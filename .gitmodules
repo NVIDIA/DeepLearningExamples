@@ -1,0 +1,3 @@
+[submodule "TensorFlow/OpenSeq2Seq"]
+	path = TensorFlow/OpenSeq2Seq
+	url = https://github.com/NVIDIA/OpenSeq2Seq
