@@ -7,10 +7,12 @@ benchmarking, training and evaluation of models.
 
 Uber's Horovod data-parallel framework is used for parallelization.
 
+
 ## Imagenet data preprocessing
 
 See [this file](data_preprocessing/README.md) for instructions on downloading
 and preprocessing the imagenet data set.
+
 
 ## ResNet50 training example
 
@@ -34,8 +36,6 @@ format at /data/imagenet_tfrecord.
                       --learning_rate=2.0
 ```
 
-After training, the network should achieve a Top 1 accuracy of around 75.5% on
-the validation data set.
 
 ## Inception V3 training example
 
@@ -59,6 +59,7 @@ format at /data/imagenet_tfrecord.
                       --learning_rate=1.0
 ```
 
+
 ## Evaluating accuracy with the test set
 
 Model parameters are stored in FP32 precision when training with either FP32 or
@@ -67,15 +68,16 @@ evaluation is performed on a single GPU. The following command performs
 evaluation of a trained model.
 
 ```
-    $ python nvcnn_hvd.py --model=resnet50 \
+    $ python nvcnn_hvd.py --model=<resnet50|inception3> \
                           --data_dir=/data/imagenet_tfrecord \
                           --batch_size=256 \
                           --log_dir=./checkpoint-dir \
                           --eval
 ```
 
-After trianing, ResNet50 and Inception_v3 should achieve top1 accuracies of
+After trianing, ResNet50 and Inception V3 should achieve top-1 accuracies of
 75.5% and 77.8%, respectively, on the imagenet validation set.
+
 
 ##  Notes
 
