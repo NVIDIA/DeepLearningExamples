@@ -6,7 +6,7 @@ This repository provides the latest deep learning example networks for training.
 ## NVIDIA GPU Cloud (NGC) Container Registry
 These examples, along with our NVIDIA deep learning software stack, are provided in a monthly updated Docker container on the NGC container registry (https://ngc.nvidia.com). These containers include:  
 
-- The latest NVIDIA examples from this [repository](https://github.com/NVIDIA/DeepLearningExamples/edit/caffe2_fp16/README.md)
+- The latest NVIDIA examples from this repository
 - The latest NVIDIA contributions shared upstream to the respective framework
 - The latest NVIDIA Deep Learning software libraries, such as cuDNN, NCCL, cuBLAS, etc. which have all been through a rigorous monthly quality assurance process to ensure that they provide the best possible performance
 - [Monthly release notes](https://docs.nvidia.com/deeplearning/dgx/index.html#nvidia-optimized-frameworks-release-notes) for each of the NVIDIA optimized containers
