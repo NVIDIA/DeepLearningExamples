@@ -18,7 +18,7 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 In each of the network READMEs, we indicate the level of support that will be provided. The range is from ongoing updates and improvements to a point-in-time release for thought leadership.
 
 ## Feedback / Contributions
-We're posting these examples on GitHub to better support the community, facilitate feedback, as well as collect and implement contributions using GitHub Issues and Pull Requests. We welcome all contributions!
+We're posting these examples on GitHub to better support the community, facilitate feedback, as well as collect and implement contributions using GitHub Issues and pull requests. We welcome all contributions!
 
 ## Known issues
 In each of the network READMEs, we indicate any known issues and encourage the community to provide feedback.
