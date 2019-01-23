@@ -123,7 +123,7 @@ Sacrebleu test set is a subset of test set used during a course of training thus
 
 ## Training Accuracy Results
 In order to test accuracy of our implementation we have run experiments with different seeds for 100 epochs with batch size 5120 per GPU and learining rate 6e-4 in the pytorch-18.12-py3 Docker container. Plot below shows BLEU score changes.<br/>
-![Accuracy plot](/BLEU.png)
+![Accuracy plot](BLEU.png)
 
 ## Training Performance Results
 
@@ -137,7 +137,7 @@ Running this code with the provided hyperparameters will allow you to achieve th
 In some cases we can train further with the same setup to achieve slightly better results. 
 
 GPU count |Precision |  BLEU score | Epochs to train | Training time
----|---|---|---|---|---
+---|---|---|---|---
  4 |fp16      |  28.67      | 74              | 1925 min
  4 |fp32      |  28.40      | 47              | 5478 min
 
