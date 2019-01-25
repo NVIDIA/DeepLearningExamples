@@ -8,6 +8,8 @@ downsampling, v1 has stride = 2 in the first 1x1 convolution, whereas v1.5 has s
 
 This difference makes ResNet50 v1.5 slightly more accurate (~0.5% top1) than v1, but comes with a smallperformance drawback (~5% imgs/sec).
 
+The model is initialized as described in [Delving deep into rectifiers: Surpassing human-level performance on ImageNet classification](https://arxiv.org/pdf/1502.01852.pdf)
+
 ## Training procedure
 
 ### Optimizer
@@ -26,6 +28,11 @@ during first 5 epochs
 according to [Training ImageNet in 1 hour](https://arxiv.org/abs/1706.02677).
 
 * Weight decay: 1e-4
+
+* We do not apply WD on Batch Norm trainable parameters (gamma/bias)
+
+* Label Smoothing: 0.1
+
 
 ### Data Augmentation
 
@@ -135,15 +142,15 @@ To run a non standard configuration use:
 
 * For 1 GPU
     * FP32
-        `python ./main.py --arch resnet50 <path to imagenet>`
+        `python ./main.py --arch resnet50 -c fanin --label-smoothing 0.1 <path to imagenet>`
     * FP16
-        `python ./main.py --arch resnet50 --fp16 --static-loss-scale 256 <path to imagenet>`
+        `python ./main.py --arch resnet50 -c fanin --label-smoothing 0.1 --fp16 --static-loss-scale 256 <path to imagenet>`
 
 * For multiple GPUs
     * FP32
-        `python -m apex.parallel.multiproc ./main.py --arch resnet50 <path to imagenet>`
+        `python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 -c fanin --label-smoothing 0.1 <path to imagenet>`
     * FP16
-        `python -m apex.parallel.multiproc ./main.py --arch resnet50 --fp16 --static-loss-scale 256 <path to imagenet>`
+        `python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 -c fanin --label-smoothing 0.1 --fp16 --static-loss-scale 256 <path to imagenet>`
 
 Use `python ./main.py -h` to obtain the list of available options in the `main.py` script.
 
@@ -166,9 +173,9 @@ To benchmark training, run:
 `python ./main.py --arch resnet50 --benchmark-training --fp16 --static-loss-scale 256 <path to imagenet>`
 * For multiple GPUs
     * FP32
-`python -m apex.parallel.multiproc ./main.py --arch resnet50 --benchmark-training <path to imagenet>`
+`python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 --benchmark-training <path to imagenet>`
     * FP16
-`python -m apex.parallel.multiproc ./main.py --arch resnet50 --benchmark-training --fp16 --static-loss-scale 256 <path to imagenet>`
+`python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 --benchmark-training --fp16 --static-loss-scale 256 <path to imagenet>`
 
 Each of this scripts will run 1 warmup iteration and measure the next 10 iterations.
 
@@ -195,11 +202,15 @@ To control warmup and benchmark length, use `--bench-warmup` and `--bench-iterat
 The following results were obtained by running the `./examples/RN50_{FP16, FP32}_{1, 4, 8}GPU.sh` scripts in
 the pytorch-18.09-py3 Docker container on NVIDIA DGX-1 with 8 V100 16G GPUs.
 
-| **number of GPUs** | **mixed precision top1** | **mixed precision training time** | **FP32 top1** | **FP32 training time** |
-|:------------------:|:------------------------:|:---------------------------------:|:-------------:|:----------------------:|
-| 1                  | 76.328                   | 45.4h                             | 76.232        | 89.2h                  |
-| 4                  | 76.263                   | 13.5h                             | 76.442        | 25.6h                  |
-| 8                  | 76.190                   | 8.1h                              | 76.003        | 13.9h                  |
+| **mixed precision top1** | **FP32 top1**   |
+|:------------------------:|:---------------:|
+| 76.71 +/- 0.11           | 76.83 +/- 0.11 |
+
+| **number of GPUs** | **mixed precision training time** | **FP32 training time** |
+|:------------------:|:---------------------------------:|:----------------------:|
+| 1                  | 45.4h                             | 89.2h                  |
+| 4                  | 13.5h                             | 25.6h                  |
+| 8                  | 8.1h                              | 13.9h                  |
 
 Here are example graphs of FP32 and FP16 training on 8 GPU configuration:
 
@@ -235,8 +246,10 @@ Here are example graphs of FP32 and FP16 training on 8 GPU configuration:
 
 # Changelog
 
-1. Sep 1, 2018
+1. September 2018
   * Initial release
+2. January 2019
+  * Added options Label Smoothing, fan-in initialization, skipping weight decay on batch norm gamma and bias.
 
 # Known issues
 

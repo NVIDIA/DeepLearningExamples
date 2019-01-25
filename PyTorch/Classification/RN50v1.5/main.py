@@ -4,6 +4,7 @@ import shutil
 import time
 import random
 
+import numpy as np
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
@@ -15,9 +16,6 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-import torchvision.models as models
-
-import numpy as np
 
 try:
     from apex.parallel import DistributedDataParallel as DDP
@@ -25,10 +23,12 @@ try:
 except ImportError:
     raise ImportError("Please install apex from https://www.github.com/nvidia/apex to run this example.")
 
+import resnet as models
+from smoothing import LabelSmoothing
+
 def add_parser_arguments(parser):
-    model_names = sorted(name for name in models.__dict__
-                         if name.islower() and not name.startswith("__")
-                         and callable(models.__dict__[name]))
+    model_names = models.resnet_versions.keys()
+    model_configs = models.resnet_configs.keys()
 
     parser.add_argument('data', metavar='DIR',
                         help='path to dataset')
@@ -37,6 +37,10 @@ def add_parser_arguments(parser):
                         help='model architecture: ' +
                         ' | '.join(model_names) +
                         ' (default: resnet18)')
+    parser.add_argument('--model-config', '-c', metavar='CONF', default='classic',
+                        choices=model_configs,
+                        help='model configs: ' +
+                        ' | '.join(model_configs) + '(default: classic)')
     parser.add_argument('-j', '--workers', default=5, type=int, metavar='N',
                         help='number of data loading workers (default: 5)')
     parser.add_argument('--epochs', default=90, type=int, metavar='N',
@@ -49,18 +53,21 @@ def add_parser_arguments(parser):
                         metavar='LR', help='initial learning rate')
     parser.add_argument('--warmup', default=0, type=int,
                         metavar='E', help='number of warmup epochs')
+    parser.add_argument('--label-smoothing', default=0.0, type=float,
+                        metavar='S', help='label smoothing')
+
     parser.add_argument('--momentum', default=0.9, type=float, metavar='M',
                         help='momentum')
     parser.add_argument('--weight-decay', '--wd', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4)')
+    parser.add_argument('--bn-weight-decay', action='store_true',
+                        help='use weight_decay on batch normalization learnable parameters, default: false)')
     parser.add_argument('--print-freq', '-p', default=10, type=int,
                         metavar='N', help='print frequency (default: 10)')
     parser.add_argument('--resume', default='', type=str, metavar='PATH',
                         help='path to latest checkpoint (default: none)')
     parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
                         help='evaluate model on validation set')
-    parser.add_argument('--pretrained', dest='pretrained', action='store_true',
-                        help='use pre-trained model')
     parser.add_argument('--pretrained-weights', default='', type=str, metavar='PATH',
                         help='file with weights')
 
@@ -83,25 +90,13 @@ def add_parser_arguments(parser):
     parser.add_argument('--bench-warmup', type=int, default=20, metavar='N',
                         help='Number of warmup iterations for benchmarking')
 
-
-    parser.add_argument('--dist-url', default='tcp://localhost:23456', type=str,
-                        help='url used to set up distributed training')
-    parser.add_argument('--dist-backend', default='nccl', type=str,
-                        help='distributed backend')
-
-    parser.add_argument('--world-size', default=1, type=int,
-                        help='Number of GPUs to use. Can either be manually set ' +
-                        'or automatically set by using \'python -m multiproc\'.')
-    parser.add_argument('--rank', default=0, type=int,
-                        help='Used for multi-process training. Can either be manually set ' +
-                        'or automatically set by using \'python -m multiproc\'.')
+    parser.add_argument("--local_rank", default=0, type=int)
 
     parser.add_argument('--seed', default=None, type=int,
                         help='random seed used for np and pytorch')
 
     parser.add_argument('--gather-checkpoints', action='store_true',
                         help='Gather checkpoints throughout the training')
-
 
 def main():
     if args.trainbench or args.inferbench:
@@ -111,34 +106,35 @@ def main():
 
     train_net(args, logger)
 
-
 def train_net(args, logger_cls):
     exp_start_time = time.time()
     global best_prec1
     best_prec1 = 0
 
-    args.distributed = args.world_size > 1
+    args.distributed = False
+    if 'WORLD_SIZE' in os.environ:
+        args.distributed = int(os.environ['WORLD_SIZE']) > 1
+
     args.gpu = 0
-    if args.distributed:
-        args.gpu = args.rank % torch.cuda.device_count()
+    args.world_size = 1
 
     if args.distributed:
+        args.gpu = args.local_rank % torch.cuda.device_count()
         torch.cuda.set_device(args.gpu)
-        dist.init_process_group(backend=args.dist_backend,
-                                init_method=args.dist_url,
-                                world_size=args.world_size,
-                                rank=args.rank)
+        dist.init_process_group(backend='nccl', init_method='env://')
+        args.world_size = torch.distributed.get_world_size()
+
 
     if args.seed is not None:
         print("Using seed = {}".format(args.seed))
-        torch.manual_seed(args.seed + args.rank)
-        torch.cuda.manual_seed(args.seed + args.rank)
-        np.random.seed(seed=args.seed + args.rank)
-        random.seed(args.seed + args.rank)
+        torch.manual_seed(args.seed + args.local_rank)
+        torch.cuda.manual_seed(args.seed + args.local_rank)
+        np.random.seed(seed=args.seed + args.local_rank)
+        random.seed(args.seed + args.local_rank)
 
         def _worker_init_fn(id):
-            np.random.seed(seed=args.seed + args.rank + id)
-            random.seed(args.seed + args.rank + id)
+            np.random.seed(seed=args.seed + args.local_rank + id)
+            random.seed(args.seed + args.local_rank + id)
     else:
         def _worker_init_fn(id):
             pass
@@ -177,16 +173,20 @@ def train_net(args, logger_cls):
         model_state = None
         optimizer_state = None
 
-    model_and_loss = ModelAndLoss(args.arch, nn.CrossEntropyLoss, 
-            args.pretrained, pretrained_weights=pretrained_weights, state=model_state,
+    model_and_loss = ModelAndLoss(
+            (args.arch, args.model_config),
+            nn.CrossEntropyLoss if args.label_smoothing == 0.0 else (lambda: LabelSmoothing(args.label_smoothing)),
+            pretrained_weights=pretrained_weights,
+            state=model_state,
             cuda = True, fp16 = args.fp16, distributed = args.distributed)
 
     # Create data loaders and optimizers as needed
 
     if not (args.evaluate or args.inferbench):
-        optimizer = get_optimizer(model_and_loss.model.parameters(),
+        optimizer = get_optimizer(list(model_and_loss.model.named_parameters()),
                 args.fp16,
                 args.lr, args.momentum, args.weight_decay,
+                bn_weight_decay = args.bn_weight_decay,
                 state=optimizer_state,
                 static_loss_scale = args.static_loss_scale,
                 dynamic_loss_scale = args.dynamic_loss_scale)
@@ -233,11 +233,32 @@ def train_net(args, logger_cls):
     print("Experiment ended")
 
 
-# Get Optimizer {{{
-def get_optimizer(parameters, fp16, lr, momentum, weight_decay, state=None, static_loss_scale=1., dynamic_loss_scale=False):
-    optimizer = torch.optim.SGD(parameters, lr,
-                                momentum=momentum,
-                                weight_decay=weight_decay)
+# get optimizer {{{
+def get_optimizer(parameters, fp16, lr, momentum, weight_decay,
+                  true_wd=False,
+                  nesterov=False,
+                  state=None,
+                  static_loss_scale=1., dynamic_loss_scale=False,
+                  bn_weight_decay = False):
+
+    if bn_weight_decay:
+        print(" ! Weight decay applied to BN parameters ")
+        optimizer = torch.optim.SGD([v for n, v in parameters], lr,
+                           momentum=momentum,
+                           weight_decay=weight_decay,
+                           nesterov = nesterov)
+    else:
+        print(" ! Weight decay NOT applied to BN parameters ")
+        bn_params = [v for n, v in parameters if 'bn' in n]
+        rest_params = [v for n, v in parameters if not 'bn' in n]
+        print(len(bn_params))
+        print(len(rest_params))
+        optimizer = torch.optim.SGD([{'params': bn_params, 'weight_decay' : 0},
+                            {'params': rest_params, 'weight_decay' : weight_decay}],
+                           lr,
+                           momentum=momentum,
+                           weight_decay=weight_decay,
+                           nesterov = nesterov)
     if fp16:
         optimizer = FP16_Optimizer(optimizer,
                                    static_loss_scale=static_loss_scale,
@@ -251,28 +272,22 @@ def get_optimizer(parameters, fp16, lr, momentum, weight_decay, state=None, stat
 
 # ModelAndLoss {{{
 class ModelAndLoss(nn.Module):
-    def __init__(self, arch, loss, pretrained, pretrained_weights=None, state=None, cuda=True, fp16=False, distributed=False):
+    def __init__(self, arch, loss, pretrained_weights=None, state=None, cuda=True, fp16=False, distributed=False):
         super(ModelAndLoss, self).__init__()
         self.arch = arch
-        if pretrained:
-            if pretrained_weights is None:
-                print("=> using pre-trained model from torchvision '{}'".format(arch))
-                model = models.__dict__[arch](pretrained=True)
-            else:
-                print("=> using pre-trained model from a file '{}'".format(arch))
-                model = models.__dict__[arch]()
-                model.load_state_dict(pretrained_weights)
-        else:
-            print("=> creating model '{}'".format(arch))
-            model = models.__dict__[arch]()
+        
+        print("=> creating model '{}'".format(arch))
+        model = models.build_resnet(arch[0], arch[1])
+        if pretrained_weights is not None:
+            print("=> using pre-trained model from a file '{}'".format(arch))
+            model.load_state_dict(pretrained_weights)
 
         if cuda:
             model = model.cuda()
         if fp16:
             model = network_to_half(model)
         if distributed:
-            #shared param turns off bucketing in DDP, for lower latency runs this can improve perf
-            model = DDP(model, shared_param=True)
+            model = DDP(model)
 
         if not state is None:
             model.load_state_dict(state)
@@ -461,7 +476,6 @@ def bench(step, train_loader, warmup, iterations, fp16, logger, epoch_warmup = F
             break
 
     logger.end_callback()
-
 
 def train(train_loader, model_and_loss, optimizer, fp16, logger, epoch, prof=False):
 
