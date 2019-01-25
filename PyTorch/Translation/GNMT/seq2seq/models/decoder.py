@@ -3,8 +3,8 @@ import itertools
 import torch
 import torch.nn as nn
 
-from seq2seq.models.attention import BahdanauAttention
 import seq2seq.data.config as config
+from seq2seq.models.attention import BahdanauAttention
 
 
 class RecurrentAttention(nn.Module):
@@ -63,22 +63,14 @@ class Classifier(nn.Module):
     """
     Fully-connected classifier
     """
-    def __init__(self, in_features, out_features, math='fp32'):
+    def __init__(self, in_features, out_features):
         """
         Constructor for the Classifier.
 
         :param in_features: number of input features
         :param out_features: number of output features (size of vocabulary)
-        :param math: arithmetic type, 'fp32' or 'fp16'
         """
         super(Classifier, self).__init__()
-
-        self.out_features = out_features
-
-        # padding required to trigger HMMA kernels
-        if math == 'fp16':
-            out_features = (out_features + 7) // 8 * 8
-
         self.classifier = nn.Linear(in_features, out_features)
 
     def forward(self, x):
@@ -88,7 +80,6 @@ class Classifier(nn.Module):
         :param x: output from decoder
         """
         out = self.classifier(x)
-        out = out[..., :self.out_features]
         return out
 
 
@@ -104,7 +95,7 @@ class ResidualRecurrentDecoder(nn.Module):
     layers in the decoder at the current timestep.
     """
     def __init__(self, vocab_size, hidden_size=128, num_layers=8, bias=True,
-                 dropout=0, batch_first=False, math='fp32', embedder=None):
+                 dropout=0, batch_first=False, embedder=None):
         """
         Constructor of the ResidualRecurrentDecoder.
 
@@ -115,7 +106,6 @@ class ResidualRecurrentDecoder(nn.Module):
         :param dropout: probability of dropout (between LSTM layers)
         :param batch_first: if True the model uses (batch,seq,feature) tensors,
             if false the model uses (seq, batch, feature)
-        :param math: arithmetic type, 'fp32' or 'fp16'
         :param embedder: embedding module, if None constructor will create new
             embedding layer
         """
@@ -139,7 +129,7 @@ class ResidualRecurrentDecoder(nn.Module):
             self.embedder = nn.Embedding(vocab_size, hidden_size,
                                          padding_idx=config.PAD)
 
-        self.classifier = Classifier(hidden_size, vocab_size, math)
+        self.classifier = Classifier(hidden_size, vocab_size)
         self.dropout = nn.Dropout(p=dropout)
 
     def init_hidden(self, hidden):

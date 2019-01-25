@@ -1,23 +1,22 @@
+import logging
+
 import torch
 from torch.utils.data.sampler import Sampler
-from seq2seq.utils import get_world_size, get_rank
+
+from seq2seq.utils import get_rank
+from seq2seq.utils import get_world_size
 
 
-class BucketingSampler(Sampler):
-    """
-    Distributed data sampler supporting bucketing by sequence length.
-    """
-    def __init__(self, dataset, batch_size, bucketing=True, world_size=None,
-                 rank=None):
+class DistributedSampler(Sampler):
+    def __init__(self, dataset, batch_size, seeds, world_size=None, rank=None):
         """
-        Constructor for the BucketingSampler.
+        Constructor for the DistributedSampler.
 
         :param dataset: dataset
         :param batch_size: batch size
-        :param bucketing: if True enables bucketing by sequence length
-        :param world_size: number of processes participating in distributed
-            training
-        :param rank: rank of the current process within world_size
+        :param seeds: list of seeds, one seed for each training epoch
+        :param world_size: number of distributed workers
+        :param rank: rank of the current process
         """
         if world_size is None:
             world_size = get_world_size()
@@ -28,75 +27,231 @@ class BucketingSampler(Sampler):
         self.world_size = world_size
         self.rank = rank
         self.epoch = 0
-        self.bucketing = bucketing
+        self.seeds = seeds
 
         self.batch_size = batch_size
         self.global_batch_size = batch_size * world_size
 
         self.data_len = len(self.dataset)
+
         self.num_samples = self.data_len // self.global_batch_size \
             * self.global_batch_size
 
-    def __iter__(self):
-        # deterministically shuffle based on epoch
-        g = torch.Generator()
-        g.manual_seed(self.epoch)
+    def init_rng(self):
+        """
+        Creates new RNG, seed depends on current epoch idx.
+        """
+        rng = torch.Generator()
+        seed = self.seeds[self.epoch]
+        logging.info(f'Sampler for epoch {self.epoch} uses seed {seed}')
+        rng.manual_seed(seed)
+        return rng
 
-        # generate permutation
-        indices = torch.randperm(self.data_len, generator=g)
-        # make indices evenly divisible by (batch_size * world_size)
-        indices = indices[:self.num_samples]
+    def distribute_batches(self, indices):
+        """
+        Assigns batches to workers.
+        Consecutive ranks are getting consecutive batches.
 
-        # splits the dataset into chunks of 'batches_in_shard' global batches
-        # each, sorts by (src + tgt) sequence length within each chunk,
-        # reshuffles all global batches
-        if self.bucketing:
-            batches_in_shard = 80
-            shard_size = self.global_batch_size * batches_in_shard
-            nshards = (self.num_samples + shard_size - 1) // shard_size
-
-            lengths = self.dataset.lengths[indices]
-
-            shards = [indices[i * shard_size:(i+1) * shard_size] for i in range(nshards)]
-            len_shards = [lengths[i * shard_size:(i+1) * shard_size] for i in range(nshards)]
-
-            indices = []
-            for len_shard in len_shards:
-                _, ind = len_shard.sort()
-                indices.append(ind)
-
-            output = tuple(shard[idx] for shard, idx in zip(shards, indices))
-            indices = torch.cat(output)
-
-            # global reshuffle
-            indices = indices.view(-1, self.global_batch_size)
-            order = torch.randperm(indices.shape[0], generator=g)
-            indices = indices[order, :]
-            indices = indices.view(-1)
-
+        :param indices: torch.tensor with batch indices
+        """
         assert len(indices) == self.num_samples
 
-        # build indices for each individual worker
-        # consecutive ranks are getting consecutive batches,
-        # default pytorch DistributedSampler assigns strided batches
-        # with offset = length / world_size
         indices = indices.view(-1, self.batch_size)
         indices = indices[self.rank::self.world_size].contiguous()
         indices = indices.view(-1)
         indices = indices.tolist()
 
         assert len(indices) == self.num_samples // self.world_size
+        return indices
 
+    def reshuffle_batches(self, indices, rng):
+        """
+        Permutes global batches
+
+        :param indices: torch.tensor with batch indices
+        :param rng: instance of torch.Generator
+        """
+        indices = indices.view(-1, self.global_batch_size)
+        num_batches = indices.shape[0]
+        order = torch.randperm(num_batches, generator=rng)
+        indices = indices[order, :]
+        indices = indices.view(-1)
+        return indices
+
+    def __iter__(self):
+        rng = self.init_rng()
+        # generate permutation
+        indices = torch.randperm(self.data_len, generator=rng)
+
+        # make indices evenly divisible by (batch_size * world_size)
+        indices = indices[:self.num_samples]
+
+        # assign batches to workers
+        indices = self.distribute_batches(indices)
         return iter(indices)
-
-    def __len__(self):
-        return self.num_samples // self.world_size
 
     def set_epoch(self, epoch):
         """
-        Sets current epoch index. This value is used to seed RNGs in __iter__()
-        function.
+        Sets current epoch index.
+        Epoch index is used to seed RNG in __iter__() function.
 
         :param epoch: index of current epoch
         """
         self.epoch = epoch
+
+    def __len__(self):
+        return self.num_samples // self.world_size
+
+
+class ShardingSampler(DistributedSampler):
+    def __init__(self, dataset, batch_size, seeds, shard_size,
+                 world_size=None, rank=None):
+        """
+        Constructor for the ShardingSampler.
+
+        :param dataset: dataset
+        :param batch_size: batch size
+        :param seeds: list of seeds, one seed for each training epoch
+        :param shard_size: number of global batches within one shard
+        :param world_size: number of distributed workers
+        :param rank: rank of the current process
+        """
+
+        super().__init__(dataset, batch_size, seeds, world_size, rank)
+
+        self.shard_size = shard_size
+        self.num_samples = self.data_len // self.global_batch_size \
+            * self.global_batch_size
+
+    def __iter__(self):
+        rng = self.init_rng()
+        # generate permutation
+        indices = torch.randperm(self.data_len, generator=rng)
+        # make indices evenly divisible by (batch_size * world_size)
+        indices = indices[:self.num_samples]
+
+        # splits the dataset into chunks of 'self.shard_size' global batches
+        # each, sorts by (src + tgt) sequence length within each chunk,
+        # reshuffles all global batches
+        shard_size = self.global_batch_size * self.shard_size
+        nshards = (self.num_samples + shard_size - 1) // shard_size
+
+        lengths = self.dataset.lengths[indices]
+
+        shards = [indices[i * shard_size:(i+1) * shard_size] for i in range(nshards)]
+        len_shards = [lengths[i * shard_size:(i+1) * shard_size] for i in range(nshards)]
+
+        # sort by (src + tgt) sequence length within each shard
+        indices = []
+        for len_shard in len_shards:
+            _, ind = len_shard.sort()
+            indices.append(ind)
+
+        output = tuple(shard[idx] for shard, idx in zip(shards, indices))
+
+        # build batches
+        indices = torch.cat(output)
+        indices = self.reshuffle_batches(indices, rng)
+        indices = self.distribute_batches(indices)
+        return iter(indices)
+
+
+class BucketingSampler(DistributedSampler):
+    def __init__(self, dataset, batch_size, seeds, num_buckets,
+                 world_size=None, rank=None):
+        """
+        Constructor for the BucketingSampler.
+
+        :param dataset: dataset
+        :param batch_size: batch size
+        :param seeds: list of seeds, one seed for each training epoch
+        :param num_buckets: number of buckets
+        :param world_size: number of distributed workers
+        :param rank: rank of the current process
+        """
+
+        super().__init__(dataset, batch_size, seeds, world_size, rank)
+
+        self.num_buckets = num_buckets
+        bucket_width = (dataset.max_len + num_buckets - 1) // num_buckets
+
+        bucket_ids = torch.max(dataset.src_lengths // bucket_width,
+                               dataset.tgt_lengths // bucket_width)
+        bucket_ids.clamp_(0, num_buckets - 1)
+
+        # build buckets
+        all_indices = torch.tensor(range(self.data_len))
+        self.buckets = []
+        self.num_samples = 0
+        global_bs = self.global_batch_size
+
+        for bid in range(num_buckets):
+            # gather indices for current bucket
+            indices = all_indices[bucket_ids == bid]
+            self.buckets.append(indices)
+
+            # count number of samples in current bucket
+            samples = len(indices) // global_bs * global_bs
+            self.num_samples += samples
+
+    def __iter__(self):
+        rng = self.init_rng()
+        global_bs = self.global_batch_size
+
+        indices = []
+        for bid in range(self.num_buckets):
+            # random shuffle within current bucket
+            perm = torch.randperm(len(self.buckets[bid]), generator=rng)
+            bucket_indices = self.buckets[bid][perm]
+
+            # make bucket_indices evenly divisible by global batch size
+            length = len(bucket_indices) // global_bs * global_bs
+            bucket_indices = bucket_indices[:length]
+            assert len(bucket_indices) % self.global_batch_size == 0
+
+            # add samples from current bucket to indices for current epoch
+            indices.append(bucket_indices)
+
+        indices = torch.cat(indices)
+        assert len(indices) % self.global_batch_size == 0
+
+        indices = self.reshuffle_batches(indices, rng)
+        indices = self.distribute_batches(indices)
+        return iter(indices)
+
+
+class StaticDistributedSampler(Sampler):
+    def __init__(self, dataset, batch_size, pad, world_size=None, rank=None):
+        if world_size is None:
+            world_size = get_world_size()
+        if rank is None:
+            rank = get_rank()
+
+        self.world_size = world_size
+
+        global_batch_size = batch_size * world_size
+
+        data_len = len(dataset)
+        num_samples = (data_len + global_batch_size - 1) \
+            // global_batch_size * global_batch_size
+        self.num_samples = num_samples
+
+        indices = list(range(data_len))
+        if pad:
+            indices += [0] * (num_samples - len(indices))
+        else:
+            indices += [-1] * (num_samples - len(indices))
+        indices = torch.tensor(indices)
+
+        indices = indices.view(-1, batch_size)
+        indices = indices[rank::world_size].contiguous()
+        indices = indices.view(-1)
+        indices = indices[indices != -1]
+        indices = indices.tolist()
+        self.indices = indices
+
+    def __iter__(self):
+        return iter(self.indices)
+
+    def __len__(self):
+        return len(self.indices)

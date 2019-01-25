@@ -1,39 +1,61 @@
 #!/usr/bin/env python
-import logging
 import argparse
+import logging
+import os
 import warnings
 from ast import literal_eval
+from itertools import product
 
 import torch
+import torch.distributed as dist
 
-from seq2seq.models.gnmt import GNMT
-from seq2seq.inference.inference import Translator
+import seq2seq.utils as utils
 from seq2seq.data.dataset import TextDataset
+from seq2seq.data.tokenizer import Tokenizer
+from seq2seq.inference.inference import Translator
+from seq2seq.models.gnmt import GNMT
+from seq2seq.utils import setup_logging
 
 
 def parse_args():
     """
     Parse commandline arguments.
     """
-    parser = argparse.ArgumentParser(description='GNMT Translate',
-                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    # data
+    def exclusive_group(group, name, default, help):
+        destname = name.replace('-', '_')
+        subgroup = group.add_mutually_exclusive_group(required=False)
+        subgroup.add_argument(f'--{name}', dest=f'{destname}',
+                              action='store_true',
+                              help=f'{help} (use \'--no-{name}\' to disable)')
+        subgroup.add_argument(f'--no-{name}', dest=f'{destname}',
+                              action='store_false', help=argparse.SUPPRESS)
+        subgroup.set_defaults(**{destname: default})
+
+    parser = argparse.ArgumentParser(
+        description='GNMT Translate',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    # dataset
     dataset = parser.add_argument_group('data setup')
     dataset.add_argument('--dataset-dir', default='data/wmt16_de_en/',
-                         help='path to directory with training/validation data')
+                         help='path to directory with training/test data')
     dataset.add_argument('-i', '--input', required=True,
                          help='full path to the input file (tokenized)')
     dataset.add_argument('-o', '--output', required=True,
                          help='full path to the output file (tokenized)')
     dataset.add_argument('-r', '--reference', default=None,
-                         help='full path to the reference file (for sacrebleu)')
+                         help='full path to the file with reference \
+                         translations (for sacrebleu)')
     dataset.add_argument('-m', '--model', required=True,
                          help='full path to the model checkpoint file')
+    exclusive_group(group=dataset, name='sort', default=True,
+                    help='sorts dataset by sequence length')
+
     # parameters
     params = parser.add_argument_group('inference setup')
-    params.add_argument('--batch-size', default=128, type=int,
-                        help='batch size')
-    params.add_argument('--beam-size', default=5, type=int,
+    params.add_argument('--batch-size', nargs='+', default=[128], type=int,
+                        help='batch size per GPU')
+    params.add_argument('--beam-size', nargs='+', default=[5], type=int,
                         help='beam size')
     params.add_argument('--max-seq-len', default=80, type=int,
                         help='maximum generated sequence length')
@@ -45,16 +67,18 @@ def parse_args():
                         help='length normalization constant')
     # general setup
     general = parser.add_argument_group('general setup')
-    general.add_argument('--math', default='fp16', choices=['fp32', 'fp16'],
-                         help='arithmetic type')
+    general.add_argument('--math', nargs='+', default=['fp16'],
+                         choices=['fp16', 'fp32'], help='arithmetic type')
 
-    bleu_parser = general.add_mutually_exclusive_group(required=False)
-    bleu_parser.add_argument('--bleu', dest='bleu', action='store_true',
-                             help='compares with reference and computes BLEU \
-                             (use \'--no-bleu\' to disable)')
-    bleu_parser.add_argument('--no-bleu', dest='bleu', action='store_false',
-                             help=argparse.SUPPRESS)
-    bleu_parser.set_defaults(bleu=True)
+    exclusive_group(group=general, name='env', default=True,
+                    help='print info about execution env')
+    exclusive_group(group=general, name='bleu', default=True,
+                    help='compares with reference translation and computes \
+                    BLEU')
+    exclusive_group(group=general, name='cuda', default=True,
+                    help='enables cuda')
+    exclusive_group(group=general, name='cudnn', default=True,
+                    help='enables cudnn')
 
     batch_first_parser = general.add_mutually_exclusive_group(required=False)
     batch_first_parser.add_argument('--batch-first', dest='batch_first',
@@ -67,60 +91,25 @@ def parse_args():
                                     format for RNNs')
     batch_first_parser.set_defaults(batch_first=True)
 
-    cuda_parser = general.add_mutually_exclusive_group(required=False)
-    cuda_parser.add_argument('--cuda', dest='cuda', action='store_true',
-                             help='enables cuda (use \'--no-cuda\' to disable)')
-    cuda_parser.add_argument('--no-cuda', dest='cuda', action='store_false',
-                             help=argparse.SUPPRESS)
-    cuda_parser.set_defaults(cuda=True)
-
-    cudnn_parser = general.add_mutually_exclusive_group(required=False)
-    cudnn_parser.add_argument('--cudnn', dest='cudnn', action='store_true',
-                              help='enables cudnn (use \'--no-cudnn\' to disable)')
-    cudnn_parser.add_argument('--no-cudnn', dest='cudnn', action='store_false',
-                              help=argparse.SUPPRESS)
-    cudnn_parser.set_defaults(cudnn=True)
-
     general.add_argument('--print-freq', '-p', default=1, type=int,
                          help='print log every PRINT_FREQ batches')
+
+    # distributed
+    distributed = parser.add_argument_group('distributed setup')
+    distributed.add_argument('--rank', default=0, type=int,
+                             help='global rank of the process, do not set!')
+    distributed.add_argument('--local_rank', default=0, type=int,
+                             help='local rank of the process, do not set!')
 
     args = parser.parse_args()
 
     if args.bleu and args.reference is None:
         parser.error('--bleu requires --reference')
 
+    if 'fp16' in args.math and not args.cuda:
+        parser.error('--math fp16 requires --cuda')
+
     return args
-
-
-def checkpoint_from_distributed(state_dict):
-    """
-    Checks whether checkpoint was generated by DistributedDataParallel. DDP
-    wraps model in additional "module.", it needs to be unwrapped for single
-    GPU inference.
-
-    :param state_dict: model's state dict
-    """
-    ret = False
-    for key, _ in state_dict.items():
-        if key.find('module.') != -1:
-            ret = True
-            break
-    return ret
-
-
-def unwrap_distributed(state_dict):
-    """
-    Unwraps model from DistributedDataParallel.
-    DDP wraps model in additional "module.", it needs to be removed for single
-    GPU inference.
-
-    :param state_dict: model's state dict
-    """
-    new_state_dict = {}
-    for key, value in state_dict.items():
-        new_key = key.replace('module.', '')
-        new_state_dict[new_key] = value
-    return new_state_dict
 
 
 def main():
@@ -130,26 +119,17 @@ def main():
     with length normalization and coverage penalty.
     """
     args = parse_args()
+    utils.set_device(args)
+    utils.init_distributed(args)
+    setup_logging()
 
-    logging.basicConfig(level=logging.DEBUG,
-                        format="%(asctime)s - %(levelname)s - %(message)s",
-                        datefmt="%Y-%m-%d %H:%M:%S",
-                        filename='log.log',
-                        filemode='w')
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(message)s')
-    console.setFormatter(formatter)
-    logging.getLogger('').addHandler(console)
+    if args.env:
+        utils.log_env_info()
 
-    logging.info(args)
+    logging.info(f'Run arguments: {args}')
 
-    if args.cuda:
-        torch.cuda.set_device(0)
     if not args.cuda and torch.cuda.is_available():
         warnings.warn('cuda is available but not enabled')
-    if args.math == 'fp16' and not args.cuda:
-        raise RuntimeError('fp16 requires cuda')
     if not args.cudnn:
         torch.backends.cudnn.enabled = False
 
@@ -157,57 +137,57 @@ def main():
     checkpoint = torch.load(args.model, map_location={'cuda:0': 'cpu'})
 
     # build GNMT model
-    tokenizer = checkpoint['tokenizer']
+    tokenizer = Tokenizer()
+    tokenizer.set_state(checkpoint['tokenizer'])
     vocab_size = tokenizer.vocab_size
-    model_config = dict(vocab_size=vocab_size, math=checkpoint['config'].math,
-                        **literal_eval(checkpoint['config'].model_config))
+    model_config = checkpoint['model_config']
     model_config['batch_first'] = args.batch_first
-    model = GNMT(**model_config)
+    model = GNMT(vocab_size=vocab_size, **model_config)
+    model.load_state_dict(checkpoint['state_dict'])
 
-    state_dict = checkpoint['state_dict']
-    if checkpoint_from_distributed(state_dict):
-        state_dict = unwrap_distributed(state_dict)
+    for (math, batch_size, beam_size) in product(args.math, args.batch_size,
+                                                 args.beam_size):
+        logging.info(f'math: {math}, batch size: {batch_size}, '
+                     f'beam size: {beam_size}')
+        if math == 'fp32':
+            dtype = torch.FloatTensor
+        if math == 'fp16':
+            dtype = torch.HalfTensor
+        model.type(dtype)
 
-    model.load_state_dict(state_dict)
+        if args.cuda:
+            model = model.cuda()
+        model.eval()
 
-    if args.math == 'fp32':
-        dtype = torch.FloatTensor
-    if args.math == 'fp16':
-        dtype = torch.HalfTensor
+        # construct the dataset
+        test_data = TextDataset(src_fname=args.input,
+                                tokenizer=tokenizer,
+                                sort=args.sort)
 
-    model.type(dtype)
-    if args.cuda:
-        model = model.cuda()
-    model.eval()
+        # build the data loader
+        test_loader = test_data.get_loader(batch_size=batch_size,
+                                           batch_first=args.batch_first,
+                                           shuffle=False,
+                                           pad=True,
+                                           num_workers=0)
 
-    # construct the dataset
-    test_data = TextDataset(src_fname=args.input,
-                            tokenizer=tokenizer,
-                            sort=False)
+        # build the translator object
+        translator = Translator(model=model,
+                                tokenizer=tokenizer,
+                                loader=test_loader,
+                                beam_size=beam_size,
+                                max_seq_len=args.max_seq_len,
+                                len_norm_factor=args.len_norm_factor,
+                                len_norm_const=args.len_norm_const,
+                                cov_penalty_factor=args.cov_penalty_factor,
+                                cuda=args.cuda,
+                                print_freq=args.print_freq,
+                                dataset_dir=args.dataset_dir)
 
-    # build the data loader
-    test_loader = test_data.get_loader(batch_size=args.batch_size,
-                                       batch_first=args.batch_first,
-                                       shuffle=False,
-                                       num_workers=0,
-                                       drop_last=False)
+        # execute the inference
+        translator.run(calc_bleu=args.bleu, eval_path=args.output,
+                       reference_path=args.reference, summary=True)
 
-    # build the translator object
-    translator = Translator(model=model,
-                            tokenizer=tokenizer,
-                            loader=test_loader,
-                            beam_size=args.beam_size,
-                            max_seq_len=args.max_seq_len,
-                            len_norm_factor=args.len_norm_factor,
-                            len_norm_const=args.len_norm_const,
-                            cov_penalty_factor=args.cov_penalty_factor,
-                            cuda=args.cuda,
-                            print_freq=args.print_freq,
-                            dataset_dir=args.dataset_dir)
-
-    # execute the inference
-    translator.run(calc_bleu=args.bleu, eval_path=args.output,
-                   reference_path=args.reference, summary=True)
 
 if __name__ == '__main__':
     main()

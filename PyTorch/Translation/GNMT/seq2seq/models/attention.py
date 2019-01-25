@@ -74,7 +74,8 @@ class BahdanauAttention(nn.Module):
         else:
             max_len = context.size(0)
 
-        indices = torch.arange(0, max_len, dtype=torch.int64, device=context.device)
+        indices = torch.arange(0, max_len, dtype=torch.int64,
+                               device=context.device)
         self.mask = indices >= (context_len.unsqueeze(1))
 
     def calc_score(self, att_query, att_keys):
@@ -96,16 +97,12 @@ class BahdanauAttention(nn.Module):
 
         if self.normalize:
             sum_qk = sum_qk + self.normalize_bias
-
-            tmp = self.linear_att.to(torch.float32)
-            linear_att = tmp / tmp.norm()
-            linear_att = linear_att.to(self.normalize_scalar)
-
+            linear_att = self.linear_att / self.linear_att.norm()
             linear_att = linear_att * self.normalize_scalar
         else:
             linear_att = self.linear_att
 
-        out = F.tanh(sum_qk).matmul(linear_att)
+        out = torch.tanh(sum_qk).matmul(linear_att)
         return out
 
     def forward(self, query, keys):
