@@ -4,3 +4,4 @@ tags
 /results
 /data
 .DS_Store
+.rsyncignore

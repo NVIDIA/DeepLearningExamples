@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/pytorch:18.06-py3
+FROM nvcr.io/nvidia/pytorch:19.01-py3
 
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
