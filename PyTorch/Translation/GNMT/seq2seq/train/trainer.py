@@ -1,17 +1,15 @@
 import logging
-import os
 import time
+import os
 from itertools import cycle
 
-import numpy as np
 import torch
 import torch.optim
 import torch.utils.data
-from apex.parallel import DistributedDataParallel as DDP
+import numpy as np
 
-from seq2seq.train.fp_optimizers import Fp16Optimizer
-from seq2seq.train.fp_optimizers import Fp32Optimizer
-from seq2seq.train.lr_scheduler import WarmupMultiStepLR
+from seq2seq.train.distributed import DistributedDataParallel as DDP
+from seq2seq.train.fp_optimizers import Fp16Optimizer, Fp32Optimizer
 from seq2seq.utils import AverageMeter
 from seq2seq.utils import sync_workers
 
@@ -20,21 +18,19 @@ class Seq2SeqTrainer:
     """
     Seq2SeqTrainer
     """
-    def __init__(self, model, criterion, opt_config, scheduler_config,
+    def __init__(self, model, criterion, opt_config,
                  print_freq=10,
                  save_freq=1000,
                  grad_clip=float('inf'),
                  batch_first=False,
                  save_info={},
                  save_path='.',
-                 train_iterations=0,
                  checkpoint_filename='checkpoint%s.pth',
                  keep_checkpoints=5,
                  math='fp32',
                  cuda=True,
                  distributed=False,
                  intra_epoch_eval=0,
-                 iter_size=1,
                  translator=None,
                  verbose=False):
         super(Seq2SeqTrainer, self).__init__()
@@ -56,19 +52,16 @@ class Seq2SeqTrainer:
         self.loss = None
         self.translator = translator
         self.intra_epoch_eval = intra_epoch_eval
-        self.iter_size = iter_size
 
         if cuda:
             self.model = self.model.cuda()
             self.criterion = self.criterion.cuda()
 
-        if math == 'fp16':
-            self.model = self.model.half()
-
         if distributed:
             self.model = DDP(self.model)
 
         if math == 'fp16':
+            self.model = self.model.half()
             self.fp_optimizer = Fp16Optimizer(self.model, grad_clip)
             params = self.fp_optimizer.fp32_params
         elif math == 'fp32':
@@ -78,8 +71,6 @@ class Seq2SeqTrainer:
         opt_name = opt_config.pop('optimizer')
         self.optimizer = torch.optim.__dict__[opt_name](params, **opt_config)
         logging.info(f'Using optimizer: {self.optimizer}')
-
-        self.scheduler = WarmupMultiStepLR(self.optimizer, train_iterations, **scheduler_config)
 
     def iterate(self, src, tgt, update=True, training=True):
         src, src_length = src
@@ -105,15 +96,14 @@ class Seq2SeqTrainer:
             tgt_labels = tgt[1:]
             T, B = output.size(0), output.size(1)
 
-        loss = self.criterion(output.view(T * B, -1),
+        loss = self.criterion(output.view(T * B, -1).float(),
                               tgt_labels.contiguous().view(-1))
 
         loss_per_batch = loss.item()
-        loss /= (B * self.iter_size)
+        loss /= B
 
         if training:
-            self.fp_optimizer.step(loss, self.optimizer, self.scheduler,
-                                   update)
+            self.fp_optimizer.step(loss, self.optimizer, update)
 
         loss_per_token = loss_per_batch / num_toks['tgt']
         loss_per_sentence = loss_per_batch / B
@@ -130,9 +120,7 @@ class Seq2SeqTrainer:
         if training:
             assert self.optimizer is not None
             eval_fractions = np.linspace(0, 1, self.intra_epoch_eval+2)[1:-1]
-            iters_with_update = len(data_loader) // self.iter_size
-            eval_iters = (eval_fractions * iters_with_update).astype(int)
-            eval_iters = eval_iters * self.iter_size
+            eval_iters = (eval_fractions * len(data_loader)).astype(int)
             eval_iters = set(eval_iters)
 
         batch_time = AverageMeter()
@@ -152,12 +140,8 @@ class Seq2SeqTrainer:
             # measure data loading time
             data_time.update(time.time() - end)
 
-            update = False
-            if i % self.iter_size == self.iter_size - 1:
-                update = True
-
             # do a train/evaluate iteration
-            stats = self.iterate(src, tgt, update, training=training)
+            stats = self.iterate(src, tgt, training=training)
             loss_per_token, loss_per_sentence, num_toks = stats
 
             # measure accuracy and record loss
@@ -192,16 +176,13 @@ class Seq2SeqTrainer:
                 log = []
                 log += [f'{phase} [{self.epoch}][{i}/{len(data_loader)}]']
                 log += [f'Time {batch_time.val:.3f} ({batch_time.avg:.3f})']
-                log += [f'Data {data_time.val:.2e} ({data_time.avg:.2e})']
+                log += [f'Data {data_time.val:.3f} ({data_time.avg:.3f})']
                 log += [f'Tok/s {tot_tok_time.val:.0f} ({tot_tok_time.avg:.0f})']
                 if self.verbose:
                     log += [f'Src tok/s {src_tok_time.val:.0f} ({src_tok_time.avg:.0f})']
                     log += [f'Tgt tok/s {tgt_tok_time.val:.0f} ({tgt_tok_time.avg:.0f})']
                     log += [f'Loss/sentence {losses_per_sentence.val:.1f} ({losses_per_sentence.avg:.1f})']
                 log += [f'Loss/tok {losses_per_token.val:.4f} ({losses_per_token.avg:.4f})']
-                if training:
-                    lr = self.optimizer.param_groups[0]['lr']
-                    log += [f'LR {lr:.3e}']
                 log = '\t'.join(log)
                 logging.info(log)
 
@@ -217,8 +198,9 @@ class Seq2SeqTrainer:
 
             end = time.time()
 
-        tot_tok_time.reduce('sum')
-        losses_per_token.reduce('mean')
+        if training:
+            tot_tok_time.reduce('sum')
+            losses_per_token.reduce('mean')
 
         return losses_per_token.avg, tot_tok_time.avg
 
@@ -246,7 +228,6 @@ class Seq2SeqTrainer:
         src = src, src_length
         tgt = tgt, tgt_length
         self.iterate(src, tgt, update=False, training=training)
-        self.model.zero_grad()
 
     def optimize(self, data_loader):
         """
@@ -260,7 +241,6 @@ class Seq2SeqTrainer:
         torch.cuda.empty_cache()
         self.preallocate(data_loader, training=True)
         output = self.feed_data(data_loader, training=True)
-        self.model.zero_grad()
         torch.cuda.empty_cache()
         return output
 
@@ -276,7 +256,6 @@ class Seq2SeqTrainer:
         torch.cuda.empty_cache()
         self.preallocate(data_loader, training=False)
         output = self.feed_data(data_loader, training=False)
-        self.model.zero_grad()
         torch.cuda.empty_cache()
         return output
 
@@ -288,13 +267,9 @@ class Seq2SeqTrainer:
         """
         if os.path.isfile(filename):
             checkpoint = torch.load(filename, map_location={'cuda:0': 'cpu'})
-            if self.distributed:
-                self.model.module.load_state_dict(checkpoint['state_dict'])
-            else:
-                self.model.load_state_dict(checkpoint['state_dict'])
+            self.model.load_state_dict(checkpoint['state_dict'])
             self.fp_optimizer.initialize_model(self.model)
             self.optimizer.load_state_dict(checkpoint['optimizer'])
-            self.scheduler.load_state_dict(checkpoint['scheduler'])
             self.epoch = checkpoint['epoch']
             self.loss = checkpoint['loss']
             logging.info(f'Loaded checkpoint {filename} (epoch {self.epoch})')
@@ -316,16 +291,10 @@ class Seq2SeqTrainer:
             logging.info(f'Saving model to {filename}')
             torch.save(state, filename)
 
-        if self.distributed:
-            model_state = self.model.module.state_dict()
-        else:
-            model_state = self.model.state_dict()
-
         state = {
             'epoch': self.epoch,
-            'state_dict': model_state,
+            'state_dict': self.model.state_dict(),
             'optimizer': self.optimizer.state_dict(),
-            'scheduler': self.scheduler.state_dict(),
             'loss': getattr(self, 'loss', None),
         }
         state = dict(list(state.items()) + list(self.save_info.items()))

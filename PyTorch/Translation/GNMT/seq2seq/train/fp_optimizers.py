@@ -35,7 +35,7 @@ class Fp16Optimizer:
             param.data.copy_(new_param.data)
 
     def __init__(self, fp16_model, grad_clip=float('inf'), loss_scale=8192,
-                 dls_downscale=2, dls_upscale=2, dls_upscale_interval=128):
+                 dls_downscale=2, dls_upscale=2, dls_upscale_interval=2048):
         logging.info('Initializing fp16 optimizer')
         self.initialize_model(fp16_model)
 
@@ -61,7 +61,7 @@ class Fp16Optimizer:
         for param in self.fp32_params:
             param.requires_grad = True
 
-    def step(self, loss, optimizer, scheduler, update=True):
+    def step(self, loss, optimizer, update=True):
         """
         Performs one step of the optimizer.
         Applies loss scaling, computes gradients in fp16, converts gradients to
@@ -76,21 +76,21 @@ class Fp16Optimizer:
         :param update: if True executes weight update
         """
         loss *= self.loss_scale
+
+        self.fp16_model.zero_grad()
         loss.backward()
 
+        self.set_grads(self.fp32_params, self.fp16_model.parameters())
+        if self.loss_scale != 1.0:
+            for param in self.fp32_params:
+                param.grad.data /= self.loss_scale
+
+        norm = clip_grad_norm_(self.fp32_params, self.grad_clip)
+
         if update:
-            self.set_grads(self.fp32_params, self.fp16_model.parameters())
-            if self.loss_scale != 1.0:
-                for param in self.fp32_params:
-                    param.grad.data /= self.loss_scale
-
-            norm = clip_grad_norm_(self.fp32_params, self.grad_clip)
-
             if math.isfinite(norm):
-                scheduler.step()
                 optimizer.step()
-                self.set_weights(self.fp16_model.parameters(),
-                                 self.fp32_params)
+                self.set_weights(self.fp16_model.parameters(), self.fp32_params)
                 self.since_last_invalid += 1
             else:
                 self.loss_scale /= self.dls_downscale
@@ -103,8 +103,6 @@ class Fp16Optimizer:
                 self.loss_scale = min(self.loss_scale, 8192.0)
                 logging.info(f'Upscaling, new scale: {self.loss_scale}')
                 self.since_last_invalid = 0
-
-            self.fp16_model.zero_grad()
 
 
 class Fp32Optimizer:
@@ -131,7 +129,7 @@ class Fp32Optimizer:
         self.model = model
         self.model.zero_grad()
 
-    def step(self, loss, optimizer, scheduler, update=True):
+    def step(self, loss, optimizer, update=True):
         """
         Performs one step of the optimizer.
 
@@ -140,9 +138,8 @@ class Fp32Optimizer:
         :param update: if True executes weight update
         """
         loss.backward()
+        if self.grad_clip != float('inf'):
+            clip_grad_norm_(self.model.parameters(), self.grad_clip)
         if update:
-            if self.grad_clip != float('inf'):
-                clip_grad_norm_(self.model.parameters(), self.grad_clip)
-            scheduler.step()
             optimizer.step()
-            self.model.zero_grad()
+        self.model.zero_grad()

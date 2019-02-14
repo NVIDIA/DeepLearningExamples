@@ -81,8 +81,7 @@ class SequenceGenerator:
             counter += 1
 
             words = words.view(word_view)
-            output = self.model.generate(words, context, 1)
-            words, logprobs, attn, context = output
+            words, logprobs, attn, context = self.model.generate(words, context, 1)
             words = words.view(-1)
 
             translation[active, idx] = words
@@ -124,15 +123,13 @@ class SequenceGenerator:
         max_seq_len = self.max_seq_len
         cov_penalty_factor = self.cov_penalty_factor
 
-        translation = torch.zeros(batch_size * beam_size, max_seq_len,
-                                  dtype=torch.int64)
+        translation = torch.zeros(batch_size * beam_size, max_seq_len, dtype=torch.int64)
         lengths = torch.ones(batch_size * beam_size, dtype=torch.int64)
         scores = torch.zeros(batch_size * beam_size, dtype=torch.float32)
 
         active = torch.arange(0, batch_size * beam_size, dtype=torch.int64)
         base_mask = torch.arange(0, batch_size * beam_size, dtype=torch.int64)
-        global_offset = torch.arange(0, batch_size * beam_size, beam_size,
-                                     dtype=torch.int64)
+        global_offset = torch.arange(0, batch_size * beam_size, beam_size, dtype=torch.int64)
 
         eos_beam_fill = torch.tensor([0] + (beam_size - 1) * [float('-inf')])
 
@@ -164,23 +161,21 @@ class SequenceGenerator:
             _, seq, feature = context[0].shape
             context[0].unsqueeze_(1)
             context[0] = context[0].expand(-1, beam_size, -1, -1)
-            context[0] = context[0].contiguous().view(batch_size * beam_size,
-                                                      seq, feature)
+            context[0] = context[0].contiguous().view(batch_size * beam_size, seq, feature)
             # context[0]: (batch * beam, seq, feature)
         else:
             # context[0] (encoder state): (seq, batch, feature)
             seq, _, feature = context[0].shape
             context[0].unsqueeze_(2)
             context[0] = context[0].expand(-1, -1, beam_size, -1)
-            context[0] = context[0].contiguous().view(seq, batch_size *
-                                                      beam_size, feature)
+            context[0] = context[0].contiguous().view(seq, batch_size * beam_size, feature)
             # context[0]: (seq, batch * beam,  feature)
 
-        # context[1] (encoder seq length): (batch)
+        #context[1] (encoder seq length): (batch)
         context[1].unsqueeze_(1)
         context[1] = context[1].expand(-1, beam_size)
         context[1] = context[1].contiguous().view(batch_size * beam_size)
-        # context[1]: (batch * beam)
+        #context[1]: (batch * beam)
 
         accu_attn_scores = torch.zeros(batch_size * beam_size, seq)
         if self.cuda:
@@ -199,8 +194,7 @@ class SequenceGenerator:
 
             lengths[active[~eos_mask.view(-1)]] += 1
 
-            output = self.model.generate(words, context, beam_size)
-            words, logprobs, attn, context = output
+            words, logprobs, attn, context = self.model.generate(words, context, beam_size)
 
             attn = attn.float().squeeze(attn_query_dim)
             attn = attn.masked_fill(eos_mask.view(-1).unsqueeze(1), 0)

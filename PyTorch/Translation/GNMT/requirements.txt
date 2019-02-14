@@ -1,2 +1,1 @@
 sacrebleu==1.2.10
-git+git://github.com/NVIDIA/apex.git#egg=apex

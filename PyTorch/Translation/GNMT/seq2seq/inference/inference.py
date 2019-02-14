@@ -1,8 +1,7 @@
-import contextlib
 import logging
-import os
 import subprocess
 import time
+import os
 
 import torch
 import torch.distributed as dist
@@ -10,18 +9,7 @@ import torch.distributed as dist
 import seq2seq.data.config as config
 from seq2seq.inference.beam_search import SequenceGenerator
 from seq2seq.utils import AverageMeter
-from seq2seq.utils import barrier
-from seq2seq.utils import get_rank
-from seq2seq.utils import get_world_size
-
-
-def gather_predictions(preds):
-    world_size = get_world_size()
-    if world_size > 1:
-        all_preds = [preds.new(preds.size(0), preds.size(1)) for i in range(world_size)]
-        dist.all_gather(all_preds, preds)
-        preds = torch.cat(all_preds)
-    return preds
+from seq2seq.utils import get_rank, get_world_size
 
 
 class Translator:
@@ -108,25 +96,17 @@ class Translator:
             eval_path = self.build_eval_path(epoch, iteration)
         detok_eval_path = eval_path + '.detok'
 
-        with contextlib.suppress(FileNotFoundError):
-            os.remove(eval_path)
-            os.remove(detok_eval_path)
-
         rank = get_rank()
-        logging.info(f'Running evaluation on test set')
-        self.model.eval()
-        torch.cuda.empty_cache()
-
-        output = self.evaluate(epoch, iteration, summary)
-        output = output[:len(self.loader.dataset)]
-        output = self.loader.dataset.unsort(output)
-
         if rank == 0:
-            with open(eval_path, 'a') as eval_file:
-                eval_file.writelines(output)
+            logging.info(f'Running evaluation on test set')
+            self.model.eval()
+            torch.cuda.empty_cache()
+
+            self.evaluate(epoch, iteration, eval_path, summary)
             if calc_bleu:
                 self.run_detokenizer(eval_path)
-                test_bleu[0] = self.run_sacrebleu(detok_eval_path, reference_path)
+                test_bleu[0] = self.run_sacrebleu(detok_eval_path,
+                                                  reference_path)
                 if summary:
                     logging.info(f'BLEU on test dataset: {test_bleu[0]:.2f}')
 
@@ -134,9 +114,8 @@ class Translator:
                     logging.info(f'Target accuracy reached')
                     break_training[0] = 1
 
-        barrier()
-        torch.cuda.empty_cache()
-        logging.info(f'Finished evaluation on test set')
+            torch.cuda.empty_cache()
+            logging.info(f'Finished evaluation on test set')
 
         if self.distributed:
             dist.broadcast(break_training, 0)
@@ -144,29 +123,35 @@ class Translator:
 
         return test_bleu[0].item(), break_training[0].item()
 
-    def evaluate(self, epoch, iteration, summary):
+    def evaluate(self, epoch, iteration, eval_path, summary):
         """
         Runs evaluation on test dataset.
 
         :param epoch: index of the current epoch
         :param iteration: index of the current iteration
+        :param eval_path: path to the file for saving results
         :param summary: if True prints summary
         """
+        eval_file = open(eval_path, 'w')
+
         batch_time = AverageMeter(False)
         tot_tok_per_sec = AverageMeter(False)
         iterations = AverageMeter(False)
         enc_seq_len = AverageMeter(False)
         dec_seq_len = AverageMeter(False)
+        total_iters = 0
+        total_lines = 0
         stats = {}
-
-        output = []
 
         for i, (src, indices) in enumerate(self.loader):
             translate_timer = time.time()
             src, src_length = src
 
-            batch_size = self.loader.batch_size
-            global_batch_size = batch_size * get_world_size()
+            if self.batch_first:
+                batch_size = src.size(0)
+            else:
+                batch_size = src.size(1)
+            total_lines += batch_size
             beam_size = self.beam_size
 
             bos = [self.insert_target_start] * (batch_size * beam_size)
@@ -194,18 +179,20 @@ class Translator:
                     generator = self.generator.beam_search
                 preds, lengths, counter = generator(batch_size, bos, context)
 
-            stats['total_dec_len'] = lengths.sum().item()
+            preds = preds.cpu()
+            lengths = lengths.cpu()
+            stats['total_dec_len'] = int(lengths.sum())
             stats['iters'] = counter
+            total_iters += stats['iters']
 
-            indices = torch.tensor(indices).to(preds)
-            preds = preds.scatter(0, indices.unsqueeze(1).expand_as(preds), preds)
+            output = []
+            for idx, pred in enumerate(preds):
+                end = lengths[idx] - 1
+                pred = pred[1:end].tolist()
+                out = self.tokenizer.detokenize(pred)
+                output.append(out)
 
-            preds = gather_predictions(preds).cpu()
-
-            for pred in preds:
-                pred = pred.tolist()
-                detok = self.tokenizer.detokenize(pred)
-                output.append(detok + '\n')
+            output = [output[indices.index(i)] for i in range(len(output))]
 
             elapsed = time.time() - translate_timer
             batch_time.update(elapsed, batch_size)
@@ -232,27 +219,24 @@ class Translator:
                 log = ''.join(log)
                 logging.info(log)
 
-        tot_tok_per_sec.reduce('sum')
-        enc_seq_len.reduce('mean')
-        dec_seq_len.reduce('mean')
-        batch_time.reduce('mean')
-        iterations.reduce('sum')
+            for line in output:
+                eval_file.write(line)
+                eval_file.write('\n')
 
-        if summary and get_rank() == 0:
-            time_per_sentence = (batch_time.avg / global_batch_size)
+        eval_file.close()
+        if summary:
+            time_per_sentence = (batch_time.avg / self.loader.batch_size)
             log = []
             log += f'TEST SUMMARY:\n'
-            log += f'Lines translated: {len(self.loader.dataset)}\t'
+            log += f'Lines translated: {total_lines}\t'
             log += f'Avg total tokens/s: {tot_tok_per_sec.avg:.0f}\n'
             log += f'Avg time per batch: {batch_time.avg:.3f} s\t'
             log += f'Avg time per sentence: {1000*time_per_sentence:.3f} ms\n'
             log += f'Avg encoder seq len: {enc_seq_len.avg:.2f}\t'
             log += f'Avg decoder seq len: {dec_seq_len.avg:.2f}\t'
-            log += f'Total decoder iterations: {int(iterations.sum)}'
+            log += f'Total decoder iterations: {total_iters}'
             log = ''.join(log)
             logging.info(log)
-
-        return output
 
     def run_detokenizer(self, eval_path):
         """

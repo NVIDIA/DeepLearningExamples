@@ -1,15 +1,12 @@
 import logging
-from operator import itemgetter
 
 import torch
-from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
+from torch.utils.data.sampler import SequentialSampler
+from torch.utils.data import DataLoader
 
 import seq2seq.data.config as config
 from seq2seq.data.sampler import BucketingSampler
-from seq2seq.data.sampler import DistributedSampler
-from seq2seq.data.sampler import ShardingSampler
-from seq2seq.data.sampler import StaticDistributedSampler
 
 
 def build_collate_fn(batch_first=False, parallel=True, sort=False):
@@ -52,8 +49,8 @@ def build_collate_fn(batch_first=False, parallel=True, sort=False):
         """
         src_seqs, tgt_seqs = zip(*seqs)
         if sort:
-            indices, src_seqs = zip(*sorted(enumerate(src_seqs),
-                                            key=lambda item: len(item[1]),
+            key = lambda item: len(item[1])
+            indices, src_seqs = zip(*sorted(enumerate(src_seqs), key=key,
                                             reverse=True))
             tgt_seqs = [tgt_seqs[idx] for idx in indices]
 
@@ -67,8 +64,8 @@ def build_collate_fn(batch_first=False, parallel=True, sort=False):
         :param src_seqs: source sequences
         """
         if sort:
-            indices, src_seqs = zip(*sorted(enumerate(src_seqs),
-                                            key=lambda item: len(item[1]),
+            key = lambda item: len(item[1])
+            indices, src_seqs = zip(*sorted(enumerate(src_seqs), key=key,
                                             reverse=True))
         else:
             indices = range(len(src_seqs))
@@ -88,7 +85,6 @@ class TextDataset(Dataset):
         self.min_len = min_len
         self.max_len = max_len
         self.parallel = False
-        self.sorted = False
 
         self.src = self.process_data(src_fname, tokenizer, max_size)
 
@@ -105,14 +101,6 @@ class TextDataset(Dataset):
         self.lengths, indices = self.lengths.sort(descending=True)
 
         self.src = [self.src[idx] for idx in indices]
-        self.indices = indices.tolist()
-        self.sorted = True
-
-    def unsort(self, array):
-        if self.sorted:
-            inverse = sorted(enumerate(self.indices), key=itemgetter(1))
-            array = [array[i[0]] for i in inverse]
-        return array
 
     def filter_data(self, min_len, max_len):
         logging.info(f'Filtering data, min len: {min_len}, max len: {max_len}')
@@ -145,34 +133,24 @@ class TextDataset(Dataset):
     def __getitem__(self, idx):
         return self.src[idx]
 
-    def get_loader(self, batch_size=1, seeds=None, shuffle=False,
-                   num_workers=0, batch_first=False, pad=False,
-                   batching=None, batching_opt={}):
+    def get_loader(self, batch_size=1, shuffle=False, num_workers=0,
+                   batch_first=False, drop_last=False, bucketing=True):
 
         collate_fn = build_collate_fn(batch_first, parallel=self.parallel,
                                       sort=True)
 
         if shuffle:
-            if batching == 'random':
-                sampler = DistributedSampler(self, batch_size, seeds)
-            elif batching == 'sharding':
-                sampler = ShardingSampler(self, batch_size, seeds,
-                                          batching_opt['shard_size'])
-            elif batching == 'bucketing':
-                sampler = BucketingSampler(self, batch_size, seeds,
-                                           batching_opt['num_buckets'])
-            else:
-                raise NotImplementedError
+            sampler = BucketingSampler(self, batch_size, bucketing)
         else:
-            sampler = StaticDistributedSampler(self, batch_size, pad)
+            sampler = SequentialSampler(self)
 
         return DataLoader(self,
                           batch_size=batch_size,
                           collate_fn=collate_fn,
                           sampler=sampler,
                           num_workers=num_workers,
-                          pin_memory=True,
-                          drop_last=False)
+                          pin_memory=False,
+                          drop_last=drop_last)
 
 
 class ParallelDataset(TextDataset):
@@ -182,7 +160,6 @@ class ParallelDataset(TextDataset):
         self.min_len = min_len
         self.max_len = max_len
         self.parallel = True
-        self.sorted = False
 
         self.src = self.process_data(src_fname, tokenizer, max_size)
         self.tgt = self.process_data(tgt_fname, tokenizer, max_size)
@@ -191,11 +168,8 @@ class ParallelDataset(TextDataset):
         self.filter_data(min_len, max_len)
         assert len(self.src) == len(self.tgt)
 
-        src_lengths = [len(s) for s in self.src]
-        tgt_lengths = [len(t) for t in self.tgt]
-        self.src_lengths = torch.tensor(src_lengths)
-        self.tgt_lengths = torch.tensor(tgt_lengths)
-        self.lengths = self.src_lengths + self.tgt_lengths
+        lengths = [len(s) + len(t) for (s, t) in zip(self.src, self.tgt)]
+        self.lengths = torch.tensor(lengths)
 
         if sort:
             self.sort_by_length()
@@ -205,10 +179,6 @@ class ParallelDataset(TextDataset):
 
         self.src = [self.src[idx] for idx in indices]
         self.tgt = [self.tgt[idx] for idx in indices]
-        self.src_lengths = [self.src_lengths[idx] for idx in indices]
-        self.tgt_lengths = [self.tgt_lengths[idx] for idx in indices]
-        self.indices = indices.tolist()
-        self.sorted = True
 
     def filter_data(self, min_len, max_len):
         logging.info(f'Filtering data, min len: {min_len}, max len: {max_len}')
@@ -229,70 +199,3 @@ class ParallelDataset(TextDataset):
 
     def __getitem__(self, idx):
         return self.src[idx], self.tgt[idx]
-
-
-class LazyParallelDataset(TextDataset):
-    def __init__(self, src_fname, tgt_fname, tokenizer,
-                 min_len, max_len, sort=False, max_size=None):
-        self.min_len = min_len
-        self.max_len = max_len
-        self.parallel = True
-        self.sorted = False
-        self.tokenizer = tokenizer
-
-        self.raw_src = self.process_raw_data(src_fname, max_size)
-        self.raw_tgt = self.process_raw_data(tgt_fname, max_size)
-        assert len(self.raw_src) == len(self.raw_tgt)
-
-        logging.info(f'Filtering data, min len: {min_len}, max len: {max_len}')
-        # Subtracting 2 because EOS and BOS are added later during tokenization
-        self.filter_raw_data(min_len - 2, max_len - 2)
-        assert len(self.raw_src) == len(self.raw_tgt)
-
-        # Adding 2 because EOS and BOS are added later during tokenization
-        src_lengths = [i + 2 for i in self.src_len]
-        tgt_lengths = [i + 2 for i in self.tgt_len]
-        self.src_lengths = torch.tensor(src_lengths)
-        self.tgt_lengths = torch.tensor(tgt_lengths)
-        self.lengths = self.src_lengths + self.tgt_lengths
-
-    def process_raw_data(self, fname, max_size):
-        logging.info(f'Processing data from {fname}')
-        data = []
-        with open(fname) as dfile:
-            for idx, line in enumerate(dfile):
-                if max_size and idx == max_size:
-                    break
-                data.append(line)
-        return data
-
-    def filter_raw_data(self, min_len, max_len):
-        initial_len = len(self.raw_src)
-        filtered_src = []
-        filtered_tgt = []
-        filtered_src_len = []
-        filtered_tgt_len = []
-        for src, tgt in zip(self.raw_src, self.raw_tgt):
-            src_len = src.count(' ') + 1
-            tgt_len = tgt.count(' ') + 1
-            if min_len <= src_len <= max_len and \
-                    min_len <= tgt_len <= max_len:
-                filtered_src.append(src)
-                filtered_tgt.append(tgt)
-                filtered_src_len.append(src_len)
-                filtered_tgt_len.append(tgt_len)
-
-        self.raw_src = filtered_src
-        self.raw_tgt = filtered_tgt
-        self.src_len = filtered_src_len
-        self.tgt_len = filtered_tgt_len
-        filtered_len = len(self.raw_src)
-        logging.info(f'Pairs before: {initial_len}, after: {filtered_len}')
-
-    def __getitem__(self, idx):
-        src = torch.tensor(self.tokenizer.segment(self.raw_src[idx]))
-        tgt = torch.tensor(self.tokenizer.segment(self.raw_tgt[idx]))
-        return src, tgt
-
-    def __len__(self):
-        return len(self.raw_src)
