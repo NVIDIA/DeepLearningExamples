@@ -28,20 +28,37 @@ and
   * 4-layer LSTM, hidden size 1024, first layer is bidirectional, the rest are
     unidirectional
   * with residual connections starting from 3rd layer
-  * uses LSTM layer accelerated by cuDNN
+  * uses standard pytorch nn.LSTM layer
+  * dropout is applied on input to all LSTM layers, probability of dropout is
+    set to 0.2
+  * hidden state of LSTM layers is initialized with zeros
+  * weights and bias of LSTM layers is initialized with uniform(-0.1, 0.1)
+    distribution
 * decoder:
   * 4-layer unidirectional LSTM with hidden size 1024 and fully-connected
     classifier
   * with residual connections starting from 3rd layer
-  * uses LSTM layer accelerated by cuDNN
+  * uses standard pytorch nn.LSTM layer
+  * dropout is applied on input to all LSTM layers, probability of dropout is
+    set to 0.2
+  * hidden state of LSTM layers is initialized with zeros
+  * weights and bias of LSTM layers is initialized with uniform(-0.1, 0.1)
+    distribution
+  * weights and bias of fully-connected classifier is initialized with
+    uniform(-0.1, 0.1) distribution
 * attention:
   * normalized Bahdanau attention
   * output from first LSTM layer of decoder goes into attention,
   then re-weighted context is concatenated with the input to all subsequent
   LSTM layers of the decoder at the current timestep
+  * linear transform of keys and queries is initialized with uniform(-0.1, 0.1),
+  normalization scalar is initialized with 1.0 / sqrt(1024),
+    normalization bias is initialized with zero
 * inference:
   * beam search with default beam size of 5
-  * with coverage penalty and length normalization terms
+  * with coverage penalty and length normalization, coverage penalty factor is
+    set to 0.1, length normalization factor is set to 0.6 and length
+    normalization constant is set to 5.0
   * detokenized BLEU computed by [SacreBLEU](https://github.com/awslabs/sockeye/tree/master/contrib/sacrebleu)
   * [motivation](https://github.com/awslabs/sockeye/tree/master/contrib/sacrebleu#motivation) for choosing SacreBLEU
 
@@ -53,12 +70,11 @@ Our experiments show that a 4-layer model is significantly faster to train and
 yields comparable accuracy on the public
 [WMT16 English-German](http://www.statmt.org/wmt16/translation-task.html)
 dataset. The number of LSTM layers is controlled by the `num_layers` parameter
-in the `scripts/train.sh` training script.
+in the `train.py` training script.
 
 # Setup
 ## Requirements
-* [PyTorch 18.06-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
-(or newer)
+* [PyTorch 19.01-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
 * [SacreBLEU 1.2.10](https://pypi.org/project/sacrebleu/1.2.10/)
 
 This repository contains `Dockerfile` which extends the PyTorch NGC container
@@ -76,7 +92,7 @@ and
 Before you can train using mixed precision with Tensor Cores, ensure that you
 have a
 [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
-based GPU.
+based GPU. Other platforms might likely work but aren't officially supported.
 For information about how to train using mixed precision, see the
 [Mixed Precision Training paper](https://arxiv.org/abs/1710.03740)
 and
@@ -109,15 +125,33 @@ By default, the training script will use all available GPUs. The training script
 saves only one checkpoint with the lowest value of the loss function on the
 validation dataset. All results and logs are saved to the `results` directory
 (on the host) or to the `/workspace/gnmt/results` directory (in the container).
-By default, the `scripts/train.sh` script will launch mixed precision training
+By default, the `train.py` script will launch mixed precision training
 with Tensor Cores. You can change this behaviour by setting the `--math fp32`
-flag in the `scripts/train.sh` script.
+flag for the `train.py` training script.
+
+Launching training on 1, 4 or 8 GPUs:
+
 ```
-bash scripts/train.sh
+python3 -m launch train.py --seed 2 --train-global-batch-size 1024
 ```
+
+Launching training on 16 GPUs:
+
+```
+python3 -m launch train.py --seed 2 --train-global-batch-size 2048
+```
+
+By default the training script will launch training with batch size 128 per GPU.
+If specified `--train-global-batch-size` is larger than 128 times the number of
+GPUs available for the training then the training script will accumulate
+gradients over consecutive iterations and then perform the weight update.
+For example 1 GPU training with `--train-global-batch-size 1024` will accumulate
+gradients over 8 iterations before doing the weight update with accumulated
+gradients.
+
 The training script automatically runs the validation and testing after each
 training epoch. The results from the validation and testing are printed to
-the standard error (stderr) and saved to log files.
+the standard output (stdout) and saved to log files.
 
 The summary after each training epoch is printed in the following format:
 ```
@@ -145,21 +179,24 @@ Our download script is very similar to the `wmt16_en_de.sh` script from the
 [tensorflow/nmt](https://github.com/tensorflow/nmt/blob/master/nmt/scripts/wmt16_en_de.sh)
 repository. Our download script contains an extra preprocessing step, which
 discards all pairs of sentences which can't be decoded by *latin-1* encoder.
-
 The `scripts/wmt16_en_de.sh` script uses the
 [subword-nmt](https://github.com/rsennrich/subword-nmt)
 package to segment text into subword units (BPE). By default, the script builds
 the shared vocabulary of 32,000 tokens.
 
+In order to test with other datasets, scripts need to be customized accordingly.
+
 ## Running training
 The default training configuration can be launched by running the
-`scripts/train.sh` training script.
+`train.py` training script.
 By default, the training script saves only one checkpoint with the lowest value
 of the loss function on the validation dataset, an evaluation is performed after
 each training epoch. Results are stored in the `results/gnmt_wmt16` directory.
 
 The training script launches data-parallel training with batch size 128 per GPU
-on all available GPUs. After each training epoch, the script runs an evaluation
+on all available GPUs. We have tested reliance on up to 16 GPUs on a single
+node.
+After each training epoch, the script runs an evaluation
 on the validation dataset and outputs a BLEU score on the test dataset
 (*newstest2014*). BLEU is computed by the
 [SacreBLEU](https://github.com/awslabs/sockeye/tree/master/contrib/sacrebleu)
@@ -171,12 +208,11 @@ behavior by setting the `CUDA_VISIBLE_DEVICES` variable in your environment or
 by setting the `NV_GPU` variable at the Docker container launch
 ([see section "GPU isolation"](https://github.com/NVIDIA/nvidia-docker/wiki/nvidia-docker#gpu-isolation)).
 
-By default, the `scripts/train.sh` script will launch mixed precision training
+By default, the `train.py` script will launch mixed precision training
 with Tensor Cores. You can change this behaviour by setting the `--math fp32`
-flag in the `scripts/train.sh` script.
+flag for the `train.py` script.
 
-Internally, the `scripts/train.sh` script uses `train.py`. To view all available
-options for training, run `python3 train.py --help`.
+To view all available options for training, run `python3 train.py --help`.
 
 ## Running inference
 Inference can be run by launching the `translate.py` inference script, although,
@@ -188,93 +224,129 @@ normalization term. Greedy decoding can be enabled by setting the beam size to 1
 
 To view all available options for inference, run `python3 translate.py --help`.
 
-## Benchmarking scripts
-### Training performance benchmark
-The `scripts/benchmark_training.sh` benchmarking script runs a few, relatively
-short training sessions and automatically collects performance numbers. The
-benchmarking script assumes that the `scripts/wmt16_en_de.sh` data download
-script was launched and the datasets are available in the default location
-(`data` directory).
-
-Results from the benchmark are stored in the `results` directory. After the
-benchmark is done, you can launch the `scripts/parse_train_benchmark.sh` script
-to generate a short summary which will contain launch configuration, performance
-(in tokens per second), and estimated training time needed for one epoch (in
-seconds).
-
-### Inference performance and accuracy benchmark
-The `scripts/benchmark_inference.sh` benchmarking script launches a number of
-inference runs with different hyperparameters (beam size, batch size, arithmetic
-type) on sorted and unsorted *newstest2014* test dataset. Performance and
-accuracy results are stored in the `results/inference_benchmark` directory.
-BLEU score is computed by the SacreBLEU package.
-
-The `scripts/benchmark_inference.sh` script assumes that the
-`scripts/wmt16_en_de.sh` data download script was
-launched and the datasets are available in the default location (`data`
-directory).
-
-The `scripts/benchmark_inference.sh` script requires a pre-trained
-model checkpoint. By default, the script is loading a checkpoint from the
-`results/gnmt_wmt16/model_best.pth` location.
-
 ## Training Accuracy Results
-All results were obtained by running the `scripts/train.sh` script in
-the pytorch-18.06-py3 Docker container on NVIDIA DGX-1 with 8 V100 16G GPUs.
+Results were obtained by running the `train.py` script with the default
+batch size = 128 per GPU in the pytorch-19.01-py3 Docker container.
 
+### NVIDIA DGX-1 (8x Tesla V100 16G)
+Command used to launch the training:
 
-| **number of GPUs** | **mixed precision BLEU** | **fp32 BLEU** | **mixed precision training time** | **fp32 training time** |
-| ------------------ | ------------------------ | ------------- | --------------------------------- | ---------------------- |
-|         1          |        22.54		          |     22.25		  |          412 minutes              |       948 minutes      |
-|         4          |        22.45		          |     22.46		  |          118 minutes              |       264 minutes      |
-|         8          |        22.41		          |     22.43		  |          64 minutes               |       139 minutes      |
+```
+python3 -m launch train.py --seed 2 --train-global-batch-size 1024
+```
+
+| **number of GPUs** | **batch size/GPU** | **mixed precision BLEU** | **fp32 BLEU** | **mixed precision training time** | **fp32 training time** |
+| --- | --- | ----- | ----- | ------------- | ------------- |
+|  1  | 128 | 24.59 | 24.71 | 264.4 minutes | 824.4 minutes |
+|  4  | 128 | 24.30 | 24.45 | 89.5 minutes  | 230.8 minutes |
+|  8  | 128 | 24.45 | 24.48 | 46.2 minutes  | 116.6 minutes |
+
+### NVIDIA DGX-2 (16x Tesla V100 32G)
+Commands used to launch the training:
+
+```
+for 1,4,8 GPUs:
+python3 -m launch train.py --seed 2 --train-global-batch-size 1024
+for 16 GPUs:
+python3 -m launch train.py --seed 2 --train-global-batch-size 2048
+```
+
+| **number of GPUs** | **batch size/GPU** | **mixed precision BLEU** | **fp32 BLEU** | **mixed precision training time** | **fp32 training time** |
+| --- | --- | ----- | ----- | ------------- | ------------- |
+| 1   | 128 | 24.59 | 24.71 | 265.0 minutes | 825.1 minutes |
+| 4   | 128 | 24.69 | 24.33 | 87.4 minutes  | 216.3 minutes |
+| 8   | 128 | 24.50 | 24.47 | 49.6 minutes  | 113.5 minutes |
+| 16  | 128 | 24.22 | 24.16 | 26.3 minutes  | 58.6 minutes  |
 
 ![TrainingLoss](./img/training_loss.png)
 
 ### Training Stability Test
-The GNMT v2 model was trained for 10 epochs, starting from 96 different initial
+The GNMT v2 model was trained for 6 epochs, starting from 50 different initial
 random seeds. After each training epoch the model was evaluated on the test
 dataset and the BLEU score was recorded. The training was performed in the
-pytorch-18.06-py3 Docker container on NVIDIA DGX-1 with 8 V100 16G GPUs. The
-following table summarizes results of the stability test.
+pytorch-19.01-py3 Docker container on NVIDIA DGX-1 with 8 Tesla V100 16G GPUs.
+The following table summarizes results of the stability test.
 
 ![TrainingAccuracy](./img/training_accuracy.png)
 
-## Training Performance Results
-All results were obtained by running the `scripts/train.sh` training script in
-the pytorch-18.06-py3 Docker container on NVIDIA DGX-1 with 8 V100 16G GPUs.
-Performance numbers (in tokens per second) were averaged over an entire training
-epoch.
+#### BLEU scores after each training epoch for different initial random seeds
+| **epoch** | **average** | **stdev** | **minimum** | **maximum** | **median** |
+| --- | ------ | ----- | ------ | ------ | ------ |
+|  1  | 19.954 | 0.326 | 18.710 | 20.490 | 20.020 |
+|  2  | 21.734 | 0.222 | 21.220 | 22.120 | 21.765 |
+|  3  | 22.502 | 0.223 | 21.960 | 22.970 | 22.485 |
+|  4  | 23.004 | 0.221 | 22.350 | 23.430 | 23.020 |
+|  5  | 24.201 | 0.146 | 23.900 | 24.480 | 24.215 |
+|  6  | 24.423 | 0.159 | 24.070 | 24.820 | 24.395 |
 
-| **number of GPUs** | **mixed precision tokens/s** | **fp32 tokens/s** | **mixed precision speedup** | **mixed precision multi-gpu weak scaling** | **fp32 multi-gpu weak scaling** |
-| -------- | ------------- | ------------- | ------------ | --------------------------- | --------------------------- |
-|    1     |    42337      |   18581       |   2.279      |        1.000                |        1.000                |
-|    4     |    153433     |   67586       |   2.270      |        3.624                |        3.637                |
-|    8     |    300181     |   132734      |   2.262      |        7.090                |        7.144                |
+
+## Training Performance Results
+All results were obtained by running the `train.py` training script in the
+pytorch-19.01-py3 Docker container. Performance numbers (in tokens per second)
+were averaged over an entire training epoch.
+
+### NVIDIA DGX-1 (8x Tesla V100 16G)
+
+| **number of GPUs** | **batch size/GPU** | **mixed precision tokens/s** | **fp32 tokens/s** | **mixed precision speedup** | **mixed precision multi-gpu strong scaling** | **fp32 multi-gpu strong scaling** |
+| --- | --- | ------ | ------ | ----- | ----- | ----- |
+|  1  | 128 | 66050  | 21346  | 3.094 | 1.000  | 1.000|
+|  4  | 128 | 196174 | 76083  | 2.578 | 2.970  | 3.564|
+|  8  | 128 | 387282 | 153697 | 2.520 | 5.863  | 7.200|
+
+
+### NVIDIA DGX-2 (16x Tesla V100 32G)
+
+| **number of GPUs** | **batch size/GPU** | **mixed precision tokens/s** | **fp32 tokens/s** | **mixed precision speedup** | **mixed precision multi-gpu strong scaling** | **fp32 multi-gpu strong scaling** |
+| --- | --- | ------ | ------- | ----- | ------ | ------ |
+|  1  | 128 | 65830  | 22695  | 2.901 | 1.000   | 1.000  |
+|  4  | 128 | 200886 | 81224  | 2.473 | 3.052   | 3.579  |
+|  8  | 128 | 362612 | 156536 | 2.316 | 5.508   | 6.897  |
+| 16  | 128 | 738521 | 314831 | 2.346 | 11.219  | 13.872 |
 
 ## Inference Performance Results
-All results were obtained by running the `scripts/benchmark_inference.sh`
-benchmarking script in the pytorch-18.06-py3 Docker container on NVIDIA DGX-1.
-Inference was run on a single V100 16G GPU.
+All results were obtained by running the `translate.py` script in the
+pytorch-19.01-py3 Docker container on NVIDIA DGX-1. Inference benchmark was run
+on a single Tesla V100 16G GPU. The benchmark requires a checkpoint from a fully
+trained model.
+
+Command to launch the inference benchmark:
+```
+python3 translate.py --input data/wmt16_de_en/newstest2014.tok.bpe.32000.en \
+  --reference data/wmt16_de_en/newstest2014.de --output /tmp/output \
+  --model results/gnmt/model_best.pth --batch-size 32 128 512 \
+  --beam-size 1 2 5 10 --math fp16 fp32
+```
 
 | **batch size** | **beam size** | **mixed precision BLEU** | **fp32 BLEU** | **mixed precision tokens/s** | **fp32 tokens/s** |
-| -------------- | ------------- | ------------- | ------------- | ----------------- | ------------ |
-|      512       |       1       |     20.63     |    20.63      |     62009  	     |    31229     |
-|      512       |       2       |     21.55     |    21.60      |     32669  	     |    16454     |
-|      512       |       5       |     22.34     |    22.36      |     21105  	     |    8562      |
-|      512       |       10      |     22.34     |    22.40      |     12967  	     |    4720      |
-|      128       |       1       |     20.62     |    20.63      |     27095  	     |    19505     |
-|      128       |       2       |     21.56     |    21.60      |     13224  	     |    9718      |
-|      128       |       5       |     22.38     |    22.36      |     10987  	     |    6575      |
-|      128       |       10      |     22.35     |    22.40      |     8603          |    4103      |
-|      32        |       1       |     20.62     |    20.63      |     9451   	     |    8483      |
-|      32        |       2       |     21.56     |    21.60      |     4818          |    4333      |
-|      32        |       5       |     22.34     |    22.36      |     4505          |    3655      |
-|      32        |       10      |     22.37     |    22.40      |     4086          |    2822      |
+| ---- | ----- | ------- | ------- | ---------|-------- |
+|  32  |   1   |  23.18  |  23.18  |  23571   |  19462  |
+|  32  |   2   |  24.09  |  24.12  |  15303   |  12345  |
+|  32  |   5   |  24.63  |  24.62  |  13644   |  7725   |
+|  32  |   10  |  24.50  |  24.48  |  11049   |  5359   |
+|  128 |   1   |  23.17  |  23.18  |  73429   |  42272  |
+|  128 |   2   |  24.07  |  24.12  |  43373   |  23131  |
+|  128 |   5   |  24.69  |  24.63  |  29646   |  12525  |
+|  128 |   10  |  24.45  |  24.48  |  19100   |  6886   |
+|  512 |   1   |  23.17  |  23.18  |  135333  |  48962  |
+|  512 |   2   |  24.08  |  24.12  |  74367   |  27308  |
+|  512 |   5   |  24.60  |  24.63  |  39217   |  12674  |
+|  512 |   10  |  24.54  |  24.48  |  21433   |  6640   |
+
 
 # Changelog
 1. Aug 7, 2018
   * Initial release
+2. Dec 4, 2018
+  * Added exponential warm-up and step learning rate decay
+  * Multi-GPU (distributed) inference and validation
+  * Default container updated to PyTorch 18.11-py3
+  * General performance improvements
+3. Feb 14, 2019
+  * Different batching algorithm (bucketing with 5 equal-width buckets)
+  * Additional dropouts before first LSTM layer in encoder and in decoder
+  * Weight initialization changed to uniform (-0.1, 0.1)
+  * Switched order of dropout and concatenation with attention in decoder
+  * Default container updated to PyTorch 19.01-py3
 
 # Known issues
 None

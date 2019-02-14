@@ -12,7 +12,7 @@ class BahdanauAttention(nn.Module):
     Implementation is very similar to tf.contrib.seq2seq.BahdanauAttention
     """
     def __init__(self, query_size, key_size, num_units, normalize=False,
-                 dropout=0, batch_first=False):
+                 batch_first=False, init_weight=0.1):
         """
         Constructor for the BahdanauAttention.
 
@@ -20,9 +20,10 @@ class BahdanauAttention(nn.Module):
         :param key_size: feature dimension for keys
         :param num_units: internal feature dimension
         :param normalize: whether to normalize energy term
-        :param dropout: probability of the dropout (between softmax and bmm)
         :param batch_first: if True batch size is the 1st dimension, if False
             the sequence is first and batch size is second
+        :param init_weight: range for uniform initializer used to initialize
+            Linear key and query transform layers and linear_att vector
         """
         super(BahdanauAttention, self).__init__()
 
@@ -32,10 +33,11 @@ class BahdanauAttention(nn.Module):
 
         self.linear_q = nn.Linear(query_size, num_units, bias=False)
         self.linear_k = nn.Linear(key_size, num_units, bias=False)
+        nn.init.uniform_(self.linear_q.weight.data, -init_weight, init_weight)
+        nn.init.uniform_(self.linear_k.weight.data, -init_weight, init_weight)
 
         self.linear_att = Parameter(torch.Tensor(num_units))
 
-        self.dropout = nn.Dropout(dropout)
         self.mask = None
 
         if self.normalize:
@@ -45,14 +47,14 @@ class BahdanauAttention(nn.Module):
             self.register_parameter('normalize_scalar', None)
             self.register_parameter('normalize_bias', None)
 
-        self.reset_parameters()
+        self.reset_parameters(init_weight)
 
-    def reset_parameters(self):
+    def reset_parameters(self, init_weight):
         """
         Sets initial random values for trainable parameters.
         """
         stdv = 1. / math.sqrt(self.num_units)
-        self.linear_att.data.uniform_(-stdv, stdv)
+        self.linear_att.data.uniform_(-init_weight, init_weight)
 
         if self.normalize:
             self.normalize_scalar.data.fill_(stdv)
@@ -74,7 +76,8 @@ class BahdanauAttention(nn.Module):
         else:
             max_len = context.size(0)
 
-        indices = torch.arange(0, max_len, dtype=torch.int64, device=context.device)
+        indices = torch.arange(0, max_len, dtype=torch.int64,
+                               device=context.device)
         self.mask = indices >= (context_len.unsqueeze(1))
 
     def calc_score(self, att_query, att_keys):
@@ -96,16 +99,12 @@ class BahdanauAttention(nn.Module):
 
         if self.normalize:
             sum_qk = sum_qk + self.normalize_bias
-
-            tmp = self.linear_att.to(torch.float32)
-            linear_att = tmp / tmp.norm()
-            linear_att = linear_att.to(self.normalize_scalar)
-
+            linear_att = self.linear_att / self.linear_att.norm()
             linear_att = linear_att * self.normalize_scalar
         else:
             linear_att = self.linear_att
 
-        out = F.tanh(sum_qk).matmul(linear_att)
+        out = torch.tanh(sum_qk).matmul(linear_att)
         return out
 
     def forward(self, query, keys):
@@ -152,7 +151,6 @@ class BahdanauAttention(nn.Module):
 
         # Calculate the weighted average of the attention inputs according to
         # the scores
-        scores_normalized = self.dropout(scores_normalized)
         # context: (b x t_q x n)
         context = torch.bmm(scores_normalized, keys)
 

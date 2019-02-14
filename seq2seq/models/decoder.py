@@ -3,16 +3,18 @@ import itertools
 import torch
 import torch.nn as nn
 
-from seq2seq.models.attention import BahdanauAttention
 import seq2seq.data.config as config
+from seq2seq.models.attention import BahdanauAttention
+from seq2seq.utils import init_lstm_
 
 
 class RecurrentAttention(nn.Module):
     """
-    LSTM with an attention module.
+    LSTM wrapped with an attention module.
     """
-    def __init__(self, input_size, context_size, hidden_size, num_layers=1,
-                 bias=True, batch_first=False, dropout=0):
+    def __init__(self, input_size=1024, context_size=1024, hidden_size=1024,
+                 num_layers=1, batch_first=False, dropout=0.2,
+                 init_weight=0.1):
         """
         Constructor for the RecurrentAttention.
 
@@ -20,16 +22,17 @@ class RecurrentAttention(nn.Module):
         :param context_size: number of features in output from encoder
         :param hidden_size: internal hidden size
         :param num_layers: number of layers in LSTM
-        :param bias: enables bias in LSTM layers
         :param batch_first: if True the model uses (batch,seq,feature) tensors,
             if false the model uses (seq, batch, feature)
-        :param dropout: probability of dropout
+        :param dropout: probability of dropout (on input to LSTM layer)
+        :param init_weight: range for the uniform initializer
         """
 
         super(RecurrentAttention, self).__init__()
 
-        self.rnn = nn.LSTM(input_size, hidden_size, num_layers, bias,
-                           batch_first)
+        self.rnn = nn.LSTM(input_size, hidden_size, num_layers, bias=True,
+                           batch_first=batch_first)
+        init_lstm_(self.rnn, init_weight)
 
         self.attn = BahdanauAttention(hidden_size, context_size, context_size,
                                       normalize=True, batch_first=batch_first)
@@ -52,9 +55,9 @@ class RecurrentAttention(nn.Module):
         # softmax
         self.attn.set_mask(context_len, context)
 
+        inputs = self.dropout(inputs)
         rnn_outputs, hidden = self.rnn(inputs, hidden)
         attn_outputs, scores = self.attn(rnn_outputs, context)
-        rnn_outputs = self.dropout(rnn_outputs)
 
         return rnn_outputs, hidden, attn_outputs, scores
 
@@ -63,23 +66,18 @@ class Classifier(nn.Module):
     """
     Fully-connected classifier
     """
-    def __init__(self, in_features, out_features, math='fp32'):
+    def __init__(self, in_features, out_features, init_weight=0.1):
         """
         Constructor for the Classifier.
 
         :param in_features: number of input features
         :param out_features: number of output features (size of vocabulary)
-        :param math: arithmetic type, 'fp32' or 'fp16'
+        :param init_weight: range for the uniform initializer
         """
         super(Classifier, self).__init__()
-
-        self.out_features = out_features
-
-        # padding required to trigger HMMA kernels
-        if math == 'fp16':
-            out_features = (out_features + 7) // 8 * 8
-
         self.classifier = nn.Linear(in_features, out_features)
+        nn.init.uniform_(self.classifier.weight.data, -init_weight, init_weight)
+        nn.init.uniform_(self.classifier.bias.data, -init_weight, init_weight)
 
     def forward(self, x):
         """
@@ -88,7 +86,6 @@ class Classifier(nn.Module):
         :param x: output from decoder
         """
         out = self.classifier(x)
-        out = out[..., :self.out_features]
         return out
 
 
@@ -102,22 +99,24 @@ class ResidualRecurrentDecoder(nn.Module):
     LSTM layer of the decoder goes into the attention module, then the
     re-weighted context is concatenated with inputs to all subsequent LSTM
     layers in the decoder at the current timestep.
+
+    Residual connections are enabled after 3rd LSTM layer, dropout is applied
+    on inputs to LSTM layers.
     """
-    def __init__(self, vocab_size, hidden_size=128, num_layers=8, bias=True,
-                 dropout=0, batch_first=False, math='fp32', embedder=None):
+    def __init__(self, vocab_size, hidden_size=1024, num_layers=4, dropout=0.2,
+                 batch_first=False, embedder=None, init_weight=0.1):
         """
         Constructor of the ResidualRecurrentDecoder.
 
         :param vocab_size: size of vocabulary
         :param hidden_size: hidden size for LSMT layers
         :param num_layers: number of LSTM layers
-        :param bias: enables bias in LSTM layers
-        :param dropout: probability of dropout (between LSTM layers)
+        :param dropout: probability of dropout (on input to LSTM layers)
         :param batch_first: if True the model uses (batch,seq,feature) tensors,
             if false the model uses (seq, batch, feature)
-        :param math: arithmetic type, 'fp32' or 'fp16'
-        :param embedder: embedding module, if None constructor will create new
-            embedding layer
+        :param embedder: instance of nn.Embedding, if None constructor will
+            create new embedding layer
+        :param init_weight: range for the uniform initializer
         """
         super(ResidualRecurrentDecoder, self).__init__()
 
@@ -125,21 +124,26 @@ class ResidualRecurrentDecoder(nn.Module):
 
         self.att_rnn = RecurrentAttention(hidden_size, hidden_size,
                                           hidden_size, num_layers=1,
-                                          batch_first=batch_first)
+                                          batch_first=batch_first,
+                                          dropout=dropout)
 
         self.rnn_layers = nn.ModuleList()
         for _ in range(num_layers - 1):
             self.rnn_layers.append(
-                nn.LSTM(2 * hidden_size, hidden_size, num_layers=1, bias=bias,
+                nn.LSTM(2 * hidden_size, hidden_size, num_layers=1, bias=True,
                         batch_first=batch_first))
+
+        for lstm in self.rnn_layers:
+            init_lstm_(lstm, init_weight)
 
         if embedder is not None:
             self.embedder = embedder
         else:
             self.embedder = nn.Embedding(vocab_size, hidden_size,
                                          padding_idx=config.PAD)
+            nn.init.uniform_(embedder.weight.data, -init_weight, init_weight)
 
-        self.classifier = Classifier(hidden_size, vocab_size, math)
+        self.classifier = Classifier(hidden_size, vocab_size)
         self.dropout = nn.Dropout(p=dropout)
 
     def init_hidden(self, hidden):
@@ -199,15 +203,15 @@ class ResidualRecurrentDecoder(nn.Module):
         x, h, attn, scores = self.att_rnn(x, hidden[0], enc_context, enc_len)
         self.append_hidden(h)
 
-        x = self.dropout(x)
         x = torch.cat((x, attn), dim=2)
+        x = self.dropout(x)
         x, h = self.rnn_layers[0](x, hidden[1])
         self.append_hidden(h)
 
         for i in range(1, len(self.rnn_layers)):
             residual = x
-            x = self.dropout(x)
             x = torch.cat((x, attn), dim=2)
+            x = self.dropout(x)
             x, h = self.rnn_layers[i](x, hidden[i + 1])
             self.append_hidden(h)
             x = x + residual
