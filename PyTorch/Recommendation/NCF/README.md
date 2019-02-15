@@ -173,6 +173,11 @@ Mean HR@10 for mixed precision was equal to 0.95917 and for single precision it 
 
 ## Training performance results
 
+This example is based on [our submission for the MLPerf v0.5 benchmark](https://github.com/mlperf/results/tree/master/v0.5.0/nvidia/submission/code/recommendation/pytorch). Please note that we've introduced some improvements to this version that make time-to-train not directly comparable between it and our MLPerf submission:
+- This version uses a more efficient multi-gpu sharding algorithm
+- We added dropout operations here to achieve better accuracy
+- This version uses 100 negatives by default during the evaluation phase as was done in the original NCF paper. MLPerf version used 999
+- We save the model checkpoints in this version. This might make the training a few seconds slower depending on the speed of your storage
 
 ### NVIDIA DGX-1 with 8 V100 16G GPUs
 
@@ -180,10 +185,17 @@ The following table shows the best training throughput:
 
 | **Number of GPUs (samples/sec)** | **Mixed precision (samples/sec)** | **Full precision (samples/sec)** | **Speedup** | 
 |:---:|:-------------:|:-----------:|:-----:|
-| 1 | 20,027 840 | 9,529,271 | 2.10 |
-| 4 | 62,633 260| 32,719,700 | 1.91 |
-| 8 | 99,332 230| 55,004,590 | 1.81 |
+| 1 | 20,027,840 | 9,529,271 | 2.10 |
+| 4 | 62,633,260| 32,719,700 | 1.91 |
+| 8 | 99,332,230| 55,004,590 | 1.81 |
 
+The following table shows mean time to reach HR@10 of 0.9562 across 5 random seeds. The training time was measured excluding data downloading, preprocessing and library initialization times.
+
+| **Number of GPUs (samples/sec)** | **Mixed precision (seconds)** | **Full precision (seconds)** | **Speedup** | 
+|:---:|:-------------:|:-----------:|:-----:|
+| 1 | 78.73 | 153.90 | 1.95 |
+| 4 | 25.80 | 49.41 | 1.92 |
+| 8 | 20.42 | 32.68 | 1.60 |
 
 ### NVIDIA DGX-1 with 8 V100 32G GPUs
 
@@ -191,10 +203,17 @@ The following table shows the best training throughput:
 	
 | **Number of GPUs (samples/sec)** | **Mixed precision (samples/sec)** | **Full precision (samples/sec)** | **Speedup** | 
 |:---:|:-------------:|:-----------:|:-----:|
-| 1 | 18,871 650 | 9,206 424 | 2.05 |
-| 4 | 59,413 640 | 31,898 870 | 1.86 |
-| 8 | 94,752 770 | 53,645 640 | 1.77 |
+| 1 | 18,871,650 | 9,206,424 | 2.05 |
+| 4 | 59,413,640 | 31,898,870 | 1.86 |
+| 8 | 94,752,770 | 53,645,640 | 1.77 |
 
+The following table shows mean time to reach HR@10 of 0.9562 across 5 random seeds. The training time was measured excluding data downloading, preprocessing and library initialization times.
+
+| **Number of GPUs (samples/sec)** | **Mixed precision (seconds)** | **Full precision (seconds)** | **Speedup** | 
+|:---:|:-------------:|:-----------:|:-----:|
+| 1 | 79.80 | 147.92 | 1.85 |
+| 4 | 27.67 | 47.64 | 1.72 |
+| 8 | 22.61 | 31.62 | 1.40 |
 
 ## Inference performance results
 
