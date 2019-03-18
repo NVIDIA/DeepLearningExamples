@@ -60,7 +60,8 @@ class ResidualRecurrentEncoder(nn.Module):
         else:
             self.embedder = nn.Embedding(vocab_size, hidden_size,
                                          padding_idx=config.PAD)
-            nn.init.uniform_(embedder.weight.data, -init_weight, init_weight)
+            nn.init.uniform_(self.embedder.weight.data, -init_weight,
+                             init_weight)
 
     def forward(self, inputs, lengths):
         """

@@ -1,0 +1,19 @@
+MODEL:
+  META_ARCHITECTURE: "GeneralizedRCNN"
+  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  RPN:
+    PRE_NMS_TOP_N_TEST: 6000
+    POST_NMS_TOP_N_TEST: 1000
+  ROI_MASK_HEAD:
+    PREDICTOR: "MaskRCNNC4Predictor"
+    SHARE_BOX_FEATURE_EXTRACTOR: True
+  MASK_ON: True
+DATASETS:
+  TRAIN: ("coco_2014_train", "coco_2014_valminusminival")
+  TEST: ("coco_2014_minival",)
+SOLVER:
+  BASE_LR: 0.01
+  WEIGHT_DECAY: 0.0001
+  STEPS: (120000, 160000)
+  MAX_ITER: 180000
+  IMS_PER_BATCH: 8

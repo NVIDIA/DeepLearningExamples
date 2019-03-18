@@ -1,0 +1,6 @@
+matplotlib
+numpy
+inflect
+librosa
+scipy
+Unidecode

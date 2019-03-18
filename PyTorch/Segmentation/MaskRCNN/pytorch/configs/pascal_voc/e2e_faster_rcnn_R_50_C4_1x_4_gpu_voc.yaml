@@ -1,0 +1,20 @@
+MODEL:
+  META_ARCHITECTURE: "GeneralizedRCNN"
+  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  RPN:
+    PRE_NMS_TOP_N_TEST: 6000
+    POST_NMS_TOP_N_TEST: 300
+    ANCHOR_SIZES: (128, 256, 512)
+  ROI_BOX_HEAD:
+    NUM_CLASSES: 21
+DATASETS:
+  TRAIN: ("voc_2007_train", "voc_2007_val")
+  TEST: ("voc_2007_test",)
+SOLVER:
+  BASE_LR: 0.004
+  WEIGHT_DECAY: 0.0001
+  STEPS: (12500, )
+  MAX_ITER: 17500
+  IMS_PER_BATCH: 4
+TEST:
+  IMS_PER_BATCH: 4

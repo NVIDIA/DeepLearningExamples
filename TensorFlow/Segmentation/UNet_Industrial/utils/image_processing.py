@@ -1,0 +1,40 @@
+# !/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# ==============================================================================
+#
+# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# ==============================================================================
+
+import tensorflow as tf
+
+__all__ = ["binarize_output"]
+
+
+def binarize_output(image, threshold=None):
+
+    if threshold is not None:
+        image = tf.cast(image > threshold, dtype=tf.uint8)
+        image = image * 255
+    else:
+        image = tf.cast(image * 255, dtype=tf.uint8)
+
+    encoded_image = tf.image.encode_jpeg(image, format='grayscale', quality=100)
+
+    if image.get_shape().rank == 3:
+        image = tf.expand_dims(image, axis=0)
+
+    return image, encoded_image
