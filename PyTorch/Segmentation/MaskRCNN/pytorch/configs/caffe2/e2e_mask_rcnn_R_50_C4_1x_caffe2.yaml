@@ -1,0 +1,9 @@
+MODEL:
+  META_ARCHITECTURE: "GeneralizedRCNN"
+  WEIGHT: "catalog://Caffe2Detectron/COCO/35858791/e2e_mask_rcnn_R-50-C4_1x"
+  ROI_MASK_HEAD:
+    PREDICTOR: "MaskRCNNC4Predictor"
+    SHARE_BOX_FEATURE_EXTRACTOR: True
+  MASK_ON: True
+DATASETS:
+  TEST: ("coco_2014_minival",)

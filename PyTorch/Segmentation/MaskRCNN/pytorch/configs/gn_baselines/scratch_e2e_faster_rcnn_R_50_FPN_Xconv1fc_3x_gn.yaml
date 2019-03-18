@@ -1,0 +1,51 @@
+INPUT:
+  MIN_SIZE_TRAIN: 800
+  MAX_SIZE_TRAIN: 1333
+  MIN_SIZE_TEST: 800
+  MAX_SIZE_TEST: 1333
+MODEL:
+  META_ARCHITECTURE: "GeneralizedRCNN"
+  WEIGHT: "" # no pretrained model
+  BACKBONE:
+    CONV_BODY: "R-50-FPN"
+    OUT_CHANNELS: 256
+    FREEZE_CONV_BODY_AT: 0 # finetune all layers
+  RESNETS: # use GN for backbone
+    TRANS_FUNC: "BottleneckWithGN"
+    STEM_FUNC: "StemWithGN"
+  FPN:
+    USE_GN: True # use GN for FPN
+  RPN:
+    USE_FPN: True
+    ANCHOR_STRIDE: (4, 8, 16, 32, 64)
+    PRE_NMS_TOP_N_TRAIN: 2000
+    PRE_NMS_TOP_N_TEST: 1000
+    POST_NMS_TOP_N_TEST: 1000
+    FPN_POST_NMS_TOP_N_TEST: 1000
+  ROI_HEADS:
+    USE_FPN: True
+    BATCH_SIZE_PER_IMAGE: 512
+    POSITIVE_FRACTION: 0.25
+  ROI_BOX_HEAD:
+    USE_GN: True # use GN for bbox head
+    POOLER_RESOLUTION: 7
+    POOLER_SCALES: (0.25, 0.125, 0.0625, 0.03125)
+    POOLER_SAMPLING_RATIO: 2
+    CONV_HEAD_DIM: 256
+    NUM_STACKED_CONVS: 4
+    FEATURE_EXTRACTOR: "FPNXconv1fcFeatureExtractor"
+    PREDICTOR: "FPNPredictor"
+DATASETS:
+  TRAIN: ("coco_2014_train", "coco_2014_valminusminival")
+  TEST: ("coco_2014_minival",)
+DATALOADER:
+  SIZE_DIVISIBILITY: 32
+SOLVER:
+  # Assume 8 gpus
+  BASE_LR: 0.02
+  WEIGHT_DECAY: 0.0001
+  STEPS: (210000, 250000)
+  MAX_ITER: 270000
+  IMS_PER_BATCH: 16
+TEST:
+  IMS_PER_BATCH: 8

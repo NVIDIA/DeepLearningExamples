@@ -1,0 +1,10 @@
+.git
+!.git/HEAD
+!.git/refs/heads/
+
+models/
+!models/research/object_detection/
+!models/research/slim/
+**/*.jpg
+**/*.png
+**/*.pb

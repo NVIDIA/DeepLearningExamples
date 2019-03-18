@@ -1,0 +1,187 @@
+[style]
+based_on_style=google
+
+# The number of columns to use for indentation.
+indent_width = 4
+
+# The column limit.
+column_limit=120
+
+use_tabs = False
+
+# Align closing bracket with visual indentation.
+align_closing_bracket_with_visual_indent = False
+
+# Allow dictionary keys to exist on multiple lines. For example:
+# x = {
+#     ('this is the first element of a tuple',
+#      'this is the second element of a tuple'):
+#          value,
+# }
+allow_multiline_dictionary_keys = True
+
+# Allow splits before the dictionary value.
+allow_split_before_dict_value = True
+
+# Allow lambdas to be formatted on more than one line.
+allow_multiline_lambdas = True
+
+# Insert a blank line before a def or class immediately nested within another def or class. For example:
+#
+# class Foo:
+#                    # <------ this blank line
+#     def method():
+#         pass
+blank_line_before_nested_class_or_def = True
+
+# Insert a blank line before a module docstring.
+blank_line_before_module_docstring = True
+
+# Insert a blank line before a class-level docstring.
+blank_line_before_class_docstring = False
+
+# Sets the number of desired blank lines surrounding top-level function and class definitions. For example:
+#
+# class Foo:
+#     pass
+#                    # <------ having two blank lines here
+#                    # <------ is the default setting
+# class Bar:
+#     pass
+blank_lines_around_top_level_definition = 2
+
+# Do not split consecutive brackets. Only relevant when DEDENT_CLOSING_BRACKETS is set
+coalesce_brackets = False
+
+# The style for continuation alignment. Possible values are:
+#
+# SPACE: Use spaces for continuation alignment. This is default behavior.
+#
+# FIXED: Use fixed number (CONTINUATION_INDENT_WIDTH) of columns (ie: CONTINUATION_INDENT_WIDTH/INDENT_WIDTH tabs) for continuation alignment.
+#
+# VALIGN-RIGHT: Vertically align continuation lines with indent characters. Slightly right (one more indent character) if cannot vertically align continuation lines with indent characters.
+#
+# For options FIXED, and VALIGN-RIGHT are only available when USE_TABS is enabled.
+continuation_align_style = SPACE
+
+# Indent width used for line continuations.
+continuation_indent_width = 4
+
+# Put closing brackets on a separate line, dedented, if the bracketed
+# expression can't fit in a single line. Applies to all kinds of brackets,
+# including function definitions and calls. For example:
+#
+#   config = {
+#       'key1': 'value1',
+#       'key2': 'value2',
+#   }        # <--- this bracket is dedented and on a separate line
+#
+#   time_series = self.remote_client.query_entity_counters(
+#       entity='dev3246.region1',
+#       key='dns.query_latency_tcp',
+#       transform=Transformation.AVERAGE(window=timedelta(seconds=60)),
+#       start_ts=now()-timedelta(days=3),
+#       end_ts=now(),
+#   )        # <--- this bracket is dedented and on a separate line
+dedent_closing_brackets = True
+
+# Disable the heuristic which places each list element on a separate line if the list is comma-terminated.
+disable_ending_comma_heuristic = false
+
+# Place each dictionary entry onto its own line.
+each_dict_entry_on_separate_line = True
+
+# The regex for an internationalization comment.
+# The presence of this comment stops reformatting of that line,
+# because the comments are required to be next to the string they translate.
+i18n_comment = True
+
+# The internationalization function call names.
+# The presence of this function stops reformatting on that line,
+# because the string it has cannot be moved away from the i18n comment.
+i18n_function_call = True
+
+# Indent the dictionary value if it cannot fit on the same line as the dictionary key. For example:
+#
+# config = {
+#     'key1':
+#         'value1',
+#     'key2': value1 +
+#             value2,
+# }
+indent_dictionary_value = False
+
+# Join short lines into one line. E.g., single line if statements.
+join_multiple_lines = True
+
+# Do not include spaces around selected binary operators.
+# Example: 1 + 2 * 3 - 4 / 5     =>     1 + 2*3 - 4/5
+no_spaces_around_selected_binary_operators = True
+
+# Set to True to prefer spaces around the assignment operator for default or keyword arguments.
+spaces_around_default_or_named_assign = False
+
+# Set to True to prefer using spaces around **.
+spaces_around_power_operator = False
+
+# The number of spaces required before a trailing comment.
+spaces_before_comment = 2
+
+# Insert a space between the ending comma and closing bracket of a list, etc.
+space_between_ending_comma_and_closing_bracket = True
+
+# Split before arguments if the argument list is terminated by a comma.
+split_arguments_when_comma_terminated = True
+
+# If a comma separated list (dict, list, tuple, or function def) is on a line that is too long,
+# split such that all elements are on a single line.
+split_all_comma_separated_values = False
+
+# Set to True to prefer splitting before &, | or ^ rather than after.
+split_before_bitwise_operator = False
+
+# Split before the closing bracket if a list or dict literal doesn't fit on a single line.
+split_before_closing_bracket = True
+
+# Split before a dictionary or set generator (comp_for). For example, note the split before the for:
+#
+# foo = {
+#     variable: 'Hello world, have a nice day!'
+#     for variable in bar if variable != 42
+# }
+split_before_dict_set_generator = True
+
+# Split after the opening paren which surrounds an expression if it doesn't fit on a single line.
+split_before_expression_after_opening_paren = False
+
+# If an argument / parameter list is going to be split, then split before the first argument.
+split_before_first_argument = False
+
+# Set to True to prefer splitting before and or or rather than after.
+split_before_logical_operator  = False
+
+# Split named assignments onto individual lines.
+split_before_named_assigns = True
+
+# For list comprehensions and generator expressions with multiple clauses (e.g multiple "for" calls, "if" filter expressions) and which need to be reflowed, split each clause onto its own line. For example:
+#
+# result = [
+#     a_var + b_var for a_var in xrange(1000) for b_var in xrange(1000)
+#     if a_var % b_var]
+# would reformat to something like:
+#
+# result = [
+#     a_var + b_var
+#     for a_var in xrange(1000)
+#     for b_var in xrange(1000)
+#     if a_var % b_var]
+split_complex_comprehension = True
+
+split_penalty_after_opening_bracket = 500
+split_penalty_before_if_expr = 500
+split_penalty_bitwise_operator = 500
+split_penalty_comprehension = 500
+split_penalty_excess_character = 500
+split_penalty_for_added_line_split = 1000
+split_penalty_import_names = 500
+split_penalty_logical_operator = 500

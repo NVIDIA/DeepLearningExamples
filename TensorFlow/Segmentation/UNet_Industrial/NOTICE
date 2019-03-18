@@ -1,0 +1,5 @@
+UNet for the product inspection in TensorFlow
+
+This repository includes two scripts for the DAGM2007 dataset preprocessing 
+from https://github.com/DEKHTIARJonathan/DAGM2007_TF_Utils
+licensed under the MIT License.
