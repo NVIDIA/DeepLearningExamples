@@ -103,7 +103,7 @@ To train your model using mixed precision with tensor cores or using FP32, perfo
 ### 1. Clone the repository.
 ```
 git clone https://github.com/NVIDIA/DeepLearningExamples.git
-cd DeepLearningExamples/PyTorch/Segmentation/MaskRCNN
+cd DeepLearningExamples/PyTorch/Segmentation/MaskRCNN/pytorch
 ```
 
 ### 2. Download and preprocess the dataset.

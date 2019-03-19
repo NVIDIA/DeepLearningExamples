@@ -29,7 +29,7 @@ RUN git clone -b v0.1 https://github.com/NVIDIA/cocoapi.git \
 
 # Copy detectron code and build
 WORKDIR /workspace/object_detection
-RUN mkdir -p /datasets/coco
+RUN mkdir -p /datasets/data
 RUN mkdir /results
 COPY . .
 RUN pip install -e .
