@@ -3,7 +3,7 @@
 #Predictions will be stored in `FOLDER`/inference`
 #1x8x4 DGX1V
 
-GPU=8
+GPU=1
 
 # uncomment below to use default 
 # CONFIG='configs/e2e_mask_rcnn_R_50_FPN_1x.yaml'
@@ -42,4 +42,5 @@ python3 -m torch.distributed.launch --nproc_per_node=$GPU tools/test_net.py \
     DTYPE "float16" \
     DATASETS.TEST "(\"coco_2014_minival\",)" \
     OUTPUT_DIR $FOLDER \
+    TEST.IMS_PER_BATCH 1 \
     | tee $LOGFILE

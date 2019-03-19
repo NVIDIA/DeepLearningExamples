@@ -8,7 +8,7 @@
 
 
 
-GPU=8
+GPU=1
 
 CONFIG='configs/e2e_mask_rcnn_R_50_FPN_1x.yaml'
 
@@ -74,6 +74,7 @@ python3 -m torch.distributed.launch --nproc_per_node=$GPU tools/test_net.py \
     DATASETS.TEST "(\"coco_2014_minival\",)" \
     DTYPE "$DTYPE" \
     OUTPUT_DIR $FOLDER \
+    TEST.IMS_PER_BATCH 1 \
     | tee $LOGFILE
 
     
