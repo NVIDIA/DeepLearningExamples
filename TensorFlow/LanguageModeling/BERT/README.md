@@ -24,13 +24,13 @@ This repository provides a script and recipe to train BERT to achieve state of t
   * [Training accuracy results](#training-accuracy-results)
   * [Training stability test](#training-stability-test)
   * [Training performance results](#training-performance-results)
-      * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
-      * [NVIDIA DGX-1 (8x V100 32G)](#nvidia-dgx-1-8x-v100-32g)
-      * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-16x-v100-32g)
+  * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
+  * [NVIDIA DGX-1 (8x V100 32G)](#nvidia-dgx-1-8x-v100-32g)
+  * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-1-16x-v100-32g)
   * [Inference performance results](#inference-performance-results)
-      * [NVIDIA DGX-1 16G (1x V100 16G)](#nvidia-dgx-1-16g-1x-v100-16g)
-      * [NVIDIA DGX-1 32G (1x V100 32G)](#nvidia-dgx-1-32g-1x-v100-32g)
-      * [NVIDIA DGX-2 32G (1x V100 32G)](#nvidia-dgx-2-32g-1x-v100-32g)
+  * [NVIDIA DGX-1 16G (1x V100 16G)](#nvidia-dgx-1-16g-1x-v100-16g)
+  * [NVIDIA DGX-1 32G (1x V100 32G)](#nvidia-dgx-1-32g-1x-v100-32g)
+  * [NVIDIA DGX-2 32G (1x V100 32G)](#nvidia-dgx-1-32g-1x-v100-32g)
 * [Changelog](#changelog)
 * [Known issues](#known-issues)
 
@@ -120,7 +120,7 @@ After you build the container image and download the data, you can start an inte
 bash scripts/docker/launch.sh
 ```
 
-The `launch.sh` script assumes that the datasets are in the following locations by default after downloading data. 
+The `interactive.sh` script assumes that the datasets are in the following locations by default after downloading data. 
 - SQuaD v1.1 - `data/squad/v1.1`
 - BERT - `data/pretrained_models_google/uncased_L-24_H-1024_A-16`
 - Wikipedia - `data/wikipedia_corpus/final_tfrecords_sharded`
@@ -194,9 +194,9 @@ Aside from options to set hyperparameters, the relevant options to control the b
   --[no]amp: Whether to enable AMP ops.(default: 'false')
   --[no]amp_fastmath: Whether to enable AMP fasthmath ops.(default: 'false')
   --bert_config_file: The config json file corresponding to the pre-trained BERT model. This specifies the model architecture.
-  --[no]do_eval: Whether to run evaluation on the dev set.(default: 'false')
+  --[no]do_eval: Whether to run eval on the dev set.(default: 'false')
   --[no]do_train: Whether to run training.(default: 'false')
-  --eval_batch_size: Total batch size for evaluation.(default: '8')(an integer)
+  --eval_batch_size: Total batch size for eval.(default: '8')(an integer)
   --[no]fastmath: Whether to enable loss scaler for fasthmath ops.(default: 'false')
   --[no]horovod: Whether to use Horovod for multi-gpu runs(default: 'false')
   --init_checkpoint: Initial checkpoint (usually from a pre-trained BERT model).
@@ -207,7 +207,7 @@ Aside from options to set hyperparameters, the relevant options to control the b
 Aside from options to set hyperparameters, some relevant options to control the behaviour of the run_squad.py script are: 
 ```bash
   --bert_config_file: The config json file corresponding to the pre-trained BERT model. This specifies the model architecture.
-  --[no]do_predict: Whether to run evaluation on the dev set. (default: 'false')
+  --[no]do_predict: Whether to run eval on the dev set. (default: 'false')
   --[no]do_train: Whether to run training. (default: 'false')
   --learning_rate: The initial learning rate for Adam.(default: '5e-06')(a number)
   --max_answer_length: The maximum length of an answer that can be generated. This is needed because the start and end predictions are not conditioned on one another.(default: '30')(an integer)
@@ -234,13 +234,15 @@ Pre-training is performed using the `run_pretraining.py` script along with param
 
 
 The `run_pretraining.sh` script runs a job on a single node  that trains the BERT-large model from scratch using the Wikipedia and Book corpus datasets as training data. By default, the training script:
-- Runs on 8 GPUs with training batch size of 14 and evaluation batch size of 8 per GPU.
-- Has FP16 precision enabled.
-- Is XLA enabled.
-- Trains with default learning rate of 1e-4 for 1144000 steps with 10000 warm-up steps.
-- Saves a checkpoint every 5000 iterations.
-- Creates a log file containing all the output.
-- Evaluates the model at the end of training. To skip evaluation, modify `--do_eval` to `False`.
+- Assumes training batch size of 14
+- Assumes evaluation batch size of 8
+- Assumes learning rate of 1e-4
+- Assumes precision of fp16_xla (fp16 math JIT compiled with XLA)
+- Assumes you want to run on 8 GPUs
+- Assumes 10,000 warmup steps
+- Assumes 1144000 training steps
+- Assumes checkpoints should be saved every 5000 steps
+- Assumes you do want to create a log file for all the output
 
 These parameters will train Wikipedia + BooksCorpus to reasonable accuracy on a DGX1 with 32GB V100 cards. If you want to match google’s best results from the BERT paper, you should either train for twice as many steps (2,288,000 steps) on a DGX1, or train on 16 GPUs on a DGX2. The DGX2 having 16 GPUs will be able to fit a batch size twice as large as a DGX1 (224 vs 112), hence the DGX2 can finish in half as many steps. 
 
@@ -251,7 +253,7 @@ run_pretraining.sh <node_type> <training_batch_size> <eval_batch_size> <learning
 ```
 
 Where:
-- <training_batch_size> per-gpu batch size used for training. Batch size varies with <precision>, larger batch sizes run more efficiently, but require more memory.
+- <training_batch_size> Batch size varies with <precision>, larger batch sizes run more efficiently, but require more memory.
 
 - <eval_batch_size> per-gpu batch size used for evaluation after training.<learning_rate> Default rate of 1e-4 is good for global batch size 256.
 
@@ -295,16 +297,16 @@ Trains BERT-large from scratch on a single DGX-2 using FP16 arithmetic. This wil
 Fine tuning is performed using the `run_squad.py` script along with parameters defined in `scripts/run_squad.sh`.
 
 The `run_squad.sh` script trains a model and performs evaluation on the SQuaD v1.1 dataset. By default, the training script: 
-- Uses 8 GPUs and batch size of 10 on each GPU.
-- Has FP16 precision enabled.
-- Is XLA enabled.
-- Runs for 2 epochs.
+- Uses 8 GPUs and batch size of 10 on each GPU
+- Has FP16 precision enabled
+- Is XLA enabled
+- Runs for 2 epochs
 - Saves a checkpoint every 1000 iterations (keeps only the latest checkpoint) and at the end of training. All checkpoints, evaluation results and training logs are saved to the `/results` directory (in the container which can be mounted to a local directory).
-- Evaluation is done at the end of training. To skip evaluation, modify `--do_predict` to `False`.
+- Evaluation is done at the end of training. To skip eval, modify `--do_predict` to `False`.
 
 This script outputs checkpoints to the `/results` directory, by default, inside the container. Mount point of `/results` can be changed in the `scripts/docker/launch.sh` file. The training log contains information about:
-- Loss for the final step
-- Training and evaluation performance
+- Loss for final step
+- Train and eval performance
 - F1 and exact match score on the Dev Set of SQuaD after evaluation. 
 
 The summary after training is printed in the following format:
@@ -345,12 +347,12 @@ Inference on a fine tuned Question Answering system is performed using the `run_
 The `run_squad_inference.sh` script trains a model and performs evaluation on the SQuaD v1.1 dataset. By default, the inferencing script: 
 - Has FP16 precision enabled
 - Is XLA enabled
-- Evaluates the latest checkpoint present in `/results` with a batch size of 8
+- Does eval on latest checkpoint present in `/results` with a batch size of 8
 
 This script outputs predictions file to `/results/predictions.json` and computes F1 score and exact match score using SQuaD's `evaluate-v1.1.py`. Mount point of `/results` can be changed in the `scripts/docker/launch.sh` file. 
 
 The output log contains information about:
-- Evaluation performance
+- Eval performance
 - F1 and exact match score on the Dev Set of SQuaD after evaluation. 
 
 The summary after inference is printed in the following format:
@@ -410,14 +412,14 @@ Our results were obtained by running batch sizes up to 3x GPUs on a 16GB V100 an
 Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance numbers (in tokens per second) were averaged over an entire training epoch.
 
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
+| **Number of GPUs** | **Batch size per GPU** | **FP 32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
 |:---:|:---:|:------:|:-----:|:----:|:----:|:----:|
 | 1 | 2 | 7.41 |11.86|1.6 |1.0 |1.0 |
 | 4 | 2 |23.699|35.34|1.49|3.2 |2.98|
 | 8 | 2 |44.29 |64.96|1.47|5.98|5.48|
 
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
+| **Number of GPUs** | **Batch size per GPU** | **FP 32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
 |:---:|:---:|:-----:|:-----:|:---:|:---:|:----:|
 | 1 | 3 |  -  |14.86| - | - |1.0 |
 | 4 | 3 |  -  |44.17| - | - |2.97|
@@ -431,14 +433,14 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epochs.
 
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
+| **Number of GPUs** | **Batch size per GPU** | **FP 32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
 |---|---|-----|-----|----|----|----|
 | 1 | 4 | 8.55|18.14|2.12|1.0 |1.0 |
 | 4 | 4 |32.13|52.85|1.64|3.76|2.91|
 | 8 | 4 |62.83|95.28|1.51|7.35|5.25|
 
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
+| **Number of GPUs** | **Batch size per GPU** | **FP 32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
 |---|---|-----|-------|---|---|----|
 | 1 | 10|  -  | 27.69 | - | - |1.0 |
 | 4 | 10|  -  | 85.193| - | - |3.07|
@@ -453,7 +455,7 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epoch.
 
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
+| **Number of GPUs** | **Batch size per GPU** | **FP 32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
 |---|---|------|------|----|-----|----|
 |  1| 4 |  8.80| 17.43|1.98| 1.0 |1.0 |
 |  4| 4 | 33.22| 56.87|1.71| 3.78|3.26|
@@ -461,7 +463,7 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 | 16| 4 |117.83|162.29|1.38|13.39|9.31|
 
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
+| **Number of GPUs** | **Batch size per GPU** | **FP 32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
 |---|---|---|------|---|---|----|
 |  1| 10| - | 28.72| - | - |1.0 |
 |  4| 10| - | 92.73| - | - |3.22|
@@ -477,7 +479,7 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 #### NVIDIA DGX-1 16G (1x V100 16G)
 Our results were obtained by running the `scripts/run_squad_inference.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 1x V100 16G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epoch.
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
+| **Number of GPUs** | **Batch size per GPU** | **FP 32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
 |---|---|-----|------|----|
 | 1 | 8 |41.04|112.55|2.74|
 
@@ -487,7 +489,7 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 #### NVIDIA DGX-1 32G (1x V100 32G)
 Our results were obtained by running the `scripts/run_squad_inference.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 1x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epoch.
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
+| **Number of GPUs** | **Batch size per GPU** | **FP 32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
 |---|---|-----|------|----|
 | 1 | 8 |36.78|118.54|3.22|
 
@@ -496,7 +498,7 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 #### NVIDIA DGX-2 32G (1x V100 32G)
 Our results were obtained by running the `scripts/run_squad_inference.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-2 with 1x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epoch.
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
+| **Number of GPUs** | **Batch size per GPU** | **FP 32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
 |---|---|-----|------|----|
 | 1 | 8 |33.95|108.45|3.19|
 
