@@ -377,7 +377,7 @@ def fit(args, network, data_loader, **kwargs):
             self.tic = 0
 
         def gather_metrics(self, data):
-            params = dict(data.eval_metric.get_global_name_value())
+            params = dict(data.eval_metric.get_name_value())
 
             if self.num != 0:
                 self.time += time.time() - self.tic
