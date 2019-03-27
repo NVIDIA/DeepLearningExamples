@@ -29,6 +29,7 @@ import tokenization
 import six
 import tensorflow as tf
 import horovod.tensorflow as hvd
+import time
 flags = tf.flags
 
 FLAGS = flags.FLAGS
