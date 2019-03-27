@@ -63,7 +63,7 @@ export EXTRA_PARAMS
 
 set -x
 cd $CODEDIR
-pwd 
+pwd
 
 PART=""
 if [ "$partition" != "default" ] ; then
@@ -75,15 +75,16 @@ printf -v TAG "%s_%dn_%s_gbs%d" "$job_name" $num_nodes "$precision" $GBS
 export DATESTAMP=`date +'%y%m%d%H%M%S'`
 
 sbatch $PART \
-	-N $num_nodes \
-       	-t $wall_time \
-       	-J $job_name \
-	--exclusive \
+        -N $num_nodes \
+        -t $wall_time \
+        -J $job_name \
+        --exclusive \
         --mem=0 \
-	--mail-type=FAIL \
-	--ntasks-per-node=$DGXNGPU \
-	--threads-per-core=$DGXHT \
-	--cores-per-socket=$DGXSOCKETCORES \
-	--output=$LOGDIR/$TAG.$DATESTAMP.log \
-	$CODEDIR/scripts/run.sub 
+        --mail-type=FAIL \
+        --ntasks-per-node=$DGXNGPU \
+        --threads-per-core=$DGXHT \
+        --cores-per-socket=$DGXSOCKETCORES \
+        --output=$LOGDIR/$TAG.$DATESTAMP.log \
+        $CODEDIR/scripts/run.sub
 set +x
+

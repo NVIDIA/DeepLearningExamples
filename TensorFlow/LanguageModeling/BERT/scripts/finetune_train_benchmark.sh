@@ -17,12 +17,7 @@ if [ "$task" = "squad" ] ; then
     LOGFILE="/results/${task}_training_benchmark.log"
     if [ "$precision" = "fp16" ] ; then
             export TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE=1
-            use_fp16="--fast_math"
-    elif [ "$precision" = "fast_math" ] ; then
-            export TF_ENABLE_CUBLAS_TENSOR_OP_MATH_FP32=1
-            export TF_ENABLE_CUDNN_TENSOR_OP_MATH_FP32=1
-            export TF_ENABLE_CUDNN_RNN_TENSOR_OP_MATH_FP32=1
-            export TF_USE_DEFAULT_LOSS_SCALING=1
+            use_fp16="--use_fp16"
     fi
 
 

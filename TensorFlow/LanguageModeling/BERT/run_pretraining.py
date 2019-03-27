@@ -114,11 +114,7 @@ flags.DEFINE_bool("use_fp16", False, "Whether to use fp32 or fp16 arithmetic on 
 
 flags.DEFINE_bool("use_xla", False, "Whether to enable XLA JIT compilation.")
 
-flags.DEFINE_bool("fastmath", False, "Whether to enable loss scaler for fasthmath ops.")
-
 flags.DEFINE_bool("amp", False, "Whether to enable AMP ops.")
-
-flags.DEFINE_bool("amp_fastmath", False, "Whether to enable AMP fasthmath ops.")
 
 # report samples/sec, total loss and learning rate during training
 class _LogSessionRunHook(tf.train.SessionRunHook):
@@ -127,7 +123,7 @@ class _LogSessionRunHook(tf.train.SessionRunHook):
     self.display_every = display_every
     self.hvd_rank = hvd_rank
   def after_create_session(self, session, coord):
-    if FLAGS.use_fp16 or FLAGS.fastmath or FLAGS.amp or FLAGS.amp_fastmath:
+    if FLAGS.use_fp16 or FLAGS.amp:
       print('  Step samples/sec   MLM Loss  NSP Loss  Loss  Learning-rate  Loss-scaler')
     else:
       print('  Step samples/sec   MLM Loss  NSP Loss  Loss  Learning-rate')
@@ -135,7 +131,7 @@ class _LogSessionRunHook(tf.train.SessionRunHook):
     self.count = 0
   def before_run(self, run_context):
     self.t0 = time.time()
-    if FLAGS.use_fp16 or FLAGS.fastmath or FLAGS.amp or FLAGS.amp_fastmath:
+    if FLAGS.use_fp16 or FLAGS.amp:
       return tf.train.SessionRunArgs(
           fetches=['step_update:0', 'total_loss:0',
                    'learning_rate:0', 'nsp_loss:0',
@@ -148,7 +144,7 @@ class _LogSessionRunHook(tf.train.SessionRunHook):
   def after_run(self, run_context, run_values):
     self.elapsed_secs += time.time() - self.t0
     self.count += 1
-    if FLAGS.use_fp16 or FLAGS.fastmath or FLAGS.amp or FLAGS.amp_fastmath:
+    if FLAGS.use_fp16 or FLAGS.amp:
       global_step, total_loss, lr, nsp_loss, mlm_loss, loss_scaler = run_values.results
     else:
       global_step, total_loss, lr, nsp_loss, mlm_loss = run_values.results
@@ -157,14 +153,14 @@ class _LogSessionRunHook(tf.train.SessionRunHook):
         dt = self.elapsed_secs / self.count
         img_per_sec = self.global_batch_size / dt
         if self.hvd_rank >= 0:
-          if FLAGS.use_fp16 or FLAGS.fastmath or FLAGS.amp or FLAGS.amp_fastmath:
+          if FLAGS.use_fp16 or FLAGS.amp:
             print('%2d :: %6i %11.1f %10.4e %10.4e %6.3f     %6.4e  %6.4e' %
                   (self.hvd_rank, print_step, img_per_sec, mlm_loss, nsp_loss, total_loss, lr, loss_scaler))
           else:
             print('%2d :: %6i %11.1f %10.4e %10.4e %6.3f     %6.4e' %
                   (self.hvd_rank, print_step, img_per_sec, mlm_loss, nsp_loss, total_loss, lr))
         else:
-          if FLAGS.use_fp16 or FLAGS.fastmath or FLAGS.amp or FLAGS.amp_fastmath:
+          if FLAGS.use_fp16 or FLAGS.amp:
             print('%6i %11.1f %10.4e %10.4e %6.3f     %6.4e  %6.4e' %
                   (print_step, img_per_sec, mlm_loss, nsp_loss, total_loss, lr, loss_scaler))
           else:
@@ -247,7 +243,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
     if mode == tf.estimator.ModeKeys.TRAIN:
       train_op = optimization.create_optimizer(
           total_loss, learning_rate, num_train_steps, num_warmup_steps, use_tpu,
-          hvd, FLAGS.use_fp16, FLAGS.fastmath, FLAGS.amp, FLAGS.amp_fastmath)
+          hvd, FLAGS.use_fp16, FLAGS.amp)
 
       output_spec = tf.contrib.tpu.TPUEstimatorSpec(
           mode=mode,
@@ -483,24 +479,8 @@ def main(_):
   if not FLAGS.do_train and not FLAGS.do_eval:
     raise ValueError("At least one of `do_train` or `do_eval` must be True.")
 
-  if FLAGS.fastmath and FLAGS.amp:
-    raise ValueError("Only one of fastmath or amp must be True.")
-
-  if FLAGS.fastmath and FLAGS.amp_fastmath:
-    raise ValueError("Only one of fastmath or amp_fastmath must be True.")
-
-  if FLAGS.amp and FLAGS.amp_fastmath:
-    raise ValueError("Only one of amp or amp_fastmath must be True.")
-
-  if FLAGS.fastmath:
-    os.environ["TF_ENABLE_CUBLAS_TENSOR_OP_MATH_FP32"] = "1"
-    os.environ["TF_ENABLE_CUDNN_TENSOR_OP_MATH_FP32"] = "1"
-    os.environ["TF_ENABLE_CUDNN_RNN_TENSOR_OP_MATH_FP32"] = "1"
-  elif FLAGS.amp:
+  if FLAGS.amp:
     os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
-  elif FLAGS.amp_fastmath:
-    os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
-    os.environ["TF_AUTO_MIXED_PRECISION_GRAPH_REWRITE_LEVEL"] = "TENSOR_CORES_ONLY"
 
   if FLAGS.horovod:
     import horovod.tensorflow as hvd
