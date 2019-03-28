@@ -154,12 +154,12 @@ bash scripts/run_squad.sh <batch_size_per_gpu> <learning_rate_per_gpu> <precisio
 
 For FP16 training with XLA using a DGX-1 V100 32G, run:
 ```bash
-bash scripts/run_squad.sh 10 5e-6 fp16 true 8 /bert/bert_model.ckpt
+bash scripts/run_squad.sh 10 5e-6 fp16 true 8 data/pretrained_models_google/uncased_L-24_H-1024_A-16/bert_model.ckpt
 ```
 
 For FP32 training without XLA using a DGX-1 V100 32G, run:
 ```bash
-bash scripts/run_squad.sh 5 5e-6 fp32 false 8 /bert/bert_model.ckpt
+bash scripts/run_squad.sh 5 5e-6 fp32 false 8 data/pretrained_models_google/uncased_L-24_H-1024_A-16/bert_model.ckpt
 ```
 
 ### 7. Start validation/evaluation.
