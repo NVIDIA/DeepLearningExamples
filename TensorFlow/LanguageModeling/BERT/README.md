@@ -247,7 +247,7 @@ These parameters will train Wikipedia + BooksCorpus to reasonable accuracy on a 
 
 For example:
 ```bash
-run_pretraining.sh <node_type> <training_batch_size> <eval_batch_size> <learning-rate> <precision> <num_gpus> <warmup_steps> <training_steps> <save_checkpoint_steps> <create_logfile>
+run_pretraining.sh <training_batch_size> <eval_batch_size> <learning-rate> <precision> <num_gpus> <warmup_steps> <training_steps> <save_checkpoint_steps> <create_logfile>
 ```
 
 Where:
