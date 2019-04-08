@@ -154,12 +154,12 @@ bash scripts/run_squad.sh <batch_size_per_gpu> <learning_rate_per_gpu> <precisio
 
 For FP16 training with XLA using a DGX-1 V100 32G, run:
 ```bash
-bash scripts/run_squad.sh 10 5e-6 fp16 true 8 /bert/bert_model.ckpt
+bash scripts/run_squad.sh 10 5e-6 fp16 true 8 data/pretrained_models_google/uncased_L-24_H-1024_A-16/bert_model.ckpt
 ```
 
 For FP32 training without XLA using a DGX-1 V100 32G, run:
 ```bash
-bash scripts/run_squad.sh 5 5e-6 fp32 false 8 /bert/bert_model.ckpt
+bash scripts/run_squad.sh 5 5e-6 fp32 false 8 data/pretrained_models_google/uncased_L-24_H-1024_A-16/bert_model.ckpt
 ```
 
 ### 7. Start validation/evaluation.
@@ -192,12 +192,10 @@ python run_squad.py --help
 Aside from options to set hyperparameters, the relevant options to control the behaviour of the `run_pretraining.py` script are: 
 ```bash
   --[no]amp: Whether to enable AMP ops.(default: 'false')
-  --[no]amp_fastmath: Whether to enable AMP fasthmath ops.(default: 'false')
   --bert_config_file: The config json file corresponding to the pre-trained BERT model. This specifies the model architecture.
   --[no]do_eval: Whether to run evaluation on the dev set.(default: 'false')
   --[no]do_train: Whether to run training.(evaluation: 'false')
   --eval_batch_size: Total batch size for eval.(default: '8')(an integer)
-  --[no]fastmath: Whether to enable loss scaler for fasthmath ops.(default: 'false')
   --[no]horovod: Whether to use Horovod for multi-gpu runs(default: 'false')
   --init_checkpoint: Initial checkpoint (usually from a pre-trained BERT model).
   --input_file: Input TF example files (can be a glob or comma separated).
@@ -247,7 +245,7 @@ These parameters will train Wikipedia + BooksCorpus to reasonable accuracy on a 
 
 For example:
 ```bash
-run_pretraining.sh <node_type> <training_batch_size> <eval_batch_size> <learning-rate> <precision> <num_gpus> <warmup_steps> <training_steps> <save_checkpoint_steps> <create_logfile>
+run_pretraining.sh <training_batch_size> <eval_batch_size> <learning-rate> <precision> <num_gpus> <warmup_steps> <training_steps> <save_checkpoint_steps> <create_logfile>
 ```
 
 Where:
@@ -255,23 +253,11 @@ Where:
 
 - <eval_batch_size> per-gpu batch size used for evaluation after training.<learning_rate> Default rate of 1e-4 is good for global batch size 256.
 
-- <precision> Type of math in your model, can be either fp32, fp16, fp16_xla, fastmath, amp_fm, amp_fm_xla, amp or amp_xla. The options mean:
+- <precision> Type of math in your model, can be either fp32, or amp. The options mean:
 
     - fp32 32 bit IEEE single precision floats.
 
-    - fp16 Hand-coded mixed precision 16 and 32 bit floats.
-
-    - fp16 Hand-coded mixed precision floats, JIT compiled with XLA.
-
-    - fastmath Matmuls done by tensor cores in mixed precision, the rest is done in FP32.
-
-    - amp_fm Alternative FastMath implementation that works by manipulating TensorFlow’s compute graph.
-
-    - amp_fm_xla The amp_fm flag plus XLA JIT compilation.
-
     - amp Automatic rewrite of TensorFlow compute graph to take advantage of 16 bit arithmetic whenever that is safe.
-
-    - amp_xla The amp flag plus XLA JIT compilation.
 
 - <num_gpus> Number of GPUs to use for training. Must be equal to or smaller than the number of GPUs attached to your node.
 
