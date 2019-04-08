@@ -1,4 +1,4 @@
-FROM gitlab-master.nvidia.com:5005/dl/dgx/pytorch:19.03-py3-stage
+FROM nvcr.io/nvidia/pytorch:19.03-py3
 
 # Set working directory
 WORKDIR /mlperf
