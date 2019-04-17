@@ -183,7 +183,9 @@ bash scripts/run_squad_inference.sh /results/model.ckpt 8 fp32 false
 The following sections provide greater details of the dataset, running training and inference, and the training results.
 
 ### Command line options
-To see the full list of available options and their descriptions, use the -h or --help command line option, for example: 
+
+The `run_squad.sh` script calls the `run_squad.py` file and the `run_pretraining.sh` script calls the `run_pretraining.py` file with a set of options. To see the full list of available options and their descriptions, use the -h or --help command line option with the python file, for example:
+
 ```bash
 python run_pretraining.py --help
 python run_squad.py --help 
@@ -393,42 +395,42 @@ The following tables compare `F1` scores across 5 different training runs with d
 Our results were obtained by running batch sizes up to 3x GPUs on a 16GB V100 and up to 10x GPUs on a 32G V100 with mixed precision.
 
 #### NVIDIA DGX-1 (8x V100 16G)
-Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance numbers (in tokens per second) were averaged over an entire training epoch.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance (in sentences per second) is the steady-state throughput.
 
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
 |:---:|:---:|:------:|:-----:|:----:|:----:|:----:|
-| 1 | 2 | 7.41 |11.86|1.6 |1.0 |1.0 |
-| 4 | 2 |23.699|35.34|1.49|3.2 |2.98|
-| 8 | 2 |44.29 |64.96|1.47|5.98|5.48|
+| 1 | 2 | 8.06 |14.12|1.75 |1.0  |1.0 |
+| 4 | 2 |25.71 |41.32|1.61 |3.19 |2.93|
+| 8 | 2 |50.20 |80.76|1.61 |6.23 |5.72|
 
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
 |:---:|:---:|:-----:|:-----:|:---:|:---:|:----:|
-| 1 | 3 |  -  |14.86| - | - |1.0 |
-| 4 | 3 |  -  |44.17| - | - |2.97|
-| 8 | 3 |  -  |78.89| - | - |5.3 |
+| 1 | 3 |  -  |17.14| - | - |1.0 |
+| 4 | 3 |  -  |51.59| - | - |3.0 |
+| 8 | 3 |  -  |98.75| - | - |5.76|
 
 Note: The respective values for FP32 runs that use a batch size of 3 are not available due to out of memory errors that arise. Batch size of 3 is only available on using FP16.
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 #### NVIDIA DGX-1 (8x V100 32G)
-Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epochs.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. Performance (in sentences per second) is the steady-state throughput.
 
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
-|---|---|-----|-----|----|----|----|
-| 1 | 4 | 8.55|18.14|2.12|1.0 |1.0 |
-| 4 | 4 |32.13|52.85|1.64|3.76|2.91|
-| 8 | 4 |62.83|95.28|1.51|7.35|5.25|
+|---|---|-----|------|----|----|----|
+| 1 | 4 | 8.96|20.91 |2.33|1.0 |1.0 |
+| 4 | 4 |33.66|64.89 |1.93|3.76|3.10|
+| 8 | 4 |66.65|129.16|1.94|7.44|6.18|
 
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
 |---|---|-----|-------|---|---|----|
-| 1 | 10|  -  | 27.69 | - | - |1.0 |
-| 4 | 10|  -  | 85.193| - | - |3.07|
-| 8 | 10|  -  |142.69 | - | - |5.1 |
+| 1 | 10|  -  | 31.80 | - | - |1.0 |
+| 4 | 10|  -  | 107.65| - | - |3.39|
+| 8 | 10|  -  | 220.88| - | - |6.95|
 
 
 Note: The respective values for FP32 runs that use a batch size of 10 are not available due to out of memory errors that arise. Batch size of 10 is only available on using FP16.
@@ -436,23 +438,23 @@ Note: The respective values for FP32 runs that use a batch size of 10 are not av
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above. 
 
 #### NVIDIA DGX-2 (16x V100 32G)
-Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epoch.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance (in sentences per second) is the steady-state throughput.
 
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
-|---|---|------|------|----|-----|----|
-|  1| 4 |  8.80| 17.43|1.98| 1.0 |1.0 |
-|  4| 4 | 33.22| 56.87|1.71| 3.78|3.26|
-|  8| 4 | 64.46|100.58|1.56| 7.33|5.77|
-| 16| 4 |117.83|162.29|1.38|13.39|9.31|
+|---|---|------|------|----|-----|-----|
+|  1| 4 | 10.85| 21.83|2.01| 1.0 | 1.0 |
+|  4| 4 | 38.85| 71.87|1.85| 3.58| 3.29|
+|  8| 4 | 74.65|140.66|1.88| 6.88| 6.44|
+| 16| 4 |132.71|251.26|1.89|12.23|11.51|
 
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
-|---|---|---|------|---|---|----|
-|  1| 10| - | 28.72| - | - |1.0 |
-|  4| 10| - | 92.73| - | - |3.22|
-|  8| 10| - |155.78| - | - |5.42|
-| 16| 10| - |228.75| - | - |7.96|
+|---|---|---|------|---|---|-----|
+|  1| 10| - | 34.38| - | - | 1.0 |
+|  4| 10| - |119.19| - | - | 3.47|
+|  8| 10| - |233.86| - | - | 6.8 |
+| 16| 10| - |427.19| - | - |12.43|
 
 
 Note: The respective values for FP32 runs that use a batch size of 10 are not available due to out of memory errors that arise. Batch size of 10 is only available on using FP16.
