@@ -477,7 +477,7 @@ Our results were obtained by running the `scripts/run_squad_inference.sh` traini
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
 |---|---|-----|------|----|
-| 1 | 8 |36.78|118.54|3.22|
+| 1 | 8 |33.95|108.45|3.19|
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
@@ -486,7 +486,7 @@ Our results were obtained by running the `scripts/run_squad_inference.sh` traini
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
 |---|---|-----|------|----|
-| 1 | 8 |33.95|108.45|3.19|
+| 1 | 8 |36.78|118.54|3.22|
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
