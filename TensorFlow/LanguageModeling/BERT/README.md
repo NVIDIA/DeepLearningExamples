@@ -1,4 +1,4 @@
-# Bert For TensorFlow
+# BERT For TensorFlow
 
 This repository provides a script and recipe to train BERT to achieve state of the art accuracy, and is tested and maintained by NVIDIA.
 
