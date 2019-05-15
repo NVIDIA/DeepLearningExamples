@@ -30,6 +30,10 @@ import torch
 from torch.autograd import Variable
 from torch import nn
 from torch.nn import functional as F
+import sys
+from os.path import abspath, dirname
+# enabling modules discovery from global entrypoint
+sys.path.append(abspath(dirname(__file__)+'/../'))
 from common.layers import ConvNorm, LinearNorm
 from common.utils import to_gpu, get_mask_from_lengths
 
@@ -375,7 +379,7 @@ class Decoder(nn.Module):
 
         return mel_outputs, gate_outputs, alignments
 
-    def decode(self, decoder_input, is_infer=False):
+    def decode(self, decoder_input):
         """ Decoder step using stored states, attention and memory
         PARAMS
         ------
@@ -390,12 +394,8 @@ class Decoder(nn.Module):
         cell_input = torch.cat((decoder_input, self.attention_context), -1)
         attention_hidden_dtype = self.attention_hidden.dtype
 
-        if is_infer:
-            self.attention_hidden, self.attention_cell = self.attention_rnn(
-                cell_input, (self.attention_hidden, self.attention_cell))
-        else:
-            self.attention_hidden, self.attention_cell = self.attention_rnn(
-                cell_input.float(), (self.attention_hidden.float(), self.attention_cell.float()))
+        self.attention_hidden, self.attention_cell = self.attention_rnn(
+            cell_input.float(), (self.attention_hidden.float(), self.attention_cell.float()))
 
         self.attention_hidden = F.dropout(
             self.attention_hidden, self.p_attention_dropout, self.training)
@@ -418,13 +418,9 @@ class Decoder(nn.Module):
             (self.attention_hidden, self.attention_context), -1)
         decoder_hidden_dtype = self.decoder_hidden.dtype
 
-        if is_infer:
-            self.decoder_hidden, self.decoder_cell = self.decoder_rnn(
-                decoder_input, (self.decoder_hidden, self.decoder_cell))
-        else:
-            self.decoder_hidden, self.decoder_cell = self.decoder_rnn(
-                decoder_input.float(), (self.decoder_hidden.float(), self.decoder_cell.float()))
-            
+        self.decoder_hidden, self.decoder_cell = self.decoder_rnn(
+            decoder_input.float(), (self.decoder_hidden.float(), self.decoder_cell.float()))
+
         self.decoder_hidden = F.dropout(
             self.decoder_hidden, self.p_decoder_dropout, self.training)
 
@@ -539,7 +535,7 @@ class Decoder(nn.Module):
         mel_outputs, gate_outputs, alignments = [], [], []
         while True:
             decoder_input = self.prenet(decoder_input)
-            mel_output, gate_output, alignment = self.decode(decoder_input, is_infer=True)
+            mel_output, gate_output, alignment = self.decode(decoder_input)
 
             mel_outputs += [mel_output.squeeze(1)]
             gate_outputs += [gate_output]
@@ -647,7 +643,7 @@ class Tacotron2(nn.Module):
             [mel_outputs, mel_outputs_postnet, gate_outputs, alignments],
             output_lengths)
 
-    def inference(self, inputs):
+    def infer(self, inputs):
         inputs = self.parse_input(inputs)
         embedded_inputs = self.embedding(inputs).transpose(1, 2)
         encoder_outputs = self.encoder.inference(embedded_inputs)

@@ -240,7 +240,7 @@ def save_sample(model_name, model, waveglow_path, tacotron2_path, phrase_path, f
                 'WaveGlow', checkpoint['config'], to_fp16=False, to_cuda=False)
             waveglow.eval()
             model.eval()
-            mel = model.inference(phrase.cuda())[0].cpu()
+            mel = model.infer(phrase.cuda())[0].cpu()
             model.train()
             if fp16:
                 mel = mel.float()
@@ -254,7 +254,7 @@ def save_sample(model_name, model, waveglow_path, tacotron2_path, phrase_path, f
             tacotron2 = models.get_model(
                 'Tacotron2', checkpoint['config'], to_fp16=False, to_cuda=False)
             tacotron2.eval()
-            mel = tacotron2.inference(phrase)[0].cuda()
+            mel = tacotron2.infer(phrase)[0].cuda()
             model.eval()
             if fp16:
                 mel = mel.half()
