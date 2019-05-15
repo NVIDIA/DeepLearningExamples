@@ -32,6 +32,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+import sys
+from os.path import abspath, join, dirname
+# enabling modules discovery from global entrypoint
+sys.path.append(abspath(dirname(__file__)+'/'))
+
 from logger.logger import LOGGER
 from logger import tags
 
