@@ -103,7 +103,7 @@ To train your model using mixed precision with tensor cores or using FP32, perfo
 ### 1. Clone the repository.
 ```
 git clone https://github.com/NVIDIA/DeepLearningExamples.git
-cd DeepLearningExamples/PyTorch/Segmentation/MaskRCNN
+cd DeepLearningExamples/PyTorch/Segmentation
 ```
 
 ### 2. Download and preprocess the dataset.
@@ -111,7 +111,6 @@ This repository provides scripts to download and extract the COCO 2014 dataset. 
 
 To download, verify, and extract the COCO dataset, use the following scripts:
   ```
-  cd Detectron_PyT
   ./download_dataset.sh <data/dir>
   ```
 By default, the data is organized into the following structure:
@@ -128,6 +127,7 @@ By default, the data is organized into the following structure:
 
 ### 3. Build the Mask R-CNN PyTorch NGC container.
 ```
+cd MaskRCNN/
 bash scripts/docker/build.sh
 ```
 
