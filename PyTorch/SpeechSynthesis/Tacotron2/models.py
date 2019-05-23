@@ -25,24 +25,28 @@
 #
 # *****************************************************************************
 
+import sys
+from os.path import abspath, dirname
+# enabling modules discovery from global entrypoint
+sys.path.append(abspath(dirname(__file__)+'/'))
 from tacotron2.model import Tacotron2
 from waveglow.model import WaveGlow
-from tacotron2.arg_parser import parse_tacotron2_args
-from waveglow.arg_parser import parse_waveglow_args
 import torch
 
 
 def parse_model_args(model_name, parser, add_help=False):
     if model_name == 'Tacotron2':
+        from tacotron2.arg_parser import parse_tacotron2_args
         return parse_tacotron2_args(parser, add_help)
     if model_name == 'WaveGlow':
+        from waveglow.arg_parser import parse_waveglow_args
         return parse_waveglow_args(parser, add_help)
     else:
         raise NotImplementedError(model_name)
 
 
 def batchnorm_to_float(module):
-    """Converts LSTMCells to FP32"""
+    """Converts batch norm to FP32"""
     if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
         module.float()
     for child in module.children():
@@ -51,7 +55,7 @@ def batchnorm_to_float(module):
 
 
 def lstmcell_to_float(module):
-    """Converts batch norm modules to FP32"""
+    """Converts LSTMCells modules to FP32"""
     if isinstance(module, torch.nn.LSTMCell):
         module.float()
     for child in module.children():

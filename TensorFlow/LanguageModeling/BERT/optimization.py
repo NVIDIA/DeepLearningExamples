@@ -22,7 +22,7 @@ import re
 import tensorflow as tf
 
 
-def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, use_tpu, hvd=None, use_fp16=False, fastmath=False, amp=False, amp_fastmath=False):
+def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, use_tpu, hvd=None, use_fp16=False, amp=False):
   """Creates an optimizer training op."""
   global_step = tf.train.get_or_create_global_step()
 
@@ -75,7 +75,7 @@ def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, use_tpu, 
     if hvd is not None:
       from horovod.tensorflow.compression import Compression
       optimizer = hvd.DistributedOptimizer(optimizer, sparse_as_dense=True, compression=Compression.none)
-    if use_fp16 or fastmath or amp or amp_fastmath:
+    if use_fp16 or amp:
       loss_scale_manager = tf.contrib.mixed_precision.ExponentialUpdateLossScaleManager(init_loss_scale=2**32, incr_every_n_steps=1000, decr_every_n_nan_or_inf=2, decr_ratio=0.5)
       optimizer = tf.contrib.mixed_precision.LossScaleOptimizer(optimizer, loss_scale_manager)
 
@@ -83,7 +83,7 @@ def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, use_tpu, 
   grads_and_vars = optimizer.compute_gradients(loss, tvars)
   grads_and_vars = [(g,v) for g,v in grads_and_vars if g is not None]
   grads, tvars = list(zip(*grads_and_vars))
-  all_are_finite = tf.reduce_all([tf.reduce_all(tf.is_finite(g)) for g in grads]) if use_fp16 or fastmath or amp or amp_fastmath else tf.constant(True, dtype=tf.bool)
+  all_are_finite = tf.reduce_all([tf.reduce_all(tf.is_finite(g)) for g in grads]) if use_fp16 or amp else tf.constant(True, dtype=tf.bool)
 
   # This is how the model was pre-trained.
   # ensure global norm is a finite number 

@@ -28,7 +28,8 @@ import optimization
 import tokenization
 import six
 import tensorflow as tf
-
+import horovod.tensorflow as hvd
+import time
 flags = tf.flags
 
 FLAGS = flags.FLAGS
@@ -90,6 +91,7 @@ flags.DEFINE_integer("predict_batch_size", 8,
 
 flags.DEFINE_float("learning_rate", 5e-6, "The initial learning rate for Adam.")
 
+flags.DEFINE_bool("horovod", False, "Whether to use Horovod for multi-gpu runs")
 flags.DEFINE_float("num_train_epochs", 3.0,
                    "Total number of training epochs to perform.")
 
@@ -154,7 +156,6 @@ flags.DEFINE_float(
     "If null_score - best_non_null is greater than the threshold predict null.")
 
 flags.DEFINE_bool("use_fp16", False, "Whether to use fp32 or fp16 arithmetic on GPU.")
-
 flags.DEFINE_bool("use_xla", False, "Whether to enable XLA JIT compilation.")
 
 # report samples/sec, total loss and learning rate during training
@@ -463,7 +464,7 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
         start_position = 0
         end_position = 0
 
-      if example_index < 20:
+      if FLAGS.verbose_logging and example_index < 20:
         tf.logging.info("*** Example ***")
         tf.logging.info("unique_id: %s" % (unique_id))
         tf.logging.info("example_index: %s" % (example_index))
@@ -593,7 +594,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
       input_mask=input_mask,
       token_type_ids=segment_ids,
       use_one_hot_embeddings=use_one_hot_embeddings,
-      compute_type=tf.float16 if FLAGS.use_fp16 else tf.float32)
+      compute_type=tf.float32)
 
   final_hidden = model.get_sequence_output()
 
@@ -631,10 +632,10 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
 
   def model_fn(features, labels, mode, params):  # pylint: disable=unused-argument
     """The `model_fn` for TPUEstimator."""
-
-    tf.logging.info("*** Features ***")
-    for name in sorted(features.keys()):
-      tf.logging.info("  name = %s, shape = %s" % (name, features[name].shape))
+    if FLAGS.verbose_logging:
+        tf.logging.info("*** Features ***")
+        for name in sorted(features.keys()):
+          tf.logging.info("  name = %s, shape = %s" % (name, features[name].shape))
 
     unique_ids = features["unique_ids"]
     input_ids = features["input_ids"]
@@ -655,7 +656,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
 
     initialized_variable_names = {}
     scaffold_fn = None
-    if init_checkpoint:
+    if init_checkpoint and (hvd is None or hvd.rank() == 0):
       (assignment_map, initialized_variable_names
       ) = modeling.get_assignment_map_from_checkpoint(tvars, init_checkpoint)
       if use_tpu:
@@ -667,14 +668,16 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
         scaffold_fn = tpu_scaffold
       else:
         tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
+    
+    if FLAGS.verbose_logging:
+        tf.logging.info("**** Trainable Variables ****")
+        for var in tvars:
+          init_string = ""
+          if var.name in initialized_variable_names:
+            init_string = ", *INIT_FROM_CKPT*"
+          tf.logging.info(" %d name = %s, shape = %s%s", 0 if hvd is None else hvd.rank(), var.name, var.shape,
+                          init_string)
 
-    tf.logging.info("**** Trainable Variables ****")
-    for var in tvars:
-      init_string = ""
-      if var.name in initialized_variable_names:
-        init_string = ", *INIT_FROM_CKPT*"
-      tf.logging.info("  name = %s, shape = %s%s", var.name, var.shape,
-                      init_string)
 
     output_spec = None
     if mode == tf.estimator.ModeKeys.TRAIN:
@@ -721,7 +724,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
   return model_fn
 
 
-def input_fn_builder(input_file, seq_length, is_training, drop_remainder):
+def input_fn_builder(input_file, seq_length, is_training, drop_remainder, hvd=None):
   """Creates an `input_fn` closure to be passed to TPUEstimator."""
 
   name_to_features = {
@@ -751,14 +754,20 @@ def input_fn_builder(input_file, seq_length, is_training, drop_remainder):
 
   def input_fn(params):
     """The actual input function."""
+
     batch_size = params["batch_size"]
 
     # For training, we want a lot of parallel reading and shuffling.
     # For eval, we want no shuffling and parallel reading doesn't matter.
-    d = tf.data.TFRecordDataset(input_file)
     if is_training:
-      d = d.repeat()
-      d = d.shuffle(buffer_size=100)
+        d = tf.data.TFRecordDataset(input_file, num_parallel_reads=4)
+        if hvd is not None: d = d.shard(hvd.size(), hvd.rank())
+        d = d.apply(tf.data.experimental.ignore_errors())
+        d = d.shuffle(buffer_size=100)
+        d = d.repeat()
+    else:
+        d = tf.data.TFRecordDataset(input_file)
+
 
     d = d.apply(
         tf.contrib.data.map_and_batch(
@@ -769,6 +778,7 @@ def input_fn_builder(input_file, seq_length, is_training, drop_remainder):
     return d
 
   return input_fn
+
 
 
 RawResult = collections.namedtuple("RawResult",
@@ -1163,6 +1173,9 @@ def validate_flags_or_throw(bert_config):
 def main(_):
   tf.logging.set_verbosity(tf.logging.INFO)
 
+  if FLAGS.horovod:
+    hvd.init()
+
   bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
 
   validate_flags_or_throw(bert_config)
@@ -1203,7 +1216,7 @@ def main(_):
   run_config = tf.contrib.tpu.RunConfig(
       cluster=tpu_cluster_resolver,
       master=FLAGS.master,
-      model_dir=FLAGS.output_dir,
+      model_dir=FLAGS.output_dir if master_process else None,
       session_config=config,
       save_checkpoints_steps=FLAGS.save_checkpoints_steps if master_process else None,
       keep_checkpoint_max=1,
@@ -1221,7 +1234,7 @@ def main(_):
     train_examples = read_squad_examples(
         input_file=FLAGS.train_file, is_training=True)
     num_train_steps = int(
-        len(train_examples) / FLAGS.train_batch_size * FLAGS.num_train_epochs)
+        len(train_examples) / global_batch_size * FLAGS.num_train_epochs)
     num_warmup_steps = int(num_train_steps * FLAGS.warmup_proportion)
 
     # Pre-shuffle the input to avoid having to make a very large shuffle
@@ -1248,7 +1261,7 @@ def main(_):
   model_fn = model_fn_builder(
       bert_config=bert_config,
       init_checkpoint=FLAGS.init_checkpoint,
-      learning_rate=FLAGS.learning_rate,
+      learning_rate=learning_rate,
       num_train_steps=num_train_steps,
       num_warmup_steps=num_warmup_steps,
       use_tpu=FLAGS.use_tpu,
@@ -1273,7 +1286,7 @@ def main(_):
         filename=tmp_filenames[hvd_rank],
         is_training=True)
     convert_examples_to_features(
-        examples=train_examples,
+        examples=train_examples[start_index:end_index],
         tokenizer=tokenizer,
         max_seq_length=FLAGS.max_seq_length,
         doc_stride=FLAGS.doc_stride,
@@ -1287,10 +1300,15 @@ def main(_):
     tf.logging.info("  Num split examples = %d", train_writer.num_features)
     tf.logging.info("  Batch size = %d", FLAGS.train_batch_size)
     tf.logging.info("  Num steps = %d", num_train_steps)
+    tf.logging.info("  LR = %f", learning_rate)
     del train_examples
+    if FLAGS.horovod:
+        barrier = hvd.allreduce(tf.constant(0))
+        with tf.Session(config=config) as sess:
+          sess.run(barrier)
 
     train_input_fn = input_fn_builder(
-        input_file=train_writer.filename,
+        input_file=tmp_filenames,
         seq_length=FLAGS.max_seq_length,
         is_training=True,
         drop_remainder=True,
@@ -1310,7 +1328,7 @@ def main(_):
         tf.logging.info("%d Training Performance = %0.4f sentences/sec", hvd_rank, avg_sentences_per_second)
         tf.logging.info("-----------------------------")
 
-  if FLAGS.do_predict:
+  if FLAGS.do_predict and master_process:
     eval_examples = read_squad_examples(
         input_file=FLAGS.predict_file, is_training=False)
 
@@ -1337,8 +1355,6 @@ def main(_):
     tf.logging.info("  Num orig examples = %d", len(eval_examples))
     tf.logging.info("  Num split examples = %d", len(eval_features))
     tf.logging.info("  Batch size = %d", FLAGS.predict_batch_size)
-
-    all_results = []
 
     predict_input_fn = input_fn_builder(
         input_file=eval_writer.filename,

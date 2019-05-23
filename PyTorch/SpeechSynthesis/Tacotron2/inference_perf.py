@@ -141,7 +141,7 @@ def main():
 
             t0 = time.time()
             with torch.no_grad():
-                _, mels, _, _ = model.inference(text_padded)
+                _, mels, _, _ = model.infer(text_padded)
             t1 = time.time()
             inference_time= t1 - t0
             num_items = text_padded.size(0)*text_padded.size(1)

@@ -476,14 +476,14 @@ Our results were obtained by running the scripts
 TensorFlow 19.03-py3 NGC container on an NVIDIA DGX-1 with 8 V100 16G GPUs.
 
 
-| # GPUs | Precision                       | Training (Imgs/sec) | Training Time | Speedup |
-|--------|---------------------------------|---------------------|---------------|---------|
-| 1      | FP32                            | 89                  | 7m44          | 1.00    |
-| 1      | Automatic Mixed Precision (AMP) | 104                 | 6m40          | 1.17    |
-| 4      | FP32                            | 261                 | 2m48          | 1.00    |
-| 4      | Automatic Mixed Precision (AMP) | 302                 | 2m27          | 1.16    |
-| 8      | FP32                            | 445                 | 1m44          | 1.00    |
-| 8      | Automatic Mixed Precision (AMP) | 491                 | 1m36          | 1.10    |
+| # GPUs | Precision                       | Throughput (Imgs/sec) | Training Time | Speedup |
+|--------|---------------------------------|-----------------------|---------------|---------|
+| 1      | FP32                            | 89                    | 7m44          | 1.00    |
+| 1      | Automatic Mixed Precision (AMP) | 104                   | 6m40          | 1.17    |
+| 4      | FP32                            | 261                   | 2m48          | 1.00    |
+| 4      | Automatic Mixed Precision (AMP) | 302                   | 2m27          | 1.16    |
+| 8      | FP32                            | 445                   | 1m44          | 1.00    |
+| 8      | Automatic Mixed Precision (AMP) | 491                   | 1m36          | 1.10    |
 
 To achieve these same results, follow the [Quick start guide](#quick-start-guide) outlined above.
 
@@ -492,10 +492,10 @@ To achieve these same results, follow the [Quick start guide](#quick-start-guide
 Our results were obtained by running the aforementioned scripts in the TensorFlow 
 19.03-py3 NGC container on an NVIDIA DGX-1 server with 8 V100 16G GPUs.
 
-| # GPUs | Precision                       | Training (Imgs/sec) | Speedup |
-|--------|---------------------------------|---------------------|---------|
-| 1      | FP32                            | 228                 | 1.00    |
-| 1      | Automatic Mixed Precision (AMP) | 301                 | 1.32    |
+| # GPUs | Precision                       | Throughput (Imgs/sec) | Speedup |
+|--------|---------------------------------|-----------------------|---------|
+| 1      | FP32                            | 228                   | 1.00    |
+| 1      | Automatic Mixed Precision (AMP) | 301                   | 1.32    |
 
 To achieve these same results, follow the [Quick start guide](#quick-start-guide) outlined above.
 

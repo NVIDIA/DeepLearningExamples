@@ -1,4 +1,4 @@
-# Bert For TensorFlow
+# BERT For TensorFlow
 
 This repository provides a script and recipe to train BERT to achieve state of the art accuracy, and is tested and maintained by NVIDIA.
 
@@ -154,12 +154,12 @@ bash scripts/run_squad.sh <batch_size_per_gpu> <learning_rate_per_gpu> <precisio
 
 For FP16 training with XLA using a DGX-1 V100 32G, run:
 ```bash
-bash scripts/run_squad.sh 10 5e-6 fp16 true 8 /bert/bert_model.ckpt
+bash scripts/run_squad.sh 10 5e-6 fp16 true 8 data/pretrained_models_google/uncased_L-24_H-1024_A-16/bert_model.ckpt
 ```
 
 For FP32 training without XLA using a DGX-1 V100 32G, run:
 ```bash
-bash scripts/run_squad.sh 5 5e-6 fp32 false 8 /bert/bert_model.ckpt
+bash scripts/run_squad.sh 5 5e-6 fp32 false 8 data/pretrained_models_google/uncased_L-24_H-1024_A-16/bert_model.ckpt
 ```
 
 ### 7. Start validation/evaluation.
@@ -183,7 +183,9 @@ bash scripts/run_squad_inference.sh /results/model.ckpt 8 fp32 false
 The following sections provide greater details of the dataset, running training and inference, and the training results.
 
 ### Command line options
-To see the full list of available options and their descriptions, use the -h or --help command line option, for example: 
+
+The `run_squad.sh` script calls the `run_squad.py` file and the `run_pretraining.sh` script calls the `run_pretraining.py` file with a set of options. To see the full list of available options and their descriptions, use the -h or --help command line option with the python file, for example:
+
 ```bash
 python run_pretraining.py --help
 python run_squad.py --help 
@@ -192,12 +194,10 @@ python run_squad.py --help
 Aside from options to set hyperparameters, the relevant options to control the behaviour of the `run_pretraining.py` script are: 
 ```bash
   --[no]amp: Whether to enable AMP ops.(default: 'false')
-  --[no]amp_fastmath: Whether to enable AMP fasthmath ops.(default: 'false')
   --bert_config_file: The config json file corresponding to the pre-trained BERT model. This specifies the model architecture.
   --[no]do_eval: Whether to run evaluation on the dev set.(default: 'false')
-  --[no]do_train: Whether to run training.(default: 'false')
-  --eval_batch_size: Total batch size for evaluation.(default: '8')(an integer)
-  --[no]fastmath: Whether to enable loss scaler for fasthmath ops.(default: 'false')
+  --[no]do_train: Whether to run training.(evaluation: 'false')
+  --eval_batch_size: Total batch size for eval.(default: '8')(an integer)
   --[no]horovod: Whether to use Horovod for multi-gpu runs(default: 'false')
   --init_checkpoint: Initial checkpoint (usually from a pre-trained BERT model).
   --input_file: Input TF example files (can be a glob or comma separated).
@@ -237,9 +237,9 @@ The `run_pretraining.sh` script runs a job on a single node  that trains the BER
 - Runs on 8 GPUs with training batch size of 14 and evaluation batch size of 8 per GPU.
 - Has FP16 precision enabled.
 - Is XLA enabled.
-- Trains with default learning rate of 1e-4 for 1144000 steps with 10000 warm-up steps.
-- Saves a checkpoint every 5000 iterations.
-- Creates a log file containing all the output.
+- Runs for 1144000 steps with 10000 warm-up steps.
+- Saves a checkpoint every 5000 iterations (keeps only the latest checkpoint) and at the end of training. All checkpoints, evaluation results and training logs are saved to the `/results` directory (in the container which can be mounted to a local directory).
+- Creates the log file containing all the output.
 - Evaluates the model at the end of training. To skip evaluation, modify `--do_eval` to `False`.
 
 These parameters will train Wikipedia + BooksCorpus to reasonable accuracy on a DGX1 with 32GB V100 cards. If you want to match google’s best results from the BERT paper, you should either train for twice as many steps (2,288,000 steps) on a DGX1, or train on 16 GPUs on a DGX2. The DGX2 having 16 GPUs will be able to fit a batch size twice as large as a DGX1 (224 vs 112), hence the DGX2 can finish in half as many steps. 
@@ -247,31 +247,19 @@ These parameters will train Wikipedia + BooksCorpus to reasonable accuracy on a 
 
 For example:
 ```bash
-run_pretraining.sh <node_type> <training_batch_size> <eval_batch_size> <learning-rate> <precision> <num_gpus> <warmup_steps> <training_steps> <save_checkpoint_steps> <create_logfile>
+run_pretraining.sh <training_batch_size> <eval_batch_size> <learning-rate> <precision> <num_gpus> <warmup_steps> <training_steps> <save_checkpoint_steps> <create_logfile>
 ```
 
 Where:
-- <training_batch_size> per-gpu batch size used for training. Batch size varies with <precision>, larger batch sizes run more efficiently, but require more memory.
+- <training_batch_size> is per-gpu batch size used for training. Batch size varies with <precision>, larger batch sizes run more efficiently, but require more memory.
 
 - <eval_batch_size> per-gpu batch size used for evaluation after training.<learning_rate> Default rate of 1e-4 is good for global batch size 256.
 
-- <precision> Type of math in your model, can be either fp32, fp16, fp16_xla, fastmath, amp_fm, amp_fm_xla, amp or amp_xla. The options mean:
+- <precision> Type of math in your model, can be either fp32, or amp. The options mean:
 
     - fp32 32 bit IEEE single precision floats.
 
-    - fp16 Hand-coded mixed precision 16 and 32 bit floats.
-
-    - fp16 Hand-coded mixed precision floats, JIT compiled with XLA.
-
-    - fastmath Matmuls done by tensor cores in mixed precision, the rest is done in FP32.
-
-    - amp_fm Alternative FastMath implementation that works by manipulating TensorFlow’s compute graph.
-
-    - amp_fm_xla The amp_fm flag plus XLA JIT compilation.
-
     - amp Automatic rewrite of TensorFlow compute graph to take advantage of 16 bit arithmetic whenever that is safe.
-
-    - amp_xla The amp flag plus XLA JIT compilation.
 
 - <num_gpus> Number of GPUs to use for training. Must be equal to or smaller than the number of GPUs attached to your node.
 
@@ -407,42 +395,42 @@ The following tables compare `F1` scores across 5 different training runs with d
 Our results were obtained by running batch sizes up to 3x GPUs on a 16GB V100 and up to 10x GPUs on a 32G V100 with mixed precision.
 
 #### NVIDIA DGX-1 (8x V100 16G)
-Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance numbers (in tokens per second) were averaged over an entire training epoch.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance (in sentences per second) is the steady-state throughput.
 
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
 |:---:|:---:|:------:|:-----:|:----:|:----:|:----:|
-| 1 | 2 | 7.41 |11.86|1.6 |1.0 |1.0 |
-| 4 | 2 |23.699|35.34|1.49|3.2 |2.98|
-| 8 | 2 |44.29 |64.96|1.47|5.98|5.48|
+| 1 | 2 | 8.06 |14.12|1.75 |1.0  |1.0 |
+| 4 | 2 |25.71 |41.32|1.61 |3.19 |2.93|
+| 8 | 2 |50.20 |80.76|1.61 |6.23 |5.72|
 
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
 |:---:|:---:|:-----:|:-----:|:---:|:---:|:----:|
-| 1 | 3 |  -  |14.86| - | - |1.0 |
-| 4 | 3 |  -  |44.17| - | - |2.97|
-| 8 | 3 |  -  |78.89| - | - |5.3 |
+| 1 | 3 |  -  |17.14| - | - |1.0 |
+| 4 | 3 |  -  |51.59| - | - |3.0 |
+| 8 | 3 |  -  |98.75| - | - |5.76|
 
 Note: The respective values for FP32 runs that use a batch size of 3 are not available due to out of memory errors that arise. Batch size of 3 is only available on using FP16.
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 #### NVIDIA DGX-1 (8x V100 32G)
-Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epochs.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. Performance (in sentences per second) is the steady-state throughput.
 
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
-|---|---|-----|-----|----|----|----|
-| 1 | 4 | 8.55|18.14|2.12|1.0 |1.0 |
-| 4 | 4 |32.13|52.85|1.64|3.76|2.91|
-| 8 | 4 |62.83|95.28|1.51|7.35|5.25|
+|---|---|-----|------|----|----|----|
+| 1 | 4 | 8.96|20.91 |2.33|1.0 |1.0 |
+| 4 | 4 |33.66|64.89 |1.93|3.76|3.10|
+| 8 | 4 |66.65|129.16|1.94|7.44|6.18|
 
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
 |---|---|-----|-------|---|---|----|
-| 1 | 10|  -  | 27.69 | - | - |1.0 |
-| 4 | 10|  -  | 85.193| - | - |3.07|
-| 8 | 10|  -  |142.69 | - | - |5.1 |
+| 1 | 10|  -  | 31.80 | - | - |1.0 |
+| 4 | 10|  -  | 107.65| - | - |3.39|
+| 8 | 10|  -  | 220.88| - | - |6.95|
 
 
 Note: The respective values for FP32 runs that use a batch size of 10 are not available due to out of memory errors that arise. Batch size of 10 is only available on using FP16.
@@ -450,23 +438,23 @@ Note: The respective values for FP32 runs that use a batch size of 10 are not av
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above. 
 
 #### NVIDIA DGX-2 (16x V100 32G)
-Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epoch.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance (in sentences per second) is the steady-state throughput.
 
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
-|---|---|------|------|----|-----|----|
-|  1| 4 |  8.80| 17.43|1.98| 1.0 |1.0 |
-|  4| 4 | 33.22| 56.87|1.71| 3.78|3.26|
-|  8| 4 | 64.46|100.58|1.56| 7.33|5.77|
-| 16| 4 |117.83|162.29|1.38|13.39|9.31|
+|---|---|------|------|----|-----|-----|
+|  1| 4 | 10.85| 21.83|2.01| 1.0 | 1.0 |
+|  4| 4 | 38.85| 71.87|1.85| 3.58| 3.29|
+|  8| 4 | 74.65|140.66|1.88| 6.88| 6.44|
+| 16| 4 |132.71|251.26|1.89|12.23|11.51|
 
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
-|---|---|---|------|---|---|----|
-|  1| 10| - | 28.72| - | - |1.0 |
-|  4| 10| - | 92.73| - | - |3.22|
-|  8| 10| - |155.78| - | - |5.42|
-| 16| 10| - |228.75| - | - |7.96|
+|---|---|---|------|---|---|-----|
+|  1| 10| - | 34.38| - | - | 1.0 |
+|  4| 10| - |119.19| - | - | 3.47|
+|  8| 10| - |233.86| - | - | 6.8 |
+| 16| 10| - |427.19| - | - |12.43|
 
 
 Note: The respective values for FP32 runs that use a batch size of 10 are not available due to out of memory errors that arise. Batch size of 10 is only available on using FP16.
@@ -489,7 +477,7 @@ Our results were obtained by running the `scripts/run_squad_inference.sh` traini
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
 |---|---|-----|------|----|
-| 1 | 8 |36.78|118.54|3.22|
+| 1 | 8 |33.95|108.45|3.19|
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
@@ -498,7 +486,7 @@ Our results were obtained by running the `scripts/run_squad_inference.sh` traini
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
 |---|---|-----|------|----|
-| 1 | 8 |33.95|108.45|3.19|
+| 1 | 8 |36.78|118.54|3.22|
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 

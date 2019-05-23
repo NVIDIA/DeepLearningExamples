@@ -14,13 +14,7 @@ use_fp16=""
 if [ "$precision" = "fp16" ] ; then
         echo "fp16 activated!"
         export TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE=1
-        use_fp16="--fast_math"
-elif [ "$precision" = "fast_math" ] ; then
-        echo "fastmath activated!"
-        export TF_ENABLE_CUBLAS_TENSOR_OP_MATH_FP32=1
-        export TF_ENABLE_CUDNN_TENSOR_OP_MATH_FP32=1
-        export TF_ENABLE_CUDNN_RNN_TENSOR_OP_MATH_FP32=1
-        export TF_USE_DEFAULT_LOSS_SCALING=1
+        use_fp16="--use_fp16"
 fi
 
 if [ "$use_xla" = "true" ] ; then
@@ -29,7 +23,6 @@ if [ "$use_xla" = "true" ] ; then
 else
     use_xla_tag=""
 fi
-
 
 python run_squad.py \
 --vocab_file=$BERT_DIR/vocab.txt \

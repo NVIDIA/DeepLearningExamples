@@ -190,7 +190,7 @@ def main():
         if args.tacotron2:
             tacotron2_t0 = time.time()
             with torch.no_grad():
-                _, mel, _, _ = tacotron2.inference(sequence)
+                _, mel, _, _ = tacotron2.infer(sequence)
             tacotron2_t1 = time.time()
             tacotron2_infer_perf = sequence.size(1)/(tacotron2_t1-tacotron2_t0)
             LOGGER.log(key="tacotron2_items_per_sec", value=tacotron2_infer_perf)
