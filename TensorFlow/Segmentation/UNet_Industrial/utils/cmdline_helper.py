@@ -95,6 +95,14 @@ def parse_cmdline():
         help="""Directory in which to write training logs, summaries and checkpoints."""
     )
 
+    _add_bool_argument(
+        parser=p,
+        name="save_eval_results_to_json",
+        default=False,
+        required=False,
+        help="Whether to save evaluation results in JSON format."
+    )
+
     p.add_argument('--data_dir', required=False, default=None, type=str, help="Path to dataset directory")
 
     p.add_argument(

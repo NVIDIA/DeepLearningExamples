@@ -17,9 +17,11 @@
 # This script launches UNet evaluation in FP32 on 1 GPUs using 16 batch size
 # Usage ./UNet_FP32_EVAL.sh <path to result repository> <path to dataset> <dagm classID (1-10)>
 
-pip install ../dllogger/
+BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-python ../main.py \
+pip install ${BASEDIR}/../dllogger/
+
+python ${BASEDIR}/../main.py \
     --unet_variant='tinyUNet' \
     --activation_fn='relu' \
     --exec_mode='evaluate' \

@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import sys
+
 from absl import flags
 from time import time
 
@@ -63,7 +65,8 @@ class TimingHook(tf.train.SessionRunHook):
         self.start_time = time()
 
     def log_progress(self):
-        print(len(self.times) - FLAGS.warmup_iters, '/', FLAGS.benchmark_iters, ' '*10, end='\r')
+        if sys.stdout.isatty():
+            print(len(self.times) - FLAGS.warmup_iters, '/', FLAGS.benchmark_iters, ' '*10, end='\r')
 
     def after_run(self, *args, **kwargs):
         super(TimingHook, self).after_run(*args, **kwargs)

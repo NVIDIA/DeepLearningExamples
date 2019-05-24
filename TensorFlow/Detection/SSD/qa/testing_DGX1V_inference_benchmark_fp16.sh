@@ -1,11 +1,20 @@
 #!/bin/bash
-BASELINES=(193.6 135.2 171.5 188.3 187 187.6 191.4)
+BASELINES=(93.6 136.3 172.1 190.8 188.2 189.4 192.2)
+TOLERANCE=0.07
+PRECISION=FP16
 
 for i in `seq 0 6`
 do
-        echo "Testing mixed precision inference speed on batch size = $((2 ** $i))"
-        bash examples/SSD320_FP16_inference.sh --batch_size $((2 ** $i)) > tmp 2> /dev/null
-        echo -n "img/s: "; tail -n 1 tmp | awk '{print $3}'; echo "expected img/s: ${BASELINES[$i]}"; echo -n "relative error: "; err=`tail -n 1 tmp | awk -v BASELINE=${BASELINES[$i]} '{print sqrt(($3 - BASELINE)^2)/$3}'`; echo $err
-        rm tmp
-        if [[ $err > 0.1 ]]; then echo "FAILED" && exit 1; else echo "PASSED"; fi
+    BS=$((2 ** $i))
+    
+    MSG="Testing mixed precision inference speed on batch size = $BS"
+    CMD="bash ../../examples/SSD320_${PRECISION}_inference.sh ../../configs --batch_size $BS"
+
+    if CMD=$CMD BASELINE=${BASELINES[$i]} TOLERANCE=$TOLERANCE MSG=$MSG bash ../../qa/testing_DGX1V_performance.sh
+    then
+        exit $?
+    fi
+
 done
+
+return $result

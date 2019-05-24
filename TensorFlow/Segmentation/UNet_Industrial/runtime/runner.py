@@ -22,6 +22,7 @@
 from __future__ import print_function
 
 import os
+import json
 import multiprocessing
 import operator
 import random
@@ -509,7 +510,7 @@ class Runner(object):
         if not hvd_utils.is_using_hvd() or hvd.local_rank() == 0:
             LOGGER.log('Ending Model Training ...')
 
-    def evaluate(self, iter_unit, num_iter, batch_size, warmup_steps=50, is_benchmark=False):
+    def evaluate(self, iter_unit, num_iter, batch_size, warmup_steps=50, is_benchmark=False, save_eval_results_to_json=False):
 
         if iter_unit not in ["epoch", "batch"]:
             raise ValueError('`iter_unit` value is unknown: %s (allowed: ["epoch", "batch"])' % iter_unit)
@@ -540,7 +541,7 @@ class Runner(object):
                 log_every=self.run_hparams.log_every_n_steps,
                 warmup_steps=warmup_steps,
                 is_training=False,
-                sample_dir=None
+                sample_dir=self.run_hparams.sample_dir
             )
         ]
 
@@ -629,6 +630,32 @@ class Runner(object):
             LOGGER.log('FP', tps)
             LOGGER.log('TPR', tpr)
             LOGGER.log('TNR', tnr)
+
+            if save_eval_results_to_json:
+
+                results_dict = {
+                    'IoU': {
+                        '0.75': str(eval_results["IoU_THS_0.75"]),
+                        '0.85': str(eval_results["IoU_THS_0.85"]),
+                        '0.95': str(eval_results["IoU_THS_0.95"]),
+                        '0.99': str(eval_results["IoU_THS_0.99"]),
+                    },
+                    'TPR': {
+                        '0.75': str(tpr[-4]),
+                        '0.85': str(tpr[-3]),
+                        '0.95': str(tpr[-2]),
+                        '0.99': str(tpr[-1]),
+                    },
+                    'TNR': {
+                        '0.75': str(tnr[-4]),
+                        '0.85': str(tnr[-3]),
+                        '0.95': str(tnr[-2]),
+                        '0.99': str(tnr[-1]),
+                    }
+                }
+
+                with open(os.path.join(self.run_hparams.model_dir, "..", "results.json"), 'w') as f:
+                    json.dump(results_dict, f)
 
         except KeyboardInterrupt:
             print("Keyboard interrupt")

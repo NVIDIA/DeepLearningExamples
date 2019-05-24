@@ -20,6 +20,7 @@
 # ==============================================================================
 
 import os
+import json
 import time
 import operator
 
@@ -97,7 +98,7 @@ class ProfilerHook(tf.train.SessionRunHook):
 
             # ==================== Samples ==================== #
 
-            if self._sample_dir is not None:
+            if self._sample_dir is not None and self._is_training:
                 additional_fetches["samples"] = {}
 
                 additional_fetches["samples"]["input_image"] = tf.get_default_graph(
@@ -170,7 +171,7 @@ class ProfilerHook(tf.train.SessionRunHook):
             LOGGER.log("False Positives:", run_values.results["confusion_matrix"]["fp"])
             LOGGER.log("False Negatives:", run_values.results["confusion_matrix"]["fn"])
 
-            if self._sample_dir is not None:
+            if self._sample_dir is not None and self._is_training:
 
                 for key in sorted(run_values.results["samples"].keys(), key=operator.itemgetter(0)):
 
@@ -208,3 +209,13 @@ class ProfilerHook(tf.train.SessionRunHook):
             "\t[*] Total Processing Time: %dh %02dm %02ds\n" %
             (avg_processing_speed, total_processing_hours, total_processing_minutes, total_processing_seconds)
         )
+
+        perf_dict = {
+            'throughput': str(avg_processing_speed),
+            'processing_time': str(total_processing_time)
+        }
+
+        perf_filename = "performances_%s.json" % ("train" if self._is_training else "eval")
+
+        with open(os.path.join(self._sample_dir, "..", perf_filename), 'w') as f:
+            json.dump(perf_dict, f)
