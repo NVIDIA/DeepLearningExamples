@@ -1,9 +1,9 @@
 DATA_DIR=$1
 
-wget https://dl.fbaipublicfiles.com/detectron/coco/coco_annotations_minival.tgz
-wget http://images.cocodataset.org/zips/train2014.zip
-wget http://images.cocodataset.org/zips/val2014.zip
-wget http://images.cocodataset.org/annotations/annotations_trainval2014.zip
+wget -c https://dl.fbaipublicfiles.com/detectron/coco/coco_annotations_minival.tgz
+wget -c http://images.cocodataset.org/zips/train2014.zip
+wget -c http://images.cocodataset.org/zips/val2014.zip
+wget -c http://images.cocodataset.org/annotations/annotations_trainval2014.zip
 
 if md5sum -c hashes.md5
 then
