@@ -32,8 +32,12 @@ training_tokens = list(map(lambda x: float(x[5]), training_speed))
 training_sentences = list(map(lambda x: float(x[3]), training_speed))
 
 eval_speed = re.findall(rb'\neval time for epoch (\d+): ((\d|.)+) mins \(((\d|.)+) sent/sec, ((\d|.)+) tokens/sec\)', content)
+if not eval_speed:
+    eval_speed = re.findall(rb'\neval time for ckpt(): ((\d|.)+) mins \(((\d|.)+) sent/sec, ((\d|.)+) tokens/sec\)', content)
 eval_tokens = list(map(lambda x: float(x[5]), eval_speed))
 eval_sentences = list(map(lambda x: float(x[3]), eval_speed))
+
+experiment_duration = float(re.findall(rb'\nExperiment took ((\d|.)+) min', content)[0][0])
 
 ret = {}
 ret['bleu'] = bleu
@@ -41,5 +45,6 @@ ret['training_tokens_per_sec'] = training_tokens
 ret['training_sentences_per_sec'] = training_sentences
 ret['eval_tokens_per_sec'] = eval_tokens
 ret['eval_sentences_per_sec'] = eval_sentences
+ret['duration'] = experiment_duration
 
 print(json.dumps(ret))

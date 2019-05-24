@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/tensorflow:19.03-py3 as base
+FROM nvcr.io/nvidia/tensorflow:19.05-py3 as base
 
 FROM base as sha
 

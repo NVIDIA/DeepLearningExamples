@@ -56,7 +56,6 @@ class Runner(object):
         # ======= Optimization HParams ======== #
         use_xla=False,
         use_tf_amp=False,
-        use_fast_math=False,
 
         # ======== Debug Flags ======== #
         debug_verbosity=0,
@@ -105,34 +104,19 @@ class Runner(object):
         os.environ['TF_DISABLE_NVTX_RANGES'] = '1'
 
         # ============================================
-        # TF-AMP and Fast Math Setup - Do not remove
+        # TF-AMP Setup - Do not remove
         # ============================================
 
         if dtype == tf.float16:
 
-            if use_fast_math:
-                raise RuntimeError("Fast Math can not be activated for FP16 precision")
-
             if use_tf_amp:
                 raise RuntimeError("TF AMP can not be activated for FP16 precision")
 
-        elif use_fast_math and use_tf_amp:
-            raise RuntimeError("TF AMP and Fast Math can not be activated simultaneously")
-
-        else:
-
-            if use_fast_math:
-                if hvd.rank() == 0:
-                    LOGGER.log("Fast Math computation is activated - Experimental Feature")
-
-                os.environ["TF_ENABLE_CUBLAS_TENSOR_OP_MATH_FP32"] = "1"
-                os.environ["TF_ENABLE_CUDNN_TENSOR_OP_MATH_FP32"] = "1"
-                os.environ["TF_ENABLE_CUDNN_RNN_TENSOR_OP_MATH_FP32"] = "1"
-
-            elif use_tf_amp:
-                if hvd.rank() == 0:
-                    LOGGER.log("TF AMP is activated - Experimental Feature")
-                os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
+        elif use_tf_amp:
+            
+            if hvd.rank() == 0:
+                LOGGER.log("TF AMP is activated - Experimental Feature")
+            os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
 
         # =================================================
 
@@ -150,7 +134,6 @@ class Runner(object):
 
         run_config_performance = tf.contrib.training.HParams(
             num_preprocessing_threads=32,
-            use_fast_math=use_fast_math,
             use_tf_amp=use_tf_amp,
             use_xla=use_xla,
         )
@@ -159,7 +142,7 @@ class Runner(object):
             model_dir=model_dir if not hvd_utils.is_using_hvd() or hvd.rank() == 0 else None,
             log_dir=log_dir if not hvd_utils.is_using_hvd() or hvd.rank() == 0 else None,
             data_dir=data_dir,
-            num_preprocessing_threads=32,
+            num_preprocessing_threads=16,
         )
 
         self.run_hparams = Runner._build_hparams(model_hparams, run_config_additional, run_config_performance)
@@ -311,7 +294,7 @@ class Runner(object):
         momentum=0.9,
         log_every_n_steps=1,
         loss_scale=256,
-        use_auto_loss_scaling=False,
+        use_static_loss_scaling=False,
         is_benchmark=False
     ):
 
@@ -321,15 +304,14 @@ class Runner(object):
         if self.run_hparams.data_dir is None and not is_benchmark:
             raise ValueError('`data_dir` must be specified for training!')
 
-        if self.run_hparams.use_fast_math or self.run_hparams.use_tf_amp or self.run_hparams.dtype == tf.float16:
-            if use_auto_loss_scaling:
+        if self.run_hparams.use_tf_amp or self.run_hparams.dtype == tf.float16:
+            if use_static_loss_scaling:
+                os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_LOSS_SCALING"] = "0"
+            else:
                 LOGGER.log("TF Loss Auto Scaling is activated - Experimental Feature")
                 os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_LOSS_SCALING"] = "1"
-
-            else:
-                os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_LOSS_SCALING"] = "0"
         else:
-            use_auto_loss_scaling = False  # Make sure it hasn't been set to True on FP32 training
+            use_static_loss_scaling = False  # Make sure it hasn't been set to True on FP32 training
 
         num_gpus = 1 if not hvd_utils.is_using_hvd() else hvd.size()
         global_batch_size = batch_size * num_gpus
@@ -407,7 +389,7 @@ class Runner(object):
             'learning_rate_init': learning_rate_init,
             'weight_decay': weight_decay,
             'loss_scale': loss_scale,
-            'apply_loss_scaling': not use_auto_loss_scaling
+            'apply_loss_scaling': use_static_loss_scaling
         }
 
         image_classifier = self._get_estimator(

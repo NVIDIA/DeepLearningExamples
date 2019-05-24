@@ -18,7 +18,7 @@ then
 	download_1m
 elif [[ ${DATASET_NAME} == "ml-20m" ]]
 then
-        download_20m
+    download_20m
 else
 	echo "Unsupported dataset name: $DATASET_NAME"
 	exit 1

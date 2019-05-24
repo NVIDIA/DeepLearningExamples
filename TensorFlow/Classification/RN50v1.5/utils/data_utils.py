@@ -95,8 +95,8 @@ def get_tfrecords_input_fn(filenames, batch_size, height, width, training, disto
     ds = ds.apply(
         tf.data.experimental.parallel_interleave(
             tf.data.TFRecordDataset,
-            cycle_length=4,
-            block_length=16,
+            cycle_length=10,
+            block_length=8,
             sloppy=not deterministic,
             prefetch_input_elements=16
         )
@@ -109,7 +109,7 @@ def get_tfrecords_input_fn(filenames, batch_size, height, width, training, disto
         return image_processing.preprocess_image_record(record, height, width, _NUM_CHANNELS, training)
 
     ds = ds.cache()
-
+    
     if training:
 
         ds = ds.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=shuffle_buffer_size, seed=seed))

@@ -14,7 +14,7 @@ set -e
 
 DATASET_NAME=${1:-'ml-20m'}
 RAW_DATADIR='/data'
-CACHED_DATADIR='/data/cache/'${DATASET_NAME}
+CACHED_DATADIR='/tmp/cache/'${DATASET_NAME}
 
 # you can add another option to this case in order to support other datasets
 case ${DATASET_NAME} in

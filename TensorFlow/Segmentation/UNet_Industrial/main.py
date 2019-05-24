@@ -41,6 +41,7 @@ if __name__ == "__main__":
 
     RUNNING_CONFIG = tf.contrib.training.HParams(
         exec_mode=FLAGS.exec_mode,
+        save_eval_results_to_json=FLAGS.save_eval_results_to_json,
 
         # ======= Directory HParams ======= #
         log_dir=os.path.join(FLAGS.results_dir, "logs"),
@@ -158,5 +159,6 @@ if __name__ == "__main__":
                 num_iter=RUNNING_CONFIG.num_iter if RUNNING_CONFIG.exec_mode != "train_and_evaluate" else 1,
                 warmup_steps=RUNNING_CONFIG.warmup_steps,
                 batch_size=RUNNING_CONFIG.batch_size,
-                is_benchmark=RUNNING_CONFIG.exec_mode == 'inference_benchmark'
+                is_benchmark=RUNNING_CONFIG.exec_mode == 'inference_benchmark',
+                save_eval_results_to_json=RUNNING_CONFIG.save_eval_results_to_json
             )

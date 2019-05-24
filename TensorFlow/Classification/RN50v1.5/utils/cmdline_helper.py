@@ -150,10 +150,10 @@ def parse_cmdline():
 
     _add_bool_argument(
         parser=p,
-        name="use_auto_loss_scaling",
+        name="use_static_loss_scaling",
         default=False,
         required=False,
-        help="Use AutoLossScaling in FP16, FP32 - Fast Math or FP32 AMP."
+        help="Use static loss scaling in FP16 or FP32 AMP."
     )
 
     _add_bool_argument(
@@ -162,14 +162,6 @@ def parse_cmdline():
         default=False,
         required=False,
         help="Enable XLA (Accelerated Linear Algebra) computation for improved performance."
-    )
-
-    #Enable FastMath Computation using TensorCores to speedup FP32 computation.
-    p.add_argument(
-        "--use_fast_math",
-        action='store_true',
-        required=False,
-        help=argparse.SUPPRESS 
     )
 
     _add_bool_argument(

@@ -16,7 +16,7 @@
 #
 # ==============================================================================
 
-FROM nvcr.io/nvidia/tensorflow:19.03-py3
+FROM nvcr.io/nvidia/tensorflow:19.05-py3
 
 LABEL version="1.0" maintainer="Jonathan DEKHTIAR <jonathan.dekhtiar@nvidia.com>"
 
