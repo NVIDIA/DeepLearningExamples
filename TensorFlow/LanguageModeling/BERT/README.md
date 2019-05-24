@@ -36,14 +36,14 @@ This repository provides a script and recipe to train BERT to achieve state of t
 
 ## The model
 
-BERT, or Bidirectional Encoder Representations from Transformers, is a new method of pre-training language representations which obtains state-of-the-art results on a wide array of Natural Language Processing (NLP) tasks. This model is based on [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805) paper. NVIDIA's BERT 19.03 is an optimized version of [Google's official implementation](https://github.com/google-research/bert), leveraging mixed precision arithmetic and tensor cores on V100 GPUS for faster training times while maintaining target accuracy. 
+BERT, or Bidirectional Encoder Representations from Transformers, is a new method of pre-training language representations which obtains state-of-the-art results on a wide array of Natural Language Processing (NLP) tasks. This model is based on [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805) paper. NVIDIA's BERT 19.03 is an optimized version of [Google's official implementation](https://github.com/google-research/bert), leveraging mixed precision arithmetic and tensor cores on V100 GPUS for faster training times while maintaining target accuracy.
 
 
 The repository also contains scripts to interactively launch data download, training, benchmarking and inference routines in a Docker container for both pretraining and fine tuning for Question Answering. The major differences between the official implementation of the paper and our version of BERT are as follows:
 - Mixed precision support with TensorFlow Automatic Mixed Precision (TF-AMP), which enables mixed precision training without any changes to the code-base by performing automatic graph rewrites and loss scaling controlled by an environmental variable.
 - Scripts to download dataset for 
-    - Pretraining - [Wikipedia](https://dumps.wikimedia.org/),  [BookCorpus](http://yknzhu.wixsite.com/mbweb)
-    - Fine Tuning - [SQuaD](https://rajpurkar.github.io/SQuAD-explorer/) (Stanford Question Answering Dataset), Pretrained Weights from Google
+    - Pretraining - [Wikipedia](https://dumps.wikimedia.org/),  [BooksCorpus](http://yknzhu.wixsite.com/mbweb)
+    - Fine Tuning - [SQuAD](https://rajpurkar.github.io/SQuAD-explorer/) (Stanford Question Answering Dataset), Pretrained Weights from Google
 - Custom fused CUDA kernels for faster computations
 - Multi-GPU/Multi-Node support using Horovod
 
@@ -58,6 +58,7 @@ These techniques and optimizations improve model performance and reduce training
 Other publicly available implementations of BERT include:
 1. [Hugging Face](https://github.com/huggingface/pytorch-pretrained-BERT)
 2. [codertimo](https://github.com/codertimo/BERT-pytorch)
+3. [gluon-nlp](https://github.com/dmlc/gluon-nlp/tree/master/scripts/bert)
 
 
 This model trains with mixed precision tensor cores on Volta, therefore researchers can get results much faster than training without tensor cores. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
@@ -121,14 +122,14 @@ bash scripts/docker/launch.sh
 ```
 
 The `launch.sh` script assumes that the datasets are in the following locations by default after downloading data. 
-- SQuaD v1.1 - `data/squad/v1.1`
+- SQuAD v1.1 - `data/squad/v1.1`
 - BERT - `data/pretrained_models_google/uncased_L-24_H-1024_A-16`
 - Wikipedia - `data/wikipedia_corpus/final_tfrecords_sharded`
-- BookCorpus -  `data/bookcorpus/final_tfrecords_sharded`
+- BooksCorpus -  `data/bookcorpus/final_tfrecords_sharded`
 
 
 ### 5. Start pre-training.
-BERT is designed to pre-train deep bidirectional representations for language representations. The following scripts are to replicate pretraining on Wikipedia+Book Corpus from the [paper](https://arxiv.org/pdf/1810.04805.pdf). These scripts are general and can be used for pretraining language representations on any corpus of choice.
+BERT is designed to pre-train deep bidirectional representations for language representations. The following scripts are to replicate pretraining on Wikipedia+Books Corpus from the [paper](https://arxiv.org/pdf/1810.04805.pdf). These scripts are general and can be used for pretraining language representations on any corpus of choice.
 
 From within the container, you can use the following script to run pre-training.
 ```bash
@@ -222,7 +223,7 @@ Aside from options to set hyperparameters, some relevant options to control the 
 ```
 
 ### Getting the data
-For pre-training BERT, we use the concatenation of Wikipedia (2500M words) as well as Book Corpus (800M words). For Wikipedia, we extract only the text passages from [here](ftp://ftpmirror.your.org/pub/wikimedia/dumps/enwiki/20190301/enwiki-20190301-pages-articles-multistream.xml.bz2) and ignore headers list and tables. It is structured as a document level corpus rather than a shuffled sentence level corpus because it is critical to extract long contiguous sentences. The next step is to run `create_pretraining_data.py` with the document level corpus as input, which generates input data and labels for the masked language modeling and next sentence prediction tasks. Pre-training can also be performed on any corpus of your choice. The collection of data generation scripts are intended to be modular to allow modifications for additional preprocessing steps or to use additional data.
+For pre-training BERT, we use the concatenation of Wikipedia (2500M words) as well as Books Corpus (800M words). For Wikipedia, we extract only the text passages from [here](ftp://ftpmirror.your.org/pub/wikimedia/dumps/enwiki/20190301/enwiki-20190301-pages-articles-multistream.xml.bz2) and ignore headers list and tables. It is structured as a document level corpus rather than a shuffled sentence level corpus because it is critical to extract long contiguous sentences. The next step is to run `create_pretraining_data.py` with the document level corpus as input, which generates input data and labels for the masked language modeling and next sentence prediction tasks. Pre-training can also be performed on any corpus of your choice. The collection of data generation scripts are intended to be modular to allow modifications for additional preprocessing steps or to use additional data.
 
 We can use a pre-trained BERT model for other fine tuning tasks like Question Answering. We use SQuaD for this task. SQuaD v1.1 has 100,000+ question-answer pairs on 500+ articles. SQuaD v2.0 combines v1.1 with an additional 50,000 new unanswerable questions and must not only answer questions but also determine when that is not possible. 
 
