@@ -32,7 +32,7 @@ Mask R-CNN is a convolution based neural network for the task of object instance
 The repository also contains scripts to interactively launch training, benchmarking and inference routines in a Docker container.
 
 The major differences between the official implementation of the paper and our version of Mask R-CNN are as follows:
-  - Mixed precision support with [PyTorch AMP](https://www.google.com/url?q=https://github.com/NVIDIA/apex&sa=D&ust=1552333999336000&usg=AFQjCNGO8dE0mQMO0lUfhMyCs7g0NmJXkw).
+  - Mixed precision support with [PyTorch AMP](https://github.com/NVIDIA/apex).
   - Gradient accumulation to simulate larger batches.
   - Custom fused CUDA kernels for faster computations.
 

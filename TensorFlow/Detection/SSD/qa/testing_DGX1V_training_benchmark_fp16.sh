@@ -1,13 +1,21 @@
 #!/bin/bash
-BASELINES=(125 430 750)
+BASELINES=(120 480 800)
+GPUS=(1 4 8)
+PRECISION=FP16
+TOLERANCE=0.11
 
-i=0
-for GPUS in 1 4 8
+for i in {1..4}
 do
-        echo "Testing mixed precision training speed on $GPUS GPUs"
-        bash examples/SSD320_FP16_${GPUS}_BENCHMARK.sh > tmp 2> /dev/null
-        echo -n "img/s: "; tail -n 1 tmp | awk '{print $7}'; echo "expected img/s: ${BASELINES[$i]}"; echo -n "relative error: "; err=`tail -n 1 tmp | awk -v BASELINE=${BASELINES[$i]} '{print sqrt(($7 - BASELINE)^2)/$7}'`; echo $err
-        rm tmp
-        if [[ $err > 0.1 ]]; then echo "FAILED" && exit 1; else echo "PASSED"; fi
-        i=$(($i + 1))
+    GPU=${GPUS[$i]}
+    
+    MSG="Testing mixed precision training speed on $GPUS GPUs"
+    CMD="bash ../../examples/SSD320_FP16_${GPU}GPU_BENCHMARK.sh /results/SSD320_FP16_${GPU}GPU ../../configs"
+
+    if CMD=$CMD BASELINE=${BASELINES[$i]} TOLERANCE=$TOLERANCE MSG=$MSG bash ../../qa/testing_DGX1V_performance.sh
+    then
+        exit $?
+    fi
+
 done
+
+exit $result

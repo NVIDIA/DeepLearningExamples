@@ -267,10 +267,10 @@ To control warmup and benchmark length, use `--warmup_steps`, `--num_iter` and `
 To benchmark the inference performance on a specific batch size, run:
 
 * FP32
-`python ./main.py --mode=inference_benchmark --precision=fp32 --warmup_steps 20 --train_iter 100 --iter_unit batch --batch_size <batch size> --data_dir=<path to imagenet> --log_dir=<path to results directory>`
+`python ./main.py --mode=inference_benchmark --warmup_steps 20 --train_iter 100 --iter_unit batch --batch_size <batch size> --data_dir=<path to imagenet> --log_dir=<path to results directory>`
 
 * FP16
-`python ./main.py --mode=inference_benchmark --precision=fp16 --warmup_steps 20 --train_iter 100 --iter_unit batch --batch_size <batch size> --data_dir=<path to imagenet> --log_dir=<path to results directory>`
+`python ./main.py --mode=inference_benchmark --use_tf_amp --warmup_steps 20 --train_iter 100 --iter_unit batch --batch_size <batch size> --data_dir=<path to imagenet> --log_dir=<path to results directory>`
 
 Each of these scripts, by default runs 20 warm-up iterations and measures the next 80 iterations.
 
@@ -307,9 +307,6 @@ Our results were obtained by running the `./scripts/benchmarking/DGX1V_trainbenc
 
 Our results were obtained by running the `./scripts/benchmarking/DGX1V_inferbench_fp16.sh` and `./scripts/benchmarking/DGX1V_inferbench_fp32.sh` scripts in the tensorflow-19.02-py3 Docker container on NVIDIA DGX-1 with 8 V100 16G GPUs.
 
-Those results can be improved when [XLA](https://www.tensorflow.org/xla) is used 
-in conjunction with mixed precision, delivering up to 3.3x speedup over FP32 on a single GPU (~1179 img/s).
-However XLA is still considered experimental.
 
 ## Inference performance results
 
@@ -330,6 +327,10 @@ However XLA is still considered experimental.
 # Changelog
 1. March 1, 2019
   * Initial release
+
+2. May 23, 2019
+  * TF-AMP support added
+  * Benchmark scripts updated
 
 # Known issues
 There are no known issues with this model.

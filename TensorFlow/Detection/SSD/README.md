@@ -108,7 +108,7 @@ Moreover the script will download pre-trained RN50 checkpoint in the `<checkpoin
 
 ### 4. Launch the NGC container to run training/inference.
 ```
-nvidia-docker run --rm -it --shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 -v <data_dir_path>:/data -v <checkpoint_dir_path>:/checkpoints --ipc=host nvidia_ssd
+nvidia-docker run --rm -it --shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 -v <data_dir_path>:/data/coco2017_tfrecords -v <checkpoint_dir_path>:/checkpoints --ipc=host nvidia_ssd
 ```
 
 ### 5. Start training.
@@ -116,6 +116,7 @@ nvidia-docker run --rm -it --shm-size=1g --ulimit memlock=-1 --ulimit stack=6710
 The `./examples` directory provides several sample scripts for various GPU settings and act as wrappers around
 `object_detection/model_main.py` script. The example scripts can be modified by arguments: 
 - A path to directory for checkpoints
+- A path to directory for configs
 - Additional arguments to `object_detection/model_main.py`
 
 If you want to run 8 GPUs, training with tensor cores acceleration and save checkpoints in `/checkpoints` directory, run:
@@ -178,7 +179,7 @@ The SSD320 v1.2 model was trained on the COCO 2017 dataset. The val2017 validati
 The `download_data.sh` script will preprocess the data to tfrecords format.
 
 This repository contains the `download_dataset.sh` script which will automatically download and preprocess the training,
-validation and test datasets. By default, data will be downloaded to the `/data` directory.
+validation and test datasets. By default, data will be downloaded to the `/data/coco2017_tfrecords` directory.
 
 ### Training process
 Training the SSD model is implemented in the `object_detection/model_main.py` script. 
@@ -331,6 +332,8 @@ To achieve same results, follow the [Quick start guide](#quick-start-guide) outl
 
 March 2019
  * Initial release
+May 2019
+ * Test scripts updated
 
 ## Known issues
 There are no known issues with this model.
