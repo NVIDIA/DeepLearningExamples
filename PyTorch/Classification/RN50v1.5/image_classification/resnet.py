@@ -1,14 +1,18 @@
 import math
 import torch
 import torch.nn as nn
+import numpy as np
 
 __all__ = ['ResNet', 'build_resnet', 'resnet_versions', 'resnet_configs']
 
 # ResNetBuilder {{{
 
 class ResNetBuilder(object):
-    def __init__(self, config):
+    def __init__(self, version, config):
         self.config = config
+
+        self.L = sum(version['layers'])
+        self.M = version['block'].M
 
     def conv(self, kernel_size, in_planes, out_planes, stride=1):
         if kernel_size == 3:
@@ -18,15 +22,19 @@ class ResNetBuilder(object):
         elif kernel_size == 1:
             conv = nn.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride,
                              bias=False)
+        elif kernel_size == 5:
+            conv = nn.Conv2d(in_planes, out_planes, kernel_size=5, stride=stride,
+                             padding=2, bias=False)
         elif kernel_size == 7:
             conv = nn.Conv2d(in_planes, out_planes, kernel_size=7, stride=stride,
                              padding=3, bias=False)
         else:
             return None
 
-        nn.init.kaiming_normal_(conv.weight,
-                mode=self.config['conv_init'],
-                nonlinearity='relu')
+        if self.config['nonlinearity'] == 'relu':
+            nn.init.kaiming_normal_(conv.weight,
+                    mode=self.config['conv_init'],
+                    nonlinearity=self.config['nonlinearity'])
 
         return conv
 
@@ -45,20 +53,27 @@ class ResNetBuilder(object):
         c = self.conv(7, in_planes, out_planes, stride=stride)
         return c
 
-    def batchnorm(self, planes):
+    def conv5x5(self, in_planes, out_planes, stride=1):
+        """5x5 convolution with padding"""
+        c = self.conv(5, in_planes, out_planes, stride=stride)
+        return c
+
+    def batchnorm(self, planes, last_bn=False):
         bn = nn.BatchNorm2d(planes)
-        nn.init.constant_(bn.weight, 1)
+        gamma_init_val = 0 if last_bn and self.config['last_bn_0_init'] else 1
+        nn.init.constant_(bn.weight, gamma_init_val)
         nn.init.constant_(bn.bias, 0)
-    
+
         return bn
 
     def activation(self):
-        return nn.ReLU(inplace=True)
+        return self.config['activation']()
 
 # ResNetBuilder }}}
 
 # BasicBlock {{{
 class BasicBlock(nn.Module):
+    M = 2
     expansion = 1
 
     def __init__(self, builder, inplanes, planes, stride=1, downsample=None):
@@ -67,7 +82,7 @@ class BasicBlock(nn.Module):
         self.bn1 = builder.batchnorm(planes)
         self.relu = builder.activation()
         self.conv2 = builder.conv3x3(planes, planes)
-        self.bn2 = builder.batchnorm(planes)
+        self.bn2 = builder.batchnorm(planes, last_bn=True)
         self.downsample = downsample
         self.stride = stride
 
@@ -81,6 +96,7 @@ class BasicBlock(nn.Module):
         out = self.relu(out)
 
         out = self.conv2(out)
+
         if self.bn2 is not None:
             out = self.bn2(out)
 
@@ -95,6 +111,7 @@ class BasicBlock(nn.Module):
 
 # Bottleneck {{{
 class Bottleneck(nn.Module):
+    M = 3
     expansion = 4
 
     def __init__(self, builder, inplanes, planes, stride=1, downsample=None):
@@ -104,7 +121,7 @@ class Bottleneck(nn.Module):
         self.conv2 = builder.conv3x3(planes, planes, stride=stride)
         self.bn2 = builder.batchnorm(planes)
         self.conv3 = builder.conv1x1(planes, planes * self.expansion)
-        self.bn3 = builder.batchnorm(planes * self.expansion)
+        self.bn3 = builder.batchnorm(planes * self.expansion, last_bn=True)
         self.relu = builder.activation()
         self.downsample = downsample
         self.stride = stride
@@ -113,24 +130,21 @@ class Bottleneck(nn.Module):
         residual = x
 
         out = self.conv1(x)
-        if self.bn1 is not None:
-            out = self.bn1(out)
+        out = self.bn1(out)
         out = self.relu(out)
 
         out = self.conv2(out)
-        if self.bn2 is not None:
-            out = self.bn2(out)
+        out = self.bn2(out)
         out = self.relu(out)
 
         out = self.conv3(out)
-        if self.bn3 is not None:
-            out = self.bn3(out)
+        out = self.bn3(out)
 
         if self.downsample is not None:
             residual = self.downsample(x)
 
         out += residual
-        
+
         out = self.relu(out)
 
         return out
@@ -159,7 +173,7 @@ class ResNet(nn.Module):
                                     stride=stride)
             dbn = builder.batchnorm(planes * block.expansion)
             if dbn is not None:
-                downsample = nn.Sequential(dconv, dbn)    
+                downsample = nn.Sequential(dconv, dbn)
             else:
                 downsample = dconv
 
@@ -195,35 +209,46 @@ resnet_configs = {
         'classic' : {
             'conv' : nn.Conv2d,
             'conv_init' : 'fan_out',
+            'nonlinearity' : 'relu',
+            'last_bn_0_init' : False,
+            'activation' : lambda: nn.ReLU(inplace=True),
             },
         'fanin' : {
             'conv' : nn.Conv2d,
             'conv_init' : 'fan_in',
+            'nonlinearity' : 'relu',
+            'last_bn_0_init' : False,
+            'activation' : lambda: nn.ReLU(inplace=True),
             },
         }
 
 resnet_versions = {
         'resnet18' : {
+            'net' : ResNet,
             'block' : BasicBlock,
             'layers' : [2, 2, 2, 2],
             'num_classes' : 1000,
             },
          'resnet34' : {
+            'net' : ResNet,
             'block' : BasicBlock,
             'layers' : [3, 4, 6, 3],
             'num_classes' : 1000,
             },
          'resnet50' : {
+            'net' : ResNet,
             'block' : Bottleneck,
             'layers' : [3, 4, 6, 3],
             'num_classes' : 1000,
             },
         'resnet101' : {
+            'net' : ResNet,
             'block' : Bottleneck,
             'layers' : [3, 4, 23, 3],
             'num_classes' : 1000,
             },
         'resnet152' : {
+            'net' : ResNet,
             'block' : Bottleneck,
             'layers' : [3, 8, 36, 3],
             'num_classes' : 1000,
@@ -231,17 +256,16 @@ resnet_versions = {
         }
 
 
-
 def build_resnet(version, config, model_state=None):
     version = resnet_versions[version]
     config = resnet_configs[config]
 
-    builder = ResNetBuilder(config)
+    builder = ResNetBuilder(version, config)
     print("Version: {}".format(version))
     print("Config: {}".format(config))
-    model = ResNet(builder, 
-                   version['block'], 
-                   version['layers'], 
-                   version['num_classes'])
+    model = version['net'](builder,
+                           version['block'],
+                           version['layers'],
+                           version['num_classes'])
 
     return model

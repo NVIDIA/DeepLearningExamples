@@ -12,14 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvcr.io/nvidia/pytorch:18.12.1-py3 
+FROM nvcr.io/nvidia/pytorch:19.05-py3 
 
 # Install Python dependencies
 RUN pip install --upgrade --no-cache-dir pip \
  && pip install --no-cache-dir \
-      sacrebleu
+      sacrebleu \
+      sentencepiece
+
+RUN apt-get update
+RUN apt-get install -y cmake pkg-config libprotobuf9v5 protobuf-compiler libprotobuf-dev libgoogle-perftools-dev
+RUN git clone https://github.com/google/sentencepiece.git /workspace/sentencepiece
+RUN cd /workspace/sentencepiece \
+  && mkdir build \
+  && cd build \
+  && cmake .. \
+  && make -j 8 \
+  && make install \
+  && ldconfig -v
+
+ENV PYTHONPATH=/workspace/translation/examples/translation/subword-nmt/
 WORKDIR /workspace/translation
 COPY . .
 RUN git clone https://github.com/rsennrich/subword-nmt.git /workspace/translation/examples/translation/subword-nmt/
-ENV PYTHONPATH=/workspace/translation/examples/translation/subword-nmt/
 RUN pip install -e .

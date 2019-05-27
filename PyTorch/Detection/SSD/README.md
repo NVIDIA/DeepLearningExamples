@@ -98,22 +98,32 @@ To train your model using mixed precision with Tensor Cores, perform the
 following steps using the default parameters of the SSD v1.1 model on the
 [COCO 2017](http://cocodataset.org/#download) dataset.
 
-### 1. Download and preprocess the dataset.
+### 1. Clone the repository.
+```
+git clone https://github.com/NVIDIA/DeepLearningExamples
+cd DeepLearningExamples/PyTorch/Detection/SSD
+```
+
+### 2. Download and preprocess the dataset.
 
 Extract the COCO 2017 dataset with `download_dataset.sh $COCO_DIR`.
 Data will be downloaded to the `$COCO_DIR` directory (on the host).
 
-### 2. Build the SSD300 v1.1 PyTorch NGC container.
+### 3. Build the SSD300 v1.1 PyTorch NGC container.
 
-` docker build . -t nvidia_ssd `
+```
+docker build . -t nvidia_ssd
+```
 
-### 3. Launch the NGC container to run training/inference.
-`nvidia-docker run --rm -it --ulimit memlock=-1 --ulimit stack=67108864 -v $COCO_DIR:/coco --ipc=host nvidia_ssd`
+### 4. Launch the NGC container to run training/inference.
+```
+nvidia-docker run --rm -it --ulimit memlock=-1 --ulimit stack=67108864 -v $COCO_DIR:/coco --ipc=host nvidia_ssd
+```
 
 
 **Note**: the default mount point in the container is `/coco`.
 
-### 4. Start training.
+### 5. Start training.
 
 The `./examples` directory provides several sample scripts for various GPU settings
 and act as wrappers around the main.py script.
@@ -130,14 +140,16 @@ Use `python main.py -h` to obtain the list of available options in the `main.py`
 For example, if you want to run 8 GPU training with TensorCore acceleration and
 save checkpoints after each epoch, run:
 
-`bash ./examples/SSD300_FP16_8GPU.sh . /coco --save`
+```
+bash ./examples/SSD300_FP16_8GPU.sh . /coco --save
+```
 
 For information about how to train using mixed precision, see the [Mixed Precision Training paper](https://arxiv.org/abs/1710.03740) and [Training With Mixed Precision documentation](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html).
 
 For PyTorch, easily adding mixed-precision support is available from NVIDIA’s [APEX](https://github.com/NVIDIA/apex), a PyTorch extension that contains utility libraries, such as AMP, which require minimal network code changes to leverage tensor cores performance.
 
 
-### 5. Start validation/evaluation.
+### 6. Start validation/evaluation.
 
 
 The `main.py` training script automatically runs validation during training.
@@ -162,11 +174,15 @@ The metric reported in our results is present in the first row.
 
 To evaluate a checkpointed model saved in previous point, run:
 
-`python ./main.py --backbone resnet50 --mode evaluation --checkpoint ./models/epoch_*.pt --data /coco`
+```
+python ./main.py --backbone resnet50 --mode evaluation --checkpoint ./models/epoch_*.pt --data /coco
+```
 
-### 6. Optionally, resume training from a checkpointed model.
+### 7. Optionally, resume training from a checkpointed model.
 
-`python ./main.py --backbone resnet50 --checkpoint ./models/epoch_*.pt --data /coco`
+```
+python ./main.py --backbone resnet50 --checkpoint ./models/epoch_*.pt --data /coco
+```
 
 ## Details
 
@@ -175,7 +191,9 @@ The following sections provide greater details of the dataset, running training 
 ### Command line arguments
 All these parameters can be controlled by passing command line arguments to the `main.py` script. To get a complete list of all command line arguments with descriptions and default values you can run:
 
-`python main.py --help`
+```
+python main.py --help
+```
 
 ### Getting the data
 
@@ -218,24 +236,32 @@ During training we perform the following augmentation techniques:
  
 Mixed precision is enabled in PyTorch by using the Automatic Mixed Precision (AMP),  library from [APEX](https://github.com/NVIDIA/apex) that casts variables to half-precision upon retrieval,
 while storing variables in single-precision format. Furthermore, to preserve small gradient magnitudes in backpropagation, a [loss scaling](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#lossscaling) step must be included when applying gradients.
-In PyTorch, loss scaling can be easily applied by using scale_loss() method provided by amp. The scaling value to be used can be dynamic or fixed.
+In PyTorch, loss scaling can be easily applied by using scale_loss() method provided by amp. The scaling value to be used can be [dynamic](https://nvidia.github.io/apex/fp16_utils.html#apex.fp16_utils.DynamicLossScaler) or fixed.
 
 For an in-depth walk through on AMP, check out sample usage [here](https://github.com/NVIDIA/apex/tree/master/apex/amp#usage-and-getting-started). [APEX](https://github.com/NVIDIA/apex) is a PyTorch extension that contains utility libraries, such as AMP, which require minimal network code changes to leverage tensor cores performance.
 
 To enable mixed precision, you can:
 - Import AMP from APEX, for example:
 
-  `from apex import amp`
+  ```
+  from apex import amp
+  ```
 - Initialize an AMP handle, for example: 
 
-  `amp_handle = amp.init(enabled=True, verbose=True)`
+  ```
+  amp_handle = amp.init(enabled=True, verbose=True)
+  ```
 - Wrap your optimizer with the AMP handle, for example:
 
-  `optimizer = amp_handle.wrap_optimizer(optimizer)`
+  ```
+  optimizer = amp_handle.wrap_optimizer(optimizer)
+  ```
 - Scale loss before backpropagation (assuming loss is stored in a variable called losses)
   - Default backpropagate for FP32:
 
-    `losses.backward()`
+    ```
+    losses.backward()
+    ```
   - Scale loss and backpropagate with AMP:
 
     ```
@@ -246,7 +272,7 @@ To enable mixed precision, you can:
 For information about:
 - How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) documentation.
 - Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
-
+- APEX tools for mixed precision training, see the [NVIDIA Apex: Tools for Easy Mixed-Precision Training in PyTorch](https://devblogs.nvidia.com/apex-pytorch-easy-mixed-precision-training/).
 
 
 
@@ -339,6 +365,9 @@ To achieve same results, follow the [Quick start guide](#quick-start-guide) outl
 
 March 2019
  * Initial release
+
+May 2019
+ * Test scripts updated
 
 ## Known issues
 There are no known issues with this model.

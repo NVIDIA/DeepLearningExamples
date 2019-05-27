@@ -54,12 +54,12 @@ def get_extensions():
     extra_compile_flags['nvcc'] = ['-DCUDA_HAS_FP16=1','-D__CUDA_NO_HALF_OPERATORS__','-D__CUDA_NO_HALF_CONVERSIONS__','-D__CUDA_NO_HALF2_OPERATORS__']
 
     gencodes = [
-                #'-gencode', 'arch=compute_50,code=sm_50',
-                #'-gencode', 'arch=compute_52,code=sm_52',
-                #'-gencode', 'arch=compute_60,code=sm_60',
-                #'-gencode', 'arch=compute_61,code=sm_61',
+                '-gencode', 'arch=compute_52,code=sm_52',
+                '-gencode', 'arch=compute_60,code=sm_60',
+                '-gencode', 'arch=compute_61,code=sm_61',
                 '-gencode', 'arch=compute_70,code=sm_70',
-                '-gencode', 'arch=compute_70,code=compute_70',]
+                '-gencode', 'arch=compute_75,code=sm_75',
+                '-gencode', 'arch=compute_75,code=compute_75',]
 
     extra_compile_flags['nvcc'] += gencodes
 
