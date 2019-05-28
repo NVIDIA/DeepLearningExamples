@@ -256,15 +256,16 @@ class FP16Trainer(Trainer):
             loss = loss * self.scaler.loss_scale
         return super()._backward(loss)
 
-    def _all_reduce_and_rescale(self, grad_denom, has_grad = True):
+    def _all_reduce_and_rescale(self, grad_denom, has_grad = True, ooms = 0):
         # undo effect of dynamic loss scaling on gradients
         self.grad_denom = grad_denom * self.scaler.loss_scale
 
         if self.args.distributed_world_size > 1:
-            self.grad_denom /= self.args.distributed_world_size
+            self.grad_denom /= self.args.distributed_world_size - ooms
 
             if not self.args.enable_parallel_backward_allred_opt or self._last_step:
                 # flatten grads into a single buffer
+
                 self._flat_grads = self._get_flat_grads(out=None, has_grad = has_grad)
 
                 # scale gradients to avoid overflow in all-reduce
@@ -363,5 +364,5 @@ class FP16Trainer(Trainer):
             if not p.requires_grad:
                 continue
             numel = p.data.numel()
-            p.data.set_(new_params[offset:offset+numel].view_as(p.data))
+            p.data.copy_(new_params[offset:offset+numel].view_as(p.data))
             offset += numel

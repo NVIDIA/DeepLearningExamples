@@ -112,7 +112,7 @@ python generate.py /path/to/dataset/wmt14_en_de_joined_dict  \
 ```
 In order to use [SacreBLEU](https://pypi.org/project/sacrebleu/1.2.10/) for evaluation, run:
 ```bash
-sacrebleu -t wmt14 -l en-de --echo src > wmt14-en-de.src
+sacrebleu -t wmt14/full -l en-de --echo src > wmt14-en-de.src
 python interactive.py --buffer-size 1 --fp16 --path /path/to/your/checkpoint.pt --max-tokens 128 \
         --fuse-dropout-add --remove-bpe --bpe-codes /path/to/code/file \
         /path/to/dataset/wmt14_en_de_joined_dict/ < wmt14-en-de.src > wmt14.detok
@@ -122,7 +122,7 @@ cat wmt14.translated | sacrebleu -t wmt14 -lc -l en-de
 Sacrebleu test set is a subset of test set used during a course of training thus score obtained with sacreBLEU can slightly differ from the one computed during training.
 
 ## Training Accuracy Results
-In order to test accuracy of our implementation we have run experiments with different seeds for 100 epochs with batch size 5120 per GPU and learining rate 6e-4 in the pytorch-18.12-py3 Docker container. Plot below shows BLEU score changes.<br/>
+In order to test accuracy of our implementation we have run experiments with different seeds for 100 epochs with batch size 5120 per GPU and learining rate 6e-4 in the pytorch-19.03-py3 Docker container. Plot below shows BLEU score changes.<br/>
 ![Accuracy plot](BLEU.png)
 
 ## Training Performance Results
@@ -160,6 +160,7 @@ Tesla V100 | 5129.34 | 3396.09 | 1.51
 ## Changelog
 
 - initial commit, forked from [fairseq](https://github.com/pytorch/fairseq/commit/ac5fddfc691267285a84c81d39475411da5ed1c6)
+- adding mid-training [SacreBLEU](https://pypi.org/project/sacrebleu/1.2.10/) evaluation. Better handling of OOMs.
 
 ## Known issues
 

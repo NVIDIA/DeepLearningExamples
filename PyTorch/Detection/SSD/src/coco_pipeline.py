@@ -238,7 +238,7 @@ class DALICOCOIterator(object):
 
         for p in self._pipes:
             p._release_outputs()
-            p._start_run()
+            p._run()
 
         copy_db_index = self._current_data_batch
         # Change index for double buffering
