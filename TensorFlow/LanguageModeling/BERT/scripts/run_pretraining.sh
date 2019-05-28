@@ -84,7 +84,7 @@ CMD+=" --learning_rate=$learning_rate"
 CMD+=" --report_loss"
 CMD+=" --horovod $PREC"
 
-if [ $num_gpus > 1 ] ; then
+if [ $num_gpus -gt 1 ] ; then
    CMD="mpiexec --allow-run-as-root -np $num_gpus --bind-to socket $CMD"
 fi
 
