@@ -100,7 +100,7 @@ The following section list the requirements that you need to meet in order to us
 This repository contains Dockerfile which extends the Tensorflow NGC container and encapsulates all dependencies.  Aside from these dependencies, ensure you have the following software:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [TensorFlow 19.03-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)
+* [TensorFlow 19.03-py3 NGC container or later](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)
 * [NVIDIA Volta based GPU](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
 
 For more information about how to get started with NGC containers, see the
