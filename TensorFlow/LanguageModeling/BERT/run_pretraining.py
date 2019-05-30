@@ -514,7 +514,7 @@ def main(_):
       master=FLAGS.master,
       model_dir=FLAGS.output_dir,
       session_config=config,
-      save_checkpoints_steps=FLAGS.save_checkpoints_steps if not FLAGS.horovod or hvd.rank() == 0 else None,
+      save_checkpoints_steps=FLAGS.save_checkpoint_steps if not FLAGS.horovod or hvd.rank() == 0 else None,
       tpu_config=tf.contrib.tpu.TPUConfig(
           iterations_per_loop=FLAGS.iterations_per_loop,
           num_shards=FLAGS.num_tpu_cores,
