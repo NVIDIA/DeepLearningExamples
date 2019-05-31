@@ -5,9 +5,9 @@ echo "Container nvidia build = " $NVIDIA_BUILD_ID
 # WIKI_DIR=/workspace/bert/data/wikipedia_corpus/final_tfrecords_sharded
 # BOOKS_DIR=/workspace/bert/data/bookcorpus/final_tfrecords_sharded
 PUBMED_DIR=/workspace/bert/data/pubmed/final_tfrecords_sharded_gvocab_base
-BERT_CONFIG=/workspace/bert/data/pretrained_models_google/uncased_L-24_H-1024_A-16/bert_config.json
+BERT_CONFIG=/workspace/bert/data/pretrained_models_google/uncased_L-12_H-768_A-12/bert_config.json
 RESULTS_DIR=/results
-CHECKPOINTS_DIR=/results/checkpoints
+CHECKPOINTS_DIR=/checkpoints
 
 # if [ ! -d "$WIKI_DIR" ] ; then
 #    echo "Error! $WIKI_DIR directory missing. Please mount wikipedia dataset."
