@@ -55,4 +55,5 @@ RUN git clone https://github.com/facebookresearch/maskrcnn-benchmark.git \
  && cd maskrcnn-benchmark \
  && python setup.py build develop
 
-WORKDIR /maskrcnn-benchmark
+RUN git clone https://github.com/NVIDIA/DeepLearningExamples.git
+WORKDIR /notebooks/DeepLearningExamples/PyTorch/Segmentation/MaskRCNN/pytorch/demo
