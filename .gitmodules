@@ -1,3 +1,3 @@
-[submodule "PyTorch/Translation/cutlass"]
-	path = PyTorch/Translation/cutlass
+[submodule "PyTorch/Translation/Transformer/cutlass"]
+	path = PyTorch/Translation/Transformer/cutlass
 	url = https://github.com/NVIDIA/cutlass.git
