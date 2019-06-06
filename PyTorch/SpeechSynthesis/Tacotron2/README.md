@@ -320,7 +320,9 @@ To benchmark the inference performance on a batch size=1, run:
 The log files will contain performance numbers for Tacotron 2 model 
 (number of input tokens per second, reported as `tacotron2_items_per_sec`) 
 and for WaveGlow (number of output samples per second, reported as 
-`waveglow_items_per_sec`).
+`waveglow_items_per_sec`). The `inference.py` script will iterate over the
+lines of text in the input file. For performace measurement, disregard a few
+(2 to 3) iterations, since the Tacotron 2 and WaveGlow models need a warmup.
 
 ## Training performance benchmark
 To benchmark the training performance on a specific batch size, run:
