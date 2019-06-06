@@ -65,7 +65,8 @@ def parse_args(parser):
                         help='inference in fp16')
     parser.add_argument('--log-file', type=str, default='nvlog.json',
                         help='Filename for logging')
-
+    parser.add_argument('--run-test', action='store_true',
+                        help='test inference performance')
 
     return parser
 
@@ -170,18 +171,27 @@ def main():
         waveglow = load_and_setup_model('WaveGlow', parser, args.waveglow, args.fp16_run)
 
     texts = []
-    try:
-        f = open(args.input, 'r')
-        texts = f.readlines()
-    except:
-        print("Could not read file. Using default text.")
+    if args.run_test:
+        print("Running inference performance test...")
+        warmup_iter = 3
         texts = ["The forms of printed letters should be beautiful, and\
         that their arrangement on the page should be reasonable and\
-        a help to the shapeliness of the letters themselves."]
+        a help to the shapeliness of the letters themselves."]*4
+    else:
+        try:
+            f = open(args.input, 'r')
+            texts = f.readlines()
+        except:
+            print("Could not read file. Using default text.")
+            texts = ["The forms of printed letters should be beautiful, and\
+            that their arrangement on the page should be reasonable and\
+            a help to the shapeliness of the letters themselves."]
+
 
     for i, text in enumerate(texts):
 
-        LOGGER.iteration_start()
+        if not args.run_test or i >= warmup_iter:
+            LOGGER.iteration_start()
 
         sequence = np.array(text_to_sequence(text, ['english_cleaners']))[None, :]
         sequence = torch.autograd.Variable(
@@ -193,7 +203,8 @@ def main():
                 _, mel, _, _ = tacotron2.infer(sequence)
             tacotron2_t1 = time.time()
             tacotron2_infer_perf = sequence.size(1)/(tacotron2_t1-tacotron2_t0)
-            LOGGER.log(key="tacotron2_items_per_sec", value=tacotron2_infer_perf)
+            if not args.run_test or i >= warmup_iter:
+                LOGGER.log(key="tacotron2_items_per_sec", value=tacotron2_infer_perf)
 
         waveglow_t0 = time.time()
         with torch.no_grad():
@@ -205,8 +216,9 @@ def main():
         audio_path = args.output + "audio_"+str(i)+".wav"
         write(audio_path, args.sampling_rate, audio[0].data.cpu().numpy())
 
-        LOGGER.log(key="waveglow_items_per_sec", value=waveglow_infer_perf)
-        LOGGER.iteration_stop()
+        if not args.run_test or i >= warmup_iter:
+            LOGGER.log(key="waveglow_items_per_sec", value=waveglow_infer_perf)
+            LOGGER.iteration_stop()
 
     LOGGER.finish()
 

@@ -310,11 +310,11 @@ To benchmark the inference performance on a batch size=1, run:
 
 * For FP32
     ```bash
-    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ -i text.txt --log-file=output/nvlog_fp32.json
+    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --run-test --log-file=output/nvlog_fp32.json
     ```
 * For FP16
     ```bash
-    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ -i text.txt --fp16-run--log-file=output/nvlog_fp16.json
+    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --run-test --fp16-run --log-file=output/nvlog_fp16.json
     ```
 
 The log files will contain performance numbers for Tacotron 2 model 
