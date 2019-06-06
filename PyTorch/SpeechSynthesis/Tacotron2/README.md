@@ -321,7 +321,7 @@ The output log files will contain performance numbers for Tacotron 2 model
 (number of input tokens per second, reported as `tacotron2_items_per_sec`) 
 and for WaveGlow (number of output samples per second, reported as 
 `waveglow_items_per_sec`). The `inference.py` script will iterate over
-predefined text lines, disregarding few iterations that are needed for warmup.
+predefined text lines, discarding few iterations that are needed for warmup.
 
 ## Training performance benchmark
 To benchmark the training performance on a specific batch size, run:
