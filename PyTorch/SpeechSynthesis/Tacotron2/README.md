@@ -72,7 +72,7 @@ and encapsulates some dependencies. Aside from these dependencies, ensure you
 have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 18.12.1-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch) or newer
+* [PyTorch 19.05-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch) or newer
 * [NVIDIA Volta based GPU](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
 
 
@@ -379,7 +379,7 @@ and accuracy in training and inference.
 
 ## Training accuracy results
 Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{FP16,FP32}_DGX1_16GB_8GPU.sh` 
-training script in the PyTorch-18.12.1-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
+training script in the PyTorch-19.05-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
 
 All of the results were produced using the `train.py` as described in the 
 [Training process](#training-process) section of this document.
@@ -402,7 +402,7 @@ WaveGlow FP32 loss - batch size 4 (mean and std over 16 runs)
 
 ## Training performance results
 Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{FP16,FP32}_DGX1_16GB_8GPU.sh` 
-training script in the PyTorch-18.12.1-py3 NGC container on NVIDIA DGX-1 with 
+training script in the PyTorch-19.05-py3 NGC container on NVIDIA DGX-1 with 
 8x V100 16G GPUs. Performance numbers (in input tokens per second for 
 Tacotron 2 and output samples per second for WaveGlow) were averaged over 
 an entire training epoch.
@@ -412,17 +412,17 @@ for mixed precision and FP32 training, respectively.
 
 |Number of GPUs|Mixed precision tokens/sec|FP32 tokens/sec|Speed-up with mixed precision|Multi-gpu weak scaling with mixed precision|Multi-gpu weak scaling with FP32|
 |---:|---:|---:|---:|---:|---:|
-|**1**|2,424|1,826|1.33|1.00|1.00|
-|**4**|7,280|5,944|1.22|3.00|3.26|
-|**8**|12,742|10,843|1.18|5.26|5.94|
+|**1**|2,554|1,740|1.47|1.00|1.00|
+|**4**|7,768|5,683|1.37|3.04|3.27|
+|**8**|12,524|10,484|1.19|4.90|6.03|
 
 The following table shows the results for WaveGlow, with batch size equal 4 and 8 for mixed precision and FP32 training, respectively.
 
 |Number of GPUs|Mixed precision samples/sec|FP32 samples/sec|Speed-up with mixed precision|Multi-gpu weak scaling with mixed precision|Multi-gpu weak scaling with FP32|
 |---:|---:|---:|---:|---:|---:|
-|**1**| 70,362 | 35,180 | 2.00 | 1.00 | 1.00 |
-|**4**| 215,380 | 118,961 | 1.81 | 3.06 | 3.38 |
-|**8**| 500,375 | 257,687 | 1.94 | 7.11 | 7.32 |
+|**1**| 76,686 | 36,602 | 2.10 | 1.00 | 1.00 |
+|**4**| 260,826 | 124,514 | 2.09 | 3.40 | 3.40 |
+|**8**| 566,471 | 264,138 | 2.14 | 7.39 | 7.22 |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
@@ -432,21 +432,21 @@ This table shows the expected training time for convergence for Tacotron 2 (1500
 
 |Number of GPUs|Expected training time with mixed precision|Expected training time with FP32|Speed-up with mixed precision|
 |---:|---:|---:|---:|
-|**1**| 208.00 | 288.03 | 1.38 | 
-|**4**| 67.53 | 84.20 | 1.25 |
-|**8**| 33.14 | 44.00 | 1.33 |
+|**1**| 197.39 | 302.32 | 1.38 |
+|**4**| 63.29 | 88.07 | 1.25 |
+|**8**| 33.72 | 45.51 | 1.33 |
 
 This table shows the expected training time for convergence for WaveGlow (1000 epochs).
 
 |Number of GPUs|Expected training time with mixed precision|Expected training time with FP32|Speed-up with mixed precision|
 |---:|---:|---:|---:|
-|**1**| 437.03 | 814.30 | 1.86 |
-|**4**|	108.26 | 223.04 | 2.06 |
-|**8**|	54.83 | 109.96 | 2.01 |
+|**1**| 400.99 | 782.67 | 1.95 |
+|**4**|	89.40 | 213.09 | 2.38 |
+|**8**|	48.43 | 107.27 | 2.21 |
 
 ## Inference performance results
 Our results were obtained by running the `./inference.py` inference script in the 
-PyTorch-18.12.1-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
+PyTorch-19.05-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
 Performance numbers (in input tokens per second for Tacotron 2 and output 
 samples per second for WaveGlow) were averaged over 16 runs.
 
@@ -456,7 +456,7 @@ Results are measured in the number of input tokens per second.
 
 |Number of GPUs|Mixed precision tokens/sec|FP32 tokens/sec|Speed-up with mixed precision|
 |---:|---:|---:|---:|
-|**1**|170|178|0.96|
+|**1**|130|150|0.87|
 
 
 This table shows the inference performance results for WaveGlow. 
@@ -464,7 +464,7 @@ Results are measured in the number of output audio samples per second.<sup>1</su
 
 |Number of GPUs|Mixed precision samples/sec|FP32 samples/sec|Speed-up with mixed precision|
 |---:|---:|---:|---:|
-|**1**|537525|404206|1.33|
+|**1**|435110|400097|1.09|
 
 <sup>1</sup>With sampling rate equal to 22050, one second of audio is generated from 22050 samples.
 
