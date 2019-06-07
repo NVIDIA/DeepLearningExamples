@@ -65,7 +65,8 @@ def parse_args(parser):
                         help='inference in fp16')
     parser.add_argument('--log-file', type=str, default='nvlog.json',
                         help='Filename for logging')
-
+    parser.add_argument('--include-warmup', action='store_true',
+                        help='Include warmup')
 
     return parser
 
@@ -178,6 +179,14 @@ def main():
         texts = ["The forms of printed letters should be beautiful, and\
         that their arrangement on the page should be reasonable and\
         a help to the shapeliness of the letters themselves."]
+
+    if args.include_warmup:
+        sequence = torch.randint(low=0, high=148, size=(1,50),
+                                 dtype=torch.long).cuda()
+        for i in range(3):
+            with torch.no_grad():
+                _, mel, _, _ = tacotron2.infer(sequence)
+                _ = waveglow.infer(mel)
 
     for i, text in enumerate(texts):
 
