@@ -120,6 +120,7 @@ def nvidia_tacotron2(pretrained=True, **kwargs):
 
     from PyTorch.SpeechSynthesis.Tacotron2.tacotron2 import model as tacotron2
     from PyTorch.SpeechSynthesis.Tacotron2.models import lstmcell_to_float, batchnorm_to_float
+    from PyTorch.SpeechSynthesis.Tacotron2.tacotron2.text import text_to_sequence
 
     fp16 = "model_math" in kwargs and kwargs["model_math"] == "fp16"
     force_reload = "force_reload" in kwargs and kwargs["force_reload"]
@@ -162,6 +163,8 @@ def nvidia_tacotron2(pretrained=True, **kwargs):
 
     if pretrained:
         m.load_state_dict(state_dict)
+
+    m.text_to_sequence = text_to_sequence
 
     return m
 
