@@ -153,7 +153,7 @@ and `--waveglow` arguments.
 
 To run inference issue:
 ```bash
-python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ -i text.txt --fp16-run
+python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ -i phrase.txt --fp16-run
 ```
 The speech is generated from text file passed with `-i` argument. To run 
 inference in mixed precision, use `--fp16-run` flag. The output audio will 
@@ -310,11 +310,11 @@ To benchmark the inference performance on a batch size=1, run:
 
 * For FP32
     ```bash
-    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --include-warmup --log-file=output/nvlog_fp32.json
+    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --include-warmup -i phrase.txt --log-file=output/nvlog_fp32.json
     ```
 * For FP16
     ```bash
-    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --include-warmup --fp16-run --log-file=output/nvlog_fp16.json
+    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --include-warmup -i phrase.txt --fp16-run --log-file=output/nvlog_fp16.json
     ```
 
 The output log files will contain performance numbers for Tacotron 2 model
@@ -455,7 +455,7 @@ Results are measured in the number of input tokens per second.
 
 |Number of GPUs|Mixed precision tokens/sec|FP32 tokens/sec|Speed-up with mixed precision|
 |---:|---:|---:|---:|
-|**1**|130|150|0.87|
+|**1**|132|153|0.86|
 
 
 This table shows the inference performance results for WaveGlow. 
@@ -463,7 +463,7 @@ Results are measured in the number of output audio samples per second.<sup>1</su
 
 |Number of GPUs|Mixed precision samples/sec|FP32 samples/sec|Speed-up with mixed precision|
 |---:|---:|---:|---:|
-|**1**|435110|400097|1.09|
+|**1**|425379|376037|1.13|
 
 <sup>1</sup>With sampling rate equal to 22050, one second of audio is generated from 22050 samples.
 
