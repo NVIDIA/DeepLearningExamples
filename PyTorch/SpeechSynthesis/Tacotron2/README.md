@@ -293,7 +293,7 @@ and input text as a text file, with one phrase per line.
 
 To run inference, issue:
 ```bash
-python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ -i text.txt --fp16-run
+python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ -i phrase.txt --fp16-run
 ```
 Here, `Tacotron2_checkpoint` and `WaveGlow_checkpoint` are pre-trained 
 checkpoints for the respective models, and `text.txt` contains input phrases. 
