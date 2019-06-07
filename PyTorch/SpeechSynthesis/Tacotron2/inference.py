@@ -67,8 +67,6 @@ def parse_args(parser):
                         help='Filename for logging')
     parser.add_argument('--include-warmup', action='store_true',
                         help='Include warmup')
-    parser.add_argument('--warmup-iter', type=int, default=3,
-                        help='Number of warmup iterations')
 
     return parser
 
@@ -185,7 +183,7 @@ def main():
     if args.include_warmup:
         sequence = torch.randint(low=0, high=148, size=(1,50),
                                  dtype=torch.long).cuda()
-        for i in range(args.warmup_iter):
+        for i in range(3):
             with torch.no_grad():
                 _, mel, _, _ = tacotron2.infer(sequence)
                 _ = waveglow.infer(mel)
