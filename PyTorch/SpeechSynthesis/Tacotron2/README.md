@@ -310,18 +310,18 @@ To benchmark the inference performance on a batch size=1, run:
 
 * For FP32
     ```bash
-    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --run-test --log-file=output/nvlog_fp32.json
+    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --include-warmup --log-file=output/nvlog_fp32.json
     ```
 * For FP16
     ```bash
-    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --run-test --fp16-run --log-file=output/nvlog_fp16.json
+    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --include-warmup --fp16-run --log-file=output/nvlog_fp16.json
     ```
 
 The output log files will contain performance numbers for Tacotron 2 model
-(number of input tokens per second, reported as `tacotron2_items_per_sec`) 
-and for WaveGlow (number of output samples per second, reported as 
-`waveglow_items_per_sec`). The `inference.py` script will iterate over
-predefined text lines, discarding few iterations that are needed for warmup.
+(number of input tokens per second, reported as `tacotron2_items_per_sec`)
+and for WaveGlow (number of output samples per second, reported as
+`waveglow_items_per_sec`). The `inference.py` script will run a few warmup
+iterations before running the benchmark.
 
 ## Training performance benchmark
 To benchmark the training performance on a specific batch size, run:
