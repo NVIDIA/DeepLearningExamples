@@ -245,9 +245,9 @@ Each of this scripts will run 100 iterations and save results in benchmark.json 
 
 | **number of GPUs** | **mixed precision training time** | **FP32 training time** |
 |:------------------:|:---------------------------------:|:----------------------:|
-| 1                  | ~24h                              | ~45h                   |
-| 4                  | ~8h                               | ~13h                   |
-| 8                  | ~4h                               | ~7h                    |
+| 2                  | ~24h                              | ~45h                   |
+| 8                  | ~8h                               | ~13h                   |
+| 16                  | ~4h                               | ~7h                    |
 
 
 ### Example plots (250 Epochs configuration on DGX2)
@@ -269,7 +269,7 @@ Each of this scripts will run 100 iterations and save results in benchmark.json 
 | 4                  | 2886.9                    | 1375.5         | 2.1                         | 3.86                             | 3.79                  |
 | 8                  | 5815.8                    | 2857.9         | 2.03                        | 7.78                             | 7.87                  |
 
-### NVIDIA DGX1V (16x V100 32G)
+### NVIDIA DGX2V (16x V100 32G)
 
 | **number of GPUs** | **mixed precision img/s** | **FP32 img/s** | **mixed precision speedup** |
 |:------------------:|:-------------------------:|:--------------:|:---------------------------:|
