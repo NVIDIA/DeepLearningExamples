@@ -293,7 +293,7 @@ The `run_squad.sh` script trains a model and performs evaluation on the SQuaD v1
 - Saves a checkpoint every 1000 iterations (keeps only the latest checkpoint) and at the end of training. All checkpoints, evaluation results, and training logs are saved to the `/results` directory (in the container which can be mounted to a local directory).
 - Evaluation is done at the end of training. To skip evaluation, modify `--do_predict` to `False`.
 
-This script outputs checkpoints to the `/results` directory, by default, inside the container. The mount point of `/results` can be changed in the `scripts/docker/launch.sh` file. The training log contains information about:
+By default, this script outputs checkpoints to the `/results` directory inside the container. The mount point of `/results` can be changed in the `scripts/docker/launch.sh` file. The training log contains information about:
 - Loss for the final step
 - Training and evaluation performance
 - F1 and exact match score on the Dev Set of SQuaD after evaluation. 
@@ -323,7 +323,7 @@ mpi_command="mpirun -np 8 -H localhost:8 \
 2. Manually adding loss scaling to preserve small gradient values. 
 This can now be achieved using Automatic Mixed Precision (AMP) for TensorFlow to enable the full [mixed precision methodology](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#tensorflow) in your existing TensorFlow model code.  AMP enables mixed precision training on Volta and Turing GPUs automatically. The TensorFlow framework code makes all necessary model changes internally.
 
-In TF-AMP, the computational graph is optimized to use as few casts as necessary and maximize the use of FP16, and the loss scaling is automatically applied inside of supported optimizers. AMP can be configured to work with the existing `tf.contrib` loss scaling manager by disabling the AMP scaling with a single environment variable to perform only the automatic mixed-precision optimization. It accomplishes this by automatically rewriting all computation graphs with the necessary operations to enable mixed precision training and automatic loss scaling.
+In TF-AMP, the computational graph is optimized to use as few casts as necessary and maximize the use of FP16, and the loss scaling is automatically applied inside of supported optimizers. By setting a single environment variable, AMP can be configured to work with the existing `tf.contrib` loss scaling manager. This allows AMP to perform automatic-mixed-precision optimizations while disabling the AMP loss scaling. It accomplishes this by automatically rewriting all computation graphs with the necessary operations to enable mixed precision training and automatic loss scaling.
 
 For information about:
 - How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) documentation.
@@ -466,7 +466,7 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 ### Inference performance results
 
 #### NVIDIA DGX-1 16G (1x V100 16G)
-Our results were obtained by running the `scripts/run_squad_inference.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 1x V100 16G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epoch.
+Our results were obtained by running the `scripts/run_squad_inference.sh` inference script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 1x V100 16G GPUs. Performance numbers (in sentences per second) were averaged over an entire epoch.
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
 |---|---|-----|------|----|
@@ -476,7 +476,7 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 
 #### NVIDIA DGX-1 32G (1x V100 32G)
-Our results were obtained by running the `scripts/run_squad_inference.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 1x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epoch.
+Our results were obtained by running the `scripts/run_squad_inference.sh` inference script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 1x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire epoch.
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
 |---|---|-----|------|----|
@@ -485,7 +485,7 @@ Our results were obtained by running the `scripts/run_squad_inference.sh` traini
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 #### NVIDIA DGX-2 32G (1x V100 32G)
-Our results were obtained by running the `scripts/run_squad_inference.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-2 with 1x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epoch.
+Our results were obtained by running the `scripts/run_squad_inference.sh` inference script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-2 with 1x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire epoch.
 
 | **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
 |---|---|-----|------|----|
