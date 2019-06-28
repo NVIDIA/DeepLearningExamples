@@ -36,12 +36,12 @@ This repository provides a script and recipe to train BERT to achieve state of t
 
 ## The model
 
-BERT, or Bidirectional Encoder Representations from Transformers, is a new method of pre-training language representations which obtains state-of-the-art results on a wide array of Natural Language Processing (NLP) tasks. This model is based on [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805) paper. NVIDIA's BERT 19.03 is an optimized version of [Google's official implementation](https://github.com/google-research/bert), leveraging mixed precision arithmetic and tensor cores on V100 GPUS for faster training times while maintaining target accuracy.
+BERT, or Bidirectional Encoder Representations from Transformers, is a new method of pre-training language representations which obtains state-of-the-art results on a wide array of Natural Language Processing (NLP) tasks. This model is based on the [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805) paper. NVIDIA's BERT 19.03 is an optimized version of [Google's official implementation](https://github.com/google-research/bert), leveraging mixed precision arithmetic and tensor cores on V100 GPUS for faster training times while maintaining target accuracy.
 
 
-The repository also contains scripts to interactively launch data download, training, benchmarking and inference routines in a Docker container for both pretraining and fine tuning for Question Answering. The major differences between the official implementation of the paper and our version of BERT are as follows:
+The repository contains scripts to interactively launch data download, training, benchmarking and inference routines in a Docker container for both pretraining and fine tuning for Question Answering. The major differences between the official implementation of the paper and our version of BERT are as follows:
 - Mixed precision support with TensorFlow Automatic Mixed Precision (TF-AMP), which enables mixed precision training without any changes to the code-base by performing automatic graph rewrites and loss scaling controlled by an environmental variable.
-- Scripts to download dataset for 
+- Scripts to download datasets for 
     - Pretraining - [Wikipedia](https://dumps.wikimedia.org/),  [BooksCorpus](http://yknzhu.wixsite.com/mbweb)
     - Fine Tuning - [SQuAD](https://rajpurkar.github.io/SQuAD-explorer/) (Stanford Question Answering Dataset), Pretrained Weights from Google
 - Custom fused CUDA kernels for faster computations
@@ -73,7 +73,7 @@ BERT's model architecture is a multi-layer bidirectional Transformer encoder. Ba
 |BERTLARGE|24 encoder|1024| 16|4 x 1024|512|330M|
 
 ## Setup
-The following section list the requirements in order to start training the BERT model.
+The following section lists the necessary requirements to start training the BERT model.
 
 ### Requirements
 This repository contains `Dockerfile` which extends the TensorFlow NGC container and encapsulates some dependencies.  Aside from these dependencies, ensure you have the following components:
@@ -104,7 +104,7 @@ bash scripts/docker/build.sh
 ```
 
 ### 3. Download and preprocess the dataset.
-This repository provides scripts to download, verify and extract the SQuaD dataset+pretrained weights for fine tuning as well as Wikipedia + BookCorpus dataset for pretraining.
+This repository provides scripts to download, verify, and extract the SQuaD dataset + pretrained weights for fine tuning as well as Wikipedia + BookCorpus dataset for pretraining.
 
 To download, verify, and extract required datasets: 
 
@@ -129,7 +129,7 @@ The `launch.sh` script assumes that the datasets are in the following locations 
 
 
 ### 5. Start pre-training.
-BERT is designed to pre-train deep bidirectional representations for language representations. The following scripts are to replicate pretraining on Wikipedia+Books Corpus from the [paper](https://arxiv.org/pdf/1810.04805.pdf). These scripts are general and can be used for pretraining language representations on any corpus of choice.
+BERT is designed to pre-train deep bidirectional representations for language representations. The following scripts are to replicate pretraining on Wikipedia + Books Corpus from the [paper](https://arxiv.org/pdf/1810.04805.pdf). These scripts are general and can be used for pretraining language representations on any corpus of choice.
 
 From within the container, you can use the following script to run pre-training.
 ```bash
@@ -147,7 +147,7 @@ bash scripts/run_pretraining.sh 6 6 2e-5 fp32 8 2000 5333333 5000 true
 ```
 
 ### 6. Start fine tuning.
-The above pretrained BERT representations can be fine tuned with just one additional output layer for a state-of-the-art Question Answering system. From within the container, you can use the following script to run fine-training for SQuaD.
+The above pretrained BERT representations can be fine tuned with just one additional output layer for a state-of-the-art Question Answering system. From within the container, you can use the following script to run fine tuning for SQuaD.
 
 ```bash
 bash scripts/run_squad.sh <batch_size_per_gpu> <learning_rate_per_gpu> <precision> <use_xla> <num_gpus> <checkpoint>
@@ -205,7 +205,7 @@ Aside from options to set hyperparameters, the relevant options to control the b
   --iterations_per_loop: How many steps to make in each estimator call.(default: '1000')
 ```
 
-Aside from options to set hyperparameters, some relevant options to control the behaviour of the run_squad.py script are: 
+Aside from options to set hyperparameters, some relevant options to control the behaviour of the `run_squad.py` script are: 
 ```bash
   --bert_config_file: The config json file corresponding to the pre-trained BERT model. This specifies the model architecture.
   --[no]do_predict: Whether to run evaluation on the dev set. (default: 'false')
@@ -223,7 +223,7 @@ Aside from options to set hyperparameters, some relevant options to control the 
 ```
 
 ### Getting the data
-For pre-training BERT, we use the concatenation of Wikipedia (2500M words) as well as Books Corpus (800M words). For Wikipedia, we extract only the text passages from [here](ftp://ftpmirror.your.org/pub/wikimedia/dumps/enwiki/20190301/enwiki-20190301-pages-articles-multistream.xml.bz2) and ignore headers list and tables. It is structured as a document level corpus rather than a shuffled sentence level corpus because it is critical to extract long contiguous sentences. The next step is to run `create_pretraining_data.py` with the document level corpus as input, which generates input data and labels for the masked language modeling and next sentence prediction tasks. Pre-training can also be performed on any corpus of your choice. The collection of data generation scripts are intended to be modular to allow modifications for additional preprocessing steps or to use additional data.
+For pre-training BERT, we use the concatenation of Wikipedia (2500M words) as well as Books Corpus (800M words). For Wikipedia, we extract only the text passages from [here](ftp://ftpmirror.your.org/pub/wikimedia/dumps/enwiki/20190301/enwiki-20190301-pages-articles-multistream.xml.bz2) and ignore headers, lists, and tables. It is structured as a document level corpus rather than a shuffled sentence level corpus because it is critical to extract long contiguous sentences. The next step is to run `create_pretraining_data.py` with the document level corpus as input, which generates input data and labels for the masked language modeling and next sentence prediction tasks. Pre-training can also be performed on any corpus of your choice. The collection of data generation scripts are intended to be modular to allow modifications for additional preprocessing steps or to use additional data.
 
 We can use a pre-trained BERT model for other fine tuning tasks like Question Answering. We use SQuaD for this task. SQuaD v1.1 has 100,000+ question-answer pairs on 500+ articles. SQuaD v2.0 combines v1.1 with an additional 50,000 new unanswerable questions and must not only answer questions but also determine when that is not possible. 
 
@@ -243,7 +243,7 @@ The `run_pretraining.sh` script runs a job on a single node  that trains the BER
 - Creates the log file containing all the output.
 - Evaluates the model at the end of training. To skip evaluation, modify `--do_eval` to `False`.
 
-These parameters will train Wikipedia + BooksCorpus to reasonable accuracy on a DGX1 with 32GB V100 cards. If you want to match google’s best results from the BERT paper, you should either train for twice as many steps (2,288,000 steps) on a DGX1, or train on 16 GPUs on a DGX2. The DGX2 having 16 GPUs will be able to fit a batch size twice as large as a DGX1 (224 vs 112), hence the DGX2 can finish in half as many steps. 
+These parameters will train Wikipedia + BooksCorpus to a reasonable accuracy on a DGX1 with 32GB V100 cards. If you want to match google’s best results from the BERT paper, you should either train for twice as many steps (2,288,000 steps) on a DGX1, or train with 16 GPUs on a DGX2. The DGX2 having 16 GPUs will be able to fit a batch size twice as large as a DGX1 (224 vs 112), hence the DGX2 can finish in half as many steps. 
 
 
 For example:
@@ -254,9 +254,11 @@ run_pretraining.sh <training_batch_size> <eval_batch_size> <learning-rate> <prec
 Where:
 - <training_batch_size> is per-gpu batch size used for training. Batch size varies with <precision>, larger batch sizes run more efficiently, but require more memory.
 
-- <eval_batch_size> per-gpu batch size used for evaluation after training.<learning_rate> Default rate of 1e-4 is good for global batch size 256.
+- <eval_batch_size> per-gpu batch size used for evaluation after training.
 
-- <precision> Type of math in your model, can be either fp32, or amp. The options mean:
+- <learning_rate> Default rate of 1e-4 is good for global batch size 256.
+
+- <precision> Type of math in your model, can be either fp32 or amp. The options mean:
 
     - fp32 32 bit IEEE single precision floats.
 
@@ -288,10 +290,10 @@ The `run_squad.sh` script trains a model and performs evaluation on the SQuaD v1
 - Has FP16 precision enabled.
 - Is XLA enabled.
 - Runs for 2 epochs.
-- Saves a checkpoint every 1000 iterations (keeps only the latest checkpoint) and at the end of training. All checkpoints, evaluation results and training logs are saved to the `/results` directory (in the container which can be mounted to a local directory).
+- Saves a checkpoint every 1000 iterations (keeps only the latest checkpoint) and at the end of training. All checkpoints, evaluation results, and training logs are saved to the `/results` directory (in the container which can be mounted to a local directory).
 - Evaluation is done at the end of training. To skip evaluation, modify `--do_predict` to `False`.
 
-This script outputs checkpoints to the `/results` directory, by default, inside the container. Mount point of `/results` can be changed in the `scripts/docker/launch.sh` file. The training log contains information about:
+This script outputs checkpoints to the `/results` directory, by default, inside the container. The mount point of `/results` can be changed in the `scripts/docker/launch.sh` file. The training log contains information about:
 - Loss for the final step
 - Training and evaluation performance
 - F1 and exact match score on the Dev Set of SQuaD after evaluation. 
@@ -326,17 +328,17 @@ In TF-AMP, the computational graph is optimized to use as few casts as necessary
 For information about:
 - How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) documentation.
 - How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp) from the TensorFlow User Guide.
-- Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
+- Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog post.
 
 ### Inference process
-Inference on a fine tuned Question Answering system is performed using the `run_squad.py` script along with parameters defined in the `scripts/run_squad_inference.sh`. Inference is supported on single GPU at this moment.
+Inference on a fine tuned Question Answering system is performed using the `run_squad.py` script along with parameters defined in the `scripts/run_squad_inference.sh`. Inference isonly  supported on single GPU at this moment.
 
 The `run_squad_inference.sh` script trains a model and performs evaluation on the SQuaD v1.1 dataset. By default, the inferencing script: 
 - Has FP16 precision enabled
 - Is XLA enabled
 - Evaluates the latest checkpoint present in `/results` with a batch size of 8
 
-This script outputs predictions file to `/results/predictions.json` and computes F1 score and exact match score using SQuaD's `evaluate-v1.1.py`. Mount point of `/results` can be changed in the `scripts/docker/launch.sh` file. 
+This script outputs predictions file to `/results/predictions.json` and computes F1 score and exact match score using SQuaD's `evaluate-v1.1.py`. The mount point of `/results` can be changed in the `scripts/docker/launch.sh` file. 
 
 The output log contains information about:
 - Evaluation performance
@@ -352,7 +354,7 @@ I0312 23:14:00.550973 140287431493376 run_squad.py:1397] 0 Inference Performance
 ## Benchmarking
 The following section shows how to run benchmarks measuring the model performance in training and inference modes.
 
-Benchmarking can be performed for both training and inference. Both scripts run the BERT model for fine tuning. You can specify whether benchmarking is performed in FP16 or FP32 by specifying it as an argument to the benchmarking scripts. 
+Benchmarking can be performed for both training and inference. Both scripts run the BERT model for fine tuning. You can specify whether benchmarking is performed in FP16 or FP32 by setting it as an argument to the benchmarking scripts. 
 
 Both of these benchmarking scripts enable you to run a number of epochs and extract performance numbers.
 
@@ -412,7 +414,7 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 | 4 | 3 |  -  |51.59| - | - |3.0 |
 | 8 | 3 |  -  |98.75| - | - |5.76|
 
-Note: The respective values for FP32 runs that use a batch size of 3 are not available due to out of memory errors that arise. Batch size of 3 is only available on using FP16.
+  > Note: The respective values for FP32 runs that use a batch size of 3 are not available due to out of memory errors that arise. Batch size of 3 is only available while using FP16.
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
