@@ -388,7 +388,7 @@ def score(args, trainer, task, epoch_itr, subset):
     predictions = [tuple(item.split('\t')) for item in predictions]
     predictions = [(int(item[0]), item[1]) for item in predictions]
     predictions.sort(key=lambda tup: tup[0])
-    predictions = [hypo[1] + ('\n' if hypo[-1]!='\n' else '')  for hypo in predictions]
+    predictions = [hypo[1] + ('\n' if hypo[1][-1]!='\n' else '')  for hypo in predictions]
     sacrebleu_score = sacrebleu.corpus_bleu(predictions, refs, lowercase=args.ignore_case)
     print(f'|Detokenized {sacrebleu_score}')
     if gen_timer.sum != 0:
