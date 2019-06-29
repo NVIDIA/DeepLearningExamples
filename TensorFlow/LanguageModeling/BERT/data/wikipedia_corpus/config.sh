@@ -14,7 +14,7 @@ N_LINES_PER_SHARD_APPROX=396000   # Default=396000 creates 256 shards
 N_PROCS_PREPROCESS=4    # Adjust this based on memory requirements and available number of cores
 export WORKING_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-WIKI_DUMP="ftp://ftpmirror.your.org/pub/wikimedia/dumps/enwiki/20190301/enwiki-20190301-pages-articles-multistream.xml.bz2"
+WIKI_DUMP="ftp://ftpmirror.your.org/pub/wikimedia/dumps/enwiki/latest/enwiki-latest-pages-articles-multistream.xml.bz2"
 BERT_BASE_DIR="${WORKING_DIR}/../pretrained_models_google/uncased_L-12_H-768_A-12"
 BERT_LARGE_DIR="${WORKING_DIR}/../pretrained_models_google/uncased_L-24_H-1024_A-16"
 
