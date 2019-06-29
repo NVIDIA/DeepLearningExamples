@@ -1,3 +1,3 @@
 #!/bin/bash
 
-docker build . --rm -t bert
+docker build . --rm --network=host -t bert

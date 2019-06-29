@@ -2,6 +2,7 @@
 
 docker run -it --rm \
   --runtime=nvidia \
+  --network=host \
   -p 8888:8888 \
   --shm-size=1g \
   --ulimit memlock=-1 \
