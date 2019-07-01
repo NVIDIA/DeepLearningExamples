@@ -137,8 +137,7 @@ Ensure your loss values are comparable to those listed in the table in the
 Results section. For both models, the loss values are stored in the 
 `./output/nvlog.json` log file. 
 
-After you have trained the Tacotron 2 model for 1500 epochs and the 
-WaveGlow model for 800 epochs, you should get audio results similar to the 
+After you have trained the Tacotron 2 and WaveGlow models, you should get audio results similar to the
 samples in the `./audio` folder. For details about generating audio, see the 
 [Inference process](#inference-process) section below.
 
