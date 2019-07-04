@@ -34,7 +34,7 @@ from scipy.io.wavfile import write
 import json
 import time
 
-from inference import checkpoint_from_distributed, unwrap_distributed, load_and_setup_model
+from inference import checkpoint_from_distributed, unwrap_distributed, load_and_setup_model, MeasureTime
 
 from dllogger.logger import LOGGER
 import dllogger.logger as dllg
@@ -134,16 +134,15 @@ def main():
         if i >= dry_runs:
             LOGGER.iteration_start()
 
+        measurements = {}
+
         if args.model_name == 'Tacotron2':
             text_padded = torch.load(args.input_text)
             text_padded = text_padded[:args.batch_size]
             text_padded = torch.autograd.Variable(text_padded).cuda().long()
 
-            t0 = time.time()
-            with torch.no_grad():
+            with torch.no_grad(), MeasureTime(measurements, "inference_time"):
                 _, mels, _, _ = model.infer(text_padded)
-            t1 = time.time()
-            inference_time= t1 - t0
             num_items = text_padded.size(0)*text_padded.size(1)
 
             # # ## uncomment to generate new padded mels
@@ -158,16 +157,13 @@ def main():
             if args.fp16_run:
                 mel_padded = mel_padded.half()
 
-            t0 = time.time()
-            with torch.no_grad():
+            with torch.no_grad(), MeasureTime(measurements, "inference_time"):
                 audios = model.infer(mel_padded)
                 audios = audios.float()
-            t1 = time.time()
-            inference_time = t1 - t0
             num_items = audios.size(0)*audios.size(1)
 
         if i >= dry_runs:
-            LOGGER.log(key="items_per_sec", value=(num_items/inference_time))
+            LOGGER.log(key="items_per_sec", value=(num_items/measurements['inference_time']))
             LOGGER.iteration_stop()
 
     LOGGER.finish()
