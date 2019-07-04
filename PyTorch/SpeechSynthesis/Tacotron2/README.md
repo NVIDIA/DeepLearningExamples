@@ -457,7 +457,7 @@ Results are measured in the number of input tokens per second.
 
 |Number of GPUs|Mixed precision tokens/sec|FP32 tokens/sec|Speed-up with mixed precision|
 |---:|---:|---:|---:|
-|**1**|132|153|0.86|
+|**1**|141|146|0.97|
 
 
 This table shows the inference performance results for WaveGlow. 
@@ -465,7 +465,7 @@ Results are measured in the number of output audio samples per second.<sup>1</su
 
 |Number of GPUs|Mixed precision samples/sec|FP32 samples/sec|Speed-up with mixed precision|
 |---:|---:|---:|---:|
-|**1**|425379|376037|1.13|
+|**1**|181287|162926|1.11|
 
 <sup>1</sup>With sampling rate equal to 22050, one second of audio is generated from 22050 samples.
 

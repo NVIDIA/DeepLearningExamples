@@ -128,6 +128,20 @@ def load_and_setup_model(model_name, parser, checkpoint, fp16_run):
     return model
 
 
+class MeasureTime():
+    def __init__(self, measurements, key):
+        self.measurements = measurements
+        self.key = key
+
+    def __enter__(self):
+        torch.cuda.synchronize()
+        self.t0 = time.perf_counter()
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        torch.cuda.synchronize()
+        self.measurements[self.key] = time.perf_counter() - self.t0
+
+
 def main():
     """
     Launches text to speech (inference).
@@ -192,24 +206,22 @@ def main():
 
         LOGGER.iteration_start()
 
+        measurements = {}
+
         sequence = np.array(text_to_sequence(text, ['english_cleaners']))[None, :]
         sequence = torch.autograd.Variable(
             torch.from_numpy(sequence)).cuda().long()
 
         if args.tacotron2:
-            tacotron2_t0 = time.time()
-            with torch.no_grad():
+            with torch.no_grad(), MeasureTime(measurements, "tacotron2_time"):
                 _, mel, _, _ = tacotron2.infer(sequence)
-            tacotron2_t1 = time.time()
-            tacotron2_infer_perf = sequence.size(1)/(tacotron2_t1-tacotron2_t0)
+            tacotron2_infer_perf = sequence.size(1)/measurements['tacotron2_time']
             LOGGER.log(key="tacotron2_items_per_sec", value=tacotron2_infer_perf)
 
-        waveglow_t0 = time.time()
-        with torch.no_grad():
+        with torch.no_grad(), MeasureTime(measurements, "waveglow_time"):
             audio = waveglow.infer(mel, sigma=args.sigma_infer)
             audio = audio.float()
-        waveglow_t1 = time.time()
-        waveglow_infer_perf = audio[0].size(0)/(waveglow_t1-waveglow_t0)
+        waveglow_infer_perf = audio[0].size(0)/measurements['waveglow_time']
 
         audio_path = args.output + "audio_"+str(i)+".wav"
         write(audio_path, args.sampling_rate, audio[0].data.cpu().numpy())
