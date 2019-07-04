@@ -117,7 +117,7 @@ python interactive.py --buffer-size 1 --fp16 --path /path/to/your/checkpoint.pt 
         --fuse-dropout-add --remove-bpe --bpe-codes /path/to/code/file \
         /path/to/dataset/wmt14_en_de_joined_dict/ < wmt14-en-de.src > wmt14.detok
 grep ^H wmt14.detok | cut -f3- > wmt14.translated
-cat wmt14.translated | sacrebleu -t wmt14 -lc -l en-de
+cat wmt14.translated | sacrebleu -t wmt14/full -lc -l en-de
 ```
 Sacrebleu test set is a subset of test set used during a course of training thus score obtained with sacreBLEU can slightly differ from the one computed during training.
 
