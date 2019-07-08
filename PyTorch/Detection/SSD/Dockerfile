@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/pytorch:19.03-py3
+FROM nvcr.io/nvidia/pytorch:19.05-py3
 
 # Set working directory
 WORKDIR /mlperf

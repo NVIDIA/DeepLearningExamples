@@ -2,6 +2,7 @@
 import argparse
 import logging
 import os
+import sys
 import warnings
 from ast import literal_eval
 from itertools import product
@@ -94,6 +95,13 @@ def parse_args():
     general.add_argument('--print-freq', '-p', default=1, type=int,
                          help='print log every PRINT_FREQ batches')
 
+    # benchmarking
+    benchmark = parser.add_argument_group('benchmark setup')
+    benchmark.add_argument('--target-perf', default=None, type=float,
+                           help='target inference performance (in tokens \
+                           per second)')
+    benchmark.add_argument('--target-bleu', default=None, type=float,
+                           help='target accuracy')
     # distributed
     distributed = parser.add_argument_group('distributed setup')
     distributed.add_argument('--rank', default=0, type=int,
@@ -109,6 +117,9 @@ def parse_args():
     if 'fp16' in args.math and not args.cuda:
         parser.error('--math fp16 requires --cuda')
 
+    if len(list(product(args.math, args.batch_size, args.beam_size))) > 1:
+        args.target_bleu = None
+        args.target_perf = None
     return args
 
 
@@ -185,9 +196,15 @@ def main():
                                 dataset_dir=args.dataset_dir)
 
         # execute the inference
-        translator.run(calc_bleu=args.bleu, eval_path=args.output,
-                       reference_path=args.reference, summary=True)
+        stats = translator.run(calc_bleu=args.bleu, eval_path=args.output,
+                               reference_path=args.reference, summary=True)
+
+    passed = utils.benchmark(stats['bleu'], args.target_bleu,
+                             stats['tokens_per_sec'], args.target_perf)
+    return passed
 
 
 if __name__ == '__main__':
-    main()
+    passed = main()
+    if not passed:
+        sys.exit(1)

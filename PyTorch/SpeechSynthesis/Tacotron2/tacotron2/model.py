@@ -30,10 +30,6 @@ import torch
 from torch.autograd import Variable
 from torch import nn
 from torch.nn import functional as F
-import sys
-from os.path import abspath, dirname
-# enabling modules discovery from global entrypoint
-sys.path.append(abspath(dirname(__file__)+'/../'))
 from common.layers import ConvNorm, LinearNorm
 from common.utils import to_gpu, get_mask_from_lengths
 
@@ -223,7 +219,7 @@ class Encoder(nn.Module):
 
         return outputs
 
-    def inference(self, x):
+    def infer(self, x):
         for conv in self.convolutions:
             x = F.dropout(F.relu(conv(x)), 0.5, self.training)
 
@@ -392,19 +388,11 @@ class Decoder(nn.Module):
         attention_weights:
         """
         cell_input = torch.cat((decoder_input, self.attention_context), -1)
-        attention_hidden_dtype = self.attention_hidden.dtype
 
         self.attention_hidden, self.attention_cell = self.attention_rnn(
-            cell_input.float(), (self.attention_hidden.float(), self.attention_cell.float()))
-
+            cell_input, (self.attention_hidden, self.attention_cell))
         self.attention_hidden = F.dropout(
             self.attention_hidden, self.p_attention_dropout, self.training)
-
-        if attention_hidden_dtype == torch.float16:
-            self.attention_hidden = self.attention_hidden.half()
-
-        self.attention_cell = F.dropout(
-            self.attention_cell, self.p_attention_dropout, self.training)
 
         attention_weights_cat = torch.cat(
             (self.attention_weights.unsqueeze(1),
@@ -416,19 +404,11 @@ class Decoder(nn.Module):
         self.attention_weights_cum += self.attention_weights
         decoder_input = torch.cat(
             (self.attention_hidden, self.attention_context), -1)
-        decoder_hidden_dtype = self.decoder_hidden.dtype
 
         self.decoder_hidden, self.decoder_cell = self.decoder_rnn(
-            decoder_input.float(), (self.decoder_hidden.float(), self.decoder_cell.float()))
-
+            decoder_input, (self.decoder_hidden, self.decoder_cell))
         self.decoder_hidden = F.dropout(
             self.decoder_hidden, self.p_decoder_dropout, self.training)
-
-        if decoder_hidden_dtype == torch.float16:
-            self.decoder_hidden = self.decoder_hidden.half()
-
-        self.decoder_cell = F.dropout(
-            self.decoder_cell, self.p_decoder_dropout, self.training)
 
         decoder_hidden_attention_context = torch.cat(
             (self.decoder_hidden, self.attention_context), dim=1)
@@ -476,45 +456,8 @@ class Decoder(nn.Module):
 
         return mel_outputs, gate_outputs, alignments
 
-    # def inference(self, memory):
-    #     """ Decoder inference
-    #     PARAMS
-    #     ------
-    #     memory: Encoder outputs
 
-    #     RETURNS
-    #     -------
-    #     mel_outputs: mel outputs from the decoder
-    #     gate_outputs: gate outputs from the decoder
-    #     alignments: sequence of attention weights from the decoder
-    #     """
-    #     decoder_input = self.get_go_frame(memory)
-
-    #     self.initialize_decoder_states(memory, mask=None)
-
-    #     mel_outputs, gate_outputs, alignments = [], [], []
-    #     while True:
-    #         decoder_input = self.prenet(decoder_input)
-    #         mel_output, gate_output, alignment = self.decode(decoder_input)
-
-    #         mel_outputs += [mel_output.squeeze(1)]
-    #         gate_outputs += [gate_output]
-    #         alignments += [alignment]
-
-    #         if torch.sigmoid(gate_output.data) > self.gate_threshold:
-    #             break
-    #         elif len(mel_outputs) == self.max_decoder_steps:
-    #             print("Warning! Reached max decoder steps")
-    #             break
-
-    #         decoder_input = mel_output
-
-    #     mel_outputs, gate_outputs, alignments = self.parse_decoder_outputs(
-    #         mel_outputs, gate_outputs, alignments)
-
-    #     return mel_outputs, gate_outputs, alignments
-
-    def inference(self, memory):
+    def infer(self, memory):
         """ Decoder inference
         PARAMS
         ------
@@ -646,8 +589,8 @@ class Tacotron2(nn.Module):
     def infer(self, inputs):
         inputs = self.parse_input(inputs)
         embedded_inputs = self.embedding(inputs).transpose(1, 2)
-        encoder_outputs = self.encoder.inference(embedded_inputs)
-        mel_outputs, gate_outputs, alignments = self.decoder.inference(
+        encoder_outputs = self.encoder.infer(embedded_inputs)
+        mel_outputs, gate_outputs, alignments = self.decoder.infer(
             encoder_outputs)
 
         mel_outputs_postnet = self.postnet(mel_outputs)

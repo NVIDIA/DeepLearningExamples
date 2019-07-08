@@ -94,6 +94,9 @@ def parse_args():
                     help='enables cuda')
     exclusive_group(group=general, name='cudnn', default=True,
                     help='enables cudnn')
+    exclusive_group(group=general, name='log-all-ranks', default=True,
+                    help='enables logging from all distributed ranks, if \
+                    disabled then only logs from rank 0 are reported')
 
     # training
     training = parser.add_argument_group('training setup')
@@ -269,7 +272,8 @@ def main():
 
     # setup logging
     log_filename = f'log_rank_{utils.get_rank()}.log'
-    utils.setup_logging(os.path.join(save_path, log_filename))
+    utils.setup_logging(args.log_all_ranks,
+                        os.path.join(save_path, log_filename))
 
     if args.env:
         utils.log_env_info()
@@ -387,7 +391,6 @@ def main():
                             cuda=args.cuda,
                             print_freq=args.print_freq,
                             dataset_dir=args.dataset_dir,
-                            target_bleu=args.target_bleu,
                             save_path=args.save_path)
 
     # create trainer
@@ -452,8 +455,11 @@ def main():
 
         if args.eval:
             utils.barrier()
-            test_bleu, break_training = translator.run(calc_bleu=True,
-                                                       epoch=epoch)
+            eval_stats = translator.run(calc_bleu=True, epoch=epoch)
+            test_bleu = eval_stats['bleu']
+            if args.target_bleu and test_bleu >= args.target_bleu:
+                logging.info(f'Target accuracy reached')
+                break_training = True
 
         acc_log = []
         acc_log += [f'Summary: Epoch: {epoch}']

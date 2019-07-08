@@ -1,0 +1,30 @@
+{
+  "jobDefinition": {
+    "name": "transformer TF fp32 only hvd",
+    "clusterId": 425,
+    "description": "",
+    "dockerImage": "nvidian_general/jbaczek:transformer_debug",
+    "jobType": "BATCH",
+    "command": "bash run_training.sh",
+    "resources": {
+      "gpus": 8,
+      "systemMemory": 480,
+      "cpuCores": 16
+    },
+    "jobDataLocations": [
+      {
+        "protocol": "NFSV3",
+        "shareHost": "dcg-zfs-03.nvidia.com",
+        "mountPoint": "/processed_data",
+        "sharePath": "/export/jbaczek_personal.cosmos701/wmt14/TF_processed_new"
+      },
+      {
+        "protocol": "NFSV3",
+        "shareHost": "dcg-zfs-03.nvidia.com",
+        "mountPoint": "/results",
+        "sharePath": "/export/jbaczek_personal.cosmos701/experiments/"
+      }
+    ],
+    "portMappings": []
+  }
+}

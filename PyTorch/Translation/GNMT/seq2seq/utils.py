@@ -165,7 +165,7 @@ def timer(name, ndigits=2, sync_gpu=True):
     logging.info(f'TIMER {name} {elapsed}')
 
 
-def setup_logging(log_file=os.devnull):
+def setup_logging(log_all_ranks=True, log_file=os.devnull):
     """
     Configures logging.
     By default logs from all workers are printed to the console, entries are
@@ -174,15 +174,19 @@ def setup_logging(log_file=os.devnull):
     Full logs with timestamps are saved to the log_file file.
     """
     class RankFilter(logging.Filter):
-        def __init__(self, rank):
+        def __init__(self, rank, log_all_ranks):
             self.rank = rank
+            self.log_all_ranks = log_all_ranks
 
         def filter(self, record):
             record.rank = self.rank
-            return True
+            if self.log_all_ranks:
+                return True
+            else:
+                return (self.rank == 0)
 
     rank = get_rank()
-    rank_filter = RankFilter(rank)
+    rank_filter = RankFilter(rank, log_all_ranks)
 
     logging_format = "%(asctime)s - %(levelname)s - %(rank)s - %(message)s"
     logging.basicConfig(level=logging.DEBUG,

@@ -27,6 +27,7 @@ parser = argparse.ArgumentParser(description='Tesnorflow Benchmark Tests')
 
 parser.add_argument('--bs', default=[1], type=int, nargs='+')
 parser.add_argument('--ngpus', default=[1], type=int, nargs='+')
+parser.add_argument('--perf_args', default=[], type=str, nargs='*')
 
 parser.add_argument(
     '--mode',
@@ -47,10 +48,6 @@ parser.add_argument(
 
 parser.add_argument('--precision', default='fp32', choices=['fp16', 'fp32'], help=argparse.SUPPRESS)
 
-parser.add_argument("--use_tf_amp", action='store_true', required=False,  help="Enable Automatic Mixed Precision to speedup FP32 computation using tensor cores.")
-
-parser.add_argument("--use_xla", action='store_true', required=False, help="Enable XLA (Accelerated Linear Algebra) computation for improved performance.")
-
 parser.add_argument('--baseline', type=str, default=None, metavar='FILE', help='path to the file with baselines')
 
 parser.add_argument('--data_dir', default="/data/imagenet", type=str, metavar='<PATH>', help='path to the dataset')
@@ -68,11 +65,6 @@ def benchmark(command, metrics, args):
     mgpu = "mpiexec --allow-run-as-root --bind-to socket -np {ngpu} {sgpu}"
 
     perf_args = []
-    if args.use_tf_amp:
-        perf_args.append('--use_tf_amp')
-        
-    if args.use_xla:
-        perf_args.append('--use_xla')
     
     table = {k: [] for k in metrics}
     for ngpu in args.ngpus:
@@ -88,6 +80,10 @@ def benchmark(command, metrics, args):
             print('rfile', rfile)
             mgpu_str = mgpu.format(ngpu=ngpu, sgpu=sgpu)
             print(mgpu_str)
+            
+            perf_args = [ '--' + arg for arg in args.perf_args]
+            perf_args_str = " ".join(perf_args) if args.perf_args else ""
+            
             cmd = command.format(
                 mode=args.mode,
                 batch_size=bspgpu,
@@ -97,7 +93,7 @@ def benchmark(command, metrics, args):
                 data_dir=args.data_dir,
                 results_dir=args.results_dir,
                 exp_name=exp_name,
-                perf_args=' '.join(perf_args)
+                perf_args=perf_args_str
             )
             print(cmd)
 
@@ -161,14 +157,17 @@ def check(results, baseline, ngpus, bs, metrics):
         for n in ngpus:
             for b in bs:
                 result = results[m][n][b]
-                reference = baseline[str(n)][str(b)][m]
-                if result < PERF_THR * reference:
-                    allright = False
-                    print(
-                        "Metric: {} NGPUs: {} BS: {} Result ( {} ) is more than {} times slower than reference ( {} )".
-                        format(m, n, b, result, PERF_THR, reference)
-                    )
-
+                try: 
+                    reference = baseline[str(n)][str(b)][m]
+                    if result < PERF_THR * reference:
+                        allright = False
+                        print(
+                            "Metric: {} NGPUs: {} BS: {} Result ( {} ) is more than {} times slower than reference ( {} )".
+                            format(m, n, b, result, PERF_THR, reference)
+                        )
+                except KeyError:
+                    continue
+                    
     return allright
 
 

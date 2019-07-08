@@ -41,6 +41,8 @@ import dllogger.logger as dllg
 from dllogger import tags
 from dllogger.autologging import log_hardware, log_args
 
+from apex import amp
+
 def parse_args(parser):
     """
     Parse commandline arguments.
@@ -53,10 +55,12 @@ def parse_args(parser):
                         help='Path to tensor containing mels (when running WaveGlow)')
     parser.add_argument('-sr', '--sampling-rate', default=22050, type=int,
                         help='Sampling rate')
-    parser.add_argument('--fp16-run', action='store_true',
-                        help='inference in fp16')
+    parser.add_argument('--amp-run', action='store_true',
+                        help='inference with AMP')
     parser.add_argument('-bs', '--batch-size', type=int, default=1)
     parser.add_argument('--create-benchmark', action='store_true')
+    parser.add_argument('--log-file', type=str, default='nvlog.json',
+                        help='Filename for logging')
 
     return parser
 
@@ -92,11 +96,7 @@ def main():
     parser = parse_args(parser)
     args, _ = parser.parse_known_args()
 
-    log_file = ("qa/baselines/" + args.model_name + "_inferbench_BS" + str(args.batch_size) + "_FP" + ("16" if args.fp16_run else "32") +
-                "_DGX1_16GB_1GPU_single" + ".json") \
-                if args.create_benchmark else \
-                   (args.model_name + "_infer_BS" + str(args.batch_size) + "_FP" + ("16" if args.fp16_run else "32") + \
-                   "_DGX1_16GB_1GPU_single" + ".json")
+    log_file = args.log_file
 
     LOGGER.set_model_name("Tacotron2_PyT")
     LOGGER.set_backends([
@@ -111,7 +111,7 @@ def main():
     log_hardware()
     log_args(args)
 
-    # ## uncomment to generate new padded text
+    # ### uncomment to generate new padded text
     # texts = []
     # f = open('qa/ljs_text_train_subset_2500.txt', 'r')
     # texts = f.readlines()
@@ -124,7 +124,8 @@ def main():
     # torch.save(text_padded, "qa/text_padded.pt")
     # torch.save(input_lengths, "qa/input_lengths.pt")
 
-    model = load_and_setup_model(args.model_name, parser, None, args.fp16_run)
+    model = load_and_setup_model(args.model_name, parser, None,
+                                 args.amp_run)
 
     dry_runs = 3
     num_iters = (16+dry_runs) if args.create_benchmark else (1+dry_runs)
@@ -155,7 +156,7 @@ def main():
             mel_padded = mel_padded[:args.batch_size]
             mel_padded = mel_padded.cuda()
 
-            if args.fp16_run:
+            if args.amp_run:
                 mel_padded = mel_padded.half()
 
             t0 = time.time()

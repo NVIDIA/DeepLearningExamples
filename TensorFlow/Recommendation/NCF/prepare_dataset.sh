@@ -13,8 +13,8 @@
 set -e
 
 DATASET_NAME=${1:-'ml-20m'}
-RAW_DATADIR='/data'
-CACHED_DATADIR='/tmp/cache/'${DATASET_NAME}
+RAW_DATADIR=${2:-'/data'}
+CACHED_DATADIR="${RAW_DATADIR}/cache/${DATASET_NAME}"
 
 # you can add another option to this case in order to support other datasets
 case ${DATASET_NAME} in
@@ -31,8 +31,14 @@ case ${DATASET_NAME} in
         exit 1
 esac
 
-mkdir -p ${RAW_DATADIR}
-mkdir -p ${CACHED_DATADIR}
+if [ ! -d ${RAW_DATADIR} ]; then
+    mkdir -p ${RAW_DATADIR}
+fi
+
+if [ ! -d ${CACHED_DATADIR} ]; then
+    mkdir -p ${CACHED_DATADIR}
+fi
+
 rm -f log
 
 if [ ! -f ${ZIP_PATH} ]; then

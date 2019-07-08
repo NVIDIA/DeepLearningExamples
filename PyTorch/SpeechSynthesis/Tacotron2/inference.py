@@ -40,6 +40,7 @@ from dllogger.logger import LOGGER
 import dllogger.logger as dllg
 from dllogger.autologging import log_hardware, log_args
 
+from apex import amp
 
 def parse_args(parser):
     """
@@ -61,12 +62,11 @@ def parse_args(parser):
     parser.add_argument('-s', '--sigma-infer', default=0.6, type=float)
     parser.add_argument('-sr', '--sampling-rate', default=22050, type=int,
                         help='Sampling rate')
-    parser.add_argument('--fp16-run', action='store_true',
-                        help='inference in fp16')
+    parser.add_argument('--amp-run', action='store_true',
+                        help='inference with AMP')
     parser.add_argument('--log-file', type=str, default='nvlog.json',
                         help='Filename for logging')
-    parser.add_argument('--include-warmup', action='store_true',
-                        help='Include warmup')
+
 
     return parser
 
@@ -110,12 +110,12 @@ def unwrap_distributed(state_dict):
     return new_state_dict
 
 
-def load_and_setup_model(model_name, parser, checkpoint, fp16_run):
+def load_and_setup_model(model_name, parser, checkpoint, amp_run):
     model_parser = models.parse_model_args(model_name, parser, add_help=False)
     model_args, _ = model_parser.parse_known_args()
 
     model_config = models.get_model_config(model_name, model_args)
-    model = models.get_model(model_name, model_config, to_fp16=fp16_run, to_cuda=True, training=False)
+    model = models.get_model(model_name, model_config, to_cuda=True)
 
     if checkpoint is not None:
         state_dict = torch.load(checkpoint)['state_dict']
@@ -123,7 +123,14 @@ def load_and_setup_model(model_name, parser, checkpoint, fp16_run):
             state_dict = unwrap_distributed(state_dict)
 
         model.load_state_dict(state_dict)
+
+    if model_name == "WaveGlow":
+        model = model.remove_weightnorm(model)
+
     model.eval()
+
+    if amp_run:
+        model, _ = amp.initialize(model, [], opt_level="O3")
 
     return model
 
@@ -154,7 +161,8 @@ def main():
     # tacotron2 model filepath was specified
     if args.tacotron2:
         # Setup Tacotron2
-        tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2, args.fp16_run)
+        tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2,
+                                         args.amp_run)
     # file with mel spectrogram was specified
     elif args.mel_file:
         mel = torch.load(args.mel_file)
@@ -168,7 +176,8 @@ def main():
         waveglow = waveglow.cuda()
         waveglow.eval()
     else:
-        waveglow = load_and_setup_model('WaveGlow', parser, args.waveglow, args.fp16_run)
+        waveglow = load_and_setup_model('WaveGlow', parser, args.waveglow,
+                                        args.amp_run)
 
     texts = []
     try:
@@ -179,14 +188,6 @@ def main():
         texts = ["The forms of printed letters should be beautiful, and\
         that their arrangement on the page should be reasonable and\
         a help to the shapeliness of the letters themselves."]
-
-    if args.include_warmup:
-        sequence = torch.randint(low=0, high=148, size=(1,50),
-                                 dtype=torch.long).cuda()
-        for i in range(3):
-            with torch.no_grad():
-                _, mel, _, _ = tacotron2.infer(sequence)
-                _ = waveglow.infer(mel)
 
     for i, text in enumerate(texts):
 

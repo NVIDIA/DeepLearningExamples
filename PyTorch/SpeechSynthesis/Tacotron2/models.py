@@ -25,28 +25,24 @@
 #
 # *****************************************************************************
 
-import sys
-from os.path import abspath, dirname
-# enabling modules discovery from global entrypoint
-sys.path.append(abspath(dirname(__file__)+'/'))
 from tacotron2.model import Tacotron2
 from waveglow.model import WaveGlow
+from tacotron2.arg_parser import parse_tacotron2_args
+from waveglow.arg_parser import parse_waveglow_args
 import torch
 
 
 def parse_model_args(model_name, parser, add_help=False):
     if model_name == 'Tacotron2':
-        from tacotron2.arg_parser import parse_tacotron2_args
         return parse_tacotron2_args(parser, add_help)
     if model_name == 'WaveGlow':
-        from waveglow.arg_parser import parse_waveglow_args
         return parse_waveglow_args(parser, add_help)
     else:
         raise NotImplementedError(model_name)
 
 
 def batchnorm_to_float(module):
-    """Converts batch norm to FP32"""
+    """Converts batch norm modules to FP32"""
     if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
         module.float()
     for child in module.children():
@@ -54,16 +50,7 @@ def batchnorm_to_float(module):
     return module
 
 
-def lstmcell_to_float(module):
-    """Converts LSTMCells modules to FP32"""
-    if isinstance(module, torch.nn.LSTMCell):
-        module.float()
-    for child in module.children():
-        lstmcell_to_float(child)
-    return module
-
-
-def get_model(model_name, model_config, to_fp16, to_cuda, training=True):
+def get_model(model_name, model_config, to_cuda):
     """ Code chooses a model based on name"""
     model = None
     if model_name == 'Tacotron2':
@@ -72,12 +59,6 @@ def get_model(model_name, model_config, to_fp16, to_cuda, training=True):
         model = WaveGlow(**model_config)
     else:
         raise NotImplementedError(model_name)
-    if to_fp16:
-        model = batchnorm_to_float(model.half())
-        model = lstmcell_to_float(model)
-        if model_name == "WaveGlow":
-            for k in model.convinv:
-                k.float()
     if to_cuda:
         model = model.cuda()
     return model

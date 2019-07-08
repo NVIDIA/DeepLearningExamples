@@ -22,6 +22,7 @@ import horovod.tensorflow as hvd
 
 from utils import image_processing
 from utils import hvd_utils
+from utils import dali_utils
 
 __all__ = ["get_synth_input_fn", "normalized_inputs"]
 
@@ -129,6 +130,26 @@ def get_tfrecords_input_fn(filenames, batch_size, height, width, training, disto
     ds = ds.prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
 
     return ds
+
+
+def get_dali_input_fn(filenames, idx_filenames, batch_size, height, width, training, distort_color, num_threads, deterministic):
+
+    if idx_filenames is None:
+        raise ValueError("Must provide idx_filenames for DALI's reader")
+        
+    preprocessor = dali_utils.DALIPreprocessor(
+        filenames,
+        idx_filenames,
+        height, width,
+        batch_size,
+        num_threads,
+        dali_cpu=False,
+        deterministic=deterministic,
+        training=training)
+    
+    images, labels = preprocessor.get_device_minibatches()
+    
+    return (images, labels)
 
 
 def normalized_inputs(inputs):

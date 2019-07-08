@@ -52,6 +52,14 @@ def parse_cmdline():
     )
 
     p.add_argument(
+        '--data_idx_dir',
+        required=False,
+        default=None,
+        type=str,
+        help="Path to index files for DALI. Files should be named 'train-*' and 'validation-*'."
+    )
+    
+    p.add_argument(
         '--batch_size', 
         type=int, 
         required=True, 
@@ -166,6 +174,14 @@ def parse_cmdline():
 
     _add_bool_argument(
         parser=p,
+        name="use_dali",
+        default=False,
+        required=False,
+        help="Enable DALI data input."
+    )
+
+    _add_bool_argument(
+        parser=p,
         name="use_tf_amp",
         default=False,
         required=False,
@@ -178,7 +194,14 @@ def parse_cmdline():
         default=1, 
         help="""Random seed."""
     )
-
+    
+    p.add_argument(
+        '--gpu_memory_fraction',
+        type=float,
+        default=0.7,
+        help="""Limit memory fraction used by training script for DALI"""
+    )
+    
     FLAGS, unknown_args = p.parse_known_args()
 
     if len(unknown_args) > 0:
