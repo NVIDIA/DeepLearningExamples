@@ -41,8 +41,22 @@ from . import (
 )
 
 from apex.normalization.fused_layer_norm import FusedLayerNorm
-from .fused_dropout_add import fused_dropout_add
-from .fused_relu_dropout import fused_relu_dropout
+
+
+@torch.jit.script
+def jit_dropout_add(x, residual, prob, is_training) :
+    # type: (Tensor, Tensor, float, bool) -> Tensor
+    out = F.dropout(x, p=prob, training=is_training)
+    out = residual + out
+    return out
+
+@torch.jit.script
+def jit_relu_dropout(x, prob, is_training) :
+    # type: (Tensor, float, bool) -> Tensor
+    out = F.threshold(x, 0., 0.)
+    out = F.dropout(out, p=prob, training=is_training)
+    return out
+
 
 @register_model('transformer')
 class TransformerModel(FairseqModel):
@@ -438,7 +452,7 @@ class TransformerEncoderLayer(nn.Module):
         x = self.maybe_layer_norm(0, x, before=True)
         x, _ = self.self_attn(query=x, key=x, value=x, key_padding_mask=encoder_padding_mask)
         if self.fuse_dropout_add and self.training :
-            x = fused_dropout_add(x, residual, self.dropout)
+            x = jit_dropout_add(x, residual, self.dropout, self.training)
         else :
             x = F.dropout(x, p=self.dropout, training=self.training)
             x = residual + x
@@ -448,14 +462,14 @@ class TransformerEncoderLayer(nn.Module):
         x = self.maybe_layer_norm(1, x, before=True)
 
         if self.fuse_relu_dropout :
-            x = fused_relu_dropout(self.fc1(x), self.relu_dropout)
+            x = jit_relu_dropout(self.fc1(x), self.relu_dropout, self.training)
         else :
             x = F.threshold(self.fc1(x),0,0)
             x = F.dropout(x, p=self.relu_dropout, training=self.training)
         x = self.fc2(x)
 
         if self.fuse_dropout_add and self.training :
-            x = fused_dropout_add(x, residual, self.dropout)
+            x = jit_dropout_add(x, residual, self.dropout, self.training)
         else :
             x = F.dropout(x, p=self.dropout, training=self.training)
             x = residual + x
@@ -517,7 +531,7 @@ class TransformerDecoderLayer(nn.Module):
             need_weights=False,
         )
         if self.fuse_dropout_add and self.training :
-            x = fused_dropout_add(x, residual, self.dropout)
+            x = jit_dropout_add(x, residual, self.dropout, self.training)
         else :
             x = F.dropout(x, p=self.dropout, training=self.training)
             x = residual + x
@@ -537,7 +551,7 @@ class TransformerDecoderLayer(nn.Module):
                 need_weights=(not self.training and self.need_attn),
             )
             if self.fuse_dropout_add and self.training :
-                x = fused_dropout_add(x, residual, self.dropout)
+                x = jit_dropout_add(x, residual, self.dropout, self.training)
             else :
                 x = F.dropout(x, p=self.dropout, training=self.training)
                 x = residual + x
@@ -546,13 +560,13 @@ class TransformerDecoderLayer(nn.Module):
         residual = x
         x = self.maybe_layer_norm(self.final_layer_norm, x, before=True)
         if self.fuse_relu_dropout :
-            x = fused_relu_dropout(self.fc1(x), self.relu_dropout)
+            x = jit_relu_dropout(self.fc1(x), self.relu_dropout, self.training)
         else :
             x = F.threshold(self.fc1(x),0,0)
             x = F.dropout(x, p=self.relu_dropout, training=self.training)
         x = self.fc2(x)
         if self.fuse_dropout_add and self.training :
-            x = fused_dropout_add(x, residual, self.dropout)
+            x = jit_dropout_add(x, residual, self.dropout, self.training)
         else :
             x = F.dropout(x, p=self.dropout, training=self.training)
             x = residual + x

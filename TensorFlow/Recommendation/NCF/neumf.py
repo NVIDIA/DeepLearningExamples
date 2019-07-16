@@ -148,7 +148,7 @@ def ncf_model_ops(users,
                   labels,
                   dup_mask,
                   params,
-                  eval_only=False):
+                  mode='TRAIN'):
     """
     Constructs the training and evaluation graphs
     """
@@ -172,7 +172,6 @@ def ncf_model_ops(users,
     sigmoid = False #params['sigmoid']
     loss_scale = params['loss_scale']
 
-    is_training = True
     model_dtype = tf.float16 if fp16 else tf.float32
 
     # If manually enabling mixed precision, use the custom variable getter
@@ -196,6 +195,9 @@ def ncf_model_ops(users,
         )
         logits = tf.squeeze(logits)
 
+        if mode == 'INFERENCE':
+            return logits
+
         # Evaluation Ops
         found_positive, dcg = compute_eval_metrics(logits, dup_mask, val_batch_size, K)
         # Metrics
@@ -204,7 +206,7 @@ def ncf_model_ops(users,
 
         eval_op = tf.group(hit_rate[1], ndcg[1])
 
-        if eval_only:
+        if mode == 'EVAL':
             return hit_rate[0], ndcg[0], eval_op, None
 
         # Labels

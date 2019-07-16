@@ -2,6 +2,9 @@ import logging
 from collections import defaultdict
 from functools import partial
 
+import torch
+import subword_nmt.apply_bpe
+import sacremoses
 import seq2seq.data.config as config
 
 
@@ -9,37 +12,53 @@ class Tokenizer:
     """
     Tokenizer class.
     """
-    def __init__(self, vocab_fname=None, pad=1, separator='@@'):
+    def __init__(self, vocab_fname=None, bpe_fname=None, lang=None, pad=1,
+                 separator='@@'):
         """
         Constructor for the Tokenizer class.
 
         :param vocab_fname: path to the file with vocabulary
+        :param bpe_fname: path to the file with bpe codes
         :param pad: pads vocabulary to a multiple of 'pad' tokens
         :param separator: tokenization separator
         """
+        self.separator = separator
+        self.lang = lang
+
+        if bpe_fname:
+            with open(bpe_fname, 'r') as bpe_codes:
+                self.bpe = subword_nmt.apply_bpe.BPE(bpe_codes)
+
         if vocab_fname:
-            self.separator = separator
+            self.build_vocabulary(vocab_fname, pad)
 
-            logging.info(f'Building vocabulary from {vocab_fname}')
-            vocab = [config.PAD_TOKEN, config.UNK_TOKEN,
-                     config.BOS_TOKEN, config.EOS_TOKEN]
+        if lang:
+            self.init_moses(lang)
 
-            with open(vocab_fname) as vfile:
-                for line in vfile:
-                    vocab.append(line.strip())
+    def init_moses(self, lang):
+        self.moses_tokenizer = sacremoses.MosesTokenizer(lang['src'])
+        self.moses_detokenizer = sacremoses.MosesDetokenizer(lang['tgt'])
 
-            self.pad_vocabulary(vocab, pad)
+    def build_vocabulary(self, vocab_fname, pad):
+        logging.info(f'Building vocabulary from {vocab_fname}')
+        vocab = [config.PAD_TOKEN, config.UNK_TOKEN,
+                 config.BOS_TOKEN, config.EOS_TOKEN]
+        with open(vocab_fname) as vfile:
+            for line in vfile:
+                vocab.append(line.strip())
 
-            self.vocab_size = len(vocab)
-            logging.info(f'Size of vocabulary: {self.vocab_size}')
+        self.pad_vocabulary(vocab, pad)
 
-            self.tok2idx = defaultdict(partial(int, config.UNK))
-            for idx, token in enumerate(vocab):
-                self.tok2idx[token] = idx
+        self.vocab_size = len(vocab)
+        logging.info(f'Size of vocabulary: {self.vocab_size}')
 
-            self.idx2tok = {}
-            for key, value in self.tok2idx.items():
-                self.idx2tok[value] = key
+        self.tok2idx = defaultdict(partial(int, config.UNK))
+        for idx, token in enumerate(vocab):
+            self.tok2idx[token] = idx
+
+        self.idx2tok = {}
+        for key, value in self.tok2idx.items():
+            self.idx2tok[value] = key
 
     def pad_vocabulary(self, vocab, pad):
         """
@@ -58,8 +77,10 @@ class Tokenizer:
     def get_state(self):
         logging.info(f'Saving state of the tokenizer')
         state = {
+            'lang': self.lang,
             'separator': self.separator,
             'vocab_size': self.vocab_size,
+            'bpe': self.bpe,
             'tok2idx': self.tok2idx,
             'idx2tok': self.idx2tok,
         }
@@ -67,10 +88,14 @@ class Tokenizer:
 
     def set_state(self, state):
         logging.info(f'Restoring state of the tokenizer')
+        self.lang = state['lang']
         self.separator = state['separator']
         self.vocab_size = state['vocab_size']
+        self.bpe = state['bpe']
         self.tok2idx = state['tok2idx']
         self.idx2tok = state['idx2tok']
+
+        self.init_moses(self.lang)
 
     def segment(self, line):
         """
@@ -85,7 +110,14 @@ class Tokenizer:
         entry = [config.BOS] + entry + [config.EOS]
         return entry
 
-    def detokenize(self, inputs, delim=' '):
+    def tokenize(self, line):
+        tokenized = self.moses_tokenizer.tokenize(line, return_str=True)
+        bpe = self.bpe.process_line(tokenized)
+        segmented = self.segment(bpe)
+        tensor = torch.tensor(segmented)
+        return tensor
+
+    def detokenize_bpe(self, inp, delim=' '):
         """
         Detokenizes single sentence and removes token separator characters.
 
@@ -94,7 +126,7 @@ class Tokenizer:
 
         returns: string representing detokenized sentence
         """
-        detok = delim.join([self.idx2tok[idx] for idx in inputs])
+        detok = delim.join([self.idx2tok[idx] for idx in inp])
         detok = detok.replace(self.separator + ' ', '')
         detok = detok.replace(self.separator, '')
 
@@ -103,3 +135,12 @@ class Tokenizer:
         detok = detok.replace(config.PAD_TOKEN, '')
         detok = detok.strip()
         return detok
+
+    def detokenize_moses(self, inp):
+        output = self.moses_detokenizer.detokenize(inp.split())
+        return output
+
+    def detokenize(self, inp):
+        detok_bpe = self.detokenize_bpe(inp)
+        output = self.detokenize_moses(detok_bpe)
+        return output

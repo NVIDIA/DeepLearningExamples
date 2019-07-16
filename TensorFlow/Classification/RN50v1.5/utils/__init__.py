@@ -26,3 +26,5 @@ from utils import data_utils
 from utils import image_processing
 
 from utils import learning_rate
+
+from utils import dali_utils

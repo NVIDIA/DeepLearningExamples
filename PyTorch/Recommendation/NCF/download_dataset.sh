@@ -3,15 +3,18 @@ RAW_DATADIR=$2
 
 function download_20m {
 	echo "Download ml-20m"
+	cd ${RAW_DATADIR}
 	curl -O http://files.grouplens.org/datasets/movielens/ml-20m.zip
-	mv ml-20m.zip ${RAW_DATADIR}
+	cd -
 }
 
 function download_1m {
 	echo "Downloading ml-1m"
+	cd ${RAW_DATADIR}
 	curl -O http://files.grouplens.org/datasets/movielens/ml-1m.zip
-	mv ml-1m.zip ${RAW_DATADIR}
+        cd -
 }
+
 
 if [[ ${DATASET_NAME} == "ml-1m" ]]
 then

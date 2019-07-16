@@ -1,79 +1,157 @@
-# Tacotron 2 And WaveGlow v1.0 For PyTorch
+# Tacotron 2 And WaveGlow v1.5 For PyTorch
 
-This repository provides a script and recipe to train Tacotron 2 and WaveGlow v1.0 to achieve state of the art accuracy, and is tested and maintained by NVIDIA.
+This repository provides a script and recipe to train Tacotron 2 and WaveGlow
+v1.5 models to achieve state of the art accuracy, and is tested and maintained by
+NVIDIA.
 
-## Table Of Contents
+Table of Contents
+=================
 * [The model](#the-model)
-	* [Default configuration](#default-configuration)
+   * [Model architecture](#model-architecture)
+   * [Default configuration](#default-configuration)
+   * [Feature support matrix](#feature-support-matrix)
+      * [Features](#features)
 * [Setup](#setup)
-	* [Requirements](#requirements)
+   * [Requirements](#requirements)
 * [Quick Start Guide](#quick-start-guide)
 * [Details](#details)
-	* [Training process](#training-process)
-		* [Hyperparameters and command line arguments](#hyperparameters-and-command-line-arguments)
-		    * [Shared parameters](#shared-parameters)
-            * [Shared audio/STFT parameters](#shared-audiostft-parameters)
-            * [Tacotron 2 parameters](#tacotron-2-parameters)
-            * [WaveGlow parameters](#waveglow-parameters)
-	* [Enabling mixed precision](#enabling-mixed-precision)
-	* [Inference process](#inference-process)
+   * [Scripts and sample code](#scripts-and-sample-code)
+   * [Parameters](#parameters)
+      * [Shared parameters](#shared-parameters)
+      * [Shared audio/STFT parameters](#shared-audiostft-parameters)
+      * [Tacotron 2 parameters](#tacotron-2-parameters)
+      * [WaveGlow parameters](#waveglow-parameters)
+   * [Command-line options](#command-line-options)
+   * [Getting the data](#getting-the-data)
+      * [Dataset guidelines](#dataset-guidelines)
+      * [Multi-dataset](#multi-dataset)
+   * [Training process](#training-process)
+   * [Inference process](#inference-process)
+* [Mixed precision training](#mixed-precision-training)
+   * [Enabling mixed precision](#enabling-mixed-precision)
 * [Benchmarking](#benchmarking)
-	* [Inference performance benchmark](#inference-performance-benchmark)
-	* [Training performance benchmark](#training-performance-benchmark)
+   * [Training performance benchmark](#training-performance-benchmark)
+   * [Inference performance benchmark](#inference-performance-benchmark)
 * [Results](#results)
-	* [Training accuracy results](#training-accuracy-results)
-	* [Training performance results](#training-performance-results)
-		* [Expected training time](#expected-training-time)
-	* [Inference performance results](#inference-performance-results)
+   * [Training accuracy results](#training-accuracy-results)
+      * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
+   * [Training performance results](#training-performance-results)
+      * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
+      * [Expected training time](#expected-training-time)
+   * [Inference performance results](#inference-performance-results)
+      * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
 * [Changelog](#changelog)
 * [Known issues](#known-issues)
 
+## The model
 
+This text-to-speech (TTS) system is a combination of two neural network
+models:
 
-# The model
-This text-to-speech (TTS) system is a combination of two neural network models:
-* a modified Tacotron 2 model from the [Natural TTS Synthesis by Conditioning WaveNet on Mel Spectrogram Predictions](https://arxiv.org/abs/1712.05884) paper and
+* a modified Tacotron 2 model from the [Natural TTS Synthesis by Conditioning WaveNet on Mel Spectrogram Predictions](https://arxiv.org/abs/1712.05884)
+paper and
 * a flow-based neural network model from the [WaveGlow: A Flow-based Generative Network for Speech Synthesis](https://arxiv.org/abs/1811.00002) paper.
 
-The Tacotron 2 and WaveGlow model form a text-to-speech system that enables
-user to synthesise a natural sounding speech from raw transcripts without
-any additional prosody information.
+The Tacotron 2 and WaveGlow models form a text-to-speech system that enables
+users to synthesize natural sounding speech from raw transcripts without
+any additional information such as patterns and/or rhythms of speech.
 
-Our implementation of Tacotron 2 model differs from the model described in the
-paper. Our implementation uses Dropout instead of Zoneout to regularize the LSTM layers.
-Also, the original text-to-speech system proposed in the paper used the [WaveNet](https://arxiv.org/abs/1609.03499)
-model to synthesize waveforms.
-In our implementation, we use the WaveGlow model for this purpose.
+Our implementation of Tacotron 2 models differs from the model described in the
+paper. Our implementation uses Dropout instead of Zoneout to regularize the
+LSTM layers. Also, the original text-to-speech system proposed in the paper
+uses the [WaveNet](https://arxiv.org/abs/1609.03499) model to synthesize
+waveforms. In our implementation, we use the WaveGlow model for this purpose.
 
 Both models are based on implementations of NVIDIA GitHub repositories
 [Tacotron 2](https://github.com/NVIDIA/tacotron2) and
 [WaveGlow](https://github.com/NVIDIA/waveglow), and are trained on a publicly
 available [LJ Speech dataset](https://keithito.com/LJ-Speech-Dataset/).
 
-This model trains with mixed precision tensor cores on Volta, therefore researchers
-can get results much faster than training without tensor cores.  This model is
-tested against each NGC monthly container release to ensure consistent accuracy
-and performance over time.
+The Tacotron 2 and WaveGlow model enables you to efficiently synthesize high
+quality speech from text.
 
-## Default configuration
-The Tacotron 2 model produces mel spectrograms from input text using
-encoder-decoder architecture. WaveGlow is a flow-based model that consumes the
-mel spectrograms to generate speech. Both models support multi-gpu and mixed
-precision training with dynamic loss scaling (see Apex code [here](https://github.com/NVIDIA/apex/blob/master/apex/fp16_utils/loss_scaler.py)),
-as well as mixed precision inference.
+Both models are trained with mixed precision using Tensor Cores on NVIDIA
+Volta and Turing GPUs. Therefore, researchers can get results 1.5x faster for Tacotron 2
+and 2.2x faster for WaveGlow than training without Tensor Cores, while
+experiencing the benefits of mixed precision training. The models are tested
+against each NGC monthly container release to ensure consistent accuracy and
+performance over time.
 
-# Setup
-The following sections list the requirements in order to
-start training the Tacotron 2 and WaveGlow models.
+### Model architecture
 
-## Requirements
-This repository contains `Dockerfile` which extends the PyTorch NGC container
+The Tacotron 2 model is a recurrent sequence-to-sequence model with attention that
+predicts mel-spectrograms from text. The encoder (blue blocks in the figure
+below) transforms the whole text into a fixed-size hidden feature
+representation. This feature representation is then consumed by the
+autoregressive decoder (orange blocks) that produces one spectrogram frame at
+a time. In our implementation, the autoregressive WaveNet (green block) is
+replaced by the flow-based generative WaveGlow.
+
+![](./img/tacotron2_arch.png "Tacotron 2 architecture")
+
+Figure 1. Architecture of the Tacotron 2 model. Taken from the
+[Tacotron 2](https://arxiv.org/abs/1712.05884) paper.
+
+The WaveGlow model is a flow-based generative model that generates audio
+samples from Gaussian distribution using mel-spectrogram conditioning (Figure
+2). During training, the model learns to transform the dataset distribution
+into spherical Gaussian distribution through a series of flows. One step of a
+flow consists of an invertible convolution, followed by a modified WaveNet
+architecture that serves as an affine coupling layer. During inference, the
+network is inverted and audio samples are generated from the Gaussian
+distribution.
+
+![](./img/waveglow_arch.png "WaveGlow architecture")
+
+Figure 2. Architecture of the WaveGlow model. Taken from the
+[WaveGlow](https://arxiv.org/abs/1811.00002) paper.
+
+
+### Default configuration
+
+Both models support multi-GPU and mixed precision training with dynamic loss
+scaling (see Apex code
+[here](https://github.com/NVIDIA/apex/blob/master/apex/fp16_utils/loss_scaler.py)),
+as well as mixed precision inference. To speed up Tacotron 2 training,
+reference mel-spectrograms are generated during a preprocessing step and read
+directly from disk during training, instead of being generated during training.
+
+The following features were implemented in this model:
+
+* data-parallel multi-GPU training
+* dynamic loss scaling with backoff for Tensor Cores (mixed precision)
+training.
+
+### Feature support matrix
+
+The following features are supported by this model.
+
+| Feature               | Tacotron 2 | and WaveGlow |               
+|:-------|---------:|-----------:|
+|[AMP](https://nvidia.github.io/apex/amp.html) | Yes | Yes |
+|[Apex DistributedDataParallel](https://nvidia.github.io/apex/parallel.html) | Yes | Yes |
+
+#### Features 
+
+AMP - a tool that enables Tensor Core-accelerated training. Please refer to section [Enabling mixed precision](#enabling-mixed-precision) for more details.
+
+Apex DistributedDataParallel - a module wrapper that enables easy multiprocess distributed data parallel training, similar to `torch.nn.parallel.DistributedDataParallel`. `DistributedDataParallel` is optimized for use with NCCL. It achieves high performance by overlapping communication with computation during backward() and bucketing smaller gradient transfers to reduce the total number of transfers required.
+
+## Setup
+
+The following section lists the requirements in order to start training the
+Tacotron 2 and WaveGlow models.
+
+### Requirements
+
+This repository contains Dockerfile which extends the PyTorch NGC container
 and encapsulates some dependencies. Aside from these dependencies, ensure you
 have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 19.05-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch) or newer
-* [NVIDIA Volta based GPU](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
+* [PyTorch 19.04-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
+or newer
+* [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
 
 
 For more information about how to get started with NGC containers, see the
@@ -84,35 +162,49 @@ Documentation:
 * [Accessing And Pulling From The NGC Container Registry](https://docs.nvidia.com/deeplearning/dgx/user-guide/index.html#accessing_registry)
 * [Running PyTorch](https://docs.nvidia.com/deeplearning/dgx/pytorch-release-notes/running.html#running)
 
-# Quick Start Guide
-To train your model using mixed precision with tensor cores or using FP32,
-perform the following steps using the default parameters of the Tacrotron 2
-and WaveGlow model on the [LJ Speech](https://keithito.com/LJ-Speech-Dataset/) dataset.
+For those unable to use the PyTorch NGC container, to set up the required
+environment or create your own container, see the versioned
+[NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/dgx/support-matrix/index.html).
 
-## 1. Clone the repository.
+## Quick Start Guide
+
+To train your model using mixed precision with Tensor Cores or using FP32,
+perform the following steps using the default parameters of the Tacrotron 2
+and WaveGlow model on the [LJ Speech](https://keithito.com/LJ-Speech-Dataset/)
+dataset.
+
+1. Clone the repository.
 ```bash
 git clone https://github.com/NVIDIA/DeepLearningExamples.git
 cd DeepLearningExamples/PyTorch/SpeechSynthesis/Tacotron2
 ```
 
-## 2. Download and preprocess the dataset.
+2. Download and preprocess the dataset.
 Use the `./scripts/prepare-dataset.sh` download script to automatically
-download and preprocess the training, validation and test datasets. To run this script, issue:
+download and preprocess the training, validation and test datasets. To run
+this script, issue:
 ```bash
 bash scripts/prepare-dataset.sh
 ```
+
+To preprocess the datasets for Tacotron 2 training, use the
+`./scripts/prepare-mels.sh` script:
+```bash
+bash scripts/prepare_mels.sh
+```
+
 Data is downloaded to the `./LJSpeech-1.1` directory (on the host).  The
 `./LJSpeech-1.1` directory is mounted to the `/workspace/tacotron2/LJSpeech-1.1`
-location in the NGC container.  The script will also generate the necessary
-filelists for training and validation in `./filelists` if they are not already present.
+location in the NGC container. The preprocessed mel-spectrograms are stored in the 
+`./LJSpeech-1.1/mels` directory.
 
-## 3. Build the Tacotron 2 and WaveGlow PyTorch NGC container.
+3. Build the Tacotron 2 and WaveGlow PyTorch NGC container.
 ```bash
 bash scripts/docker/build.sh
 ```
 
-## 4. Start an interactive session in the NGC container to run training/inference.
-After you build the container image, you can start an interactive CLI session with
+4. Start an interactive session in the NGC container to run training/inference.
+After you build the container image, you can start an interactive CLI session with:
 
 ```bash
 bash scripts/docker/interactive.sh
@@ -121,210 +213,260 @@ bash scripts/docker/interactive.sh
 The `interactive.sh` script requires that the location on the dataset is specified.
 For example, `LJSpeech-1.1`.
 
-## 5. Start training.
-To run Tacotron 2 training, run:
+5. Start training.
+To start Tacotron 2 training, run:
 ```bash
 bash scripts/train_tacotron2.sh
 ```
 
-To run WaveGlow training, run:
+To start WaveGlow training, run:
 ```bash
 bash scripts/train_waveglow.sh
 ```
 
-## 6. Start validation/evaluation.
-Ensure your loss values are comparable to those listed in the table in the 
-Results section. For both models, the loss values are stored in the 
-`./output/nvlog.json` log file. 
+6. Start validation/evaluation.
+Ensure your loss values are comparable to those listed in the table in the
+[Results][#results] section. For both models, the loss values are stored in the
+`./output/nvlog.json` log file.
 
-After you have trained the Tacotron 2 and WaveGlow models, you should get audio results similar to the
-samples in the `./audio` folder. For details about generating audio, see the 
+After you have trained the Tacotron 2 model for 1500 epochs and the
+WaveGlow model for 800 epochs, you should get audio results similar to the
+samples in the `./audio` folder. For details about generating audio, see the
 [Inference process](#inference-process) section below.
 
-The training scripts automatically run the validation after each training 
-epoch. The results from the validation are printed to the standard output 
+The training scripts automatically run the validation after each training
+epoch. The results from the validation are printed to the standard output
 (`stdout`) and saved to the log files.
 
-## 7. Start inference.
-After you have trained the Tacotron 2 and WaveGlow models, you can perform 
-inference using the respective checkpoints that are passed as `--tacotron2` 
-and `--waveglow` arguments. 
+7. Start inference.
+After you have trained the Tacotron 2 and WaveGlow models, you can perform
+inference using the respective checkpoints that are passed as `--tacotron2`
+and `--waveglow` arguments.
 
 To run inference issue:
 ```bash
-python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ -i phrase.txt --fp16-run
+python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ -i text.txt --fp16-run
 ```
-The speech is generated from text file passed with `-i` argument.
-If no file is provided or if the provided file cannot be opened, speech will be
-generated from a default text located in the `inference.py` file. To run
-inference in mixed precision, use `--fp16-run` flag. The output audio will 
-be stored in the path specified by `-o` argument.
+The speech is generated from a text file that is passed with `-i` argument. To run
+inference in mixed precision, use the `--amp-run` flag. The output audio will
+be stored in the path specified by the `-o` argument.
 
-# Details
-The following sections provide greater details of the dataset, running training 
-and inference, and the training results.
+## Details
 
-## Training process
-The Tacotron2 and WaveGlow models are trained separately and independently. 
-Both models obtain mel spectrograms from short time Fourier transform (STFT) 
-during training. These mel spectrograms are used for loss computation in case 
-of Tacotron 2 and as conditioning input to the network in case of WaveGlow.
+The following sections provide greater details of the dataset, running
+training and inference, and the training results.
 
-The training loss is averaged over an entire training epoch, whereas the 
-validation loss is averaged over the validation dataset. Performance is 
-reported in total input tokens per second for the Tacotron 2 model, and 
-in total output samples per second for the WaveGlow model. Both measures are 
-recorded as `train_iter_items/sec` (after each iteration) and `train_epoch_items/sec` 
-(averaged over epoch) in the output log. The result is averaged over an 
-entire training epoch and summed over all GPUs that were included in the training.
+### Scripts and sample code
 
-Even though the training script uses all available GPUs, you can change 
-this behavior by setting the `CUDA_VISIBLE_DEVICES` variable in your 
-environment or by setting the `NV_GPU` variable at the Docker container launch 
-([see section "GPU isolation"](https://github.com/NVIDIA/nvidia-docker/wiki/nvidia-docker#gpu-isolation)). 
+The sample code for Tacotron 2 and WaveGlow has scripts specific to a
+particular model, located in directories `./tacotron2` and `./waveglow`, as well as scripts common to both
+models, located in the `./common` directory. The model-specific scripts are as follows:
 
-### Hyperparameters and command line arguments
-Here, we list the most important hyperparameters and command line arguments, 
-together with their default values that are used to train Tacotron 2 and 
+* `<model_name>/model.py` - the model architecture, definition of forward and
+inference functions
+* `<model_name>/arg_parser.py` - argument parser for parameters specific to a
+given model
+* `<model_name>/data_function.py` - data loading functions
+* `<model_name>/loss_function.py` - loss function for the model
+
+The common scripts contain layer definitions common to both models
+(`common/layers.py`), some utility scripts (`common/utils.py`) and scripts
+for audio processing (`common/audio_processing.py` and `common/stft.py`). In
+the root directory `./` of this repository, the `./run.py` script is used for
+training while inference can be executed with the `./inference.py` script. The
+scripts `./models.py`, `./data_functions.py` and `./loss_functions.py` call
+the respective scripts in the `<model_name>` directory, depending on what
+model is trained using the `run.py` script.
+
+### Parameters
+
+In this section, we list the most important hyperparameters and command-line arguments,
+together with their default values that are used to train Tacotron 2 and
 WaveGlow models.
 
 #### Shared parameters
-`--epochs` - number of epochs (Tacotron 2: 1500, WaveGlow: 1000)
 
-`--learning-rate` - learning rate (Tacotron 2: 1e-3, WaveGlow: 1e-4)
-
-`--batch-size` - batch size (Tacotron 2 FP16/FP32: 80/48, WaveGlow FP16/FP32: 8/4)
-
-`--fp16-run` - use mixed precision training
+* `--epochs` - number of epochs (Tacotron 2: 1500, WaveGlow: 1000)
+* `--learning-rate` - learning rate (Tacotron 2: 1e-3, WaveGlow: 1e-4)
+* `--batch-size` - batch size (Tacotron 2 FP16/FP32: 80/48, WaveGlow FP16/FP32: 8/4)
+* `--amp-run` - use mixed precision training
 
 #### Shared audio/STFT parameters
-`--sampling-rate` - Sampling rate in Hz of input and output audio (22050)
 
-`--filter-length` - (1024)
-
-`--hop-length` - Hop length for FFT, i.e., sample stride between consecutive FFTs (256)
-
-`--win-length` - Window size for FFT (1024)
-
-`--mel-fmin` - Lowest frequency in Hz (0.0)
-
-`--mel-fmax` - Highest frequency in Hz (8.000)
+* `--sampling-rate` - sampling rate in Hz of input and output audio (22050)
+* `--filter-length` - (1024)
+* `--hop-length` - hop length for FFT, i.e., sample stride between consecutive FFTs (256)
+* `--win-length` - window size for FFT (1024)
+* `--mel-fmin` - lowest frequency in Hz (0.0)
+* `--mel-fmax` - highest frequency in Hz (8.000)
 
 #### Tacotron 2 parameters
-`--anneal-steps` - epochs at which to anneal the learning rate (500 1000 1500)
 
-`--anneal-factor` - factor by which to anneal the learning rate (FP16/FP32: 0.3/0.1)
+* `--anneal-steps` - epochs at which to anneal the learning rate (500 1000 1500)
+* `--anneal-factor` - factor by which to anneal the learning rate (FP16/FP32: 0.3/0.1)
 
 #### WaveGlow parameters
-`--segment-length` - segment length of input audio processed by the neural network (8000)
+
+* `--segment-length` - segment length of input audio processed by the neural network (8000)
 
 
-## Enabling mixed precision
-[Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant 
-computational speedup by performing operations in half-precision format, while 
-storing minimal information in single-precision to retain as much information as 
-possible in critical parts of the network. Since the introduction of 
-[tensor cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing 
-architectures, significant training speedups are experienced by switching to 
-mixed precision -- up to 3x overall speedup on the most arithmetically intense 
-model architectures. Using [mixed precision training](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) 
-previously required two steps:
+### Command-line options
+
+To see the full list of available options and their descriptions, use the `-h` or `--help` command line option, for example:
+```bash
+python train.py --help
+```
+
+
+### Getting the data
+
+The Tacotron 2 and WaveGlow models were trained on the LJSpeech-1.1 dataset.  
+This repository contains the `./scripts/prepare_dataset.sh` script which will automatically download and extract the whole dataset. By default, data will be extracted to the `./LJSpeech-1.1` directory. The dataset directory contains a `README` file, a `wavs` directory with all audio samples, and a file `metadata.csv` that contains audio file names and the corresponding transcripts.
+
+#### Dataset guidelines
+
+The LJSpeech dataset has 13,100 clips that amount to about 24 hours of speech. Since the original dataset has all transcripts in the `metadata.csv` file, in this repository we provide file lists in the `./filelists` directory that determine training and validation subsets; `ljs_audio_text_train_filelist.txt` is a test set used as a training dataset and `ljs_audio_text_val_filelist.txt` is a test set used as a validation dataset.
+
+#### Multi-dataset
+
+To use datasets different than the default LJSpeech dataset:
+
+1. Prepare a directory with all audio files and pass it to the `--dataset-path` command-line option.  
+
+2. Add two text files containing file lists: one for the training subset (`--training-files`) and one for the validation subset (`--validation files`).
+The structure of the filelists should be as follows:
+```bash
+`<audio file path>|<transcript>`
+```
+
+The `<audio file path>` is the relative path to the path provided by the `--dataset-path` option.
+
+
+### Training process
+
+The Tacotron2 and WaveGlow models are trained separately and independently.
+Both models obtain mel-spectrograms from short time Fourier transform (STFT)
+during training. These mel-spectrograms are used for loss computation in case
+of Tacotron 2 and as conditioning input to the network in case of WaveGlow.
+
+The training loss is averaged over an entire training epoch, whereas the
+validation loss is averaged over the validation dataset. Performance is
+reported in total input tokens per second for the Tacotron 2 model and
+in total output samples per second for the WaveGlow model. Both measures are
+recorded as `train_iter_items/sec` (after each iteration) and
+`train_epoch_items/sec` (averaged over epoch) in the output log file `./output/nvlog.json`. The result is
+averaged over an entire training epoch and summed over all GPUs that were
+included in the training.
+
+Even though the training script uses all available GPUs, you can change
+this behavior by setting the `CUDA_VISIBLE_DEVICES` variable in your
+environment or by setting the `NV_GPU` variable at the Docker container launch
+([see section "GPU isolation"](https://github.com/NVIDIA/nvidia-docker/wiki/nvidia-docker#gpu-isolation)).
+
+### Inference process
+
+You can run inference using the `./inference.py` script. This script takes
+text as input and runs Tacotron 2 and then WaveGlow inference to produce an
+audio file. It requires  pre-trained checkpoints from Tacotron 2 and WaveGlow
+models and input text as a text file, with one phrase per line.
+
+To run inference, issue:
+```bash
+python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ -i text.txt --amp-run
+```
+Here, `Tacotron2_checkpoint` and `WaveGlow_checkpoint` are pre-trained
+checkpoints for the respective models, and `text.txt` contains input phrases.
+Audio will be saved in the output folder.
+
+You can find all the available options by calling `python inference.py --help`.
+
+## Mixed precision training
+
+*Mixed precision* is the combined use of different numerical precisions in a
+computational method. [Mixed precision](https://arxiv.org/abs/1710.03740)
+training offers significant computational speedup by performing operations in
+half-precision format, while storing minimal information in single-precision
+to retain as much information as possible in critical parts of the network.
+Since the introduction of [Tensor Cores](https://developer.nvidia.com/tensor-cores)
+in the Volta and Turing architecture, significant training speedups are
+experienced by switching to mixed precision -- up to 3x overall speedup on
+the most arithmetically intense model architectures.  Using mixed precision
+training requires two steps:
 
 1. Porting the model to use the FP16 data type where appropriate.
-2. Manually adding loss scaling to preserve small gradient values.
- 
+2. Adding loss scaling to preserve small gradient values.
 
-Mixed precision is enabled in PyTorch by using the Automatic Mixed Precision 
-(AMP),  library from [APEX](https://github.com/NVIDIA/apex) that casts variables 
-to half-precision upon retrieval, while storing variables in single-precision 
-format. Furthermore, to preserve small gradient magnitudes in backpropagation, 
-a [loss scaling](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#lossscaling) 
-step must be included when applying gradients. In PyTorch, loss scaling can be 
-easily applied by using `scale_loss()` method provided by AMP. The scaling value 
+The ability to train deep learning networks with lower precision was
+introduced in the Pascal architecture and first supported in [CUDA 8](https://devblogs.nvidia.com/parallelforall/tag/fp16/) in the NVIDIA Deep Learning SDK.
+
+For information about:
+* How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740)
+paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html)
+documentation.
+* Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/)
+blog.
+* How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp)
+from the TensorFlow User Guide.
+* APEX tools for mixed precision training, see the [NVIDIA Apex: Tools for Easy Mixed-Precision Training in PyTorch](https://devblogs.nvidia.com/apex-pytorch-easy-mixed-precision-training/).
+
+
+
+### Enabling mixed precision
+
+Mixed precision is enabled in PyTorch by using the Automatic Mixed Precision
+(AMP)  library from [APEX](https://github.com/NVIDIA/apex) that casts variables
+to half-precision upon retrieval, while storing variables in single-precision
+format. Furthermore, to preserve small gradient magnitudes in backpropagation,
+a [loss scaling](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#lossscaling)
+step must be included when applying gradients. In PyTorch, loss scaling can be
+easily applied by using the `scale_loss()` method provided by AMP. The scaling value
 to be used can be [dynamic](https://nvidia.github.io/apex/fp16_utils.html#apex.fp16_utils.DynamicLossScaler) or fixed.
 
-By default, the `train_tacotron2.sh` and `train_waveglow.sh` scripts will launch 
-mixed precision training with tensor cores. You can change this behaviour by 
-removing the `--fp16-run` flag from the `train.py` script.
+By default, the `train_tacotron2.sh` and `train_waveglow.sh` scripts will
+launch mixed precision training with Tensor Cores. You can change this
+behaviour by removing the `--amp-run` flag from the `train.py` script.
 
-For an in-depth walk through on AMP, check out sample usage [here](https://github.com/NVIDIA/apex/tree/master/apex/amp#usage-and-getting-started). 
-[APEX](https://github.com/NVIDIA/apex) is a PyTorch extension that contains 
-utility libraries, such as AMP, which require minimal network code changes to 
-leverage tensor cores performance.
-
-To enable mixed precision, you can:
-* Import AMP from APEX, for example: 
+To enable mixed precision, the following steps were performed in the Tacotron 2 and
+WaveGlow models:
+* Import AMP from APEX:
     ```bash
     from apex import amp
+	amp.lists.functional_overrides.FP32_FUNCS.remove('softmax')
+	amp.lists.functional_overrides.FP16_FUNCS.append('softmax')
     ```
 
-* Initialize an AMP handle, for example: 
+* Initialize AMP:
     ```bash
-    amp_handle = amp.init(enabled=True, verbose=True)
+	model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
     ```
 
-* Wrap your optimizer with the AMP handle, for example:
+* If running on multi-GPU, wrap the model with `DistributedDataParallel`:
     ```bash
-    optimizer = amp_handle.wrap_optimizer(optimizer)    
-    ```
+  from apex.parallel import DistributedDataParallel as DDP
+  model = DDP(model)
+	```
 
-* Scale loss before backpropagation (assuming loss is stored in a variable called losses)
+* Scale loss before backpropagation (assuming loss is stored in a variable
+called `losses`)
+
     * Default backpropagate for FP32:
         ```bash
         losses.backward()
         ```
-    
+
     * Scale loss and backpropagate with AMP:
         ```bash
         with optimizer.scale_loss(losses) as scaled_losses:
             scaled_losses.backward()
-        ````
+        ```
 
-For information about:
-* How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) 
-paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) documentation.
-* Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
-* APEX tools for mixed precision training, see the [NVIDIA Apex: Tools for Easy Mixed-Precision Training in PyTorch](https://devblogs.nvidia.com/apex-pytorch-easy-mixed-precision-training/).
+## Benchmarking
 
-## Inference process
-You can run inference using the `./inference.py` script. This script takes text 
-as input, and runs Tacotron 2 and then WaveGlow inference to produce an audio 
-file. It requires  pre-trained checkpoints from Tacotron 2 and WaveGlow models 
-and input text as a text file, with one phrase per line.
+The following section shows how to run benchmarks measuring the model
+performance in training and inference mode.
 
-To run inference, issue:
-```bash
-python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ -i phrase.txt --fp16-run
-```
-Here, `Tacotron2_checkpoint` and `WaveGlow_checkpoint` are pre-trained 
-checkpoints for the respective models, and `text.txt` contains input phrases. 
-Audio will be saved in the output folder.
+### Training performance benchmark
 
-You can find all available options by calling `python inference.py --help`.
-
-# Benchmarking
-The following section shows how to run benchmarks measuring the model 
-performance in training mode.
-
-## Inference performance benchmark
-To benchmark the inference performance on a batch size=1, run:
-
-* For FP32
-    ```bash
-    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --include-warmup -i phrase.txt --log-file=output/nvlog_fp32.json
-    ```
-* For FP16
-    ```bash
-    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --include-warmup -i phrase.txt --fp16-run --log-file=output/nvlog_fp16.json
-    ```
-
-The output log files will contain performance numbers for Tacotron 2 model
-(number of input tokens per second, reported as `tacotron2_items_per_sec`)
-and for WaveGlow (number of output samples per second, reported as
-`waveglow_items_per_sec`). The `inference.py` script will run a few warmup
-iterations before running the benchmark.
-
-## Training performance benchmark
 To benchmark the training performance on a specific batch size, run:
 
 **Tacotron 2**
@@ -336,7 +478,7 @@ To benchmark the training performance on a specific batch size, run:
         ```
 	* FP16
         ```bash
-        python train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-benchmark=True --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_2500_filelist.txt --dataset-path <dataset-path> --fp16-run
+        python train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-benchmark=True --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_2500_filelist.txt --dataset-path <dataset-path> --amp-run
         ```
 
 * For multiple GPUs
@@ -346,7 +488,7 @@ To benchmark the training performance on a specific batch size, run:
         ```
 	* FP16
         ```bash
-        python -m multiproc train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-benchmark=True --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_2500_filelist.txt --dataset-path <dataset-path> --fp16-run
+        python -m multiproc train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-benchmark=True --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_2500_filelist.txt --dataset-path <dataset-path> --amp-run
         ```
 
 **WaveGlow**
@@ -358,7 +500,7 @@ To benchmark the training performance on a specific batch size, run:
         ```
 	* FP16
         ```bash
-        python train.py -m WaveGlow -o <output_dir> -lr 1e-4 --epochs 10 -bs <batch_size> --segment-length 8000 --weight-decay 0 --grad-clip-thresh 65504.0 --cudnn-benchmark=True --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_1250_filelist.txt --dataset-path <dataset-path> --fp16-run
+        python train.py -m WaveGlow -o <output_dir> -lr 1e-4 --epochs 10 -bs <batch_size> --segment-length 8000 --weight-decay 0 --grad-clip-thresh 65504.0 --cudnn-benchmark=True --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_1250_filelist.txt --dataset-path <dataset-path> --amp-run
         ```
 
 * For multiple GPUs
@@ -368,116 +510,157 @@ To benchmark the training performance on a specific batch size, run:
         ```
 	* FP16
         ```bash
-        python -m multiproc train.py -m WaveGlow -o <output_dir> -lr 1e-4 --epochs 10 -bs <batch_size> --segment-length 8000 --weight-decay 0 --grad-clip-thresh 65504.0 --cudnn-benchmark=True --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_1250_filelist.txt --dataset-path <dataset-path> --fp16-run
+        python -m multiproc train.py -m WaveGlow -o <output_dir> -lr 1e-4 --epochs 10 -bs <batch_size> --segment-length 8000 --weight-decay 0 --grad-clip-thresh 65504.0 --cudnn-benchmark=True --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_1250_filelist.txt --dataset-path <dataset-path> --amp-run
         ```
 
-Each of these scripts runs for 10 epochs and for each epoch measures the averaged number of items per second. The performance results can be read from the nvlog.json files produced by the commands.
+Each of these scripts runs for 10 epochs and for each epoch measures the
+average number of items per second. The performance results can be read from
+the `nvlog.json` files produced by the commands.
 
-# Results
-The following sections provide details on how we achieved our performance 
+### Inference performance benchmark
+
+To benchmark the inference performance on a batch size=1, run:
+
+* For FP32
+    ```bash
+    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ -i text.txt --log-file=output/nvlog_fp32.json
+    ```
+* For FP16
+    ```bash
+    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ -i text.txt --amp-run --log-file=output/nvlog_fp16.json
+    ```
+
+The log files contain performance numbers for Tacotron 2 model
+(number of input tokens per second, reported as `tacotron2_items_per_sec`)
+and for WaveGlow (number of output samples per second, reported as
+`waveglow_items_per_sec`).
+
+
+
+## Results
+
+The following sections provide details on how we achieved our performance
 and accuracy in training and inference.
 
-## Training accuracy results
-Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{FP16,FP32}_DGX1_16GB_8GPU.sh` 
-training script in the PyTorch-19.05-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
+### Training accuracy results
 
-All of the results were produced using the `train.py` as described in the 
+
+##### NVIDIA DGX-1 (8x V100 16G)
+
+Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{FP16,FP32}_DGX1_16GB_8GPU.sh` training script in the PyTorch-19.04-py3
+NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
+
+All of the results were produced using the `train.py` script as described in the
 [Training process](#training-process) section of this document.
 
 | Loss (Model/Epoch) |       1 |     250 |     500 |     750 |    1000 |
 | :----------------: | ------: | ------: | ------: | ------: | ------: |
-| **Tacotron 2 FP16** | 26.7176 |   0.473 |  0.3985 |  0.3725 |  0.3645 |
-| **Tacotron 2 FP32** |  5.3406 |  0.4317 |  0.3699 |  0.3635 |  0.3629 |
-| **WaveGlow FP16**  | -2.2054 | -5.7602 |  -5.901 | -5.9706 | -6.0258 |
-| **WaveGlow FP32**  | -3.0327 |  -5.858 | -6.0056 | -6.0613 | -6.1087 |
+| Tacotron 2 FP16 | 13.0732 | 0.5736 | 0.4408 | 0.3923 | 0.3735 |
+| Tacotron 2 FP32 | 8.5776 | 0.4807 | 0.3875 | 0.3421 | 0.3308 |
+| WaveGlow FP16  | -2.2054 | -5.7602 |  -5.901 | -5.9706 | -6.0258 |
+| WaveGlow FP32  | -3.0327 |  -5.858 | -6.0056 | -6.0613 | -6.1087 |
 
 Tacotron 2 FP16 loss - batch size 80 (mean and std over 16 runs)
-![](./img/tacotron2_fp16_loss.png "Tacotron 2 FP16 loss")
+![](./img/tacotron2_amp_loss.png "Tacotron 2 FP16 loss")
+
 Tacotron 2 FP32 loss - batch size 48 (mean and std over 16 runs)
 ![](./img/tacotron2_fp32_loss.png "Tacotron 2 FP16 loss")
+
 WaveGlow FP16 loss - batch size 8 (mean and std over 16 runs)
 ![](./img/waveglow_fp16_loss.png "WaveGlow FP16 loss")
+
 WaveGlow FP32 loss - batch size 4 (mean and std over 16 runs)
 ![](./img/waveglow_fp32_loss.png "WaveGlow FP32 loss")
 
-## Training performance results
-Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{FP16,FP32}_DGX1_16GB_8GPU.sh` 
-training script in the PyTorch-19.05-py3 NGC container on NVIDIA DGX-1 with 
-8x V100 16G GPUs. Performance numbers (in input tokens per second for 
-Tacotron 2 and output samples per second for WaveGlow) were averaged over 
+
+### Training performance results
+
+
+##### NVIDIA DGX-1 (8x V100 16G)
+
+Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{FP16,FP32}_DGX1_16GB_8GPU.sh`
+training script in the PyTorch-19.04-py3 NGC container on NVIDIA DGX-1 with
+8x V100 16G GPUs. Performance numbers (in input tokens per second for
+Tacotron 2 and output samples per second for WaveGlow) were averaged over
 an entire training epoch.
 
-This table shows the results for Tacotron 2, with batch size equal 80 and 48
-for mixed precision and FP32 training, respectively.
+This table shows the results for Tacotron 2:
 
-|Number of GPUs|Mixed precision tokens/sec|FP32 tokens/sec|Speed-up with mixed precision|Multi-gpu weak scaling with mixed precision|Multi-gpu weak scaling with FP32|
-|---:|---:|---:|---:|---:|---:|
-|**1**|2,554|1,740|1.47|1.00|1.00|
-|**4**|7,768|5,683|1.37|3.04|3.27|
-|**8**|12,524|10,484|1.19|4.90|6.03|
+|Number of GPUs|Batch size per GPU|Number of tokens used with mixed precision|Number of tokens used with FP32|Speed-up with mixed precision|Multi-GPU weak scaling with mixed precision|Multi-GPU weak scaling with FP32|
+|---:|---:|---:|---:|---:|---:|---:|
+|1|128@FP16, 64@FP32 | 3,746 | 2,087 | 1.79 | 1.00 | 1.00 |
+|4|128@FP16, 64@FP32 | 13,264 | 8,052 | 1.65 | 3.54 | 3.86 |
+|8|128@FP16, 64@FP32 | 25,056 | 15,863 | 1.58 | 6.69 | 7.60 |
 
-The following table shows the results for WaveGlow, with batch size equal 8 and
-4 for mixed precision and FP32 training, respectively.
+The following table shows the results for WaveGlow:
 
-|Number of GPUs|Mixed precision samples/sec|FP32 samples/sec|Speed-up with mixed precision|Multi-gpu weak scaling with mixed precision|Multi-gpu weak scaling with FP32|
-|---:|---:|---:|---:|---:|---:|
-|**1**| 76,686 | 36,602 | 2.10 | 1.00 | 1.00 |
-|**4**| 260,826 | 124,514 | 2.09 | 3.40 | 3.40 |
-|**8**| 566,471 | 264,138 | 2.14 | 7.39 | 7.22 |
+|Number of GPUs|Batch size per GPU|Number of samples used with mixed precision|Number of samples used with FP32|Speed-up with mixed precision|Multi-GPU weak scaling with mixed precision|Multi-GPU weak scaling with FP32|
+|---:|---:|---:|---:|---:|---:|---:|
+|1| 10@FP16, 4@FP32 | 79248.87426 | 35695.56774 | 2.22 | 1.00 | 1.00 |
+|4| 10@FP16, 4@FP32 | 275310.0262 | 126497.6265 | 2.18 | 3.47 | 3.54 |
+|8| 10@FP16, 4@FP32 | 576709.4935 | 255155.1798 | 2.26 | 7.28 | 7.15 |
 
-To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
-### Expected training time
+#### Expected training time
 
-This table shows the expected training time for convergence for Tacotron 2 (1500 epochs, time in hours).
+The following table shows the expected training time for convergence for Tacotron 2 (1500 epochs):
 
-|Number of GPUs|Expected training time in hours with mixed precision|Expected training time in hours with FP32|Speed-up with mixed precision|
-|---:|---:|---:|---:|
-|**1**| 197.39 | 302.32 | 1.38 |
-|**4**| 63.29 | 88.07 | 1.25 |
-|**8**| 33.72 | 45.51 | 1.33 |
+|Number of GPUs|Batch size per GPU|Time to train with mixed precision (Hrs)|Time to train with FP32 (Hrs)|Speed-up with mixed precision|
+|---:|---:|---:|---:|---:|
+|1| 128@FP16, 64@FP32 | 137.33 | 227.66 | 1.66 |
+|4| 128@FP16, 64@FP32 | 40.68 | 63.99 | 1.57 |
+|8| 128@FP16, 64@FP32 | 20.74 | 32.47 | 1.57 |
 
-This table shows the expected training time for convergence for WaveGlow (1000 epochs, time in hours).
 
-|Number of GPUs|Expected training time in hours with mixed precision|Expected training time in hours with FP32|Speed-up with mixed precision|
-|---:|---:|---:|---:|
-|**1**| 400.99 | 782.67 | 1.95 |
-|**4**|	89.40 | 213.09 | 2.38 |
-|**8**|	48.43 | 107.27 | 2.21 |
 
-## Inference performance results
-Our results were obtained by running the `./inference.py` inference script in the 
-PyTorch-19.05-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
-Performance numbers (in input tokens per second for Tacotron 2 and output 
+The following table shows the expected training time for convergence for WaveGlow (1000 epochs):
+
+|Number of GPUs|Batch size per GPU|Time to train with mixed precision (Hrs)|Time to train with FP32 (Hrs)|Speed-up with mixed precision|
+|---:|---:|---:|---:|---:|
+|1| 10@FP16, 4@FP32 | 358.00 | 793.97 | 2.22 |
+|4| 10@FP16, 4@FP32 | 103.10 | 223.59 | 2.17 |
+|8| 10@FP16, 4@FP32 | 50.40 | 109.45 | 2.17 |
+
+
+
+### Inference performance results
+
+
+##### NVIDIA DGX-1 (8x V100 16G)
+
+Our results were obtained by running the `./inference.py` inference script in the
+PyTorch-18.12.1-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
+Performance numbers (in input tokens per second for Tacotron 2 and output
 samples per second for WaveGlow) were averaged over 16 runs.
 
 
-This table shows the inference performance results for Tacotron 2.
+The following table shows the inference performance results for Tacotron 2.
 Results are measured in the number of input tokens per second.
 
-|Number of GPUs|Mixed precision tokens/sec|FP32 tokens/sec|Speed-up with mixed precision|
+|Number of GPUs|Number of tokens used with mixed precision|Number of tokens used with FP32|Speed-up with mixed precision|
 |---:|---:|---:|---:|
-|**1**|132|153|0.86|
+|1|168|173|0.97|
 
-
-This table shows the inference performance results for WaveGlow. 
+The following table shows the inference performance results for WaveGlow.
 Results are measured in the number of output audio samples per second.<sup>1</sup>
 
-|Number of GPUs|Mixed precision samples/sec|FP32 samples/sec|Speed-up with mixed precision|
+|Number of GPUs|Number of samples used with mixed precision|Number of samples used with FP32|Speed-up with mixed precision|
 |---:|---:|---:|---:|
-|**1**|425379|376037|1.13|
+|1|583318|553380|1.05|
 
 <sup>1</sup>With sampling rate equal to 22050, one second of audio is generated from 22050 samples.
 
-To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
-# Changelog
+## Changelog
 March 2019
-
 * Initial release
 
-# Known issues
-For mixed precision training of Tacotron 2, dropouts on LSTMCells 
-cause overflow leading to dynamic loss scaling going to 1, see [here](https://github.com/NVIDIA/tacotron2/issues/112). 
-The current workaround, which is already applied in our model implementation, 
-is to convert `attention_rnn` and `decoder_rnn` back to FP32 precision.
+June 2019
+* AMP support
+* Data preprocessing for Tacotron 2 training
+* Fixed dropouts on LSTMCells
+
+## Known issues
+There are no known issues in this release.

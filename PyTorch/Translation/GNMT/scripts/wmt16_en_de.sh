@@ -146,32 +146,25 @@ python3 scripts/filter_dataset.py \
    -f2 ${OUTPUT_DIR}/newstest_dev.tok.clean.de
 
 # Generate Subword Units (BPE)
-# Clone Subword NMT
-if [ ! -d "${OUTPUT_DIR}/subword-nmt" ]; then
-  git clone https://github.com/rsennrich/subword-nmt.git "${OUTPUT_DIR}/subword-nmt"
-  cd ${OUTPUT_DIR}/subword-nmt
-  git reset --hard 48ba99e657591c329e0003f0c6e32e493fa959ef
-  cd -
-fi
 
 # Learn Shared BPE
 for merge_ops in 32000; do
   echo "Learning BPE with merge_ops=${merge_ops}. This may take a while..."
   cat "${OUTPUT_DIR}/train.tok.clean.de" "${OUTPUT_DIR}/train.tok.clean.en" | \
-    ${OUTPUT_DIR}/subword-nmt/learn_bpe.py -s $merge_ops > "${OUTPUT_DIR}/bpe.${merge_ops}"
+    subword-nmt learn-bpe -s $merge_ops > "${OUTPUT_DIR}/bpe.${merge_ops}"
 
   echo "Apply BPE with merge_ops=${merge_ops} to tokenized files..."
   for lang in en de; do
     for f in ${OUTPUT_DIR}/*.tok.${lang} ${OUTPUT_DIR}/*.tok.clean.${lang}; do
       outfile="${f%.*}.bpe.${merge_ops}.${lang}"
-      ${OUTPUT_DIR}/subword-nmt/apply_bpe.py -c "${OUTPUT_DIR}/bpe.${merge_ops}" < $f > "${outfile}"
+      subword-nmt apply-bpe -c "${OUTPUT_DIR}/bpe.${merge_ops}" < $f > "${outfile}"
       echo ${outfile}
     done
   done
 
   # Create vocabulary file for BPE
   cat "${OUTPUT_DIR}/train.tok.clean.bpe.${merge_ops}.en" "${OUTPUT_DIR}/train.tok.clean.bpe.${merge_ops}.de" | \
-    ${OUTPUT_DIR}/subword-nmt/get_vocab.py | cut -f1 -d ' ' > "${OUTPUT_DIR}/vocab.bpe.${merge_ops}"
+    subword-nmt get-vocab | cut -f1 -d ' ' > "${OUTPUT_DIR}/vocab.bpe.${merge_ops}"
 
 done
 
