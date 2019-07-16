@@ -936,40 +936,40 @@ def main():
         {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
         {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
     ]
+    if args.do_train:
+        if args.fp16:
+            try:
+                # from fused_adam_local import FusedAdamBert as FusedAdam
+                from apex.optimizers import FusedAdam
+                from apex.optimizers import FP16_Optimizer
+            except ImportError:
+                raise ImportError(
+                    "Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
+            # import ipdb; ipdb.set_trace()
+            optimizer = FusedAdam(optimizer_grouped_parameters,
+                                  lr=args.learning_rate,
+                                  bias_correction=False,
+                                  max_grad_norm=1.0)
 
-    if args.fp16:
-        try:
-            # from fused_adam_local import FusedAdamBert as FusedAdam
-            from apex.optimizers import FusedAdam
-            from apex.optimizers import FP16_Optimizer
-        except ImportError:
-            raise ImportError(
-                "Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
-        # import ipdb; ipdb.set_trace()
-        optimizer = FusedAdam(optimizer_grouped_parameters,
-                              lr=args.learning_rate,
-                              bias_correction=False,
-                              max_grad_norm=1.0)
-
-        if args.loss_scale == 0:
-            if args.old:
-                optimizer = FP16_Optimizer(optimizer, dynamic_loss_scale=True)
+            if args.loss_scale == 0:
+                if args.old:
+                    optimizer = FP16_Optimizer(optimizer, dynamic_loss_scale=True)
+                else:
+                    model, optimizer = amp.initialize(model, optimizer, opt_level="O2", keep_batchnorm_fp32=False,
+                                                      loss_scale="dynamic")
             else:
-                model, optimizer = amp.initialize(model, optimizer, opt_level="O2", keep_batchnorm_fp32=False,
-                                                  loss_scale="dynamic")
+                if args.old:
+                    optimizer = FP16_Optimizer(optimizer, static_loss_scale=args.loss_scale)
+                else:
+                    model, optimizer = amp.initialize(model, optimizer, opt_level="O2", keep_batchnorm_fp32=False, loss_scale=args.loss_scale)
+            if not args.old and args.do_train:
+                scheduler = LinearWarmUpScheduler(optimizer, warmup=args.warmup_proportion, total_steps=num_train_optimization_steps)
+
         else:
-            if args.old:
-                optimizer = FP16_Optimizer(optimizer, static_loss_scale=args.loss_scale)
-            else:
-                model, optimizer = amp.initialize(model, optimizer, opt_level="O2", keep_batchnorm_fp32=False, loss_scale=args.loss_scale)
-        if not args.old and args.do_train:
-            scheduler = LinearWarmUpScheduler(optimizer, warmup=args.warmup_proportion, total_steps=num_train_optimization_steps)
-
-    else:
-        optimizer = BertAdam(optimizer_grouped_parameters,
-                                lr=args.learning_rate,
-                                warmup=args.warmup_proportion,
-                                t_total=num_train_optimization_steps)
+            optimizer = BertAdam(optimizer_grouped_parameters,
+                                    lr=args.learning_rate,
+                                    warmup=args.warmup_proportion,
+                                    t_total=num_train_optimization_steps)
 
     #print(model)
     if args.local_rank != -1:
@@ -1086,6 +1086,10 @@ def main():
 
 
     if args.do_predict and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
+
+        if not args.do_train and args.fp16:
+            model.half()
+
         eval_examples = read_squad_examples(
             input_file=args.predict_file, is_training=False, version_2_with_negative=args.version_2_with_negative)
         eval_features = convert_examples_to_features(

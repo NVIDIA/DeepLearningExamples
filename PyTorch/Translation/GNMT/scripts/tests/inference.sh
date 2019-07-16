@@ -33,12 +33,13 @@ fi
 cd $REPO_DIR
 
 python3 translate.py \
-   --input ${DATASET_DIR}/newstest2014.tok.bpe.32000.en \
+   --input ${DATASET_DIR}/newstest2014.en \
    --reference ${DATASET_DIR}/newstest2014.de \
    --output /tmp/output \
    --model results/gnmt/model_best.pth \
    --batch-size ${BATCH_SIZE} \
    --beam-size ${BEAM_SIZE} \
    --math ${MATH} \
+   --warmup 1 \
    --target-bleu 24.3 \
    ${TARGET_PERF}

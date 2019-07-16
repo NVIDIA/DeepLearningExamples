@@ -4,28 +4,30 @@ This repository provides a script and recipe to train Neural Collaborative Filte
 accuracy, and is tested and maintained by NVIDIA.
 
 ## Table Of Contents
-* [The Model](#the-model)
+* [Model overview](#model-overview)
   * [Default Configuration](#default-configuration)
+  * [Mixed precision training](#mixed-precision-training)
 * [Setup](#setup)
   * [Requirements](#requirements)
 * [Quick Start Guide](#quick-start-guide)
-* [Details](#details)
+* [Advanced](#advanced)
   * [Command Line Arguments](#command-line-arguments)
   * [Getting the Data](#getting-the-data)
   * [Other Datasets](#other-datasets)
   * [Training Process](#training-process)
-  * [Enabling Mixed Precision](#enabling-mixed-precision)
   * [Evaluation Process](#evaluation-process)
-* [Benchmarking](#benchmarking)
-  * [Performance Benchmark](#performance-benchmark)
-* [Results](#results)
-  * [Training Accuracy Results](#training-accuracy-results)
-  * [Training Performance Results](#training-performance-results)
-  * [Inference Performance Results](#inference-performance-results)
-* [Changelog](#changelog)
-* [Known Issues](#known-issues)
+* [Performance](#performance)
+  * [Benchmarking](#benchmarking)
+    * [Performance Benchmark](#performance-benchmark)
+  * [Results](#results)
+    * [Training Accuracy Results](#training-accuracy-results)
+    * [Training Performance Results](#training-performance-results)
+    * [Inference Performance Results](#inference-performance-results)
+* [Release notes](#release-notes)
+  * [Changelog](#changelog)
+  * [Known Issues](#known-issues)
 
-## The Model
+## Model overview
 
 The Neural Collaborative Filtering (NCF) model is a neural network that provides collaborative filtering based on
 implicit feedback, specifically, it provides product recommendations based on user and item interactions.  The training
@@ -78,6 +80,47 @@ This implementation is implemented with the following features:
     - Note: The negative samples generated for the test set are always verified regardless if the shortcut is enabled or
       not.
 
+### Mixed Precision Training
+
+[Mixed Precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing
+operations in half-precision format, while storing information in single-precision to retain as much information as
+possible. Mixed precision is enabled in TensorFlow by using a custom variable getter that casts variables to
+half-precision upon retrieval, while storing variables in single-precision format. Furthermore, to preserve small
+gradient magnitudes in backpropagation, a [loss
+scaling](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#lossscaling) step must be included
+when applying gradients. In TensorFlow, loss scaling can be easily applied by using
+[LossScaleOptimizer](https://www.tensorflow.org/api_docs/python/tf/contrib/mixed_precision/LossScaleOptimizer) . The
+scaling value to be used can be
+[dynamic](https://www.tensorflow.org/api_docs/python/tf/contrib/mixed_precision/ExponentialUpdateLossScaleManager) or
+[fixed](https://www.tensorflow.org/api_docs/python/tf/contrib/mixed_precision/FixedLossScaleManager)
+
+Enabling mixed precision is now easier than ever with support for AMP in TensorFlow. TF-AMP is an extension of
+TensorFlow that enables mixed precision without any code changes. It accomplishes this by automatically rewriting all
+computation graphs with the necessary operations to enable mixed precision training and loss scaling. Currently, TF-AMP
+is only available through NVIDIA’s TensorFlow Docker container.
+
+TF-AMP is controlled by the `TF_ENABLE_AUTO_MIXED_PRECISION=1` environment variable; when set, TensorFlow will rewrite
+all graphs to perform computations in half-precision format and loss scaling will automatically be applied. 
+
+To enable mixed precision training using TF-AMP, the environment variable can be set prior to running `ncf.py`.
+Alternatively, `ncf.py` can be run with the `--fp16` flag.
+
+**Note:**  The `--fp16` flag sets the environment variable to the correct value
+for mixed precision training inside the script, for example:
+
+```
+# Note that the --fp16 flag maps to the amp variable in code
+if args.amp:
+    os.environ["TF_ENABLE_AUTO_MIXED_PRECISION"] = "1" 
+```
+
+For more information about:
+* How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper
+  and the [Training With Mixed Precision documentation](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html).
+* How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp)
+  from the TensorFlow User Guide.
+
+
 ## Setup
 
 The following section lists the requirements in order to start training the NCF model.
@@ -103,14 +146,14 @@ Documentation and the Deep Learning Documentation:
 To train your model using mixed precision with tensor cores or using FP32, perform the following steps using the default
 parameters of the NCF model on the ml-20m dataset.
 
-### 1. Clone this repository
+### Clone this repository
 
 ```bash
 git clone https://github.com/NVIDIA/DeepLearningExamples
 cd DeepLearningExamples/TensorFlow/Recommendation/NCF
 ```
 
-### 2. Build the NCF TensorFlow NGC container.
+### Build the NCF TensorFlow NGC container.
 
 After Docker is correctly set up, you can build the NCF image with:
 
@@ -118,7 +161,7 @@ After Docker is correctly set up, you can build the NCF image with:
 docker build . -t nvidia_ncf
 ``` 
 
-### 3. Launch the NCF TensorFlow Docker container.
+### Launch the NCF TensorFlow Docker container.
 
 ```bash
 mkdir data
@@ -129,7 +172,9 @@ This will launch the container and mount the ./data directory as a volume to the
 Any datasets and experiment results (logs, checkpoints etc.) saved to /data will be accessible in the ./data directory
 on the host.
 
-### 4. Download and preprocess the dataset.
+### Download and preprocess the dataset.
+
+#### ml-20m
 
 Preprocessing consists of downloading the data, filtering out users that have less than 20 ratings (by default), sorting
 the data and dropping the duplicates. No data augmentation techniques are used in the preprocessing stage.
@@ -140,7 +185,7 @@ To download and preprocess the ml-20m dataset, run:
 ./prepare_dataset.sh
 ```
 
-##### ml-1m
+#### ml-1m
 
 To download and preprocess the ml-1m dataset, run:
 
@@ -151,7 +196,7 @@ To download and preprocess the ml-1m dataset, run:
 This will store the preprocessed training and evaluation data in the `/data` directory, so that it can be later used to
 train the model (by passing the appropriate `--data` argument to the `ncf.py` script).
 
-### 5. Start training.
+### Start training.
 
 After the Docker container is launched, the training with the default hyper-parameters can be started with:
 
@@ -166,7 +211,7 @@ mpirun -np $numgpu \
 After the training is complete, the model parameters that provide the best evaluation accuracy are saved to the
 directory passed to the `--checkpoint-dir` argument. By default, this will be in the `/data/checkpoints/` directory.
 
-### 6. Start validation/evaluation.
+### Start validation/evaluation.
 
 To run evaluation on a specific checkpoint, simply run the following command:
 
@@ -177,7 +222,7 @@ python ncf.py --data /data/cache/ml-20m --mode test --checkpoint-dir $checkpoint
 
 Note: TensorFlow checkpoints consist of 3 files each with a `*.ckpt` prefix.
 
-## Details
+## Advanced
 
 The following sections provide greater details of the dataset, running training and inference, and the training results.
 
@@ -237,7 +282,7 @@ automatically call `download_dataset.sh` to download the desired dataset, and
 then preprocess the training and test datasets. By default, data will be
 downloaded to the `/data` directory.
 
-##### Other Datasets
+#### Other Datasets
 
 This implementation is tuned for the ml-20m and ml-1m datasets.  Using other
 datasets might require tuning some hyperparameters (for example, learning rate,
@@ -319,46 +364,6 @@ will be stored at the directory pointed to by the `--checkpoint-dir` argument.
 Multiple GPUs can be used for training through Horovod. The number of GPUs can
 be controlled by the `-np` parameter passed to `mpirun`.
 
-##### Enabling Mixed Precision
-
-[Mixed Precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing
-operations in half-precision format, while storing information in single-precision to retain as much information as
-possible. Mixed precision is enabled in TensorFlow by using a custom variable getter that casts variables to
-half-precision upon retrieval, while storing variables in single-precision format. Furthermore, to preserve small
-gradient magnitudes in backpropagation, a [loss
-scaling](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#lossscaling) step must be included
-when applying gradients. In TensorFlow, loss scaling can be easily applied by using
-[LossScaleOptimizer](https://www.tensorflow.org/api_docs/python/tf/contrib/mixed_precision/LossScaleOptimizer) . The
-scaling value to be used can be
-[dynamic](https://www.tensorflow.org/api_docs/python/tf/contrib/mixed_precision/ExponentialUpdateLossScaleManager) or
-[fixed](https://www.tensorflow.org/api_docs/python/tf/contrib/mixed_precision/FixedLossScaleManager)
-
-Enabling mixed precision is now easier than ever with support for AMP in TensorFlow. TF-AMP is an extension of
-TensorFlow that enables mixed precision without any code changes. It accomplishes this by automatically rewriting all
-computation graphs with the necessary operations to enable mixed precision training and loss scaling. Currently, TF-AMP
-is only available through NVIDIA’s TensorFlow Docker container.
-
-TF-AMP is controlled by the `TF_ENABLE_AUTO_MIXED_PRECISION=1` environment variable; when set, TensorFlow will rewrite
-all graphs to perform computations in half-precision format and loss scaling will automatically be applied. 
-
-To enable mixed precision training using TF-AMP, the environment variable can be set prior to running `ncf.py`.
-Alternatively, `ncf.py` can be run with the `--fp16` flag.
-
-**Note:**  The `--fp16` flag sets the environment variable to the correct value
-for mixed precision training inside the script, for example:
-
-```
-# Note that the --fp16 flag maps to the amp variable in code
-if args.amp:
-    os.environ["TF_ENABLE_AUTO_MIXED_PRECISION"] = "1" 
-```
-
-For more information about:
-* How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper
-  and the [Training With Mixed Precision documentation](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html).
-* How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp)
-  from the TensorFlow User Guide.
-
 ### Evaluation Process
 
 The evaluation process can be run by the ncf.py script as well. By passing the
@@ -372,12 +377,14 @@ The script will then output a line like the one below which describes the model 
 Eval Time = 1.1829, HR@10 = 0.9574, NDCG@10 = 0.7420
 ```
 
-## Benchmarking
+## Performance
+
+### Benchmarking
 
 The following section shows how to run benchmarks measuring the model
 performance in training and inference modes.
 
-### Performance Benchmark
+#### Performance Benchmark
 
 To benchmark the training and inference performance, run: 
 
@@ -394,11 +401,11 @@ By default, the `ncf.py` script outputs metrics describing the following:
 * Training speed and throughput
 * Evaluation speed and throughput
 
-## Results
+### Results
 
 The following sections provide details on how we achieved our performance and accuracy in training and inference.
 
-## Training Accuracy Results
+### Training Accuracy Results
 
 Our results were obtained by running the `ncf.py` training script in the
 TensorFlow 19.03-py3 NGC container on a NVIDIA DGX-1 with 8x V100 16G GPUs.
@@ -414,9 +421,9 @@ recorded to demonstrate the maximum accuracy the model can achieve.
 | 4 | 0.9589 | 0.9591 |
 | 8 | 0.9597 | 0.9598 |
 
-## Training Performance Results
+### Training Performance Results
 
-### NVIDIA DGX-1 (8x V100 16G)
+#### NVIDIA DGX-1 (8x V100 16G)
 
 Our results were obtained by running the `ncf.py` training script in the
 TensorFlow 19.03-py3 NGC container on a NVIDIA DGX-1 with 8x V100 16GB GPUs
@@ -448,7 +455,7 @@ Those results can be improved when [XLA](https://www.tensorflow.org/xla) is used
 in conjunction with mixed precision, delivering up to 2.6x speedup over FP32 on a single GPU (~24.3M items/sec). 
 However XLA is still considered experimental.
 
-### NVIDIA DGX-1 (8x V100 32G)
+#### NVIDIA DGX-1 (8x V100 32G)
 
 Our results were obtained by running the `ncf.py` training script in the
 TensorFlow 19.03-py3 NGC container on a NVIDIA DGX-1 with 8x V100 32G GPUs with
@@ -472,7 +479,7 @@ The performance was measured by the wall clock time over one training epoch.
 The number of samples in the epoch (roughly 100 million samples), was then
 divided by the average training duration to obtain the items per second metric.
 
-## Inference Performance Results
+### Inference Performance Results
 
 Our results were obtained by running the `ncf.py` training script in the
 TensorFlow 19.03-py3 NGC container on a NVIDIA DGX-1 with 1x V100 16G GPUs.
@@ -488,14 +495,16 @@ achieve.
 | 4 | 88,255,971 | 66,625,422 | 1.32x |
 | 8 | 119,159,304 | 100,117,608 | 1.19x |
 
-## Changelog
+## Release Notes
+
+### Changelog
 
 March 2019
 * Initial Release
 
-## Known Issues 
+### Known Issues 
 
-### Multi-GPU Scaling Efficiency
+#### Multi-GPU Scaling Efficiency
 
 Currently, this model does not exhibit good scaling efficiency when scaling to
 4 and 8 GPUs.  Since we could not find hyper-parameters that could hit the
@@ -505,7 +514,7 @@ to a more common weak scaling strategy. Additionally, we believe that the small
 dataset size does not facilitate great scaling. However, the training scripts
 allow the use of custom datasets provided they are in the correct format.
 
-### Scaling beyond 8 GPUs
+#### Scaling beyond 8 GPUs
 
 Neural Collaborative Filtering (NCF) is a relatively lightweight model that
 trains quickly with this relatively smaller dataset, ml-20m. Because of the

@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvcr.io/nvidia/pytorch:19.05-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:19.06-py3
+FROM ${FROM_IMAGE_NAME}
 
 RUN apt-get update && \
     apt-get install -y unzip

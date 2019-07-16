@@ -30,4 +30,6 @@ python preprocess.py \
   --nwordstgt 33712 \
   --joined-dictionary
 
+sacrebleu -t wmt14/full -l de-en --echo src > $DATASET_DIR/sacrebleu_reference.de
+
 cp $TEXT/code $DATASET_DIR/code

@@ -29,6 +29,7 @@ import torch
 
 from fairseq import data, options, tasks, tokenizer, utils
 from fairseq.sequence_generator import SequenceGenerator
+from fairseq.meters import StopwatchMeter
 
 from apply_bpe import BPE
 
@@ -156,6 +157,9 @@ def main(args):
             )
         return result
 
+    gen_timer = StopwatchMeter()
+    end2end_timer = StopwatchMeter()
+
     def process_batch(batch):
         tokens = batch.tokens
         lengths = batch.lengths
@@ -164,11 +168,13 @@ def main(args):
             tokens = tokens.cuda()
             lengths = lengths.cuda()
 
+        gen_timer.start()
         translations = translator.generate(
             tokens,
             lengths,
             maxlen=int(args.max_len_a * tokens.size(1) + args.max_len_b),
         )
+        gen_timer.stop()
 
         return [make_result(batch.srcs[i], t) for i, t in enumerate(translations)]
 
@@ -178,6 +184,7 @@ def main(args):
     for inputs in buffered_read(args.buffer_size):
         indices = []
         results = []
+        end2end_timer.start()
         for batch, batch_indices in make_batches(inputs, args, src_dict, models[0].max_positions(), bpe):
             indices.extend(batch_indices)
             results += process_batch(batch)
@@ -190,6 +197,12 @@ def main(args):
                 print(pos_scores)
                 if align is not None:
                     print(align)
+
+        print('Model latency: {} s'.format(gen_timer.sum))
+        gen_timer.reset()
+        end2end_timer.stop()
+        print('End-to-end translation time: {} s'.format(end2end_timer.sum))
+        end2end_timer.reset()
 
 
 if __name__ == '__main__':

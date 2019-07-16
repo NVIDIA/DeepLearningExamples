@@ -6,46 +6,50 @@ model to achieve state of the art accuracy, and is tested and maintained by NVID
 Table of Contents
 =================
 
-  * [The model](#the-model)
-     * [Model architecture](#model-architecture)
-     * [Default configuration](#default-configuration)
-   * [Feature support matrix](#feature-support-matrix)
+* [Model overview](#model-overview)
+    * [Model architecture](#model-architecture)
+    * [Default configuration](#default-configuration)
+    * [Feature support matrix](#feature-support-matrix)
         * [Features](#features)
-  * [Setup](#setup)
-     * [Requirements](#requirements)
-     * [Quick Start Guide](#quick-start-guide)
-  * [Details](#details)
-     * [Scripts and sample code](#scripts-and-sample-code)
-     * [Command-line options](#command-line-options)
-     * [Getting the data](#getting-the-data)
+    * [Mixed precision training](#mixed-precision-training)
+        * [Enabling mixed precision](#enabling-mixed-precision)
+* [Setup](#setup)
+    * [Requirements](#requirements)
+* [Quick Start Guide](#quick-start-guide)
+* [Advanced](#advanced)
+    * [Scripts and sample code](#scripts-and-sample-code)
+    * [Command-line options](#command-line-options)
+    * [Getting the data](#getting-the-data)
         * [Dataset guidelines](#dataset-guidelines)
         * [Multi-dataset](#multi-dataset)
     * [ML-1m](#ml-1m)
-     * [Training process](#training-process)
-     * [Inference process](#inference-process)
-  * [Mixed precision training](#mixed-precision-training)
-     * [Enabling mixed precision](#enabling-mixed-precision)
-  * [Benchmarking](#benchmarking)
-     * [Training performance benchmark](#training-performance-benchmark)
-     * [Inference performance benchmark](#inference-performance-benchmark)
-  * [Results](#results)
-     * [Training accuracy results](#training-accuracy-results)
-        * [NVIDIA DGX-1 (8x V100 32G)](#nvidia-dgx-1-8x-v100-32g)
-        * [Training stability test](#training-stability-test)
-     * [Training performance results](#training-performance-results)
-        * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-(8x-v100-16g))
-        * [NVIDIA DGX-1 (8x V100 32G)](#nvidia-dgx-1-(8x-v100-32g))
-        * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-(16x-v100-32g))
-     * [Inference performance results](#inference-performance-results)
-        * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-(8x-v100-16g))
-        * [NVIDIA DGX-1 (8x V100 32G)](#nvidia-dgx-1-(8x-v100-32g))
-        * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-(16x-v100-32g))
-  * [Changelog](#changelog)
-  * [Known issues](#known-issues)
-     * [Scaling beyond 8 GPUs](#scaling-beyond-8-gpus)
-     * [Memory usage](#memory-usage)
+    * [Training process](#training-process)
+    * [Inference process](#inference-process)
+* [Performance](#performance)
+    * [Benchmarking](#benchmarking)
+        * [Training performance benchmark](#training-performance-benchmark)
+        * [Inference performance benchmark](#inference-performance-benchmark)
+    * [Results](#results)
+        * [Training accuracy results](#training-accuracy-results)
+            * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
+            * [NVIDIA DGX-1 (8x V100 32G)](#nvidia-dgx-1-8x-v100-32g)
+            * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-16x-v100-32g)
+            * [Training stability test](#training-stability-test)
+        * [Training performance results](#training-performance-results)
+            * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-(8x-v100-16g))
+            * [NVIDIA DGX-1 (8x V100 32G)](#nvidia-dgx-1-(8x-v100-32g))
+            * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-(16x-v100-32g))
+        * [Inference performance results](#inference-performance-results)
+            * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-(8x-v100-16g))
+            * [NVIDIA DGX-1 (8x V100 32G)](#nvidia-dgx-1-(8x-v100-32g))
+            * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-(16x-v100-32g))
+* [Release notes](#release-notes)
+    * [Changelog](#changelog)
+    * [Known issues](#known-issues)
+        * [Scaling beyond 8 GPUs](#scaling-beyond-8-gpus)
+        * [Memory usage](#memory-usage)
 
-## The model
+## Model overview
 
 The NCF model focuses on providing recommendations, also known as collaborative filtering; with implicit feedback. The training data for this model should contain binary information about whether a user interacted with a specific item.
 NCF was first described by Xiangnan He, Lizi Liao, Hanwang Zhang, Liqiang Nie, Xia Hu and Tat-Seng Chua in the [Neural Collaborative Filtering paper](https://arxiv.org/abs/1708.05031).
@@ -110,6 +114,35 @@ It allows us to use FP16 training with FP32 master weights by modifying just 3 l
 * Fused Adam - We use a special implementation of the Adam implementation provided by the Apex package. It fuses some operations for faster weight updates.
 Since NCF is a relatively lightweight model with a large number of parameters, we’ve observed significant performance improvements from using FusedAdam.
 
+## Mixed precision training
+
+Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format, while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [tensor cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing architecture, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using mixed precision training requires two steps:
+1.  Porting the model to use the FP16 data type where appropriate.
+2.  Adding loss scaling to preserve small gradient values.
+
+The ability to train deep learning networks with lower precision was introduced in the Pascal architecture and first supported in [CUDA 8](https://devblogs.nvidia.com/parallelforall/tag/fp16/) in the NVIDIA Deep Learning SDK.
+
+For information about:
+-   How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) documentation.
+-   Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
+-   How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp) from the TensorFlow User Guide.
+-   APEX tools for mixed precision training, see the [NVIDIA Apex: Tools for Easy Mixed-Precision Training in PyTorch](https://devblogs.nvidia.com/apex-pytorch-easy-mixed-precision-training/).
+
+
+### Enabling mixed precision
+
+Using the Automatic Mixed Precision (AMP) package requires two modifications in the source code.
+The first one is to initialize the model and the optimizer using the `amp.initialize` function:
+```python
+model, optimizer = amp.initialize(model, optimizer, opt_level=args.opt_level,
+                                          keep_batchnorm_fp32=False, loss_scale='dynamic')
+```
+
+The second one is to use the AMP's loss scaling context manager:
+```python
+with amp.scale_loss(loss, optimizer) as scaled_loss:
+    scaled_loss.backward()
+```
 
 ## Setup
 The following section lists the requirements in order to start training the Neural Collaborative Filtering model.
@@ -128,7 +161,7 @@ Running PyTorch
 
 For those unable to use the PyTorch NGC container, to set up the required environment or create your own container, see the versioned NVIDIA Container Support Matrix.  
   
-### Quick Start Guide
+## Quick Start Guide
 
 1. Clone the repository.
 ```bash
@@ -189,14 +222,14 @@ This will result in a checkpoint file being written to `/data/checkpoints/model.
 
 6. Start validation/evaluation.
 
-The trained model can be evaluated by passing the `--mode test` flag to the `run.sh` script:
+The trained model can be evaluated by passing the `--mode` test flag to the `run.sh` script:
 
 ```bash
 python -m torch.distributed.launch --nproc_per_node=8 ncf.py --data /data/cache/ml-20m  --mode test --checkpoint-path /data/checkpoints/model.pth
 ```
 
 
-## Details
+## Advanced
 
 The following sections provide greater details of the dataset, running training and inference, and the training results.
 
@@ -217,7 +250,7 @@ usage: ncf.py [-h] [--data DATA] [-e EPOCHS] [-b BATCH_SIZE]
               [--valid_batch_size VALID_BATCH_SIZE] [-f FACTORS]
               [--layers LAYERS [LAYERS ...]] [-n NEGATIVE_SAMPLES]
               [-l LEARNING_RATE] [-k TOPK] [--seed SEED]
-              [--threshold THRESHOLD] [--valid_negative VALID_NEGATIVE]
+              [--threshold THRESHOLD]
               [--beta1 BETA1] [--beta2 BETA2] [--eps EPS] [--dropout DROPOUT]
               [--checkpoint_dir CHECKPOINT_DIR] [--mode {train,test}]
               [--grads_accumulated GRADS_ACCUMULATED] [--opt_level {O0,O2}]
@@ -247,9 +280,6 @@ optional arguments:
   --seed SEED, -s SEED  Manually set random seed for torch
   --threshold THRESHOLD, -t THRESHOLD
                         Stop training early at threshold
-  --valid_negative VALID_NEGATIVE
-                        Number of negative samples for each positive test
-                        example
   --beta1 BETA1, -b1 BETA1
                         Beta1 for Adam
   --beta2 BETA2, -b2 BETA2
@@ -329,39 +359,11 @@ The script will then:
 * Run inference on the test dataset
 * Compute and print the validation metric
 
-## Mixed precision training
+## Performance
 
-Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format, while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [tensor cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing architecture, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using mixed precision training requires two steps:
-1.  Porting the model to use the FP16 data type where appropriate.    
-2.  Adding loss scaling to preserve small gradient values.
+### Benchmarking
 
-The ability to train deep learning networks with lower precision was introduced in the Pascal architecture and first supported in [CUDA 8](https://devblogs.nvidia.com/parallelforall/tag/fp16/) in the NVIDIA Deep Learning SDK.
-
-For information about:
--   How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) documentation.
--   Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
--   How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp) from the TensorFlow User Guide.
--   APEX tools for mixed precision training, see the [NVIDIA Apex: Tools for Easy Mixed-Precision Training in PyTorch](https://devblogs.nvidia.com/apex-pytorch-easy-mixed-precision-training/).
-
-
-### Enabling mixed precision
-
-Using the Automatic Mixed Precision (AMP) package requires two modifications in the source code.
-The first one is to initialize the model and the optimizer using the `amp.initialize` function:
-```python
-model, optimizer = amp.initialize(model, optimizer, opt_level=args.opt_level,
-                                          keep_batchnorm_fp32=False, loss_scale='dynamic')
-```
-
-The second one is to use the AMP's loss scaling context manager:
-```python
-with amp.scale_loss(loss, optimizer) as scaled_loss:
-    scaled_loss.backward()
-```
-
-## Benchmarking
-
-### Training performance benchmark
+#### Training performance benchmark
 
 NCF training on NVIDIA DGX systems is very fast, therefore, in order to measure train and validation throughput, you can simply run the full training job with: 
 ```bash
@@ -372,7 +374,7 @@ python -m torch.distributed.launch --nproc_per_node=8 ncf.py --data /data/cache/
 At the end of the script, a line reporting the best train throughput is printed.
 
 
-### Inference performance benchmark
+#### Inference performance benchmark
 
 Validation throughput can be measured by running the full training job with:
 ```bash
@@ -382,23 +384,42 @@ python -m torch.distributed.launch --nproc_per_node=8 ncf.py --data /data/cache/
 
 The best validation throughput is reported to the standard output. 
 
-## Results
+### Results
 
 The following sections provide details on how we achieved our performance and accuracy in training and inference. 
 
-### Training accuracy results
+#### Training accuracy results
 
-#### NVIDIA DGX-1 (8x V100 32G)
+##### NVIDIA DGX-1 (8x V100 16G)
+
+Our results were obtained by following the steps in the Quick Start Guide in the PyTorch 19.05-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
+
+The following table lists the best hit rate at 10 for DGX-1 with 8 V100 16G GPUs. It also shows the average time to reach this HR@10 across 5 random seeds.
+The training time was measured excluding data downloading, preprocessing, validation data generation and library initialization times.
+
+| **GPUs**    | **Batch size / GPU** | **Accuracy - FP32**  | **Accuracy - mixed precision**  |   **Time to train - FP32 (s)** |  **Time to train - mixed precision (s)** | **Time to train speedup (FP32 to mixed precision)**  |     
+|--------------------------:|-----------------------------:|--------------------------:|--------------------------:|-------------------------------:|-------------------------------:|------------------:|
+|                         1 | 1,048,576                    |  0.95913                  |  0.95887                  |                         188.82 |                         100.37 |              1.88 |
+|                         8 | 131,072                      |  0.95905                  |  0.95906                  |                          43.20 |                          26.68 |              1.62 |
+
+To reproduce this result, start the NCF Docker container interactively and run:
+```bash
+./prepare_dataset.sh
+python -m torch.distributed.launch --nproc_per_node=8 ncf.py --data /data/cache/ml-20m
+```
+
+##### NVIDIA DGX-1 (8x V100 32G)
 
 Our results were obtained by following the steps in the Quick Start Guide in the PyTorch 19.05-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs.
 
-The following table lists the best hit rate at 10 for DGX-1 with 8 V100 32G GPUs:
+The following table lists the best hit rate at 10 for DGX-1 with 8 V100 16G GPUs. It also shows the average time to reach this HR@10 across 5 random seeds.
+The training time was measured excluding data downloading, preprocessing, validation data generation and library initialization times.
 
-| **Number of GPUs** | **Single precision HR@10** | **Mixed precision HR@10** | 
-|:---:|:--------:|:-------:|
-|1|	0.95847 | 0.95845 |
-|4|	0.95887 | 0.95841 |
-|8|	0.95850 | 0.95885 |
+| **GPUs**    | **Batch size / GPU** | **Accuracy - FP32**  | **Accuracy - mixed precision**  |   **Time to train - FP32 (s)** |  **Time to train - mixed precision (s)** | **Time to train speedup (FP32 to mixed precision)**  |     
+|--------------------------:|-----------------------------:|--------------------------:|--------------------------:|-------------------------------:|-------------------------------:|------------------:|
+|                         1 | 1,048,576                    |  0.95913                  |  0.95887                  |                         194.72 |                         106.03 |              1.84 |
+|                         8 | 131,072                      |  0.95905                  |  0.95906                  |                          44.07 |                          27.86 |              1.58 |
+
 
 Here's an example validation accuracy curve for mixed precision vs single precision on DGX-1 with 8 V100 32G GPUs:
 
@@ -410,9 +431,29 @@ To reproduce this result, start the NCF Docker container interactively and run:
 python -m torch.distributed.launch --nproc_per_node=8 ncf.py --data /data/cache/ml-20m
 ```
 
-Training accuracy results on a DGX-1 with 8 V100 16G GPUs and on DGX-2 should be the same.
+##### NVIDIA DGX-2 (16x V100 32G)
 
-#### Training stability test
+Our results were obtained by following the steps in the Quick Start Guide in the PyTorch 19.05-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
+
+The following table lists the best hit rate at 10 for DGX-1 with 8 V100 16G GPUs. It also shows the average time to reach this HR@10 across 5 random seeds.
+The training time was measured excluding data downloading, preprocessing, validation data generation and library initialization times.
+
+| **GPUs**    | **Batch size / GPU** | **Accuracy - FP32**  | **Accuracy - mixed precision**  |   **Time to train - FP32 (s)** |  **Time to train - mixed precision (s)** | **Time to train speedup (FP32 to mixed precision)**  |     
+|--------------------------:|-----------------------------:|--------------------------:|--------------------------:|-------------------------------:|-------------------------------:|------------------:|
+|                         1 | 1,048,576                    |  0.95913                  |  0.95887                  |                         180.85 |                         100.33 |              1.80 |
+|                         8 | 131,072                      |  0.95900                  |  0.95918                  |                          44.21 |                          29.68 |              1.49 |
+|                        16 | 65,536                       |  0.95896                  |  0.95906                  |                          34.47 |                          26.52 |              1.30 |
+
+
+
+To reproduce this result, start the NCF Docker container interactively and run:
+```bash
+./prepare_dataset.sh
+python -m torch.distributed.launch --nproc_per_node=16 ncf.py --data /data/cache/ml-20m
+```
+
+
+##### Training stability test
 
 The histogram below shows the best HR@10 achieved 
 for 400 experiments using mixed precision and 400 experiments using single precision.
@@ -421,90 +462,60 @@ Mean HR@10 for mixed precision was equal to 0.95868 and for single precision it 
 ![hr_histogram](./img/hr_histogram.png)
 
 
-### Training performance results
+#### Training performance results
 
 
-#### NVIDIA DGX-1 (8x V100 16G)
+##### NVIDIA DGX-1 (8x V100 16G)
 
 Our results were obtained by following the steps in the Quick Start Guide in the PyTorch 19.05-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. 
 
 The following table shows the best training throughput:
 
-| **Number of GPUs** | **Batch size per GPU**| **Mixed precision throughput (samples/sec)** | **Single precision throughput (samples/sec)** | **Speed-up with mixed precision** | **Multi-GPU strong scaling with mixed precision** | **Multi-GPU strong scaling with FP32** |
-|:---:|:--------:|:-----:|:-----------:|:-----:|:----:|:---|
-| 1 |1048576| 20,459,365| 9,777,551 | 2.09 |  1 | 1 |
-| 4 |262144 | 61,782,125| 32,583,924 | 1.90 | 3.02 |3.33|
-| 8 |131072 | 98,464,084| 55,365,147 | 1.78 |4.81 |5.66|
- 
-The following table shows the average time to reach HR@10 of 0.9562 across 5 random seeds. The training time was measured excluding data downloading, preprocessing, validation data generation and library initialization times.
+|   **GPUs**                |   **Batch Size / GPU**       | **Throughput - FP32 (samples / s)** |   **Throughput - Mixed precision (samples /s)** |   **Throughput Speedup (FP32 to Mixed precision)** |   **Strong Scaling - FP32** |   **Strong scaling - Mixed precision** |
+|--------------------------:|-----------------------------:|----------------------------------:|----------------------------------:|------------------:|---------------------:|---------------------:|
+|                         1 | 1,048,576                    | 10,536,076                        | 21,059,303                        |              2.00 |                 1.00 |                 1.00 |
+|                         8 | 131,072                      | 58,286,313                        | 100,760,496                       |              1.73 |                 5.53 |                 4.78 |
 
-| **Number of GPUs** | **Batch size per GPU** | **Mixed precision (seconds)** | **Single precision (seconds)** | **Speed-up with mixed precision** | 
-|:---:|:----:|:---------:|:-----------:|:-----:|
-| 1 | 1048576| 67.03 | 142.31 | 2.12 |
-| 4 | 262144| 23.92	| 47.57	| 1.99 |
-| 8 | 131072| 18.82	| 31.48	| 1.67 | 
-
-
-
-#### NVIDIA DGX-1 (8x V100 32G)
+##### NVIDIA DGX-1 (8x V100 32G)
 
 Our results were obtained by following the steps in the Quick Start Guide in the PyTorch 19.05-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. 
 
 The following table shows the best training throughput:
 	
-| **Number of GPUs** | **Batch size per GPU** | **Mixed precision throughput (samples/sec)** | **Single precision throughput (samples/sec)** | **Speed-up with mixed precision** | **Multi-GPU strong scaling with mixed precision** | **Multi-GPU strong scaling with FP32** | 
-|:---:|:----:|:---------:|:-----------:|:-----:|:---:|:---:|
-| 1 | 1048576| 19,314,944 | 9,464,431 | 2.04 | 1 | 1 |
-| 4 | 262144| 58,579,745 |31,577,085 | 1.86 | 3.03 | 3.34 |
-| 8 | 131072| 92,964,306 | 53,972,811 | 1.72 | 4.81	| 5.70 |
-
-The following table shows the average time to reach HR@10 of 0.9562 across 5 random seeds. The training time was measured excluding data downloading, preprocessing, validation data generation and library initialization times.
-
-| **Number of GPUs** | **Mixed precision (seconds)** | **Single precision (seconds)** | **Speed-up with mixed precision** | 
-|:---:|:-------------:|:-----------:|:-----:|
-| 1 | 70.49	| 146.68 | 2.08 |
-| 4 | 24.61	| 49.01	| 1.99 |
-| 8 | 19.72	| 32.25	| 1.64 |
+|   **GPUs**                |   **Batch Size / GPU**       | **Throughput - FP32 (samples / s)** |   **Throughput - Mixed precision (samples /s)** |   **Throughput Speedup (FP32 to Mixed precision)** |   **Strong Scaling - FP32** |   **Strong scaling - Mixed precision** |
+|--------------------------:|-----------------------------:|----------------------------------:|----------------------------------:|------------------:|---------------------:|---------------------:|
+|                         1 | 1,048,576                    | 10,230,464                        | 19,894,392                        |              1.94 |                 1.00 |                 1.00 |
+|                         8 | 131,072                      | 57,043,196                        | 95,424,391                        |              1.67 |                 5.58 |                 4.80 |
 
 
-
-#### NVIDIA DGX-2 (16x V100 32G)
+##### NVIDIA DGX-2 (16x V100 32G)
 
 Our results were obtained by following the steps in the Quick Start Guide in the PyTorch 19.05-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. 
 
 The following table shows the best training throughput:
 	
-| **Number of GPUs ** | **Batch size per GPU** | **Mixed precision throughput (samples/sec)** | **Single precision throughput (samples/sec)** | **Speed-up with mixed precision** | **Multi-GPU strong scaling with mixed precision** | **Multi-GPU strong scaling with FP32** |
-|:---:|:-----:|:-------:|:-----------:|:-----:|:---:|:---:|
-| 1 | 1048576| 20,645,544 | 10,145,873 | 2.03 | 1 | 1 |
-| 4 | 262144 | 63,608,950 | 34,758,369 | 1.83 | 3.08 | 3.43 |
-| 8 | 131072| 98,887,103 | 57,251,418 | 1.73 | 4.79	| 5.64 |
-| 16 | 65536| 128,976,394 | 82,932,545 | 1.56 | 6.25 | 8.17 |
-
-The following table shows the average time to reach HR@10 of 0.9562 across 5 random seeds. The training time was measured excluding data downloading, preprocessing, validation data generation and library initialization times.
-
-| **Number of GPUs ** | **Mixed precision (seconds)** | **Single precision (seconds)** | **Speed-up with mixed precision** | 
-|:---:|:-------------:|:-----------:|:-----:|
-| 1 | 65.99	|134.93	|2.04|
-| 4 | 26.21	|41.12	|1.57|
-| 8 | 21.96	|29.71	|1.35|
-| 16| 22.15	|28.99	|1.31|
+|   **GPUs**                |   **Batch Size / GPU**       | **Throughput - FP32 (samples / s)** |   **Throughput - Mixed precision (samples /s)** |   **Throughput Speedup (FP32 to Mixed precision)** |   **Strong Scaling - FP32** |   **Strong scaling - Mixed precision** |
+|--------------------------:|:-----------------------------|:----------------------------------|:----------------------------------|------------------:|---------------------:|---------------------:|
+|                         1 | 1,048,576                    | 10,941,690                        | 21,056,129                        |              1.92 |                 1.00 |                 1.00 |
+|                         8 | 131,072                      | 60,247,209                        | 100,142,844                       |              1.66 |                 5.51 |                 4.76 |
+|                        16 | 65,536                       | 84,287,736                        | 133,300,953                       |              1.58 |                 7.70 |                 6.33 |
 
 
-### Inference performance results
+
+#### Inference performance results
 
 
-#### NVIDIA DGX-1 (8x V100 16G)
+##### NVIDIA DGX-1 (8x V100 16G)
 
 Our results were obtained by following the steps in the Quick Start Guide in the PyTorch 19.05-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
 
 The following table shows the best inference throughput:
 
-| **Number of GPUs ** | **Mixed precision (samples/sec)** | **Single precision (samples/sec)** | **Speed-up with mixed precision** | 
+| **Number of GPUs** | **Mixed precision (samples/sec)** | **Single precision (samples/sec)** | **Speed-up with mixed precision** | 
 |:---:|:-------------:|:-----------:|:-----:|
 | 1 | 57,163,273 | 28,877,257 | 1.98 |
 
-#### NVIDIA DGX-1 (8x V100 32G)
+##### NVIDIA DGX-1 (8x V100 32G)
 
 Our results were obtained by following the steps in the Quick Start Guidein the PyTorch 19.05-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs.
 
@@ -515,7 +526,7 @@ The following table shows the best inference throughput:
 | 1 | 54,570,476 | 28,085,521 | 1.94 |
 
 
-#### NVIDIA DGX-2 (16x V100 32G)
+##### NVIDIA DGX-2 (16x V100 32G)
 
 Our results were obtained by following the steps in the Quick Start Guide in the PyTorch 19.05-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs.
 
@@ -525,8 +536,9 @@ The following table shows the best inference throughput:
 |:---:|:-------------:|:-----------:|:-----:|
 | 1 | 58,383,216 | 30,018,043 | 1.94 |
 
+## Release notes
 
-## Changelog
+### Changelog
 1. January 22, 2018
     * Initial release
 2. May, 2019
@@ -536,11 +548,15 @@ The following table shows the best inference throughput:
     * Data loading code cleanup.
     * Default container updated to PyTorch 19.05-py3.
     * Updated README.md.
+3. June, 2019
+    * Updated performance tables.
+    * Default container changed to PyTorch 19.06-py3.
+    * Caching validation negatives between runs
 
 
-## Known issues
+### Known issues
  
-### Scaling beyond 8 GPUs
+#### Scaling beyond 8 GPUs
 Neural Collaborative Filtering is a relatively lightweight model that trains quickly with this relatively smaller dataset, ML-20m.
 Because of that, the high ratio of communication to computation makes it difficult to 
 efficiently use more than 8 GPUs. Typically, this is not an issue because when using 8
@@ -550,7 +566,7 @@ GPUs with FP16 precision, the training is sufficiently fast. However, if you’d
   by finding hyperparameters that enable using a larger batch size or by reducing the 
   number of trainable parameters.
 
-### Memory usage
+#### Memory usage
 
 In the default settings, the additional memory beyond 16G may not be fully utilized.
 This is because we set the default batch size for ML-20m dataset to 1M,

@@ -607,7 +607,7 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 The following table shows the expected training time for convergence for Tacotron 2 (1500 epochs):
 
 |Number of GPUs|Batch size per GPU|Time to train with mixed precision (Hrs)|Time to train with FP32 (Hrs)|Speed-up with mixed precision|
-|---:|---:|---:|---:|
+|---:|---:|---:|---:|---:|
 |1| 128@FP16, 64@FP32 | 137.33 | 227.66 | 1.66 |
 |4| 128@FP16, 64@FP32 | 40.68 | 63.99 | 1.57 |
 |8| 128@FP16, 64@FP32 | 20.74 | 32.47 | 1.57 |
@@ -617,7 +617,7 @@ The following table shows the expected training time for convergence for Tacotro
 The following table shows the expected training time for convergence for WaveGlow (1000 epochs):
 
 |Number of GPUs|Batch size per GPU|Time to train with mixed precision (Hrs)|Time to train with FP32 (Hrs)|Speed-up with mixed precision|
-|---:|---:|---:|---:|
+|---:|---:|---:|---:|---:|
 |1| 10@FP16, 4@FP32 | 358.00 | 793.97 | 2.22 |
 |4| 10@FP16, 4@FP32 | 103.10 | 223.59 | 2.17 |
 |8| 10@FP16, 4@FP32 | 50.40 | 109.45 | 2.17 |

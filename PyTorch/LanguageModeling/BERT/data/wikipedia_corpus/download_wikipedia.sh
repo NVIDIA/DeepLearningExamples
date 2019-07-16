@@ -1,7 +1,7 @@
 #! /bin/bash
 
-WIKI_DUMP="ftp://ftpmirror.your.org/pub/wikimedia/dumps/enwiki/20190301/enwiki-20190301-pages-articles-multistream.xml.bz2"
-N_PROCS_PREPROCESS=4    # Adjust this based on memory requirements and available number of cores
+WIKI_DUMP="https://dumps.wikimedia.org/enwiki/20190320/enwiki-20190320-pages-articles-multistream.xml.bz2"
+N_PROCS_PREPROCESS=$(nproc)    # Adjust this based on memory requirements and available number of cores
 
 # Download Wikipedia dump file
 mkdir -p ./download

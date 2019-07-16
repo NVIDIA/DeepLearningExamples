@@ -52,6 +52,7 @@ class Runner(object):
         model_dir=None,
         log_dir=None,
         data_dir=None,
+        data_idx_dir=None,
 
         # ======= Optimization HParams ======== #
         use_xla=False,
@@ -222,6 +223,7 @@ class Runner(object):
 
         config.allow_soft_placement = True
         config.log_device_placement = False
+
 
         if hvd_utils.is_using_hvd():
             config.gpu_options.visible_device_list = str(hvd.local_rank())

@@ -577,8 +577,12 @@ def make_input_fn(hparams, mode):
       src_file = "%s.%s" % (hparams.train_prefix, hparams.src)
       tgt_file = "%s.%s" % (hparams.train_prefix, hparams.tgt)
     else:
-      src_file = "%s.%s" % (hparams.test_prefix, hparams.src)
-      tgt_file = "%s.%s" % (hparams.test_prefix, hparams.tgt)
+      if hparams.mode == "translate":
+        src_file = hparams.translate_file + ".tok"
+        tgt_file = hparams.translate_file + ".tok"
+      else:
+        src_file = "%s.%s" % (hparams.test_prefix, hparams.src)
+        tgt_file = "%s.%s" % (hparams.test_prefix, hparams.tgt)
     src_vocab_file = hparams.src_vocab_file
     tgt_vocab_file = hparams.tgt_vocab_file
     src_vocab_table, tgt_vocab_table = vocab_utils.create_vocab_tables(
@@ -708,7 +712,7 @@ def get_sacrebleu(trans_file, detokenizer_file):
   return float(score)
 
 
-def get_metrics(hparams, model_fn, ckpt=None):
+def get_metrics(hparams, model_fn, ckpt=None, only_translate=False):
   """Run inference and compute metrics."""
   pred_estimator = tf.estimator.Estimator(
       model_fn=model_fn, model_dir=hparams.output_dir)
@@ -738,9 +742,12 @@ def get_metrics(hparams, model_fn, ckpt=None):
     if beam_id == hparams.beam_width:
       beam_id = 0
 
-  trans_file = os.path.join(
-      hparams.output_dir, "newstest2014_out_{}.tok.de".format(
-          pred_estimator.get_variable_value(tf.GraphKeys.GLOBAL_STEP)))
+  if only_translate:
+    trans_file = hparams.translate_file + '.trans.tok'
+  else:
+    trans_file = os.path.join(
+        hparams.output_dir, "newstest2014_out_{}.tok.de".format(
+            pred_estimator.get_variable_value(tf.GraphKeys.GLOBAL_STEP)))
   trans_dir = os.path.dirname(trans_file)
   if not tf.gfile.Exists(trans_dir):
     tf.gfile.MakeDirs(trans_dir)
@@ -750,6 +757,9 @@ def get_metrics(hparams, model_fn, ckpt=None):
     trans_f.write("")  # Write empty string to ensure file is created.
     for translation in translations:
       trans_f.write((translation + b"\n").decode("utf-8"))
+
+  if only_translate:
+    return None, benchmark_hook.get_average_speed_and_latencies(), sum(output_tokens)
 
   # Evaluation
   output_dir = os.path.join(pred_estimator.model_dir, "eval")
@@ -770,7 +780,7 @@ def get_metrics(hparams, model_fn, ckpt=None):
       tf_summary, pred_estimator.get_variable_value(tf.GraphKeys.GLOBAL_STEP))
 
   summary_writer.close()
-  return score, benchmark_hook.get_average_speed(), sum(output_tokens)
+  return score, benchmark_hook.get_average_speed_and_latencies(), sum(output_tokens)
 
 
 def train_fn(hparams):
@@ -805,7 +815,7 @@ def train_fn(hparams):
   estimator = tf.estimator.Estimator(
       model_fn=model_fn, model_dir=hparams.output_dir, config=config)
 
-  benchmark_hook = BenchmarkHook(hparams.batch_size)
+  benchmark_hook = BenchmarkHook(hparams.batch_size, hparams.warmup_steps + 5)
   train_hooks = [benchmark_hook]
   if hparams.profile:
     train_hooks.append(tf.train.ProfilerHook(
@@ -821,9 +831,9 @@ def train_fn(hparams):
       hooks=train_hooks,
   )
 
-  return benchmark_hook.get_average_speed()
+  return benchmark_hook.get_average_speed_and_latencies()
 
 
-def eval_fn(hparams, ckpt=None):
+def eval_fn(hparams, ckpt=None, only_translate=False):
   model_fn = make_model_fn(hparams)
-  return get_metrics(hparams, model_fn, ckpt)
+  return get_metrics(hparams, model_fn, ckpt, only_translate=only_translate)

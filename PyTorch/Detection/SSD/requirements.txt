@@ -1,1 +1,2 @@
 Cython==0.28.4
+scikit-image==0.15.0

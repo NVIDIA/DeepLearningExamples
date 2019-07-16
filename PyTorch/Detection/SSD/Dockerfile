@@ -1,7 +1,9 @@
 FROM nvcr.io/nvidia/pytorch:19.05-py3
 
 # Set working directory
-WORKDIR /mlperf
+WORKDIR /workspace
+
+ENV PYTHONPATH "${PYTHONPATH}:/workspace"
 
 RUN apt-get update && apt-get install -y python3-tk python-pip git tmux htop tree
 

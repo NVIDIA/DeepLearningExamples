@@ -109,7 +109,7 @@ def load_vocab(vocab_file):
 
 
 def check_vocab(vocab_file, output_dir, check_special_token=True, sos=None,
-                eos=None, unk=None):
+                eos=None, unk=None, pad_vocab=False):
   """Check if vocab_file doesn't exist, create from corpus_file."""
   if tf.gfile.Exists(vocab_file):
     utils.print_out("# Vocab file %s exists" % vocab_file)
@@ -133,6 +133,17 @@ def check_vocab(vocab_file, output_dir, check_special_token=True, sos=None,
           for word in vocab:
             f.write("%s\n" % word)
         vocab_file = new_vocab_file
+    if pad_vocab == True and vocab_size % 8 != 0:
+        new_vocab_file = os.path.join(output_dir, os.path.basename(vocab_file))
+        padded_vocab_size = ((vocab_size + 8 - 1)// 8) * 8
+        for i in range(0, padded_vocab_size - vocab_size):
+            token = "<madeupword" + str(i) + ">"
+            vocab.append(token)
+        with codecs.getwriter("utf-8")(
+            tf.gfile.GFile(new_vocab_file, "wb")) as f:
+            for word in vocab:
+                f.write("%s\n" % word)
+            vocab_file = new_vocab_file
   else:
     raise ValueError("vocab_file '%s' does not exist." % vocab_file)
 

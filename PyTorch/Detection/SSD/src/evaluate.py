@@ -24,7 +24,7 @@ def evaluate(model, coco, cocoGt, encoder, inv_map, args):
         print("Parsing batch: {}/{}".format(nbatch, len(coco)), end='\r')
         with torch.no_grad():
             inp = img.cuda()
-            if args.fp16:
+            if args.amp:
                 inp = inp.half()
 
             # Get predictions

@@ -170,7 +170,7 @@ def main():
                         type=float, default=0.0,
                         help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
     parser.add_argument('--log_freq',
-                        type=float, default=10.0,
+                        type=float, default=50.0,
                         help='frequency of logging loss.')
     parser.add_argument('--checkpoint_activations',
                         default=False,
@@ -333,12 +333,12 @@ def main():
             train_data = pretraining_dataset(input_file=data_file, max_pred_length=args.max_predictions_per_seq)
 
             if args.local_rank == -1:
-            train_sampler = RandomSampler(train_data)
-            train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size * n_gpu, num_workers=4, pin_memory=True)
+                train_sampler = RandomSampler(train_data)
+                train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size * n_gpu, num_workers=4, pin_memory=True)
             else:
-            train_sampler = DistributedSampler(train_data)
+                train_sampler = DistributedSampler(train_data)
+                train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size, num_workers=4, pin_memory=True)
 
-            train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size, num_workers=4, pin_memory=True)
             for step, batch in enumerate(tqdm(train_dataloader, desc="File Iteration")):
             
                 training_steps += 1
@@ -378,8 +378,9 @@ def main():
                                                                                 loss.item(), optimizer.param_groups[0]['lr']))
                     average_loss = 0
 
+                if global_step >= args.max_steps or training_steps % (
+                        args.num_steps_per_checkpoint * args.gradient_accumulation_steps) == 0:
 
-                if global_step >= args.max_steps or training_steps == 1 * args.gradient_accumulation_steps or training_steps % (args.num_steps_per_checkpoint * args.gradient_accumulation_steps) == 0:
                     if (not torch.distributed.is_initialized() or (torch.distributed.is_initialized() and torch.distributed.get_rank() == 0)):
                         # Save a trained model
                         logger.info("** ** * Saving fine - tuned model ** ** * ")

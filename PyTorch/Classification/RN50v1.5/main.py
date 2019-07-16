@@ -40,7 +40,7 @@ def add_parser_arguments(parser):
 
     parser.add_argument('data', metavar='DIR',
                         help='path to dataset')
-    parser.add_argument('--data-backend', metavar='BACKEND', default='pytorch',
+    parser.add_argument('--data-backend', metavar='BACKEND', default='dali-cpu',
                         choices=DATA_BACKEND_CHOICES)
 
     parser.add_argument('--arch', '-a', metavar='ARCH', default='resnet50',

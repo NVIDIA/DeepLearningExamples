@@ -42,6 +42,14 @@ class Dataset():
         self._num_gpus = num_gpus
         self._gpu_id = gpu_id
 
+    @property
+    def train_size(self):
+        return len(self._train_images)
+
+    @property
+    def test_size(self):
+        return len(self._test_images)
+
     def _load_multipage_tiff(self, path):
         """Load tiff images containing many images in the channel dimension"""
         return np.array([np.array(p) for p in ImageSequence.Iterator(Image.open(path))])
@@ -154,10 +162,11 @@ class Dataset():
 
         return dataset
 
-    def test_fn(self):
+    def test_fn(self, count):
         """Input function for testing"""
         dataset = tf.data.Dataset.from_tensor_slices(
-            (self._test_images))
+            self._test_images)
+        dataset = dataset.repeat(count=count)
         dataset = dataset.map(self._normalize_inputs)
         dataset = dataset.batch(self._batch_size)
         dataset = dataset.prefetch(self._batch_size)

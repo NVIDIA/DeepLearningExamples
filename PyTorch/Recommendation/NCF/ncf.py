@@ -79,8 +79,6 @@ def parse_args():
                         help='Manually set random seed for torch')
     parser.add_argument('--threshold', '-t', type=float, default=1.0,
                         help='Stop training early at threshold')
-    parser.add_argument('--valid_negative', type=int, default=100,
-                        help='Number of negative samples for each positive test example')
     parser.add_argument('--beta1', '-b1', type=float, default=0.25,
                         help='Beta1 for Adam')
     parser.add_argument('--beta2', '-b2', type=float, default=0.5,
@@ -91,6 +89,8 @@ def parse_args():
                         help='Dropout probability, if equal to 0 will not use dropout at all')
     parser.add_argument('--checkpoint_dir', default='/data/checkpoints/', type=str,
                         help='Path to the directory storing the checkpoint file')
+    parser.add_argument('--load_checkpoint_path', default=None, type=str,
+                        help='Path to the checkpoint file to be loaded before training/evaluation')
     parser.add_argument('--mode', choices=['train', 'test'], default='train', type=str,
                         help='Passing "test" will only run a single evaluation, otherwise full training will be performed')
     parser.add_argument('--grads_accumulated', default=1, type=int,
@@ -173,17 +173,13 @@ def main():
     args.distributed, args.world_size = init_distributed(args.local_rank)
     log_args(args)
 
-    main_start_time = time.time()
-    
     if args.seed is not None:
         torch.manual_seed(args.seed)
 
     print("Saving results to {}".format(args.checkpoint_dir))
     if not os.path.exists(args.checkpoint_dir) and args.checkpoint_dir != '':
         os.makedirs(args.checkpoint_dir, exist_ok=True)
-    checkpoint_path = os.path.join(args.checkpoint_dir, 'model.pth')
 
-    LOGGER.log(key=tags.PREPROC_HP_NUM_EVAL, value=args.valid_negative)
     # The default of np.random.choice is replace=True, so does pytorch random_()
     LOGGER.log(key=tags.PREPROC_HP_SAMPLE_EVAL_REPLACEMENT, value=True)
     LOGGER.log(key=tags.INPUT_HP_SAMPLE_TRAIN_REPLACEMENT, value=True)
@@ -194,10 +190,16 @@ def main():
         torch.distributed.broadcast(torch.tensor([1], device="cuda"), 0)
     torch.cuda.synchronize()
 
+    main_start_time = time.time()
     LOGGER.log(key=tags.RUN_START)
 
     train_ratings = torch.load(args.data+'/train_ratings.pt', map_location=torch.device('cuda:{}'.format(args.local_rank)))
     test_ratings = torch.load(args.data+'/test_ratings.pt', map_location=torch.device('cuda:{}'.format(args.local_rank)))
+    test_negs = torch.load(args.data+'/test_negatives.pt', map_location=torch.device('cuda:{}'.format(args.local_rank)))
+
+    valid_negative = test_negs.shape[1]
+    LOGGER.log(key=tags.PREPROC_HP_NUM_EVAL, value=valid_negative)
+
 
     nb_maxs = torch.max(train_ratings, 0)[0]
     nb_users = nb_maxs[0].item() + 1
@@ -206,7 +208,7 @@ def main():
 
     all_test_users = test_ratings.shape[0]
 
-    test_users, test_items, dup_mask, real_indices = dataloading.create_test_data(train_ratings, test_ratings, args)
+    test_users, test_items, dup_mask, real_indices = dataloading.create_test_data(test_ratings, test_negs, args)
 
     # make pytorch memory behavior more consistent later
     torch.cuda.empty_cache()
@@ -248,15 +250,25 @@ def main():
     LOGGER.log(key=tags.OPT_HP_ADAM_EPSILON, value=args.eps)
     LOGGER.log(key=tags.MODEL_HP_LOSS_FN, value=tags.VALUE_BCE)
 
+    if args.load_checkpoint_path:
+        state_dict = torch.load(args.load_checkpoint_path)
+        model.load_state_dict(state_dict)
 
     if args.mode == 'test':
-        state_dict = torch.load(checkpoint_path)
-        model.load_state_dict(state_dict)
+        LOGGER.log(key=tags.EVAL_START, value=0)
+        start = time.time()
         hr, ndcg = val_epoch(model, test_users, test_items, dup_mask, real_indices, args.topk,
-                             samples_per_user=args.valid_negative + 1,
+                             samples_per_user=valid_negative + 1,
                              num_user=all_test_users, distributed=args.distributed)
         print('HR@{K} = {hit_rate:.4f}, NDCG@{K} = {ndcg:.4f}'
               .format(K=args.topk, hit_rate=hr, ndcg=ndcg))
+        val_time = time.time() - start
+        eval_size = all_test_users * (valid_negative + 1)
+        eval_throughput = eval_size / val_time
+
+        LOGGER.log(key=tags.EVAL_ACCURACY, value={"epoch": 0, "value": hr})
+        LOGGER.log(key=tags.EVAL_STOP, value=0)
+        LOGGER.log(key='best_eval_throughput', value=eval_throughput)
         return
     
     success = False
@@ -307,7 +319,7 @@ def main():
         LOGGER.log(key=tags.EVAL_START, value=epoch)
 
         hr, ndcg = val_epoch(model, test_users, test_items, dup_mask, real_indices, args.topk,
-                             samples_per_user=args.valid_negative + 1,
+                             samples_per_user=valid_negative + 1,
                              num_user=all_test_users, epoch=epoch, distributed=args.distributed)
 
         val_time = time.time() - begin
@@ -321,15 +333,17 @@ def main():
         LOGGER.log(key=tags.EVAL_TARGET, value=args.threshold)
         LOGGER.log(key=tags.EVAL_STOP, value=epoch)
 
-        eval_size = all_test_users * (args.valid_negative + 1)
+        eval_size = all_test_users * (valid_negative + 1)
         eval_throughput = eval_size / val_time
         eval_throughputs.append(eval_throughput)
         LOGGER.log(key='eval_throughput', value=eval_throughput)
 
         if hr > max_hr and args.local_rank == 0:
             max_hr = hr
-            print("New best hr! Saving the model to: ", checkpoint_path)
-            torch.save(model.state_dict(), checkpoint_path)
+            save_checkpoint_path = os.path.join(args.checkpoint_dir, 'model.pth')
+            print("New best hr! Saving the model to: ", save_checkpoint_path)
+            torch.save(model.state_dict(), save_checkpoint_path)
+            best_model_timestamp = time.time()
 
         if args.threshold is not None:
             if hr >= args.threshold:
@@ -337,13 +351,15 @@ def main():
                 success = True
                 break
 
-    LOGGER.log(key='best_train_throughput', value=max(train_throughputs))
-    LOGGER.log(key='best_eval_throughput', value=max(eval_throughputs))
-    LOGGER.log(key='best_accuracy', value=max_hr)
-    LOGGER.log(key='time_to_target', value=time.time() - main_start_time)
+    if args.local_rank == 0:
+        LOGGER.log(key='best_train_throughput', value=max(train_throughputs))
+        LOGGER.log(key='best_eval_throughput', value=max(eval_throughputs))
+        LOGGER.log(key='best_accuracy', value=max_hr)
+        LOGGER.log(key='time_to_target', value=time.time() - main_start_time)
+        LOGGER.log(key='time_to_best_model', value=best_model_timestamp - main_start_time)
 
-    LOGGER.log(key=tags.RUN_STOP, value={"success": success})
-    LOGGER.log(key=tags.RUN_FINAL)
+        LOGGER.log(key=tags.RUN_STOP, value={"success": success})
+        LOGGER.log(key=tags.RUN_FINAL)
 
 if __name__ == '__main__':
     main()

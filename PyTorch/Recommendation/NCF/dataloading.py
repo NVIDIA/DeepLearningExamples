@@ -30,53 +30,16 @@
 
 import time
 import torch
-import tqdm
-
-class _TestNegSampler:
-    def __init__(self, train_ratings, nb_neg):
-        self.nb_neg = nb_neg
-        self.nb_users = int(train_ratings[:, 0].max()) + 1
-        self.nb_items = int(train_ratings[:, 1].max()) + 1
-
-        # compute unique ids for quickly created hash set and fast lookup
-        ids = (train_ratings[:, 0] * self.nb_items) + train_ratings[:, 1]
-        self.set = set(ids)
-
-    def generate(self, batch_size=128*1024):
-        users = torch.arange(0, self.nb_users).reshape([1, -1]).repeat([self.nb_neg, 1]).transpose(0, 1).reshape(-1)
-
-        items = [-1] * len(users)
-
-        random_items = torch.LongTensor(batch_size).random_(0, self.nb_items).tolist()
-        print('Generating validation negatives...')
-        for idx, u in enumerate(tqdm.tqdm(users.tolist())):
-            if not random_items:
-                random_items = torch.LongTensor(batch_size).random_(0, self.nb_items).tolist()
-            j = random_items.pop()
-            while u * self.nb_items + j in self.set:
-                if not random_items:
-                    random_items = torch.LongTensor(batch_size).random_(0, self.nb_items).tolist()
-                j = random_items.pop()
-
-            items[idx] = j
-        items = torch.LongTensor(items)
-        return items
 
 
-def create_test_data(train_ratings, test_ratings, args):
+def create_test_data(test_ratings, test_negs, args):
     test_users = test_ratings[:,0]
     test_pos = test_ratings[:,1].reshape(-1,1)
 
-    begin = time.time()
-    sampler = _TestNegSampler(train_ratings.cpu().numpy(), args.valid_negative)
-    test_negs = sampler.generate().cuda()
-    end = time.time()
-    print('Generating validation negatives took: ', end - begin)
-    del train_ratings
-
     # create items with real sample at last position
-    test_users = test_users.reshape(-1,1).repeat(1, 1 + args.valid_negative)
-    test_items = torch.cat((test_negs.reshape(-1, args.valid_negative), test_pos), dim=1)
+    num_valid_negative = test_negs.shape[1]
+    test_users = test_users.reshape(-1,1).repeat(1, 1 + num_valid_negative)
+    test_items = torch.cat((test_negs, test_pos), dim=1)
     del test_ratings, test_negs
 
     # generate dup mask and real indices for exact same behavior on duplication compare to reference

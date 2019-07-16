@@ -1,6 +1,20 @@
 #!/bin/bash
 
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
+train_batch_size=${1:-14}
+learning_rate=${2:-"0.4375e-4"}
+precision=${3:-"fp16"}
+num_gpus=${4:-8}
+warmup_proportion=${5:-"0.01"}
+train_steps=${6:-2285714}
+save_checkpoint_steps=${7:-2000}
+resume_training=${8:-"false"}
+create_logfile=${9:-"true"}
+accumulate_gradients=${10:-"false"}
+gradient_accumulation_steps=${11:-1}
+seed=${12:-42}
+job_name=${13:-"job"}
+
 
 DATASET=wikipedia_corpus # change this for other datasets
 
@@ -29,18 +43,6 @@ if [ ! -f "$BERT_CONFIG" ] ; then
    exit -1
 fi
 
-train_batch_size=${1:-14}
-learning_rate=${2:-"0.4375e-4"}
-precision=${3:-"fp16"}
-num_gpus=${4:-8}
-warmup_proportion=${5:-"0.01"}
-train_steps=${6:-2285714}
-save_checkpoint_steps=${7:-2000}
-resume_training=${8:-"false"}
-create_logfile=${9:-"true"}
-checkpoint_activations=${10:-"false"}
-seed=${11:-42}
-
 PREC=""
 if [ "$precision" = "fp16" ] ; then
    PREC="--fp16"
@@ -51,9 +53,9 @@ else
    exit -2
 fi
 
-CHECKPOINT_ACTIVATIONS=""
-if [ "$checkpoint_activations" == "true" ] ; then
-   CHECKPOINT_ACTIVATIONS="--checkpoint_activations"
+ACCUMULATE_GRADIENTS=""
+if [ "$accumulate_gradients" == "true" ] ; then
+   ACCUMULATE_GRADIENTS="--gradient_accumulation_steps=$gradient_accumulation_steps"
 fi
 
 CHECKPOINT=""
@@ -67,7 +69,6 @@ CMD=" /workspace/bert/run_pretraining.py"
 CMD+=" --input_dir=$DATA_DIR"
 CMD+=" --output_dir=$CHECKPOINTS_DIR"
 CMD+=" --config_file=$BERT_CONFIG"
-CMD+=" --do_train"
 CMD+=" --bert_model=bert-large-uncased"
 CMD+=" --train_batch_size=$train_batch_size"
 CMD+=" --max_seq_length=512"
@@ -78,7 +79,7 @@ CMD+=" --num_steps_per_checkpoint=$save_checkpoint_steps"
 CMD+=" --learning_rate=$learning_rate"
 CMD+=" --seed=$seed"
 CMD+=" $PREC"
-CMD+=" $CHECKPOINT_ACTIVATIONS"
+CMD+=" $ACCUMULATE_GRADIENTS"
 CMD+=" $CHECKPOINT"
 
 
@@ -93,7 +94,7 @@ if [ "$create_logfile" = "true" ] ; then
   export GBS=$(expr $train_batch_size \* $num_gpus)
   printf -v TAG "pyt_bert_pretraining_%s_gbs%d" "$precision" $GBS
   DATESTAMP=`date +'%y%m%d%H%M%S'`
-  LOGFILE=$RESULTS_DIR/$TAG.$DATESTAMP.log
+  LOGFILE=$RESULTS_DIR/$job_name.$TAG.$DATESTAMP.log
   printf "Logs written to %s\n" "$LOGFILE"
 fi
 

@@ -15,4 +15,4 @@
 # This script launches U-Net inference in TF-AMP on 1 GPUs using 2 batch size
 # Usage ./unet_INFER_BENCHMARK_TF-AMP.sh <path to this repository> <path to dataset> <path to results directory> <batch size>
 
-python $1/main.py --data_dir $2 --model_dir $3 --batch_size $4 --benchmark --use_amp --exec_mode benchmark --augment --warmup_steps 200 --log_every 100 --max_steps 300
+python $1/main.py --data_dir $2 --model_dir $3 --batch_size $4 --benchmark --use_amp --exec_mode predict --augment --warmup_steps 200 --log_every 100 --max_steps 300

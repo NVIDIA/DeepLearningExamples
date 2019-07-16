@@ -1,554 +1,739 @@
-# Bert For PyTorch
+# BERT For PyTorch
 
-This repository provides scripts and recipes to pretrain BERT from a dataset of choice and achieve state of the art accuracy on relevant fine tuning tasks. This is tested and maintained by NVIDIA.
+This repository provides a script and recipe to train the BERT model to achieve state of the art accuracy, and is tested and maintained by NVIDIA.
 
+**Table Of Contents**
 
-## Table Of Contents:
-* [The model](#the-model)
-  * [Default configuration](#default-configuration)
-* [Setup](#setup)
-  * [Requirements](#requirements)
-* [Quick start guide](#quick-start-guide)
-* [Details](#details)
-  * [Command line options](#command-line-options)
-  * [Getting the data](#getting-the-data)
-  * [Training process](#training-process)
-  * [Pre-training](#pre-training)
-  * [Fine tuning](#fine-tuning)
-  * [Enabling mixed precision](#enabling-mixed-precision)
-  * [Inference process](#inference-process)
-* [Benchmarking](#benchmarking)
-  * [Training performance benchmark](#training-performance-benchmark)
-  * [Inference performance benchmark](#inference-performance-benchmark)
-* [Results](#results)
-  * [Training accuracy results](#training-accuracy-results)
-  * [Training stability test](#training-stability-test)
-  * [Training performance results](#training-performance-results)
-      * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
-      * [NVIDIA DGX-1 (8x V100 32G)](#nvidia-dgx-1-8x-v100-32g)
-      * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-16x-v100-32g)
-  * [Inference performance results](#inference-performance-results)
-      * [NVIDIA DGX-1 16G (1x V100 16G)](#nvidia-dgx-1-16g-1x-v100-16g)
-      * [NVIDIA DGX-1 32G (1x V100 32G)](#nvidia-dgx-1-32g-1x-v100-32g)
-      * [NVIDIA DGX-2 32G (1x V100 32G)](#nvidia-dgx-2-32g-1x-v100-32g)
-* [Changelog](#changelog)
-* [Known issues](#known-issues)
+- [Model overview](#model-overview)
+    * [Model architecture](#model-architecture)
+    * [Default configuration](#default-configuration)
+    * [Feature support matrix](#feature-support-matrix)
+        * [Features](#features)
+    * [Mixed precision training](#mixed-precision-training)
+        * [Enabling mixed precision](#enabling-mixed-precision)
+- [Setup](#setup)
+    * [Requirements](#requirements)
+- [Quick Start Guide](#quick-start-guide)
+- [Advanced](#advanced)
+    * [Scripts and sample code](#scripts-and-sample-code)
+    * [Parameters](#parameters)
+    * [Command-line options](#command-line-options)
+    * [Getting the data](#getting-the-data)
+        * [Dataset guidelines](#dataset-guidelines)
+        * [Multi-dataset](#multi-dataset)
+    * [Training process](#training-process)
+    * [Inference process](#inference-process)
+- [Performance](#performance)
+    * [Benchmarking](#benchmarking)
+        * [Training performance benchmark](#training-performance-benchmark)
+        * [Inference performance benchmark](#inference-performance-benchmark)
+    * [Results](#results)
+        * [Training accuracy results](#training-accuracy-results)
+            * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
+            * [Training stability test](#training-stability-test)
+        * [Training performance results](#training-performance-results)
+            * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g-1)
+            * [Training performance: NVIDIA DGX-1 (8x V100 32G)](#nvidia-dgx-1-8x-v100-32g)
+            * [Training performance: NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-16x-v100-32g)
+        * [Inference performance results](#inference-performance-results)
+            * [Inference performance: NVIDIA DGX-1 (8x V100 16G)](#inference-performance-nvidia-dgx-1-8x-v100-16g)
+            * [Inference performance: NVIDIA DGX-1 (8x V100 32G)](#inference-performance-nvidia-dgx-1-8x-v100-32g)
+            * [Inference performance: NVIDIA DGX-2 (16x V100 32G)](#inference-performance-nvidia-dgx-2-16x-v100-32g)
+- [Release notes](#release-notes)
+    * [Changelog](#changelog)
+    * [Known issues](#known-issues)
 
-## The model
+## Model overview
+BERT, or Bidirectional Encoder Representations from Transformers, is a new method of pre-training language representations which obtains state-of-the-art results on a wide array of Natural Language Processing (NLP) tasks. This model is based on the [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805) paper. NVIDIA's implementation of BERT is an optimized version of the [Hugging Face implementation](https://github.com/huggingface/pytorch-pretrained-BERT), leveraging mixed precision arithmetic and tensor cores on V100 GPUs for faster training times while maintaining target accuracy.
 
-BERT, or Bidirectional Encoder Representations from Transformers, is a new method of pre-training language representations which obtains state-of-the-art results on a wide array of Natural Language Processing (NLP) tasks. This model is based on [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805) paper. NVIDIA's BERT 19.04 is an optimized version of [Google's official implementation](https://github.com/google-research/bert), leveraging mixed precision arithmetic and tensor cores on V100 GPUS for faster training times while maintaining target accuracy. 
+The repository also contains scripts to interactively launch data download, training, benchmarking and inference routines in a Docker container for both pre-training and fine-tuning for tasks such as question answering. The major differences between the original implementation of the paper and this version of BERT are as follows:
 
-
-The repository also contains scripts to interactively launch data download, training, benchmarking and inference routines in a Docker container for both pretraining and fine tuning for Question Answering. The major differences between the official implementation of the paper and our version of BERT are as follows:
-- [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format, while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [tensor cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing architectures, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures.  Using [mixed precision training](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) previously required two steps:
-- 1. Porting the model to use the FP16 data type where appropriate.
-- 2. Manually adding loss scaling to preserve small gradient values.
-
-Mixed precision is enabled in PyTorch by using the Automatic Mixed Precision (AMP),  library from [APEX](https://github.com/NVIDIA/apex) that casts variables to half-precision upon retrieval, while storing variables in single-precision format. Furthermore, to preserve small gradient magnitudes in backpropagation, a [loss scaling](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#lossscaling) step must be included when applying gradients. In PyTorch, loss scaling can be easily applied by using scale_loss() method provided by amp. The scaling value to be used can be [dynamic](https://nvidia.github.io/apex/fp16_utils.html#apex.fp16_utils.DynamicLossScaler) or fixed.
-
-For an in-depth walk through on AMP, check out sample usage [here](https://github.com/NVIDIA/apex/tree/master/apex/amp#usage-and-getting-started). [APEX](https://github.com/NVIDIA/apex) is a PyTorch extension that contains utility libraries, such as AMP, which require minimal network code changes to leverage tensor cores performance.
-
-- Scripts to download dataset for 
-    - Pretraining - [Wikipedia](https://dumps.wikimedia.org/),  [BookCorpus](http://yknzhu.wixsite.com/mbweb)
-    - Fine Tuning - [SQuaD](https://rajpurkar.github.io/SQuAD-explorer/) (Stanford Question Answering Dataset), Pretrained Weights from Google
-- Custom fused CUDA kernels for faster computations
-- Multi-GPU/Multi-Node support using [APEX DDP](https://github.com/NVIDIA/apex#2-distributed-training)
-
-
-These techniques and optimizations improve model performance and reduce training time, allowing you to perform various NLP tasks with no additional effort.
-
+-   Scripts to download Wikipedia and BookCorpus datasets
+-   Scripts to preprocess downloaded data or a custom corpus into inputs and targets for pre-training in a modular fashion.
+-   Fused CUDA kernels for better performance with Adam and LayerNorm
+-   Automatic Mixed precision training support
 
 Other publicly available implementations of BERT include:
-1. [Hugging Face](https://github.com/huggingface/pytorch-pretrained-BERT)
-2. [codertimo](https://github.com/codertimo/BERT-pytorch)
 
+1.  [Google's official implementation](https://github.com/google-research/bert)
+2.  [codertimo](https://github.com/codertimo/BERT-pytorch)
+    
 
-This model trains with mixed precision tensor cores on Volta, therefore researchers can get results much faster than training without tensor cores. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
+This model trains with mixed precision tensor cores on Volta and provides a push-button solution to pretraining on a corpus of choice. As a result, researchers can get results 4x faster than training without tensor cores. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
+
+### Model architecture
+
+The BERT architecture uses the same architecture as the encoder half of the Transformer. Input sequences are projected into an embedding space before being fed into the encoder structure. Additionally, a positional and segment encodings are added to the embeddings to preserve positional information. The encoder structure is simply a stack of Transformer blocks, which consist of a multi-head attention layer followed by successive stages of feed-forward networks and layer normalization. The multi-head attention layer accomplishes self-attention on multiple input representations.
+
+An illustration of the architecture taken from the [Transformer paper](https://arxiv.org/pdf/1706.03762.pdf) is shown below.
+
+ ![BERT](images/model.png)
 
 ### Default configuration
 
-BERT's model architecture is a multi-layer bidirectional Transformer encoder. Based on the model size, we have the following two default configurations of BERT.
+The architecture of the BERT model is almost identical to the Transformer model that was first introduced in the [Attention Is All You Need paper](https://arxiv.org/pdf/1706.03762.pdf). The main innovation of BERT lies in the pre-training step, where the model is trained on two unsupervised prediction tasks using a large text corpus. Training on these unsupervised tasks produces a generic language model, which can then be quickly fine-tuned to achieve state-of-the-art performance on language processing tasks such as question answering.
+
+The BERT paper reports results two configurations of BERT, each corresponding to a unique model size. This implementation provides the same configurations by default, which are described in the table below.  
 
 | **Model** | **Hidden layers** | **Hidden unit size** | **Attention heads** | **Feedforward filter size** | **Max sequence length** | **Parameters** |
 |:---------:|:----------:|:----:|:---:|:--------:|:---:|:----:|
 |BERTBASE |12 encoder| 768| 12|4 x  768|512|110M|
 |BERTLARGE|24 encoder|1024| 16|4 x 1024|512|330M|
 
-## Setup
-The following section list the requirements in order to start training the BERT model.
+Additionally, this implementation supports training on multiple GPUs. Mixed precision training and inference with dynamic loss scaling is also supported.
 
-### Requirements
-This repository contains `Dockerfile` which extends the TensorFlow NGC container and encapsulates some dependencies.  Aside from these dependencies, ensure you have the following components:
-- [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-- [PyTorch 19.04-py3](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) NGC container
-- [NVIDIA Volta based GPU](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
+### Feature support matrix
 
+The following features are supported by this model.  
 
-For more information about how to get started with NGC containers, see the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
-- [Getting Started Using NVIDIA GPU Cloud](https://docs.nvidia.com/ngc/ngc-getting-started-guide/index.html)
-- [Accessing And Pulling From The NGC Container Registry](https://docs.nvidia.com/deeplearning/dgx/user-guide/index.html#accessing_registry)
-- [Running PyTorch](https://docs.nvidia.com/deeplearning/dgx/pytorch-release-notes/running.html#running)
+| **Feature** | **BERT** |
+|:---------:|:----------:|
+|APEX AMP|Yes|
+|APEX DDP|Yes|
 
-## Quick start guide
-To pretrain or fine tune your model for Question Answering using mixed precision with tensor cores or using FP32, perform the following steps using the default parameters of the BERT model.
+#### Features
+[APEX](https://github.com/NVIDIA/apex) is a Pytorch extension with NVIDIA-maintained utilities to streamline mixed precision and distributed training. [DDP](https://nvidia.github.io/apex/parallel.html) stands for DistributedDataParallel and is used for multi gpu training, where as [AMP](https://nvidia.github.io/apex/amp.html) is an abbreviation used for mixed precision training.
 
-### 1. Clone the repository.
+### Mixed precision training
 
-```bash
-git clone https://github.com/NVIDIA/DeepLearningExamples
-cd DeepLearningExamples/PyTorch/LanguageModeling/BERT
-```
+Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format, while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [tensor cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing architecture, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using mixed precision training requires two steps:
 
-### 2. Build the BERT TensorFlow NGC container.
-
-```bash
-bash scripts/docker/build.sh
-```
-
-### 3. Download and preprocess the dataset.
-This repository provides scripts to download, verify and extract various datasets: 
-SQuaD and swag for fine-tuning as well as Wikipedia and BookCorpus for pretraining. If you just want to do fine-tuning, you can also download  the pretrained weights.
-
-To download, verify, and extract required datasets: 
-
-```bash
-bash scripts/data_download.sh  
-```
-
-Datasets can also be mixed before used for training or inference. In case of training there are two options:
-
-
-The script launches a docker container with current directory mounted and downloads datasets to `data/` folder on the host. 
-
-
-Datasets can also be mixed before used for training or inference
-
-
-### 4. Start an interactive session in the NGC container to run training/inference.
-After you build the container image and download the data, you can start an interactive CLI session as follows:  
-
-```bash
-bash scripts/docker/launch.sh
-```
-
-The `launch.sh` script assumes that the datasets are in the following locations by default after downloading data. 
-- SQuaD v1.1 - `data/squad/v1.1`
-- BERT - `data/pretrained_models_google/uncased_L-24_H-1024_A-16`
-- Wikipedia - `data/wikipedia_corpus/hdf5_shards`
-- BookCorpus -  `data/bookcorpus/hdf5_shards`
-
-
-### 5. Start pre-training.
-BERT is designed to pre-train deep bidirectional representations for language representations. The following scripts are to replicate pretraining on Wikipedia+Book Corpus from the [paper](https://arxiv.org/pdf/1810.04805.pdf). These scripts are general and can be used for pretraining language representations on any corpus of choice.
-
-From within the container, you can use the following script to run pre-training.
-```bash
-bash scripts/run_pretraining.sh <train_batch_size_per_gpu> <learning_rate> <precision> <num_gpus> <warmup_proportion> <train_steps> <save_checkpoint_steps> <create_logfile>
-```
-
-<!-- For FP16 training with XLA using a DGX-1 V100 32G, run:
-```bash
-bash scripts/run_pretraining.sh 14 8 5e-5 fp16_xla 8 5000 2285000 5000 true
-```
-
-For FP32 training without XLA using a DGX-1 V100 32G, run:
-```bash
-bash scripts/run_pretraining.sh 6 6 2e-5 fp32 8 2000 5333333 5000 true
-``` -->
-
-### 6. Start fine tuning.
-The above pretrained BERT representations can be fine tuned with just one additional output layer for a state-of-the-art Question Answering system. From within the container, you can use the following script to run fine-training for SQuaD.
-
-```bash
-bash scripts/run_squad.sh <batch_size_per_gpu> <learning_rate_per_gpu> <precision> <num_gpus> <checkpoint> <epochs>
-```
-
-
-For FP32 training using a DGX-1 V100 32G, run:
-```bash
-bash scripts/run_squad.sh 5 5e-6 fp32 8 /bert/bert_model.ckpt 2
-```
-
-### 7. Start validation/evaluation.
-The `run_squad_inference.sh` script runs inference on a checkpoint fine tuned for SQuaD and evaluates the goodness of predictions on the basis of exact match and F1 score.
-
-```bash
-bash scripts/run_squad_inference.sh <init_checkpoint> <batch_size> <precision> 
-```
-
-For FP32 inference without XLA using a DGX-1 V100 32G, run:
-```bash
-bash scripts/run_squad_inference.sh /results/model.ckpt 8 fp32 
-```
-
-## Details
-The following sections provide greater details of the dataset, running training and inference, and the training results.
-
-### Command line options
-To see the full list of available options and their descriptions, use the -h or --help command line option, for example: 
-```bash
-python run_pretraining.py --help
-python run_squad.py --help 
-```
-
-Aside from options to set hyperparameters, the relevant options to control the behaviour of the `run_pretraining.py` script are: 
-```bash
-  --[no]amp: Whether to enable AMP ops.(default: 'false')
-  --[no]amp_fastmath: Whether to enable AMP fasthmath ops.(default: 'false')
-  --bert_config_file: The config json file corresponding to the pre-trained BERT model. This specifies the model architecture.
-  --[no]do_eval: Whether to run evaluation on the dev set.(default: 'false')
-  --[no]do_train: Whether to run training.(evaluation: 'false')
-  --eval_batch_size: Total batch size for eval.(default: '8')(an integer)
-  --[no]fastmath: Whether to enable loss scaler for fasthmath ops.(default: 'false')
-  --[no]horovod: Whether to use Horovod for multi-gpu runs(default: 'false')
-  --init_checkpoint: Initial checkpoint (usually from a pre-trained BERT model).
-  --input_file: Input TF example files (can be a glob or comma separated).
-  --iterations_per_loop: How many steps to make in each estimator call.(default: '1000')
-```
-
-Aside from options to set hyperparameters, some relevant options to control the behaviour of the run_squad.py script are: 
-```bash
-  --bert_config_file: The config json file corresponding to the pre-trained BERT model. This specifies the model architecture.
-  --[no]do_predict: Whether to run evaluation on the dev set. (default: 'false')
-  --[no]do_train: Whether to run training. (default: 'false')
-  --learning_rate: The initial learning rate for Adam.(default: '5e-06')(a number)
-  --max_answer_length: The maximum length of an answer that can be generated. This is needed because the start and end predictions are not conditioned on one another.(default: '30')(an integer)
-  --max_query_length: The maximum number of tokens for the question. Questions longer than this will be truncated to this length.(default: '64')(an integer)
-  --max_seq_length: The maximum total input sequence length after WordPiece tokenization. Sequences longer than this will be truncated, and sequences shorter than this will be padded.(default: '384')(an integer)
-  --predict_batch_size: Total batch size for predictions.(default: '8')(an integer)
-  --train_batch_size: Total batch size for training.(default: '8')(an integer)
-  --[no]use_fp16: Whether to use fp32 or fp16 arithmetic on GPU.(default: 'false')
-  --[no]use_xla: Whether to enable XLA JIT compilation.(default: 'false')
-  --[no]verbose_logging: If true, all of the warnings related to data processing will be printed. A number of warnings are expected for a normal SQuAD evaluation.(default: 'false')
-  --[no]version_2_with_negative: If true, the SQuAD examples contain some that do not have an answer.(default: 'false')
-```
-
-### Getting the data
-For pre-training BERT, we use the concatenation of Wikipedia (2500M words) as well as Book Corpus (800M words). For Wikipedia, we extract only the text passages from [here](ftp://ftpmirror.your.org/pub/wikimedia/dumps/enwiki/20190301/enwiki-20190301-pages-articles-multistream.xml.bz2) and ignore headers list and tables. It is structured as a document level corpus rather than a shuffled sentence level corpus because it is critical to extract long contiguous sentences. The next step is to run `create_pretraining_data.py` with the document level corpus as input, which generates input data and labels for the masked language modeling and next sentence prediction tasks. Pre-training can also be performed on any corpus of your choice. The collection of data generation scripts are intended to be modular to allow modifications for additional preprocessing steps or to use additional data.
-
-#### Mixing datasets
-
-The repository provides tools to mix datasets for both training and finetuning.
-In case of training there are two options:
-
-a) inter sequence-pair mixing (after pretraining data is created)
-
-In the `data/` directory, `merge_datasets_after_creation.sh` is a tool to mix data from multiple source corpora. To perform this mixing, the source corpora need to be already in the format of pretraining data, i.e. .hdf5 files. To call the script, use:
-
-
-```bash
-cd data
-bash merge_datasets_after_creation.sh  <destination_folder> <input_directories> <num_shards>
-```
-
-For example, to merge the bookcorpus and Wikipedia corpora provided with this repository and create 1024 new shards containing the mixed training instances, first make sure that `data/bookcorpus/hdf5_shards/` and `data/wikipedia_corpus/hdf5_shards/` exist and are filled with .hdf5, then run:
-
-```
-cd data
-bash merge_datasets_after_creation.sh inter_instance_merged_wiki+books bookcorpus/hdf5_shards/,wikipedia_corpus/hdf5_shards/ 1024
-```
-
-b) intra sequence-pair mixing (before pretraining data is created)
-
-
-In the `data/` directory, `merge_datasets_from_start.sh` is a tool to mix data from multiple source corpora. To perform this mixing, the source corpora must each be condensed into a single file that contains the entire corpus text, with line within the file corresponding to a document in the corpus. The script is then called as such:
-
-```
-cd data
-merge_datasets_from_start.sh DESTINATION_FOLDER CORPUS_1 CORPUS_2 CORPUS_3 ...
-```
-
-For example, to merge the bookcorpus and Wikipedia corpora provided with this repository, first make sure that `data/bookcorpus/intermediate_files/bookcorpus.txt` and `data/wikipedia_corpus/intermediate_files/wikipedia.txt` exist, then run:
-
-```
-cd data
-merge_datasets_from_start.sh intra_instance_merged_wiki+books bookcorpus/intermediate_files/bookcorpus.txt wikipedia_corpus/intermediate_files/wikipedia.txt
-```
-
-Note that `merge_datasets_from_start.sh` has a few dependencies, so it may be preferable to modify `data_download_helper.sh` to call the merging script and run `data_download.sh` so that the mixing process is done in a container.
-
-#### Fine Tuning datasets
-
-We can use a pre-trained BERT model for other fine tuning tasks like Question Answering. We use SQuaD for this task. SQuaD v1.1 has 100,000+ question-answer pairs on 500+ articles. SQuaD v2.0 combines v1.1 with an additional 50,000 new unanswerable questions and must not only answer questions but also determine when that is not possible. 
-
-### Training process
-The training process consists of two steps: pre-training and fine tuning.
-
-#### Pre-training
-Pre-training is performed using the `run_pretraining.py` script along with parameters defined in the `scripts/run_pretraining.sh`.
-
-
-The `run_pretraining.sh` script runs a job on a single node  that trains the BERT-large model from scratch using the Wikipedia and Book corpus datasets as training data. By default, the training script:
-- Runs on 8 GPUs with training batch size of 14 and evaluation batch size of 8 per GPU.
-- Has FP16 precision enabled.
-- Runs for 1144000 steps with 10000 warm-up steps.
-- Saves a checkpoint every 5000 iterations (keeps only the latest checkpoint) and at the end of training. All checkpoints, evaluation results and training logs are saved to the `/results` directory (in the container which can be mounted to a local directory).
-- Creates the log file containing all the output.
-- Evaluates the model at the end of training. To skip evaluation, modify `--do_eval` to `False`.
-
-These parameters will train Wikipedia + BooksCorpus to reasonable accuracy on a DGX1 with 32GB V100 cards. If you want to match google’s best results from the BERT paper, you should either train for twice as many steps (2,288,000 steps) on a DGX1, or train on 16 GPUs on a DGX2. The DGX2 having 16 GPUs will be able to fit a batch size twice as large as a DGX1 (224 vs 112), hence the DGX2 can finish in half as many steps. 
-
-
-For example:
-```bash
-run_pretraining.sh <training_batch_size> <eval_batch_size> <learning-rate> <precision> <num_gpus> <warmup_proportion> <training_steps> <save_checkpoint_steps> <create_logfile>
-```
-
-Where:
-- <training_batch_size> is per-gpu batch size used for training. Batch size varies with <precision>, larger batch sizes run more efficiently, but require more memory.
-
-- <eval_batch_size> per-gpu batch size used for evaluation after training.<learning_rate> Default rate of 1e-4 is good for global batch size 256.
-
-- <precision> Type of math in your model, can be either fp32, fp16, fastmath, amp_fm, amp_fm_xla, amp . The options mean:
-
-    - fp32 32 bit IEEE single precision floats.
-
-    - fp16 Hand-coded mixed precision 16 and 32 bit floats.
-
-    - fp16 Hand-coded mixed precision floats, JIT compiled with XLA.
-
-    - fastmath Matmuls done by tensor cores in mixed precision, the rest is done in FP32.
-
-    - amp_fm Alternative FastMath implementation that works by manipulating TensorFlow’s compute graph.
-
-    - amp_fm_xla The amp_fm flag plus XLA JIT compilation.
-
-    - amp Automatic rewrite of TensorFlow compute graph to take advantage of 16 bit arithmetic whenever that is safe.
-
-    - amp_xla The amp flag plus XLA JIT compilation.
-
-- <num_gpus> Number of GPUs to use for training. Must be equal to or smaller than the number of GPUs attached to your node.
-
-- <warmup_steps> Number of warm-up steps at the start of training.
-
-- <training_steps> Total number of training steps.
-
-- <save_checkpoint_steps> Controls how often checkpoints are saved. Default is 5000 steps.
-
-- <create_logfile> Flag indicating if output should be written to a logfile or not (acceptable values are ‘true’ or ‘false’, true indicates output should be saved to a logfile.)
-
-
-For example:
-```bash
-bert_tf/scripts/run_pretraining.sh 14 8 1e-4 fp16_xla 16 10000 1144000 5000 true
-```
-
-Trains BERT-large from scratch on a single DGX-2 using FP16 arithmetic. This will take around 156 hours / 6.5 days. Checkpoints are written out every 5000 steps and all printouts are saved to a logfile.
-
-#### Fine tuning
-Fine tuning is performed using the `run_squad.py` script along with parameters defined in `scripts/run_squad.sh`.
-
-The `run_squad.sh` script trains a model and performs evaluation on the SQuaD v1.1 dataset. By default, the training script: 
-- Uses 8 GPUs and batch size of 10 on each GPU.
-- Has FP16 precision enabled.
-- Is XLA enabled.
-- Runs for 2 epochs.
-- Saves a checkpoint every 1000 iterations (keeps only the latest checkpoint) and at the end of training. All checkpoints, evaluation results and training logs are saved to the `/results` directory (in the container which can be mounted to a local directory).
-- Evaluation is done at the end of training. To skip evaluation, modify `--do_predict` to `False`.
-
-This script outputs checkpoints to the `/results` directory, by default, inside the container. Mount point of `/results` can be changed in the `scripts/docker/launch.sh` file. The training log contains information about:
-- Loss for the final step
-- Training and evaluation performance
-- F1 and exact match score on the Dev Set of SQuaD after evaluation. 
-
-The summary after training is printed in the following format:
-```bash
-I0312 23:10:45.137036 140287431493376 run_squad.py:1332] 0 Total Training Time = 3007.00 Training Time W/O start up overhead = 2855.92 Sentences processed = 175176
-I0312 23:10:45.137243 140287431493376 run_squad.py:1333] 0 Training Performance = 61.3378 sentences/sec
-I0312 23:14:00.550846 140287431493376 run_squad.py:1396] 0 Total Inference Time = 145.46 Inference Time W/O start up overhead = 131.86 Sentences processed = 10840
-I0312 23:14:00.550973 140287431493376 run_squad.py:1397] 0 Inference Performance = 82.2095 sentences/sec
-{"exact_match": 83.69914853358561, "f1": 90.8477003317459}
-```
-
-Multi-gpu training is enabled with the Horovod TensorFlow module. The following example runs training on 8 GPUs: 
-```bash
-mpi_command="mpirun -np 8 -H localhost:8 \
-    --allow-run-as-root -bind-to none -map-by slot \
-    -x NCCL_DEBUG=INFO \
-    -x LD_LIBRARY_PATH \
-    -x PATH -mca pml ob1 -mca btl ^openib" \
-     python run_squad.py --horovod
-```
-
-### Enabling mixed precision
-[Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format, while storing minimal information in single-precision to retain as much information as possible in critical parts of the network.  Since the introduction of [tensor cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing architectures, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures.  Using [mixed precision training](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) previously required two steps:
-1. Porting the model to use the FP16 data type where appropriate.
-2. Manually adding loss scaling to preserve small gradient values. 
-This can now be achieved using Automatic Mixed Precision (AMP) for TensorFlow to enable the full [mixed precision methodology](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#tensorflow) in your existing TensorFlow model code.  AMP enables mixed precision training on Volta and Turing GPUs automatically. The TensorFlow framework code makes all necessary model changes internally.
-
-In TF-AMP, the computational graph is optimized to use as few casts as necessary and maximize the use of FP16, and the loss scaling is automatically applied inside of supported optimizers. AMP can be configured to work with the existing `tf.contrib` loss scaling manager by disabling the AMP scaling with a single environment variable to perform only the automatic mixed-precision optimization. It accomplishes this by automatically rewriting all computation graphs with the necessary operations to enable mixed precision training and automatic loss scaling.
+1.  Porting the model to use the FP16 data type where appropriate.
+2.  Adding loss scaling to preserve small gradient values.
 
 For information about:
-- How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) documentation.
-- How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp) from the TensorFlow User Guide.
-- Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
+
+-   How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) documentation.
+-   Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
+
+APEX tools for mixed precision training, see the [NVIDIA Apex: Tools for Easy Mixed-Precision Training in PyTorch](https://devblogs.nvidia.com/apex-pytorch-easy-mixed-precision-training/).
+  
+#### Enabling mixed precision
+
+In this repository, mixed precision training is enabled by NVIDIA’s APEX library. The APEX library has an automatic mixed precision module that allows mixed precision to be enabled with minimal code changes.
+
+Automatic mixed precision can be enabled with the following code changes: 
+
+```
+from apex import amp
+if fp16:
+    # Wrap optimizer and model
+    model, optimizer = amp.initialize(model, optimizer, opt_level=<opt_level>, loss_scale=”dynamic”)
+ 
+if fp16:
+    with amp.scale_loss(loss, optimizer) as scaled_loss:
+        scaled_loss.backward()
+   ```
+
+  
+Where <opt_level> is the optimization level. In the pretraining, “O2” is set as the optimization level. Mixed precision training can be turned on by passing in the argument fp16 to the pre-training and fine-tuning Python scripts. Shell scripts all have a positional argument available to enable mixed precision training.
+  
+## Setup
+
+The following section lists the requirements in order to start training the BERT model.
+
+### Requirements
+
+This repository contains Dockerfile which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
+
+-   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
+-   [PyTorch 19.06-py3 NGC container or later](https://ngc.nvidia.com/registry/nvidia-pytorch)
+-   [NVIDIA Volta based GPU](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
+
+For more information about how to get started with NGC containers, see the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
+
+-   [Getting Started Using NVIDIA GPU Cloud](https://docs.nvidia.com/ngc/ngc-getting-started-guide/index.html)
+-   [Accessing And Pulling From The NGC Container Registry](https://docs.nvidia.com/deeplearning/dgx/user-guide/index.html#accessing_registry)
+-   [Running PyTorch](https://docs.nvidia.com/deeplearning/dgx/pytorch-release-notes/running.html#running)
+
+For those unable to use the PyTorch NGC container, to set up the required environment or create your own container, see the versioned [NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/dgx/support-matrix/index.html).
+
+## Quick Start Guide
+
+To train your model using mixed precision with tensor cores or using FP32, perform the following steps using the default parameters of the BERT model. For the specifics concerning training and inference, see [Details](https://docs.google.com/document/d/1O5f8pzO89rFhFgysrXAN6Y3di5oyhDlf_K6Q63VrMWM/edit#heading=h.fdn4uvtc4wbi).
+  
+
+1. Clone the repository.
+
+`git clone https://github.com/NVIDIA/DeepLearningExamples.git`
+
+`cd DeepLearningExamples/PyTorch/LanguageModeling/BERT`
+
+
+2. Download NVIDIA pretrained checkpoint.
+
+If you wish to use a pretrained checkpoint, visit [NGC](https://ngc.nvidia.com/catalog/models) and browse the available models. This downloaded checkpoint is used to fine-tune on SQuAD.
+
+3. Build the BERT 19.06 NGC container.
+
+`bash scripts/docker/build.sh`
+
+4. Start an interactive session in the NGC container to run training/inference.
+
+`bash scripts/docker/launch.sh <DATA_DIR> <VOCAB_DIR> <CHECKPOINT_DIR>`
+
+`<DATA_DIR>` - Path to `data` folder in the cloned repository. This directory contains scripts needed to download datasets and where the data will be downloaded.
+
+`<VOCAB_DIR>` - Path to `vocab` folder in the cloned repository. This is the vocabulary with which BERT checkpoint is pretrained.
+
+`<CHECKPOINT_DIR>` - Path to folder contaning the downloaded pretrained checkpoint from step 2 for fine-tuning.
+
+The above paths present on the local machine get mouted to predefined locations in the container.
+
+`data` and `vocab` are a part of .dockerignore in order to provide the user the ability to mount datasets of choice and not necessarily the ones downloaded by the script below. In this case, `<DATA_DIR>` points to users corpus. Refer to section [Getting the data](#getting-the-data) for more details on how to process a custom corpus as required for BERT pretraining.
+
+5. Download and preprocess the dataset.
+
+This repository provides scripts to download, verify and extract the following datasets:
+
+-   [SQuAD](https://rajpurkar.github.io/SQuAD-explorer/) (fine-tuning for question answering)
+-   [SWAG](https://rowanzellers.com/swag/) (fine-tuning for multiple choice)
+-   [MRPC](https://www.microsoft.com/en-us/download/details.aspx?id=52398) (fine-tuning for sentence classification)
+-   Wikipedia (pre-training)
+-   BookCorpus (pre-training)
+
+To download, verify, and extract the datasets, run:
+`bash scripts/data_download.sh`
+
+  Once data download is complete, the following folders should exist in `<DATA_DIR>` specified in step 4:
+
+-   SQuAD v1.1 - data/squad/v1.1
+-   SWAG - data/swag
+-   MRPC - data/glue/MRPC
+-   Vocab files - vocab/uncased_L-24_H-1024_A-16
+-   Wikipedia - data/wikipedia_corpus/hdf5_shards
+-   BookCorpus - data/bookcorpus/hdf5_shards
+-   Mixed Wikipedia/Bookcorpus - data/merged_wiki+books/hdf5_shards
+
+6. Start Pre training.
+
+BERT is designed to pre-train deep bidirectional representations for language representations. The following scripts are to replicate pretraining on Wikipedia+Book Corpus from this [paper](https://arxiv.org/pdf/1810.04805.pdf). These scripts are general and can be used for pre-training language representations on any corpus of choice.
+
+From within the container, you can use the following script to run pre-training.
+`bash scripts/run_pretraining.sh 14 0.875e-4 fp16 16 0.01 1142857 2000 false true`
+
+More details can be found in Details/Training Process
+  
+7. Start Fine Tuning SQUAD.
+
+The above pretrained BERT representations can be fine tuned with just one additional output layer for a state-of-the-art question answering system. Running the following script launches fine-tuning for question answering with the SQuaD dataset.
+
+`bash scripts/run_squad.sh /workspace/checkpoints/<downloaded_checkpoint>`
+
+Default arguments are listed below in order,
+
+-   Initial checkpoint - "/workspace/checkpoints/bert_uncased.pt"
+-   Number of training Epochs - 2
+-   Batch size - 3
+-   Learning rate - 3e-5
+-   Precision (either fp16 or fp32) - fp16
+-   Number of GPUs - 8
+-   Seed - 1
+-   SQuAD directory -  /workspace/bert/data/v1.1
+-   Vocabulary file (token to ID mapping) - /workspace/bert/vocab/vocab
+-   Output directory for result - /results/SQuAD
+-   Mode (“train”, “eval”, “train eval”, "predict") - train
+-   Config file for the bert model (It should be the same as the pretrained model) - /workspace/bert/bert_config.json
+
+The script will save the final checkpoint to the /results/SQuAD/pytorch_model.bin file.
+
+9. Start validation/evaluation.
+
+Validation can be performed with the same script as above, setting Mode to "prediction".
+
+10. Start inference/predictions.
+
+Inference can be performed with the same script as above, setting Mode to "eval". Inference predictions get saved to `<OUTPUT_DIRECTORY>/predictions.json`
+
+## Advanced
+
+The following sections provide greater details of the dataset, running training and inference, and the training results. 
+
+### Scripts and sample code
+
+Descriptions of the key scripts and folders are provided below.
+
+-   `data/` - Contains scripts for downloading and preparing individual datasets, and will contain downloaded and processed datasets.
+-   `scripts/` - Contains shell scripts to launch data download, pre-training, and fine-tuning.
+	-   `data_download.sh` - Launches download and processing of required datasets.
+	-   `run_squad.sh`  - Interface for launching question answering fine-tuning with `run_squad.py`.
+	-   `run_pretraining.sh`  - Interface for launching BERT pre-training with `run_pretraining.py`.
+-   `create_pretraining_data.py` - Creates .hdf5 files from shared text files in the final step of dataset creation.
+-   `model.py` - Implements the BERT pre-training and fine-tuning model architectures with PyTorch.
+-   `optimization.py` - Implements the ADAM optimizer with PyTorch.
+-   `run_squad.py` - Implements fine tuning training and evaluation for question answering on the [SQuaD](https://rajpurkar.github.io/SQuAD-explorer/) dataset.
+-   `run_pretraining.py` - Implements BERT pre-training.
+-   `run_pretraining_inference.py` - Implements evaluation of a BERT pre-trained model.
+
+### Parameters
+
+#### run_pretraining.py script parameters
+
+The complete list of the available parameters for the `run_pretraining.py` script are:
+
+```
+  --input_dir INPUT_DIR       - The input data directory. 
+                                Should contain .hdf5 files for the task.
+
+  --config_file CONFIG_FILE   - Path to a json file describing the BERT model 
+                                configuration. This file configures the model 
+                                architecture, such as the number of transformer 
+                                blocks, number of attention heads, etc.
+
+  --bert_model BERT_MODEL     - Specifies the type of BERT model to use; 
+                                should be one of the following:
+	    bert-base-uncased
+	    bert-large-uncased
+	    bert-base-cased
+	    bert-base-multilingual
+	    bert-base-chinese
+
+  --output_dir OUTPUT_DIR     - Path to the output directory where the model 
+                                checkpoints will be written.
+
+  --max_seq_length MAX_SEQ_LENGTH 
+                              - The maximum total input sequence length after 
+                                WordPiece tokenization. Sequences longer than 
+                                this will be truncated, and sequences shorter 
+                                than this will be padded. .
+
+  --max_predictions_per_seq MAX_PREDICTIONS_PER_SEQ 
+                              - The maximum total of masked tokens per input 
+                                sequence for Masked LM. 
+
+  --train_batch_size TRAIN_BATCH_SIZE 
+                              - Batch size per GPU for training.
+
+  --learning_rate LEARNING_RATE 
+                              - The initial learning rate for ADAM optimizer.
+
+  --max_steps MAX_STEPS       - Total number of training steps to perform.
+
+  --warmup_proportion WARMUP_PROPORTION 
+                              - Proportion of training to perform linear learning 
+                                rate warmup for. For example, 0.1 = 10% of training.
+
+  --seed SEED                 - Sets the seed to use for random number generation.
+
+  --gradient_accumulation_steps GRADIENT_ACCUMULATION_STEPS 
+                              - Number of update steps to accumulate before 
+                                performing a backward/update pass.
+
+  --fp16                      - If set, will perform computations using 
+                                automatic mixed precision.
+
+  --loss_scale LOSS_SCALE     - Sets the loss scaling value to use when 
+                                mixed precision is used. The default value (0) 
+                                tells the script to use dynamic loss scaling 
+                                instead of fixed loss scaling.
+
+  --log_freq LOG_FREQ         - If set, the script will output the training 
+                                loss every LOG_FREQ steps.
+  
+  --resume_from_checkpoint    - If set, training will resume from a checkpoint 
+                                that currently exists in OUTPUT_DIR.
+
+  --num_steps_per_checkpoint NUM_STEPS_PER_CHECKPOINT 
+                              - Number of update steps until a model checkpoint 
+                                is saved to disk.`
+
+```
+  
+#### run_squad.py script parameters
+
+The run_squad.py script contains many of the same arguments as `run_pretraining.py`. 
+The main script specific parameters are:
+
+```
+ --bert_model BERT_MODEL      - Specifies the type of BERT model to use; 
+                                should be one of the following:
+	    bert-base-uncased
+	    bert-large-uncased
+	    bert-base-cased
+	    bert-base-multilingual
+	    bert-base-chinese
+
+ --train_file TRAIN_FILE      - Path to the SQuAD json for training. 
+                                For example, train-v1.1.json.
+
+ --predict_file PREDICT_FILE  - Path to the SQuAD json for predictions. 
+                                For example, dev-v1.1.json or test-v1.1.json.
+
+ --max_seq_length MAX_SEQ_LENGTH 
+                              - The maximum total input sequence length 
+                                after WordPiece tokenization. 
+                                Sequences longer than this will be truncated, 
+                                and sequences shorter than this will be padded.
+
+ --doc_stride DOC_STRIDE      - When splitting up a long document into chunks 
+                                this parameters sets how much stride to take 
+                                between chunks of tokens.
+
+ --max_query_length MAX_QUERY_LENGTH 
+                              - The maximum number of tokens for the question. 
+                                Questions longer than <max_query_length> 
+                                will be truncated to the value specified.
+
+ --n_best_size N_BEST_SIZE    - The total number of n-best predictions to 
+                                generate in the nbest_predictions.json 
+                                output file.
+
+ --max_answer_length MAX_ANSWER_LENGTH 
+                              - The maximum length of an answer that can be 
+                                generated. This is needed because the start and 
+                                end predictions are not conditioned on one another.
+
+ --verbose_logging            - If true, all the warnings related to data 
+                                processing will be printed. A number of warnings 
+                                are expected for a normal SQuAD evaluation.
+
+ --do_lower_case              - Whether to lower case the input text. Set to 
+                                true for uncased models and false for cased models.
+
+ --version_2_with_negative    - If true, the SQuAD examples contain questions 
+                                that do not have an answer.
+
+ --null_score_diff_threshold NULL_SCORE_DIFF_THRES HOLD 
+                              - A null answer will be predicted if null_score if 
+                                best_non_null is greater than NULL_SCORE_DIFF_THRESHOLD.
+```
+
+### Command-line options
+
+To see the full list of available options and their descriptions, use the -h or --help command line option, for example:
+
+`python run_pretraining.py --help`
+
+`python run_squad.py --help`
+
+Detailed descriptions of command line options can be found in the Parameters section above.
+
+### Getting the data
+
+For pre-training BERT, we use the concatenation of Wikipedia (2500M words) as well as Book Corpus (800M words). For Wikipedia, we extract only the text passages and ignore headers, lists, and tables. BERT requires that datasets are structured as a document level corpus rather than a shuffled sentence level corpus because it is critical to extract long contiguous sentences.
+
+The preparation of an individual pre-training dataset is described in the run_preprocessing.sh script found in the data/bookcorpus and data/wikipedia_corpus folders. The component steps to prepare the datasets are as follows:
+
+1.  Data download and extract - the dataset is downloaded and extracted
+2.  Clean and format - document tags, etc. are removed from the dataset. The end result of this step is a {dataset_name}.txt file that contains the entire corpus. Each line in the text file contains an entire document from the corpus.
+3.  Sentence segmentation - the corpus text file is processed into separate sentences. The result of this step is a {dataset_name}.segmented.nltk.txt file in a final_text_file_single directory that contains the entire corpus, with each sentence having its own line. Documents are separated by a new line between documents.
+4.  Sharding - the sentence segmented corpus file is split into a number of smaller text documents. The sharding is configured so that a document will not be split between two shards.
+5.  HDF5 file creation - each text file shard is processed by the `create_pretraining_data.py` script to produce a corresponding HDF5 file. The script generates input data and labels for masked language modeling and sentence prediction tasks for the input text shard.
+
+The tools used for preparing the Bookcorpus and Wikipedia datasets can be applied to prepare an arbitrary corpus. The create_datasets_from_start.sh script in the data/ directory applies sentence segmentation, sharding, and hdf5 file creation given an arbitrary text file containing a document-separated text corpus.
+
+Therefore, to prepare a custom dataset, first replicate steps 1 and 2 above. Then, simply call:
+
+`create_datasets_from_start.sh <dataset_name> <path_to_corpus_file>`
+
+The script will then create a <dataset_name>/ directory in the data/ folder and apply steps 3 through 5 on the document corpus. The end result of the script will be the <dataset_name>/hdf5_shards directory, which contains the hdf5 files for the custom text corpus.
+
+For fine-tuning a pre-trained BERT model for specific tasks, by default this repository prepares the following datasets:
+
+-   [SQuAD](https://rajpurkar.github.io/SQuAD-explorer/): for question answering
+-   [SWAG](https://rowanzellers.com/swag/): for multiple choice
+-   [GLUE](https://gluebenchmark.com/): a benchmark that uses multiple datasets to measure sentence classification  
+
+#### Dataset guidelines
+
+The procedure to prepare a text corpus for pre-training is described in the above section. This section will provide additional insight into how exactly raw text is processed so that it is ready for pre-training.
+
+First, raw text is tokenized using [WordPiece tokenization](https://arxiv.org/pdf/1609.08144.pdf). A [CLS] token is inserted at the start of every sequence, and the two sentences in the sequence are separated with a [SEP] token.
+
+Note: BERT pre-training looks at pairs of sentences at a time. A sentence embedding token [A] is added to the first sentence and token [B] to the next.
+
+BERT pre-training optimizes for two unsupervised classification tasks. The first is Masked Language Modelling (Masked LM). One training instance of Masked LM is a single modified sentence. Each token in the sentence has a 15% chance of being replaced by a [MASK] token. The chosen token is replaced with [MASK] 80% of the time, 10% with a random token and the remaining 10% the token is retained. The task is then to predict the original token.
+
+The second task is next sentence prediction. One training instance of BERT pre-training is two sentences (a sentence pair). A sentence pair may be constructed by simply taking two adjacent sentences from a single document, or by pairing up two random sentences with equal probability. The goal of this task is to predict whether or not the second sentence followed the first in the original document.
+
+The `create_pretraining_data.py` script takes in raw text and creates training instances for both pre-training tasks.
+
+#### Multi-dataset
+
+This repository provides tools to combine multiple datasets into a single dataset for pre-training on a diverse text corpus. There are three options to accomplish this, such as relocating hdf5 files, inter sequence-pair mixing and cleaning each source corpora.
+
+##### Relocating hdf5 files
+
+If hdf5 files have been created for each component dataset, then one can simply create a combined dataset by moving all hdf5 files to a single directory. However, in the training process only one hdf5 file is consumed at a time, therefore, the training instances of any given training batch will all belong to the same source dataset.
+
+##### Inter sequence-pair mixing
+
+Another option for merging datasets once hdf5 files have been created is inter sequence-pair mixing. This is the method used to merge the Wikipedia and Bookcorpus datasets for our pre-training convergence experiments. The merge_datasets_after_creation.sh tool in the data/ directory is a tool to merge data from multiple source corpora this way. To perform this mixing from the data/ directory, simply call:
+
+`bash merge_datasets_after_creation.sh <destination folder> <comma separated input directories> <number of shards>`
+
+For example, to merge the Bookcorpus and Wikipedia corpora provided with this repository and create 1024 new shards containing the mixed training instances, first make sure that data/bookcorpus/hdf5_shards/ and data/wikipedia_corpus/hdf5_shards/ exist and contain hdf5 files, then, from the data directory run:
+
+`bash merge_datasets_after_creation.sh inter_instance_merged_wiki+books bookcorpus/hdf5_shards/,wikipedia_corpus/hdf5_shards/ 1024`
+
+##### Retain document-level granularity
+
+It is also possible to merge datasets while retaining document level granularity. To accomplish this, each source corpora must have been cleaned and merged so that each corpus has its own corresponding text file with each document fitting on one line. Examples of this kind of file would be bookcorpus.txt and wikipedia.txt. Then, to create a merged dataset run:
+
+`bash create_datasets_from_start.sh <destination folder> <path to corpus 1 text file> <path to corpus 2 text file> ...`
+
+To create a mixture of Wikipedia and Bookcorpus using this method, first ensure that the wikipedia_corpus/wikipedia_corpus.txt and bookcorpus/bookcorpus.txt files exist. Then from the data directory run:
+
+`bash create_datasets_from_start.sh merged_wiki+books wikipedia/wikipedia_corpus.txt bookcorpus/bookcorpus.txt`
+
+### Training process
+
+The training process consists of two steps: pre-training and fine-tuning.
+
+##### Pre-training
+
+Pre-training is performed using the `run_pretraining.py` script along with parameters defined in the `scripts/run_pretraining.sh`.
+
+The `run_pretraining.sh` script runs a job on a single node that trains the BERT-large model from scratch using the Wikipedia and BookCorpus datasets as training data. By default, the training script:
+
+-   Runs on 8 GPUs with training batch size of 14 per GPU
+-   Uses a learning rate of 0.4375e-4
+-   Has FP16 precision enabled
+-   Runs for 2285714 steps, where the first 1% are warm-up steps
+-   Saves a checkpoint every 2000 iterations (keeps only the latest 3 checkpoints) and at the end of training. All checkpoints, and training logs are saved to the /results directory (in the container which can be mounted to a local directory).
+-   Creates a log file containing all the output
+
+These parameters will train Wikipedia and BooksCorpus to reasonable accuracy on a DGX-1 with 32GB V100 cards. If you want to match Google’s best results from the BERT paper, you should either train for the above number of 2,285,714 steps on a DGX-1 or train on 16 GPUs on a DGX-2. The DGX-2 having 16 GPUs will be able to fit a batch size twice as large as a DGX-1 (224 vs 112), hence the DGX-2 can finish in half as many steps. For example:
+
+`bash run_pretraining.sh <training_batch_size> <learning-rate> <precision> <num_gpus> <warmup_proportion> <training_steps> <save_checkpoint_steps> <resume_training> <create_logfile> <accumulate_gradients> <gradient_accumulation_steps> <seed>`
+
+Where:
+
+-   <training_batch_size> is per-GPU batch size used for training. Larger batch sizes run more efficiently, but require more memory.
+-   <learning-rate> is the base learning rate for training
+-   <precision> is the type of math in your model, can be either FP32 or FP16. The options mean:
+    -   FP32: 32-bit IEEE single precision floats.
+    -   FP16: Mixed precision 16 and 32 bit floats.
+-   <num_gpus> is the number of GPUs to use for training. Must be equal to or smaller than the number of GPUs attached to your node.
+-   <warmup_proportion> is the percentage of training steps used for warm-up at the start of training.
+-   <training_steps> is the total number of training steps.
+-   <save_checkpoint_steps> controls how often checkpoints are saved.
+-   <resume_training> if set to true, training should resume from latest model in /results/checkpoints. Default is false.
+-   <create_logfile> a flag indicating if output should be written to a log file or not (acceptable values are true or false. true indicates output should be saved to a log file.)
+-   <accumulate_gradient> a flag indicating whether a larger batch should be simulated with gradient accumulation.
+-   <gradient_accumulation_steps> an integer indicating the number of steps to accumulate gradients over. Effective batch size = batch size / gradient_accumulation_steps
+-   <seed> random seed for the run
+
+For example:
+
+`bash scripts/run_pretraining.sh 14 0.875e-4 fp16 16 0.01 1142857 2000 false true`
+
+Trains BERT-large from scratch on a single DGX-2 using FP16 arithmetic. Checkpoints are written out every 2000 steps and all printouts are saved to a logfile.
+
+##### Fine-tuning
+
+Fine-tuning is provided for a variety of tasks. The following tasks are included with this repository through the following scripts:
+
+-   Question Answering (`scripts/run_squad.sh`)
+
+By default, each Python script implements fine-tuning a pre-trained BERT model for a specified number of training epochs as well as evaluation of the fine-tuned model. Each shell script invokes the associated python script with the following default parameters:
+
+-   Uses 8 GPUs
+-   Has FP16 precision enabled
+-   Saves a checkpoint at the end of training to the /results/<dataset_name> folder
+
+Fine-tuning Python scripts implement support for mixed precision and multi-GPU training through NVIDIA’s [Apex](https://github.com/NVIDIA/apex) library. For a full list of parameters and associated explanations, consult the [Parameters](https://docs.google.com/document/d/1O5f8pzO89rFhFgysrXAN6Y3di5oyhDlf_K6Q63VrMWM/edit#heading=h.xke3foclcggx) section.
+
+All fine-tuning shell scripts have the same positional arguments, outlined below:
+
+`bash scripts/run_squad.sh <checkpoint_to_load> <epochs> <batch_size per GPU> <learning rate> <precision (either “fp16” or “fp32”)> <number of GPUs to use> <seed> <SQUAD_DATA_DIR> <VOCAB_FILE> <OUTPUT_DIR> <mode (either “train”, “eval” or "train eval")> <CONFIG_FILE>`
+
+By default, the mode positional argument is set to train eval. See the [Quick start guide](https://docs.google.com/document/d/1O5f8pzO89rFhFgysrXAN6Y3di5oyhDlf_K6Q63VrMWM/edit#heading=h.d5y8qlmb8lpr) for explanations of each positional argument.
+
+Note: The first positional argument (the path to the checkpoint to load) is required.
+
+Each fine-tuning script assumes that the corresponding dataset files exist in the data/ directory or separate path can be a command line input to run_squad.sh
 
 ### Inference process
-Inference on a fine tuned Question Answering system is performed using the `run_squad.py` script along with parameters defined in the `scripts/run_squad_inference.sh`. Inference is supported on single GPU at this moment.
 
-The `run_squad_inference.sh` script trains a model and performs evaluation on the SQuaD v1.1 dataset. By default, the inferencing script: 
-- Has FP16 precision enabled
-- Is XLA enabled
-- Evaluates the latest checkpoint present in `/results` with a batch size of 8
+##### Pre-training
 
-This script outputs predictions file to `/results/predictions.json` and computes F1 score and exact match score using SQuaD's `evaluate-v1.1.py`. Mount point of `/results` can be changed in the `scripts/docker/launch.sh` file. 
+Inference on a pretrained model is performed using the `run_pretraining_inference.py` script along with parameters defined in scripts/run_pretraining_inference.sh. Inference is supported both for single and multi-gpu. By setting either the --eval or --prediction flag, you can choose between running evaluation on a given dataset or doing prediction (on both masked language model and next sentence prediction).
 
-The output log contains information about:
-- Evaluation performance
-- F1 and exact match score on the Dev Set of SQuaD after evaluation. 
+Prediction mode can be used to measure the inference turnaround time.
 
-The summary after inference is printed in the following format:
-```bash
-I0312 23:14:00.550846 140287431493376 run_squad.py:1396] 0 Total Inference Time = 145.46 Inference Time W/O start up overhead = 131.86 Sentences processed = 10840
-I0312 23:14:00.550973 140287431493376 run_squad.py:1397] 0 Inference Performance = 82.2095 sentences/sec
-{"exact_match": 83.69914853358561, "f1": 90.8477003317459}
-```
+The run_pretraining_inference.sh script takes a model and a dataset and performs inference/evaluation on it. By default, the inferencing script:
 
-## Benchmarking
+-   Has FP16 precision enabled
+-   Runs on 8 GPUs
+-   Evaluates the latest checkpoint present in /results/checkpoints with a batch size of 14
+-   Runs inference on the entire Wikipedia dataset
+
+This script outputs prediction file to /results/pyt_bert_pretraining_inference_<precision>_<global_batchsize>.<datestamp>.log. The output log contains information about:
+
+-   Inference performance
+-   Loss (masked language model loss and next sentence prediction loss) of the specified dataset if ground truths exist with the --eval flag.
+
+For example:
+
+`bash scripts/run_pretraining_inference.sh <evaluation_batch_size> <precision> <num_gpus> <inference_mode><model_checkpoint><inference_steps><create_logfile>`
+
+Where:
+
+-   <evaluation_batch_size> is per-GPU batch size used for inference. Larger batch sizes run more efficiently, but require more memory.
+-   <precision> is the type of math in your model, can be either FP32 or FP16. The options mean:
+    -   FP32: 32-bit IEEE single precision floats
+    -   FP16: 16-bit floats for 3.2x faster inference
+-   <num_gpus> is the number of GPUs to use for inference. Must be equal to or smaller than the number of GPUs attached to your node.
+-   <inference_mode> is either --eval for evaluation or --prediction for inference
+-   <model_checkpoint> is the model checkpoint to run inference on. Default is -1, which takes the most recent model checkpoint from the checkpoints folder.
+-   <inference_steps> is the total number of inference steps per process. Default is -1, which iterates over the entire dataset.
+-   <create_logfile> a flag indicating if output should be written to a logfile or not (acceptable values are true or false. true indicates output should be saved to a logfile.)
+
+For example:
+
+`bash scripts/run_pretraining_inference.sh 14 fp16 8 eval -1 -1 true`
+
+#### Fine-tuning
+
+Evaluation fine-tuning is enabled by the same scripts as training:
+
+-   Question Answering (`scripts/run_squad.sh`)
+
+The mode positional argument of the shell script is used to run in evaluation mode. The fine-tuned BERT model will be run on the evaluation dataset, and the evaluation loss and accuracy will be displayed.
+
+Each inference shell script expects dataset files to exist in the same locations as the corresponding training scripts. The inference scripts can be run with default settings. By setting `mode` variable in the script to either "eval" or "prediction" flag, you can choose between running evaluation on a given dataset or doing prediction.
+
+`bash scripts/run_squad.sh <path to fine-tuned model checkpoint>`
+
+Note: Fine-tuning evaluation is only supported on single GPU.
+
+## Performance
+
+### Benchmarking
+
 The following section shows how to run benchmarks measuring the model performance in training and inference modes.
 
-Benchmarking can be performed for both training and inference. Both scripts run the BERT model for fine tuning. You can specify whether benchmarking is performed in FP16 or FP32 by specifying it as an argument to the benchmarking scripts. 
+#### Training performance benchmark
 
-Both of these benchmarking scripts enable you to run a number of epochs and extract performance numbers.
+To benchmark the training performance on a specific batch size, run:
 
-### Training performance benchmark
-Training benchmarking can be performed by running the script: 
-```bash
-scripts/finetune_train_benchmark.sh squad <fp16/fp32> <use_xla> <num_gpu> <batch_size/gpu> <lr> 
-```
+`bash scripts/run_squad.sh <pretrained model path> <epochs> <batch size> <learning rate> <fp16|fp32> <num_gpus> <seed> <path to squad dataset> <path to vocab set> <results directory> train <BERT config path] <max steps>`
 
-### Inference performance benchmark
-Inference benchmarking can be performed by running the script: 
-```bash
-scripts/finetune_inference_benchmark.sh squad <fp16/fp32> <use_xla> <batch_size> <path-to-checkpoint> 
-```
+An example call used to generate throughput numbers:
 
-## Results
-The following sections provide details on how we achieved our performance and accuracy in training and inference for Question Answering fine tuning.
-### Training accuracy results
-Our results were obtained by running the `run_squad.py`  training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs.
+`bash scripts/run_squad.sh /workspace/bert/bert_large_uncased_wiki+books.pt.model 2.0 4 3e-5 fp16 8 42 /workspace/bert/squad_data /workspace/bert/scripts/vocab/vocab /results/SQuAD train /workspace/bert/bert_config.json -1`
 
+Training benchmark was run on 1x V100 16G GPU.
 
-| **Number of GPUs** | **Batch size per GPU** | **Training time with FP16 (Hrs)** | **Training time with FP32 (Hrs)** |
-|:---:|:---:|:----:|:----:|
-| 8 | 4 |||
+#### Inference performance benchmark
 
-#### Training stability test
-The following tables compare `F1` scores across 5 different training runs with different seeds, for both FP16 and FP32 respectively.  The runs showcase consistent convergence on all 5 seeds with very little deviation.
+To benchmark the inference performance on a specific batch size, run:
 
-| **FP16, 8x GPUs** | **seed #1** | **seed #2** | **seed #3** | **seed #4** | **seed #5** | **mean** | **std** |
-|:-----------:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|
-|F1         ||
-|Exact match||
+`bash scripts/run_squad.sh <pretrained model path> <epochs> <batch size> <learning rate> <fp16|fp32> <num_gpus> <seed> <path to squad dataset> <path to vocab set> <results directory> eval <BERT config path> <max steps>`
 
-| **FP32, 8x GPUs** | **seed #1** | **seed #2** | **seed #3** | **seed #4** | **seed #5** | **mean** | **std** |
-|:-----------:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|
-|F1         | |
-|Exact match| |
+An example call used to generate throughput numbers:
+
+`bash scripts/run_squad.sh /workspace/bert/bert_large_uncased_wiki+books.pt.model 2.0 4 3e-5 fp16 8 42 /workspace/bert/squad_data /workspace/bert/scripts/vocab/vocab /results/SQuAD eval /workspace/bert/bert_config.json -1`
+
+Inference benchmark was run on 1x V100 16G GPU.
+
+### Results
+  
+
+#### Training accuracy results
 
 
-### Training performance results
-Our results were obtained by running batch sizes up to 3x GPUs on a 16GB V100 and up to 10x GPUs on a 32G V100 with mixed precision.
+##### NVIDIA DGX-1 (8x V100 16G)
 
-#### NVIDIA DGX-1 (8x V100 16G)
-Our results were obtained by running the `scripts/run_pretraining.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance numbers (in tokens per second) were averaged over an entire training epoch.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the pytorch:19.06-py3 NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs.
 
+| GPUs | Batch size / GPU | Accuracy - FP32(% F1) | Accuracy - mixed precision(% F1) | Time to train(hours) - FP32 | Time to train(hours) - mixed precision | Time to train speedup (FP32 to mixed precision)
+|-|-|-|-|-|-|-
+| 8|4 | 91.18|91.24|.77|.21| 3.66
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
-|:---:|:---:|:------:|:-----:|:----:|:----:|:----:|
-| 1 | 2 | 5.48 |18.97|3.46 |1.0 |1.0 |
-| 4 | 2 |19.6|60.6|3.09|3.57 |3.2|
-| 8 | 2 |39.21 |121.21|3.09|7.15|6.38|
+##### Training stability test
 
+Training stability with 8 GPUs, fp16 computations, batch size of 4:
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
-|:---:|:---:|:-----:|:-----:|:---:|:---:|:----:|
-| 1 | 4 |  -  |19.46| - | - |1.0 |
-| 4 | 4 |  -  |75.67| - | - |3.88|
-| 8 | 4 |  -  |151.35| - | - |7.77 |
+| Accuracy Metric | Seed 1 | Seed 2 | Seed 3 | Seed 4 | Seed 5 | Mean | Standard Deviation
+|-|-|-|-|-|-|-|-
+|Exact Match %| 84.50 | 84.07 | 84.52 | 84.23 | 84.17 | 84.30 | .200
+| f1 % | 91.29 | 91.01 | 91.14 |  91.10 | 90.85 | 91.08 | 0.162
 
-Note: The respective values for FP32 runs that use a batch size of 4 are not available due to out of memory errors that arise. Batch size of 4 is only available on using FP16.
+#### Training performance results
 
-To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
+##### NVIDIA DGX 1 (8x V100 16G)
 
-#### NVIDIA DGX-1 (8x V100 32G)
-Our results were obtained by running the `scripts/run_pretraining.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epochs.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the pytorch:19.06-py3 NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs. Performance numbers (in sequences per second) were averaged over an entire training epoch.
 
+| GPUs | Batch size / GPU | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
+|------------------|----------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
+|1 | 4|8.96 |35.88 | 3.99| 1.00| 1.00
+|4 | 4|31.04 |120.00 | 3.86| 3.46| 3.34
+| 8| 4|64.64 |227.84 | 3.52| 7.20| 6.35
+|1 | 10|N/A |45.2| N/A| N/A| 1.0
+|4 | 10|N/A |163.6 | N/A| N/A| 3.62
+| 8| 10|N/A |327.2| N/A| N/A| 7.24
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
-|---|---|-----|-----|----|----|----|
-| 1 | 7 | 7.56|24.29|3.21|1.0 |1.0 |
-| 4 | 7 |28.84|86.24|2.99|3.81|3.55|
-| 8 | 7 |57.68|172.48|2.99|7.62|7.10|
+##### NVIDIA DGX 1 (8x V100 32G)
 
+Our results were obtained by running the `scripts/run_squad.sh` training script in the pytorch:19.06-py3 NGC container on NVIDIA DGX-1 with (8x V100 32G) GPUs. Performance numbers (in sequences per second) were averaged over an entire training epoch.
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
-|---|---|-----|-------|---|---|----|
-| 1 | 14|  -  | 26.04 | - | - |1.0 |
-| 4 | 14|  -  | 99.68| - | - |3.87|
-| 8 | 14|  -  |199.35 | - | - |7.65 |
+| GPUs | Batch size / GPU | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
+|------------------|----------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
+|1 | 4|8.64 |36.04 | 4.171| 1.00| 1.00
+|4 | 4|31.52 |116.80 | 3.71| 3.64| 3.24
+| 8| 4|64.32 |231.04 | 3.59| 7.44| 6.41
+|1 | 10|N/A |46.00| N/A| N/A| 1.0
+|4 | 10|N/A |164.00 | N/A| N/A| 3.57
+| 8| 10|N/A |325.60| N/A| N/A| 7.08
 
+##### NVIDIA DGX 2 (16x V100 32G)
 
-Note: The respective values for FP32 runs that use a batch size of 10 are not available due to out of memory errors that arise. Batch size of 10 is only available on using FP16.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the pytorch:19.06-py3 NGC container on NVIDIA DGX-2 with (16x V100 32G) GPUs. Performance numbers (in sequences per second) were averaged over an entire training epoch.
 
-To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above. 
+| GPUs | Batch size / GPU | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
+|------------------|----------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
+|1 |4 |9.92| 38.16| 3.84| 1.00| 1.00
+|4 |4 | 35.52| 122.08| 3.43| 3.58| 3.20
+|8 | 4| 71.36| 241.28| 3.38| 7.19| 6.32
+|16 | 4| 141.40| 462.08| 3.27| 14.25| 12.11
+|1 |10 |N/A | 47.40| N/A| N/A| 1.00
+|4 |10 | N/A| 165.60| N/A| N/A| 3.49
+|8 | 10| N/A| 325.60| N/A| N/A| 6.87
+|16 | 10| N/A| 648.00| N/A| N/A| 13.67
 
-#### NVIDIA DGX-2 (16x V100 32G)
-Our results were obtained by running the `scripts/run_pretraining.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epoch.
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
+#### Inference performance results
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
-|---|---|------|------|----|-----|----|
-|  1| 7 |  8.47| 26.04|3.07| 1.0 |1.0 |
-|  4| 7 | 32.2 | 92.68|2.87| 3.8|3.80|
-|  8| 7 | 63.84|183.68|2.87| 7.53|7.05|
-| 16| 7 |126.56|365.12|2.87|14.94|14.02|
+##### Inference performance: NVIDIA DGX 1 (8x V100 16G)
 
+Our results were obtained by running the `scripts/run_squad.sh` training script in the pytorch:19.06-py3 NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs.
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with FP32** | **Multi-gpu weak scaling with FP16** |
-|---|---|---|------|---|---|----|
-|  1| 14| - | 28.28| - | - |1.0 |
-|  4| 14| - | 103.6| - | - |3.66|
-|  8| 14| - |208.32| - | - |7.36|
-| 16| 14| - |416.64| - | - |14.73|
+|GPUs | Throughput - FP32(sequences/sec)|Throughput - Mixed Precision(sequences/sec)
+|---------- |---------|---------------
+| 1| 37.64| 119.76
 
+##### Inference performance: NVIDIA DGX 1 (8x V100 32G)
 
-Note: The respective values for FP32 runs that use a batch size of 10 are not available due to out of memory errors that arise. Batch size of 10 is only available on using FP16.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the pytorch:19.06-py3 NGC container on NVIDIA DGX-1 with (8x V100 32G) GPUs.
 
-To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above. 
-### Inference performance results
+|GPUs | Throughput(sequences/sec) - FP32|Throughput - Mixed Precision(sequences/sec)
+|---------- |---------|---------------
+| 1| 37.64| 119.76
 
-#### NVIDIA DGX-1 16G (1x V100 16G)
-Our results were obtained by running the `scripts/run_squad_inference.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 1x V100 16G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epoch.
+##### Inference performance: NVIDIA DGX 2 (16x V100 32G)
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
-|---|---|-----|------|----|
-| 1 | 8 ||
+Our results were obtained by running the `scripts/run_squad.sh` training script in the pytorch:19.06-py3 NGC container on NVIDIA DGX-2 with (16x V100 32G) GPUs.
 
-To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
+|GPUs | Throughput - FP32(sequences/sec)|Throughput - Mixed Precision(sequences/sec)
+|---------- |---------|---------------
+| 1| 35.76| 112.60
+  
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
+The inference performance metrics used were items/second.
 
-#### NVIDIA DGX-1 32G (1x V100 32G)
-Our results were obtained by running the `scripts/run_squad_inference.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-1 with 1x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epoch.
+## Release notes
 
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
-|---|---|-----|------|----|
-| 1 | 8 ||
+### Changelog
 
-To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
+July 2019
 
-#### NVIDIA DGX-2 32G (1x V100 32G)
-Our results were obtained by running the `scripts/run_squad_inference.sh` training script in the TensorFlow 19.03-py3 NGC container on NVIDIA DGX-2 with 1x V100 32G GPUs. Performance numbers (in sentences per second) were averaged over an entire training epoch.
-
-| **Number of GPUs** | **Batch size per GPU** | **FP32 sentences/sec** | **FP16 sentences/sec** | **Speedup** |
-|---|---|-----|------|----|
-| 1 | 8 ||
-
-To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
-
-## Changelog
-March 2019
 - Initial release
 
-## Known issues
+### Known issues
+
 There are no known issues with this model.

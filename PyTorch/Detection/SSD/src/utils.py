@@ -194,6 +194,9 @@ class Encoder(object):
             scores_out.append(score[candidates])
             labels_out.extend([i]*len(candidates))
 
+        if not bboxes_out:
+            return [torch.tensor([]) for _ in range(3)]
+
         bboxes_out, labels_out, scores_out = torch.cat(bboxes_out, dim=0), \
                torch.tensor(labels_out, dtype=torch.long), \
                torch.cat(scores_out, dim=0)

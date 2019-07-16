@@ -47,7 +47,7 @@ python3 -m launch train.py \
    --epochs 1 \
    --remain-steps 1.0 \
    --no-eval \
-   --max-size $((128 * ${GPU_COUNT} * 300)) \
+   --train-max-size $((128 * ${GPU_COUNT} * 300)) \
    --math ${MATH} \
    --train-global-batch-size ${GLOBAL_BATCH_SIZE} \
    ${TARGET_PERF}
