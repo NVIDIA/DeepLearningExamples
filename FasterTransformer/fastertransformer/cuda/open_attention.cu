@@ -166,8 +166,8 @@ void softmax_kernel(T* qk_buf_, const T* attr_mask, const int batch_size, const 
 
     for(int i = 0; i < seq_len; ++i)
     {
-      T qk = qk_buf_[threadIdx.x + qk_offset];
-      T mask_val = attr_mask[threadIdx.x + mask_offset];
+      T qk = threadIdx.x < seq_len ? qk_buf_[threadIdx.x + qk_offset] : (T)(0.0f);
+      T mask_val = threadIdx.x < seq_len ? attr_mask[threadIdx.x + mask_offset] : (T)(0.0f);
       
       mask_val = ((T)1.0f - mask_val) * (T)(-10000.0f);
 
@@ -179,7 +179,9 @@ void softmax_kernel(T* qk_buf_, const T* attr_mask, const int batch_size, const 
         s_sum = sum_val + 1e-6f;
       }
       __syncthreads();
-      qk_buf_[threadIdx.x + qk_offset] = qk / (T)s_sum;
+
+      if(threadIdx.x < seq_len)
+        qk_buf_[threadIdx.x + qk_offset] = qk / (T)s_sum;
 
       qk_offset += seq_len;
       mask_offset += seq_len;
@@ -199,12 +201,12 @@ void softmax_kernel_v2(T* qk_buf_, const T* attr_mask, const int batch_size, con
 
     __shared__ float s_sum;
 
-    T qk = qk_buf_[threadIdx.x + qk_offset];
-    T mask_val = attr_mask[threadIdx.x + mask_offset];
+    T qk = threadIdx.x < seq_len ? qk_buf_[threadIdx.x + qk_offset] : (T)(0.0f);
+    T mask_val = threadIdx.x < seq_len ? attr_mask[threadIdx.x + mask_offset] : (T)(0.0f);
       
     mask_val = ((T)1.0f - mask_val) * (T)(-10000.0f);
 
-    float qk_tmp = __expf((float)(qk * scaler + mask_val));
+    float qk_tmp = threadIdx.x < seq_len ? __expf((float)(qk * scaler + mask_val)) : 0.0f;
     float sum_val = blockReduceSum<float>(qk_tmp);
 
     if(threadIdx.x == 0)
@@ -212,7 +214,9 @@ void softmax_kernel_v2(T* qk_buf_, const T* attr_mask, const int batch_size, con
       s_sum = sum_val + 1e-6f;
     }
     __syncthreads();
-    qk_buf_[threadIdx.x + qk_offset] = (T)(qk_tmp / s_sum);
+
+    if(threadIdx.x < seq_len)
+      qk_buf_[threadIdx.x + qk_offset] = (T)(qk_tmp / s_sum);
 }
 
 template<typename T>
@@ -272,7 +276,8 @@ void OpenMultiHeadAttention<OpType_>::multiHeadAttr_nofuse_kernelLauncher(
 
     if(OpType_ == OperationType::FP32)
     {
-      const int word_per_block = 32;
+//      const int word_per_block = 32;
+      const int word_per_block = 1;
       assert(k > 1024);
       assert(m / word_per_block * 3 > 65536);
 
@@ -307,16 +312,27 @@ void OpenMultiHeadAttention<OpType_>::multiHeadAttr_nofuse_kernelLauncher(
       computeType_,
       static_cast<cublasGemmAlgo_t>(cublasAlgo_[1])));
 
+    if(seq_len <= 32)
+      block.x = 32;
+    else if(seq_len > 32 && seq_len <= 64)
+      block.x = 64;
+    else if(seq_len > 64 && seq_len <= 128)
+      block.x = 128;
+    else if(seq_len > 128 && seq_len <= 256)
+      block.x = 256;
+    else if(seq_len > 256 && seq_len <= 512)
+      block.x = 512;
+    else
+      block.x = 1024;
+
     if(batch_size * head_num <= 120)
     {
       grid.x = batch_size * head_num * seq_len;
-      block.x = seq_len;
       softmax_kernel_v2<DataType_><<<grid, block, 0, stream>>>(qk_buf_, attr_mask, batch_size, head_num, seq_len, scaler); 
     }
     else
     {
       grid.x = batch_size * head_num;
-      block.x = seq_len;
       softmax_kernel<DataType_><<<grid, block, 0, stream>>>(qk_buf_, attr_mask, batch_size, head_num, seq_len, scaler); 
     }
 
@@ -336,8 +352,12 @@ void OpenMultiHeadAttention<OpType_>::multiHeadAttr_nofuse_kernelLauncher(
     if(OpType_ == OperationType::HALF)
     {
       const int seq_per_block = 4;
+  //    const int seq_per_block = 1;
       grid.x = batch_size * head_num * seq_len / seq_per_block;
       block.x = seq_per_block * size_per_head / 2;
+
+      assert(grid.x * seq_per_block != batch_size * head_num * seq_len);
+
       transpose<DataType_><<<grid, block, 0, stream>>>(transpose_dst_, dst, 
           batch_size, seq_len, head_num, size_per_head / 2);
     }
