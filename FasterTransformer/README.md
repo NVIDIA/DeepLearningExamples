@@ -3,7 +3,7 @@ Faster Transformer
 ## What is it?
 The Faster Transformer implements an equivalent but highly optimized BERT transformer layer for inference. On Volta and Turing GPUs, FP16 precision is used automatically to access the computing power of tensor cores.
 
-Faster Transformer is built on top of the CUDA and cuBLAS. It supports three kinds of sequence lengths, 32, 64 and 128. Two key parameters of the transformer layer, the number of heads and the size of each head, are passed in runtime. Thus, not only the BERT Base (12 heads *  64 per head) , but also customized models like 4 heads * 32 per head and 8 heads * 96 per heads, are well supported. Our implementation shows good speedups on both small and large batch size cases. 
+Faster Transformer is built on top of the CUDA and cuBLAS. It supports sequence lengths that are larger than 3 and smaller or equal to 1024. Two key parameters of the transformer layer, the number of heads and the size of each head, are passed in runtime. Thus, not only the BERT Base (12 heads *  64 per head) , but also customized models like 4 heads * 32 per head and 8 heads * 96 per heads, are well supported. Our implementation shows good speedups on both small and large batch size cases. 
 
 C++ API, TensorRT plugin, and TensorFlow OP wrapper are available. You can easily integrate this optimized transformer layer into your TensorFlow or other inference service codes that built in native C++ or TensorRT. In addition to codes that illustrate the API invocations, we also provide a simple end-to-end BERT TensorFlow inference sample.
 
@@ -61,7 +61,7 @@ For large batch size case, we report both Tensorflow XLA and faster transformer'
    |--/trt_plugin: TensorRT plugin implementation
 /sample: c++ and tensorflow transformer interface samples
    |--/cpp: both FP16 and FP32 c++ interface samples
-   |--/fastertransformer_bert: samples that show of how to integrate our Tensorflow OP into the open source BERT model for sentence (and sentence-pair) classification tasks (GLUE), the samples support both FP16 and FP32, see readme file within this folder more details
+   |--/tensorflow_bert: samples that show of how to integrate our Tensorflow OP into the open source BERT model for sentence (and sentence-pair) classification tasks (GLUE), the samples support both FP16 and FP32, see readme file within this folder more details
    |--/tensorflow: both FP16 and FP32 tensorflow OP samples
    |--/tensorRT: both FP16 and FP32 tensorRT plugin samples
 /tools/gemm_test: loop over all GEMM algorithms to pick the best one
@@ -88,7 +88,8 @@ $ make
 Note: xx is the compute capability of your GPU. For example, 60 (P40) or 61 (P4) or 70 (V100) or 75(T4).
 ### Execute demos ###
 ```shell
-$ Step1 Generate the gemm_config.in file under the path build to pick GEMM algorithms for the best performance.
+$ To achieve the best performance, please execute step1 and step2 together when you test a new model.
+$ Step1 Generate the gemm_config.in file under the path build to pick GEMM algorithms for the best performance. 
 $ ./build/bin/gemm_fp16(32) <batch_size> <seq_len> <head_num> <size_per_head>
 $ Step2 Execute demos
 $ 1. Tensorflow demos: python build/transformer_fp16(32).py <batch_size> <num_layers> <seq_len> <head_num> <size_per_head>
