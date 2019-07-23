@@ -169,6 +169,20 @@ def prepare_input_sequence(texts):
     return text_padded, input_lengths
 
 
+class MeasureTime():
+    def __init__(self, measurements, key):
+        self.measurements = measurements
+        self.key = key
+
+    def __enter__(self):
+        torch.cuda.synchronize()
+        self.t0 = time.perf_counter()
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        torch.cuda.synchronize()
+        self.measurements[self.key] = time.perf_counter() - self.t0
+
+
 def main():
     """
     Launches text to speech (inference).
@@ -219,26 +233,26 @@ def main():
 
     LOGGER.iteration_start()
 
+    measurements = {}
+
     sequences_padded, input_lengths = prepare_input_sequence(texts)
 
-    tacotron2_t0 = time.time()
-    with torch.no_grad():
+    with torch.no_grad(), MeasureTime(measurements, "tacotron2_time"):
         _, mel, _, _, mel_lengths = tacotron2.infer(sequences_padded, input_lengths)
-    tacotron2_t1 = time.time()
 
-    waveglow_t0 = time.time()
-    with torch.no_grad():
+    with torch.no_grad(), MeasureTime(measurements, "waveglow_time"):
         audios = waveglow.infer(mel, sigma=args.sigma_infer)
         audios = audios.float()
-    waveglow_t1 = time.time()
 
-    tacotron2_infer_perf = mel.size(0)*mel.size(2)/(tacotron2_t1-tacotron2_t0)
+    tacotron2_infer_perf = mel.size(0)*mel.size(2)/measurements['tacotron2_time']
+    waveglow_infer_perf = audios.size(0)*audios.size(1)/measurements['waveglow_time']
+
     LOGGER.log(key="tacotron2_items_per_sec", value=tacotron2_infer_perf)
-    LOGGER.log(key="tacotron2_latency", value=(tacotron2_t1-tacotron2_t0))
-    waveglow_infer_perf = audios.size(0)*audios.size(1)/(waveglow_t1-waveglow_t0)
+    LOGGER.log(key="tacotron2_latency", value=measurements['tacotron2_time'])
     LOGGER.log(key="waveglow_items_per_sec", value=waveglow_infer_perf)
-    LOGGER.log(key="waveglow_latency", value=(waveglow_t1-waveglow_t0))
-    LOGGER.log(key="latency", value=(waveglow_t1-tacotron2_t0))
+    LOGGER.log(key="waveglow_latency", value=measurements['waveglow_time'])
+    LOGGER.log(key="latency", value=(measurements['tacotron2_time']+
+                                     measurements['waveglow_time']))
 
     for i, audio in enumerate(audios):
         audio_path = args.output + "audio_"+str(i)+".wav"
@@ -246,7 +260,6 @@ def main():
               audio.data.cpu().numpy()[:mel_lengths[i]*args.stft_hop_length])
 
     LOGGER.iteration_stop()
-
     LOGGER.finish()
 
 if __name__ == '__main__':
