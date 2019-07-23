@@ -27,7 +27,6 @@
 
 import torch
 from librosa.filters import mel as librosa_mel_fn
-from torch.nn import functional as F
 from common.audio_processing import dynamic_range_compression, dynamic_range_decompression
 from common.stft import STFT
 
