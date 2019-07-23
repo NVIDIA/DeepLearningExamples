@@ -32,7 +32,7 @@ import numpy as np
 import json
 import time
 
-from inference import checkpoint_from_distributed, unwrap_distributed, load_and_setup_model
+from inference import checkpoint_from_distributed, unwrap_distributed, load_and_setup_model, MeasureTime
 
 from dllogger.logger import LOGGER
 import dllogger.logger as dllg
@@ -94,14 +94,14 @@ def main():
         if i >= warmup_iters:
             LOGGER.iteration_start()
 
+        measurements = {}
+
         if args.model_name == 'Tacotron2':
             text_padded = torch.randint(low=0, high=148, size=(args.batch_size, 140),
                                         dtype=torch.long).cuda()
             input_lengths = torch.IntTensor([text_padded.size(1)]*args.batch_size).cuda().long()
-            t0 = time.time()
-            with torch.no_grad():
+            with torch.no_grad(), MeasureTime(measurements, "inference_time"):
                 _, mels, _, _, _ = model.infer(text_padded, input_lengths)
-            inference_time = time.time() - t0
             num_items = mels.size(0)*mels.size(2)
 
         if args.model_name == 'WaveGlow':
@@ -112,16 +112,14 @@ def main():
             if args.amp_run:
                 mel_padded = mel_padded.half()
 
-            t0 = time.time()
-            with torch.no_grad():
+            with torch.no_grad(), MeasureTime(measurements, "inference_time"):
                 audios = model.infer(mel_padded)
                 audios = audios.float()
-            inference_time = time.time() - t0
             num_items = audios.size(0)*audios.size(1)
 
         if i >= warmup_iters:
-            LOGGER.log(key="items_per_sec", value=(num_items/inference_time))
-            LOGGER.log(key="latency", value=inference_time)
+            LOGGER.log(key="items_per_sec", value=(num_items/measurements['inference_time']))
+            LOGGER.log(key="latency", value=measurements['inference_time'])
             LOGGER.iteration_stop()
 
     LOGGER.finish()

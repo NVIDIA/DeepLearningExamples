@@ -647,14 +647,14 @@ Results are measured in the number of output mel-spectrograms per second.
 
 |Number of GPUs|Number of mels used with mixed precision|Number of mels used with FP32|Speed-up with mixed precision|
 |---:|---:|---:|---:|
-|**1**|637|619|1.03|
+|**1**|625|613|1.02|
 
 The following table shows the inference performance results for WaveGlow model. 
 Results are measured in the number of output samples per second<sup>1</sup>.
 
 |Number of GPUs|Number of samples used with mixed precision|Number of samples used with FP32|Speed-up with mixed precision|
 |---:|---:|---:|---:|
-|**1**|565629|578322|0.98|
+|**1**|180474|162282|1.11|
 
 <sup>1</sup>With sampling rate equal to 22050, one second of audio is generated from 22050 samples.
 
