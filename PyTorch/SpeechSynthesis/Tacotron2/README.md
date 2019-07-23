@@ -230,7 +230,7 @@ and encapsulates some dependencies. Aside from these dependencies, ensure you
 have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 19.05-py3+ NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
+* [PyTorch 19.06-py3+ NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
 or newer
 * [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
 
@@ -489,45 +489,45 @@ To benchmark the training performance on a specific batch size, run:
 **Tacotron 2**
 
 * For 1 GPU
-	* FP32
-        ```bash
-        python train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-enabled --cudnn-benchmark --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_2500_filelist.txt --dataset-path <dataset-path>
-        ```
 	* FP16
         ```bash
         python train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-enabled --cudnn-benchmark --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_2500_filelist.txt --dataset-path <dataset-path> --amp-run
         ```
-
-* For multiple GPUs
 	* FP32
         ```bash
-        python -m multiproc train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-enabled --cudnn-benchmark --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_2500_filelist.txt --dataset-path <dataset-path>
+        python train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-enabled --cudnn-benchmark --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_2500_filelist.txt --dataset-path <dataset-path>
         ```
+
+* For multiple GPUs
 	* FP16
         ```bash
         python -m multiproc train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-enabled --cudnn-benchmark --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_2500_filelist.txt --dataset-path <dataset-path> --amp-run
+        ```
+	* FP32
+        ```bash
+        python -m multiproc train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-enabled --cudnn-benchmark --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_2500_filelist.txt --dataset-path <dataset-path>
         ```
 
 **WaveGlow**
 
 * For 1 GPU
-	* FP32
-        ```bash
-        python train.py -m WaveGlow -o <output_dir> -lr 1e-4 --epochs 10 -bs <batch_size> --segment-length  8000 --weight-decay 0 --grad-clip-thresh 3.4028234663852886e+38 --cudnn-enabled --cudnn-benchmark --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_1250_filelist.txt --dataset-path <dataset-path>
-        ```
 	* FP16
         ```bash
         python train.py -m WaveGlow -o <output_dir> -lr 1e-4 --epochs 10 -bs <batch_size> --segment-length 8000 --weight-decay 0 --grad-clip-thresh 65504.0 --cudnn-enabled --cudnn-benchmark --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_1250_filelist.txt --dataset-path <dataset-path> --amp-run
         ```
-
-* For multiple GPUs
 	* FP32
         ```bash
-        python -m multiproc train.py -m WaveGlow -o <output_dir> -lr 1e-4 --epochs 10 -bs <batch_size> --segment-length 8000 --weight-decay 0 --grad-clip-thresh 3.4028234663852886e+38 --cudnn-enabled --cudnn-benchmark --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_1250_filelist.txt --dataset-path <dataset-path>
+        python train.py -m WaveGlow -o <output_dir> -lr 1e-4 --epochs 10 -bs <batch_size> --segment-length  8000 --weight-decay 0 --grad-clip-thresh 3.4028234663852886e+38 --cudnn-enabled --cudnn-benchmark --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_1250_filelist.txt --dataset-path <dataset-path>
         ```
+
+* For multiple GPUs
 	* FP16
         ```bash
         python -m multiproc train.py -m WaveGlow -o <output_dir> -lr 1e-4 --epochs 10 -bs <batch_size> --segment-length 8000 --weight-decay 0 --grad-clip-thresh 65504.0 --cudnn-enabled --cudnn-benchmark --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_1250_filelist.txt --dataset-path <dataset-path> --amp-run
+        ```
+	* FP32
+        ```bash
+        python -m multiproc train.py -m WaveGlow -o <output_dir> -lr 1e-4 --epochs 10 -bs <batch_size> --segment-length 8000 --weight-decay 0 --grad-clip-thresh 3.4028234663852886e+38 --cudnn-enabled --cudnn-benchmark --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_1250_filelist.txt --dataset-path <dataset-path>
         ```
 
 Each of these scripts runs for 10 epochs and for each epoch measures the
@@ -561,7 +561,7 @@ and accuracy in training and inference.
 
 ##### NVIDIA DGX-1 (8x V100 16G)
 
-Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{AMP,FP32}_DGX1_16GB_8GPU.sh` training script in the PyTorch-19.05-py3
+Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{AMP,FP32}_DGX1_16GB_8GPU.sh` training script in the PyTorch-19.06-py3
 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
 
 All of the results were produced using the `train.py` script as described in the
@@ -592,7 +592,7 @@ WaveGlow FP32 loss - batch size 4 (mean and std over 16 runs)
 ##### NVIDIA DGX-1 (8x V100 16G)
 
 Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{AMP,FP32}_DGX1_16GB_8GPU.sh`
-training script in the PyTorch-19.05-py3 NGC container on NVIDIA DGX-1 with
+training script in the PyTorch-19.06-py3 NGC container on NVIDIA DGX-1 with
 8x V100 16G GPUs. Performance numbers (in output mel-spectrograms per second for
 Tacotron 2 and output samples per second for WaveGlow) were averaged over
 an entire training epoch.
@@ -638,7 +638,7 @@ The following table shows the expected training time for convergence for WaveGlo
 ##### NVIDIA DGX-1 (8x V100 16G)
 
 Our results were obtained by running the `./inference.py` inference script in 
-the PyTorch-19.05-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
+the PyTorch-19.06-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
 Performance numbers (in output mel-spectrograms per second for Tacotron 2 and 
 output samples per second for WaveGlow) were averaged over 16 runs.
 
