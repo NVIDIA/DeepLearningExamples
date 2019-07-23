@@ -308,8 +308,8 @@ To start Tacotron 2 training, run:
 Ensure your loss values are comparable to those listed in the table in the
 [Results](#results) section. For both models, the loss values are stored in the `./output/nvlog.json` log file.
 
-   After you have trained the Tacotron 2 model for 1500 epochs and the 
-   WaveGlow model for 800 epochs, you should get audio results similar to the 
+   After you have trained the Tacotron 2 and WaveGlow models, you should get
+   audio results similar to the
    samples in the `./audio` folder. For details about generating audio, see the
    [Inference process](#inference-process) section below.
 
@@ -368,9 +368,9 @@ WaveGlow models.
 
 #### Shared parameters
 
-* `--epochs` - number of epochs (Tacotron 2: 1500, WaveGlow: 1000)
+* `--epochs` - number of epochs (Tacotron 2: 1501, WaveGlow: 1001)
 * `--learning-rate` - learning rate (Tacotron 2: 1e-3, WaveGlow: 1e-4)
-* `--batch-size` - batch size (Tacotron 2 FP16/FP32: 80/48, WaveGlow FP16/FP32: 8/4)
+* `--batch-size` - batch size (Tacotron 2 FP16/FP32: 128/64, WaveGlow FP16/FP32: 10/4)
 * `--amp-run` - use mixed precision training
 
 #### Shared audio/STFT parameters
@@ -561,7 +561,7 @@ and accuracy in training and inference.
 
 ##### NVIDIA DGX-1 (8x V100 16G)
 
-Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{FP16,FP32}_DGX1_16GB_8GPU.sh` training script in the PyTorch-19.05-py3
+Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{AMP,FP32}_DGX1_16GB_8GPU.sh` training script in the PyTorch-19.05-py3
 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
 
 All of the results were produced using the `train.py` script as described in the
@@ -574,13 +574,13 @@ All of the results were produced using the `train.py` script as described in the
 | WaveGlow FP16  | -2.2054 | -5.7602 |  -5.901 | -5.9706 | -6.0258 |
 | WaveGlow FP32  | -3.0327 |  -5.858 | -6.0056 | -6.0613 | -6.1087 |
 
-Tacotron 2 FP16 loss - batch size 80 (mean and std over 16 runs)
+Tacotron 2 FP16 loss - batch size 128 (mean and std over 16 runs)
 ![](./img/tacotron2_amp_loss.png "Tacotron 2 FP16 loss")
 
-Tacotron 2 FP32 loss - batch size 48 (mean and std over 16 runs)
+Tacotron 2 FP32 loss - batch size 64 (mean and std over 16 runs)
 ![](./img/tacotron2_fp32_loss.png "Tacotron 2 FP16 loss")
 
-WaveGlow FP16 loss - batch size 8 (mean and std over 16 runs)
+WaveGlow FP16 loss - batch size 10 (mean and std over 16 runs)
 ![](./img/waveglow_fp16_loss.png "WaveGlow FP16 loss")
 
 WaveGlow FP32 loss - batch size 4 (mean and std over 16 runs)
@@ -591,7 +591,7 @@ WaveGlow FP32 loss - batch size 4 (mean and std over 16 runs)
 
 ##### NVIDIA DGX-1 (8x V100 16G)
 
-Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{FP16,FP32}_DGX1_16GB_8GPU.sh`
+Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{AMP,FP32}_DGX1_16GB_8GPU.sh`
 training script in the PyTorch-19.05-py3 NGC container on NVIDIA DGX-1 with
 8x V100 16G GPUs. Performance numbers (in output mel-spectrograms per second for
 Tacotron 2 and output samples per second for WaveGlow) were averaged over
@@ -617,7 +617,7 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 ##### Expected training time
 
-The following table shows the expected training time for convergence for Tacotron 2 (1500 epochs):
+The following table shows the expected training time for convergence for Tacotron 2 (1501 epochs):
 
 |Number of GPUs|Batch size per GPU|Time to train with mixed precision (Hrs)|Time to train with FP32 (Hrs)|Speed-up with mixed precision|
 |---:|---:|---:|---:|---:|
@@ -625,7 +625,7 @@ The following table shows the expected training time for convergence for Tacotro
 |4| 128@FP16, 64@FP32 | 42 | 64 | 1.54 |
 |8| 128@FP16, 64@FP32 | 22 | 33 | 1.52 |
 
-The following table shows the expected training time for convergence for WaveGlow (1000 epochs):
+The following table shows the expected training time for convergence for WaveGlow (1001 epochs):
 
 |Number of GPUs|Batch size per GPU|Time to train with mixed precision (Hrs)|Time to train with FP32 (Hrs)|Speed-up with mixed precision|
 |---:|---:|---:|---:|---:|
