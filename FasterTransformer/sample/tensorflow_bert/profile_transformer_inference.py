@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # usage example
-# export BERT_BASE_DIR=/home/dongluw/Desktop/data/uncased_L-12_H-768_A-12
+# export BERT_BASE_DIR=/path/to/bert/uncased_L-12_H-768_A-12
 # python profile_transformer_inference.py --init_checkpoint=$BERT_BASE_DIR/bert_model.ckpt --tf_profile=false --output_dir=mrpc_output --profiling_output_file=time_elapsed --xla=false --floatx=float32
 from __future__ import absolute_import
 from __future__ import division

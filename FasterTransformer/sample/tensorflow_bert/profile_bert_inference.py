@@ -13,8 +13,8 @@
 # limitations under the License.
 
 # usage example
-# export GLUE_DIR=/home/dongluw/Desktop/data/glue_data
-# export BERT_BASE_DIR=/home/dongluw/Desktop/data/uncased_L-12_H-768_A-12
+# export BERT_BASE_DIR=/path/to/bert/uncased_L-12_H-768_A-12
+# export GLUE_DIR=/path/to/glue
 # python profile_bert_inference.py   --task_name=MRPC   --data_dir=$GLUE_DIR/MRPC   --vocab_file=$BERT_BASE_DIR/vocab.txt   --bert_config_file=$BERT_BASE_DIR/bert_config.json   --predict_batch_size=8   --max_seq_length=128   --output_dir=mrpc_output --init_checkpoint=$BERT_BASE_DIR/bert_model.ckpt --tf_profile=true  --profiling_output_file=time_elapsed --xla=false --floatx=float32
 from __future__ import absolute_import
 from __future__ import division

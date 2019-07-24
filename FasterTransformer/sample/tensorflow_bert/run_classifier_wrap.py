@@ -13,8 +13,8 @@
 # limitations under the License.
 
 # usage example
-# export GLUE_DIR=/home/dongluw/Desktop/data/glue_data
-# export BERT_BASE_DIR=/home/dongluw/Desktop/data/uncased_L-12_H-768_A-12
+# export BERT_BASE_DIR=/path/to/bert/uncased_L-12_H-768_A-12
+# export GLUE_DIR=/path/to/glue
 # python run_classifier_wrap.py   --floatx=float16   --task_name=MRPC   --do_eval=true   --data_dir=$GLUE_DIR/MRPC   --vocab_file=$BERT_BASE_DIR/vocab.txt   --bert_config_file=$BERT_BASE_DIR/bert_config.json   --init_checkpoint=mrpc_output/fp16_model.ckpt   --max_seq_length=128   --eval_batch_size=8   --output_dir=mrpc_output
 
 # FP32 Tensorflow Transformer MRPC result
