@@ -1,11 +1,5 @@
 #!/bin/bash
 
-# Check running from repository root
-if [ ! -d .git ]; then
-  echo "Not running from repository root! Exiting."
-  exit 1
-fi
-
 DATA_DIR=${1:-"/mnt/dldata/bert"}
 VOCAB_DIR=${2:-"/mnt/dldata/bert/vocab"}
 CHECKPOINT_DIR=${3:-"/mnt/dldata/bert/pretrained_models_nvidia_pytorch"}
