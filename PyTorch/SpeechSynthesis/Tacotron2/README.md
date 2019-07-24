@@ -260,15 +260,15 @@ dataset.
    ```
 
 2. Download and preprocess the dataset.
-Use the `./scripts/prepare-dataset.sh` download script to automatically
+Use the `./scripts/prepare_dataset.sh` download script to automatically
 download and preprocess the training, validation and test datasets. To run
 this script, issue:
    ```bash
-   bash scripts/prepare-dataset.sh
+   bash scripts/prepare_dataset.sh
    ```
 
    To preprocess the datasets for Tacotron 2 training, use the
-   `./scripts/prepare-mels.sh` script:
+   `./scripts/prepare_mels.sh` script:
    ```bash
    bash scripts/prepare_mels.sh
    ```
