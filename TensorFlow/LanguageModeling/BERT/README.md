@@ -99,7 +99,8 @@ These techniques and optimizations improve model performance and reduce training
 ### Feature support matrix
 
 The following features are supported by this model.
-| Feature               | BERT |
+
+| **Feature**               | **BERT** |
 |:-----------------------:|:--------------------------:|
 | Horovod Multi-GPU      | Yes |                         
 
