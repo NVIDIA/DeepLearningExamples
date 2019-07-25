@@ -1,9 +1,7 @@
 [submodule "PyTorch/Translation/Transformer/cutlass"]
 	path = PyTorch/Translation/Transformer/cutlass
 	url = https://github.com/NVIDIA/cutlass.git
-
-[submodule "tensorrt-inference-server"]
+[submodule "TensorFlow/LanguageModeling/BERT/tensorrt-inference-server"]
+        path = TensorFlow/LanguageModeling/BERT/tensorrt-inference-server
         url = https://github.com/NVIDIA/tensorrt-inference-server.git
-        path = tensorrt-inference-server
-        branch = r19.06
-
+	branch = r19.06
