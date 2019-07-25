@@ -268,4 +268,7 @@ def build_resnet(version, config, model_state=None):
                            version['layers'],
                            version['num_classes'])
 
+    if model_state:
+        model.load_state_dict(model_state)
+    
     return model
