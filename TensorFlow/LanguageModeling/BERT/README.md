@@ -99,7 +99,8 @@ These techniques and optimizations improve model performance and reduce training
 ### Feature support matrix
 
 The following features are supported by this model.
-| Feature               | BERT |
+
+| **Feature**               | **BERT** |
 |:-----------------------:|:--------------------------:|
 | Horovod Multi-GPU      | Yes |                         
 
@@ -640,12 +641,12 @@ Our results were obtained by running the `run_squad.py` training script in the T
 
 The following tables compare `F1` scores across 5 different training runs with different seeds, for both FP16 and FP32 respectively.  The runs showcase consistent convergence on all 5 seeds with very little deviation.
 
-| **FP16, 8x GPUs** | **seed #1** | **seed #2** | **seed #3** | **seed #4** | **seed #5** | **mean** | **std** |
+| **FP16, 8x GPUs** | **seed 1** | **seed 2** | **seed 3** | **seed 4** | **seed 5** | **mean** | **std** |
 |:-----------:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|
 |F1         |90.75|90.82|90.89|91.05|90.79|90.86|0.12|
 |Exact match|83.85|83.93|83.95|84.25|83.59|83.91|0.24|
 
-| **FP32, 8x GPUs** | **seed #1** | **seed #2** | **seed #3** | **seed #4** | **seed #5** | **mean** | **std** |
+| **FP32, 8x GPUs** | **seed 1** | **seed 2** | **seed 3** | **seed 4** | **seed 5** | **mean** | **std** |
 |:-----------:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|
 |F1         |90.70|90.80|90.89|91.08|90.73|90.84|0.15 |
 |Exact match|83.82|83.77|84.23|84.19|83.63|83.93|0.27 |
