@@ -2,5 +2,5 @@
 .git/
 __pycache__/
 results/
-data/*/*/
-data/*/*.zip
+data/
+checkpoints/
