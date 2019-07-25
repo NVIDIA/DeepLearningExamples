@@ -30,6 +30,10 @@ import torch
 from torch.autograd import Variable
 from torch import nn
 from torch.nn import functional as F
+import sys
+from os.path import abspath, dirname
+# enabling modules discovery from global entrypoint
+sys.path.append(abspath(dirname(__file__)+'/../'))
 from common.layers import ConvNorm, LinearNorm
 from common.utils import to_gpu, get_mask_from_lengths
 
@@ -122,9 +126,17 @@ class Prenet(nn.Module):
             [LinearNorm(in_size, out_size, bias=False)
              for (in_size, out_size) in zip(in_sizes, sizes)])
 
-    def forward(self, x):
-        for linear in self.layers:
-            x = F.dropout(F.relu(linear(x)), p=0.5, training=True)
+    def forward(self, x, inference=False):
+        if inference:
+            for linear in self.layers:
+                x = F.relu(linear(x))
+                x0 = x[0].unsqueeze(0)
+                mask = Variable(torch.bernoulli(x0.data.new(x0.data.size()).fill_(0.5)))
+                mask = mask.expand(x.size(0), x.size(1))
+                x = x*mask*2
+        else:
+            for linear in self.layers:
+                x = F.dropout(F.relu(linear(x)), p=0.5, training=True)
         return x
 
 
@@ -457,7 +469,7 @@ class Decoder(nn.Module):
         return mel_outputs, gate_outputs, alignments
 
 
-    def infer(self, memory):
+    def infer(self, memory, memory_lengths):
         """ Decoder inference
         PARAMS
         ------
@@ -471,13 +483,23 @@ class Decoder(nn.Module):
         """
         decoder_input = self.get_go_frame(memory)
 
-        self.initialize_decoder_states(memory, mask=None)
+        if memory.size(0) > 1:
+            mask =~ get_mask_from_lengths(memory_lengths)
+        else:
+            mask = None
 
-        mel_lengths = torch.zeros([memory.size(0)], dtype=torch.int32).cuda()
-        not_finished = torch.ones([memory.size(0)], dtype=torch.int32).cuda()
+        self.initialize_decoder_states(memory, mask=mask)
+
+        mel_lengths = torch.zeros([memory.size(0)], dtype=torch.int32)
+        not_finished = torch.ones([memory.size(0)], dtype=torch.int32)
+        if torch.cuda.is_available():
+            mel_lengths = mel_lengths.cuda()
+            not_finished = not_finished.cuda()
+
+
         mel_outputs, gate_outputs, alignments = [], [], []
         while True:
-            decoder_input = self.prenet(decoder_input)
+            decoder_input = self.prenet(decoder_input, inference=True)
             mel_output, gate_output, alignment = self.decode(decoder_input)
 
             mel_outputs += [mel_output.squeeze(1)]
@@ -500,7 +522,7 @@ class Decoder(nn.Module):
         mel_outputs, gate_outputs, alignments = self.parse_decoder_outputs(
             mel_outputs, gate_outputs, alignments)
 
-        return mel_outputs, gate_outputs, alignments
+        return mel_outputs, gate_outputs, alignments, mel_lengths
 
 
 class Tacotron2(nn.Module):
@@ -552,9 +574,6 @@ class Tacotron2(nn.Module):
             (text_padded, input_lengths, mel_padded, max_len, output_lengths),
             (mel_padded, gate_padded))
 
-    def parse_input(self, inputs):
-        return inputs
-
     def parse_output(self, outputs, output_lengths=None):
         if self.mask_padding and output_lengths is not None:
             mask = ~get_mask_from_lengths(output_lengths)
@@ -568,8 +587,7 @@ class Tacotron2(nn.Module):
         return outputs
 
     def forward(self, inputs):
-        inputs, input_lengths, targets, max_len, \
-            output_lengths = self.parse_input(inputs)
+        inputs, input_lengths, targets, max_len, output_lengths = inputs
         input_lengths, output_lengths = input_lengths.data, output_lengths.data
 
         embedded_inputs = self.embedding(inputs).transpose(1, 2)
@@ -586,17 +604,17 @@ class Tacotron2(nn.Module):
             [mel_outputs, mel_outputs_postnet, gate_outputs, alignments],
             output_lengths)
 
-    def infer(self, inputs):
-        inputs = self.parse_input(inputs)
+    def infer(self, inputs, input_lengths):
+
         embedded_inputs = self.embedding(inputs).transpose(1, 2)
-        encoder_outputs = self.encoder.infer(embedded_inputs)
-        mel_outputs, gate_outputs, alignments = self.decoder.infer(
-            encoder_outputs)
+        encoder_outputs = self.encoder(embedded_inputs, input_lengths)
+        mel_outputs, gate_outputs, alignments, mel_lengths = self.decoder.infer(
+            encoder_outputs, input_lengths)
 
         mel_outputs_postnet = self.postnet(mel_outputs)
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet
 
         outputs = self.parse_output(
-            [mel_outputs, mel_outputs_postnet, gate_outputs, alignments])
+            [mel_outputs, mel_outputs_postnet, gate_outputs, alignments, mel_lengths])
 
         return outputs

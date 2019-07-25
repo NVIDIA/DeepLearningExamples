@@ -151,5 +151,5 @@ def batch_to_gpu(batch):
     output_lengths = to_gpu(output_lengths).long()
     x = (text_padded, input_lengths, mel_padded, max_len, output_lengths)
     y = (mel_padded, gate_padded)
-    len_x = torch.sum(input_lengths)
+    len_x = torch.sum(output_lengths)
     return (x, y, len_x)
