@@ -1,0 +1,5 @@
+Jasper in PyTorch
+
+This repository includes source code (in "parts/") from:
+* https://github.com/keithito/tacotron and https://github.com/ryanleary/patter licensed under MIT license.
+

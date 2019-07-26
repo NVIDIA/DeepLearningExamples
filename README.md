@@ -33,6 +33,9 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 ### Text to Speech
 - __Tacotron & WaveGlow__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2)]
 
+### Speech Recognition
+- __Jasper__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechRecognition/Jasper)]
+
 ## NVIDIA support
 In each of the network READMEs, we indicate the level of support that will be provided. The range is from ongoing updates and improvements to a point-in-time release for thought leadership.
 
