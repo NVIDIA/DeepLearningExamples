@@ -22,7 +22,7 @@ import re
 import tensorflow as tf
 
 
-def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, use_tpu, hvd=None, use_fp16=False, fastmath=False, amp=False, amp_fastmath=False):
+def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None, use_fp16=False, amp=False):
   """Creates an optimizer training op."""
   global_step = tf.train.get_or_create_global_step()
 
@@ -69,21 +69,18 @@ def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, use_tpu, 
       epsilon=1e-6,
       exclude_from_weight_decay=["LayerNorm", "layer_norm", "bias"])
 
-  if use_tpu:
-    optimizer = tf.contrib.tpu.CrossShardOptimizer(optimizer)
-  else:
-    if hvd is not None:
-      from horovod.tensorflow.compression import Compression
-      optimizer = hvd.DistributedOptimizer(optimizer, sparse_as_dense=True, compression=Compression.none)
-    if use_fp16 or fastmath or amp or amp_fastmath:
-      loss_scale_manager = tf.contrib.mixed_precision.ExponentialUpdateLossScaleManager(init_loss_scale=2**32, incr_every_n_steps=1000, decr_every_n_nan_or_inf=2, decr_ratio=0.5)
-      optimizer = tf.contrib.mixed_precision.LossScaleOptimizer(optimizer, loss_scale_manager)
+  if hvd is not None:
+    from horovod.tensorflow.compression import Compression
+    optimizer = hvd.DistributedOptimizer(optimizer, sparse_as_dense=True, compression=Compression.none)
+  if use_fp16 or amp:
+    loss_scale_manager = tf.contrib.mixed_precision.ExponentialUpdateLossScaleManager(init_loss_scale=2**32, incr_every_n_steps=1000, decr_every_n_nan_or_inf=2, decr_ratio=0.5)
+    optimizer = tf.contrib.mixed_precision.LossScaleOptimizer(optimizer, loss_scale_manager)
 
   tvars = tf.trainable_variables()
   grads_and_vars = optimizer.compute_gradients(loss, tvars)
   grads_and_vars = [(g,v) for g,v in grads_and_vars if g is not None]
   grads, tvars = list(zip(*grads_and_vars))
-  all_are_finite = tf.reduce_all([tf.reduce_all(tf.is_finite(g)) for g in grads]) if use_fp16 or fastmath or amp or amp_fastmath else tf.constant(True, dtype=tf.bool)
+  all_are_finite = tf.reduce_all([tf.reduce_all(tf.is_finite(g)) for g in grads]) if use_fp16 or amp else tf.constant(True, dtype=tf.bool)
 
   # This is how the model was pre-trained.
   # ensure global norm is a finite number 
@@ -128,7 +125,8 @@ class AdamWeightDecayOptimizer(tf.train.Optimizer):
     self.epsilon = epsilon
     self.exclude_from_weight_decay = exclude_from_weight_decay
 
-  def apply_gradients(self, grads_and_vars, global_step=None, name=None):
+  def apply_gradients(self, grads_and_vars, global_step=None, name=None,
+      use_fp16=False):
     """See base class."""
     assignments = []
     for (grad, param) in grads_and_vars:
@@ -136,6 +134,16 @@ class AdamWeightDecayOptimizer(tf.train.Optimizer):
         continue
 
       param_name = self._get_variable_name(param.name)
+      has_shadow = use_fp16 and param.dtype.base_dtype != tf.float32
+      if has_shadow:
+        # create shadow fp32 weights for fp16 variable
+        param_fp32 = tf.get_variable(
+            name=param_name + "/shadow",
+            dtype=tf.float32,
+            trainable=False,
+            initializer=tf.cast(param.initialized_value(),tf.float32))
+      else:
+        param_fp32 = param
 
       m = tf.get_variable(
           name=param_name + "/adam_m",
@@ -167,14 +175,17 @@ class AdamWeightDecayOptimizer(tf.train.Optimizer):
       # with the m/v parameters. This is equivalent to adding the square
       # of the weights to the loss with plain (non-momentum) SGD.
       if self._do_use_weight_decay(param_name):
-        update += self.weight_decay_rate * param
+        update += self.weight_decay_rate * param_fp32
 
       update_with_lr = self.learning_rate * update
 
-      next_param = param - update_with_lr
+      next_param = param_fp32 - update_with_lr
 
+      if has_shadow:
+        # cast shadow fp32 weights to fp16 and assign to trainable variable
+        param.assign(tf.cast(next_param, param.dtype.base_dtype))
       assignments.extend(
-          [param.assign(next_param),
+          [param_fp32.assign(next_param),
            m.assign(next_m),
            v.assign(next_v)])
     return tf.group(*assignments, name=name)

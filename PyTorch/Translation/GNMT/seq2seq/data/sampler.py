@@ -183,7 +183,7 @@ class BucketingSampler(DistributedSampler):
         bucket_ids.clamp_(0, num_buckets - 1)
 
         # build buckets
-        all_indices = torch.tensor(range(self.data_len))
+        all_indices = torch.arange(self.data_len)
         self.buckets = []
         self.num_samples = 0
         global_bs = self.global_batch_size
@@ -226,7 +226,7 @@ class BucketingSampler(DistributedSampler):
 
 
 class StaticDistributedSampler(Sampler):
-    def __init__(self, dataset, batch_size, pad, world_size=None, rank=None):
+    def __init__(self, dataset, batch_size, pad, repeat=1, world_size=None, rank=None):
         """
         Constructor for the StaticDistributedSampler.
 
@@ -247,11 +247,12 @@ class StaticDistributedSampler(Sampler):
         global_batch_size = batch_size * world_size
 
         data_len = len(dataset)
-        num_samples = (data_len + global_batch_size - 1) \
+        repeated_data_len = int(len(dataset) * repeat)
+        num_samples = (repeated_data_len + global_batch_size - 1) \
             // global_batch_size * global_batch_size
         self.num_samples = num_samples
 
-        indices = list(range(data_len))
+        indices = list(range(repeated_data_len))
         if pad:
             # pad dataset to a multiple of global_batch_size samples, uses
             # sample with idx 0 as pad
@@ -267,6 +268,7 @@ class StaticDistributedSampler(Sampler):
         indices = indices.view(-1)
         # remove temporary pad
         indices = indices[indices != -1]
+        indices = indices % data_len
         indices = indices.tolist()
         self.indices = indices
 

@@ -34,6 +34,7 @@ import argparse
 import os
 import random
 import sys
+import subprocess
 
 # import matplotlib.image as mpimg
 import numpy as np
@@ -193,6 +194,11 @@ def add_arguments(parser):
       help="Test prefix, expect files with src/tgt suffixes.")
 
   parser.add_argument(
+      "--translate_file",
+      type=str,
+      help="File to translate, works only with translate mode")
+
+  parser.add_argument(
       "--output_dir", type=str, default="results",
       help="Store log/model files.")
 
@@ -290,7 +296,7 @@ def add_arguments(parser):
       help="save_checkpoints_steps")
   parser.add_argument(
       "--log_step_count_steps", type=int, default=10,
-      help=("The frequency, in number of global steps, that the global step"
+      help=("The frequency, in number of global steps, that the global step "
             "and the loss will be logged during training"))
   parser.add_argument(
       "--num_gpus", type=int, default=1, help="Number of gpus in each worker.")
@@ -317,6 +323,9 @@ def add_arguments(parser):
   parser.add_argument("--detokenizer_file", type=str,
                       default=None,
                       help=("""Detokenizer script file. Default: DATA_DIR/mosesdecoder/scripts/tokenizer/detokenizer.perl"""))
+  parser.add_argument("--tokenizer_file", type=str,
+                      default=None,
+                      help=("""Tokenizer script file. Default: DATA_DIR/mosesdecoder/scripts/tokenizer/tokenizer.perl"""))
 
   # Advanced inference arguments
   parser.add_argument("--infer_mode", type=str, default="beam_search",
@@ -558,7 +567,7 @@ def add_arguments(parser):
   parser.add_argument("--use_synthetic_data", type="bool", default=False)
   parser.add_argument(
       "--mode", type=str, default="train_and_eval",
-      choices=["train_and_eval", "infer"])
+      choices=("train_and_eval", "infer", "translate"))
 
 
 def create_hparams(flags):
@@ -569,6 +578,7 @@ def create_hparams(flags):
       tgt=flags.tgt,
       train_prefix=os.path.join(flags.data_dir, flags.train_prefix),
       test_prefix=os.path.join(flags.data_dir, flags.test_prefix),
+      translate_file=flags.translate_file,
       vocab_prefix=os.path.join(flags.data_dir, flags.vocab_prefix),
       embed_prefix=flags.embed_prefix,
       output_dir=flags.output_dir,
@@ -617,6 +627,8 @@ def create_hparams(flags):
       infer_batch_size=flags.infer_batch_size,
       detokenizer_file=flags.detokenizer_file if flags.detokenizer_file is not None \
                        else os.path.join(flags.data_dir, 'mosesdecoder/scripts/tokenizer/detokenizer.perl'),
+      tokenizer_file=flags.tokenizer_file if flags.tokenizer_file is not None \
+                       else os.path.join(flags.data_dir, 'mosesdecoder/scripts/tokenizer/tokenizer.perl'),
 
       # Advanced inference arguments
       infer_mode=flags.infer_mode,
@@ -718,6 +730,8 @@ def extend_hparams(hparams):
   if hparams.infer_mode == "beam_search" and hparams.beam_width <= 0:
     raise ValueError("beam_width must greater than 0 when using beam_search"
                      "decoder.")
+  if hparams.mode == "translate" and not hparams.translate_file:
+    raise ValueError("--translate_file flag must be specified in translate mode")
 
   # Different number of encoder / decoder layers
   assert hparams.num_encoder_layers and hparams.num_decoder_layers
@@ -776,7 +790,8 @@ def extend_hparams(hparams):
       check_special_token=hparams.check_special_token,
       sos=hparams.sos,
       eos=hparams.eos,
-      unk=vocab_utils.UNK)
+      unk=vocab_utils.UNK,
+      pad_vocab=True)
 
   # Target vocab
   if hparams.share_vocab:
@@ -871,6 +886,17 @@ def run_main(flags, default_hparams, estimator_fn):
   estimator_fn(hparams)
   return hparams
 
+def tokenize(hparams, file, tokenized_file):
+  utils.print_out("tokenizing {} -> {}".format(file, tokenized_file))
+  with open(file, 'rb') as input_file:
+    with open(tokenized_file, 'wb') as output_file:
+      subprocess.run([hparams.tokenizer_file, '-l', hparams.src], stdin=input_file, stdout=output_file)
+
+def detokenize(hparams, file, detokenized_file):
+  utils.print_out("detokenizing {} -> {}".format(file, detokenized_file))
+  with open(file, 'rb') as input_file:
+    with open(detokenized_file, 'wb') as output_file:
+      subprocess.run([hparams.detokenizer_file, '-l', hparams.tgt], stdin=input_file, stdout=output_file)
 
 def main(unused_argv):
   experiment_start = time.time()
@@ -921,8 +947,14 @@ def main(unused_argv):
     utils.print_out("Running training mode.")
     default_hparams = create_hparams(FLAGS)
     run_main(FLAGS, default_hparams, estimator.train_fn)
-  elif FLAGS.mode == "infer":
-    utils.print_out("Running inference mode.")
+  elif FLAGS.mode == "infer" or FLAGS.mode == "translate":
+    if FLAGS.mode == "infer":
+        utils.print_out("Running inference mode.")
+        translate_mode = False
+    else:
+        utils.print_out("Running translate mode on file {}.".format(FLAGS.translate_file))
+        translate_mode = True
+
     # Random
     random_seed = FLAGS.random_seed
     if random_seed is not None and random_seed > 0:
@@ -946,16 +978,25 @@ def main(unused_argv):
     utils.print_out("infer_hparams:")
     utils.print_hparams(hparams)
 
-    eval_sentences, eval_src_tokens, eval_tgt_tokens = iterator_utils.get_effective_epoch_size(hparams, train=False)
+    if translate_mode:
+      tokenize(hparams, hparams.translate_file, hparams.translate_file + ".tok")
+
+    eval_sentences, eval_src_tokens, _ = iterator_utils.get_effective_epoch_size(hparams, train=False)
 
     # Run evaluation when there's a new checkpoint
     tf.logging.info("Starting to evaluate...")
     eval_start = time.time()
-    bleu_score, eval_speed, eval_output_tokens = estimator.eval_fn(hparams, hparams.ckpt)
+    _, (eval_speed, eval_latencies), eval_output_tokens = estimator.eval_fn(hparams, hparams.ckpt, only_translate=translate_mode)
     eval_end = time.time()
     eval_delta = eval_end - eval_start
     utils.print_out("eval time for ckpt: %.2f mins (%.2f sent/sec, %.2f tokens/sec)" %
                     (eval_delta / 60., eval_speed, eval_speed * (eval_src_tokens + eval_output_tokens) / eval_sentences), f=sys.stderr)
+    for lat in sorted(eval_latencies):
+      utils.print_out("eval latency_%s for ckpt: %.2f ms" % (lat, eval_latencies[lat] * 1000))
+
+    if translate_mode:
+      detokenize(hparams, hparams.translate_file + ".trans.tok", hparams.translate_file + ".trans")
+
   else:
     assert FLAGS.mode == "train_and_eval"
     utils.print_out("Running train and eval mode.")
@@ -996,13 +1037,13 @@ def main(unused_argv):
     should_stop = epochs >= FLAGS.max_train_epochs
 
     train_sentences, train_src_tokens, train_tgt_tokens = iterator_utils.get_effective_epoch_size(hparams)
-    eval_sentences, eval_src_tokens, eval_tgt_tokens = iterator_utils.get_effective_epoch_size(hparams, train=False)
+    eval_sentences, eval_src_tokens, _ = iterator_utils.get_effective_epoch_size(hparams, train=False)
 
     while not should_stop:
       utils.print_out("Starting epoch %d" % epochs)
       try:
         train_start = time.time()
-        train_speed = estimator.train_fn(hparams)
+        train_speed, _ = estimator.train_fn(hparams)
       except tf.errors.OutOfRangeError:
         utils.print_out("training hits OutOfRangeError", f=sys.stderr)
 
@@ -1013,11 +1054,14 @@ def main(unused_argv):
 
       # This is probably sub-optimal, doing eval per-epoch
       eval_start = time.time()
-      bleu_score, eval_speed, eval_output_tokens = estimator.eval_fn(infer_hparams)
+      bleu_score, (eval_speed, eval_latencies), eval_output_tokens = estimator.eval_fn(infer_hparams)
       eval_end = time.time()
       eval_delta = eval_end - eval_start
       utils.print_out("eval time for epoch %d: %.2f mins (%.2f sent/sec, %.2f tokens/sec)" %
                       (epochs + 1, eval_delta / 60., eval_speed, eval_speed * (eval_src_tokens + eval_output_tokens) / eval_sentences), f=sys.stderr)
+      for lat in sorted(eval_latencies):
+        utils.print_out("eval latency_%s for epoch %d: %.2f ms" % (lat, epochs + 1, eval_latencies[lat] * 1000))
+
 
       if FLAGS.debug or (FLAGS.target_bleu is not None and bleu_score > FLAGS.target_bleu):
         should_stop = True

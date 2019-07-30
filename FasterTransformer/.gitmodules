@@ -1,0 +1,4 @@
+[submodule "sample/fastertransformer_bert/bert"]
+	path = sample/tensorflow_bert/bert
+	url = https://github.com/google-research/bert.git
+

@@ -1,5 +1,4 @@
 import numpy as np
-import tensorflow as tf
 import cupy as cp
 
 def generate_negatives(neg_users, true_mat, item_range, sort=False, use_trick=False):
@@ -29,7 +28,7 @@ def generate_negatives(neg_users, true_mat, item_range, sort=False, use_trick=Fa
     neg_users = cp.concatenate(neg_u)
     neg_items = cp.concatenate(neg_i)
 
-    if sort == False:
+    if not sort:
         return neg_users, neg_items
 
     sorted_users = cp.sort(neg_users)
@@ -56,7 +55,6 @@ class DataGenerator():
                  pos_eval_items,            # type: np.ndarray
                  eval_users_per_batch,      # type: int
                  eval_negative_samples,     # type: int
-                 use_neg_trick=False,       # type: bool
                 ):
         # Check input data
         if train_users.shape != train_items.shape:
@@ -86,7 +84,6 @@ class DataGenerator():
         self._pos_eval_items = pos_eval_items
         self.eval_users_per_batch = eval_users_per_batch
         self._eval_negative_samples = eval_negative_samples
-        self.use_neg_trick = use_neg_trick
 
         # Eval data
         self.eval_users = None
@@ -108,9 +105,9 @@ class DataGenerator():
         neg_eval_users_base = cp.repeat(pos_eval_users, self._eval_negative_samples)
 
         # Generate negative samples
-        test_u_neg, test_i_neg = generate_negatives(
-            neg_eval_users_base, neg_mat, self.num_items, True
-        )
+        test_u_neg, test_i_neg = generate_negatives(neg_users=neg_eval_users_base, true_mat=neg_mat,
+                                                    item_range=self.num_items, sort=True, use_trick=False)
+
         test_u_neg = test_u_neg.reshape((-1, self._eval_negative_samples)).get()
         test_i_neg = test_i_neg.reshape((-1, self._eval_negative_samples)).get()
 
@@ -150,21 +147,20 @@ class DataGenerator():
         is_neg = cp.logical_not(self._train_labels)
 
         # Do not store verification matrix if using the negatives generation shortcut
-        neg_mat = None if self.use_neg_trick else cp.array(self._neg_mat)
+        neg_mat = None
 
         # If there are no negative samples in the local portion of the training data, do nothing
         any_neg = cp.any(is_neg)
         if any_neg:
             self._train_users[is_neg], self._train_items[is_neg] = generate_negatives(
-                self._train_users[is_neg], neg_mat, self.num_items, use_trick=self.use_neg_trick
+                self._train_users[is_neg], neg_mat, self.num_items, use_trick=True
             )
 
         shuffled_order = cp.random.permutation(self._train_users.shape[0])
         self._train_users = self._train_users[shuffled_order]
         self._train_items = self._train_items[shuffled_order]
         self._train_labels = self._train_labels[shuffled_order]
-        is_neg = cp.logical_not(self._train_labels)
-        
+
         # Manually create batches
         split_indices = np.arange(batch_size, self._train_users.shape[0], batch_size)
         self.train_users_batches = np.split(self._train_users, split_indices)

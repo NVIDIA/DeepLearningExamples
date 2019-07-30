@@ -10,6 +10,12 @@ import torch.distributed as dist
 from maskrcnn_benchmark.utils.comm import get_world_size
 from maskrcnn_benchmark.utils.metric_logger import MetricLogger
 
+try:
+    from apex import amp
+    use_amp = True
+except ImportError:
+    print('Use APEX for multi-precision via apex.amp')
+    use_amp = False
 
 def reduce_loss_dict(loss_dict):
     """
@@ -80,7 +86,7 @@ def do_train(
         # Note: If mixed precision is not used, this ends up doing nothing
         # Otherwise apply loss scaling for mixed-precision recipe
         if use_amp:        
-            with optimizer.scale_loss(losses) as scaled_losses:
+            with amp.scale_loss(losses, optimizer) as scaled_losses:
                 scaled_losses.backward()
         else:
             losses.backward()

@@ -50,6 +50,7 @@ class ResnetModel(object):
         compute_format='NCHW',
         input_format='NHWC',
         dtype=tf.float32,
+        use_dali=False,
     ):
 
         self.model_hparams = tf.contrib.training.HParams(
@@ -59,6 +60,7 @@ class ResnetModel(object):
             dtype=dtype,
             layer_counts=(3, 4, 6, 3),
             model_name=model_name,
+            use_dali=use_dali
         )
 
         self.batch_norm_hparams = tf.contrib.training.HParams(
@@ -122,7 +124,7 @@ class ResnetModel(object):
                 raise RuntimeError("Parameter `loss_scale` is missing...")
 
                 
-        if mode == tf.estimator.ModeKeys.TRAIN:
+        if mode == tf.estimator.ModeKeys.TRAIN and not self.model_hparams.use_dali:
 
             with tf.device('/cpu:0'):
                 # Stage inputs on the host
@@ -139,7 +141,8 @@ class ResnetModel(object):
 
             # Subtract mean per channel
             # and enforce values between [-1, 1]
-            features = normalized_inputs(features)
+            if not self.model_hparams.use_dali:
+                features = normalized_inputs(features)
 
             # Update Global Step
             global_step = tf.train.get_or_create_global_step()
@@ -275,8 +278,13 @@ class ResnetModel(object):
 
                     backprop_op = optimizer.minimize(total_loss, gate_gradients=gate_gradients, global_step=global_step)
 
-                    train_ops = tf.group(backprop_op, cpu_prefetch_op, gpu_prefetch_op, update_ops, name='train_ops')
-
+                    
+                    if self.model_hparams.use_dali:
+                    
+                        train_ops = tf.group(backprop_op, update_ops, name='train_ops')
+                    
+                    else:
+                        train_ops = tf.group(backprop_op, cpu_prefetch_op, gpu_prefetch_op, update_ops, name='train_ops')
                     return tf.estimator.EstimatorSpec(mode=mode, loss=total_loss, train_op=train_ops)
 
                 elif mode == tf.estimator.ModeKeys.EVAL:

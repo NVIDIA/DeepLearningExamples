@@ -1,5 +1,5 @@
-PIPELINE_CONFIG_PATH=/workdir/models/research/configs/ssd320_full_4gpus.config
 CKPT_DIR=${1:-"/results/SSD320_FP32_4GPU"}
+PIPELINE_CONFIG_PATH=${2:-"/workdir/models/research/configs"}"/ssd320_full_4gpus.config"
 GPUS=4
 
 TENSOR_OPS=0
@@ -17,8 +17,8 @@ time mpirun --allow-run-as-root \
        -x PATH \
        -mca pml ob1 \
        -mca btl ^openib \
-        python -u /workdir/models/research/object_detection/model_main.py \
+        python -u ./object_detection/model_main.py \
                --pipeline_config_path=${PIPELINE_CONFIG_PATH} \
                --model_dir=${CKPT_DIR} \
                --alsologtostder \
-               "${@:2}"
+               "${@:3}"

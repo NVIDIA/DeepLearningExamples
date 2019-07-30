@@ -17,7 +17,9 @@
 # This script launches UNet training benchmark in FP32-AMP on 8 GPUs using 16 batch size (2 per GPU)
 # Usage ./DGX1v_trainbench_FP32AMP_8GPU.sh <path to result repository> <path to dataset> <dagm classID (1-10)>
 
-pip install ../../dllogger/
+BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+pip install ${BASEDIR}/../../dllogger/
 
 mpirun \
     -np 8 \
@@ -29,7 +31,7 @@ mpirun \
     -x PATH \
     -mca pml ob1 -mca btl ^openib \
     --allow-run-as-root \
-    python ../../main.py \
+    python ${BASEDIR}/../../main.py \
         --unet_variant='tinyUNet' \
         --activation_fn='relu' \
         --exec_mode='training_benchmark' \

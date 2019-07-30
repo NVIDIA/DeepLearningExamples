@@ -15,7 +15,7 @@ def get_train_loader(args, local_seed):
 
     train_pipe = COCOPipeline(args.batch_size, args.local_rank, train_coco_root,
                     train_annotate, args.N_gpu, num_threads=args.num_workers,
-                    output_fp16=args.fp16, output_nhwc=False,
+                    output_fp16=args.amp, output_nhwc=False,
                     pad_output=False, seed=local_seed)
     train_pipe.build()
     test_run = train_pipe.run()

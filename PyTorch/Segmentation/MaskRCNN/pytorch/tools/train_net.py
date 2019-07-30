@@ -97,14 +97,9 @@ def train(cfg, local_rank, distributed):
     if use_amp:
         # Initialize mixed-precision training
         use_mixed_precision = cfg.DTYPE == "float16"
-        amp_handle = amp.init(enabled=use_mixed_precision, verbose=cfg.AMP_VERBOSE)
 
-        # wrap the optimizer for mixed precision
-        if cfg.SOLVER.ACCUMULATE_GRAD:
-            # also specify number of steps to accumulate over
-            optimizer = amp_handle.wrap_optimizer(optimizer, num_loss=cfg.SOLVER.ACCUMULATE_STEPS)
-        else:
-            optimizer = amp_handle.wrap_optimizer(optimizer)
+        amp_opt_level = 'O1' if use_mixed_precision else 'O0'
+        model, optimizer = amp.initialize(model, optimizer, opt_level=amp_opt_level)
 
     if distributed:
         if use_apex_ddp:

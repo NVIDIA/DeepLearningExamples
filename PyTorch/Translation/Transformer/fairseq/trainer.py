@@ -165,8 +165,9 @@ class Trainer(object):
                 )
             ooms_fwd = sum(ooms_fwd)
             ooms_bwd = sum(ooms_bwd)
+            ooms = ooms_fwd + ooms_bwd #this is always <= distributed_world_size
 
-            if ooms_fwd == self.args.distributed_world_size:
+            if ooms == self.args.distributed_world_size:
                 print('| WARNING: OOM in all workers, skipping batch')
                 self.zero_grad()
                 return None
@@ -179,7 +180,7 @@ class Trainer(object):
 
             try:
                 # all-reduce and rescale gradients, then take an optimization step
-                grad_norm = self._all_reduce_and_rescale(grad_denom, sample is not None)
+                grad_norm = self._all_reduce_and_rescale(grad_denom, sample is not None and not (oom_fwd or oom_bwd), ooms)
                 self._opt()
 
                 # update meters
@@ -230,7 +231,7 @@ class Trainer(object):
                     logging_output.update(logging_output_)
         except RuntimeError as e:
             if not eval and 'out of memory' in str(e):
-                print('| WARNING: ran out of memory, skipping batch')
+                print('| WARNING: ran out of memory in worker {}, skipping batch'.format(self.args.distributed_rank), force=True)
                 oom = 1
                 loss = None
             else:
@@ -245,20 +246,20 @@ class Trainer(object):
                 loss.backward()
             except RuntimeError as e:
                 if 'out of memory' in str(e):
-                    print('| WARNING: ran out of memory, skipping batch')
+                    print('| WARNING: ran out of memory in worker {}, skipping batch'.format(self.args.distributed_rank), force=True)
                     oom = 1
                     self.zero_grad()
                 else:
                     raise e
         return oom
 
-    def _all_reduce_and_rescale(self, grad_denom, non_empty = True):
+    def _all_reduce_and_rescale(self, grad_denom, has_grad = True, ooms = 0):
         # flatten grads into a single buffer and all-reduce
-        flat_grads = self._flat_grads = self._get_flat_grads(out=self._flat_grads, has_grad = non_empty)
+        flat_grads = self._flat_grads = self._get_flat_grads(out=self._flat_grads, has_grad = has_grad)
         if self.args.distributed_world_size > 1:
             torch.distributed.all_reduce(flat_grads)
-
         # rescale and clip gradients
+        grad_denom *= (self.args.distributed_world_size - ooms) / self.args.distributed_world_size
         flat_grads.div_(grad_denom)
         grad_norm = utils.clip_grad_norm_(flat_grads, self.args.clip_norm)
 

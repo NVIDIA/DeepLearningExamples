@@ -1,4 +1,4 @@
-# !/usr/bin/env python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
@@ -43,6 +43,7 @@ if __name__ == "__main__":
         model_dir=FLAGS.results_dir,
         summaries_dir=FLAGS.results_dir,
         data_dir=FLAGS.data_dir,
+        data_idx_dir=FLAGS.data_idx_dir,
 
         # ========= Model HParams ========= #
         n_classes=1001,
@@ -63,13 +64,14 @@ if __name__ == "__main__":
         weight_decay=FLAGS.weight_decay,
         momentum=FLAGS.momentum,
         loss_scale=FLAGS.loss_scale,
-        use_auto_loss_scaling=FLAGS.use_auto_loss_scaling,
+        use_static_loss_scaling=FLAGS.use_static_loss_scaling,
         distort_colors=False,
 
         # ======= Optimization HParams ======== #
         use_xla=FLAGS.use_xla,
         use_tf_amp=FLAGS.use_tf_amp,
-        use_fast_math=FLAGS.use_fast_math,
+        use_dali=FLAGS.use_dali,
+        gpu_memory_fraction=FLAGS.gpu_memory_fraction,
         
         seed=FLAGS.seed,
     )
@@ -89,12 +91,13 @@ if __name__ == "__main__":
         log_dir=RUNNING_CONFIG.log_dir,
         model_dir=RUNNING_CONFIG.model_dir,
         data_dir=RUNNING_CONFIG.data_dir,
+        data_idx_dir=RUNNING_CONFIG.data_idx_dir,
 
         # ======= Optimization HParams ======== #
         use_xla=RUNNING_CONFIG.use_xla,
         use_tf_amp=RUNNING_CONFIG.use_tf_amp,
-        use_fast_math=RUNNING_CONFIG.use_fast_math,
-
+        use_dali=RUNNING_CONFIG.use_dali,
+        gpu_memory_fraction=RUNNING_CONFIG.gpu_memory_fraction,
         seed=RUNNING_CONFIG.seed
     )
 
@@ -110,7 +113,7 @@ if __name__ == "__main__":
             learning_rate_init=RUNNING_CONFIG.learning_rate_init,
             momentum=RUNNING_CONFIG.momentum,
             loss_scale=RUNNING_CONFIG.loss_scale,
-            use_auto_loss_scaling=FLAGS.use_auto_loss_scaling,
+            use_static_loss_scaling=FLAGS.use_static_loss_scaling,
             is_benchmark=RUNNING_CONFIG.mode == 'training_benchmark',
         )
 

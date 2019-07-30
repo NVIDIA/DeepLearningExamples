@@ -144,7 +144,7 @@ class BahdanauAttention(nn.Module):
         if self.mask is not None:
             mask = self.mask.unsqueeze(1).expand(b, t_q, t_k)
             # I can't use -INF because of overflow check in pytorch
-            scores.data.masked_fill_(mask, -65504.0)
+            scores.masked_fill_(mask, -65504.0)
 
         # Normalize the scores, softmax over t_k
         scores_normalized = F.softmax(scores, dim=-1)

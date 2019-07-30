@@ -40,7 +40,7 @@ def count_steps(iter_unit, num_samples, num_iter, global_batch_size):
     return num_steps, num_epochs, num_decay_steps
 
 
-def list_filenames_in_dataset(data_dir, mode):
+def list_filenames_in_dataset(data_dir, mode, count=True):
 
     if mode not in ["train", 'validation']:
         raise ValueError("Unknown mode received: %s" % mode)
@@ -51,15 +51,17 @@ def list_filenames_in_dataset(data_dir, mode):
     filename_pattern = os.path.join(data_dir, '%s-*' % mode)
 
     file_list = sorted(tf.gfile.Glob(filename_pattern))
+    num_samples = 0 
+    
+    if count:
+        def count_records(tf_record_filename):
+            count = 0
+            for _ in tf.python_io.tf_record_iterator(tf_record_filename):
+                count += 1
+            return count
 
-    def count_records(tf_record_filename):
-        count = 0
-        for _ in tf.python_io.tf_record_iterator(tf_record_filename):
-            count += 1
-        return count
-
-    n_files = len(file_list)
-    num_samples = (count_records(file_list[0]) * (n_files - 1) + count_records(file_list[-1]))
+        n_files = len(file_list)
+        num_samples = (count_records(file_list[0]) * (n_files - 1) + count_records(file_list[-1]))
 
     return file_list, num_samples
 
@@ -77,3 +79,11 @@ def parse_tfrecords_dataset(data_dir, mode, iter_unit, num_iter, global_batch_si
     )
 
     return filenames, num_samples, num_steps, num_epochs, num_decay_steps
+
+
+def parse_dali_idx_dataset(data_idx_dir, mode):
+    
+    if data_idx_dir is not None:
+        filenames, _ = list_filenames_in_dataset(data_dir=data_idx_dir, mode=mode, count=False)
+        
+    return filenames
