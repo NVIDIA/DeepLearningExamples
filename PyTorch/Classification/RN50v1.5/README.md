@@ -16,22 +16,33 @@ The model is initialized as described in [Delving deep into rectifiers: Surpassi
 
 This model trains for 90 epochs, with standard ResNet v1.5 setup:
 
-* SGD with momentum (0.9)
+* SGD with momentum (0.875)
 
-* Learning rate = 0.1 for 256 batch size, for other batch sizes we lineary
+* Learning rate = 0.256 for 256 batch size, for other batch sizes we lineary
 scale the learning rate.
 
-* Learning rate decay - multiply by 0.1 after 30, 60, and 80 epochs
+* Learning rate schedule - we use cosine LR schedule
 
 * For bigger batch sizes (512 and up) we use linear warmup of the learning rate
-during first 5 epochs
+during first couple of epochs
 according to [Training ImageNet in 1 hour](https://arxiv.org/abs/1706.02677).
+Warmup length depends on total training length.
 
-* Weight decay: 1e-4
+* Weight decay: 3.0517578125e-05 (1/32768).
 
 * We do not apply WD on Batch Norm trainable parameters (gamma/bias)
 
 * Label Smoothing: 0.1
+
+* We train for:
+
+    * 50 Epochs -> configuration that reaches 75.9% top1 accuracy
+
+    * 90 Epochs -> 90 epochs is a standard for ResNet50
+
+    * 250 Epochs -> best possible accuracy.
+
+* For 250 epoch training we also use [MixUp regularization](https://arxiv.org/pdf/1710.09412.pdf).
 
 
 ### Data Augmentation
@@ -76,7 +87,7 @@ Using 288px images means that a lot more FLOPs are needed during inference to re
 Ensure you meet the following requirements:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 18.09-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch) or newer
+* [PyTorch 19.05-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch) or newer
 * (optional) NVIDIA Volta GPU (see section below) - for best training performance using mixed precision
 
 For more information about how to get started with NGC containers, see the
@@ -103,6 +114,13 @@ For PyTorch, easily adding mixed-precision support is available from NVIDIA’s
 [APEX](https://github.com/NVIDIA/apex), a PyTorch extension, that contains
 utility libraries, such as AMP, which require minimal network code changes to
 leverage Tensor Core performance.
+
+### DALI
+
+For DGX2 configurations we use [NVIDIA DALI](https://github.com/NVIDIA/DALI),
+which speeds up data loading when CPU becomes a bottleneck.
+
+Run training with `--data-backends dali-gpu` to enable DALI.
 
 # Quick start guide
 
@@ -132,9 +150,9 @@ The directory in which the `train/` and `val/` directories are placed, is referr
 
 ## Running training
 
-To run training for a standard configuration (1/4/8 GPUs, FP16/FP32),
-run one of the scripts in the `./examples` directory
-called `./examples/RN50_{FP16, FP32}_{1, 4, 8}GPU.sh`.
+To run training for a standard configuration (DGX1V/DGX2V, FP16/FP32, 50/90/250 Epochs),
+run one of the scripts in the `./resnet50v1.5/training` directory
+called `./resnet50v1.5/training/{DGX1, DGX2}_RN50_{FP16, FP32}_{50,90,250}E.sh`.
 
 Ensure imagenet is mounted in the `/data/imagenet` directory.
 
@@ -168,18 +186,16 @@ To benchmark training, run:
 
 * For 1 GPU
     * FP32
-`python ./main.py --arch resnet50 --benchmark-training <path to imagenet>`
+`python ./main.py --arch resnet50 --training-only -p 1 --raport-file benchmark.json --epochs 1 --prof 100 <path to imagenet>`
     * FP16
-`python ./main.py --arch resnet50 --benchmark-training --fp16 --static-loss-scale 256 <path to imagenet>`
+`python ./main.py --arch resnet50 --training-only -p 1 --raport-file benchmark.json --epochs 1 --prof 100 --fp16 --static-loss-scale 256 <path to imagenet>`
 * For multiple GPUs
     * FP32
-`python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 --benchmark-training <path to imagenet>`
+`python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 --training-only -p 1 --raport-file benchmark.json --epochs 1 --prof 100 <path to imagenet>`
     * FP16
-`python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 --benchmark-training --fp16 --static-loss-scale 256 <path to imagenet>`
+`python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 --training-only -p 1 --raport-file benchmark.json --fp16 --static-loss-scale 256 --epochs 1 --prof 100 <path to imagenet>`
 
-Each of this scripts will run 1 warmup iteration and measure the next 10 iterations.
-
-To control warmup and benchmark length, use the `--bench-warmup` and `--bench-iterations` flags.
+Each of this scripts will run 100 iterations and save results in benchmark.json file
 
 ### Inference performance
 
@@ -187,41 +203,65 @@ To benchmark inference, run:
 
 * FP32
 
-`python ./main.py --arch resnet50 --benchmark-inference <path to imagenet>`
+`python ./main.py --arch resnet50 -p 1 --raport-file benchmark.json --epochs 1 --prof 100 --evaluate <path to imagenet>`
 
 * FP16
 
-`python ./main.py --arch resnet50 --benchmark-inference --fp16 <path to imagenet>`
+`python ./main.py --arch resnet50 -p 1 --raport-file benchmark.json --epochs 1 --prof 100 --evaluate --fp16 <path to imagenet>`
 
-Each of this scripts will run 1 warmup iteration and measure the next 10 iterations.
-
-To control warmup and benchmark length, use `--bench-warmup` and `--bench-iterations` flags.
+Each of this scripts will run 100 iterations and save results in benchmark.json file
 
 ## Training Accuracy Results
 
-The following results were obtained by running the `./examples/RN50_{FP16, FP32}_{1, 4, 8}GPU.sh` scripts in
-the pytorch-18.09-py3 Docker container on NVIDIA DGX-1 with 8 V100 16G GPUs.
+### NVIDIA DGX1V (8x V100 16G)
 
-| **mixed precision top1** | **FP32 top1**   |
-|:------------------------:|:---------------:|
-| 76.71 +/- 0.11           | 76.83 +/- 0.11 |
+#### Accuracy
+
+| **# of epochs** | **mixed precision top1** | **FP32 top1**   |
+|:-----------------:|:------------------------:|:---------------:|
+| 50                | 76.25 +/- 0.04           | 76.26 +/- 0.07  |
+| 90                | 77.23 +/- 0.04           | 77.08 +/- 0.07  |
+| 250               | 78.42 +/- 0.04           | 78.30 +/- 0.16  |
+
+#### Training time for 90 epochs
 
 | **number of GPUs** | **mixed precision training time** | **FP32 training time** |
 |:------------------:|:---------------------------------:|:----------------------:|
-| 1                  | 45.4h                             | 89.2h                  |
-| 4                  | 13.5h                             | 25.6h                  |
-| 8                  | 8.1h                              | 13.9h                  |
+| 1                  | ~46h                              | ~90h                   |
+| 4                  | ~14h                              | ~26h                   |
+| 8                  | ~8h                               | ~14h                   |
 
-Here are example graphs of FP32 and FP16 training on 8 GPU configuration:
+### NVIDIA DGX2V (16x V100 32G)
 
-![TrainingLoss](./img/training_loss.png)
+#### Accuracy
 
-![TrainingAccuracy](./img/training_accuracy.png)
+| **# of epochs** | **mixed precision top1** | **FP32 top1**   |
+|:-----------------:|:------------------------:|:---------------:|
+| 50                | 75.80 +/- 0.08           | 76.04 +/- 0.05  |
+| 90                | 77.10 +/- 0.06           | 77.23 +/- 0.04  |
+| 250               | 78.59 +/- 0.13           | 78.46 +/- 0.03  |
 
-![ValidationAccuracy](./img/validation_accuracy.png)
+#### Training time for 90 epochs
+
+| **number of GPUs** | **mixed precision training time** | **FP32 training time** |
+|:------------------:|:---------------------------------:|:----------------------:|
+| 2                  | ~24h                              | ~45h                   |
+| 8                  | ~8h                               | ~13h                   |
+| 16                  | ~4h                               | ~7h                    |
+
+
+### Example plots (250 Epochs configuration on DGX2)
+
+![TrainingLoss](./img/DGX2_250_loss.png)
+
+![ValidationTop1](./img/DGX2_250_top1.png)
+
+![ValidationTop5](./img/DGX2_250_top5.png)
 
 
 ## Training Performance Results
+
+### NVIDIA DGX1V (8x V100 16G)
 
 | **number of GPUs** | **mixed precision img/s** | **FP32 img/s** | **mixed precision speedup** | **mixed precision weak scaling** | **FP32 weak scaling** |
 |:------------------:|:-------------------------:|:--------------:|:---------------------------:|:--------------------------------:|:---------------------:|
@@ -229,19 +269,27 @@ Here are example graphs of FP32 and FP16 training on 8 GPU configuration:
 | 4                  | 2886.9                    | 1375.5         | 2.1                         | 3.86                             | 3.79                  |
 | 8                  | 5815.8                    | 2857.9         | 2.03                        | 7.78                             | 7.87                  |
 
+### NVIDIA DGX2V (16x V100 32G)
+
+| **number of GPUs** | **mixed precision img/s** | **FP32 img/s** | **mixed precision speedup** |
+|:------------------:|:-------------------------:|:--------------:|:---------------------------:|
+| 16                 | 12086.1                   | 5578.2         | 2.16                        |
+
 
 ## Inference Performance Results
 
+### NVIDIA VOLTA V100 16G on DGX1V
+
 | **batch size** | **mixed precision img/s** | **FP32 img/s** |
 |:--------------:|:-------------------------:|:--------------:|
-|       1 |   131.8 |   134.9 |                                                                                                                                                                                                               │
-|       2 |   248.7 |   260.6 |                                                                                                                                                                                                               │
-|       4 |   486.4 |   425.5 |                                                                                                                                                                                                               │
-|       8 |   908.5 |   783.6 |                                                                                                                                                                                                               │
-|      16 |  1370.6 |   998.9 |                                                                                                                                                                                                               │
-|      32 |  2287.5 |  1092.3 |                                                                                                                                                                                                               │
-|      64 |  2476.2 |  1166.6 |                                                                                                                                                                                                               │
-|     128 |  2615.6 |  1215.6 |                                                                                                                                                                                                               │
+|       1 |   131.8 |   134.9 |
+|       2 |   248.7 |   260.6 |
+|       4 |   486.4 |   425.5 |
+|       8 |   908.5 |   783.6 |
+|      16 |  1370.6 |   998.9 |
+|      32 |  2287.5 |  1092.3 |
+|      64 |  2476.2 |  1166.6 |
+|     128 |  2615.6 |  1215.6 |
 |     256 |  2696.7 |  N/A    |
 
 # Changelog
@@ -250,6 +298,13 @@ Here are example graphs of FP32 and FP16 training on 8 GPU configuration:
   * Initial release
 2. January 2019
   * Added options Label Smoothing, fan-in initialization, skipping weight decay on batch norm gamma and bias.
+3. May 2019
+  * Cosine LR schedule
+  * MixUp regularization
+  * DALI support
+  * DGX2 configurations
+  * gradients accumulation
+
 
 # Known issues
 

@@ -6,7 +6,7 @@ import numpy as np
 from torch.optim.lr_scheduler import MultiStepLR
 import torch.utils.data.distributed
 
-from src.model import SSD300, Loss
+from src.model import SSD300, ResNet, Loss
 from src.utils import dboxes300_coco, Encoder
 from src.logger import Logger, BenchLogger
 from src.evaluate import evaluate
@@ -34,7 +34,7 @@ def generate_mean_std(args):
     mean = mean.view(*view)
     std = std.view(*view)
 
-    if args.fp16:
+    if args.amp:
         mean = mean.half()
         std = std.half()
 
@@ -84,8 +84,12 @@ def make_parser():
 
     parser.add_argument('--backbone', type=str, default='resnet50',
                         choices=['resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152'])
+    parser.add_argument('--backbone-path', type=str, default=None,
+                        help='Path to chekcpointed backbone. It should match the'
+                             ' backbone model declared with the --backbone argument.'
+                             ' When it is not provided, pretrained model from torchvision'
+                             ' will be downloaded.')
     parser.add_argument('--num-workers', type=int, default=4)
-    parser.add_argument('--fp16', action='store_true')
     parser.add_argument('--amp', action='store_true')
 
     # Distributed
@@ -97,8 +101,6 @@ def make_parser():
 
 
 def train(train_loop_func, logger, args):
-    if args.amp:
-        amp_handle = amp.init(enabled=args.fp16)
     # Check that GPUs are actually available
     use_cuda = not args.no_cuda
 
@@ -134,7 +136,7 @@ def train(train_loop_func, logger, args):
     val_dataset = get_val_dataset(args)
     val_dataloader = get_val_dataloader(val_dataset, args)
 
-    ssd300 = SSD300(backbone=args.backbone)
+    ssd300 = SSD300(backbone=ResNet(args.backbone, args.backbone_path))
     args.learning_rate = args.learning_rate * args.N_gpu * (args.batch_size / 32)
     start_epoch = 0
     iteration = 0
@@ -144,20 +146,15 @@ def train(train_loop_func, logger, args):
         ssd300.cuda()
         loss_func.cuda()
 
-    if args.fp16 and not args.amp:
-        ssd300 = network_to_half(ssd300)
+    optimizer = torch.optim.SGD(tencent_trick(ssd300), lr=args.learning_rate,
+                                    momentum=args.momentum, weight_decay=args.weight_decay)
+    scheduler = MultiStepLR(optimizer=optimizer, milestones=args.multistep, gamma=0.1)
+    if args.amp:
+        ssd300, optimizer = amp.initialize(ssd300, optimizer, opt_level='O2')
 
     if args.distributed:
         ssd300 = DDP(ssd300)
 
-    optimizer = torch.optim.SGD(tencent_trick(ssd300), lr=args.learning_rate,
-                                    momentum=args.momentum, weight_decay=args.weight_decay)
-    scheduler = MultiStepLR(optimizer=optimizer, milestones=args.multistep, gamma=0.1)
-    if args.fp16:
-        if args.amp:
-            optimizer = amp_handle.wrap_optimizer(optimizer)
-        else:
-            optimizer = FP16_Optimizer(optimizer, static_loss_scale=128.)
     if args.checkpoint is not None:
         if os.path.isfile(args.checkpoint):
             load_checkpoint(ssd300, args.checkpoint)

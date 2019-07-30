@@ -10,7 +10,7 @@ mkdir -p ${OUTPUT_DIR}
 
 OUTPUT_FILE="${OUTPUT_DIR}/tf_examples.tfrecord000${SHARD_INDEX}"
 
-python /workspace/bert/create_pretraining_data.py \
+python /workspace/bert/utils/create_pretraining_data.py \
   --input_file=${INPUT_FILE} \
   --output_file=${OUTPUT_FILE} \
   --vocab_file=${VOCAB_FILE} \

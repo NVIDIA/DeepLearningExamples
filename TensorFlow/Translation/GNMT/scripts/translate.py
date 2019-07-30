@@ -38,7 +38,8 @@ def pr(*args, column_len=14):
     print('', arg.ljust(column_len), end=' |')
   print()
 
-pr('batch size', 'beam width', 'bleu', 'sentences/sec', 'tokens/sec')
+pr('batch size', 'beam width', 'bleu', 'sentences/sec', 'tokens/sec',
+   'latency_avg', 'latency_50', 'latency_90', 'latency_95', 'latency_99', 'latency_100')
 
 for batch_size in batch_sizes:
   for beam_width in beam_widths:
@@ -50,7 +51,11 @@ for batch_size in batch_sizes:
     bleu_search_res = re.search(rb'\nbleu is ((\d|.)+)', out)
     speed_search_res = re.search(
       rb'\neval time for ckpt: ((\d|.)+) mins \(((\d|.)+) sent/sec, ((\d|.)+) tokens/sec\)', out)
-    if bleu_search_res is None or speed_search_res is None:
+
+    latencies = []
+    for lat in ['avg', '50', '90', '95', '99', '100']:
+      latencies.append(re.search(r'\neval latency_{} for ckpt: ((\d|.)+) ms'.format(lat).encode(), out))
+    if bleu_search_res is None or speed_search_res is None or any(filter(lambda x: x is None, latencies)):
       print('AN ERROR OCCURRED WHILE RUNNING:', cmd, file=sys.stderr)
       print('-' * 20, 'STDOUT', '-' * 20, file=sys.stderr)
       print(out.decode())
@@ -60,5 +65,6 @@ for batch_size in batch_sizes:
 
     bleu = float(bleu_search_res.group(1))
     sentences_per_sec, tokens_per_sec = map(float, speed_search_res.group(3, 5))
+    latencies = list(map(lambda x: float(x.group(1)), latencies))
 
-    pr(batch_size, beam_width, bleu, sentences_per_sec, tokens_per_sec)
+    pr(batch_size, beam_width, bleu, sentences_per_sec, tokens_per_sec, *latencies)

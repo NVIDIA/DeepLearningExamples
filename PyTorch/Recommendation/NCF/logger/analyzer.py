@@ -60,12 +60,11 @@ def collect_by_scope(loglines):
 
     # gather eval_accuracy
     eval_accuracy_dup = [l.value for l in loglines if l.tag == tags.EVAL_ACCURACY]
-    eval_accuracy = list({l['value']:l for l in eval_accuracy_dup})
+    eval_accuracy = [l['value'] for l in eval_accuracy_dup]
     epoch_stats['eval_accuracy'] = eval_accuracy
 
     # gather it_per_sec
     eval_it_per_sec = [l.value for l in loglines if l.tag == tags.PERF_IT_PER_SEC]
-    #eval_it_per_sec = list({l['value']:l for l in eval_it_per_sec_dup})
     epoch_stats['it_per_sec'] = eval_it_per_sec
 
 

@@ -35,9 +35,9 @@ class COCOPipeline(Pipeline):
         super(COCOPipeline, self).__init__(batch_size=batch_size, device_id=device_id,
                                            num_threads=num_threads, seed = seed)
 
-        try:
+        if torch.distributed.is_initialized():
             shard_id = torch.distributed.get_rank()
-        except RuntimeError:
+        else:
             shard_id = 0
 
         self.input = ops.COCOReader(file_root = file_root, annotations_file = annotations_file,
@@ -238,7 +238,7 @@ class DALICOCOIterator(object):
 
         for p in self._pipes:
             p._release_outputs()
-            p._start_run()
+            p._run()
 
         copy_db_index = self._current_data_batch
         # Change index for double buffering

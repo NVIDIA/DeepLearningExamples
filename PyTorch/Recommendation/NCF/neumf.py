@@ -32,6 +32,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+import sys
+from os.path import abspath, join, dirname
+# enabling modules discovery from the global entrypoint
+sys.path.append(abspath(dirname(__file__) + '/'))
+
 from logger.logger import LOGGER
 from logger import tags
 
@@ -39,12 +44,8 @@ LOGGER.model = 'ncf'
 
 class NeuMF(nn.Module):
     def __init__(self, nb_users, nb_items,
-                 mf_dim, mf_reg,
-                 mlp_layer_sizes, mlp_layer_regs,
-                 dropout=0):
+                 mf_dim, mlp_layer_sizes, dropout=0):
         
-        if len(mlp_layer_sizes) != len(mlp_layer_regs):
-            raise RuntimeError('u dummy, layer_sizes != layer_regs!')
         if mlp_layer_sizes[0] % 2 != 0:
             raise RuntimeError('u dummy, mlp_layer_sizes[0] % 2 != 0')
         super(NeuMF, self).__init__()

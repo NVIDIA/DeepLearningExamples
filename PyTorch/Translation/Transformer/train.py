@@ -40,10 +40,9 @@ from fairseq.meters import AverageMeter, StopwatchMeter, TimeMeter
 from fairseq.sequence_generator import SequenceGenerator
 from fairseq.data import dictionary
 
+import sacrebleu
+
 def main(args):
-    if args.distributed_rank > 0:
-        sys.stdout = open('/dev/null', 'w')
-        sys.stderr = open('/dev/null', 'w')
     if not torch.cuda.is_available():
         raise NotImplementedError('Training on CPU is not supported')
     torch.cuda.set_device(args.device_id)
@@ -116,18 +115,16 @@ def main(args):
     valid_losses = [None]
     valid_subsets = args.valid_subset.split(',')
 
+
     while lr >= args.min_lr and epoch_itr.epoch < max_epoch and trainer.get_num_updates() < max_update and current_bleu < tgt_bleu:
-
         # train for one epoch
-
         train(args, trainer, task, epoch_itr)
-
         if epoch_itr.epoch % args.validate_interval == 0:
             valid_losses = validate(args, trainer, task, epoch_itr, valid_subsets)
 
         # Eval BLEU score
         if args.online_eval or (not tgt_bleu is math.inf):
-            current_bleu = score(args, trainer, task, epoch_itr, args.gen_subset)
+            current_bleu, current_sc_bleu = score(args, trainer, task, epoch_itr, args.gen_subset)
             if current_bleu > best_bleu:
                 best_bleu = current_bleu
                 save_checkpoint(args, trainer, epoch_itr, valid_losses[0])
@@ -165,6 +162,7 @@ def train(args, trainer, task, epoch_itr):
     begin = time.time()
     #inside = 0
     for i, sample in enumerate(progress, start=epoch_itr.iterations_in_epoch):
+
         if i < num_batches - 1 and (i + 1) % update_freq > 0:
             # buffer updates according to --update-freq
             trainer.train_step(sample, update_params=False, last_step=(i == len(itr)-1))
@@ -321,8 +319,7 @@ def score(args, trainer, task, epoch_itr, subset):
     scorer = bleu.Scorer(dict.pad(), dict.eos(), dict.unk())
     num_sentences = 0
     has_target = True
-    if args.log_translations:
-        log = open(os.path.join(args.save_dir, 'translations_epoch{}_{}'.format(epoch_itr.epoch, args.distributed_rank)), 'w+')
+    predictions = []
     with progress_bar.build_progress_bar(args, itr) as progress:
         translations = translator.generate_batched_itr(
                 progress, maxlen_a=args.max_len_a, maxlen_b=args.max_len_b,
@@ -339,11 +336,6 @@ def score(args, trainer, task, epoch_itr, subset):
             if has_target:
                 target_str = tgt_dict.string(target_tokens, args.remove_bpe, escape_unk=True)
 
-            if args.log_translations:
-                log.write('S-{}\t{}\n'.format(sample_id, src_str))
-                if has_target:
-                    log.write('T-{}\t{}\n'.format(sample_id, target_str))
-
             # Process top predictions
             for i, hypo in enumerate(hypos[:min(len(hypos), args.nbest)]):
                 hypo_tokens, hypo_str, alignment = utils.post_process_prediction(
@@ -354,21 +346,18 @@ def score(args, trainer, task, epoch_itr, subset):
                         tgt_dict=tgt_dict,
                         remove_bpe=args.remove_bpe
                         )
-                if args.log_translations:
-                    log.write('H-{}\t{}\t{}\n'.format(sample_id, hypo['score'], hypo_str))
-                    log.write('P-{}\t{}\n'.format(
-                        sample_id,
-                        ' '.join(map(
-                            lambda x: '{:.4f}'.format(x),
-                            hypo['positional_scores'].tolist(),
-                        ))
-                    ))
 
                 # Score only the top hypothesis
                 if has_target and i==0:
+                    if args.sentencepiece:
+                        hypo_str = hypo_str.replace(' ', '').replace('▁', ' ')
+                        target_str = target_str.replace(' ', '').replace('▁', ' ')
                     sys_tok = tokenizer.Tokenizer.tokenize((hypo_str.lower() if args.ignore_case else hypo_str), dict)
                     ref_tok = tokenizer.Tokenizer.tokenize((target_str.lower() if args.ignore_case else target_str), dict)
                     scorer.add(ref_tok, sys_tok)
+                    if not args.sentencepiece:
+                        hypo_str = tokenizer.Tokenizer.detokenize(hypo_str, 'de')
+                    predictions.append('{}\t{}'.format(sample_id, hypo_str))
 
             wps_meter.update(src_tokens.size(0))
             progress.log({'wps':round(wps_meter.avg)})
@@ -376,8 +365,17 @@ def score(args, trainer, task, epoch_itr, subset):
 
     if args.distributed_world_size > 1:
         _all_gather_bleu_scorer(scorer)
-    if args.log_translations:
-        log.close()
+        predictions = _all_gather_predictions(predictions)
+
+    with open(os.path.join(args.data, 'sacrebleu_reference.de'), 'r') as reference:
+        refs = [reference.readlines()]
+    #reducing indexed predictions as strings is more memory efficient than reducing tuples
+    predictions = [tuple(item.split('\t')) for item in predictions]
+    predictions = [(int(item[0]), item[1]) for item in predictions]
+    predictions.sort(key=lambda tup: tup[0])
+    predictions = [hypo[1] + ('\n' if hypo[-1]!='\n' else '')  for hypo in predictions]
+    sacrebleu_score = sacrebleu.corpus_bleu(predictions, refs, lowercase=args.ignore_case)
+    print(f'|Detokenized {sacrebleu_score}')
     if gen_timer.sum != 0:
         print('| Translated {} sentences ({} tokens) in {:.1f}s ({:.2f} sentences/s, {:.2f} tokens/s)'.format(
             num_sentences, gen_timer.n, gen_timer.sum, num_sentences / gen_timer.sum, 1./gen_timer.avg))
@@ -386,7 +384,37 @@ def score(args, trainer, task, epoch_itr, subset):
 
     print('| Eval completed in: {:.2f}s'.format(time.time()-begin))
 
-    return scorer.score(order=4)
+    return scorer.score(order=4), sacrebleu_score.score
+
+def _all_gather_predictions(predictions):
+    ready = False
+    all_ready = False
+    reduced_predictions = []
+    max_size = 65000
+    while not all_ready:
+        lst_len = len(predictions)
+        size = 2000     #some extra space for python stuff
+        n = 0
+        while n < lst_len:
+            str_len = len(predictions[n].encode('utf8')) + 8 # per string pickle overhead
+            if size + str_len >= max_size:
+                break
+            size += str_len
+            n += 1
+        chunk = predictions[:n]
+        predictions = predictions[n:]
+        if not predictions:
+            ready = True
+        chunk = (ready, chunk)
+        torch.cuda.synchronize()
+        gathered = distributed_utils.all_gather_list(chunk, max_size=65000)
+        torch.cuda.synchronize()
+        reduced_predictions += [t[1] for t in gathered]
+        all_ready = all([t[0] for t in gathered])
+
+    reduced_predictions = [item for sublist in reduced_predictions for item in sublist]
+
+    return reduced_predictions
 
 def _all_gather_bleu_scorer(scorer):
     stats = distributed_utils.all_gather_list(scorer.stat)

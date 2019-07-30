@@ -52,6 +52,14 @@ def parse_cmdline():
     )
 
     p.add_argument(
+        '--data_idx_dir',
+        required=False,
+        default=None,
+        type=str,
+        help="Path to index files for DALI. Files should be named 'train-*' and 'validation-*'."
+    )
+    
+    p.add_argument(
         '--batch_size', 
         type=int, 
         required=True, 
@@ -150,10 +158,10 @@ def parse_cmdline():
 
     _add_bool_argument(
         parser=p,
-        name="use_auto_loss_scaling",
+        name="use_static_loss_scaling",
         default=False,
         required=False,
-        help="Use AutoLossScaling in FP16, FP32 - Fast Math or FP32 AMP."
+        help="Use static loss scaling in FP16 or FP32 AMP."
     )
 
     _add_bool_argument(
@@ -164,12 +172,12 @@ def parse_cmdline():
         help="Enable XLA (Accelerated Linear Algebra) computation for improved performance."
     )
 
-    #Enable FastMath Computation using TensorCores to speedup FP32 computation.
-    p.add_argument(
-        "--use_fast_math",
-        action='store_true',
+    _add_bool_argument(
+        parser=p,
+        name="use_dali",
+        default=False,
         required=False,
-        help=argparse.SUPPRESS 
+        help="Enable DALI data input."
     )
 
     _add_bool_argument(
@@ -186,7 +194,14 @@ def parse_cmdline():
         default=1, 
         help="""Random seed."""
     )
-
+    
+    p.add_argument(
+        '--gpu_memory_fraction',
+        type=float,
+        default=0.7,
+        help="""Limit memory fraction used by training script for DALI"""
+    )
+    
     FLAGS, unknown_args = p.parse_known_args()
 
     if len(unknown_args) > 0:

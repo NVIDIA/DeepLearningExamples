@@ -12,6 +12,8 @@ __pycache__/
 data/*/*/
 data/*/*.zip
 
+#Resutls
+results/
 
 # Distribution / packaging
 .Python
@@ -29,6 +31,7 @@ var/
 wheels/
 *.egg-info/
 .installed.cfg
+.vscode/
 *.egg
 MANIFEST
 

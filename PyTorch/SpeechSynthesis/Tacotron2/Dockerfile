@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/pytorch:18.12.1-py3
+FROM nvcr.io/nvidia/pytorch:19.06-py3
 
 ADD . /workspace/tacotron2
 WORKDIR /workspace/tacotron2

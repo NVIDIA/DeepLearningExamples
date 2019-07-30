@@ -52,12 +52,14 @@ class Runner(object):
         model_dir=None,
         log_dir=None,
         data_dir=None,
+        data_idx_dir=None,
 
         # ======= Optimization HParams ======== #
         use_xla=False,
         use_tf_amp=False,
-        use_fast_math=False,
-
+        use_dali=False,
+        gpu_memory_fraction=1.0,
+        
         # ======== Debug Flags ======== #
         debug_verbosity=0,
         seed=None
@@ -89,7 +91,7 @@ class Runner(object):
 
         os.environ['HOROVOD_GPU_ALLREDUCE'] = 'NCCL'
 
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+        #os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
         os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
         os.environ['TF_GPU_THREAD_COUNT'] = '1' if not hvd_utils.is_using_hvd() else str(hvd.size())
@@ -105,34 +107,19 @@ class Runner(object):
         os.environ['TF_DISABLE_NVTX_RANGES'] = '1'
 
         # ============================================
-        # TF-AMP and Fast Math Setup - Do not remove
+        # TF-AMP Setup - Do not remove
         # ============================================
 
         if dtype == tf.float16:
 
-            if use_fast_math:
-                raise RuntimeError("Fast Math can not be activated for FP16 precision")
-
             if use_tf_amp:
                 raise RuntimeError("TF AMP can not be activated for FP16 precision")
 
-        elif use_fast_math and use_tf_amp:
-            raise RuntimeError("TF AMP and Fast Math can not be activated simultaneously")
-
-        else:
-
-            if use_fast_math:
-                if hvd.rank() == 0:
-                    LOGGER.log("Fast Math computation is activated - Experimental Feature")
-
-                os.environ["TF_ENABLE_CUBLAS_TENSOR_OP_MATH_FP32"] = "1"
-                os.environ["TF_ENABLE_CUDNN_TENSOR_OP_MATH_FP32"] = "1"
-                os.environ["TF_ENABLE_CUDNN_RNN_TENSOR_OP_MATH_FP32"] = "1"
-
-            elif use_tf_amp:
-                if hvd.rank() == 0:
-                    LOGGER.log("TF AMP is activated - Experimental Feature")
-                os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
+        elif use_tf_amp:
+            
+            if hvd.rank() == 0:
+                LOGGER.log("TF AMP is activated - Experimental Feature")
+            os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
 
         # =================================================
 
@@ -147,19 +134,26 @@ class Runner(object):
             distort_colors=distort_colors,
             seed=tf_seed
         )
+        
+        if use_dali:
+            num_preprocessing_threads=4
+        else:
+            num_preprocessing_threads=10
 
         run_config_performance = tf.contrib.training.HParams(
-            num_preprocessing_threads=32,
-            use_fast_math=use_fast_math,
+            num_preprocessing_threads=num_preprocessing_threads,
             use_tf_amp=use_tf_amp,
             use_xla=use_xla,
+            use_dali=use_dali,
+            gpu_memory_fraction=gpu_memory_fraction
         )
 
         run_config_additional = tf.contrib.training.HParams(
             model_dir=model_dir if not hvd_utils.is_using_hvd() or hvd.rank() == 0 else None,
             log_dir=log_dir if not hvd_utils.is_using_hvd() or hvd.rank() == 0 else None,
             data_dir=data_dir,
-            num_preprocessing_threads=32,
+            data_idx_dir=data_idx_dir,
+            num_preprocessing_threads=num_preprocessing_threads
         )
 
         self.run_hparams = Runner._build_hparams(model_hparams, run_config_additional, run_config_performance)
@@ -170,11 +164,12 @@ class Runner(object):
             input_format=model_hparams.input_format,
             compute_format=model_hparams.compute_format,
             dtype=model_hparams.dtype,
+            use_dali=use_dali
         )
 
         if self.run_hparams.seed is not None:
             if hvd.rank() == 0:
-                LOGGER.log("Deterministic Run - Seed: %d\n" % seed)
+                LOGGER.log("Deterministic Run - Seed: %d" % seed)
             tf.set_random_seed(self.run_hparams.seed)
             
 
@@ -209,17 +204,26 @@ class Runner(object):
             return worker_batch_size
 
     @staticmethod
-    def _get_session_config(mode, use_xla):
+    def _get_session_config(mode, use_xla, use_dali, gpu_memory_fraction):
 
         if mode not in ["train", 'validation', 'benchmark']:
             raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark')" % mode)
 
-        config = tf.ConfigProto()
+        # Limit available GPU memory (tune the size)
+        if use_dali:
+            LOGGER.log("DALI is activated, GPU memory fraction used for training is limited to", gpu_memory_fraction)
+            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_memory_fraction)  
+            config = tf.ConfigProto(gpu_options=gpu_options)
+            config.gpu_options.allow_growth = False
+
+        
+        else:
+            config = tf.ConfigProto()
+            config.gpu_options.allow_growth = True
 
         config.allow_soft_placement = True
         config.log_device_placement = False
 
-        config.gpu_options.allow_growth = True
 
         if hvd_utils.is_using_hvd():
             config.gpu_options.visible_device_list = str(hvd.local_rank())
@@ -241,7 +245,7 @@ class Runner(object):
         return config
 
     @staticmethod
-    def _get_run_config(mode, model_dir, use_xla, seed=None):
+    def _get_run_config(mode, model_dir, use_xla, use_dali, gpu_memory_fraction, seed=None):
 
         if mode not in ["train", 'validation', 'benchmark']:
             raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark')" % mode)
@@ -260,7 +264,7 @@ class Runner(object):
             save_summary_steps=100 if mode in ['train', 'validation'] else 1e9,  # disabled in benchmark mode
             save_checkpoints_steps=None,
             save_checkpoints_secs=None,
-            session_config=Runner._get_session_config(mode=mode, use_xla=use_xla),
+            session_config=Runner._get_session_config(mode=mode, use_xla=use_xla, use_dali=use_dali, gpu_memory_fraction=gpu_memory_fraction),
             keep_checkpoint_max=5,
             keep_checkpoint_every_n_hours=1e6,  # disabled
             log_step_count_steps=1e9,
@@ -281,7 +285,7 @@ class Runner(object):
 
         return config
 
-    def _get_estimator(self, mode, run_params, use_xla):
+    def _get_estimator(self, mode, run_params, use_xla, use_dali, gpu_memory_fraction):
 
         if mode not in ["train", 'validation', 'benchmark']:
             raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark')" % mode)
@@ -290,6 +294,8 @@ class Runner(object):
             mode=mode,
             model_dir=self.run_hparams.model_dir,
             use_xla=use_xla,
+            use_dali=use_dali,
+            gpu_memory_fraction=gpu_memory_fraction,
             seed=self.run_hparams.seed
         )
 
@@ -311,7 +317,7 @@ class Runner(object):
         momentum=0.9,
         log_every_n_steps=1,
         loss_scale=256,
-        use_auto_loss_scaling=False,
+        use_static_loss_scaling=False,
         is_benchmark=False
     ):
 
@@ -321,21 +327,20 @@ class Runner(object):
         if self.run_hparams.data_dir is None and not is_benchmark:
             raise ValueError('`data_dir` must be specified for training!')
 
-        if self.run_hparams.use_fast_math or self.run_hparams.use_tf_amp or self.run_hparams.dtype == tf.float16:
-            if use_auto_loss_scaling:
-                LOGGER.log("TF Loss Auto Scaling is activated - Experimental Feature")
-                os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_LOSS_SCALING"] = "1"
-
-            else:
+        if self.run_hparams.use_tf_amp or self.run_hparams.dtype == tf.float16:
+            if use_static_loss_scaling:
                 os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_LOSS_SCALING"] = "0"
+            else:
+                LOGGER.log("TF Loss Auto Scaling is activated")
+                os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_LOSS_SCALING"] = "1"
         else:
-            use_auto_loss_scaling = False  # Make sure it hasn't been set to True on FP32 training
+            use_static_loss_scaling = False  # Make sure it hasn't been set to True on FP32 training
 
         num_gpus = 1 if not hvd_utils.is_using_hvd() else hvd.size()
         global_batch_size = batch_size * num_gpus
 
         if self.run_hparams.data_dir is not None:
-            filenames, num_samples, num_steps, num_epochs, num_decay_steps = runner_utils.parse_tfrecords_dataset(
+            filenames,num_samples, num_steps, num_epochs, num_decay_steps = runner_utils.parse_tfrecords_dataset(
                 data_dir=self.run_hparams.data_dir,
                 mode="train",
                 iter_unit=iter_unit,
@@ -345,7 +350,6 @@ class Runner(object):
 
             steps_per_epoch = num_steps / num_epochs
 
-
         else:
             num_epochs = 1
             num_steps = num_iter
@@ -353,6 +357,13 @@ class Runner(object):
             num_decay_steps = num_steps
             num_samples = num_steps * batch_size
 
+            
+        if self.run_hparams.data_idx_dir is not None:
+            idx_filenames = runner_utils.parse_dali_idx_dataset(
+                data_idx_dir=self.run_hparams.data_idx_dir,
+                mode="train"
+            )
+            
         training_hooks = []
       
         if hvd.rank() == 0:
@@ -407,18 +418,36 @@ class Runner(object):
             'learning_rate_init': learning_rate_init,
             'weight_decay': weight_decay,
             'loss_scale': loss_scale,
-            'apply_loss_scaling': not use_auto_loss_scaling
+            'apply_loss_scaling': use_static_loss_scaling
         }
 
         image_classifier = self._get_estimator(
             mode='train',
             run_params=estimator_params,
-            use_xla=self.run_hparams.use_xla
+            use_xla=self.run_hparams.use_xla,
+            use_dali=self.run_hparams.use_dali,
+            gpu_memory_fraction=self.run_hparams.gpu_memory_fraction
         )
 
         def training_data_fn():
-
-            if self.run_hparams.data_dir is not None:
+            
+            if self.run_hparams.use_dali and self.run_hparams.data_idx_dir is not None:
+                if hvd.rank() == 0:
+                    LOGGER.log("Using DALI input... ")
+                    
+                return data_utils.get_dali_input_fn(
+                    filenames=filenames,
+                    idx_filenames=idx_filenames,
+                    batch_size=batch_size,
+                    height=self.run_hparams.height,
+                    width=self.run_hparams.width,
+                    training=True,
+                    distort_color=self.run_hparams.distort_colors,
+                    num_threads=self.run_hparams.num_preprocessing_threads,
+                    deterministic=False if self.run_hparams.seed is None else True
+                )
+            
+            elif self.run_hparams.data_dir is not None:
 
                 return data_utils.get_tfrecords_input_fn(
                     filenames=filenames,
@@ -481,7 +510,9 @@ class Runner(object):
         image_classifier = self._get_estimator(
             mode='validation',
             run_params=estimator_params,
-            use_xla=self.run_hparams.use_xla
+            use_xla=self.run_hparams.use_xla,
+            use_dali=self.run_hparams.use_dali,
+            gpu_memory_fraction=self.run_hparams.gpu_memory_fraction
         )
 
         if self.run_hparams.data_dir is not None:
@@ -498,6 +529,13 @@ class Runner(object):
             num_decay_steps = -1
             num_steps = num_iter
        
+    
+        if self.run_hparams.data_idx_dir is not None:
+            idx_filenames = runner_utils.parse_dali_idx_dataset(
+                data_idx_dir=self.run_hparams.data_idx_dir,
+                mode="validation"
+            )
+    
         eval_hooks = []
         
         if hvd.rank() == 0:
@@ -518,8 +556,25 @@ class Runner(object):
             LOGGER.log("Global Batch Size", batch_size)
 
         def evaluation_data_fn():
-
-            if self.run_hparams.data_dir is not None:
+    
+            if self.run_hparams.use_dali and self.run_hparams.data_idx_dir is not None:
+                if hvd.rank() == 0:
+                    LOGGER.log("Using DALI input... ")
+                    
+                return data_utils.get_dali_input_fn(
+                    filenames=filenames,
+                    idx_filenames=idx_filenames,
+                    batch_size=batch_size,
+                    height=self.run_hparams.height,
+                    width=self.run_hparams.width,
+                    training=False,
+                    distort_color=self.run_hparams.distort_colors,
+                    num_threads=self.run_hparams.num_preprocessing_threads,
+                    deterministic=False if self.run_hparams.seed is None else True
+                )
+            
+            
+            elif self.run_hparams.data_dir is not None:
                 return data_utils.get_tfrecords_input_fn(
                         filenames=filenames,
                         batch_size=batch_size,

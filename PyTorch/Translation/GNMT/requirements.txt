@@ -1,2 +1,5 @@
+pytablewriter
 sacrebleu==1.2.10
+sacremoses==0.0.19
+git+git://github.com/rsennrich/subword-nmt.git@48ba99e657591c329e0003f0c6e32e493fa959ef
 git+git://github.com/NVIDIA/apex.git#egg=apex
