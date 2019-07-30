@@ -217,7 +217,7 @@ The `launch.sh` script assumes that the datasets are in the following locations 
 - Wikipedia - `data/wikipedia_corpus/final_tfrecords_sharded`
 - Books Corpus -  `data/bookcorpus/final_tfrecords_sharded`
 
-5. Start pre-training.
+6. Start pre-training.
 
 BERT is designed to pre-train deep bidirectional representations for language representations. The following scripts are to replicate pre-training on Wikipedia and Books Corpus from the [paper](https://arxiv.org/pdf/1810.04805.pdf). These scripts are general and can be used for pre-training language representations on any corpus of choice.
 
@@ -236,7 +236,7 @@ For FP32 training without XLA using a DGX-1 V100 32G, run:
 bash scripts/run_pretraining.sh 6 6 2e-5 fp32 false 8 2000 5333333 5000 true
 ```
 
-6. Start fine tuning.
+7. Start fine tuning.
 
 The above pretrained BERT representations can be fine tuned with just one additional output layer for a state-of-the-art Question Answering system. From within the container, you can use the following script to run fine-training for SQuaD.
 
@@ -256,7 +256,7 @@ For SQuAD 2.0 FP32 training without XLA using a DGX-1 V100 32G, run:
 bash scripts/run_squad.sh 5 5e-6 fp32 false 8 384 128 large 1.1 data/pretrained_models_google/uncased_L-24_H-1024_A-16/bert_model.ckpt 2.0
 ```
 
-7. Start validation/evaluation.
+8. Start validation/evaluation.
 
 The `run_squad_inference.sh` script runs inference on a checkpoint fine tuned for SQuaD and evaluates the validity of predictions on the basis of exact match and F1 score.
 
@@ -479,7 +479,7 @@ The `run_squad_inference.sh` script trains a model and performs evaluation on th
 - Uses SQuAD v1.1 dataset
 - Has FP16 precision enabled
 - Is XLA enabled
-- Does eval on latest checkpoint present in `/results` with a batch size of 8
+- Evaulates the latest checkpoint present in `/results` with a batch size of 8
 
 This script outputs predictions file to `/results/predictions.json` and computes F1 score and exact match score using SQuaD's evaluate file. Mount point of `/results` can be changed in the `scripts/docker/launch.sh` file.
 
@@ -655,6 +655,7 @@ The following tables compare `F1` scores across 5 different training runs with d
 
 Our results were obtained by running batch sizes up to 3x GPUs on a 16GB V100 and up to 10x GPUs on a 32G V100 with mixed precision.
 
+
 ##### Training performance: NVIDIA DGX-1 (8x V100 16G)
 
 Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
@@ -673,9 +674,11 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 | 4 | 3 |  -  |50.71| - | - |2.95 |
 | 8 | 3 |  -  |91.88| - | - |5.34|
 
+
 Note: The respective values for FP32 runs that use a batch size of 3 are not available due to out of memory errors that arise. Batch size of 3 is only available on using FP16.
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
+
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 32G)
 
@@ -704,7 +707,6 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
 
-
 | **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
 |---|---|------|------|----|-----|-----|
 |  1| 4 | 9.39 | 20.69 |2.20| 1.0 | 1.0 |
@@ -723,6 +725,7 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 
 
 Note: The respective values for FP32 runs that use a batch size of 10 are not available due to out of memory errors that arise. Batch size of 10 is only available on using FP16.
+
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
@@ -911,13 +914,17 @@ BERT BASE FP32
 | 384             | 8          | 139.75                       | 57.25               | 57.74           | 58.08           | 59.53           |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
+
 ## Release notes
 ### Changelog
+
 March 2019
-Initial release
+- Initial release
+
 July 2019
-Results obtained using 19.06
-Inference Studies using TensorRT Inference Server
+- Results obtained using 19.06
+- Inference Studies using TensorRT Inference Server
 
 ### Known issues
+
 There are no known issues with this model.
