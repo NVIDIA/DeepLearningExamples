@@ -582,7 +582,7 @@ def main(_):
         is_training=False,
         drop_remainder=eval_drop_remainder)
 
-    eval_hooks = [LogEvalRunHook(FLAGS.predict_batch_size)]
+    eval_hooks = [LogEvalRunHook(FLAGS.eval_batch_size)]
     eval_start_time = time.time()
     result = estimator.evaluate(input_fn=eval_input_fn, hooks=eval_hooks)
 
@@ -591,7 +591,7 @@ def main(_):
 
     time_list = eval_hooks[-1].time_list
     time_list.sort()
-    num_sentences = (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.predict_batch_size
+    num_sentences = (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.eval_batch_size
 
     avg = np.mean(time_list)
     cf_50 = max(time_list[:int(len(time_list) * 0.50)])
@@ -603,11 +603,11 @@ def main(_):
 
     tf.logging.info("-----------------------------")
     tf.logging.info("Total Inference Time = %0.2f for Sentences = %d", eval_time_elapsed,
-                    eval_hooks[-1].count * FLAGS.predict_batch_size)
+                    eval_hooks[-1].count * FLAGS.eval_batch_size)
     tf.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", eval_time_wo_overhead,
-                    (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.predict_batch_size)
+                    (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.eval_batch_size)
     tf.logging.info("Summary Inference Statistics on EVAL set")
-    tf.logging.info("Batch size = %d", FLAGS.predict_batch_size)
+    tf.logging.info("Batch size = %d", FLAGS.eval_batch_size)
     tf.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
     tf.logging.info("Precision = %s", "fp16" if FLAGS.use_fp16 else "fp32")
     tf.logging.info("Latency Confidence Level 50 (ms) = %0.2f", cf_50 * 1000)
@@ -648,7 +648,16 @@ def main(_):
 
     predict_hooks = [LogEvalRunHook(FLAGS.predict_batch_size)]
     predict_start_time = time.time()
-    result = estimator.predict(input_fn=predict_input_fn, hooks=predict_hooks)
+
+    output_predict_file = os.path.join(FLAGS.output_dir, "test_results.tsv")
+    with tf.gfile.GFile(output_predict_file, "w") as writer:
+        tf.logging.info("***** Predict results *****")
+        for prediction in estimator.predict(input_fn=predict_input_fn, hooks=predict_hooks,
+                                            yield_single_examples=False):
+            output_line = "\t".join(
+                str(class_probability) for class_probability in prediction) + "\n"
+            writer.write(output_line)
+
 
     predict_time_elapsed = time.time() - predict_start_time
     predict_time_wo_overhead = predict_hooks[-1].total_time
@@ -683,14 +692,6 @@ def main(_):
     tf.logging.info("Latency Average (ms) = %0.2f", avg * 1000)
     tf.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
     tf.logging.info("-----------------------------")
-
-    output_predict_file = os.path.join(FLAGS.output_dir, "test_results.tsv")
-    with tf.gfile.GFile(output_predict_file, "w") as writer:
-      tf.logging.info("***** Predict results *****")
-      for prediction in result:
-        output_line = "\t".join(
-            str(class_probability) for class_probability in prediction) + "\n"
-        writer.write(output_line)
 
 
 if __name__ == "__main__":

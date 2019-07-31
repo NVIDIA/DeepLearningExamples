@@ -15,10 +15,6 @@ This repository provides a script and recipe to train BERT to achieve state of t
 * [Setup](#setup)
   * [Requirements](#requirements)
 * [Quick Start Guide](#quick-start-guide)
-* [Deploying the BERT model using TensorRT Inference Server](#deploying-the-bert-model-using-tensorrt-inference)
-  * [Performance analysis for TensorRT Inference Server](#performance-analysis-for-tensorrt-inference-server)
-    *[Advanced Details](advanced-details)
-  * [Running the TensorRT Inference Server and client](#running-the-tensorrt-inference-server-and-client)
 * [Advanced](#advanced)
   * [Scripts and sample code](#scripts-and-sample-code)
   * [Parameters](#parameters)
@@ -30,6 +26,10 @@ This repository provides a script and recipe to train BERT to achieve state of t
     * [Pre-training](#pre-training)
     * [Fine tuning](#fine-tuning)
   * [Inference process](#inference-process)
+  * [Deploying the BERT model using TensorRT Inference Server](#deploying-the-bert-model-using-tensorrt-inference-server)
+    * [Performance analysis for TensorRT Inference Server](#performance-analysis-for-tensorrt-inference-server)
+      * [Advanced Details](#advanced-details)
+    * [Running the TensorRT Inference Server and client](#running-the-tensorrt-inference-server-and-client)
 * [Performance](#performance)
   * [Benchmarking](#benchmarking)
     * [Training performance benchmark](#training-performance-benchmark)
@@ -43,9 +43,9 @@ This repository provides a script and recipe to train BERT to achieve state of t
       * [Training performance: NVIDIA DGX-1 (8x V100 32G)](#training-performance-nvidia-dgx-1-8x-v100-32g)
       * [Training performance: NVIDIA DGX-2 (16x V100 32G)](#training-performance-nvidia-dgx-2-16x-v100-32g)
     * [Inference performance results](#inference-performance-results)
-      * [Inference performance: NVIDIA DGX-1 (1x V100 16G)](#inference-performance-nvidia-dgx-1-(1x-v100-16G))
-      * [Inference performance: NVIDIA DGX-1 (1x V100 32G)](#inference-performance-nvidia-dgx-1-(1x-v100-32G))
-      * [Inference performance: NVIDIA DGX-2 (1x V100 32G)](#inference-performance-nvidia-dgx-1-(1x-v100-32G))
+      * [Inference performance: NVIDIA DGX-1 (1x V100 16G)](#inference-performance-nvidia-dgx-1-1x-v100-16g)
+      * [Inference performance: NVIDIA DGX-1 (1x V100 32G)](#inference-performance-nvidia-dgx-1-1x-v100-32g)
+      * [Inference performance: NVIDIA DGX-2 (1x V100 32G)](#inference-performance-nvidia-dgx-2-1x-v100-32g)
 * [Release notes](#release-notes)
   * [Changelog](#changelog)
   * [Known issues](#known-issues)
@@ -219,7 +219,6 @@ The `launch.sh` script assumes that the datasets are in the following locations 
 
 6. Start pre-training.
 
-
 BERT is designed to pre-train deep bidirectional representations for language representations. The following scripts are to replicate pre-training on Wikipedia and Books Corpus from the [paper](https://arxiv.org/pdf/1810.04805.pdf). These scripts are general and can be used for pre-training language representations on any corpus of choice.
 
 From within the container, you can use the following script to run pre-training.
@@ -273,104 +272,6 @@ bash scripts/run_squad_inference.sh /results/model.ckpt 8 fp16 true 384 128 larg
 For SQuAD 1.1 FP32 inference without XLA using a DGX-1 V100 32G, run:
 ```bash
 bash scripts/run_squad_inference.sh /results/model.ckpt 8 fp32 false 384 128 large 1.1
-```
-
-## Deploying the BERT model using TensorRT Inference Server
-
-The [NVIDIA TensorRT Inference Server](https://github.com/NVIDIA/tensorrt-inference-server) provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server.
-
-A typical TensorRT Inference Server pipeline can be broken down into the following 8 steps:
-Client serializes the inference request into a message and sends it to the server (Client Send)
-Message travels over the network from the client to the server (Network)
-Message arrives at server, and is deserialized (Server Receive)
-Request is placed on the queue (Server Queue)
-Request is removed from the queue and computed (Server Compute)
-Completed request is serialized in a message and sent back to the client (Server Send)
-Completed message travels over network from the server to the client (Network)
-Completed message is deserialized by the client and processed as a completed inference request (Client Receive)
-
-Generally, for local clients, steps 1-4 and 6-8 will only occupy a small fraction of time, compared to steps 5-6. As backend deep learning systems like BERT are rarely exposed directly to end users, but instead only interfacing with local front-end servers, for the sake of BERT, we can consider that all clients are local.
-In this section, we will go over how to launch TensorRT Inference Server and client and get the best performant solution that fits your specific application needs.
-
-Note: The following instructions are run from outside the container and call `docker run` commands as required.
-
-### Performance analysis for TensorRT Inference Server
-
-Based on the figures 2 and 3 below, we recommend using the Dynamic Batcher with `max_batch_size = 8`, `max_queue_delay_microseconds` as large as possible to fit within your latency window (The values used below are extremely large to exaggerate their effect), and only 1 instance of the engine. The largest improvements to both throughput and latency come from increasing the batch size due to efficiency gains in the GPU with larger batches. The Dynamic Batcher combines the best of both worlds by efficiently batching together a large number of simultaneous requests, while also keeping latency down for infrequent requests. We recommend only 1 instance of the engine due to the negligible improvement to throughput at the cost of significant increases in latency. Many models can benefit from multiple engine instances but as the figures below show, that is not the case for this model.
-
-
-![](data/images/trtis_base_summary.png?raw=true)
-
-Figure 2: Latency vs Throughput for BERT Base, fp16, Sequence Length = 128 using Various configurations available in TRTIS
-
-![](data/images/trtis_large_summary.png?raw=true)
-
-Figure 3: Latency vs Throughput for BERT Large, fp16, Sequence Length = 384 using Various configurations available in TRTIS
-
-#### Advanced Details
-
-This section digs deeper into the performance numbers and configurations corresponding to running TensorRT Inference Server for BERT fine tuning for Question Answering. It explains the tradeoffs in selecting maximum batch sizes, batching techniques and number of inference engines on the same GPU to understand how we arrived at the optimal configuration specified previously.
-
-Results can be reproduced by running `generate_figures.sh`. It exports the Tensorflow BERT model as a `tensorflow_savedmodel` that TensorRT Inference Server accepts, builds a matching [TensorRT Inference Server model config](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-guide/docs/model_configuration.html#), starts the server on localhost in a detached state and runs [perf_client](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-guide/docs/client.html#performance-example-application) for various configurations.
-
-```bash
-bash scripts/trtis/generate_figures.sh <bert_model> <seq_length> <precision> <init_checkpoint>
-```
-
-All results below are obtained on 1 DGX-1 V100 32 GB GPU for BERT Base, Sequence Length = 128 and FP16 precision running on a local server. Latencies are indicated by bar plots using the left axis. Throughput is indicated by the blue line plot using the right axis. X-axis indicates the concurrency - the maximum number of inference requests that can be in the pipeline at any given time. For example, when the concurrency is set to 1, the client waits for an inference request to be completed (Step 8) before it sends another to the server (Step 1).  A high number of concurrent requests can reduce the impact of network latency on overall throughput
-
-1. Maximum batch size
-
-As we can see in figure 4 below, the throughput at BS=1, Client Concurrent Requests = 64 is 119 and in figure 5 below, the throughput at BS=8, Client Concurrent Requests = 8 is 517, respectively giving a speedup of ~4.3x (Note: We compare BS=1, Client Concurrent Requests = 64 to BS=8, Client Concurrent Requests = 8 to keep the Total Number of Outstanding Requests equal between the two different modes. Where Total Number of Outstanding Requests = Batch Size * Client Concurrent Requests. This is also why there are 8 times as many bars on the BS=1 chart than the BS=8 chart). Increasing the batch size from 1 to 8 results in an increase in compute time by 1.8x (8.38ms to 15.46ms) showing that computation is more efficient at higher batch sizes. Hence, an optimal batch size would be the maximum batch size that can both fit in memory and is within the preferred latency threshold.
-
-
-![](data/images/trtis_bs_1.png?raw=true)
-
-Figure 4: Latency & Throughput vs Concurrency at Batch size = 1
-
-![](data/images/trtis_bs_8.png?raw=true)
-
-Figure 5: Latency & Throughput vs Concurrency at Batch size = 8
-
-2.  Batching techniques
-
-Static batching is a feature of the inference server that allows inference requests to be served as they are received. It is preferred in scenarios where low latency is desired at the cost of throughput when the GPU is under utilized.
-
-Dynamic batching is a feature of the inference server that allows inference requests to be combined by the server, so that a batch is created dynamically, resulting in an increased throughput. It is preferred in scenarios where we would like to maximize throughput and GPU utilization at the cost of higher latencies. User can set the [Dynamic Batcher parameters](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-master-branch-guide/docs/model_configuration.html#dynamic-batcher) `max_queue_delay_microseconds` to indicate the maximum amount of time they are willing to wait and ‘preferred_batchsize’ to indicate their optimal batch sizes in the TensorRT Inference Server model config.
-
-The figures 6 & 7 below emphasize the increase in overall throughput with dynamic batching. At low numbers of concurrent requests, the increased throughput comes at the cost of increasing latency as the requests are queued up to `max_queue_delay_microseconds`. The effect of `preferred_batchsize` for dynamic batching is visually depicted by the dip in Server Queue time at integer multiples of the preferred batch sizes. At higher numbers of concurrent requests, observe that the throughput approach a maximum limit as we saturate the GPU utilization.
-
-![](data/images/trtis_static.png?raw=true)
-
-Figure 6: Latency & Throughput vs Concurrency using Static Batching at `Batch size` = 1  
-
-![](data/images/trtis_dynamic.png?raw=true)
-
-Figure 7: Latency & Throughput vs Concurrency using Dynamic Batching at `Batch size` = 1, `preferred_batchsize` = [4, 8] and `max_queue_delay_microseconds` = 5000
-
-3. Model execution instance count
-
-TensorRT Inference Server enables us to launch multiple engines in separate CUDA streams by setting the `instance_group_count` parameter to improve both latency and throughput. Multiple engines are useful when the model doesn’t saturate the GPU allowing the GPU to run multiple instances of the model in parallel.
-
-From the figures 8 & 9 below, we can see a drop in queue time as more models are available to serve an inference request. However, this is countered by an increase in compute time as multiple models compete for resources. Since BERT is a large model which utilizes the majority of the GPU, the benefit to running multiple engines is not seen.
-
-
-![](data/images/trtis_ec_1.png?raw=true)
-
-Figure 8: Latency & Throughput vs Concurrency at Batch size = 1, Engine Count = 1
-(One copy of the model loaded in GPU memory)
-
-![](data/images/trtis_ec_4.png?raw=true)
-
-Figure 9: Latency & Throughput vs Concurrency at Batch size = 1, Engine count = 4
-(Four copies the model loaded in GPU memory)
-
-### Run the TensorRT Inference Server and client
-
-The `run_trtis.sh` script exports the Tensorflow BERT model as a `tensorflow_savedmodel` that TensorRT Inference Server accepts, builds a matching [TensorRT Inference Server model config](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-guide/docs/model_configuration.html#), starts the server on local host in a detached state, runs client and then evaluates the validity of predictions on the basis of exact match and F1 score all in one step.
-
-```bash
-bash scripts/trtis/run_trtis.sh <init_checkpoint> <batch_size> <precision> <use_xla> <seq_length> <doc_stride> <bert_model> <squad_version> <trtis_version_name> <trtis_model_name> <trtis_export_model> <trtis_dyn_batching_delay> <trtis_engine_count> <trtis_model_overwrite>
 ```
 
 ## Advanced
@@ -578,7 +479,7 @@ The `run_squad_inference.sh` script trains a model and performs evaluation on th
 - Uses SQuAD v1.1 dataset
 - Has FP16 precision enabled
 - Is XLA enabled
-- Evaluates the latest checkpoint present in `/results` with a batch size of 8
+- Evaulates the latest checkpoint present in `/results` with a batch size of 8
 
 This script outputs predictions file to `/results/predictions.json` and computes F1 score and exact match score using SQuaD's evaluate file. Mount point of `/results` can be changed in the `scripts/docker/launch.sh` file.
 
@@ -591,6 +492,104 @@ The summary after inference is printed in the following format:
 I0312 23:14:00.550846 140287431493376 run_squad.py:1396] 0 Total Inference Time = 145.46 Inference Time W/O start up overhead = 131.86 Sentences processed = 10840
 I0312 23:14:00.550973 140287431493376 run_squad.py:1397] 0 Inference Performance = 82.2095 sentences/sec
 {"exact_match": 83.69914853358561, "f1": 90.8477003317459}
+```
+
+### Deploying the BERT model using TensorRT Inference Server
+
+The [NVIDIA TensorRT Inference Server](https://github.com/NVIDIA/tensorrt-inference-server) provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server.
+
+A typical TensorRT Inference Server pipeline can be broken down into the following 8 steps:
+Client serializes the inference request into a message and sends it to the server (Client Send)
+Message travels over the network from the client to the server (Network)
+Message arrives at server, and is deserialized (Server Receive)
+Request is placed on the queue (Server Queue)
+Request is removed from the queue and computed (Server Compute)
+Completed request is serialized in a message and sent back to the client (Server Send)
+Completed message travels over network from the server to the client (Network)
+Completed message is deserialized by the client and processed as a completed inference request (Client Receive)
+
+Generally, for local clients, steps 1-4 and 6-8 will only occupy a small fraction of time, compared to steps 5-6. As backend deep learning systems like BERT are rarely exposed directly to end users, but instead only interfacing with local front-end servers, for the sake of BERT, we can consider that all clients are local.
+In this section, we will go over how to launch TensorRT Inference Server and client and get the best performant solution that fits your specific application needs.
+
+Note: The following instructions are run from outside the container and call `docker run` commands as required.
+
+#### Performance analysis for TensorRT Inference Server
+
+Based on the figures 2 and 3 below, we recommend using the Dynamic Batcher with `max_batch_size = 8`, `max_queue_delay_microseconds` as large as possible to fit within your latency window (The values used below are extremely large to exaggerate their effect), and only 1 instance of the engine. The largest improvements to both throughput and latency come from increasing the batch size due to efficiency gains in the GPU with larger batches. The Dynamic Batcher combines the best of both worlds by efficiently batching together a large number of simultaneous requests, while also keeping latency down for infrequent requests. We recommend only 1 instance of the engine due to the negligible improvement to throughput at the cost of significant increases in latency. Many models can benefit from multiple engine instances but as the figures below show, that is not the case for this model.
+
+
+![](data/images/trtis_base_summary.png?raw=true)
+
+Figure 2: Latency vs Throughput for BERT Base, fp16, Sequence Length = 128 using Various configurations available in TRTIS
+
+![](data/images/trtis_large_summary.png?raw=true)
+
+Figure 3: Latency vs Throughput for BERT Large, fp16, Sequence Length = 384 using Various configurations available in TRTIS
+
+##### Advanced Details
+
+This section digs deeper into the performance numbers and configurations corresponding to running TensorRT Inference Server for BERT fine tuning for Question Answering. It explains the tradeoffs in selecting maximum batch sizes, batching techniques and number of inference engines on the same GPU to understand how we arrived at the optimal configuration specified previously.
+
+Results can be reproduced by running `generate_figures.sh`. It exports the Tensorflow BERT model as a `tensorflow_savedmodel` that TensorRT Inference Server accepts, builds a matching [TensorRT Inference Server model config](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-guide/docs/model_configuration.html#), starts the server on localhost in a detached state and runs [perf_client](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-guide/docs/client.html#performance-example-application) for various configurations.
+
+```bash
+bash scripts/trtis/generate_figures.sh <bert_model> <seq_length> <precision> <init_checkpoint>
+```
+
+All results below are obtained on 1 DGX-1 V100 32 GB GPU for BERT Base, Sequence Length = 128 and FP16 precision running on a local server. Latencies are indicated by bar plots using the left axis. Throughput is indicated by the blue line plot using the right axis. X-axis indicates the concurrency - the maximum number of inference requests that can be in the pipeline at any given time. For example, when the concurrency is set to 1, the client waits for an inference request to be completed (Step 8) before it sends another to the server (Step 1).  A high number of concurrent requests can reduce the impact of network latency on overall throughput
+
+1. Maximum batch size
+
+As we can see in figure 4 below, the throughput at BS=1, Client Concurrent Requests = 64 is 119 and in figure 5 below, the throughput at BS=8, Client Concurrent Requests = 8 is 517, respectively giving a speedup of ~4.3x (Note: We compare BS=1, Client Concurrent Requests = 64 to BS=8, Client Concurrent Requests = 8 to keep the Total Number of Outstanding Requests equal between the two different modes. Where Total Number of Outstanding Requests = Batch Size * Client Concurrent Requests. This is also why there are 8 times as many bars on the BS=1 chart than the BS=8 chart). Increasing the batch size from 1 to 8 results in an increase in compute time by 1.8x (8.38ms to 15.46ms) showing that computation is more efficient at higher batch sizes. Hence, an optimal batch size would be the maximum batch size that can both fit in memory and is within the preferred latency threshold.
+
+
+![](data/images/trtis_bs_1.png?raw=true)
+
+Figure 4: Latency & Throughput vs Concurrency at Batch size = 1
+
+![](data/images/trtis_bs_8.png?raw=true)
+
+Figure 5: Latency & Throughput vs Concurrency at Batch size = 8
+
+2.  Batching techniques
+
+Static batching is a feature of the inference server that allows inference requests to be served as they are received. It is preferred in scenarios where low latency is desired at the cost of throughput when the GPU is under utilized.
+
+Dynamic batching is a feature of the inference server that allows inference requests to be combined by the server, so that a batch is created dynamically, resulting in an increased throughput. It is preferred in scenarios where we would like to maximize throughput and GPU utilization at the cost of higher latencies. User can set the [Dynamic Batcher parameters](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-master-branch-guide/docs/model_configuration.html#dynamic-batcher) `max_queue_delay_microseconds` to indicate the maximum amount of time they are willing to wait and ‘preferred_batchsize’ to indicate their optimal batch sizes in the TensorRT Inference Server model config.
+
+The figures 6 & 7 below emphasize the increase in overall throughput with dynamic batching. At low numbers of concurrent requests, the increased throughput comes at the cost of increasing latency as the requests are queued up to `max_queue_delay_microseconds`. The effect of `preferred_batchsize` for dynamic batching is visually depicted by the dip in Server Queue time at integer multiples of the preferred batch sizes. At higher numbers of concurrent requests, observe that the throughput approach a maximum limit as we saturate the GPU utilization.
+
+![](data/images/trtis_static.png?raw=true)
+
+Figure 6: Latency & Throughput vs Concurrency using Static Batching at `Batch size` = 1
+
+![](data/images/trtis_dynamic.png?raw=true)
+
+Figure 7: Latency & Throughput vs Concurrency using Dynamic Batching at `Batch size` = 1, `preferred_batchsize` = [4, 8] and `max_queue_delay_microseconds` = 5000
+
+3. Model execution instance count
+
+TensorRT Inference Server enables us to launch multiple engines in separate CUDA streams by setting the `instance_group_count` parameter to improve both latency and throughput. Multiple engines are useful when the model doesn’t saturate the GPU allowing the GPU to run multiple instances of the model in parallel.
+
+From the figures 8 & 9 below, we can see a drop in queue time as more models are available to serve an inference request. However, this is countered by an increase in compute time as multiple models compete for resources. Since BERT is a large model which utilizes the majority of the GPU, the benefit to running multiple engines is not seen.
+
+
+![](data/images/trtis_ec_1.png?raw=true)
+
+Figure 8: Latency & Throughput vs Concurrency at Batch size = 1, Engine Count = 1
+(One copy of the model loaded in GPU memory)
+
+![](data/images/trtis_ec_4.png?raw=true)
+
+Figure 9: Latency & Throughput vs Concurrency at Batch size = 1, Engine count = 4
+(Four copies the model loaded in GPU memory)
+
+#### Run the TensorRT Inference Server and client
+
+The `run_trtis.sh` script exports the Tensorflow BERT model as a `tensorflow_savedmodel` that TensorRT Inference Server accepts, builds a matching [TensorRT Inference Server model config](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-guide/docs/model_configuration.html#), starts the server on local host in a detached state, runs client and then evaluates the validity of predictions on the basis of exact match and F1 score all in one step.
+
+```bash
+bash scripts/trtis/run_trtis.sh <init_checkpoint> <batch_size> <precision> <use_xla> <seq_length> <doc_stride> <bert_model> <squad_version> <trtis_version_name> <trtis_model_name> <trtis_export_model> <trtis_dyn_batching_delay> <trtis_engine_count> <trtis_model_overwrite>
 ```
 
 ## Performance
@@ -727,12 +726,13 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 
 Note: The respective values for FP32 runs that use a batch size of 10 are not available due to out of memory errors that arise. Batch size of 10 is only available on using FP16.
 
+
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 
 #### Inference performance results
 
-##### Inference performance: NVIDIA DGX-1 16G (1x V100 16G)
+##### Inference performance: NVIDIA DGX-1 (1x V100 16G)
 
 Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-1 with 1x V100 16G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 
@@ -790,10 +790,9 @@ BERT BASE FP32
 | 384             | 8          | 138.63                       | 57.71               | 58.15           | 58.37           | 59.33           |
 
 
-
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
-##### Inference performance: NVIDIA DGX-1 32G (1x V100 32G)
+##### Inference performance: NVIDIA DGX-1 (1x V100 32G)
 
 Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-1 with 1x V100 32G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 
@@ -854,7 +853,7 @@ BERT BASE FP32
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
-##### Inference performance: NVIDIA DGX-2 32G (1x V100 32G)
+##### Inference performance: NVIDIA DGX-2 (1x V100 32G)
 
 Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-2 with 1x V100 32G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 
