@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
 DATA_DIR=${1:-/workspace/bert/data}
 
-# Check running from repository root
-if [ ! -d .git ]; then
-  echo "Not running from repository root! Exiting."
-  exit 1
-fi
-
 # Download vocab files from pretrained model
 cd vocab && python3 download_models.py && rm *.zip && rm ./*/*.ckpt.*
 
