@@ -35,6 +35,11 @@ from torch.utils import checkpoint
 
 from file_utils import cached_path
 
+from torch.nn import Module
+from torch.nn.parameter import Parameter
+import torch.nn.functional as F
+import torch.nn.init as init
+
 logger = logging.getLogger(__name__)
 
 PRETRAINED_MODEL_ARCHIVE_MAP = {
@@ -111,20 +116,80 @@ def load_tf_weights_in_bert(model, tf_checkpoint_path):
     return model
 
 
+@torch.jit.script
+def f_gelu(x):
+    return  x * 0.5 * (1.0 + torch.erf(x / 1.41421))
+
+@torch.jit.script
+def bias_gelu(bias, y):
+    x = bias + y
+    return  x * 0.5 * (1.0 + torch.erf(x / 1.41421))
+
+@torch.jit.script
+def bias_tanh(bias, y):
+    x = bias + y
+    return torch.tanh(x)
+
 def gelu(x):
     """Implementation of the gelu activation function.
         For information: OpenAI GPT's gelu is slightly different (and gives slightly different results):
         0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
         Also see https://arxiv.org/abs/1606.08415
     """
-    return x * 0.5 * (1.0 + torch.erf(x / math.sqrt(2.0)))
-
+    return f_gelu(x)
 
 def swish(x):
     return x * torch.sigmoid(x)
 
 
 ACT2FN = {"gelu": gelu, "relu": torch.nn.functional.relu, "swish": swish}
+
+class LinearActivation(Module):
+    r"""Fused Linear and activation Module.
+    """
+    __constants__ = ['bias']
+
+    def __init__(self, in_features, out_features, act='gelu', bias=True):
+        super(LinearActivation, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.fused_gelu = False
+        self.fused_tanh = False
+        if isinstance(act, str) or (sys.version_info[0] == 2 and isinstance(act, unicode)):
+            if bias and act == 'gelu':
+                self.fused_gelu = True
+            elif bias and act == 'tanh':
+                self.fused_tanh = True
+            else:
+                self.act_fn = ACT2FN[act]
+        else:
+            self.act_fn = act
+        self.weight = Parameter(torch.Tensor(out_features, in_features))
+        if bias:
+            self.bias = Parameter(torch.Tensor(out_features))
+        else:
+            self.register_parameter('bias', None)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        if self.bias is not None:
+            fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1 / math.sqrt(fan_in)
+            init.uniform_(self.bias, -bound, bound)
+
+    def forward(self, input):
+        if self.fused_gelu:
+            return bias_gelu(self.bias, F.linear(input, self.weight, None))
+        elif self.fused_tanh:
+            return bias_tanh(self.bias, F.linear(input, self.weight, None))
+        else:
+            return self.act_fn(F.linear(input, self.weight, self.bias))
+
+    def extra_repr(self):
+        return 'in_features={}, out_features={}, bias={}'.format(
+            self.in_features, self.out_features, self.bias is not None
+        )
 
 
 class BertConfig(object):
@@ -216,7 +281,11 @@ class BertConfig(object):
         return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
 
 try:
-    from apex.normalization.fused_layer_norm import FusedLayerNorm as BertLayerNorm
+    import apex
+    #apex.amp.register_half_function(apex.normalization.fused_layer_norm, 'FusedLayerNorm')
+    import apex.normalization
+    #apex.amp.register_float_function(apex.normalization.FusedLayerNorm, 'forward')
+    BertLayerNorm = apex.normalization.FusedLayerNorm
 except ImportError:
     print("Better speed can be achieved with apex installed from https://www.github.com/nvidia/apex.")
     class BertLayerNorm(nn.Module):
@@ -281,11 +350,17 @@ class BertSelfAttention(nn.Module):
         self.value = nn.Linear(config.hidden_size, self.all_head_size)
 
         self.dropout = nn.Dropout(config.attention_probs_dropout_prob)
+        self.softmax = nn.Softmax(dim=-1)
 
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
         x = x.view(*new_x_shape)
         return x.permute(0, 2, 1, 3)
+
+    def transpose_key_for_scores(self, x):
+        new_x_shape = x.size()[:-1] + (self.num_attention_heads, self.attention_head_size)
+        x = x.view(*new_x_shape)
+        return x.permute(0, 2, 3, 1)
 
     def forward(self, hidden_states, attention_mask):
         mixed_query_layer = self.query(hidden_states)
@@ -293,17 +368,17 @@ class BertSelfAttention(nn.Module):
         mixed_value_layer = self.value(hidden_states)
 
         query_layer = self.transpose_for_scores(mixed_query_layer)
-        key_layer = self.transpose_for_scores(mixed_key_layer)
+        key_layer = self.transpose_key_for_scores(mixed_key_layer)
         value_layer = self.transpose_for_scores(mixed_value_layer)
 
         # Take the dot product between "query" and "key" to get the raw attention scores.
-        attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
+        attention_scores = torch.matmul(query_layer, key_layer)
         attention_scores = attention_scores / math.sqrt(self.attention_head_size)
         # Apply the attention mask is (precomputed for all layers in BertModel forward() function)
         attention_scores = attention_scores + attention_mask
 
         # Normalize the attention scores to probabilities.
-        attention_probs = nn.Softmax(dim=-1)(attention_scores)
+        attention_probs = self.softmax(attention_scores)
 
         # This is actually dropping out entire tokens to attend to, which might
         # seem a bit unusual, but is taken from the original Transformer paper.
@@ -345,15 +420,10 @@ class BertAttention(nn.Module):
 class BertIntermediate(nn.Module):
     def __init__(self, config):
         super(BertIntermediate, self).__init__()
-        self.dense = nn.Linear(config.hidden_size, config.intermediate_size)
-        if isinstance(config.hidden_act, str) or (sys.version_info[0] == 2 and isinstance(config.hidden_act, unicode)):
-            self.intermediate_act_fn = ACT2FN[config.hidden_act]
-        else:
-            self.intermediate_act_fn = config.hidden_act
+        self.dense_act = LinearActivation(config.hidden_size, config.intermediate_size, act=config.hidden_act)
 
     def forward(self, hidden_states):
-        hidden_states = self.dense(hidden_states)
-        hidden_states = self.intermediate_act_fn(hidden_states)
+        hidden_states = self.dense_act(hidden_states)
         return hidden_states
 
 
@@ -449,31 +519,24 @@ class BertEncoder(nn.Module):
 class BertPooler(nn.Module):
     def __init__(self, config):
         super(BertPooler, self).__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        self.activation = nn.Tanh()
+        self.dense_act = LinearActivation(config.hidden_size, config.hidden_size, act="tanh")
 
     def forward(self, hidden_states):
         # We "pool" the model by simply taking the hidden state corresponding
         # to the first token.
         first_token_tensor = hidden_states[:, 0]
-        pooled_output = self.dense(first_token_tensor)
-        pooled_output = self.activation(pooled_output)
+        pooled_output = self.dense_act(first_token_tensor)
         return pooled_output
 
 
 class BertPredictionHeadTransform(nn.Module):
     def __init__(self, config):
         super(BertPredictionHeadTransform, self).__init__()
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
-        if isinstance(config.hidden_act, str) or (sys.version_info[0] == 2 and isinstance(config.hidden_act, unicode)):
-            self.transform_act_fn = ACT2FN[config.hidden_act]
-        else:
-            self.transform_act_fn = config.hidden_act
+        self.dense_act = LinearActivation(config.hidden_size, config.hidden_size, act=config.hidden_act)
         self.LayerNorm = BertLayerNorm(config.hidden_size, eps=1e-12)
 
     def forward(self, hidden_states):
-        hidden_states = self.dense(hidden_states)
-        hidden_states = self.transform_act_fn(hidden_states)
+        hidden_states = self.dense_act(hidden_states)
         hidden_states = self.LayerNorm(hidden_states)
         return hidden_states
 
@@ -493,7 +556,9 @@ class BertLMPredictionHead(nn.Module):
 
     def forward(self, hidden_states):
         hidden_states = self.transform(hidden_states)
+        torch.cuda.nvtx.range_push("decoder input.size() = {}, weight.size() = {}".format(hidden_states.size(), self.decoder.weight.size()))
         hidden_states = self.decoder(hidden_states) + self.bias
+        torch.cuda.nvtx.range_pop()
         return hidden_states
 
 
@@ -1247,3 +1312,4 @@ class BertForQuestionAnswering(BertPreTrainedModel):
             return total_loss
         else:
             return start_logits, end_logits
+

@@ -96,51 +96,6 @@ else
 fi
 set +x
 
-target_loss=15
-THROUGHPUT=1.0
-THRESHOLD=0.9
-
 throughput=`cat $LOGFILE | grep Iteration | tail -1 | awk -F'it/s' '{print $1}' | awk -F',' '{print $2}' | egrep -o [0-9.]+`
-
-
-echo "throughput: $throughput it/s"
-
-
-PERFORMANCE_TEST_RESULT=$(awk 'BEGIN {print ('${throughput}' >= \
-      ('${THROUGHPUT}' * '${THRESHOLD}'))}')
-
-if [ $PERFORMANCE_TEST_RESULT == 1 ];
-   then
-      echo "&&&& PERFORMANCE TEST PASSED"
-   else
-      echo "&&&& PERFORMANCE TEST FAILED"
-   fi
-
-
-if [ "$inference_mode" = "eval" ] ; then
-   loss=`cat $LOGFILE | grep Finished | tail -1 | awk -F'Final Loss =' '{print $2}' | awk -F' ' '{print $1}' | egrep -o [0-9.]+`
-
-
-   echo "final loss: $loss"
-
-
-   ACCURACY_TEST_RESULT=$(awk 'BEGIN {print ('${loss}' <= '${target_loss}')}')
-
-   if [ $ACCURACY_TEST_RESULT == 1 ];
-      then
-         echo "&&&& ACCURACY TEST PASSED"
-      else
-         echo "&&&& ACCURACY TEST FAILED"
-      fi
-
-   
-   if [ $ACCURACY_TEST_RESULT == 1 -a $PERFORMANCE_TEST_RESULT == 1 ];
-      then
-         echo "&&&& PASSED"
-         exit 0
-      else
-         echo "&&&& FAILED"
-         exit 1
-      fi
-fi
-
+inference_perf=$(awk 'BEGIN {print ('$throughput' * '$num_gpus' * '$eval_batch_size')}')
+echo " inference throughput : $inference_perf sequences/second"

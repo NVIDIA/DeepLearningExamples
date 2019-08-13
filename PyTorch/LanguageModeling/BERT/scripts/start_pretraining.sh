@@ -45,7 +45,7 @@ fi
 printf -v EXTRA_PARAMS "%d %d %e %s 1 %d %d %d false" $train_batch_size $eval_batch_size $learning_rate "$precision" $warmup_proportion $train_steps $save_checkpoint_steps
 
 export ROOTDIR=$root_dir
-export DATA_DIR=${DATA_DIR:-$CODEDIR/data/wikipedia_corpus/pyt_hdf5_shards}
+export DATA_DIR=${DATA_DIR:-$CODEDIR/data/hdf5/books_wiki_en_corpus}
 
 VOLS="-v $ROOTDIR:/workspace/bert"
 VOLS+=" -v $DATA_DIR:/workspace/bert/data/wikipedia_corpus/pyt_hdf5_shards"
