@@ -1,3 +1,7 @@
-data/
+data/download/
+data/extracted/
+data/formatted_one_article_per_line/
+data/sharded/
+data/hdf5/
 vocab/
 results/
