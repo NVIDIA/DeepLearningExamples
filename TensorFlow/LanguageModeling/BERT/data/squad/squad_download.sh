@@ -57,4 +57,4 @@ if [ "$EXP_EVAL_v2" != "$CALC_EVAL_v2" ]; then
     echo "evaluate-v2.0.py is corrupted! md5sum doesn't match"
 fi
 
-echo "Complete!"
+echo "SQuAD download complete!"

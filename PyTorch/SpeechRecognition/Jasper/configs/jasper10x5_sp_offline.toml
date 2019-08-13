@@ -1,0 +1,194 @@
+# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+
+model = "Jasper"
+
+[input]
+normalize = "per_feature"
+sample_rate = 16000
+window_size = 0.02
+window_stride = 0.01
+window = "hann"
+features = 64
+n_fft = 512
+frame_splicing = 1
+dither = 0.00001
+feat_type = "logfbank"
+normalize_transcripts = true
+trim_silence = true
+pad_to = 16
+max_duration = 16.7
+speed_perturbation = true
+
+
+cutout_rect_regions = 0
+cutout_rect_time = 60
+cutout_rect_freq = 25
+
+
+cutout_x_regions = 0
+cutout_y_regions = 0
+cutout_x_width = 6
+cutout_y_width = 6
+
+[input_eval]
+normalize = "per_feature"
+sample_rate = 16000
+window_size = 0.02
+window_stride = 0.01
+window = "hann"
+features = 64
+n_fft = 512
+frame_splicing = 1
+dither = 0.00001
+feat_type = "logfbank"
+normalize_transcripts = true
+trim_silence = true
+pad_to = 16 
+
+
+[encoder]
+activation = "relu"
+convmask = true
+
+[[jasper]]
+filters = 256
+repeat = 1
+kernel = [11]
+stride = [2]
+dilation = [1]
+dropout = 0.2
+residual = false
+
+[[jasper]]
+filters = 256
+repeat = 5
+kernel = [11]
+stride = [1]
+dilation = [1]
+dropout = 0.2
+residual = true
+
+
+[[jasper]]
+filters = 256
+repeat = 5
+kernel = [11]
+stride = [1]
+dilation = [1]
+dropout = 0.2
+residual = true
+
+
+[[jasper]]
+filters = 384
+repeat = 5
+kernel = [13]
+stride = [1]
+dilation = [1]
+dropout = 0.2
+residual = true
+
+
+[[jasper]]
+filters = 384
+repeat = 5
+kernel = [13]
+stride = [1]
+dilation = [1]
+dropout = 0.2
+residual = true
+
+[[jasper]]
+filters = 512
+repeat = 5
+kernel = [17]
+stride = [1]
+dilation = [1]
+dropout = 0.2
+residual = true
+
+
+[[jasper]]
+filters = 512
+repeat = 5
+kernel = [17]
+stride = [1]
+dilation = [1]
+dropout = 0.2
+residual = true
+
+
+[[jasper]]
+filters = 640
+repeat = 5
+kernel = [21]
+stride = [1]
+dilation = [1]
+dropout = 0.3
+residual = true
+
+
+[[jasper]]
+filters = 640
+repeat = 5
+kernel = [21]
+stride = [1]
+dilation = [1]
+dropout = 0.3
+residual = true
+
+
+[[jasper]]
+filters = 768
+repeat = 5
+kernel = [25]
+stride = [1]
+dilation = [1]
+dropout = 0.3
+residual = true
+
+
+[[jasper]]
+filters = 768
+repeat = 5
+kernel = [25]
+stride = [1]
+dilation = [1]
+dropout = 0.3
+residual = true
+
+
+[[jasper]]
+filters = 896
+repeat = 1
+kernel = [29]
+stride = [1]
+dilation = [2]
+dropout = 0.4
+residual = false
+
+[[jasper]]
+filters = 1024
+repeat = 1
+kernel = [1]
+stride = [1]
+dilation = [1]
+dropout = 0.4
+residual = false
+
+[labels]
+labels = [" ", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "'"]
