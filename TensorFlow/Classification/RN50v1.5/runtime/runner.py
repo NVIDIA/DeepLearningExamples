@@ -313,10 +313,13 @@ class Runner(object):
         batch_size,
         warmup_steps=50,
         weight_decay=1e-4,
-        learning_rate_init=0.1,
+        lr_init=0.1,
+        lr_warmup_epochs=5,
         momentum=0.9,
         log_every_n_steps=1,
         loss_scale=256,
+        label_smoothing=0.0,
+        use_cosine_lr=False,
         use_static_loss_scaling=False,
         is_benchmark=False
     ):
@@ -373,7 +376,7 @@ class Runner(object):
             LOGGER.log("Steps per Epoch", steps_per_epoch)
             LOGGER.log("Decay Steps", num_decay_steps)
             LOGGER.log("Weight Decay Factor", weight_decay)
-            LOGGER.log("Init Learning Rate", learning_rate_init)
+            LOGGER.log("Init Learning Rate", lr_init)
             LOGGER.log("Momentum", momentum)
             LOGGER.log("Num GPUs", num_gpus)
             LOGGER.log("Per-GPU Batch Size", batch_size)
@@ -415,10 +418,14 @@ class Runner(object):
             'steps_per_epoch': steps_per_epoch,
             'num_gpus': num_gpus,
             'momentum': momentum,
-            'learning_rate_init': learning_rate_init,
+            'lr_init': lr_init,
+            'lr_warmup_epochs': lr_warmup_epochs,
             'weight_decay': weight_decay,
             'loss_scale': loss_scale,
-            'apply_loss_scaling': use_static_loss_scaling
+            'apply_loss_scaling': use_static_loss_scaling,
+            'label_smoothing': label_smoothing,
+            'num_decay_steps': num_decay_steps,
+            'use_cosine_lr': use_cosine_lr
         }
 
         image_classifier = self._get_estimator(

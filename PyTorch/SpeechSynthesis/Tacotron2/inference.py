@@ -46,8 +46,7 @@ def parse_args(parser):
     Parse commandline arguments.
     """
     parser.add_argument('-i', '--input', type=str, required=True,
-                        help='full path to the input text (phareses separated by new line); \
-                        if not provided then use default text')
+                        help='full path to the input text (phareses separated by new line)')
     parser.add_argument('-o', '--output', required=True,
                         help='output folder to save audio (file per phrase)')
     parser.add_argument('--tacotron2', type=str,
