@@ -671,8 +671,8 @@ NVIDIA DGX-2 With 32G|16|4096 and 2048 |64 and 256|-|1.52|-|2.71|-
 ###### Pre-training stability test
 
 | Accuracy Metric | Seed 1
-|-|-|-|-|-|-|-|-
-|Final Loss | 1.52
+|-|-
+| Final Loss | 1.52
 
 ###### Fine-tuning stability test
 
@@ -838,7 +838,7 @@ The inference performance metrics used were items/second.
 
 ### Changelog
 
-October 2019
+August 2019
 
 - Pretraining support with LAMB optimizer
 
