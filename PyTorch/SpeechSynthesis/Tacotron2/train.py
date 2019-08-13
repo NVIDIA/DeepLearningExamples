@@ -96,6 +96,8 @@ def parse_args(parser):
                           help='Enable cudnn')
     training.add_argument('--cudnn-benchmark', action='store_true',
                           help='Run cudnn benchmark')
+    training.add_argument('--disable-uniform-initialize-bn-weight', action='store_true',
+                          help='disable uniform initialization of batchnorm layer weight')
 
     optimization = parser.add_argument_group('optimization setup')
     optimization.add_argument(
@@ -343,7 +345,8 @@ def main():
 
     model_config = models.get_model_config(model_name, args)
     model = models.get_model(model_name, model_config,
-                             to_cuda=True)
+                             to_cuda=True,
+                             uniform_initialize_bn_weight=not args.disable_uniform_initialize_bn_weight)
 
     if not args.amp_run and distributed_run:
         model = DDP(model)

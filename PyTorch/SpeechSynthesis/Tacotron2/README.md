@@ -417,7 +417,7 @@ Batch: 8/260 epoch 0
 
 ### Getting the data
 
-The Tacotron 2 and WaveGlow models were trained on the LJSpeech-1.1 dataset.  
+The Tacotron 2 and WaveGlow models were trained on the LJSpeech-1.1 dataset.
 This repository contains the `./scripts/prepare_dataset.sh` script which will automatically download and extract the whole dataset. By default, data will be extracted to the `./LJSpeech-1.1` directory. The dataset directory contains a `README` file, a `wavs` directory with all audio samples, and a file `metadata.csv` that contains audio file names and the corresponding transcripts.
 
 #### Dataset guidelines
@@ -428,7 +428,7 @@ The LJSpeech dataset has 13,100 clips that amount to about 24 hours of speech. S
 
 To use datasets different than the default LJSpeech dataset:
 
-1. Prepare a directory with all audio files and pass it to the `--dataset-path` command-line option.  
+1. Prepare a directory with all audio files and pass it to the `--dataset-path` command-line option.
 
 2. Add two text files containing file lists: one for the training subset (`--training-files`) and one for the validation subset (`--validation files`).
 The structure of the filelists should be as follows:
@@ -678,6 +678,10 @@ July 2019
 benchmarks from input tokes per second to output mel-spectrograms per second
 * Introduced batched inference
 * Included warmup in the inference script
+
+August 2019
+* Fixed inference results
+* Fixed initialization of Batch Normalization
 
 ### Known issues
 

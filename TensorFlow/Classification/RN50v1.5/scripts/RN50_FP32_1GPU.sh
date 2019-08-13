@@ -15,4 +15,4 @@
 # This script launches ResNet50 training in FP32 on 1 GPUs using 128 batch size (128 per GPU)
 # Usage ./RN50_FP32_1GPU.sh <path to this repository> <path to dataset> <path to results directory>
 
-python $1/main.py --num_iter=90 --iter_unit=epoch --data_dir=$2  --batch_size=128 --results_dir=$3
+python $1/main.py --mode=train_and_evaluate --iter_unit=epoch --num_iter=50 --batch_size=128 --warmup_steps=100 --use_cosine_lr --label_smoothing 0.1 --lr_init=0.256 --lr_warmup_epochs=8 --momentum=0.875 --weight_decay=3.0517578125e-05 --data_dir=$2 --results_dir=$3

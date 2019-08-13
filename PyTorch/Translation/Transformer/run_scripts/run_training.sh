@@ -1,4 +1,5 @@
 #! /bin/bash
+
 nvidia-smi
 
 python -m torch.distributed.launch --nproc_per_node 8 /workspace/translation/train.py \
@@ -18,13 +19,12 @@ python -m torch.distributed.launch --nproc_per_node 8 /workspace/translation/tra
   --weight-decay 0.0 \
   --criterion label_smoothed_cross_entropy \
   --label-smoothing 0.1 \
-  --max-tokens 5120 \
+  --max-tokens 2560 \
   --seed 1 \
-  --max-epoch 100 \
-  --fp16 \
+  --max-epoch 50 \
   --online-eval \
   --no-epoch-checkpoints \
   --no-progress-bar \
-  --log-interval 500 \
+  --log-interval 1000 \
   --save-dir /results/checkpoints \
   --distributed-init-method env:// 

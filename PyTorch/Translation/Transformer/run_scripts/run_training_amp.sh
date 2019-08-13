@@ -21,7 +21,8 @@ python -m torch.distributed.launch --nproc_per_node 8 /workspace/translation/tra
   --max-tokens 5120 \
   --seed 1 \
   --max-epoch 100 \
-  --fp16 \
+  --amp \
+  --amp-level O2 \
   --online-eval \
   --no-epoch-checkpoints \
   --no-progress-bar \

@@ -19,8 +19,8 @@
 
 import tensorflow as tf
 
-from model import layers
-from model import blocks
+import model.layers
+import model.blocks 
 
 __all__ = ['bottleneck_block']
 
@@ -60,7 +60,7 @@ def bottleneck_block(
 
                 else:
 
-                    shortcut = layers.average_pooling2d(
+                    shortcut = model.layers.average_pooling2d(
                         inputs,
                         pool_size=(1, 1),
                         strides=(stride, stride),
@@ -71,7 +71,7 @@ def bottleneck_block(
 
             else:
 
-                shortcut = blocks.conv2d_block(
+                shortcut = model.blocks.conv2d_block(
                     inputs,
                     n_channels=depth,
                     kernel_size=(1, 1),
@@ -85,7 +85,7 @@ def bottleneck_block(
                     batch_norm_hparams=batch_norm_hparams
                 )
 
-        bottleneck = blocks.conv2d_block(
+        bottleneck = model.blocks.conv2d_block(
             inputs,
             n_channels=depth_bottleneck,
             kernel_size=(1, 1),
@@ -100,7 +100,7 @@ def bottleneck_block(
             name='bottleneck_1'
         )
 
-        bottleneck = blocks.conv2d_block(
+        bottleneck = model.blocks.conv2d_block(
             bottleneck,
             n_channels=depth_bottleneck,
             kernel_size=(3, 3),
@@ -115,7 +115,7 @@ def bottleneck_block(
             name='bottleneck_2'
         )
 
-        bottleneck = blocks.conv2d_block(
+        bottleneck = model.blocks.conv2d_block(
             bottleneck,
             n_channels=depth,
             kernel_size=(1, 1),
@@ -130,4 +130,4 @@ def bottleneck_block(
             name='bottleneck_3'
         )
 
-        return layers.relu(shortcut + bottleneck, name='relu')
+        return model.layers.relu(shortcut + bottleneck, name='relu')

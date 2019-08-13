@@ -30,6 +30,7 @@ from itertools import chain
 
 import torch
 import apex_C
+from apex import amp
 
 from fairseq import distributed_utils, optim, utils
 from fairseq.meters import AverageMeter, TimeMeter
@@ -82,6 +83,15 @@ class Trainer(object):
             raise RuntimeError('--enable-parallel-backward-allred-opt is only meant for distributed training')
         if self.args.enable_parallel_backward_allred_opt and not self.args.fp16:
             raise RuntimeError('--enable-parallel-backward-allred-opt only works with FP16 training')
+        if self.args.amp:
+            self.model, optimizer = amp.initialize(self.model,
+                                                   self.optimizer._optimizer,
+                                                   opt_level=self.args.amp_level,
+                                                   keep_batchnorm_fp32=False, # this is the only supported configuration for FusedAdam so far
+                                                   loss_scale='dynamic'
+                                                   )
+            self.optimizer._optimizer = optimizer
+
 
     @property
     def optimizer(self):
@@ -188,7 +198,7 @@ class Trainer(object):
                 self.meters['ups'].update(1.)
                 self.meters['wpb'].update(ntokens)
                 self.meters['bsz'].update(nsentences)
-                if grad_norm is not None:
+                if grad_norm is not None and not (self.args.amp and grad_norm != float('nan')):
                     self.meters['gnorm'].update(grad_norm)
                     self.meters['clip'].update(1. if grad_norm > self.args.clip_norm else 0.)
                 self.meters['oom'].update(ooms_fwd + ooms_bwd)
@@ -242,8 +252,12 @@ class Trainer(object):
         oom = 0
         if loss is not None:
             try:
-                # backward pass
-                loss.backward()
+                if self.args.amp:
+                    with amp.scale_loss(loss, self.optimizer._optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                else:
+                    loss.backward()
+
             except RuntimeError as e:
                 if 'out of memory' in str(e):
                     print('| WARNING: ran out of memory in worker {}, skipping batch'.format(self.args.distributed_rank), force=True)
