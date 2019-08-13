@@ -15,6 +15,10 @@
 ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:19.06-py3
 FROM ${FROM_IMAGE_NAME}
 
+WORKDIR /workspace
+RUN git clone https://github.com/NVIDIA/apex \
+ && cd apex \
+ && pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
 # Install Python dependencies
 RUN pip install --upgrade --no-cache-dir pip \
  && pip install --no-cache-dir \

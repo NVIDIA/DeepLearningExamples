@@ -4,8 +4,8 @@ This repository provides a script and recipe to train the ResNet-50 v1.5 model t
 
 ## Table Of Contents
 * [Model overview](#model-overview)
-    * [Model architecture](#model-architecture)
     * [Default configuration](#default-configuration)
+    * [Data augmentation](#data-augmentation)
     * [Other training recipes](#other-training-recipes)
     * [Feature support matrix](#feature-support-matrix)
         * [Features](#features)
@@ -54,23 +54,48 @@ The following performance optimizations were implemented in this model:
 * JIT graph compilation with [XLA](https://www.tensorflow.org/xla)
 * NVIDIA Data Loading ([DALI](https://github.com/NVIDIA/DALI)) support (experimental). 
 
-### Model architecture
-
 ### Default configuration
 
 This model trains for 90 epochs, with default ResNet50 v1.5 setup:
 
-* SGD with momentum (0.9)
+* SGD with momentum (0.875)
 
-* Learning rate = 0.1 for 256 batch size, for other batch sizes we linearly
+* Learning rate = 0.256 for 256 batch size, for other batch sizes we lineary
 scale the learning rate.
 
-* Learning rate decay - multiply by 0.1 after 30, 60, and 80 epochs
+* Learning rate schedule - we use cosine LR schedule
 
 * For bigger batch sizes (512 and up) we use linear warmup of the learning rate
 during first 5 epochs according to [Training ImageNet in 1 hour](https://arxiv.org/abs/1706.02677).
 
-* Weight decay: 1e-4
+* Weight decay: 3.0517578125e-05 (1/32768).
+
+* We do not apply Weight Decay on Batch Norm trainable parameters (gamma/bias).
+
+* Label Smoothing: 0.1
+
+* We train for:
+
+    * 50 Epochs -> configuration that reaches 75.9% top1 accuracy
+
+    * 90 Epochs -> 90 epochs is a standard for ResNet50
+
+### Data Augmentation
+
+This model uses the following data augmentation:
+
+* For training:
+  * Normalization
+  * Random resized crop to 224x224
+    * Scale from 8% to 100%
+    * Aspect ratio from 3/4 to 4/3
+  * Random horizontal flip
+
+* For inference:
+  * Normalization
+  * Scale to 256x256
+  * Center crop to 224x224
+
 
 ### Other training recipes
 
@@ -406,7 +431,7 @@ The following sections provide details on how we achieved our results in trainin
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 16G)
 
 Our results were obtained by running the `./scripts/RN50_{FP16, FP32}_{1, 4, 8}GPU.sh` script in
-the tensorflow-19.06-py3 Docker container on NVIDIA DGX-1 with 8 V100 16G GPUs.
+the tensorflow-19.07-py3 Docker container on NVIDIA DGX-1 with 8 V100 16G GPUs.
 
 
 | **number of GPUs** | **mixed precision top1** | **mixed precision training time** | **FP32 top1** | **FP32 training time** |
@@ -499,6 +524,9 @@ The results were obtained by running the `./scripts/benchmarking/DGX2_inferbench
   * Added DALI support
   * Added scripts for DGX-2
   * Added benchmark results for DGX-2 and XLA-enabled DGX-1 and DGX-2.
-
+3. July 15, 2019
+  * Added Cosine learning rate schedule
+  * Added T4 benchmarks
+  
 ### Known issues
 There are no known issues with this model.

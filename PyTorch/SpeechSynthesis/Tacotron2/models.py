@@ -54,7 +54,16 @@ def batchnorm_to_float(module):
     return module
 
 
-def get_model(model_name, model_config, to_cuda):
+def init_bn(module):
+    if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
+        if module.affine:
+            module.weight.data.uniform_()
+    for child in module.children():
+        init_bn(child)
+
+
+def get_model(model_name, model_config, to_cuda,
+              uniform_initialize_bn_weight=False):
     """ Code chooses a model based on name"""
     model = None
     if model_name == 'Tacotron2':
@@ -63,6 +72,10 @@ def get_model(model_name, model_config, to_cuda):
         model = WaveGlow(**model_config)
     else:
         raise NotImplementedError(model_name)
+
+    if uniform_initialize_bn_weight:
+        init_bn(model)
+
     if to_cuda:
         model = model.cuda()
     return model
