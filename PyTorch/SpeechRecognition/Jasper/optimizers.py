@@ -199,7 +199,7 @@ class Novograd(Optimizer):
                 norm = torch.sum(torch.pow(grad, 2))
 
                 if exp_avg_sq == 0:
-                    exp_avg_sq = norm
+                    exp_avg_sq.copy_( norm)
                 else:
                     exp_avg_sq.mul_(beta2).add_(1 - beta2, norm)
 
