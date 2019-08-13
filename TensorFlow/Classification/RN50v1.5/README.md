@@ -526,7 +526,6 @@ The results were obtained by running the `./scripts/benchmarking/DGX2_inferbench
   * Added benchmark results for DGX-2 and XLA-enabled DGX-1 and DGX-2.
 3. July 15, 2019
   * Added Cosine learning rate schedule
-  * Added T4 benchmarks
   
 ### Known issues
 There are no known issues with this model.
