@@ -218,8 +218,6 @@ The above paths present on the local machine get mounted to predefined locations
 This repository provides scripts to download, verify and extract the following datasets:
 
 -   [SQuAD](https://rajpurkar.github.io/SQuAD-explorer/) (fine-tuning for question answering)
--   [SWAG](https://rowanzellers.com/swag/) (fine-tuning for multiple choice)
--   [MRPC](https://www.microsoft.com/en-us/download/details.aspx?id=52398) (fine-tuning for sentence classification)
 -   Wikipedia (pre-training)
 -   BookCorpus (pre-training)
 
