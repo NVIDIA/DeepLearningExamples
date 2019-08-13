@@ -916,11 +916,16 @@ def main():
 
     # Prepare model
     config = BertConfig.from_json_file(args.config_file)
+    # Padding for divisibility by 8
+    if config.vocab_size % 8 != 0:
+        config.vocab_size += 8 - (config.vocab_size % 8)
+
     model = BertForQuestionAnswering(config)
     # model = BertForQuestionAnswering.from_pretrained(args.bert_model,
                 # cache_dir=os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE), 'distributed_{}'.format(args.local_rank)))
-    model.load_state_dict(torch.load(args.init_checkpoint, map_location='cpu'), strict=False)
-
+    print("USING CHECKOINT")
+    model.load_state_dict(torch.load(args.init_checkpoint, map_location='cpu')["model"], strict=False)
+    print("USED CHECKPOINT \n\n")
     model.to(device)
     if args.fp16 and args.old:
         model.half()

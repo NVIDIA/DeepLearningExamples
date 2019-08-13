@@ -1,3 +1,2 @@
 #!/bin/bash
-
-docker build . --rm -t bert
+docker build . --rm -t bert_pyt
