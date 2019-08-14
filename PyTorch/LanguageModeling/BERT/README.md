@@ -655,10 +655,10 @@ Note: Pretraining results were obtained with a dataset that was created using an
 
 ##### Pre-training loss results
 
-DGX System| GPUs | Accumulated Batch size / GPU (Phase 1 and Phase 2) | Accumulation steps (Phase 1 and Phase 2) | Final Loss - FP32 | Final Loss - mixed precision | Time to train(days) - FP32 | Time to train(days) - mixed precision | Time to train speedup (FP32 to mixed precision)
+| DGX System | GPUs | Accumulated Batch size / GPU (Phase 1 and Phase 2) | Accumulation steps (Phase 1 and Phase 2) | Final Loss - FP32 | Final Loss - mixed precision | Time to train(days) - FP32 | Time to train(days) - mixed precision | Time to train speedup (FP32 to mixed precision)
 |-|-|-|-|-|-|-|-|-
-NVIDIA DGX-1 With 16G|8|8192 and 4196 |512 and 1024|-|1.53|-|6.84|- 
-NVIDIA DGX-2 With 32G|16|4096 and 2048 |64 and 256|-|1.52|-|2.71|- 
+| NVIDIA DGX-1 With 16G|8|8192 and 4196 |512 and 1024|-|1.53|-|6.84|- 
+| NVIDIA DGX-2 With 32G|16|4096 and 2048 |64 and 256|-|1.52|-|2.71|- 
 
 ##### Fine-tuning accuracy results
 
