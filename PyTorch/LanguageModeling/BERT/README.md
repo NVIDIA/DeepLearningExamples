@@ -466,7 +466,7 @@ The `create_pretraining_data.py` script takes in raw text and creates training i
 
 #### Multi-dataset
 
-This repository provides functionality to combine multiple datasets into a single dataset for pre-training on a diverse text corpus at the shard level in `. /workspace/bert/data/create_datasets_from_start.sh`.
+This repository provides functionality to combine multiple datasets into a single dataset for pre-training on a diverse text corpus at the shard level in `data/create_datasets_from_start.sh`.
 
 ### Training process
 
