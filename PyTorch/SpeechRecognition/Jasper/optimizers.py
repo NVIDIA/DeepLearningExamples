@@ -124,7 +124,7 @@ class Novograd(Optimizer):
             parameter groups
         lr (float, optional): learning rate (default: 1e-3)
         betas (Tuple[float, float], optional): coefficients used for computing
-            running averages of gradient and its square (default: (0.95, 0.98))
+            running averages of gradient and its square (default: (0.95, 0))
         eps (float, optional): term added to the denominator to improve
             numerical stability (default: 1e-8)
         weight_decay (float, optional): weight decay (L2 penalty) (default: 0)
@@ -134,7 +134,7 @@ class Novograd(Optimizer):
             (default: False)
     """
 
-    def __init__(self, params, lr=1e-3, betas=(0.95, 0.98), eps=1e-8,
+    def __init__(self, params, lr=1e-3, betas=(0.95, 0), eps=1e-8,
                  weight_decay=0, grad_averaging=False, amsgrad=False):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -199,7 +199,7 @@ class Novograd(Optimizer):
                 norm = torch.sum(torch.pow(grad, 2))
 
                 if exp_avg_sq == 0:
-                    exp_avg_sq = norm
+                    exp_avg_sq.copy_(norm)
                 else:
                     exp_avg_sq.mul_(beta2).add_(1 - beta2, norm)
 
