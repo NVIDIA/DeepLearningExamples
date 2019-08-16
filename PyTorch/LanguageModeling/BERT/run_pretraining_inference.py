@@ -1,6 +1,6 @@
 # coding=utf-8
+# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
 # Copyright 2018 The Google AI Language Team Authors and The HugginFace Inc. team.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -101,11 +101,15 @@ def main():
                         type=str,
                         required=False,
                         help="The BERT model config")
-    parser.add_argument("--ckpt_dir",
+    ckpt_group = parser.add_mutually_exclusive_group(required=True)
+    ckpt_group.add_argument("--ckpt_dir",
                         default=None,
                         type=str,
-                        required=True,
                         help="The ckpt directory, e.g. /results")
+    ckpt_group.add_argument("--ckpt_path",
+                            default=None,
+                            type=str,
+                            help="Path to the specific checkpoint")
 
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--eval', dest='do_eval', action='store_true')
@@ -184,16 +188,21 @@ def main():
 
     # Prepare model
     config = BertConfig.from_json_file(args.config_file)
+    # Padding for divisibility by 8
+    if config.vocab_size % 8 != 0:
+        config.vocab_size += 8 - (config.vocab_size % 8)
     model = BertForPreTraining(config)
 
-
-    if args.ckpt_step == -1:
-        #retrieve latest model
-        model_names = [f for f in os.listdir(args.ckpt_dir) if f.endswith(".model")]
-        args.ckpt_step = max([int(x.split('.model')[0].split('_')[1].strip()) for x in model_names])
-        print("load model saved at iteraton", args.ckpt_step)
-    model_file = os.path.join(args.ckpt_dir, "ckpt_" + str(args.ckpt_step) + ".model")
-    state_dict = torch.load(model_file, map_location="cpu")
+    if args.ckpt_dir:
+        if args.ckpt_step == -1:
+            #retrieve latest model
+            model_names = [f for f in os.listdir(args.ckpt_dir) if f.endswith(".model")]
+            args.ckpt_step = max([int(x.split('.model')[0].split('_')[1].strip()) for x in model_names])
+            print("load model saved at iteraton", args.ckpt_step)
+        model_file = os.path.join(args.ckpt_dir, "ckpt_" + str(args.ckpt_step) + ".pt")
+    else:
+        model_file = args.ckpt_path
+    state_dict = torch.load(model_file, map_location="cpu")["model"]
     model.load_state_dict(state_dict, strict=False)
 
     if args.fp16:

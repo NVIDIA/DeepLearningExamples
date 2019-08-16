@@ -144,6 +144,9 @@ def get_parser(desc, default_task='translation'):
     parser.add_argument('--seed', default=1, type=int, metavar='N',
                         help='pseudo random number generator seed')
     parser.add_argument('--fp16', action='store_true', help='use FP16')
+    parser.add_argument('--amp', action='store_true', help='use Automatic Mixed Precision')
+    parser.add_argument('--amp-level', type=str, default="O1", help='choose apm\'s optimization level')
+
     parser.add_argument('--profile', type=int, default=None)
     # Task definitions can be found under fairseq/tasks/
     parser.add_argument(

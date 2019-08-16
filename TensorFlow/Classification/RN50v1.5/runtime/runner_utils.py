@@ -23,7 +23,8 @@ __all__ = ['count_steps', 'list_filenames_in_dataset', 'parse_tfrecords_dataset'
 
 
 def count_steps(iter_unit, num_samples, num_iter, global_batch_size):
-
+    
+    num_samples, num_iter = map(float, (num_samples, num_iter))
     if iter_unit not in ["batch", "epoch"]:
         raise ValueError("Invalid `iter_unit` value: %s" % iter_unit)
 

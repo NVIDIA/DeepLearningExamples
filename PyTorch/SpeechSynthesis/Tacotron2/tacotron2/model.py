@@ -206,7 +206,7 @@ class Encoder(nn.Module):
                          dilation=1, w_init_gain='relu'),
                 nn.BatchNorm1d(encoder_embedding_dim))
             convolutions.append(conv_layer)
-            self.convolutions = nn.ModuleList(convolutions)
+        self.convolutions = nn.ModuleList(convolutions)
 
         self.lstm = nn.LSTM(encoder_embedding_dim,
                             int(encoder_embedding_dim / 2), 1,
@@ -228,17 +228,6 @@ class Encoder(nn.Module):
 
         outputs, _ = nn.utils.rnn.pad_packed_sequence(
             outputs, batch_first=True)
-
-        return outputs
-
-    def infer(self, x):
-        for conv in self.convolutions:
-            x = F.dropout(F.relu(conv(x)), 0.5, self.training)
-
-        x = x.transpose(1, 2)
-
-        self.lstm.flatten_parameters()
-        outputs, _ = self.lstm(x)
 
         return outputs
 

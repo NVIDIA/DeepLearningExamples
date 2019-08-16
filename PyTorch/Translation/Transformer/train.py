@@ -1,4 +1,4 @@
-#!/usr/bin/env python3 -u
+    #!/usr/bin/env python3 -u
 # Copyright (c) 2017-present, Facebook, Inc.
 # All rights reserved.
 #
@@ -71,10 +71,12 @@ def main(args):
     print('| num. model params: {}'.format(sum(p.numel() for p in model.parameters())))
 
     # Build trainer
-    if args.fp16:
+    if args.fp16 and not args.amp:
         trainer = FP16Trainer(args, task, model, criterion)
+    elif args.fp16 and args.amp:
+        raise ValueError('Cannot use AMP and fp16 simultaneously')
     else:
-        if torch.cuda.get_device_capability(0)[0] >= 7:
+        if torch.cuda.get_device_capability(0)[0] >= 7 and not args.amp:
             print('| NOTICE: your device may support faster training with --fp16')
         trainer = Trainer(args, task, model, criterion)
     if (args.online_eval or args.target_bleu) and not args.remove_bpe:
@@ -373,7 +375,7 @@ def score(args, trainer, task, epoch_itr, subset):
     predictions = [tuple(item.split('\t')) for item in predictions]
     predictions = [(int(item[0]), item[1]) for item in predictions]
     predictions.sort(key=lambda tup: tup[0])
-    predictions = [hypo[1] + ('\n' if hypo[-1]!='\n' else '')  for hypo in predictions]
+    predictions = [hypo[1] + ('\n' if hypo[1][-1]!='\n' else '')  for hypo in predictions]
     sacrebleu_score = sacrebleu.corpus_bleu(predictions, refs, lowercase=args.ignore_case)
     print(f'|Detokenized {sacrebleu_score}')
     if gen_timer.sum != 0:

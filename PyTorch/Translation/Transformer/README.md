@@ -345,7 +345,7 @@ The following sections provide details on how we achieved our performance and ac
 #### Training accuracy results
 
 In order to test the accuracy of our implementation, we have run experiments with different seeds for 100 epochs with batch size 5120 per GPU and learning rate 6e-4 in the pytorch-18.12-py3 Docker container. The plot below shows the BLEU score changes.<br/>
-![Accuracy plot](/BLEU.png)
+![Accuracy plot](./BLEU.png)
 
 Running this code with the provided hyperparameters will allow you to achieve the following results. Our setup is a DGX-1 with 8x Tesla V100 16GB. We've verified our results after training 32 epochs to obtain multi-GPU and mixed precision scaling results.
 
@@ -424,12 +424,18 @@ January 2019
 - initial commit, forked from [fairseq](https://github.com/pytorch/fairseq/commit/ac5fddfc691267285a84c81d39475411da5ed1c6)
 
 May 2019:
-- adding mid-training SacreBLEU evaluation. Better handling of OOMs.
+- add mid-training [SacreBLEU](https://pypi.org/project/sacrebleu/1.2.10/) evaluation. Better handling of OOMs.
 
 June 2019
 - new README
-- jit support added
+
+July 2019
+- replace custom fused operators with jit functions
+
+August 2019
+- add basic AMP support
 
 ## Known issues
 
 - Course of a training heavily depends on a random seed. There is high variance in the time required to reach a certain BLEU score. Also the highest BLEU score value observed vary between runs with different seeds.
+- Translations produced by training script during online evaluation may differ from those produced by `generate.py` script. It is probably a format conversion issue.
