@@ -11,6 +11,7 @@ __pycache__/
 #Data       
 data/*/*/   
 data/*/*.zip
+data/*
 
 # Distribution / packaging
 .Python
