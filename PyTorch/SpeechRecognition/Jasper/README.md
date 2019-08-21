@@ -513,7 +513,7 @@ Apart from the default arguments as listed in the [Parameters](#parameters) sect
 * Uses masked convolutions and dense residuals as described in the paper
 * Uses weight decay of 0.001
 * Uses 1 gradient accumulation step
-* Uses [Novograd](https://arxiv.org/pdf/1905.11286.pdf) as optimizer with betas=(0.95, 0.98)
+* Uses [Novograd](https://arxiv.org/pdf/1905.11286.pdf) as optimizer with betas=(0.95, 0)
 
 
 These parameters will match the greedy WER [Results](#results) of the Jasper paper on a DGX1 with 32GB V100 GPUs.
