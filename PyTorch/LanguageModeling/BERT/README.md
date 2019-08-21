@@ -229,7 +229,7 @@ To download, verify, extract the datasets, and create the shards in hdf5 format,
 BERT is designed to pre-train deep bidirectional representations for language representations. The following scripts are to replicate pretraining on Wikipedia+Book Corpus from this [paper](https://arxiv.org/pdf/1810.04805.pdf). These scripts are general and can be used for pre-training language representations on any corpus of choice.
 
 From within the container, you can use the following script to run pre-training.
-`bash scripts/run_pretraining.sh 14 0.875e-4 fp16 16 0.01 1142857 2000 false true`
+`bash scripts/run_pretraining.sh`
 
 More details can be found in Details/Training Process
  
@@ -466,7 +466,7 @@ The `create_pretraining_data.py` script takes in raw text and creates training i
 
 #### Multi-dataset
 
-This repository provides functionality to combine multiple datasets into a single dataset for pre-training on a diverse text corpus at the shard level in `. /workspace/bert/data/create_datasets_from_start.sh`.
+This repository provides functionality to combine multiple datasets into a single dataset for pre-training on a diverse text corpus at the shard level in `data/create_datasets_from_start.sh`.
 
 ### Training process
 
@@ -476,7 +476,7 @@ The training process consists of two steps: pre-training and fine-tuning.
 
 Pre-training is performed using the `run_pretraining.py` script along with parameters defined in the `scripts/run_pretraining.sh`.
 
-The `run_pretraining.sh` script runs a job on a single node that trains the BERT-large model from scratch using the Wikipedia and BookCorpus datasets as training data using LAMB optimizer. By default, the training script runs two phases of training:
+The `run_pretraining.sh` script runs a job on a single node that trains the BERT-large model from scratch using the Wikipedia and BookCorpus datasets as training data using LAMB optimizer. By default, the training script runs two phases of training with a hyperparameter recipe specific to 8 x V100 32G cards:
 
 Phase 1: (Maximum sequence length of 128)
 -   Runs on 8 GPUs with training batch size of 64 per GPU
@@ -527,7 +527,11 @@ For example:
 
 `bash scripts/run_pretraining.sh`
 
-Trains BERT-large from scratch on a single DGX-1 32G using FP16 arithmetic. 90% of the training steps are done with sequence length 128 (phase1 of training) and 10% of the training steps are done with sequence length 512 (phase2 of training).
+Trains BERT-large from scratch on a DGX-1 32G using FP16 arithmetic. 90% of the training steps are done with sequence length 128 (phase1 of training) and 10% of the training steps are done with sequence length 512 (phase2 of training).
+
+In order to train on a DGX-1 16G, set `gradient_accumulation_steps` to `512` and `gradient_accumulation_steps_phase2` to `1024` in `scripts/run_pretraining.sh`
+
+In order to train on a DGX-2 32G, set `train_batch_size` to `4096`, `train_batch_size_phase2` to `2048`, `num_gpus` to `16`, `gradient_accumulation_steps` to `64` and `gradient_accumulation_steps_phase2` to `256` in `scripts/run_pretraining.sh`
 
 ##### Fine-tuning
 
