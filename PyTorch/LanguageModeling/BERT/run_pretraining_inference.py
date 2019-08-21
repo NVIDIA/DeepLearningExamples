@@ -213,7 +213,7 @@ def main():
     if multi_gpu_training:
         model = DDP(model)
    
-    files = [os.path.join(args.input_dir, f) for f in os.listdir(args.input_dir) if os.path.isfile(os.path.join(args.input_dir, f))]
+    files = [os.path.join(args.input_dir, f) for f in os.listdir(args.input_dir) if os.path.isfile(os.path.join(args.input_dir, f)) and 'test' in f]
     files.sort()
 
       
