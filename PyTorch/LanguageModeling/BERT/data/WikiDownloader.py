@@ -3,6 +3,7 @@
 import bz2
 import os
 import urllib.request
+import subprocess
 import sys
 
 class WikiDownloader:
@@ -39,20 +40,9 @@ class WikiDownloader:
 
             # Always unzipping since this is relatively fast and will overwrite
             print('Unzipping:', self.output_files[self.language])
-            #with open(self.save_path + '/' + file, mode='rb', buffering=131072) as f:
-            #    it = iter(lambda: f.read(131072), b'')
-            #    self.decompression(it, sys.stdout.buffer)
-
-            zip = bz2.BZ2File(self.save_path + '/' + file)
-            open(self.save_path + '/wikicorpus_' + self.language + '.xml', mode='wb', buffering=131072).write(zip.read())
+            subprocess.run('bzip2 -dk ' + self.save_path + '/' + file, shell=True, check=True)
 
         else:
             assert False, 'WikiDownloader not implemented for this language yet.'
 
-    def decompression(self, input, output):
-        decomp = bz2.BZ2Decompressor()
-
-        for chunk in input:
-            dc = decomp.decompress(chunk)
-            output.write(dc)
 
