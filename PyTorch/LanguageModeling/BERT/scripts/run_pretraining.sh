@@ -156,7 +156,7 @@ echo "final loss: $final_loss"
 
 DATASET=hdf5_lower_case_1_seq_len_512_max_pred_80_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/books_wiki_en_corpus # change this for other datasets
 
-DATA_DIR=data/${DATASET}/hdf5_shards/
+DATA_DIR=data/${DATASET}/
 #DATA_DIR=data/hdf5/wiki+book/bert_pytorch_wikipedia_bookcorpus_interseqmix_seq_512_pred_80/
 
 PREC=""
