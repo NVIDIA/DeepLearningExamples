@@ -13,4 +13,3 @@ class BooksDownloader:
         bookscorpus_download_command += ' ' + self.save_path + '/bookscorpus'
         bookscorpus_download_command += ' --trash-bad-count'
         bookscorpus_download_process = subprocess.run(bookscorpus_download_command, shell=True, check=True)
-        bookscorpus_download_process.communicate()
