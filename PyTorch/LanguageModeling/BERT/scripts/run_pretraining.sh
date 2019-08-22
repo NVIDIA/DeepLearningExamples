@@ -16,7 +16,7 @@ seed=${12:-$RANDOM}
 job_name=${13:-"bert_lamb_pretraining"}
 allreduce_post_accumulation=${14:-"true"}
 allreduce_post_accumulation_fp16=${15:-"true"}
-accumulate_into_fp16=${16:-"true"}
+accumulate_into_fp16=${16:-"false"}
 
 train_batch_size_phase2=${1:-4096}
 learning_rate_phase2=${2:-"4e-3"}
