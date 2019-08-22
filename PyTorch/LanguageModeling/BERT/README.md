@@ -199,11 +199,7 @@ If you want to use a pretrained checkpoint, visit [NGC](https://ngc.nvidia.com/c
 
 4. Start an interactive session in the NGC container to run training/inference.
 
-`bash scripts/docker/launch.sh <DATA_DIR> <VOCAB_DIR> <CHECKPOINT_DIR> <RESULTS_DIR>`
-
-`<DATA_DIR>` - Path to `data` folder in the cloned repository. This directory contains scripts needed to download datasets and where the data will be downloaded.
-
-`<VOCAB_DIR>` - Path to `vocab` folder in the cloned repository. This is the vocabulary with which BERT checkpoint is pretrained.
+`bash scripts/docker/launch.sh <CHECKPOINT_DIR> <RESULTS_DIR>`
 
 `<CHECKPOINT_DIR>` - Path to folder containing the downloaded pretrained checkpoint from step 2 for fine-tuning.
 
@@ -211,7 +207,7 @@ If you want to use a pretrained checkpoint, visit [NGC](https://ngc.nvidia.com/c
 
 The above paths present on the local machine get mounted to predefined locations in the container.
 
-`data` and `vocab` are a part of `.dockerignore` in order to provide the user the ability to mount datasets of choice and not necessarily the ones downloaded by the script below. In this case, `<DATA_DIR>` points to users corpus. Refer to the [Getting the data](#getting-the-data) section for more details on how to process a custom corpus as required for BERT pretraining.
+`data` and `vocab.txt` are downloaded in `data/` directory by default. Refer to the [Getting the data](#getting-the-data) section for more details on how to process a custom corpus as required for BERT pretraining.
 
 5. Download and preprocess the dataset.
 
