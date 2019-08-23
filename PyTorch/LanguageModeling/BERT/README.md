@@ -77,6 +77,7 @@ The repository also contains scripts to interactively launch data download, trai
 -   Scripts to download Wikipedia and BookCorpus datasets
 -   Scripts to preprocess downloaded data or a custom corpus into inputs and targets for pre-training in a modular fashion.
 -   Fused [LAMB](https://arxiv.org/pdf/1904.00962.pdf) optimizer to support training with larger batches
+-   Fused Adam optimizer for fine tuning tasks
 -   Fused CUDA kernels for better performance LayerNorm
 -   Automatic Mixed precision training support
 
@@ -191,7 +192,7 @@ To train your model using mixed precision with Tensor Cores or using FP32, perfo
 
 2. Download NVIDIA pretrained checkpoint.
 
-If you want to use a pretrained checkpoint, visit [NGC](https://ngc.nvidia.com/catalog/models) and browse the available models. This downloaded checkpoint is used to fine-tune on SQuAD.
+If you want to use a pretrained checkpoint, visit [NGC](https://ngc.nvidia.com/catalog/models) and browse the available models. This downloaded checkpoint is used to fine-tune on SQuAD. Make sure to place the downloaded checkpoint in `checkpoints/` folder.
 
 3. Build the BERT 19.07 NGC container.
 
@@ -199,13 +200,9 @@ If you want to use a pretrained checkpoint, visit [NGC](https://ngc.nvidia.com/c
 
 4. Start an interactive session in the NGC container to run training/inference.
 
-`bash scripts/docker/launch.sh <CHECKPOINT_DIR> <RESULTS_DIR>`
+`bash scripts/docker/launch.sh`
 
-`<CHECKPOINT_DIR>` - Path to folder containing the downloaded pretrained checkpoint from step 2 for fine-tuning.
-
-`<RESULTS_DIR>` - Path to folder where logs and checkpoints will be saved.
-
-The above paths present on the local machine get mounted to predefined locations in the container.
+Resultant logs and checkpoints of pretraining and finetuning routines get stored in the `results/` folder.
 
 `data` and `vocab.txt` are downloaded in `data/` directory by default. Refer to the [Getting the data](#getting-the-data) section for more details on how to process a custom corpus as required for BERT pretraining.
 

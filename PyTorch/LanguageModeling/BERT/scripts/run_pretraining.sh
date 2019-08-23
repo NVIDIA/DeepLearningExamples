@@ -25,12 +25,10 @@ train_steps_phase2=${6:-1563}
 gradient_accumulation_steps_phase2=${11:-512}
 
 DATASET=hdf5_lower_case_1_seq_len_128_max_pred_20_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/books_wiki_en_corpus # change this for other datasets
-
-DATA_DIR=data/${DATASET}/
-#DATA_DIR=data/hdf5/wiki+book/bert_pytorch_wikipedia_bookcorpus_interseqmix_seq_128_pred_20/
+DATA_DIR=$BERT_PREP_WORKING_DIR/${DATASET}/
 BERT_CONFIG=bert_config.json
-RESULTS_DIR=/results
-CHECKPOINTS_DIR=/results/checkpoints
+RESULTS_DIR=/workspace/bert/results
+CHECKPOINTS_DIR=$RESULTS_DIR/checkpoints
 
 
 mkdir -p $CHECKPOINTS_DIR
@@ -155,9 +153,7 @@ echo "final loss: $final_loss"
 #Start Phase2
 
 DATASET=hdf5_lower_case_1_seq_len_512_max_pred_80_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/books_wiki_en_corpus # change this for other datasets
-
-DATA_DIR=data/${DATASET}/
-#DATA_DIR=data/hdf5/wiki+book/bert_pytorch_wikipedia_bookcorpus_interseqmix_seq_512_pred_80/
+DATA_DIR=$BERT_PREP_WORKING_DIR/${DATASET}/
 
 PREC=""
 if [ "$precision" = "fp16" ] ; then
