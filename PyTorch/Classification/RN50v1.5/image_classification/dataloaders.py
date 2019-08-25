@@ -121,7 +121,7 @@ class DALIWrapper(object):
 def get_dali_train_loader(dali_cpu=False):
     def gdtl(data_path, batch_size, num_classes, one_hot, workers=5, _worker_init_fn=None, fp16=False):
         if torch.distributed.is_initialized():
-            local_rank = torch.distributed.get_rank()
+            local_rank = torch.distributed.get_rank() % int(os.environ['NPROC_PER_NODE'])
             world_size = torch.distributed.get_world_size()
         else:
             local_rank = 0
@@ -144,7 +144,7 @@ def get_dali_train_loader(dali_cpu=False):
 def get_dali_val_loader():
     def gdvl(data_path, batch_size, num_classes, one_hot, workers=5, _worker_init_fn=None, fp16=False):
         if torch.distributed.is_initialized():
-            local_rank = torch.distributed.get_rank()
+            local_rank = torch.distributed.get_rank() % int(os.environ['NPROC_PER_NODE'])
             world_size = torch.distributed.get_world_size()
         else:
             local_rank = 0
