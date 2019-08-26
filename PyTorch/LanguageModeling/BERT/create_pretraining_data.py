@@ -444,8 +444,7 @@ def main():
 
     args = parser.parse_args()
 
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
-
+    tokenizer = BertTokenizer(args.vocab_file, do_lower_case=args.do_lower_case, max_len=512)
     
     input_files = []
     if os.path.isfile(args.input_file):

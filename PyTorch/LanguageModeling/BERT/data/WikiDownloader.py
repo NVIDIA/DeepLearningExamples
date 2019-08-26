@@ -1,8 +1,9 @@
-# NVIDIA
+# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
 
 import bz2
 import os
 import urllib.request
+import subprocess
 import sys
 
 class WikiDownloader:
@@ -27,32 +28,21 @@ class WikiDownloader:
     def download(self):
         if self.language in self.download_urls:
             url = self.download_urls[self.language]
-            file = self.output_files[self.language]
+            filename = self.output_files[self.language]
 
             print('Downloading:', url)
-            if os.path.isfile(self.save_path + '/' + file):
+            if os.path.isfile(self.save_path + '/' + filename):
                 print('** Download file already exists, skipping download')
             else:
                 response = urllib.request.urlopen(url)
-                with open(self.save_path + '/' + file, "wb") as handle:
+                with open(self.save_path + '/' + filename, "wb") as handle:
                     handle.write(response.read())
 
             # Always unzipping since this is relatively fast and will overwrite
             print('Unzipping:', self.output_files[self.language])
-            #with open(self.save_path + '/' + file, mode='rb', buffering=131072) as f:
-            #    it = iter(lambda: f.read(131072), b'')
-            #    self.decompression(it, sys.stdout.buffer)
-
-            zip = bz2.BZ2File(self.save_path + '/' + file)
-            open(self.save_path + '/wikicorpus_' + self.language + '.xml', mode='wb', buffering=131072).write(zip.read())
+            subprocess.run('bzip2 -dk ' + self.save_path + '/' + filename, shell=True, check=True)
 
         else:
             assert False, 'WikiDownloader not implemented for this language yet.'
 
-    def decompression(self, input, output):
-        decomp = bz2.BZ2Decompressor()
-
-        for chunk in input:
-            dc = decomp.decompress(chunk)
-            output.write(dc)
 
