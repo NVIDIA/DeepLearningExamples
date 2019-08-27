@@ -72,7 +72,7 @@ def main(args):
                 wikiextractor_process = subprocess.run(wikiextractor_command, shell=True, check=True)
                 #wikiextractor_process.communicate()
 
-            wiki_path = working_dir + '/' + directory_structure['extracted'] + '/wikicorpus_en'
+            wiki_path = directory_structure['extracted'] + '/wikicorpus_en'
             output_filename = directory_structure['formatted'] + '/wikicorpus_en_one_article_per_line.txt'
             wiki_formatter = WikicorpusTextFormatting.WikicorpusTextFormatting(wiki_path, output_filename, recursive=True)
             wiki_formatter.merge()
@@ -86,7 +86,7 @@ def main(args):
                 wikiextractor_process = subprocess.run(wikiextractor_command, shell=True, check=True)
                 #wikiextractor_process.communicate()
 
-            wiki_path = working_dir + '/' + directory_structure['extracted'] + '/wikicorpus_zh'
+            wiki_path = directory_structure['extracted'] + '/wikicorpus_zh'
             output_filename = directory_structure['formatted'] + '/wikicorpus_zh_one_article_per_line.txt'
             wiki_formatter = WikicorpusTextFormatting.WikicorpusTextFormatting(wiki_path, output_filename, recursive=True)
             wiki_formatter.merge()
