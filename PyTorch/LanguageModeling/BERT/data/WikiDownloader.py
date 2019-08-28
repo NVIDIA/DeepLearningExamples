@@ -28,19 +28,19 @@ class WikiDownloader:
     def download(self):
         if self.language in self.download_urls:
             url = self.download_urls[self.language]
-            file = self.output_files[self.language]
+            filename = self.output_files[self.language]
 
             print('Downloading:', url)
-            if os.path.isfile(self.save_path + '/' + file):
+            if os.path.isfile(self.save_path + '/' + filename):
                 print('** Download file already exists, skipping download')
             else:
                 response = urllib.request.urlopen(url)
-                with open(self.save_path + '/' + file, "wb") as handle:
+                with open(self.save_path + '/' + filename, "wb") as handle:
                     handle.write(response.read())
 
             # Always unzipping since this is relatively fast and will overwrite
             print('Unzipping:', self.output_files[self.language])
-            subprocess.run('bzip2 -dk ' + self.save_path + '/' + file, shell=True, check=True)
+            subprocess.run('bzip2 -dk ' + self.save_path + '/' + filename, shell=True, check=True)
 
         else:
             assert False, 'WikiDownloader not implemented for this language yet.'
