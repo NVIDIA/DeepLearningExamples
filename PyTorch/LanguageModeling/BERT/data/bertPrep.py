@@ -91,7 +91,7 @@ def main(args):
             wiki_formatter = WikicorpusTextFormatting.WikicorpusTextFormatting(wiki_path, output_filename, recursive=True)
             wiki_formatter.merge()
             
-            assert os.path.getsize(output_filename) > 0, 'File glob did not pick up extracted wiki files from WikiExtractor.'
+            assert os.stat(output_filename).st_size > 0, 'File glob did not pick up extracted wiki files from WikiExtractor.'
 
     elif args.action == 'sharding':
         # Note: books+wiki requires user to provide list of input_files (comma-separated with no spaces)
