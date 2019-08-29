@@ -70,7 +70,6 @@ def main(args):
                 wikiextractor_command = path_to_wikiextractor_in_container + ' ' + directory_structure['download'] + '/' + args.dataset + '/wikicorpus_en.xml ' + '-b 100M --processes ' + str(args.n_processes) + ' -o ' + directory_structure['extracted'] + '/' + args.dataset
                 print('WikiExtractor Command:', wikiextractor_command)
                 wikiextractor_process = subprocess.run(wikiextractor_command, shell=True, check=True)
-                #wikiextractor_process.communicate()
 
             wiki_path = working_dir + '/' + directory_structure['extracted'] + '/wikicorpus_en'
             output_filename = directory_structure['formatted'] + '/wikicorpus_en_one_article_per_line.txt'
@@ -84,7 +83,6 @@ def main(args):
                 wikiextractor_command = path_to_wikiextractor_in_container + ' ' + directory_structure['download'] + '/' + args.dataset + '/wikicorpus_zh.xml ' + '-b 100M --processes ' + str(args.n_processes) + ' -o ' + directory_structure['extracted'] + '/' + args.dataset
                 print('WikiExtractor Command:', wikiextractor_command)
                 wikiextractor_process = subprocess.run(wikiextractor_command, shell=True, check=True)
-                #wikiextractor_process.communicate()
 
             wiki_path = working_dir + '/' + directory_structure['extracted'] + '/wikicorpus_zh'
             output_filename = directory_structure['formatted'] + '/wikicorpus_zh_one_article_per_line.txt'
