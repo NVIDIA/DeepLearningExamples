@@ -1,4 +1,4 @@
-# NVIDIA
+# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
 
 from collections import defaultdict
 from itertools import islice

@@ -11,6 +11,11 @@ __pycache__/
 #Data       
 data/*/*/   
 data/*/*.zip
+data/*
+
+#checkpoints and results
+checkpoints/*
+results/*
 
 # Distribution / packaging
 .Python

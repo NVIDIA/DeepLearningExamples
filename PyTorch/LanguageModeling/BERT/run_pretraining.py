@@ -443,7 +443,7 @@ def main():
             thread = None
             if not args.resume_from_checkpoint or epoch > 0 or args.phase2:
                 files = [os.path.join(args.input_dir, f) for f in os.listdir(args.input_dir) if
-                         os.path.isfile(os.path.join(args.input_dir, f))]
+                         os.path.isfile(os.path.join(args.input_dir, f)) and 'training' in f]
                 files.sort()
                 num_files = len(files)
                 random.shuffle(files)

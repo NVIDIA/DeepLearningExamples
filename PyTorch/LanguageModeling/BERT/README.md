@@ -77,6 +77,7 @@ The repository also contains scripts to interactively launch data download, trai
 -   Scripts to download Wikipedia and BookCorpus datasets
 -   Scripts to preprocess downloaded data or a custom corpus into inputs and targets for pre-training in a modular fashion.
 -   Fused [LAMB](https://arxiv.org/pdf/1904.00962.pdf) optimizer to support training with larger batches
+-   Fused Adam optimizer for fine tuning tasks
 -   Fused CUDA kernels for better performance LayerNorm
 -   Automatic Mixed precision training support
 
@@ -191,7 +192,7 @@ To train your model using mixed precision with Tensor Cores or using FP32, perfo
 
 2. Download NVIDIA pretrained checkpoint.
 
-If you want to use a pretrained checkpoint, visit [NGC](https://ngc.nvidia.com/catalog/models) and browse the available models. This downloaded checkpoint is used to fine-tune on SQuAD.
+If you want to use a pretrained checkpoint, visit [NGC](https://ngc.nvidia.com/catalog/models) and browse the available models. This downloaded checkpoint is used to fine-tune on SQuAD. Make sure to place the downloaded checkpoint in `checkpoints/` folder.
 
 3. Build the BERT 19.07 NGC container.
 
@@ -199,19 +200,11 @@ If you want to use a pretrained checkpoint, visit [NGC](https://ngc.nvidia.com/c
 
 4. Start an interactive session in the NGC container to run training/inference.
 
-`bash scripts/docker/launch.sh <DATA_DIR> <VOCAB_DIR> <CHECKPOINT_DIR> <RESULTS_DIR>`
+`bash scripts/docker/launch.sh`
 
-`<DATA_DIR>` - Path to `data` folder in the cloned repository. This directory contains scripts needed to download datasets and where the data will be downloaded.
+Resultant logs and checkpoints of pretraining and finetuning routines get stored in the `results/` folder.
 
-`<VOCAB_DIR>` - Path to `vocab` folder in the cloned repository. This is the vocabulary with which BERT checkpoint is pretrained.
-
-`<CHECKPOINT_DIR>` - Path to folder containing the downloaded pretrained checkpoint from step 2 for fine-tuning.
-
-`<RESULTS_DIR>` - Path to folder where logs and checkpoints will be saved.
-
-The above paths present on the local machine get mounted to predefined locations in the container.
-
-`data` and `vocab` are a part of `.dockerignore` in order to provide the user the ability to mount datasets of choice and not necessarily the ones downloaded by the script below. In this case, `<DATA_DIR>` points to users corpus. Refer to the [Getting the data](#getting-the-data) section for more details on how to process a custom corpus as required for BERT pretraining.
+`data` and `vocab.txt` are downloaded in `data/` directory by default. Refer to the [Getting the data](#getting-the-data) section for more details on how to process a custom corpus as required for BERT pretraining.
 
 5. Download and preprocess the dataset.
 
@@ -229,7 +222,7 @@ To download, verify, extract the datasets, and create the shards in hdf5 format,
 BERT is designed to pre-train deep bidirectional representations for language representations. The following scripts are to replicate pretraining on Wikipedia+Book Corpus from this [paper](https://arxiv.org/pdf/1810.04805.pdf). These scripts are general and can be used for pre-training language representations on any corpus of choice.
 
 From within the container, you can use the following script to run pre-training.
-`bash scripts/run_pretraining.sh 14 0.875e-4 fp16 16 0.01 1142857 2000 false true`
+`bash scripts/run_pretraining.sh`
 
 More details can be found in Details/Training Process
  
@@ -466,7 +459,7 @@ The `create_pretraining_data.py` script takes in raw text and creates training i
 
 #### Multi-dataset
 
-This repository provides functionality to combine multiple datasets into a single dataset for pre-training on a diverse text corpus at the shard level in `. /workspace/bert/data/create_datasets_from_start.sh`.
+This repository provides functionality to combine multiple datasets into a single dataset for pre-training on a diverse text corpus at the shard level in `data/create_datasets_from_start.sh`.
 
 ### Training process
 
@@ -476,7 +469,7 @@ The training process consists of two steps: pre-training and fine-tuning.
 
 Pre-training is performed using the `run_pretraining.py` script along with parameters defined in the `scripts/run_pretraining.sh`.
 
-The `run_pretraining.sh` script runs a job on a single node that trains the BERT-large model from scratch using the Wikipedia and BookCorpus datasets as training data using LAMB optimizer. By default, the training script runs two phases of training:
+The `run_pretraining.sh` script runs a job on a single node that trains the BERT-large model from scratch using the Wikipedia and BookCorpus datasets as training data using LAMB optimizer. By default, the training script runs two phases of training with a hyperparameter recipe specific to 8 x V100 32G cards:
 
 Phase 1: (Maximum sequence length of 128)
 -   Runs on 8 GPUs with training batch size of 64 per GPU
@@ -527,7 +520,11 @@ For example:
 
 `bash scripts/run_pretraining.sh`
 
-Trains BERT-large from scratch on a single DGX-1 32G using FP16 arithmetic. 90% of the training steps are done with sequence length 128 (phase1 of training) and 10% of the training steps are done with sequence length 512 (phase2 of training).
+Trains BERT-large from scratch on a DGX-1 32G using FP16 arithmetic. 90% of the training steps are done with sequence length 128 (phase1 of training) and 10% of the training steps are done with sequence length 512 (phase2 of training).
+
+In order to train on a DGX-1 16G, set `gradient_accumulation_steps` to `512` and `gradient_accumulation_steps_phase2` to `1024` in `scripts/run_pretraining.sh`
+
+In order to train on a DGX-2 32G, set `train_batch_size` to `4096`, `train_batch_size_phase2` to `2048`, `num_gpus` to `16`, `gradient_accumulation_steps` to `64` and `gradient_accumulation_steps_phase2` to `256` in `scripts/run_pretraining.sh`
 
 ##### Fine-tuning
 
@@ -656,14 +653,14 @@ Note: Pretraining results were obtained with a dataset that was created using an
 ##### Pre-training loss results
 
 | DGX System | GPUs | Accumulated Batch size / GPU (Phase 1 and Phase 2) | Accumulation steps (Phase 1 and Phase 2) | Final Loss - FP32 | Final Loss - mixed precision | Time to train(days) - FP32 | Time to train(days) - mixed precision | Time to train speedup (FP32 to mixed precision)
-|-|-|-|-|-|-|-|-|-
+|---|---|---|---|---|---|---|---|---
 | NVIDIA DGX-1 With 16G|8|8192 and 4196 |512 and 1024|-|1.53|-|6.84|- 
 | NVIDIA DGX-2 With 32G|16|4096 and 2048 |64 and 256|-|1.52|-|2.71|- 
 
 ##### Fine-tuning accuracy results
 
 | GPUs | Batch size / GPU | Accuracy - FP32(% F1) | Accuracy - mixed precision(% F1) | Time to train(hours) - FP32 | Time to train(hours) - mixed precision | Time to train speedup (FP32 to mixed precision)
-|-|-|-|-|-|-|-
+|---|---|---|---|---|---|---
 | 8|4 | 91.18|91.24|.77|.21| 3.66
 
 ##### Training stability test
@@ -671,7 +668,7 @@ Note: Pretraining results were obtained with a dataset that was created using an
 ###### Pre-training stability test
 
 | Accuracy Metric | Seed 1
-|-|-
+|---|---
 | Final Loss | 1.52
 
 ###### Fine-tuning stability test
@@ -679,7 +676,7 @@ Note: Pretraining results were obtained with a dataset that was created using an
 Training stability with 8 GPUs, FP16 computations, batch size of 4:
 
 | Accuracy Metric | Seed 1 | Seed 2 | Seed 3 | Seed 4 | Seed 5 | Mean | Standard Deviation
-|-|-|-|-|-|-|-|-
+|---|---|---|---|---|---|---|---
 |Exact Match %| 84.50 | 84.07 | 84.52 | 84.23 | 84.17 | 84.30 | .200
 | f1 % | 91.29 | 91.01 | 91.14 |  91.10 | 90.85 | 91.08 | 0.162
 
@@ -687,18 +684,18 @@ Training stability with 8 GPUs, FP16 computations, batch size of 4:
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 16G)
 
-Our results were obtained by running `scripts/run_pretraining.sh` and `scripts/run_squad.shtraining scripts in the pytorch:19.07-py3 NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs. Performance numbers (in sequences per second) were averaged over an entire training epoch.
+Our results were obtained by running `scripts/run_pretraining.sh` and `scripts/run_squad.shtraining scripts in the pytorch:19.07-py3 NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs. Performance numbers (in sequences per second) were averaged over a predefined number of training iterations.
 
 ###### Pre-training NVIDIA DGX-1 With 16G
 
-| GPUs | Batch size / GPU | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
-|------------------|----------------------|-------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
-|1 | 4| 512| 7.56 |26.64 |3.52 |3.50 | 1.00
-|4 | 4| 512| 28 |98.24 | 3.50| 3.70| 3.69
-| 8| 4| 512| 56.16 |194.56 | 3.46| 7.43| 7.30
-|1 | 16| 128| N/A |151.36 |N/A |N/A | 1.00
-|4 | 16| 128| N/A |602.88 | N/A| N/A| 3.98
-| 8| 16| 128| N/A |1192.96 | N/A| N/A| 7.88
+| GPUs | Batch size / GPU (FP32) | Batch size / GPU (FP16) | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
+|------------------|----------------------|----------------------|-------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
+|1 | 8 | 16| 128| 33.36 |125.44 |3.76 |1.00 | 1.00
+|4 | 8 | 16| 128| 121.92 |458.24 | 3.75| 3.65| 3.65
+|8 | 8 | 16| 128| 245.12 |919.04 | 3.74| 7.34| 7.32
+|1 | 2| 4| 512| 7.56 |26.64 |3.52 |1.00 | 1.00
+|4 | 2| 4| 512| 28 |98.24 | 3.50| 3.70| 3.69
+| 8| 2| 4| 512| 56.16 |194.56 | 3.46| 7.43| 7.30
 
 
 ###### Fine-tuning NVIDIA DGX-1 With 16G
@@ -720,17 +717,17 @@ Our results were obtained by running `scripts/run_pretraining.sh` and `scripts/r
 
 ###### Pre-training NVIDIA DGX-1 With 32G
 
-| GPUs | Batch size / GPU | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
-|------------------|----------------------|-------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
-|1 | 8| 512|8.36 |30.08 | 3.68| 1.00| 1.00
-|4 | 8| 512|31.52 |116.80 | 3.70| 3.84| 3.82
-| 8| 8| 512|62.72 |231.68 | 3.69| 7.68| 7.61
-|1 | 10| 512|N/A |46.00| N/A| N/A| 1.0
-|4 | 10| 512|N/A |164.00 | N/A| N/A| 3.57
-| 8| 10| 512|N/A |325.60| N/A| N/A| 7.08
-|1 | 64| 128|N/A |186.32| N/A| N/A| 1.0
-|4 | 64| 128|N/A |739.84 | N/A| N/A| 3.97
-| 8| 64| 128|N/A |1479.68| N/A| N/A| 7.94
+| GPUs | Batch size / GPU (FP32) | Batch size / GPU (FP16) | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
+|------------------|----------------------|----------------------|-------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
+|1 |32 | 64| 128| 40.32 |171.52| 4.25| 1.0| 1.0
+|4 |32 | 64| 128| 154.88 |655.36 | 4.23| 3.84| 3.82
+|8 |32 | 64| 128|309.76 |1305.6| 4.21| 7.68 | 7.62
+|1 | 4| 8| 512|8.36 |30.08 | 3.68| 1.00| 1.00
+|4 | 4| 8| 512|31.52 |116.80 | 3.70| 3.84| 3.82
+| 8| 4| 8| 512|62.72 |231.68 | 3.69| 7.68| 7.61
+|1 |N/A | 10| 512|N/A |46.00| N/A| N/A| 1.0
+|4 |N/A | 10| 512|N/A |164.00 | N/A| N/A| 3.57
+| 8|N/A | 10| 512|N/A |325.60| N/A| N/A| 7.08
 
 ###### Fine-tuning NVIDIA DGX-1 With 32G
 
@@ -750,20 +747,20 @@ Our results were obtained by running `scripts/run_pretraining.sh` and `scripts/r
 
 ###### Pre-training NVIDIA DGX-2 With 32G
 
-| GPUs | Batch size / GPU | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
-|------------------|----------------------|-------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
-|1 |8 | 512|9.0| 32.32| 3.59| 1.00| 1.00
-|4 |8 | 512| 34.4| 124.16| 3.60| 3.82| 3.84
-|8 | 8| 512| 68.1671.36| 247.04| 3.62| 7.57| 7.64
-|16 | 8| 512| 135.68| 488.96| 3.60| 15.08| 15.13
-|1 |10 | 512|N/A | 47.40| N/A| N/A| 1.00
-|4 |10 | 512| N/A| 165.60| N/A| N/A| 3.49
-|8 | 10| 512| N/A| 325.60| N/A| N/A| 6.87
-|16 | 10| 512| N/A| 648.00| N/A| N/A| 13.67
-|1 |64 | 128|N/A | 199.05| N/A| N/A| 1.00
-|4 |64 | 128| N/A| 796.16| N/A| N/A| 3.99
-|8 | 64| 128| N/A| 1592.32| N/A| N/A| 7.99
-|16 | 64| 128| N/A| 3174.4| N/A| N/A| 15.94
+| GPUs | Batch size / GPU (FP32) | Batch size / GPU (FP16) | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
+|------------------|----------------------|----------------------|-------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
+|1 |32 | 64 | 128|43.52 | 181.76 | 4.17| 1.00| 1.00
+|4 |32 | 64 | 128| 168.96| 704| 4.16| 3.88| 3.87
+|8 |32 | 64| 128| 335.36| 1402.88| 4.18| 7.70| 7.72
+|16 |32 | 64| 128| 665.6| 2775.04| 4.16| 15.29| 15.26
+|1 | 4 | 8 | 512|9.0| 32.32| 3.59| 1.00| 1.00
+|4 | 4 |8 | 512| 34.4| 124.16| 3.60| 3.82| 3.84
+|8 | 4 | 8| 512| 68.16| 247.04| 3.62| 7.57| 7.64
+|16 | 4 | 8| 512| 135.68| 488.96| 3.60| 15.08| 15.13
+|1 | N/A | 10 | 512|N/A | 47.40| N/A| N/A| 1.00
+|4 | N/A |10 | 512| N/A| 165.60| N/A| N/A| 3.49
+|8 | N/A | 10| 512| N/A| 325.60| N/A| N/A| 6.87
+|16 | N/A | 10| 512| N/A| 648.00| N/A| N/A| 13.67
 
 ###### Fine-tuning NVIDIA DGX-2 With 32G
 

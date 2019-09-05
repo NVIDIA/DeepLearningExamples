@@ -16,7 +16,7 @@ seed=${12:-$RANDOM}
 job_name=${13:-"bert_lamb_pretraining"}
 allreduce_post_accumulation=${14:-"true"}
 allreduce_post_accumulation_fp16=${15:-"true"}
-accumulate_into_fp16=${16:-"true"}
+accumulate_into_fp16=${16:-"false"}
 
 train_batch_size_phase2=${1:-4096}
 learning_rate_phase2=${2:-"4e-3"}
@@ -24,13 +24,11 @@ warmup_proportion_phase2=${5:-"0.128"}
 train_steps_phase2=${6:-1563}
 gradient_accumulation_steps_phase2=${11:-512}
 
-DATASET=books_wiki_en_corpus # change this for other datasets
-
-DATA_DIR=data/${DATASET}/training/
-#DATA_DIR=data/hdf5/wiki+book/bert_pytorch_wikipedia_bookcorpus_interseqmix_seq_128_pred_20/
+DATASET=hdf5_lower_case_1_seq_len_128_max_pred_20_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/books_wiki_en_corpus # change this for other datasets
+DATA_DIR=$BERT_PREP_WORKING_DIR/${DATASET}/
 BERT_CONFIG=bert_config.json
-RESULTS_DIR=/results
-CHECKPOINTS_DIR=/results/checkpoints
+RESULTS_DIR=/workspace/bert/results
+CHECKPOINTS_DIR=$RESULTS_DIR/checkpoints
 
 
 mkdir -p $CHECKPOINTS_DIR
@@ -120,7 +118,7 @@ fi
 
 if [ "$create_logfile" = "true" ] ; then
   export GBS=$(expr $train_batch_size \* $num_gpus)
-  printf -v TAG "pyt_bert_pretraining_%s_gbs%d" "$precision" $GBS
+  printf -v TAG "pyt_bert_pretraining_phase1_%s_gbs%d" "$precision" $GBS
   DATESTAMP=`date +'%y%m%d%H%M%S'`
   LOGFILE=$RESULTS_DIR/$job_name.$TAG.$DATESTAMP.log
   printf "Logs written to %s\n" "$LOGFILE"
@@ -154,10 +152,8 @@ echo "final loss: $final_loss"
 
 #Start Phase2
 
-DATASET=merged_wiki+books_phase2 # change this for other datasets
-
-DATA_DIR=data/${DATASET}/hdf5_shards/
-#DATA_DIR=data/hdf5/wiki+book/bert_pytorch_wikipedia_bookcorpus_interseqmix_seq_512_pred_80/
+DATASET=hdf5_lower_case_1_seq_len_512_max_pred_80_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/books_wiki_en_corpus # change this for other datasets
+DATA_DIR=$BERT_PREP_WORKING_DIR/${DATASET}/
 
 PREC=""
 if [ "$precision" = "fp16" ] ; then
@@ -220,8 +216,8 @@ fi
 
 
 if [ "$create_logfile" = "true" ] ; then
-  export GBS=$(expr $train_batch_size \* $num_gpus)
-  printf -v TAG "pyt_bert_pretraining_%s_gbs%d" "$precision" $GBS
+  export GBS=$(expr $train_batch_size_phase2 \* $num_gpus)
+  printf -v TAG "pyt_bert_pretraining_phase2_%s_gbs%d" "$precision" $GBS
   DATESTAMP=`date +'%y%m%d%H%M%S'`
   LOGFILE=$RESULTS_DIR/$job_name.$TAG.$DATESTAMP.log
   printf "Logs written to %s\n" "$LOGFILE"
