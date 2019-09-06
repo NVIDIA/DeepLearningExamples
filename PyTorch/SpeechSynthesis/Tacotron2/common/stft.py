@@ -123,7 +123,8 @@ class STFT(torch.nn.Module):
             approx_nonzero_indices = torch.from_numpy(
                 np.where(window_sum > tiny(window_sum))[0])
             window_sum = torch.autograd.Variable(
-                torch.from_numpy(window_sum), requires_grad=False).cuda()
+                torch.from_numpy(window_sum), requires_grad=False)
+            window_sum = window_sum.cuda() if magnitude.is_cuda else window_sum
             inverse_transform[:, :, approx_nonzero_indices] /= window_sum[approx_nonzero_indices]
 
             # scale by hop ratio
