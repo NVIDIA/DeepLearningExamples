@@ -24,6 +24,8 @@ import modeling
 import optimization
 import tensorflow as tf
 
+from tensorflow.core.protobuf import rewriter_config_pb2
+
 flags = tf.flags
 
 FLAGS = flags.FLAGS
@@ -467,6 +469,7 @@ def main(_):
         raise ValueError("Input Files must be sharded")
   if FLAGS.use_xla: 
     config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
+    config.graph_options.rewrite_options.memory_optimization = rewriter_config_pb2.RewriterConfig.NO_MEM_OPT
   is_per_host = tf.contrib.tpu.InputPipelineConfig.PER_HOST_V2
   config = tf.ConfigProto()
   if FLAGS.horovod:
