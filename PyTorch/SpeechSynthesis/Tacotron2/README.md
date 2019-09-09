@@ -1,4 +1,4 @@
-# Tacotron 2 And WaveGlow v1.6 For PyTorch
+# Tacotron 2 And WaveGlow v1.7 For PyTorch
 
 This repository provides a script and recipe to train Tacotron 2 and WaveGlow
 v1.6 models to achieve state of the art accuracy, and is tested and maintained by NVIDIA.
@@ -38,7 +38,8 @@ v1.6 models to achieve state of the art accuracy, and is tested and maintained b
          * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
          * [Expected training time](#expected-training-time)
       * [Inference performance results](#inference-performance-results)
-         * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
+         * [NVIDIA V100 16G](#nvidia-v100-16g)
+         * [NVIDIA T4](#nvidia-t4)
 * [Release notes](#release-notes)
    * [Changelog](#changelog)
    * [Known issues](#known-issues)
@@ -99,7 +100,7 @@ into spherical Gaussian distribution through a series of flows. One step of a
 flow consists of an invertible convolution, followed by a modified WaveNet
 architecture that serves as an affine coupling layer. During inference, the
 network is inverted and audio samples are generated from the Gaussian
-distribution.
+distribution. Our implementation uses 512 residual channels in the coupling layer.
 
 ![](./img/waveglow_arch.png "WaveGlow architecture")
 
@@ -266,17 +267,10 @@ this script, issue:
    ```bash
    bash scripts/prepare_dataset.sh
    ```
-
-   To preprocess the datasets for Tacotron 2 training, use the
-   `./scripts/prepare_mels.sh` script:
-   ```bash
-   bash scripts/prepare_mels.sh
-   ```
     
    Data is downloaded to the `./LJSpeech-1.1` directory (on the host).  The
 `./LJSpeech-1.1` directory is mounted to the `/workspace/tacotron2/LJSpeech-1.1`
-location in the NGC container. The preprocessed mel-spectrograms are stored in the 
-`./LJSpeech-1.1/mels` directory.
+   location in the NGC container.
 
 3. Build the Tacotron 2 and WaveGlow PyTorch NGC container.
    ```bash
@@ -291,7 +285,13 @@ After you build the container image, you can start an interactive CLI session wi
    ```
 
    The `interactive.sh` script requires that the location on the dataset is specified. 
-   For example, `LJSpeech-1.1`.
+   For example, `LJSpeech-1.1`. To preprocess the datasets for Tacotron 2 training, use 
+   the `./scripts/prepare_mels.sh` script:
+   ```bash
+   bash scripts/prepare_mels.sh
+   ```
+
+   The preprocessed mel-spectrograms are stored in the `./LJSpeech-1.1/mels` directory.
 
 5. Start training.
 To start Tacotron 2 training, run:
@@ -390,6 +390,7 @@ WaveGlow models.
 #### WaveGlow parameters
 
 * `--segment-length` - segment length of input audio processed by the neural network (8000)
+* `--wn-channels` - number of residual channels in the coupling layer networks (512)
 
 
 ### Command-line options
@@ -471,7 +472,11 @@ To run inference, issue:
 python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --include-warmup -i phrases/phrase.txt --amp-run
 ```
 Here, `Tacotron2_checkpoint` and `WaveGlow_checkpoint` are pre-trained
-checkpoints for the respective models, and `phrases/phrase.txt` contains input phrases. The number of text lines determines the inference batch size. Audio will be saved in the output folder.
+checkpoints for the respective models, and `phrases/phrase.txt` contains input 
+phrases. The number of text lines determines the inference batch size. Audio 
+will be saved in the output folder. The audio files [audio_fp16](./audio/audio_fp16.wav)
+and [audio_fp32](./audio/audio_fp32.wav) were generated using checkpoints from 
+mixed precision and FP32 training, respectively.
 
 You can find all the available options by calling `python inference.py --help`.
 
@@ -635,31 +640,36 @@ The following table shows the expected training time for convergence for WaveGlo
 
 #### Inference performance results
 
-##### NVIDIA DGX-1 (8x V100 16G)
+The following tables show inference statistics for the Tacotron2 and WaveGlow
+text-to-speech system, gathered from 1000 inference runs, on 1 V100 and 1 T4,
+respectively. Latency is measured from the start of Tacotron 2 inference to
+the end of WaveGlow inference. The tables include average latency, latency standard
+deviation, and latency confidence intervals. Throughput is measured
+as the number of generated audio samples per second. RTF is the real-time factor
+which tells how many seconds of speech are generated in 1 second of compute.
 
-Our results were obtained by running the `./inference.py` inference script in 
-the PyTorch-19.06-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
-Performance numbers (in output mel-spectrograms per second for Tacotron 2 and 
-output samples per second for WaveGlow) were averaged over 16 runs.
+##### NVIDIA V100 16G
 
-The following table shows the inference performance results for Tacotron 2 model. 
-Results are measured in the number of output mel-spectrograms per second.
+|Batch size|Input length|Precision|Avg latency (s)|Latency std (s)|Latency confidence interval 50% (s)|Latency confidence interval 100% (s)|Throughput (samples/sec)|Speed-up with mixed precision|Avg mels generated (81 mels=1 sec of speech)|Avg audio length (s)|Avg RTF|
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+|1| 128| FP16| 1.73| 0.07| 1.72| 2.11|  89,162| 1.09| 601| 6.98| 4.04|
+|4| 128| FP16| 4.21| 0.17| 4.19| 4.84| 145,800| 1.16| 600| 6.97| 1.65|
+|1| 128| FP32| 1.85| 0.06| 1.84| 2.19|  81,868| 1.00| 590| 6.85| 3.71|
+|4| 128| FP32| 4.80| 0.15| 4.79| 5.43| 125,930| 1.00| 590| 6.85| 1.43|
 
-|Number of GPUs|Number of mels used with mixed precision|Number of mels used with FP32|Speed-up with mixed precision|
-|---:|---:|---:|---:|
-|**1**|625|613|1.02|
+##### NVIDIA T4
 
-The following table shows the inference performance results for WaveGlow model. 
-Results are measured in the number of output samples per second<sup>1</sup>.
+|Batch size|Input length|Precision|Avg latency (s)|Latency std (s)|Latency confidence interval 50% (s)|Latency confidence interval 100% (s)|Throughput (samples/sec)|Speed-up with mixed precision|Avg mels generated (81 mels=1 sec of speech)|Avg audio length (s)|Avg RTF|
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+|1| 128| FP16|  3.16| 0.13|  3.16|  3.81| 48,792| 1.23| 603| 7.00| 2.21|
+|4| 128| FP16| 11.45| 0.49| 11.39| 14.38| 53,771| 1.22| 601| 6.98| 0.61|
+|1| 128| FP32|  3.82| 0.11|  3.81|  4.24| 39,603| 1.00| 591| 6.86| 1.80|
+|4| 128| FP32| 13.80| 0.45| 13.74| 16.09| 43,915| 1.00| 592| 6.87| 0.50|
 
-|Number of GPUs|Number of samples used with mixed precision|Number of samples used with FP32|Speed-up with mixed precision|
-|---:|---:|---:|---:|
-|**1**|180474|162282|1.11|
-
-<sup>1</sup>With sampling rate equal to 22050, one second of audio is generated from 22050 samples.
-
-To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
-
+Our results were obtained by running the `./run_latency_tests.sh` script in
+the PyTorch-19.06-py3 NGC container. Please note that to reproduce the results,
+you need to provide pretrained checkpoints for Tacotron 2 and WaveGlow. Please
+edit the script to provide your checkpoint filenames.
 
 ## Release notes
 
@@ -683,6 +693,10 @@ August 2019
 * Fixed inference results
 * Fixed initialization of Batch Normalization
 
+September 2019
+* Introduced inference statistics
+
 ### Known issues
 
 There are no known issues in this release.
+

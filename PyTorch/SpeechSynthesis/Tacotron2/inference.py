@@ -41,6 +41,8 @@ from dllogger.autologging import log_hardware, log_args
 
 from apex import amp
 
+from waveglow.denoiser import Denoiser
+
 def parse_args(parser):
     """
     Parse commandline arguments.
@@ -53,7 +55,8 @@ def parse_args(parser):
                         help='full path to the Tacotron2 model checkpoint file')
     parser.add_argument('--waveglow', type=str,
                         help='full path to the WaveGlow model checkpoint file')
-    parser.add_argument('-s', '--sigma-infer', default=0.6, type=float)
+    parser.add_argument('-s', '--sigma-infer', default=0.9, type=float)
+    parser.add_argument('-d', '--denoising-strength', default=0.01, type=float)
     parser.add_argument('-sr', '--sampling-rate', default=22050, type=int,
                         help='Sampling rate')
     parser.add_argument('--amp-run', action='store_true',
@@ -212,6 +215,7 @@ def main():
                                      args.amp_run)
     waveglow = load_and_setup_model('WaveGlow', parser, args.waveglow,
                                     args.amp_run)
+    denoiser = Denoiser(waveglow).cuda()
 
     texts = []
     try:
@@ -242,6 +246,7 @@ def main():
     with torch.no_grad(), MeasureTime(measurements, "waveglow_time"):
         audios = waveglow.infer(mel, sigma=args.sigma_infer)
         audios = audios.float()
+        audios = denoiser(audios, strength=args.denoising_strength).squeeze(1)
 
     tacotron2_infer_perf = mel.size(0)*mel.size(2)/measurements['tacotron2_time']
     waveglow_infer_perf = audios.size(0)*audios.size(1)/measurements['waveglow_time']
@@ -254,9 +259,10 @@ def main():
                                      measurements['waveglow_time']))
 
     for i, audio in enumerate(audios):
+        audio = audio[:mel_lengths[i]*args.stft_hop_length]
+        audio = audio/torch.max(torch.abs(audio))
         audio_path = args.output + "audio_"+str(i)+".wav"
-        write(audio_path, args.sampling_rate,
-              audio.data.cpu().numpy()[:mel_lengths[i]*args.stft_hop_length])
+        write(audio_path, args.sampling_rate, audio.cpu().numpy())
 
     LOGGER.iteration_stop()
     LOGGER.finish()
