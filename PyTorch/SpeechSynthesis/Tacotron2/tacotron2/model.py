@@ -491,9 +491,6 @@ class Decoder(nn.Module):
             decoder_input = self.prenet(decoder_input, inference=True)
             mel_output, gate_output, alignment = self.decode(decoder_input)
 
-            mel_outputs += [mel_output.squeeze(1)]
-            gate_outputs += [gate_output]
-            alignments += [alignment]
             dec = torch.le(torch.sigmoid(gate_output.data),
                            self.gate_threshold).to(torch.int32).squeeze(1)
 
@@ -502,6 +499,11 @@ class Decoder(nn.Module):
 
             if self.early_stopping and torch.sum(not_finished) == 0:
                 break
+
+            mel_outputs += [mel_output.squeeze(1)]
+            gate_outputs += [gate_output]
+            alignments += [alignment]
+
             if len(mel_outputs) == self.max_decoder_steps:
                 print("Warning! Reached max decoder steps")
                 break
