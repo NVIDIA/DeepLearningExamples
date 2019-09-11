@@ -361,7 +361,7 @@ with tf.Session(config=config) as sess:
     print("#################################")
     np_val1 = sess.run(output)
     np_val2 = sess.run(output_own)
-    print("cross_check " + str(np.allclose(np_val1, np_val2, atol = 1e-5)))
+    print("cross_check " + str(np.allclose(np_val1, np_val2, atol = 1e-4)))
     print("max diff " + str(np.fabs(np_val1 - np_val2).max()))
     print("min diff " + str(np.fabs(np_val1 - np_val2).min()))
 
