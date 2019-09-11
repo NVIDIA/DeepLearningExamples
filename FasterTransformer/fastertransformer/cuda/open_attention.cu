@@ -88,7 +88,7 @@ T blockReduceMax(T val)
   __syncthreads();
 
 
-  val = (threadIdx.x < (blockDim.x >> 5 )) ? shared[lane] : 0;
+  val = (threadIdx.x < (blockDim.x >> 5 )) ? shared[lane] : -1e20f;
   val = warpReduceMax(val);
 
   return val;
