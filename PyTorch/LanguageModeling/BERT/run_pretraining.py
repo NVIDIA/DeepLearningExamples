@@ -13,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """BERT finetuning runner."""
 
 from __future__ import absolute_import
@@ -65,7 +66,6 @@ def create_pretraining_dataset(input_file, max_pred_length, shared_list, args):
     train_dataloader = DataLoader(train_data, sampler=train_sampler,
                                   batch_size=args.train_batch_size * args.n_gpu, num_workers=4,
                                   pin_memory=True)
-    # shared_list["0"] = (train_dataloader, input_file)
     return train_dataloader, input_file
 
 class pretraining_dataset(Dataset):
@@ -179,7 +179,7 @@ def parse_arguments():
                         type=float, default=0.0,
                         help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
     parser.add_argument('--log_freq',
-                        type=float, default=50.0,
+                        type=float, default=1.0,
                         help='frequency of logging loss.')
     parser.add_argument('--checkpoint_activations',
                         default=False,
@@ -253,7 +253,7 @@ def setup_training(args):
         raise ValueError(" `do_train`  must be True.")
 
     if not args.resume_from_checkpoint and os.path.exists(args.output_dir) and (
-            os.listdir(args.output_dir) and os.listdir(args.output_dir) != ['logfile.txt']):
+            os.listdir(args.output_dir) and any([i.startswith('ckpt') for i in os.listdir(args.output_dir)])):
         raise ValueError("Output directory ({}) already exists and is not empty.".format(args.output_dir))
 
     if not args.resume_from_checkpoint:
@@ -478,8 +478,7 @@ def main():
 
             for f_id in range(f_start_id + 1 , len(files)):
                 
-                # torch.cuda.synchronize()
-                # f_start = time.time()    
+   
                 if torch.distributed.get_world_size() > num_files:
                     data_file = files[(f_id*torch.distributed.get_world_size()+torch.distributed.get_rank() + remainder*f_id)%num_files]
                 else:
@@ -489,23 +488,10 @@ def main():
 
                 previous_file = data_file
 
-                # train_dataloader = shared_file_list["0"][0]
-
-                # thread = multiprocessing.Process(
-                #     name="LOAD DATA:" + str(f_id) + ":" + str(data_file),
-                #     target=create_pretraining_dataset,
-                #     args=(data_file, args.max_predictions_per_seq, shared_file_list, args, n_gpu)
-                # )
-                # thread.start()
                 dataset_future = pool.submit(create_pretraining_dataset, data_file, args.max_predictions_per_seq, shared_file_list, args)
-                # torch.cuda.synchronize()
-                # f_end = time.time()
-                # print('[{}] : shard overhead {}'.format(torch.distributed.get_rank(), f_end - f_start))
 
                 train_iter = tqdm(train_dataloader, desc="Iteration") if is_main_process() else train_dataloader
                 for step, batch in enumerate(train_iter):
-                    # torch.cuda.synchronize()
-                    # iter_start = time.time()
 
                     training_steps += 1
                     batch = [t.to(device) for t in batch]
@@ -533,7 +519,7 @@ def main():
                         global_step = take_optimizer_step(args, optimizer, model, overflow_buf, global_step)
 
                     if global_step >= args.max_steps:
-                        last_num_steps = global_step % args.log_freq
+                        last_num_steps = int(training_steps / args.gradient_accumulation_steps) % args.log_freq
                         last_num_steps = args.log_freq if last_num_steps == 0 else last_num_steps
                         average_loss = torch.tensor(average_loss, dtype=torch.float32).cuda()
                         average_loss = average_loss / (last_num_steps * divisor)
@@ -577,13 +563,6 @@ def main():
                             del train_dataloader
                             # thread.join()
                             return args
-
-
-                    # torch.cuda.synchronize()
-                    # iter_end = time.time()
-
-                    # if torch.distributed.get_rank() == 0:
-                    #     print('step {} : {}'.format(global_step, iter_end - iter_start))
 
                 del train_dataloader
                 # thread.join()
