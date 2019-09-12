@@ -1,4 +1,4 @@
-# NVIDIA Deep Learning Examples for Volta Tensor Cores
+# NVIDIA Deep Learning Examples for Tensor Cores
 
 ## Introduction
 This repository provides the latest deep learning example networks for training.  These examples focus on achieving the best performance and convergence from NVIDIA Volta Tensor Cores.
