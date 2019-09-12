@@ -16,6 +16,7 @@
 
 import subprocess
 import xml.etree.ElementTree as ET
+import platform
 
 from logger.logger import LOGGER
 
@@ -28,8 +29,12 @@ def log_hardware():
     cpu_num = int(cpu_info[cpu_num_index]) + 1
 
     # CPU name
-    cpu_name_begin_index = cpu_info.index(b'name')
-    cpu_name_end_index = cpu_info.index(b'stepping')
+    if platform.machine() == "ppc64le":
+        cpu_name_begin_index = cpu_info.index(b'cpu')
+        cpu_name_end_index = cpu_info.index(b'clock')
+    else:                       # x86_64 (and others?)
+        cpu_name_begin_index = cpu_info.index(b'name')
+        cpu_name_end_index = cpu_info.index(b'stepping')
     cpu_name = b' '.join(cpu_info[cpu_name_begin_index + 2:cpu_name_end_index]).decode('utf-8')
 
     LOGGER.log(key='cpu_info', value={"num": cpu_num, "name": cpu_name}, stack_offset=1)
