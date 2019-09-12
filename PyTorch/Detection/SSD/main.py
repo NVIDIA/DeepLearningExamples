@@ -157,13 +157,12 @@ def train(train_loop_func, logger, args):
 
     if args.checkpoint is not None:
         if os.path.isfile(args.checkpoint):
-            load_checkpoint(ssd300, args.checkpoint)
+            load_checkpoint(ssd300.module if args.distributed else ssd300, args.checkpoint)
             checkpoint = torch.load(args.checkpoint,
                                     map_location=lambda storage, loc: storage.cuda(torch.cuda.current_device()))
             start_epoch = checkpoint['epoch']
             iteration = checkpoint['iteration']
             scheduler.load_state_dict(checkpoint['scheduler'])
-            ssd300.load_state_dict(checkpoint['model'])
             optimizer.load_state_dict(checkpoint['optimizer'])
         else:
             print('Provided checkpoint is not path to a file')

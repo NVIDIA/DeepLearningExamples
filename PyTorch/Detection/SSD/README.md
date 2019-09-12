@@ -242,11 +242,11 @@ The following section lists the requirements in order to start training the SSD3
 
 
 ### Requirements
-This repository contains `Dockerfile` which extends the PyTorch 19.06 NGC container
+This repository contains `Dockerfile` which extends the PyTorch 19.08 NGC container
 and encapsulates some dependencies.  Aside from these dependencies,
 ensure you have the following software:
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 19.06-py3+ NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
+* [PyTorch 19.08-py3+ NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
 * [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
 
 For more information about how to get started with NGC containers, see the
@@ -256,7 +256,7 @@ Documentation:
 * [Accessing And Pulling From The NGC Container Registry](https://docs.nvidia.com/deeplearning/dgx/user-guide/index.html#accessing_registry)
 * [Running PyTorch](https://docs.nvidia.com/deeplearning/dgx/pytorch-release-notes/running.html#running)
 
-For those unable to use the [PyTorch 19.06-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch),
+For those unable to use the [PyTorch 19.08-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch),
 to set up the required environment or create your own container,
 see the versioned [NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html).
 
@@ -537,9 +537,9 @@ The flag `--save` flag enables storing checkpoints after each epoch under `./mod
 Our scripts for SSD300 v1.1 presents two ways to run inference.
 To get meaningful results, you need a pre-trained model checkpoint.
 
-One way is to run an interactive session on Jupyter notebook, as described in a [Quick Start Guide](#8-start-inferencepredictions).
+One way is to run an interactive session on Jupyter notebook, as described in a 8th step of the [Quick Start Guide](#quick-start-guide).
 
-Another way is to run a script `src/SSD300_inference.py`. It contains the logic from the notebook, wrapped into a Python script. The script contains sample usage.
+Another way is to run a script `examples/SSD300_inference.py`. It contains the logic from the notebook, wrapped into a Python script. The script contains sample usage.
 
 To use the inference example script in your own code, you can call the `main` function, providing input image URIs as an argument. The result will be a list of detections for each input image.
 
@@ -597,16 +597,18 @@ The following sections provide details on how we achieved our performance and ac
 ##### NVIDIA DGX-1 (8x V100 16G)
 
 Our results were obtained by running the `./examples/SSD300_FP{16,32}_{1,4,8}GPU.sh`
-script in the `pytorch-19.06-py3` NGC container on NVIDIA DGX-1 with 8x
+script in the `pytorch-19.08-py3` NGC container on NVIDIA DGX-1 with 8x
 V100 16G GPUs. Performance numbers (in items/images per second) were averaged
 over an entire training epoch.
 
-| **Number of GPUs** | **Mixed precision mAP** | **Training time with mixed precision** | **FP32 mAP** | **Training time with FP32** |
-|:------------------:|:------------------------:|:-------------------------------------:|:------------:|:---------------------------:|
-| 1                  | 0.2494                   | 10h 39min                             | 0.2483       | 21h 40min                   |
-| 4                  | 0.2495                   | 2h 53min                              | 0.2478       | 5h 52min                    |
-| 8                  | 0.2489                   | 1h 31min                              | 0.2475       | 2h 54min                    |
-
+|GPUs       |Batch size / GPU|Accuracy - FP32|Accuracy  - mixed precision|Time to train - FP32|Time to train  - mixed precision|Time to train speedup  (FP32 to mixed precision)|
+|-----------|----------------|---------------|---------------------------|--------------------|--------------------------------|------------------------------------------------|
+|1          |32              |0.250          |0.250                      |20:20:13            |10:23:46                        |195.62%                                         |
+|4          |32              |0.249          |0.250                      |5:11:17             |2:39:28                         |195.20%                                         |
+|8          |32              |0.250          |0.250                      |2:37:35             |1:25:38                         |184.01%                                         |
+|1          |64              |<N/A>          |0.252                      |<N/A>               |9:27:33                         |215.00%                                         |
+|4          |64              |<N/A>          |0.251                      |<N/A>               |2:24:43                         |215.10%                                         |
+|8          |64              |<N/A>          |0.252                      |<N/A>               |1:13:01                         |215.85%                                         |
 
 Here are example graphs of FP32 and FP16 training on 8 GPU configuration:
 
@@ -620,15 +622,18 @@ Here are example graphs of FP32 and FP16 training on 8 GPU configuration:
 ##### NVIDIA DGX-1 (8x V100 16G)
 
 Our results were obtained by running the `main.py` script with the `--mode
-benchmark-training` flag in the `pytorch-19.06-py3` NGC container on NVIDIA
+benchmark-training` flag in the `pytorch-19.08-py3` NGC container on NVIDIA
 DGX-1 with 8x V100 16G GPUs. Performance numbers (in items/images per second)
 were averaged over an entire training epoch.
 
-| **Number of GPUs** | **Batch size per GPU** | **Mixed precision img/s (median)** | **FP32 img/s (median)** | **Speed-up with mixed precision** | **Multi-gpu weak scaling with mixed precision** | **Multi-gpu weak scaling with FP32** |
-|:------------------:|:----------------------:|:----------------------------------:|:-----------------------:|:---------------------------------:|:-----------------------------------------------:|:------------------------------------:|
-| 1                  | 32                     |  217.052                           |  102.495                | 2.12                              | 1.00                                            | 1.00                                 |
-| 4                  | 32                     |  838.457                           |  397.797                | 2.11                              | 3.86                                            | 3.88                                 |
-| 8                  | 32                     | 1639.843                           |  789.695                | 2.08                              | 7.56                                            | 7.70                                 |
+|GPUs       |Batch size / GPU|Throughput - FP32|Throughput  - mixed precision|Throughput speedup (FP32 - mixed precision)|Weak scaling - FP32             |Weak scaling  - mixed precision                 |
+|-----------|----------------|-----------------|-----------------------------|-------------------------------------------|--------------------------------|------------------------------------------------|
+|1          |32              |133.67           |215.30                       |161.07%                                    |100.00%                         |100.00%                                         |
+|4          |32              |532.05           |828.63                       |155.74%                                    |398.04%                         |384.88%                                         |
+|8          |32              |1,060.33         |1,647.74                     |155.40%                                    |793.27%                         |765.33%                                         |
+|1          |64              |<N/A>            |232.22                       |173.73%                                    |<N/A>                           |100.00%                                         |
+|4          |64              |<N/A>            |910.77                       |171.18%                                    |<N/A>                           |392.20%                                         |
+|8          |64              |<N/A>            |1,769.48                     |166.88%                                    |<N/A>                           |761.99%                                         |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
@@ -638,22 +643,29 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 ##### NVIDIA DGX-1 (1x V100 16G)
 
 Our results were obtained by running the `main.py` script with `--mode
-benchmark-inference` flag in the pytorch-19.06-py3 NGC container on NVIDIA
+benchmark-inference` flag in the pytorch-19.08-py3 NGC container on NVIDIA
 DGX-1 with (1x V100 16G) GPUs.
 
-| **Batch size** | **Mixed precision img/s (median)** | **FP32 img/s (median)** |
-|:--------------:|:----------------------------------:|:-----------------------:|
-|              2 |                            163.12  |                147.91   |
-|              4 |                            296.60  |                201.62   |
-|              8 |                            412.52  |                228.16   |
-|             16 |                            470.10  |                280.57   |
-|             32 |                            520.54  |                302.43   |
+|Batch size |Throughput - FP32|Throughput  - mixed precision|Throughput speedup (FP32 - mixed precision)|Weak scaling - FP32 |Weak scaling  - mixed precision |
+|-----------|-----------------|-----------------------------|-------------------------------------------|--------------------|--------------------------------|
+|2          |148.99           |186.60                       |125.24%                                    |100.00%             |100.00%                         |
+|4          |203.35           |326.69                       |160.66%                                    |136.48%             |175.08%                         |
+|8          |227.32           |433.45                       |190.68%                                    |152.57%             |232.29%                         |
+|16         |278.02           |493.19                       |177.39%                                    |186.60%             |264.31%                         |
+|32         |299.81           |545.84                       |182.06%                                    |201.23%             |292.53%                         |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 ## Release notes
 
 ### Changelog
+
+August 2019
+ * upgrade the PyTorch container to 19.08
+ * update Results section in the README
+ * code updated to use DALI 0.12.0
+ * checkpoint loading fix
+ * fixed links in the README
 
 July 2019
  * script and notebook for inference
@@ -666,7 +678,7 @@ July 2019
 March 2019
  * Initial release
 
-### Known issues
+## Known issues
 
 There are no known issues with this model.
 

@@ -10,7 +10,6 @@ from src.utils import dboxes300_coco, Encoder
 
 def load_checkpoint(model, model_file):
     cp = torch.load(model_file)['model']
-    cp = { k.replace('module.1.', ''): cp[k] for k in cp }
     model.load_state_dict(cp)
 
 

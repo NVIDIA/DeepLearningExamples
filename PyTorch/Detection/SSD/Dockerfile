@@ -1,11 +1,11 @@
-FROM nvcr.io/nvidia/pytorch:19.05-py3
+FROM nvcr.io/nvidia/pytorch:19.08-py3
 
 # Set working directory
 WORKDIR /workspace
 
 ENV PYTHONPATH "${PYTHONPATH}:/workspace"
 
-RUN apt-get update && apt-get install -y python3-tk python-pip git tmux htop tree
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y python3-tk python-pip git tmux htop tree
 
 # Necessary pip packages
 RUN pip install --upgrade pip
