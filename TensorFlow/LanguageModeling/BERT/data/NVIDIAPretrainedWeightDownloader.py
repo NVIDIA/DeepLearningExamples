@@ -11,14 +11,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.idea/
-.git/
-__pycache__/
-results/
-data/download
-data/extracted
-data/formatted_one_article_per_line
-data/sharded
-data/hdf5*
-data/tfrecord*
-checkpoints/
+import os
+
+class NVIDIAPretrainedWeightDownloader:
+    def __init__(self, save_path):
+        self.save_path = save_path + '/nvidia_pretrained_weights'
+
+        if not os.path.exists(self.save_path):
+            os.makedirs(self.save_path)
+
+        pass
+
+
+    def download(self):
+        assert False, 'NVIDIAPretrainedWeightDownloader not implemented yet.'
