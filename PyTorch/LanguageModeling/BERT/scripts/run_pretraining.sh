@@ -31,11 +31,11 @@ allreduce_post_accumulation=${14:-"true"}
 allreduce_post_accumulation_fp16=${15:-"true"}
 accumulate_into_fp16=${16:-"false"}
 
-train_batch_size_phase2=${1:-4096}
-learning_rate_phase2=${2:-"4e-3"}
-warmup_proportion_phase2=${5:-"0.128"}
-train_steps_phase2=${6:-1563}
-gradient_accumulation_steps_phase2=${11:-512}
+train_batch_size_phase2=${17:-4096}
+learning_rate_phase2=${18:-"4e-3"}
+warmup_proportion_phase2=${19:-"0.128"}
+train_steps_phase2=${20:-1563}
+gradient_accumulation_steps_phase2=${21:-512}
 
 DATASET=hdf5_lower_case_1_seq_len_128_max_pred_20_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/books_wiki_en_corpus # change this for other datasets
 DATA_DIR=$BERT_PREP_WORKING_DIR/${DATASET}/
