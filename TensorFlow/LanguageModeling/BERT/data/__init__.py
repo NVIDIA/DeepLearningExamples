@@ -10,15 +10,3 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-.idea/
-.git/
-__pycache__/
-results/
-data/download
-data/extracted
-data/formatted_one_article_per_line
-data/sharded
-data/hdf5*
-data/tfrecord*
-checkpoints/

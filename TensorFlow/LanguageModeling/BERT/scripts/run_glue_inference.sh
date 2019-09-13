@@ -14,28 +14,21 @@
 # limitations under the License.
 
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
-
 task_name=${1:-"MRPC"}
-batch_size=${2:-"32"}
-learning_rate=${3:-"2e-5"}
+init_checkpoint=${2:-"$BERT_DIR/bert_model.ckpt"}
+batch_size=${3:-"32"}
 precision=${4:-"fp16"}
 use_xla=${5:-"true"}
-num_gpu=${6:-"8"}
-seq_length=${7:-"128"}
-doc_stride=${8:-"64"}
-bert_model=${9:-"large"}
+seq_length=${6:-"128"}
+doc_stride=${7:-"64"}
+bert_model=${8:-"large"}
 
 if [ "$bert_model" = "large" ] ; then
-    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16
+    BERT_DIR=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16
 else
-    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-12_H-768_A-12
+    BERT_DIR=data/download/google_pretrained_weights/uncased_L-12_H-768_A-12
 fi
-export GLUE_DIR=data/download
-
-
-epochs=${10:-"3.0"}
-ws=${11:-"0.1"}
-init_checkpoint=${12:-"$BERT_DIR/bert_model.ckpt"}
+GLUE_DIR=data/download
 
 echo "GLUE directory set as " $GLUE_DIR " BERT directory set as " $BERT_DIR
 
@@ -52,29 +45,17 @@ else
     use_xla_tag=""
 fi
 
-if [ $num_gpu -gt 1 ] ; then
-    mpi_command="mpirun -np $num_gpu -H localhost:$num_gpu \
-    --allow-run-as-root -bind-to none -map-by slot \
-    -x NCCL_DEBUG=INFO \
-    -x LD_LIBRARY_PATH \
-    -x PATH -mca pml ob1 -mca btl ^openib"
-else
-    mpi_command=""
-fi
 
 export GBS=$(expr $batch_size \* $num_gpu)
-printf -v TAG "tf_bert_finetuning_glue_%s_%s_%s_gbs%d" "$task_name" "$bert_model" "$precision" $GBS
+printf -v TAG "tf_bert_finetuning_glue_%s_inf_%s_%s_gbs%d_ckpt_%s" "$task_name" "$bert_model" "$precision" $GBS "$init_checkpoint"
 DATESTAMP=`date +'%y%m%d%H%M%S'`
 #Edit to save logs & checkpoints in a different directory
-RESULTS_DIR=/results/${TAG}_${DATESTAMP}
+RESULTS_DIR=/results
 LOGFILE=$RESULTS_DIR/$TAG.$DATESTAMP.log
-mkdir -m 777 -p $RESULTS_DIR
-printf "Saving checkpoints to %s\n" "$RESULTS_DIR"
 printf "Logs written to %s\n" "$LOGFILE"
 
 #Check if all necessary files are available before training
-for DIR_or_file in $GLUE_DIR/${task_name} $RESULTS_DIR $BERT_DIR/vocab.txt $BERT_DIR/bert_config.json; do
-  echo $DIR_or_file
+for DIR_or_file in $GLUE_DIR $RESULTS_DIR $BERT_DIR/vocab.txt $BERT_DIR/bert_config.json; do
   if [ ! -d "$DIR_or_file" ] && [ ! -f "$DIR_or_file" ]; then
      echo "Error! $DIR_or_file directory missing. Please mount correctly"
      exit -1
@@ -83,7 +64,8 @@ done
 
 $mpi_command python run_classifier.py \
   --task_name=$task_name \
-  --do_train=true \
+  --predict_batch_size=$batch_size \
+  --eval_batch_size=$batch_size \
   --do_eval=true \
   --data_dir=$GLUE_DIR/$task_name \
   --vocab_file=$BERT_DIR/vocab.txt \
@@ -91,9 +73,6 @@ $mpi_command python run_classifier.py \
   --init_checkpoint=$init_checkpoint \
   --max_seq_length=$seq_length \
   --doc_stride=$doc_stride \
-  --train_batch_size=$batch_size \
-  --learning_rate=$learning_rate \
-  --num_train_epochs=$epochs \
   --output_dir=$RESULTS_DIR \
   --horovod "$use_fp16" \
-  $use_xla_tag --warmup_proportion=$ws |& tee $LOGFILE
+  $use_xla_tag |& tee $LOGFILE
