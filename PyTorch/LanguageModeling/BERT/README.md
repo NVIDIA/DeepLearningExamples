@@ -567,6 +567,9 @@ Where:
 - `<allreduce_post_accumulation>` - If set to `true`, performs allreduce only after the defined number of gradient accumulation steps.
 - `<allreduce_post_accumulation_fp16>` -  If set to `true`, performs allreduce after gradient accumulation steps in FP16.
 - `<accumulate_into_fp16>` - If set to `true`, accumulates/sums the gradients in FP16.
+
+    Note: The above three options need to be set to false when running on fp32. 
+    
 -  `<training_batch_size_phase2>` is per-GPU batch size used for training in phase 2. Larger batch sizes run more efficiently, but require more memory.
 -   `<learning_rate_phase2>` is the base learning rate for training phase 2.
 -   `<warmup_proportion_phase2>` is the percentage of training steps used for warm-up at the start of training.
