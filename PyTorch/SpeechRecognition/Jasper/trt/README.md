@@ -41,8 +41,9 @@ The Jasper inference pipeline consists of 3 components: data preprocessor, acous
 
 For the non-TRT Jasper inference pipeline, all 3 components are implemented and run with native PyTorch. For the TensorRT inference pipeline, we show the speedup of running the acoustic model with TensorRT, while preprocessing and decoding are reused from the native PyTorch pipeline.
 
-To run a model with TensorRT, we first construct the model in PyTorch, which is then exported into a ONNX static graph. Finally, a TensorRT engine is constructed from the ONNX file and can be launched to do inference.
+To run a model with TensorRT, we first construct the model in PyTorch, which is then exported into an ONNX file. Finally, a TensorRT engine is constructed from the ONNX file, serialized to TRT plan file, and also launched to do inference.
 
+Note that TensorRT engine is being runtime optimized before serialization. TRT tries a vast set of options to find the strategy that performs best on user’s GPU - so it takes a few minutes. After the TRT plan file is created, it can be reused. 
 
 ### Version Info
 
@@ -82,12 +83,18 @@ pip install -r trt/requirements.txt
 
 Running the following scripts will build and launch the container containing all required dependencies for both TensorRT as well as native PyTorch. This is necessary for using inference with TensorRT and can also be used for data download, processing and training of the model.
 
-1. Build the Jasper PyTorch and TensorRT container:
+1. Clone the repository.
+
+```bash
+git clone https://github.com/NVIDIA/DeepLearningExamples
+cd DeepLearningExamples/PyTorch/SpeechRecognition/Jasper
+```
+2. Build the Jasper PyTorch with TensorRT container:
 
 ```
 bash trt/scripts/docker/trt_build.sh
 ```
-2. Start an interactive session in the NGC docker container:
+3. Start an interactive session in the NGC docker container:
 
 ```
 bash trt/scripts/docker/trt_launch.sh <DATA_DIR> <CHECKPOINT_DIR> <RESULT_DIR>
@@ -103,9 +110,7 @@ The `/datasets`, `/checkpoints`, `/results` directories will be mounted as volum
 
 Briefly, `<DATA_DIR>` should contain, or be prepared to contain a `LibriSpeech` sub-directory (created in [Acquiring Dataset](#acquiring-dataset)), `<CHECKPOINT_DIR>` should contain a PyTorch model checkpoint (`*.pt`) file obtained through training described in [Quick Start Guide](../README.md), and `<RESULT_DIR>` should be prepared to contain timing results, logs, serialized TRT engines, and ONNX files.
 
-
-
-3.  Acquiring dataset
+4.  Acquiring dataset
 
 If LibriSpeech has already been downloaded and preprocessed as defined in the [Quick Start Guide](../README.md), no further steps in this subsection need to be taken.
 
@@ -140,7 +145,7 @@ Once the data is preprocessed, the following additional files should now exist:
    * `test-clean-wav/`
    * `test-other-wav/`
 
-4. Start TRT inference prediction
+5. Start TRT inference prediction
 
 Inside the container, use the following script to run inference with TRT.
 ```
@@ -153,7 +158,7 @@ bash trt/scripts/trt_inference.sh
 A pretrained model checkpoint can be downloaded from [NGC model repository](https://ngc.nvidia.com/catalog/models/nvidia:jasperpyt_fp16). 
 More details can be found in [Advanced](#advanced) under [Scripts and sample code](#scripts-and-sample-code), [Parameters](#parameters) and [TRT Inference process](#trt-inference).
 
-4.  Start TRT inference benchmark
+6.  Start TRT inference benchmark
 
 Inside the container, use the following script to run inference benchmark with TRT.
 ```
@@ -169,7 +174,7 @@ bash trt/scripts/trt_inference_benchmark.sh
 A pretrained model checkpoint can be downloaded from the [NGC model repository](https://ngc.nvidia.com/catalog/models/nvidia:jasperpyt_fp16). 
 More details can be found in [Advanced](#advanced) under [Scripts and sample code](#scripts-and-sample-code), [Parameters](#parameters) and [TRT Inference Benchmark process](#trt-inference-benchmark).
 
-6. Start Jupyter notebook to run inference interactively
+7. Start Jupyter notebook to run inference interactively
 The Jupyter notebook  is an open-source web application that allows you to create and share documents that contain live code, equations, visualizations and narrative text.
 The notebook which is located at `notebooks/JasperTRT.ipynb` offers an interactive method to run the Steps 2,3,4,5. In addition, the notebook shows examples how to use TRT to transcribe a single audio file into text. To launch the application please follow the instructions under [../notebooks/README.md](../notebooks/README.md). 
 A pretrained model checkpoint can be downloaded from [NGC model repository](https://ngc.nvidia.com/catalog/models/nvidia:jasperpyt_fp16). 
@@ -256,7 +261,7 @@ The inference benchmarking is performed on a single GPU by ‘trt/scripts/trt_in
 
 ### TRT Inference process
 
-The inference is performed by ‘trt/scripts/trt_inference.sh’ which delegates to ‘trt/scripts/trt_inference_benchmark.sh’. The script runs on a single GPU. To do inference prediction on the entire dataset ‘NUM_FRAMES’ is set to 3600, which roughly corresponds to 36 seconds. This covers the longest sentences in both LibriSpeech dev and test dataset. By default, ‘BATCH_SET’ is set to 1 to simulate the online inference scenario in deployment. Other batch sizes can be tried by setting a different value to this parameter. By default ‘TRT_PRECISION’ is set to full precision and can be changed by setting ‘export TRT_PRECISION=fp16’. The prediction results are stored at ‘/results/trt_predictions.txt’ and ‘/results/pyt_predictions.txt’.
+The inference is performed by `trt/scripts/trt_inference.sh` which delegates to `trt/scripts/trt_inference_benchmark.sh`. The script runs on a single GPU. To do inference prediction on the entire dataset `NUM_FRAMES` is set to 3600, which roughly corresponds to 36 seconds. This covers the longest sentences in both LibriSpeech dev and test dataset. By default, `BATCH_SET` is set to 1 to simulate the online inference scenario in deployment. Other batch sizes can be tried by setting a different value to this parameter. By default `TRT_PRECISION` is set to full precision and can be changed by setting `export TRT_PRECISION=fp16`. The prediction results are stored at `/results/trt_predictions.txt` and `/results/pyt_predictions.txt`.
 
 
 
