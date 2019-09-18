@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,20 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+#Downloads the inference-subset of the Librispeech corpus.
 
-#!/bin/bash
 
-DATA_DIR=$1
-CHECKPOINT_DIR=$2
-RESULT_DIR=$3
 
-docker run -it --rm \
-  --runtime=nvidia \
-  --shm-size=4g \
-  --ulimit memlock=-1 \
-  --ulimit stack=67108864 \
-  -v "$DATA_DIR":/datasets \
-  -v "$CHECKPOINT_DIR":/checkpoints/ \
-  -v "$RESULT_DIR":/results/ \
-  -v $PWD:/code \
-  jasper bash
+DATA_SET="LibriSpeech"
+DATA_ROOT_DIR="/datasets"
+DATA_DIR="${DATA_ROOT_DIR}/${DATA_SET}"
+if [ ! -d "$DATA_DIR" ]
+then
+    mkdir -p $DATA_DIR
+    chmod go+rx $DATA_DIR
+    python utils/download_librispeech.py utils/inference_librispeech.csv $DATA_DIR -e ${DATA_ROOT_DIR}/
+else
+    echo "Directory $DATA_DIR already exists."
+fi

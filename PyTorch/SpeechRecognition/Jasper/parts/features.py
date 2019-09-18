@@ -21,6 +21,15 @@ from .segment import AudioSegment
 from apex import amp
 
 
+def audio_from_file(file_path, offset=0, duration=0, trim=False, target_sr=16000):
+    audio = AudioSegment.from_file(file_path,
+                                   target_sr=target_sr,
+                                   int_values=False,
+                                   offset=offset, duration=duration, trim=trim)
+    samples=torch.tensor(audio.samples, dtype=torch.float).cuda()
+    num_samples = torch.tensor(samples.shape[0]).int().cuda()
+    return (samples.unsqueeze(0), num_samples.unsqueeze(0))
+
 class WaveformFeaturizer(object):
     def __init__(self, input_cfg, augmentor=None):
         self.augmentor = augmentor if augmentor is not None else AudioAugmentor()
@@ -51,6 +60,7 @@ class WaveformFeaturizer(object):
 
 constant = 1e-5
 def normalize_batch(x, seq_len, normalize_type):
+#    print ("normalize_batch: x, seq_len, shapes: ", x.shape, seq_len, seq_len.shape)
     if normalize_type == "per_feature":
         x_mean = torch.zeros((seq_len.shape[0], x.shape[1]), dtype=x.dtype,
                                                  device=x.device)
@@ -191,10 +201,10 @@ class FilterbankFeatures(nn.Module):
                        preemph=0.97,
                        nfilt=64, lowfreq=0, highfreq=None, log=True, dither=constant,
                        pad_to=8,
-                       max_duration=16.7, 
+                       max_duration=16.7,
                        frame_splicing=1):
         super(FilterbankFeatures, self).__init__()
-        print("PADDING: {}".format(pad_to))
+#        print("PADDING: {}".format(pad_to))
 
         torch_windows = {
             'hann': torch.hann_window,
@@ -242,10 +252,13 @@ class FilterbankFeatures(nn.Module):
     @torch.no_grad()
     def forward(self, inp):
         x, seq_len = inp
+
         dtype = x.dtype
 
         seq_len = self.get_seq_len(seq_len)
 
+#        print ("forward: x, seq_len, shapes: ", x.shape, seq_len, seq_len.shape)
+        
         # dither
         if self.dither > 0:
             x += self.dither * torch.randn_like(x)
@@ -282,7 +295,7 @@ class FilterbankFeatures(nn.Module):
         max_len = x.size(-1)
         mask = torch.arange(max_len).to(seq_len.dtype).to(x.device).expand(x.size(0),
                                                                            max_len) >= seq_len.unsqueeze(1)
-        
+
         x = x.masked_fill(mask.unsqueeze(1).to(device=x.device), 0)
         del mask
         pad_to = self.pad_to

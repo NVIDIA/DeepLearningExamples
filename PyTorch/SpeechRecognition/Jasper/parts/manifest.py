@@ -89,7 +89,7 @@ class Manifest(object):
                         else:
                             min_speed = min(x['speed'] for x in files_and_speeds)
                         max_duration = self.max_duration * min_speed
-                    
+
                     data['duration'] = data['original_duration']
                     if min_duration is not None and data['duration'] < min_duration:
                         filtered_duration += data['duration']
@@ -112,7 +112,7 @@ class Manifest(object):
                         filtered_duration += data['duration']
                         continue
                     data["transcript"] = self.parse_transcript(transcript_text) # convert to vocab indices
-                    
+
                     if speed_perturbation:
                         audio_paths = [x['fname'] for x in files_and_speeds]
                         data['audio_duration'] = [x['duration'] for x in files_and_speeds]
@@ -122,7 +122,7 @@ class Manifest(object):
                     data['audio_filepath'] = [os.path.join(data_dir, x) for x in audio_paths]
                     data.pop('files')
                     data.pop('original_duration')
-         
+
                     ids.append(data)
                     duration += data['duration']
 

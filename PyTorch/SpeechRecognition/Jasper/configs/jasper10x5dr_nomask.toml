@@ -60,7 +60,7 @@ pad_to = 16
 
 [encoder]
 activation = "relu"
-convmask = true
+convmask = false
 
 [[jasper]]
 filters = 256

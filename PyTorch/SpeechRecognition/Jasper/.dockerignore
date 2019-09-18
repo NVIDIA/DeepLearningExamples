@@ -1,4 +1,4 @@
 results/
 *__pycache__
 checkpoints/
-datasets/
+.git/

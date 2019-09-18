@@ -28,10 +28,10 @@ from helpers import monitor_asr_train_progress, process_evaluation_batch, proces
 from model import AudioPreprocessing, CTCLossNM, GreedyCTCDecoder, Jasper
 from optimizers import Novograd, AdamW
 
-    
+
 def lr_policy(initial_lr, step, N):
     """
-    learning rate decay 
+    learning rate decay
     Args:
         initial_lr: base learning rate
         step: current iteration number
@@ -45,7 +45,7 @@ def save(model, optimizer, epoch, output_dir):
     """
     Saves model checkpoint
     Args:
-        model: model 
+        model: model
         optimizer: optimizer
         epoch: epoch of model training
         output_dir: path to save model checkpoint
@@ -57,8 +57,8 @@ def save(model, optimizer, epoch, output_dir):
     if (not torch.distributed.is_initialized() or (torch.distributed.is_initialized() and torch.distributed.get_rank() == 0)):
         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
         save_checkpoint={
-                        'epoch': epoch, 
-                        'state_dict': model_to_save.state_dict(), 
+                        'epoch': epoch,
+                        'state_dict': model_to_save.state_dict(),
                         'optimizer': optimizer.state_dict()
                         }
 
@@ -69,15 +69,15 @@ def save(model, optimizer, epoch, output_dir):
 
 
 def train(
-        data_layer, 
+        data_layer,
         data_layer_eval,
         model,
-        ctc_loss, 
-        greedy_decoder, 
-        optimizer, 
-        optim_level, 
-        labels, 
-        multi_gpu, 
+        ctc_loss,
+        greedy_decoder,
+        optimizer,
+        optim_level,
+        labels,
+        multi_gpu,
         args,
         fn_lr_policy=None):
     """Trains model
@@ -128,10 +128,10 @@ def train(
 
             # final aggregation across all workers and minibatches) and logging of results
             wer, eloss = process_evaluation_epoch(_global_var_dict)
-        
+
             print_once("==========>>>>>>Evaluation Loss: {0}\n".format(eloss))
             print_once("==========>>>>>>Evaluation WER: {0}\n".format(wer))
-            
+
     print_once("Starting .....")
     start_time = time.time()
 
@@ -157,7 +157,7 @@ def train(
             if batch_counter == 0:
 
                 if fn_lr_policy is not None:
-                    adjusted_lr = fn_lr_policy(step) 
+                    adjusted_lr = fn_lr_policy(step)
                     for param_group in optimizer.param_groups:
                             param_group['lr'] = adjusted_lr
                 optimizer.zero_grad()
@@ -165,8 +165,8 @@ def train(
 
             t_audio_signal_t, t_a_sig_length_t, t_transcript_t, t_transcript_len_t = tensors
             model.train()
+            
             t_log_probs_t, t_encoded_len_t = model(x=(t_audio_signal_t, t_a_sig_length_t))
-
             t_loss_t = ctc_loss(log_probs=t_log_probs_t, targets=t_transcript_t, input_length=t_encoded_len_t, target_length=t_transcript_len_t)
             if args.gradient_accumulation_steps > 1:
                     t_loss_t = t_loss_t / args.gradient_accumulation_steps
@@ -238,8 +238,8 @@ def main(args):
     dataset_vocab = jasper_model_definition['labels']['labels']
     ctc_vocab = add_ctc_labels(dataset_vocab)
 
-    train_manifest = args.train_manifest 
-    val_manifest = args.val_manifest 
+    train_manifest = args.train_manifest
+    val_manifest = args.val_manifest
     featurizer_config = jasper_model_definition['input']
     featurizer_config_eval = jasper_model_definition['input_eval']
     featurizer_config["optimization_level"] = optim_level
@@ -255,7 +255,7 @@ def main(args):
         featurizer_config_eval['pad_to'] = "max"
     print_once('model_config')
     print_dict(jasper_model_definition)
-         
+
     if args.gradient_accumulation_steps < 1:
         raise ValueError('Invalid gradient accumulation steps parameter {}'.format(args.gradient_accumulation_steps))
     if args.batch_size % args.gradient_accumulation_steps != 0:
@@ -282,9 +282,9 @@ def main(args):
                                     multi_gpu=multi_gpu,
                                     pad_to_max=args.pad_to_max
                                     )
- 
+
     model = Jasper(feature_config=featurizer_config, jasper_model_definition=jasper_model_definition, feat_in=1024, num_classes=len(ctc_vocab))
- 
+
     if args.ckpt is not None:
         print_once("loading model from {}".format(args.ckpt))
         checkpoint = torch.load(args.ckpt, map_location="cpu")
@@ -304,13 +304,13 @@ def main(args):
         args.step_per_epoch = math.ceil(N / (args.batch_size * (1 if not torch.distributed.is_initialized() else torch.distributed.get_world_size())))
     elif sampler_type == 'bucket':
         args.step_per_epoch = int(len(data_layer.sampler) / args.batch_size )
-    
+
     print_once('-----------------')
     print_once('Have {0} examples to train on.'.format(N))
     print_once('Have {0} steps / (gpu * epoch).'.format(args.step_per_epoch))
     print_once('-----------------')
 
-    fn_lr_policy = lambda s: lr_policy(args.lr, s, args.num_epochs * args.step_per_epoch) 
+    fn_lr_policy = lambda s: lr_policy(args.lr, s, args.num_epochs * args.step_per_epoch)
 
 
     model.cuda()
@@ -333,7 +333,7 @@ def main(args):
             models=model,
             optimizers=optimizer,
             opt_level=AmpOptimizations[optim_level])
-    
+
     if args.ckpt is not None:
         optimizer.load_state_dict(checkpoint['optimizer'])
 
@@ -341,12 +341,12 @@ def main(args):
 
     train(
         data_layer=data_layer,
-        data_layer_eval=data_layer_eval, 
-        model=model, 
-        ctc_loss=ctc_loss, 
+        data_layer_eval=data_layer_eval,
+        model=model,
+        ctc_loss=ctc_loss,
         greedy_decoder=greedy_decoder,
-        optimizer=optimizer, 
-        labels=ctc_vocab, 
+        optimizer=optimizer,
+        labels=ctc_vocab,
         optim_level=optim_level,
         multi_gpu=multi_gpu,
         fn_lr_policy=fn_lr_policy if args.lr_decay else None,

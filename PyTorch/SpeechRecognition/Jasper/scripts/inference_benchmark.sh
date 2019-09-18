@@ -82,8 +82,3 @@ else
    grep 'latency' "$LOGFILE"
 fi
 set +x
-
-
-
-
-
