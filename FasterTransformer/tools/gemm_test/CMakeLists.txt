@@ -22,7 +22,9 @@ set(gemm_fp32_files
 )
 
 add_executable(gemm_fp32 ${gemm_fp32_files})
+set_target_properties(gemm_fp32 PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 target_link_libraries(gemm_fp32 PUBLIC -lcublas -lcudart ${CMAKE_THREAD_LIBS_INIT})
 
 add_executable(gemm_fp16 ${gemm_fp16_files})
+set_target_properties(gemm_fp16 PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 target_link_libraries(gemm_fp16 PUBLIC -lcublas -lcudart ${CMAKE_THREAD_LIBS_INIT})
