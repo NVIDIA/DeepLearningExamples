@@ -65,4 +65,3 @@ def word_error_rate(hypotheses: List[str], references: List[str]) -> float:
     else:
         wer = float('inf')
     return wer, scores, words
-

@@ -128,4 +128,3 @@ else
    echo "final_eval_loss: $final_eval_loss" | tee -a "$LOGFILE"
    echo "final_eval_wer: $final_eval_wer" | tee -a "$LOGFILE"
 fi
-

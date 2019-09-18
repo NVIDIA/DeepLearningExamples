@@ -19,14 +19,16 @@ from tqdm import tqdm
 import math
 import toml
 from dataset import AudioToTextDataLayer
-from helpers import process_evaluation_batch, process_evaluation_epoch, Optimization, add_ctc_labels, AmpOptimizations, print_dict, model_multi_gpu
+from helpers import process_evaluation_batch, process_evaluation_epoch, Optimization, add_ctc_labels, AmpOptimizations, print_dict, model_multi_gpu, __ctc_decoder_predictions_tensor
 from model import AudioPreprocessing, GreedyCTCDecoder, JasperEncoderDecoder
+from parts.features import audio_from_file
 import torch
 import apex
 from apex import amp
 import random
 import numpy as np
 import pickle
+import time
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Jasper')
@@ -44,14 +46,15 @@ def parse_args():
     parser.add_argument("--save_prediction", type=str, default=None, help="if specified saves predictions in text form at this location")
     parser.add_argument("--logits_save_to", default=None, type=str, help="if specified will save logits to path")
     parser.add_argument("--seed", default=42, type=int, help='seed')
+    parser.add_argument("--wav", type=str, help='absolute path to .wav file (16KHz)')
     return parser.parse_args()
 
 def eval(
         data_layer,
-        audio_processor, 
-        encoderdecoder, 
-        greedy_decoder, 
-        labels, 
+        audio_processor,
+        encoderdecoder,
+        greedy_decoder,
+        labels,
         multi_gpu,
         args):
     """performs inference / evaluation
@@ -74,6 +77,21 @@ def eval(
             'logits' : [],
         }
 
+
+        
+        if args.wav:
+            features, p_length_e = audio_processor(audio_from_file(args.wav))
+            torch.cuda.synchronize()
+            t0 = time.perf_counter()
+            t_log_probs_e = encoderdecoder(features)
+            torch.cuda.synchronize()
+            t1 = time.perf_counter()
+            t_predictions_e = greedy_decoder(log_probs=t_log_probs_e)
+            hypotheses = __ctc_decoder_predictions_tensor(t_predictions_e, labels=labels)
+            print("INFERENCE TIME\t\t: {} ms".format((t1-t0)*1000.0))
+            print("TRANSCRIPT\t\t:", hypotheses[0])
+            return
+        
         for it, data in enumerate(tqdm(data_layer.data_iterator)):
             tensors = []
             for d in data:
@@ -83,8 +101,11 @@ def eval(
 
             inp = (t_audio_signal_e, t_a_sig_length_e)
 
-            t_processed_signal, p_length_e = audio_processor(x=inp) 
-            t_log_probs_e, _ = encoderdecoder((t_processed_signal, p_length_e))
+            t_processed_signal, p_length_e = audio_processor(x=inp)
+            if args.use_conv_mask:
+                t_log_probs_e, t_encoded_len_e  = encoderdecoder((t_processed_signal, p_length_e))
+            else:
+                t_log_probs_e  = encoderdecoder(t_processed_signal)
             t_predictions_e = greedy_decoder(log_probs=t_log_probs_e)
 
             values_dict = dict(
@@ -98,7 +119,7 @@ def eval(
             if args.steps is not None and it + 1 >= args.steps:
                 break
         wer, _ = process_evaluation_epoch(_global_var_dict)
-        if (not multi_gpu or (multi_gpu and torch.distributed.get_rank() == 0)):    
+        if (not multi_gpu or (multi_gpu and torch.distributed.get_rank() == 0)):
             print("==========>>>>>>Evaluation WER: {0}\n".format(wer))
             if args.save_prediction is not None:
                 with open(args.save_prediction, 'w') as fp:
@@ -122,7 +143,7 @@ def main(args):
     if args.local_rank is not None:
         torch.cuda.set_device(args.local_rank)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
-    multi_gpu = args.local_rank is not None 
+    multi_gpu = args.local_rank is not None
     if multi_gpu:
         print("DISTRIBUTED with ", torch.distributed.get_world_size())
 
@@ -135,9 +156,10 @@ def main(args):
     dataset_vocab = jasper_model_definition['labels']['labels']
     ctc_vocab = add_ctc_labels(dataset_vocab)
 
-    val_manifest = args.val_manifest 
+    val_manifest = args.val_manifest
     featurizer_config = jasper_model_definition['input_eval']
     featurizer_config["optimization_level"] = optim_level
+    args.use_conv_mask = jasper_model_definition['encoder'].get('convmask', True)
 
     if args.max_duration is not None:
         featurizer_config['max_duration'] = args.max_duration
@@ -148,20 +170,22 @@ def main(args):
     print_dict(jasper_model_definition)
     print('feature_config')
     print_dict(featurizer_config)
-
-    data_layer = AudioToTextDataLayer(
-                                    dataset_dir=args.dataset_dir, 
-                                    featurizer_config=featurizer_config,
-                                    manifest_filepath=val_manifest,
-                                    labels=dataset_vocab,
-                                    batch_size=args.batch_size,
-                                    pad_to_max=featurizer_config['pad_to'] == "max",
-                                    shuffle=False,
-                                    multi_gpu=multi_gpu)
+    data_layer = None
+    
+    if args.wav is None:
+        data_layer = AudioToTextDataLayer(
+            dataset_dir=args.dataset_dir, 
+            featurizer_config=featurizer_config,
+            manifest_filepath=val_manifest,
+            labels=dataset_vocab,
+            batch_size=args.batch_size,
+            pad_to_max=featurizer_config['pad_to'] == "max",
+            shuffle=False,
+            multi_gpu=multi_gpu)
     audio_preprocessor = AudioPreprocessing(**featurizer_config)
 
     encoderdecoder = JasperEncoderDecoder(jasper_model_definition=jasper_model_definition, feat_in=1024, num_classes=len(ctc_vocab))
- 
+
     if args.ckpt is not None:
         print("loading model from ", args.ckpt)
         checkpoint = torch.load(args.ckpt, map_location="cpu")
@@ -169,25 +193,28 @@ def main(args):
             checkpoint['state_dict'][k] = checkpoint['state_dict'].pop("audio_preprocessor." + k)
         audio_preprocessor.load_state_dict(checkpoint['state_dict'], strict=False)
         encoderdecoder.load_state_dict(checkpoint['state_dict'], strict=False)
-    
+
     greedy_decoder = GreedyCTCDecoder()
 
     # print("Number of parameters in encoder: {0}".format(model.jasper_encoder.num_weights()))
+    if args.wav is None:
+        N = len(data_layer)
+        step_per_epoch = math.ceil(N / (args.batch_size * (1 if not torch.distributed.is_initialized() else torch.distributed.get_world_size())))
 
-    N = len(data_layer)
-    step_per_epoch = math.ceil(N / (args.batch_size * (1 if not torch.distributed.is_initialized() else torch.distributed.get_world_size())))
-
-    if args.steps is not None:
-        print('-----------------')
-        print('Have {0} examples to eval on.'.format(args.steps * args.batch_size * (1 if not torch.distributed.is_initialized() else torch.distributed.get_world_size())))
-        print('Have {0} steps / (gpu * epoch).'.format(args.steps))
-        print('-----------------')
+        if args.steps is not None:
+            print('-----------------')
+            print('Have {0} examples to eval on.'.format(args.steps * args.batch_size * (1 if not torch.distributed.is_initialized() else torch.distributed.get_world_size())))
+            print('Have {0} steps / (gpu * epoch).'.format(args.steps))
+            print('-----------------')
+        else:
+            print('-----------------')
+            print('Have {0} examples to eval on.'.format(N))
+            print('Have {0} steps / (gpu * epoch).'.format(step_per_epoch))
+            print('-----------------')
     else:
-        print('-----------------')
-        print('Have {0} examples to eval on.'.format(N))
-        print('Have {0} steps / (gpu * epoch).'.format(step_per_epoch))
-        print('-----------------')
+            audio_preprocessor.featurizer.normalize = "per_feature"
 
+    print ("audio_preprocessor.normalize: ", audio_preprocessor.featurizer.normalize)
     audio_preprocessor.cuda()
     encoderdecoder.cuda()
     if args.fp16:
@@ -197,8 +224,9 @@ def main(args):
 
     encoderdecoder = model_multi_gpu(encoderdecoder, multi_gpu)
 
+    
     eval(
-        data_layer=data_layer, 
+        data_layer=data_layer,
         audio_processor=audio_preprocessor,
         encoderdecoder=encoderdecoder,
         greedy_decoder=greedy_decoder,
@@ -208,7 +236,7 @@ def main(args):
 
 if __name__=="__main__":
     args = parse_args()
-    
+
     print_dict(vars(args))
 
     main(args)

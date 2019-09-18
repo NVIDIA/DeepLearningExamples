@@ -108,4 +108,3 @@ else
    ) |& tee $LOGFILE
 fi
 set +x
-
