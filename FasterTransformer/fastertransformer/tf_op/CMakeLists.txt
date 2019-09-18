@@ -25,4 +25,5 @@ add_definitions(-DGOOGLE_CUDA=1)
 add_definitions(-DNDEBUG)
 
 add_library(tf_fastertransformer SHARED ${tf_bert_transformer_files})
+set_target_properties(tf_fastertransformer PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 target_link_libraries(tf_fastertransformer PRIVATE -lcublas -lcudart -ltensorflow_framework ${CMAKE_THREAD_LIBS_INIT})
