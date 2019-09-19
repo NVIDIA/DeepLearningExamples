@@ -525,7 +525,7 @@ def embedding_postprocessor(input_tensor,
     # sequence has positions [0, 1, 2, ... seq_length-1], so we can just
     # perform a slice.
     position_embeddings = tf.slice(full_position_embeddings, [0, 0],
-                                    [seq_length, -1])
+                                    [seq_length, width])
     num_dims = len(output.shape.as_list())
 
     # Only the last two dimensions are relevant (`seq_length` and `width`), so

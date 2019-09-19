@@ -65,6 +65,8 @@ This repository provides a script and recipe to train the BERT model for TensorF
       * [Inference performance: NVIDIA DGX-2 (1x V100 32G)](#inference-performance-nvidia-dgx-2-1x-v100-32g)
         * [Pre-training inference performance on DGX-2 32G](#pre-training-inference-performance-on-dgx-2-32g)
         * [Fine-tuning inference performance for SQuAD on DGX-2  32G](#fine-tuning-inference-performance-for-squad-on-dgx-2-32g)
+      * [Inference performance: NVIDIA Tesla T4 (1x T4 16G)](#inference-performance-nvidia-tesla-t4-1x-t4-16g)
+        * [Fine-tuning inference performance for SQuAD on Tesla T4 16G](#fine-tuning-inference-performance-for-squad-on-tesla-t4-16g)
 - [Release notes](#release-notes)
   * [Changelog](#changelog)
   * [Known issues](#known-issues)
@@ -356,13 +358,13 @@ Other folders included in the root directory are:
 Aside from the options to set hyperparameters, the relevant options to control the behaviour of the `run_pretraining.py` script are:
 
 ```
-  --[no]use_fp16: Whether to enable AMP ops.(default: 'false')
   --bert_config_file: The config json file corresponding to the pre-trained BERT model. This specifies the model architecture.
+  --init_checkpoint: Initial checkpoint (usually from a pre-trained BERT model).
   --[no]do_eval: Whether to run evaluation on the dev set.(default: 'false')
   --[no]do_train: Whether to run training.(evaluation: 'false')
   --eval_batch_size: Total batch size for eval.(default: '8')(an integer)
   --[no]horovod: Whether to use Horovod for multi-gpu runs(default: 'false')
-  --init_checkpoint: Initial checkpoint (usually from a pre-trained BERT model).
+  --[no]use_fp16: Whether to enable AMP ops.(default: 'false')
   --input_files_dir: Input TF example files (can be a dir or comma separated).
   --output_dir: The output directory where the model checkpoints will be    written.
   --optimizer_type: Optimizer used for training - LAMB or ADAM
@@ -412,6 +414,7 @@ Aside from the options to set hyperparameters, some relevant options to control 
   --warmup_proportion: Proportion of training to perform linear learning rate warmup for. E.g., 0.1 = 10% of training.(default: '0.1')(a number)
 ```
 
+Note: When initializing from a checkpoint using `--init_checkpoint` and a corpus of your choice, keep in mind that `bert_config_file` and `vocab_file` should remain unchanged.
 
 ### Command-line options
 
@@ -482,6 +485,7 @@ The `run_pretraining_lamb.sh` script runs a job on a single node that trains the
     - Runs 1564 steps with 200 warm-up steps
     - Sets Maximum sequence length as 512
     - Sets Global Batch size as 32K
+    - Starts from Phase1's final checkpoint
 
 These parameters train Wikipedia and BookCorpus with reasonable accuracy on a DGX-1 with 32GB V100 cards.
 
@@ -857,11 +861,9 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 | 4 | 3 |  -   |50.71| -  | -  |2.95|
 | 8 | 3 |  -   |91.88| -  | -  |5.34|
 
-
 Note: The respective values for FP32 runs that use a batch size of 3 are not available due to out of memory errors that arise. Batch size of 3 is only available on using FP16.
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
-
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 32G)
 
@@ -951,7 +953,6 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 
 
 Note: The respective values for FP32 runs that use a batch size of 10 are not available due to out of memory errors that arise. Batch size of 10 is only available on using FP16.
-
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
@@ -1167,6 +1168,67 @@ BERT BASE FP32
 | 384             | 2          | 117.64                       | 17                  | 17.07           | 17.1            | 17.83           |
 | 384             | 4          | 131.72                       | 30.37               | 30.64           | 30.77           | 31.26           |
 | 384             | 8          | 139.75                       | 57.25               | 57.74           | 58.08           | 59.53           |
+
+
+##### Inference performance: NVIDIA Tesla T4 (1x T4 16G)
+
+###### Fine-tuning inference performance for SQuAD on Tesla T4 16G
+
+Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA Tesla T4 with 1x T4 16G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
+
+BERT BASE FP16
+
+| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+|-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
+| 128 | 1 | 107.3  | 9.32  | 10.18 | 10.32 | 11.48 |
+| 128 | 2 | 185.18 | 10.8  | 11.71 | 12.11 | 12.35 |
+| 128 | 4 | 335.47 | 11.92 | 12.58 | 12.72 | 13.36 |
+| 128 | 8 | 454.12 | 17.62 | 18.45 | 18.68 | 19.25 |
+| 384 | 1 | 83.5   | 11.98 | 12.71 | 12.93 | 13.29 |
+| 384 | 2 | 117.75 | 16.99 | 17.62 | 17.83 | 19.48 |
+| 384 | 4 | 139.08 | 28.76 | 29.59 | 29.85 | 30.74 |
+| 384 | 8 | 149.93 | 53.36 | 54.83 | 55.48 | 56.93 |
+
+BERT BASE FP32
+
+| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+|-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
+| 128 | 1 | 92.82  | 10.77  | 11.06 | 11.11  | 11.24 |
+| 128 | 2 | 127.87 | 15.64  | 16.2  | 16.4   | 16.86 |
+| 128 | 4 | 151.68 | 26.37  | 27.26 | 27.48  | 27.98 |
+| 128 | 8 | 164.51 | 48.63  | 50.36 | 50.72  | 51.52 |
+| 384 | 1 | 45.64  | 21.91  | 23.39 | 23.66  | 24.14 |
+| 384 | 2 | 48.11  | 41.57  | 42.99 | 43.47  | 44.44 |
+| 384 | 4 | 48.64  | 82.24  | 84.35 | 84.97  | 86.2  |
+| 384 | 8 | 48.04  | 166.51 | 169.9 | 170.84 | 172.6 |
+
+
+BERT LARGE FP16
+
+| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+|-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
+| 128 | 1 | 53.56  | 18.67  | 20.22  | 20.31  | 20.49  |
+| 128 | 2 | 95.39  | 20.97  | 22.86  | 23.15  | 23.73  |
+| 128 | 4 | 137.44 | 29.1   | 30.34  | 30.62  | 31.5   |
+| 128 | 8 | 166.19 | 48.14  | 49.38  | 49.73  | 50.86  |
+| 384 | 1 | 34.28  | 29.17  | 30.58  | 30.77  | 31.28  |
+| 384 | 2 | 41.89  | 47.74  | 49.05  | 49.34  | 50     |
+| 384 | 4 | 47.15  | 84.83  | 86.79  | 87.41  | 88.73  |
+| 384 | 8 | 50.28  | 159.11 | 161.75 | 162.85 | 165.72 |
+
+BERT LARGE FP32
+
+| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+|-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
+| 128 | 1 | 40.34  | 24.79  | 26.97  | 27.38  | 28.21  |
+| 128 | 2 | 45.17  | 44.27  | 46.01  | 46.6   | 47.68  |
+| 128 | 4 | 47.39  | 84.41  | 86.31  | 86.92  | 88.14  |
+| 128 | 8 | 46.98  | 170.29 | 173.35 | 174.15 | 175.48 |
+| 384 | 1 | 14.07  | 71.06  | 73     | 73.42  | 73.99  |
+| 384 | 2 | 14.91  | 134.17 | 136.72 | 137.51 | 138.66 |
+| 384 | 4 | 14.44  | 277.03 | 281.89 | 282.63 | 284.41 |
+| 384 | 8 | 14.95  | 534.94 | 540.45 | 542.32 | 544.75 |
+
 
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.

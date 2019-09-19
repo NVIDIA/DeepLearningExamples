@@ -149,12 +149,7 @@ def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None,
       update_op = tf.cond(update_step,
                           lambda: update(accum_vars), lambda: tf.no_op())
 
-      # Normally the global step update is done inside of `apply_gradients`.
-      # However, `AdamWeightDecayOptimizer` doesn't do this. But if you use
-      # a different optimizer, you should probably take this line out.
-      # new_global_step = tf.identity(tf.cond(tf.math.logical_and(update_step, batch_finite), lambda: global_step.assign_add(1), lambda: global_step.assign(global_step)), name='step_update')
-      # train_op = tf.group(update_op, new_global_step)
-      new_global_step = tf.cond(tf.math.logical_and(update_step, batch_finite), lambda: global_step+1, lambda: global_step)
+      new_global_step = tf.cond(tf.math.logical_and(update_step, tf.cast(hvd.allreduce(tf.cast(batch_finite, tf.int32)), tf.bool)), lambda: global_step+1, lambda: global_step)
       new_global_step = tf.identity(new_global_step, name='step_update')
       train_op = tf.group(update_op, [global_step.assign(new_global_step)])
   else:
@@ -176,15 +171,9 @@ def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None,
       train_op = optimizer.apply_gradients(
           list(zip(clipped_grads, tvars)), global_step=global_step)
 
-      # Normally the global step update is done inside of `apply_gradients`.
-      # However, `AdamWeightDecayOptimizer` doesn't do this. But if you use
-      # a different optimizer, you should probably take this line out.
       new_global_step = tf.cond(all_are_finite, lambda: global_step + 1, lambda: global_step)
       new_global_step = tf.identity(new_global_step, name='step_update')
       train_op = tf.group(train_op, [global_step.assign(new_global_step)])
-
-      # new_global_step = tf.identity(tf.cond(all_are_finite, lambda: global_step.assign_add(1), lambda: global_step.assign(global_step)), name='step_update')
-      # train_op = tf.group(update_op, new_global_step)
   return train_op
 
 
