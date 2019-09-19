@@ -19,7 +19,10 @@ Before running the Jupyter notebook, please make sure you already git clone the 
     cd DeepLearningExamples/PyTorch/SpeechSynthesis/Tacotron2
 ```
     
-Copy the Tacotron2.ipynb file into the folder 'Tacotron2'
+Copy the Tacotron2.ipynb file into the folder 'Tacotron2':
+```bash 
+    cp notebooks/Tacotron2.ipynb .
+```
 
 ### Running the quick start guide as a Jupyter notebook
 
