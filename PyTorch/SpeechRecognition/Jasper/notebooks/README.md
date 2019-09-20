@@ -33,11 +33,13 @@ Create three directories on your local machine for dataset, checkpoint, and resu
 mkdir data checkpoint result
 ```
 Download the checkpoint file `jasperpyt_fp16` to the directory `checkpoint` from NGC Model Repository: https://ngc.nvidia.com/catalog/models/nvidia:jasperpyt_fp16
+
 Assume you will download the dataset to /dev/sdb and mount the data on /dev/sdb to "data", please replace "/dev/sdb" with your own directories if you use other directories:
 
 ```bash
 sudo mount /dev/sdb data
 ```
+
 The Jasper PyTorch container will be launched in the Jupyter notebook. Within the container, the contents of the root repository will be copied to the /workspace/jasper directory. The /datasets, /checkpoints, /results directories are mounted as volumes and mapped to the corresponding directories "data" "checkpoint" "result" on the host.
 
 Copy the notebook to the root directory of Jasper:
