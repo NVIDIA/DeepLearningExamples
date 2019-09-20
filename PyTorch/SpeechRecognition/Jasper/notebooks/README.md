@@ -39,10 +39,16 @@ Assume you will download the dataset to /dev/sdb and mount the data on /dev/sdb 
 sudo mount /dev/sdb data
 ```
 The Jasper PyTorch container will be launched in the Jupyter notebook. Within the container, the contents of the root repository will be copied to the /workspace/jasper directory. The /datasets, /checkpoints, /results directories are mounted as volumes and mapped to the corresponding directories "data" "checkpoint" "result" on the host.
+
+Copy the JasperTRT.ipynb notebook to the root directory of Jasper:
+```bash
+cp notebooks/JasperTRT.ipynb .
+```
+
 For running the notebook on your local machine, run:
 
 ```bash
-jupyter notebook notebooks/JasperTRT.ipynb
+jupyter notebook JasperTRT.ipynb
 ```
 For running the notebook on another machine remotely, run: 
 
