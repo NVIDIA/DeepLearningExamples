@@ -42,7 +42,8 @@ sudo mount /dev/sdb data
 
 The Jasper PyTorch container will be launched in the Jupyter notebook. Within the container, the contents of the root repository will be copied to the /workspace/jasper directory. The /datasets, /checkpoints, /results directories are mounted as volumes and mapped to the corresponding directories "data" "checkpoint" "result" on the host.
 
-Copy the notebook to the root directory of Jasper:
+Copy the JasperTRT.ipynb notebook to the root directory of Jasper:
+
 ```bash
 cp notebooks/JasperTRT.ipynb .
 ```
