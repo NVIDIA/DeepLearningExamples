@@ -65,6 +65,8 @@ This repository provides a script and recipe to train the BERT model for TensorF
       * [Inference performance: NVIDIA DGX-2 (1x V100 32G)](#inference-performance-nvidia-dgx-2-1x-v100-32g)
         * [Pre-training inference performance on DGX-2 32G](#pre-training-inference-performance-on-dgx-2-32g)
         * [Fine-tuning inference performance for SQuAD on DGX-2  32G](#fine-tuning-inference-performance-for-squad-on-dgx-2-32g)
+      * [Inference performance: NVIDIA Tesla T4 (1x T4 16G)](#inference-performance-nvidia-tesla-t4-1x-t4-16g)
+        * [Fine-tuning inference performance for SQuAD on Tesla T4 16G](#fine-tuning-inference-performance-for-squad-on-tesla-t4-16g)
 - [Release notes](#release-notes)
   * [Changelog](#changelog)
   * [Known issues](#known-issues)
@@ -356,13 +358,13 @@ Other folders included in the root directory are:
 Aside from the options to set hyperparameters, the relevant options to control the behaviour of the `run_pretraining.py` script are:
 
 ```
-  --[no]use_fp16: Whether to enable AMP ops.(default: 'false')
   --bert_config_file: The config json file corresponding to the pre-trained BERT model. This specifies the model architecture.
+  --init_checkpoint: Initial checkpoint (usually from a pre-trained BERT model).
   --[no]do_eval: Whether to run evaluation on the dev set.(default: 'false')
   --[no]do_train: Whether to run training.(evaluation: 'false')
   --eval_batch_size: Total batch size for eval.(default: '8')(an integer)
   --[no]horovod: Whether to use Horovod for multi-gpu runs(default: 'false')
-  --init_checkpoint: Initial checkpoint (usually from a pre-trained BERT model).
+  --[no]use_fp16: Whether to enable AMP ops.(default: 'false')
   --input_files_dir: Input TF example files (can be a dir or comma separated).
   --output_dir: The output directory where the model checkpoints will be    written.
   --optimizer_type: Optimizer used for training - LAMB or ADAM
@@ -412,6 +414,7 @@ Aside from the options to set hyperparameters, some relevant options to control 
   --warmup_proportion: Proportion of training to perform linear learning rate warmup for. E.g., 0.1 = 10% of training.(default: '0.1')(a number)
 ```
 
+Note: When initializing from a checkpoint using `--init_checkpoint` and a corpus of your choice, keep in mind that `bert_config_file` and `vocab_file` should remain unchanged.
 
 ### Command-line options
 
@@ -482,6 +485,7 @@ The `run_pretraining_lamb.sh` script runs a job on a single node that trains the
     - Runs 1564 steps with 200 warm-up steps
     - Sets Maximum sequence length as 512
     - Sets Global Batch size as 32K
+    - Starts from Phase1's final checkpoint
 
 These parameters train Wikipedia and BookCorpus with reasonable accuracy on a DGX-1 with 32GB V100 cards.
 
@@ -857,11 +861,9 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 | 4 | 3 |  -   |50.71| -  | -  |2.95|
 | 8 | 3 |  -   |91.88| -  | -  |5.34|
 
-
 Note: The respective values for FP32 runs that use a batch size of 3 are not available due to out of memory errors that arise. Batch size of 3 is only available on using FP16.
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
-
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 32G)
 
@@ -952,7 +954,6 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 
 Note: The respective values for FP32 runs that use a batch size of 10 are not available due to out of memory errors that arise. Batch size of 10 is only available on using FP16.
 
-
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 #### Inference performance results
@@ -973,16 +974,16 @@ Our results were obtained by running the `scripts/finetune_inference_benchmark.s
 
 BERT LARGE FP16
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
-|-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 89.4                         | 11.19               | 11.29           | 11.44           | 11.71           |
-| 128             | 2          | 162.29                       | 12.32               | 12.5            | 12.57           | 12.74           |
-| 128             | 4          | 263.44                       | 15.18               | 15.32           | 15.54           | 17              |
-| 128             | 8          | 374.33                       | 21.37               | 21.56           | 21.72           | 23.23           |
-| 384             | 1          | 64.57                        | 15.49               | 15.61           | 15.73           | 16.18           |
-| 384             | 2          | 94.04                        | 21.27               | 21.34           | 21.4            | 21.9            |
-| 384             | 4          | 118.81                       | 33.67               | 33.89           | 34.37           | 36.18           |
-| 384             | 8          | 137.65                       | 58.12               | 58.53           | 59.34           | 61.32           |
+| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |        |
+|-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|--------|
+| 128             | 1          | 89.4                         | 1.19                                         | 11.19               | 11.29           | 11.44           | 11.71           | 11.71  |
+| 128             | 2          | 162.29                       | 1.56                                         | 12.32               | 12.5            | 12.57           | 12.74           | 12.74  |
+| 128             | 4          | 263.44                       | 2.24                                         | 15.18               | 15.32           | 15.54           | 17              | 17     |
+| 128             | 8          | 374.33                       | 2.98                                         | 21.37               | 21.56           | 21.72           | 23.23           | 23.23  |
+| 384             | 1          | 64.57                        | 1.87                                         | 15.49               | 15.61           | 15.73           | 16.18           | 16.18  |
+| 384             | 2          | 94.04                        | 2.47                                         | 21.27               | 21.34           | 21.4            | 21.9            | 21.9   |
+| 384             | 4          | 118.81                       | 2.96                                         | 33.67               | 33.89           | 34.37           | 36.18           | 36.18  |
+| 384             | 8          | 137.65                       | 3.26                                         | 58.12               | 58.53           | 59.34           | 61.32           | 61.32  |
 
 BERT LARGE FP32
 
@@ -999,17 +1000,16 @@ BERT LARGE FP32
 
 BERT BASE FP16
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
-|-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 196.58                       | 5.09                | 5.18            | 5.23            | 5.42            |
-| 128             | 2          | 361.92                       | 5.53                | 5.62            | 5.67            | 5.85            |
-| 128             | 4          | 605.43                       | 6.61                | 6.71            | 6.8             | 7.04            |
-| 128             | 8          | 916                          | 8.73                | 8.83            | 8.95            | 9.19            |
-| 384             | 1          | 154.05                       | 6.49                | 6.6             | 6.72            | 7.05            |
-| 384             | 2          | 238.89                       | 8.37                | 8.42            | 8.47            | 9.1             |
-| 384             | 4          | 327.18                       | 12.23               | 12.3            | 12.36           | 13.08           |
-| 384             | 8          | 390.95                       | 20.46               | 20.5            | 20.8            | 21.89           |
-
+| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |        |
+|-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|--------|
+| 128             | 1          | 196.58                       | 1.19                                         | 5.09                | 5.18            | 5.23            | 5.42            | 5.42   |
+| 128             | 2          | 361.92                       | 1.41                                         | 5.53                | 5.62            | 5.67            | 5.85            | 5.85   |
+| 128             | 4          | 605.43                       | 1.79                                         | 6.61                | 6.71            | 6.8             | 7.04            | 7.04   |
+| 128             | 8          | 916                          | 2.18                                         | 8.73                | 8.83            | 8.95            | 9.19            | 9.19   |
+| 384             | 1          | 154.05                       | 1.58                                         | 6.49                | 6.6             | 6.72            | 7.05            | 7.05   |
+| 384             | 2          | 238.89                       | 1.99                                         | 8.37                | 8.42            | 8.47            | 9.1             | 9.1    |
+| 384             | 4          | 327.18                       | 2.47                                         | 12.23               | 12.3            | 12.36           | 13.08           | 13.08  |
+| 384             | 8          | 390.95                       | 2.82                                         | 20.46               | 20.5            | 20.8            | 21.89           | 21.89  |
 
 BERT BASE FP32
 
@@ -1043,17 +1043,16 @@ Our results were obtained by running the `scripts/finetune_inference_benchmark.s
 
 BERT LARGE FP16
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
-|-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 86.4                         | 11.57               | 11.74           | 11.86           | 12.04           |
-| 128             | 2          | 155.32                       | 12.88               | 12.98           | 13.05           | 13.31           |
-| 128             | 4          | 252.18                       | 15.86               | 15.78           | 15.89           | 17.01           |
-| 128             | 8          | 359.19                       | 22.27               | 22.44           | 22.58           | 23.94           |
-| 384             | 1          | 62.45                        | 16.01               | 16.16           | 16.23           | 16.42           |
-| 384             | 2          | 89.34                        | 22.39               | 22.45           | 22.53           | 23.13           |
-| 384             | 4          | 113.77                       | 35.16               | 35.24           | 35.33           | 35.9            |
-| 384             | 8          | 131.9                        | 60.65               | 61              | 61.49           | 65.3            |
-
+| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |        |
+|-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|--------|
+| 128             | 1          | 86.4                         | 1.18                                         | 11.57               | 11.74           | 11.86           | 12.04           | 12.04  |
+| 128             | 2          | 155.32                       | 1.52                                         | 12.88               | 12.98           | 13.05           | 13.31           | 13.31  |
+| 128             | 4          | 252.18                       | 2.18                                         | 15.86               | 15.78           | 15.89           | 17.01           | 17.01  |
+| 128             | 8          | 359.19                       | 2.88                                         | 22.27               | 22.44           | 22.58           | 23.94           | 23.94  |
+| 384             | 1          | 62.45                        | 1.84                                         | 16.01               | 16.16           | 16.23           | 16.42           | 16.42  |
+| 384             | 2          | 89.34                        | 2.37                                         | 22.39               | 22.45           | 22.53           | 23.13           | 23.13  |
+| 384             | 4          | 113.77                       | 2.84                                         | 35.16               | 35.24           | 35.33           | 35.9            | 35.9   |
+| 384             | 8          | 131.9                        | 3.13                                         | 60.65               | 61              | 61.49           | 65.3            | 65.3   |
 BERT LARGE FP32
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
@@ -1069,18 +1068,16 @@ BERT LARGE FP32
 
 BERT BASE FP16
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
-|-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 192.89                       | 5.18                | 5.29            | 5.35            | 5.55            |
-| 128             | 2          | 348.23                       | 5.74                | 5.91            | 6.02            | 6.26            |
-| 128             | 4          | 592.54                       | 6.75                | 6.96            | 7.08            | 7.34            |
-| 128             | 8          | 888.58                       | 9                   | 9.11            | 9.22            | 9.5             |
-| 384             | 1          | 148.64                       | 6.73                | 6.82            | 6.87            | 7.06            |
-| 384             | 2          | 230.74                       | 8.67                | 8.75            | 8.87            | 9.44            |
-| 384             | 4          | 318.45                       | 12.56               | 12.65           | 12.76           | 13.36           |
-| 384             | 8          | 380.14                       | 21.05               | 21.1            | 21.25           | 21.83           |
-
-
+| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |        |
+|-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|--------|
+| 128             | 1          | 192.89                       | 1.19                                         | 5.18                | 5.29            | 5.35            | 5.55            | 5.55   |
+| 128             | 2          | 348.23                       | 1.37                                         | 5.74                | 5.91            | 6.02            | 6.26            | 6.26   |
+| 128             | 4          | 592.54                       | 1.79                                         | 6.75                | 6.96            | 7.08            | 7.34            | 7.34   |
+| 128             | 8          | 888.58                       | 2.15                                         | 9                   | 9.11            | 9.22            | 9.5             | 9.5    |
+| 384             | 1          | 148.64                       | 1.57                                         | 6.73                | 6.82            | 6.87            | 7.06            | 7.06   |
+| 384             | 2          | 230.74                       | 1.96                                         | 8.67                | 8.75            | 8.87            | 9.44            | 9.44   |
+| 384             | 4          | 318.45                       | 2.42                                         | 12.56               | 12.65           | 12.76           | 13.36           | 13.36  |
+| 384             | 8          | 380.14                       | 2.72                                         | 21.05               | 21.1            | 21.25           | 21.83           | 21.83  |
 BERT BASE FP32
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
@@ -1093,7 +1090,6 @@ BERT BASE FP32
 | 384             | 2          | 117.64                       | 17                  | 17.07           | 17.1            | 17.83           |
 | 384             | 4          | 131.72                       | 30.37               | 30.64           | 30.77           | 31.26           |
 | 384             | 8          | 139.75                       | 57.25               | 57.74           | 58.08           | 59.53           |
-
 
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
@@ -1114,17 +1110,16 @@ Our results were obtained by running the `scripts/finetune_inference_benchmark.s
 
 BERT LARGE FP16
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
-|-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 79                           | 12.66               | 13.13           | 13.36           | 14.49           |
-| 128             | 2          | 151.28                       | 13.22               | 13.66           | 13.89           | 14.84           |
-| 128             | 4          | 250.41                       | 15.97               | 16.13           | 16.3            | 17.81           |
-| 128             | 8          | 369.76                       | 21.64               | 21.88           | 22.08           | 26.35           |
-| 384             | 1          | 61.66                        | 16.22               | 16.46           | 16.62           | 17.26           |
-| 384             | 2          | 91.54                        | 21.85               | 22.11           | 22.3            | 23.44           |
-| 384             | 4          | 121.04                       | 33.05               | 33.08           | 33.31           | 34.97           |
-| 384             | 8          | 142.03                       | 56.33               | 56.46           | 57.49           | 59.85           |
-
+| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |        |
+|-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|--------|
+| 128             | 1          | 79                           | 1.18                                         | 12.66               | 13.13           | 13.36           | 14.49           | 14.49  |
+| 128             | 2          | 151.28                       | 1.52                                         | 13.22               | 13.66           | 13.89           | 14.84           | 14.84  |
+| 128             | 4          | 250.41                       | 2.18                                         | 15.97               | 16.13           | 16.3            | 17.81           | 17.81  |
+| 128             | 8          | 369.76                       | 2.88                                         | 21.64               | 21.88           | 22.08           | 26.35           | 26.35  |
+| 384             | 1          | 61.66                        | 1.84                                         | 16.22               | 16.46           | 16.62           | 17.26           | 17.26  |
+| 384             | 2          | 91.54                        | 2.37                                         | 21.85               | 22.11           | 22.3            | 23.44           | 23.44  |
+| 384             | 4          | 121.04                       | 2.84                                         | 33.05               | 33.08           | 33.31           | 34.97           | 34.97  |
+| 384             | 8          | 142.03                       | 3.13                                         | 56.33               | 56.46           | 57.49           | 59.85           | 59.85  |
 
 BERT LARGE FP32
 
@@ -1139,21 +1134,18 @@ BERT LARGE FP32
 | 384             | 4          | 42.79                        | 93.48               | 94.73           | 96.52           | 104.37          |
 | 384             | 8          | 45.91                        | 174.24              | 175.34          | 176.59          | 183.76          |
 
-
 BERT BASE FP16
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
-|-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 192.89                       | 5.18                | 5.29            | 5.35            | 5.55            |
-| 128             | 2          | 348.23                       | 5.74                | 5.91            | 6.02            | 6.26            |
-| 128             | 4          | 592.54                       | 6.75                | 6.96            | 7.08            | 7.34            |
-| 128             | 8          | 888.58                       | 9                   | 9.11            | 9.22            | 9.5             |
-| 384             | 1          | 148.64                       | 6.73                | 6.82            | 6.87            | 7.06            |
-| 384             | 2          | 230.74                       | 8.67                | 8.75            | 8.87            | 9.44            |
-| 384             | 4          | 318.45                       | 12.56               | 12.65           | 12.76           | 13.36           |
-| 384             | 8          | 380.14                       | 21.05               | 21.1            | 21.25           | 21.83           |
-
-
+| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |        |
+|-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|--------|
+| 128             | 1          | 172.33                       | 1.19                                         | 5.8                 | 5.94            | 6               | 6.27            | 6.27   |
+| 128             | 2          | 315.17                       | 1.37                                         | 6.35                | 6.64            | 6.78            | 7.07            | 7.07   |
+| 128             | 4          | 549.36                       | 1.79                                         | 7.28                | 7.47            | 7.6             | 8.05            | 8.05   |
+| 128             | 8          | 872.67                       | 2.15                                         | 9.17                | 9.33            | 9.5             | 9.92            | 9.92   |
+| 384             | 1          | 138.52                       | 1.57                                         | 7.22                | 7.45            | 7.52            | 7.84            | 7.84   |
+| 384             | 2          | 222.05                       | 1.96                                         | 9.01                | 9.11            | 9.24            | 10.94           | 10.94  |
+| 384             | 4          | 314.47                       | 2.42                                         | 12.72               | 12.87           | 13.01           | 14.42           | 14.42  |
+| 384             | 8          | 392.32                       | 2.72                                         | 20.39               | 20.44           | 20.67           | 22.16           | 22.16  |
 
 BERT BASE FP32
 
@@ -1167,6 +1159,65 @@ BERT BASE FP32
 | 384             | 2          | 117.64                       | 17                  | 17.07           | 17.1            | 17.83           |
 | 384             | 4          | 131.72                       | 30.37               | 30.64           | 30.77           | 31.26           |
 | 384             | 8          | 139.75                       | 57.25               | 57.74           | 58.08           | 59.53           |
+
+
+##### Inference performance: NVIDIA Tesla T4 (1x T4 16G)
+
+###### Fine-tuning inference performance for SQuAD on Tesla T4 16G
+
+Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA Tesla T4 with 1x T4 16G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
+
+BERT LARGE FP16
+
+| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |        |
+|-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|--------|
+| 128             | 1          | 53.56                        | 1.18                                         | 18.67               | 20.22           | 20.31           | 20.49           | 20.49  |
+| 128             | 2          | 95.39                        | 1.52                                         | 20.97               | 22.86           | 23.15           | 23.73           | 23.73  |
+| 128             | 4          | 137.44                       | 2.18                                         | 29.1                | 30.34           | 30.62           | 31.5            | 31.5   |
+| 128             | 8          | 166.19                       | 2.88                                         | 48.14               | 49.38           | 49.73           | 50.86           | 50.86  |
+| 384             | 1          | 34.28                        | 1.84                                         | 29.17               | 30.58           | 30.77           | 31.28           | 31.28  |
+| 384             | 2          | 41.89                        | 2.37                                         | 47.74               | 49.05           | 49.34           | 50              | 50     |
+| 384             | 4          | 47.15                        | 2.84                                         | 84.83               | 86.79           | 87.41           | 88.73           | 88.73  |
+| 384             | 8          | 50.28                        | 3.13                                         | 159.11              | 161.75          | 162.85          | 165.72          | 165.72 |
+
+BERT LARGE FP32
+
+| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+|-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
+| 128 | 1 | 40.34  | 24.79  | 26.97  | 27.38  | 28.21  |
+| 128 | 2 | 45.17  | 44.27  | 46.01  | 46.6   | 47.68  |
+| 128 | 4 | 47.39  | 84.41  | 86.31  | 86.92  | 88.14  |
+| 128 | 8 | 46.98  | 170.29 | 173.35 | 174.15 | 175.48 |
+| 384 | 1 | 14.07  | 71.06  | 73     | 73.42  | 73.99  |
+| 384 | 2 | 14.91  | 134.17 | 136.72 | 137.51 | 138.66 |
+| 384 | 4 | 14.44  | 277.03 | 281.89 | 282.63 | 284.41 |
+| 384 | 8 | 14.95  | 534.94 | 540.45 | 542.32 | 544.75 |
+
+BERT BASE FP16
+
+| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |        |
+|-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|--------|
+| 128             | 1          | 107.3                        | 1.19                                         | 9.32                | 10.18           | 10.32           | 11.48           | 11.48  |
+| 128             | 2          | 185.18                       | 1.37                                         | 10.8                | 11.71           | 12.11           | 12.35           | 12.35  |
+| 128             | 4          | 335.47                       | 1.79                                         | 11.92               | 12.58           | 12.72           | 13.36           | 13.36  |
+| 128             | 8          | 454.12                       | 2.15                                         | 17.62               | 18.45           | 18.68           | 19.25           | 19.25  |
+| 384             | 1          | 83.5                         | 1.57                                         | 11.98               | 12.71           | 12.93           | 13.29           | 13.29  |
+| 384             | 2          | 117.75                       | 1.96                                         | 16.99               | 17.62           | 17.83           | 19.48           | 19.48  |
+| 384             | 4          | 139.08                       | 2.42                                         | 28.76               | 29.59           | 29.85           | 30.74           | 30.74  |
+| 384             | 8          | 149.93                       | 2.72                                         | 53.36               | 54.83           | 55.48           | 56.93           | 56.93  |
+
+BERT BASE FP32
+
+| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+|-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
+| 128 | 1 | 92.82  | 10.77  | 11.06 | 11.11  | 11.24 |
+| 128 | 2 | 127.87 | 15.64  | 16.2  | 16.4   | 16.86 |
+| 128 | 4 | 151.68 | 26.37  | 27.26 | 27.48  | 27.98 |
+| 128 | 8 | 164.51 | 48.63  | 50.36 | 50.72  | 51.52 |
+| 384 | 1 | 45.64  | 21.91  | 23.39 | 23.66  | 24.14 |
+| 384 | 2 | 48.11  | 41.57  | 42.99 | 43.47  | 44.44 |
+| 384 | 4 | 48.64  | 82.24  | 84.35 | 84.97  | 86.2  |
+| 384 | 8 | 48.04  | 166.51 | 169.9 | 170.84 | 172.6 |
 
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
