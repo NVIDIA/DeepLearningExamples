@@ -1230,6 +1230,7 @@ September 2019
 - Pre-training using LAMB
 - Multi Node support
 - Fine Tuning support for GLUE (CoLA, MNLI, MRPC)
+- Jupyter Notebooks
 
 July 2019
 - Results obtained using 19.06
