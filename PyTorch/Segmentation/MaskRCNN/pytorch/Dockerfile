@@ -23,9 +23,6 @@ RUN pip install --upgrade --no-cache-dir pip \
       yacs
 
 WORKDIR /opt
-RUN git clone -b v0.1 https://github.com/NVIDIA/cocoapi.git \
- && cd cocoapi/PythonAPI \
- && pip install -e .
 
 # Copy detectron code and build
 WORKDIR /workspace/object_detection
