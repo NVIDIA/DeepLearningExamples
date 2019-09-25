@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:19.02-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:19.05-py3
 FROM ${FROM_IMAGE_NAME}
 
 # Install Python dependencies
