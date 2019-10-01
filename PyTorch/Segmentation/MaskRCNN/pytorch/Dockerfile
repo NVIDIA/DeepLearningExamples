@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:19.02-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:19.05-py3
 FROM ${FROM_IMAGE_NAME}
 
 # Install Python dependencies
@@ -23,9 +23,6 @@ RUN pip install --upgrade --no-cache-dir pip \
       yacs
 
 WORKDIR /opt
-RUN git clone -b v0.1 https://github.com/NVIDIA/cocoapi.git \
- && cd cocoapi/PythonAPI \
- && pip install -e .
 
 # Copy detectron code and build
 WORKDIR /workspace/object_detection
