@@ -523,7 +523,7 @@ Where:
 The following sample code trains BERT-large from scratch on a single DGX-2 using FP16 arithmetic. This will take around 4.5 days.
 
 ```bash
-bert_tf/scripts/run_pretraining_lamb.sh 32 8 8 3.75e-4 2.5e-4 fp16 trye 16 2000 200 7820 100 128 512 256 large
+bert_tf/scripts/run_pretraining_lamb.sh 32 8 8 3.75e-4 2.5e-4 fp16 true 16 2000 200 7820 100 128 512 256 large
 ```
 
 #### Fine tuning
@@ -1053,6 +1053,7 @@ BERT LARGE FP16
 | 384             | 2          | 89.34                        | 2.37                                         | 22.39               | 22.45           | 22.53           | 23.13           | 23.13  |
 | 384             | 4          | 113.77                       | 2.84                                         | 35.16               | 35.24           | 35.33           | 35.9            | 35.9   |
 | 384             | 8          | 131.9                        | 3.13                                         | 60.65               | 61              | 61.49           | 65.3            | 65.3   |
+
 BERT LARGE FP32
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
@@ -1078,6 +1079,7 @@ BERT BASE FP16
 | 384             | 2          | 230.74                       | 1.96                                         | 8.67                | 8.75            | 8.87            | 9.44            | 9.44   |
 | 384             | 4          | 318.45                       | 2.42                                         | 12.56               | 12.65           | 12.76           | 13.36           | 13.36  |
 | 384             | 8          | 380.14                       | 2.72                                         | 21.05               | 21.1            | 21.25           | 21.83           | 21.83  |
+
 BERT BASE FP32
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |

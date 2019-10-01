@@ -177,7 +177,6 @@ def main(args):
             bert_preprocessing_command += ' --random_seed=' + str(args.random_seed)
             bert_preprocessing_command += ' --dupe_factor=' + str(args.dupe_factor)
             bert_preprocessing_process = subprocess.Popen(bert_preprocessing_command, shell=True)
-            bert_preprocessing_process.communicate()
 
             last_process = bert_preprocessing_process
 
@@ -220,7 +219,6 @@ def main(args):
             bert_preprocessing_command += ' --random_seed=' + args.random_seed
             bert_preprocessing_command += ' --dupe_factor=' + args.dupe_factor
             bert_preprocessing_process = subprocess.Popen(bert_preprocessing_command, shell=True)
-            bert_preprocessing_process.communicate()
 
             last_process = bert_preprocessing_process
 

@@ -237,17 +237,17 @@ def get_frozen_tftrt_model(bert_config, shape, use_one_hot_embeddings, init_chec
 
     num_nodes = len(frozen_graph.node)
     print('Converting graph using TensorFlow-TensorRT...')
-    import tensorflow.contrib.tensorrt as trt
-    frozen_graph = trt.create_inference_graph(
+    from tensorflow.python.compiler.tensorrt import trt_convert as trt
+    converter = trt.TrtGraphConverter(
         input_graph_def=frozen_graph,
-        outputs=output_node_names,
-        max_batch_size=FLAGS.predict_batch_size,
+        nodes_blacklist=output_node_names,
         max_workspace_size_bytes=(4096 << 20) - 1000,
         precision_mode = "FP16" if FLAGS.use_fp16 else "FP32",
         minimum_segment_size=4,
         is_dynamic_op=True,
         maximum_cached_engines=1000
     )
+    frozen_graph = converter.convert()
 
     print('Total node count before and after TF-TRT conversion:',
           num_nodes, '->', len(frozen_graph.node))
