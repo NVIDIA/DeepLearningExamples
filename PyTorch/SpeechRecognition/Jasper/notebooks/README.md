@@ -8,10 +8,10 @@ This notebook provides scripts for you to run Jasper with TRT for inference step
 
 This repository contains a Dockerfile which extends the PyTorch 19.09-py3 NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 
--    NVIDIA Docker
--    PyTorch 19.09-py3 NGC container
--    NVIDIA Turing or Volta based GPU
--    Pretrained Jasper Model Checkpoint
+* [NVIDIA Turing](https://www.nvidia.com/en-us/geforce/turing/) or [Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) based GPU    
+* [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
+* [PyTorch 19.09-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
+* [Pretrained Jasper Model Checkpoint](https://ngc.nvidia.com/catalog/models/nvidia:jasperpyt_fp16)
 
 ## Quick Start Guide
 
@@ -31,6 +31,7 @@ bash trt/scripts/docker/trt_build.sh
 ```
 
 #### 3. Create directories
+
 Prepare to start a detached session in the NGC container.
 Create three directories on your local machine for dataset, checkpoint, and result, respectively, naming "data" "checkpoint" "result":
 
@@ -39,6 +40,7 @@ mkdir data checkpoint result
 ```
 
 #### 4. Download the checkpoint
+
 Download the checkpoint file jasperpyt_fp16 from NGC Model Repository:  
 - https://ngc.nvidia.com/catalog/models/nvidia:jasperpyt_fp16
 
@@ -48,7 +50,7 @@ The Jasper PyTorch container will be launched in the Jupyter notebook. Within th
 
 The /datasets, /checkpoints, /results directories are mounted as volumes and mapped to the corresponding directories "data" "checkpoint" "result" on the host.
 
-#### 5. Copy the notebook to the root
+#### 5. Run the notebook
 
 Copy the notebook to the root directory of Jasper:
 
@@ -56,7 +58,6 @@ Copy the notebook to the root directory of Jasper:
 cp notebooks/JasperTRT.ipynb .
 ```
 
-#### 6. Run the notebook
 For running the notebook on your local machine, run:
 
 ```
