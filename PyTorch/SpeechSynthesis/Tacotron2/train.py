@@ -35,6 +35,7 @@ import torch
 from torch.utils.data import DataLoader
 from torch.autograd import Variable
 from torch.nn.parameter import Parameter
+from inference import unwrap_distributed, checkpoint_from_distributed
 
 import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
@@ -98,6 +99,8 @@ def parse_args(parser):
                           help='Run cudnn benchmark')
     training.add_argument('--disable-uniform-initialize-bn-weight', action='store_true',
                           help='disable uniform initialization of batchnorm layer weight')
+    training.add_argument('--checkpoint', type=str, default="",\
+                          help="Path to checkpoint model if resuming training")
 
     optimization = parser.add_argument_group('optimization setup')
     optimization.add_argument(
@@ -347,6 +350,14 @@ def main():
     model = models.get_model(model_name, model_config,
                              to_cuda=True,
                              uniform_initialize_bn_weight=not args.disable_uniform_initialize_bn_weight)
+    
+    if args.checkpoint != "":
+        state_dict = torch.load(args.checkpoint)['state_dict']
+        if checkpoint_from_distributed(state_dict):
+            state_dict = unwrap_distributed(state_dict)
+
+        model.load_state_dict(state_dict)
+        print("Loaded from checkpoint: %s !" % args.checkpoint)
 
     if not args.amp_run and distributed_run:
         model = DDP(model)
