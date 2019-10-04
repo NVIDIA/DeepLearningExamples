@@ -220,7 +220,7 @@ cd scripts/
 ```
 
 If you wish to evaluate external checkpoint, make sure to put the TF ckpt files inside a folder named "checkpoints"
-and provide its parent path as <path to result repository> in the example above. 
+and provide its parent path as `<path to result repository>` in the example above. 
 Be aware that the script will not fail if it does not find the checkpoint. 
 It will randomly initialize the weights and run performance tests.
 
