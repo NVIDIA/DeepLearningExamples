@@ -31,7 +31,6 @@ bash trt/scripts/docker/trt_build.sh
 ```
 
 #### 3. Create directories
-
 Prepare to start a detached session in the NGC container.
 Create three directories on your local machine for dataset, checkpoint, and result, respectively, naming "data" "checkpoint" "result":
 
@@ -50,7 +49,7 @@ The Jasper PyTorch container will be launched in the Jupyter notebook. Within th
 
 The /datasets, /checkpoints, /results directories are mounted as volumes and mapped to the corresponding directories "data" "checkpoint" "result" on the host.
 
-#### 5. Run the notebook
+#### 5. Copy the notebook to the root
 
 Copy the notebook to the root directory of Jasper:
 
@@ -58,6 +57,7 @@ Copy the notebook to the root directory of Jasper:
 cp notebooks/JasperTRT.ipynb .
 ```
 
+#### 6. Run the notebook
 For running the notebook on your local machine, run:
 
 ```
