@@ -50,6 +50,7 @@ def do_coco_evaluation(
 
     results = COCOResults(*iou_types)
     logger.info("Evaluating predictions")
+    dataset.coco.createIndex(use_ext=True)
     for iou_type in iou_types:
         with tempfile.NamedTemporaryFile() as f:
             file_path = f.name
@@ -282,10 +283,10 @@ def evaluate_predictions_on_coco(
     from pycocotools.coco import COCO
     from pycocotools.cocoeval import COCOeval
 
-    coco_dt = coco_gt.loadRes(str(json_result_file)) if coco_results else COCO()
+    coco_dt = coco_gt.loadRes(str(json_result_file), use_ext=True) if coco_results else COCO()
 
     # coco_dt = coco_gt.loadRes(coco_results)
-    coco_eval = COCOeval(coco_gt, coco_dt, iou_type)
+    coco_eval = COCOeval(coco_gt, coco_dt, iou_type, use_ext=True)
     coco_eval.evaluate()
     coco_eval.accumulate()
     coco_eval.summarize()

@@ -72,7 +72,8 @@ def main():
     if args.opt_level == "O2":
         model = amp.initialize(model, opt_level=args.opt_level,
                                keep_batchnorm_fp32=False, loss_scale='dynamic')
-
+    model.eval()
+    
     users = torch.cuda.LongTensor(args.batch_size).random_(0, args.n_users)
     items = torch.cuda.LongTensor(args.batch_size).random_(0, args.n_items)
 
