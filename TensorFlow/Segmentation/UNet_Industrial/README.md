@@ -219,6 +219,11 @@ cd scripts/
 ./UNet_FP32_EVAL.sh <path to result repository> <path to dataset> <DAGM2007 classID (1-10)>
 ```
 
+If you wish to evaluate external checkpoint, make sure to put the TF ckpt files inside a folder named "checkpoints"
+and provide its parent path as <path to result repository> in the example above. 
+Be aware that the script will not fail if it does not find the checkpoint. 
+It will randomly initialize the weights and run performance tests.
+
 ## Advanced
 
 The following sections provide greater details of the dataset, running training and inference, and the training results.
