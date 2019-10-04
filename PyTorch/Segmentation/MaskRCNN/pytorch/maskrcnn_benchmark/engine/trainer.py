@@ -68,8 +68,6 @@ def do_train(
         iteration = iteration + 1
         arguments["iteration"] = iteration
 
-        scheduler.step()
-
         images = images.to(device)
         targets = [target.to(device) for target in targets]
 
@@ -93,6 +91,7 @@ def do_train(
 
         if not cfg.SOLVER.ACCUMULATE_GRAD:
             optimizer.step()
+            scheduler.step()
             optimizer.zero_grad()
         else:
             if (iteration + 1) % cfg.SOLVER.ACCUMULATE_STEPS == 0:
@@ -100,6 +99,7 @@ def do_train(
                     if param.grad is not None:
                         param.grad.data.div_(cfg.SOLVER.ACCUMULATE_STEPS)
                 optimizer.step()
+                scheduler.step()
                 optimizer.zero_grad()
             
         batch_time = time.time() - end

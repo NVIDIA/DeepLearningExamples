@@ -102,7 +102,7 @@ class AnchorGenerator(nn.Module):
             )
         else:
             device = anchors.device
-            inds_inside = torch.ones(anchors.shape[0], dtype=torch.uint8, device=device)
+            inds_inside = torch.ones(anchors.shape[0], dtype=torch.bool, device=device)
         boxlist.add_field("visibility", inds_inside)
 
     def forward(self, image_list, feature_maps):
