@@ -756,8 +756,9 @@ Our results were obtained by running the `scripts/run_pretraining_lamb.sh` train
 
 | **DGX System** | **GPUs** | **Batch size / GPU: Phase1, Phase2** | **Accumulation Steps: Phase1, Phase2** | **Time to Train - mixed precision (Hrs)** | **Final Loss - mixed precision** |
 |:---:|:---:|:----:|:----:|:---:|:----:|
-| DGX1  | 8  | 16, 2 | x, y | 247.51 | 1.43 |
-| DGX2  | 16 | 64, 8 | x, y | 108.16 | 1.58 |
+| DGX1  | 8  | 16, 2 | 512, 2048 | 247.51 | 1.43 |
+| DGX2  | 16 | 64, 8 | 64, 256 | 108.16 | 1.58 |
+
 
 ###### Pre-training accuracy: multi-node
 
