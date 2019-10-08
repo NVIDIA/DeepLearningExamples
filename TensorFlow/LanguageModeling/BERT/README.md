@@ -276,7 +276,7 @@ bash scripts/run_pretraining_lamb.sh 64 8 8 7.5e-4 5e-4 fp32 false 8 2000 200 78
 Alternatively, to run pre-training with Adam as in the original [BERT paper](https://arxiv.org/pdf/1810.04805.pdf) from within the container, run:
 
 ```bash
-bash scripts/run_pretraining_adam.sh <train_batch_size_per_gpu> <eval_batch_size> <learning_rate_per_gpu> <precision> <use_xla> <num_gpus> <warmup_steps> <train_steps> <save_checkpoint_steps> <create_logfile>
+bash scripts/run_pretraining_adam.sh <train_batch_size_per_gpu> <eval_batch_size> <learning_rate_per_gpu> <precision> <use_xla> <num_gpus> <warmup_steps> <train_steps> <save_checkpoint_steps>
 ```
 
 7. Start fine tuning.

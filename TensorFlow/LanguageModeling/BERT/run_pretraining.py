@@ -469,7 +469,7 @@ def input_fn_builder(input_files,
             lambda record: _decode_record(record, name_to_features),
             batch_size=batch_size,
             num_parallel_batches=num_cpu_threads,
-            drop_remainder=True))
+            drop_remainder=True if is_training else False))
     return d
 
   return input_fn
