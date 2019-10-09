@@ -148,7 +148,7 @@ class Runner(object):
 
         os.environ['TF_SYNC_ON_FINISH'] = '0'
         os.environ['TF_AUTOTUNE_THRESHOLD'] = '2'
-        os.environ['TF_DISABLE_NVTX_RANGES'] = '1'
+        # os.environ['TF_DISABLE_NVTX_RANGES'] = '1' 
 
         # =================================================
 
@@ -627,7 +627,7 @@ class Runner(object):
             LOGGER.log('TP', tps)
             LOGGER.log('FN', fns)
             LOGGER.log('TN', tns)
-            LOGGER.log('FP', tps)
+            LOGGER.log('FP', fps)
             LOGGER.log('TPR', tpr)
             LOGGER.log('TNR', tnr)
 

@@ -157,6 +157,14 @@ class UNet_v1(object):
             if "loss_fn_name" not in params.keys():
                 raise RuntimeError("Parameter `loss_fn_name` is missing...")
 
+        if mode == tf.estimator.ModeKeys.PREDICT:
+            y_pred, y_pred_logits = self.build_model(
+                features, training=False, reuse=False, debug_verbosity=params["debug_verbosity"]
+            )
+
+            predictions = {'logits': y_pred}
+            return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
+
         input_image, mask_image = features
 
         with tf.device("/gpu:0"):
@@ -174,10 +182,6 @@ class UNet_v1(object):
 
             all_trainable_vars = tf.reduce_sum([tf.reduce_prod(v.shape) for v in tf.trainable_variables()])
             tf.identity(all_trainable_vars, name='trainable_parameters_count_ref')
-
-            if mode == tf.estimator.ModeKeys.PREDICT:
-                predictions = {'logits': y_pred}
-                return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions)
 
             if mode == tf.estimator.ModeKeys.EVAL:
                 eval_metrics = dict()
