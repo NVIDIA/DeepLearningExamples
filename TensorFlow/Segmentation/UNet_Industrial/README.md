@@ -511,8 +511,11 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 ## Release notes
 
 ### Changelog
-March 18, 2019
-* Initial release
+
+* October 2019
+  * Jupyter notebooks added
+* March,2019
+  * Initial release
 
 ### Known issues
 There are no known issues with this model.
