@@ -288,14 +288,14 @@ if __name__ == "__main__":
         '--n_training_shards',
         type=int,
         help='Specify the number of training shards to generate',
-        default=256
+        default=1472
     )
 
     parser.add_argument(
         '--n_test_shards',
         type=int,
         help='Specify the number of test shards to generate',
-        default=256
+        default=1472
     )
 
     parser.add_argument(

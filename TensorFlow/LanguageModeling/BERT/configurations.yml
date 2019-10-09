@@ -108,18 +108,6 @@ bert--DGX2_n32:
     NUM_ACCUMULATION_STEPS: "8"
     PHASE: "1"
 
-#64 DGX2 phase1
-bert--DGX2_n64:
-  <<: *BERT_ON_CLUSTER
-  <<: *DGX2
-  variables:
-    <<: *DGX2_VARS
-    NNODES: "32"
-    BATCHSIZE: "32"
-    LEARNING_RATE: "1.171875e-5"
-    NUM_ACCUMULATION_STEPS: "4"
-    PHASE: "1"
-
 #1 DGX1 phase2
 bert--DGX1_n1p2:
   <<: *BERT_ON_CLUSTER
