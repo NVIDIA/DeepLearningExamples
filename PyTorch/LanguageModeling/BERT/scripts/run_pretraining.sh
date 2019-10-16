@@ -158,7 +158,7 @@ throughput=`cat $LOGFILE | grep Iteration | tail -1 | awk -F'it/s' '{print $1}' 
 loss=`cat $LOGFILE | grep 'Average Loss' | tail -1 | awk -F'Average Loss =' '{print $2}' | awk -F' ' '{print $1}' | egrep -o [0-9.]+`
 final_loss=`cat $LOGFILE | grep 'Total Steps' | tail -1 | awk -F'Final Loss =' '{print $2}' | awk -F' ' '{print $1}' | egrep -o [0-9.]+`
 
-train_perf=$(awk 'BEGIN {print ('$throughput' * '$num_gpus' * '$train_batch_size')}')
+train_perf=$(awk 'BEGIN {print ('$throughput' * '$num_gpus' * '$train_batch_size' / '$gradient_accumulation_steps' )}')
 echo " training throughput phase1: $train_perf sequences/second"
 echo "average loss: $loss"
 echo "final loss: $final_loss"
@@ -252,7 +252,8 @@ throughput=`cat $LOGFILE | grep Iteration | tail -1 | awk -F'it/s' '{print $1}' 
 loss=`cat $LOGFILE | grep 'Average Loss' | tail -1 | awk -F'Average Loss =' '{print $2}' | awk -F' ' '{print $1}' | egrep -o [0-9.]+`
 final_loss=`cat $LOGFILE | grep 'Total Steps' | tail -1 | awk -F'Final Loss =' '{print $2}' | awk -F' ' '{print $1}' | egrep -o [0-9.]+`
 
-train_perf=$(awk 'BEGIN {print ('$throughput' * '$num_gpus' * '$train_batch_size_phase2')}')
+train_perf=$(awk 'BEGIN {print ('$throughput' * '$num_gpus' * '$train_batch_size_phase2' / '$gradient_accumulation_steps_phase2')}')
+
 echo " training throughput phase2: $train_perf sequences/second"
 echo "average loss: $loss"
 echo "final loss: $final_loss"
