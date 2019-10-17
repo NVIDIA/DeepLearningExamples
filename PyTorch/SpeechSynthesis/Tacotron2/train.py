@@ -193,7 +193,7 @@ def save_checkpoint(model, optimizer, epoch, config, filepath, amp=None):
                 'config': config,
                 'state_dict': model.state_dict(),
                 'optimizer' : optimizer.state_dict(),
-                'amp': amp.state_dict()}, filepath)
+                'amp': amp.state_dict() if amp is not None else None}, filepath)
 
 
 def save_sample(model_name, model, waveglow_path, tacotron2_path, phrase_path, filepath, sampling_rate):
