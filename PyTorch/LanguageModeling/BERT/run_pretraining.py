@@ -527,7 +527,7 @@ def main():
                             average_loss /= torch.distributed.get_world_size()
                             torch.distributed.all_reduce(average_loss)
                         if is_main_process():
-                            logger.info("Total Steps:{} Final Loss = {}".format(training_steps, average_loss.item()))
+                            logger.info("Total Steps:{} Final Loss = {}".format(training_steps / args.gradient_accumulation_steps, average_loss.item()))
                     elif training_steps % (args.log_freq * args.gradient_accumulation_steps) == 0:
                         if is_main_process():
                             print("Step:{} Average Loss = {} Step Loss = {} LR {}".format(global_step, average_loss / (
