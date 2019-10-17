@@ -186,12 +186,14 @@ def init_distributed(args, world_size, rank, group_name):
     print("Done initializing distributed")
 
 
-def save_checkpoint(model, epoch, config, filepath):
+def save_checkpoint(model, optimizer, epoch, config, filepath, amp=None):
     print("Saving model and optimizer state at epoch {} to {}".format(
         epoch, filepath))
     torch.save({'epoch': epoch,
                 'config': config,
-                'state_dict': model.state_dict()}, filepath)
+                'state_dict': model.state_dict(),
+                'optimizer' : optimizer.state_dict(),
+                'amp': amp.state_dict()}, filepath)
 
 
 def save_sample(model_name, model, waveglow_path, tacotron2_path, phrase_path, filepath, sampling_rate):
@@ -351,24 +353,30 @@ def main():
                              to_cuda=True,
                              uniform_initialize_bn_weight=not args.disable_uniform_initialize_bn_weight)
     
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate,
+                                 weight_decay=args.weight_decay)
+    
+    if args.amp_run:
+        model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
+        if distributed_run:
+            model = DDP(model)
+    
     if args.checkpoint != "":
-        state_dict = torch.load(args.checkpoint)['state_dict']
+        checkpoint = torch.load(args.checkpoint)
+        state_dict = checkpoint['state_dict']
+        
         if checkpoint_from_distributed(state_dict):
             state_dict = unwrap_distributed(state_dict)
-
+        
+        if args.amp_run:
+            amp.load_state_dict(checkpoint['amp'])
+        
+        optimizer.load_state_dict(checkpoint['optimizer'])
         model.load_state_dict(state_dict)
         print("Loaded from checkpoint: %s !" % args.checkpoint)
 
     if not args.amp_run and distributed_run:
         model = DDP(model)
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate,
-                                 weight_decay=args.weight_decay)
-
-    if args.amp_run:
-        model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
-        if distributed_run:
-            model = DDP(model)
 
     try:
         sigma = args.sigma
@@ -500,7 +508,7 @@ def main():
         if (epoch % args.epochs_per_checkpoint == 0) and args.rank == 0:
             checkpoint_path = os.path.join(
                 args.output_directory, "checkpoint_{}_{}".format(model_name, epoch))
-            save_checkpoint(model, epoch, model_config, checkpoint_path)
+            save_checkpoint(model, optimizer, epoch, model_config, checkpoint_path, amp if args.amp_run else None)
             save_sample(model_name, model, args.waveglow_checkpoint,
                         args.tacotron2_checkpoint, args.phrase_path,
                         os.path.join(args.output_directory, "sample_{}_{}.wav".format(model_name, iteration)), args.sampling_rate)
