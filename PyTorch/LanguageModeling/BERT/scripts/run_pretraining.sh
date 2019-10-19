@@ -121,13 +121,7 @@ CMD+=" $ALL_REDUCE_POST_ACCUMULATION"
 CMD+=" $ALL_REDUCE_POST_ACCUMULATION_FP16"
 CMD+=" $ACCUMULATE_INTO_FP16"
 CMD+=" --do_train"
-
-if [ "$num_gpus" -gt 1  ] ; then
-   CMD="python3 -m torch.distributed.launch --nproc_per_node=$num_gpus $CMD"
-else
-   CMD="python3  $CMD"
-fi
-
+CMD="python3 -m torch.distributed.launch --nproc_per_node=$num_gpus $CMD"
 
 if [ "$create_logfile" = "true" ] ; then
   export GBS=$(expr $train_batch_size \* $num_gpus)
@@ -220,13 +214,7 @@ CMD+=" $ALL_REDUCE_POST_ACCUMULATION"
 CMD+=" $ALL_REDUCE_POST_ACCUMULATION_FP16"
 CMD+=" $ACCUMULATE_INTO_FP16"
 CMD+=" --do_train --phase2 --resume_from_checkpoint --phase1_end_step=$train_steps"
-
-if [ "$num_gpus" -gt 1  ] ; then
-   CMD="python3 -m torch.distributed.launch --nproc_per_node=$num_gpus $CMD"
-else
-   CMD="python3  $CMD"
-fi
-
+CMD="python3 -m torch.distributed.launch --nproc_per_node=$num_gpus $CMD"
 
 if [ "$create_logfile" = "true" ] ; then
   export GBS=$(expr $train_batch_size_phase2 \* $num_gpus)
