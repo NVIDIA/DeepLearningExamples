@@ -33,197 +33,408 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-""" example train fit utility """
+""" train fit utility """
 import logging
 import os
 import time
 import re
 import math
 import sys
+import random
+from itertools import starmap
+import numpy as np
 import mxnet as mx
+import mxnet.ndarray as nd
+import horovod.mxnet as hvd
+import mxnet.contrib.amp as amp
+from mxnet import autograd as ag
+from mxnet import gluon
 from report import Report
 from benchmarking import BenchmarkingDataIter
-
-def get_epoch_size(args, kv):
-    return math.ceil(int(args.num_examples / kv.num_workers) / args.batch_size)
-
-def _get_lr_scheduler(args, kv):
-    if 'lr_factor' not in args or args.lr_factor >= 1:
-        return (args.lr, None)
-    epoch_size = get_epoch_size(args, kv)
-    begin_epoch = args.load_epoch if args.load_epoch else 0
-    if 'pow' in args.lr_step_epochs:
-        lr = args.lr
-        max_up = args.num_epochs * epoch_size
-        pwr = float(re.sub('pow[- ]*', '', args.lr_step_epochs))
-        poly_sched = mx.lr_scheduler.PolyScheduler(max_up, lr, pwr)
-        return (lr, poly_sched)
-    step_epochs = [int(l) for l in args.lr_step_epochs.split(',')]
-    lr = args.lr
-    for s in step_epochs:
-        if begin_epoch >= s:
-            lr *= args.lr_factor
-    if lr != args.lr:
-        logging.info('Adjust learning rate to %e for epoch %d',
-                     lr, begin_epoch)
-
-    steps = [epoch_size * (x - begin_epoch)
-             for x in step_epochs if x - begin_epoch > 0]
-    if steps:
-        if kv:
-            num_workers = kv.num_workers
-        else:
-            num_workers = 1
-        epoch_size = math.ceil(int(args.num_examples/num_workers)/args.batch_size)
-        return (lr, mx.lr_scheduler.MultiFactorScheduler(step=steps, factor=args.lr_factor,
-                                                         base_lr=args.lr, warmup_steps=epoch_size * args.warmup_epochs,
-                                                         warmup_mode=args.warmup_strategy))
-    else:
-        return (lr, None)
-
-def _load_model(args, rank=0):
-    if 'load_epoch' not in args or args.load_epoch is None:
-        return (None, None, None)
-    assert args.model_prefix is not None
-    model_prefix = args.model_prefix
-    if rank > 0 and os.path.exists("%s-%d-symbol.json" % (model_prefix, rank)):
-        model_prefix += "-%d" % (rank)
-    sym, arg_params, aux_params = mx.model.load_checkpoint(
-        model_prefix, args.load_epoch)
-    logging.info('Loaded model %s_%04d.params', model_prefix, args.load_epoch)
-    return (sym, arg_params, aux_params)
-
-
-def _save_model(args, rank=0):
-    if args.model_prefix is None:
-        return None
-    return mx.callback.do_checkpoint(args.model_prefix if rank == 0 else "%s-%d" % (
-        args.model_prefix, rank), period=args.save_period)
-
+import data
 
 def add_fit_args(parser):
-    """
-    parser : argparse.ArgumentParser
-    return a parser added with args required by fit
-    """
-    train = parser.add_argument_group('Training', 'model training')
-    train.add_argument('--num-layers', type=int,
-                       help='number of layers in the neural network, \
-                             required by some networks such as resnet')
-    train.add_argument('--gpus', type=str,
-                       help='list of gpus to run, e.g. 0 or 0,2,5. empty means using cpu')
-    train.add_argument('--kv-store', type=str, default='device',
+    def int_list(x):
+        return list(map(int, x.split(',')))
+
+    def float_list(x):
+        return list(map(float, x.split(',')))
+
+    train = parser.add_argument_group('Training')
+    train.add_argument('--mode', default='train_val', choices=('train_val', 'train', 'val', 'pred'),
+                       help='mode')
+    train.add_argument('--seed', type=int, default=None,
+                       help='random seed')
+
+    train.add_argument('--gpus', type=int_list, default=[0],
+                       help='list of gpus to run, e.g. 0 or 0,2,5')
+    train.add_argument('--kv-store', type=str, default='device', choices=('device', 'horovod'),
                        help='key-value store type')
-    train.add_argument('--num-epochs', type=int, default=100,
-                       help='max num of epochs')
+
+    train.add_argument('--dtype', type=str, default='float16', choices=('float32', 'float16'),
+                       help='precision')
+    train.add_argument('--amp', action='store_true',
+                       help='If enabled, turn on AMP (Automatic Mixed Precision)')
+    train.add_argument('--batch-size', type=int, default=192,
+                       help='the batch size')
+    train.add_argument('--num-epochs', type=int, default=90,
+                       help='number of epochs')
     train.add_argument('--lr', type=float, default=0.1,
                        help='initial learning rate')
-    train.add_argument('--lr-factor', type=float, default=0.1,
+    train.add_argument('--lr-schedule', choices=('multistep', 'cosine'), default='cosine',
+                       help='learning rate schedule')
+    train.add_argument('--lr-factor', type=float, default=0.256,
                        help='the ratio to reduce lr on each step')
-    train.add_argument('--lr-step-epochs', type=str,
+    train.add_argument('--lr-steps', type=float_list, default=[],
                        help='the epochs to reduce the lr, e.g. 30,60')
-    train.add_argument('--initializer', type=str, default='default',
-                       help='the initializer type')
-    train.add_argument('--optimizer', type=str, default='sgd',
-                       help='the optimizer type')
-    train.add_argument('--mom', type=float, default=0.9,
-                       help='momentum for sgd')
-    train.add_argument('--wd', type=float, default=0.0001,
-                       help='weight decay for sgd')
-    train.add_argument('--batch-size', type=int, default=208,
-                       help='the batch size')
-    train.add_argument('--disp-batches', type=int, default=20,
-                       help='show progress for every n batches')
-    train.add_argument('--model-prefix', type=str,
-                       help='model prefix')
-    train.add_argument('--save-period', type=int, default=1, help='params saving period')
-    parser.add_argument('--monitor', dest='monitor', type=int, default=0,
-                        help='log network parameters every N iters if larger than 0')
-    train.add_argument('--load-epoch', type=int,
-                       help='load the model on an epoch using the model-load-prefix')
-    train.add_argument('--loss', type=str, default='',
-                       help='show the cross-entropy or nll loss. ce strands for cross-entropy, nll-loss stands for likelihood loss')
-    train.add_argument('--test-io', type=int, default=0,
-                       help='1 means test reading speed without training')
-    train.add_argument('--dtype', type=str, default='float16',
-                       help='precision: float32 or float16')
-    train.add_argument('--gc-type', type=str, default='none',
-                       help='type of gradient compression to use, \
-                             takes `2bit` or `none` for now')
-    train.add_argument('--gc-threshold', type=float, default=0.5,
-                       help='threshold for 2bit gradient compression')
-    # additional parameters for large batch sgd
-    train.add_argument('--macrobatch-size', type=int, default=0,
-                       help='distributed effective batch size')
     train.add_argument('--warmup-epochs', type=int, default=5,
                        help='the epochs to ramp-up lr to scaled large-batch value')
-    train.add_argument('--warmup-strategy', type=str, default='linear',
-                       help='the ramping-up strategy for large batch sgd')
-    train.add_argument('--logging-dir', type=str, default='logs')
-    train.add_argument('--log', type=str, default='')
-    train.add_argument('--bn-gamma-init0', action='store_true')
-    train.add_argument('--epoch-size',type=int, default=0,
-                       help='set number of batches in an epoch. useful for debugging')
-    #train.add_argument('--tensorboard', type=str, default='',
-    #                   help='log parameters to visualize in tensorboard every epoch. takes name to specify as tensorboard run. Empty means tensorboard logging is disabled')
-    train.add_argument('--profile-worker-suffix', type=str, default='',
-                       help='profile workers actions into this file. During distributed training\
-                             filename saved will be rank1_ followed by this suffix')
-    train.add_argument('--profile-server-suffix', type=str, default='',
-                       help='profile server actions into a file with name like rank1_ followed by this suffix \
-                             during distributed training')
-    train.add_argument('--report', type=str, help='file where to save report')
-    train.add_argument('--only-inference', action='store_true', help='do not train, only inference (for benchmarking)')
+    train.add_argument('--optimizer', type=str, default='sgd',
+                       help='the optimizer type')
+    train.add_argument('--mom', type=float, default=0.875,
+                       help='momentum for sgd')
+    train.add_argument('--wd', type=float, default=1 / 32768,
+                       help='weight decay for sgd')
+    train.add_argument('--label-smoothing', type=float, default=0.1,
+                       help='label smoothing factor')
+    train.add_argument('--mixup', type=float, default=0,
+                       help='alpha parameter for mixup (if 0 then mixup is not applied)')
+
+    train.add_argument('--disp-batches', type=int, default=20,
+                       help='show progress for every n batches')
+    train.add_argument('--model-prefix', type=str, default='model',
+                       help='model checkpoint prefix')
+    train.add_argument('--save-frequency', type=int, default=-1,
+                       help='frequency of saving model in epochs (--model-prefix must be specified). '
+                            'If -1 then save only best model. If 0 then do not save anything.')
+    train.add_argument('--begin-epoch', type=int, default=0,
+                       help='start the model from an epoch')
+    train.add_argument('--load', help='checkpoint to load')
+
+    train.add_argument('--test-io', action='store_true',
+                       help='test reading speed without training')
+    train.add_argument('--test-io-mode', default='train', choices=('train', 'val'),
+                       help='data to test')
+
+    train.add_argument('--log', type=str, default='log.log',
+                       help='file where to save the log from the experiment')
+    train.add_argument('--report', default='report.json', help='file where to save report')
+
     train.add_argument('--no-metrics', action='store_true', help='do not calculate evaluation metrics (for benchmarking)')
+    train.add_argument('--benchmark-iters', type=int, default=None,
+                       help='run only benchmark-iters iterations from each epoch')
     return train
 
+def get_epoch_size(args, kv):
+    return math.ceil(args.num_examples / args.batch_size)
 
-def fit(args, network, data_loader, **kwargs):
+def get_lr_scheduler(args):
+    def multistep_schedule(x):
+        lr = args.lr * (args.lr_factor ** (len(list(filter(lambda step: step <= x, args.lr_steps)))))
+        warmup_coeff = min(1, x / args.warmup_epochs)
+        return warmup_coeff * lr
+
+    def cosine_schedule(x):
+        steps = args.lr_steps
+        if not steps or steps[0] > args.warmup_epochs:
+            steps = [args.warmup_epochs] + steps
+        elif not steps or steps[0] != 0:
+            steps = [0] + steps
+
+        if steps[-1] != args.num_epochs:
+            steps.append(args.num_epochs)
+
+        if x < args.warmup_epochs:
+            return args.lr * x / args.warmup_epochs
+
+        for i, (step, next_step) in enumerate(zip(steps, steps[1:])):
+            if next_step > x:
+                return args.lr * 0.5 * (1 + math.cos(math.pi * (x - step) / (next_step - step))) * (args.lr_factor ** i)
+        return 0
+
+    schedules = {
+        'multistep': multistep_schedule,
+        'cosine': cosine_schedule,
+    }
+    return schedules[args.lr_schedule]
+
+def load_model(args, model):
+    if args.load is None:
+        return False
+    model.load_parameters(args.load)
+    logging.info('Loaded model {}'.format(args.load))
+    return True
+
+def save_checkpoint(net, epoch, top1, best_acc, model_prefix, save_frequency, kvstore):
+    if model_prefix is None or save_frequency == 0 or ('horovod' in kvstore and hvd.rank() != 0):
+        return
+    if save_frequency > 0 and (epoch + 1) % save_frequency == 0:
+        fname = '{}_{:04}.params'.format(model_prefix, epoch)
+        net.save_parameters(fname)
+        logging.info('[Epoch {}] Saving checkpoint to {} with Accuracy: {:.4f}'.format(epoch, fname, top1))
+    if top1 > best_acc:
+        fname = '{}_best.params'.format(model_prefix)
+        net.save_parameters(fname)
+        logging.info('[Epoch {}] Saving checkpoint to {} with Accuracy: {:.4f}'.format(epoch, fname, top1))
+
+def add_metrics_to_report(report, mode, metric, durations, total_batch_size, loss=None, warmup=20):
+    if report is None:
+        return
+
+    top1 = metric.get('accuracy', None)
+    if top1 is not None:
+        report.add_value('{}.top1'.format(mode), top1)
+
+    top5 = metric.get('top_k_accuracy_5', None)
+    if top5 is not None:
+        report.add_value('{}.top5'.format(mode), top5)
+
+    if loss is not None:
+        report.add_value('{}.loss'.format(mode), loss.get_global()[1])
+
+    if len(durations) > warmup:
+        durations = durations[warmup:]
+    duration = np.mean(durations)
+    total_ips = total_batch_size / duration
+    report.add_value('{}.latency_avg'.format(mode), duration)
+    for percentile in [50, 90, 95, 99, 100]:
+        report.add_value('{}.latency_{}'.format(mode, percentile), np.percentile(durations, percentile))
+    report.add_value('{}.total_ips'.format(mode), total_ips)
+
+def model_pred(args, model, image):
+    from imagenet_classes import classes
+    output = model(image.reshape(-1, *image.shape))[0].softmax().as_in_context(mx.cpu())
+    top = output.argsort(is_ascend=False)[:10]
+    for i, ind in enumerate(top):
+        ind = int(ind.asscalar())
+        logging.info('{:2d}. {:5.2f}% -> {}'.format(i + 1, output[ind].asscalar() * 100, classes[ind]))
+
+def reduce_metrics(args, metrics, kvstore):
+    if 'horovod' not in kvstore or not metrics[0] or hvd.size() == 1:
+        return metrics
+
+    m = mx.ndarray.array(metrics[1], ctx=mx.gpu(args.gpus[0]))
+    reduced = hvd.allreduce(m)
+    values = reduced.as_in_context(mx.cpu()).asnumpy().tolist()
+    return (metrics[0], values)
+
+def model_score(args, net, val_data, metric, kvstore, report=None):
+    if val_data is None:
+        logging.info('Omitting validation: no data')
+        return [], []
+
+    if not isinstance(metric, mx.metric.EvalMetric):
+        metric = mx.metric.create(metric)
+    metric.reset()
+
+    val_data.reset()
+
+    total_batch_size = val_data.batch_size * val_data._num_gpus * (hvd.size() if 'horovod' in kvstore else 1)
+
+    durations = []
+    tic = time.time()
+    outputs = []
+    for batches in val_data:
+        # synchronize to previous iteration
+        for o in outputs:
+            o.wait_to_read()
+
+        data = [b.data[0] for b in batches]
+        label = [b.label[0][:len(b.data[0]) - b.pad] for b in batches if len(b.data[0]) != b.pad]
+        outputs = [net(X) for X, b in zip(data, batches)]
+        outputs = [o[:len(b.data[0]) - b.pad] for o, b in zip(outputs, batches) if len(b.data[0]) != b.pad]
+        metric.update(label, outputs)
+
+        durations.append(time.time() - tic)
+        tic = time.time()
+
+    metric = reduce_metrics(args, metric.get_global(), kvstore)
+    add_metrics_to_report(report, 'val', dict(zip(*metric)), durations, total_batch_size)
+    return metric
+
+class ScalarMetric(mx.metric.Loss):
+    def update(self, _, scalar):
+        self.sum_metric += scalar
+        self.global_sum_metric += scalar
+        self.num_inst += 1
+        self.global_num_inst += 1
+
+def label_smoothing(labels, classes, eta):
+    return labels.one_hot(classes, on_value=1 - eta + eta / classes, off_value=eta / classes)
+
+def model_fit(args, net, train_data, eval_metric, optimizer,
+        optimizer_params, lr_scheduler, eval_data, kvstore, kv,
+        begin_epoch, num_epoch, model_prefix, report, print_loss):
+
+    if not isinstance(eval_metric, mx.metric.EvalMetric):
+        eval_metric = mx.metric.create(eval_metric)
+    loss_metric = ScalarMetric()
+
+    if 'horovod' in kvstore:
+        trainer = hvd.DistributedTrainer(net.collect_params(), optimizer, optimizer_params)
+    else:
+        trainer = gluon.Trainer(net.collect_params(), optimizer, optimizer_params,
+                                kvstore=kv, update_on_kvstore=False)
+
+    if args.amp:
+        amp.init_trainer(trainer)
+
+    sparse_label_loss = (args.label_smoothing == 0 and args.mixup == 0)
+    loss = gluon.loss.SoftmaxCrossEntropyLoss(sparse_label=sparse_label_loss)
+    loss.hybridize(static_shape=True, static_alloc=True)
+
+    local_batch_size = train_data.batch_size
+    total_batch_size = local_batch_size * train_data._num_gpus * (hvd.size() if 'horovod' in kvstore else 1)
+    durations = []
+
+    epoch_size = get_epoch_size(args, kv)
+
+    def transform_data(images, labels):
+        if args.mixup != 0:
+            coeffs = mx.nd.array(np.random.beta(args.mixup, args.mixup, size=images.shape[0])).as_in_context(images.context)
+            image_coeffs = coeffs.astype(images.dtype, copy=False).reshape(*coeffs.shape, 1, 1, 1)
+            ret_images = image_coeffs * images + (1 - image_coeffs) * images[::-1]
+
+            ret_labels = label_smoothing(labels, args.num_classes, args.label_smoothing)
+            label_coeffs = coeffs.reshape(*coeffs.shape, 1)
+            ret_labels = label_coeffs * ret_labels + (1 - label_coeffs) * ret_labels[::-1]
+        else:
+            ret_images = images
+            if not sparse_label_loss:
+                ret_labels = label_smoothing(labels, args.num_classes, args.label_smoothing)
+            else:
+                ret_labels = labels
+
+        return ret_images, ret_labels
+
+
+    best_accuracy = -1
+    for epoch in range(begin_epoch, num_epoch):
+        tic = time.time()
+        train_data.reset()
+        eval_metric.reset()
+        loss_metric.reset()
+        btic = time.time()
+
+        logging.info('Starting epoch {}'.format(epoch))
+        outputs = []
+        for i, batches in enumerate(train_data):
+            # synchronize to previous iteration
+            for o in outputs:
+                o.wait_to_read()
+
+            trainer.set_learning_rate(lr_scheduler(epoch + i / epoch_size))
+
+            data = [b.data[0] for b in batches]
+            label = [b.label[0].as_in_context(b.data[0].context) for b in batches]
+            orig_label = label
+
+            data, label = zip(*starmap(transform_data, zip(data, label)))
+
+            outputs = []
+            Ls = []
+            with ag.record():
+                for x, y in zip(data, label):
+                    z = net(x)
+                    L = loss(z, y)
+                    # store the loss and do backward after we have done forward
+                    # on all GPUs for better speed on multiple GPUs.
+                    Ls.append(L)
+                    outputs.append(z)
+
+                if args.amp:
+                    with amp.scale_loss(Ls, trainer) as scaled_loss:
+                        ag.backward(scaled_loss)
+                else:
+                    ag.backward(Ls)
+
+            if 'horovod' in kvstore:
+                trainer.step(local_batch_size)
+            else:
+                trainer.step(total_batch_size)
+
+            if print_loss:
+                loss_metric.update(..., np.mean([l.asnumpy() for l in Ls]).item())
+            eval_metric.update(orig_label, outputs)
+
+            if args.disp_batches and not (i + 1) % args.disp_batches:
+                name, acc = eval_metric.get()
+                if print_loss:
+                    name = [loss_metric.get()[0]] + name
+                    acc = [loss_metric.get()[1]] + acc
+
+                logging.info('Epoch[{}] Batch [{}-{}]\tSpeed: {} samples/sec\tLR: {}\t{}'.format(
+                    epoch, (i // args.disp_batches) * args.disp_batches, i,
+                    args.disp_batches * total_batch_size / (time.time() - btic), trainer.learning_rate,
+                    '\t'.join(list(map(lambda x: '{}: {:.6f}'.format(*x), zip(name, acc))))))
+                eval_metric.reset_local()
+                loss_metric.reset_local()
+                btic = time.time()
+
+            durations.append(time.time() - tic)
+            tic = time.time()
+
+
+        add_metrics_to_report(report, 'train', dict(eval_metric.get_global_name_value()), durations, total_batch_size, loss_metric if print_loss else None)
+
+        if args.mode == 'train_val':
+            logging.info('Validating epoch {}'.format(epoch))
+            score = model_score(args, net, eval_data, eval_metric, kvstore, report)
+            for name, value in zip(*score):
+                logging.info('Epoch[{}] Validation {:20}: {}'.format(epoch, name, value))
+
+            score = dict(zip(*score))
+            accuracy = score.get('accuracy', -1)
+            save_checkpoint(net, epoch, accuracy, best_accuracy, model_prefix, args.save_frequency, kvstore)
+            best_accuracy = max(best_accuracy, accuracy)
+
+
+def fit(args, model, data_loader):
     """
     train a model
     args : argparse returns
-    network : the symbol definition of the nerual network
+    model : the the neural network model
     data_loader : function that returns the train and val data iterators
     """
 
     start_time = time.time()
 
+    report = Report(args.arch, len(args.gpus), sys.argv)
+
+    # select gpu for horovod process
+    if 'horovod' in args.kv_store:
+        hvd.init()
+        args.gpus = [args.gpus[hvd.local_rank()]]
+
+    if args.amp:
+        amp.init()
+
+    if args.seed is not None:
+        logging.info('Setting seeds to {}'.format(args.seed))
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        mx.random.seed(args.seed)
+
     # kvstore
-    kv = mx.kvstore.create(args.kv_store)
-    if args.gc_type != 'none':
-        kv.set_gradient_compression({'type': args.gc_type,
-                                     'threshold': args.gc_threshold})
-    if args.profile_server_suffix:
-        mx.profiler.set_config(filename=args.profile_server_suffix, profile_all=True, profile_process='server')
-        mx.profiler.set_state(state='run', profile_process='server')
-
-    if args.profile_worker_suffix:
-        if kv.num_workers > 1:
-            filename = 'rank' + str(kv.rank) + '_' + args.profile_worker_suffix
-        else:
-            filename = args.profile_worker_suffix
-        mx.profiler.set_config(filename=filename, profile_all=True, profile_process='worker')
-        mx.profiler.set_state(state='run', profile_process='worker')
-
-    # logging
-    head = '%(asctime)-15s Node[' + str(kv.rank) + '] %(message)s'
-    logging.basicConfig(level=logging.DEBUG, format=head)
-    logging.info('start with arguments %s', args)
-
-    epoch_size = get_epoch_size(args, kv)
-
-    # data iterators
-    (train, val) = data_loader(args, kv)
-    if 'dist' in args.kv_store and not 'async' in args.kv_store:
-        logging.info('Resizing training data to %d batches per machine', epoch_size)
-        # resize train iter to ensure each machine has same number of batches per epoch
-        # if not, dist_sync can hang at the end with one machine waiting for other machines
-        if not args.use_dali:
-            train = mx.io.ResizeIter(train, epoch_size)
+    if 'horovod' in args.kv_store:
+        kv = None
+        rank = hvd.rank()
+        num_workers = hvd.size()
+    else:
+        kv = mx.kvstore.create(args.kv_store)
+        rank = kv.rank
+        num_workers = kv.num_workers
 
     if args.test_io:
+        train, val = data_loader(args, kv)
+
+        if args.test_io_mode == 'train':
+            data_iter = train
+        else:
+            data_iter = val
+
         tic = time.time()
-        for i, batch in enumerate(train):
+        for i, batch in enumerate(data_iter):
             if isinstance(batch, list):
                 for b in batch:
                     for j in b.data:
@@ -232,232 +443,90 @@ def fit(args, network, data_loader, **kwargs):
                 for j in batch.data:
                     j.wait_to_read()
             if (i + 1) % args.disp_batches == 0:
-                logging.info('Batch [%d]\tSpeed: %.2f samples/sec', i,
-                             args.disp_batches * args.batch_size / (time.time() - tic))
+                logging.info('Batch [{}]\tSpeed: {:.2f} samples/sec'.format(
+                    i, args.disp_batches * args.batch_size / (time.time() - tic)))
                 tic = time.time()
         return
 
-    # load model
-    if 'arg_params' in kwargs and 'aux_params' in kwargs:
-        arg_params = kwargs['arg_params']
-        aux_params = kwargs['aux_params']
-    else:
-        sym, arg_params, aux_params = _load_model(args, kv.rank)
-
-    # save model
-    checkpoint = _save_model(args, kv.rank)
-    epoch_end_callbacks = []
-    if checkpoint:
-        epoch_end_callbacks.append(checkpoint)
+    if not load_model(args, model):
+        # all initializers should be specified in the model definition.
+        # if not, this will raise an error
+        model.initialize(mx.init.Initializer())
 
     # devices for training
-    devs = mx.cpu() if args.gpus is None or args.gpus == "" else [
-        mx.gpu(int(i)) for i in args.gpus.split(',')]
+    devs = list(map(mx.gpu, args.gpus))
+    model.collect_params().reset_ctx(devs)
+
+    if args.mode == 'pred':
+        logging.info('Infering image {}'.format(args.data_pred))
+        model_pred(args, model, data.load_image(args, args.data_pred, devs[0]))
+        return
 
     # learning rate
-    lr, lr_scheduler = _get_lr_scheduler(args, kv)
-
-    # create model
-    model = mx.mod.Module(
-        context=devs,
-        symbol=network
-    )
+    lr_scheduler = get_lr_scheduler(args)
 
     optimizer_params = {
-        'learning_rate': lr,
+        'learning_rate': 0,
         'wd': args.wd,
-        'lr_scheduler': lr_scheduler,
-        'multi_precision': True}
+        'multi_precision': True,
+    }
 
     # Only a limited number of optimizers have 'momentum' property
     has_momentum = {'sgd', 'dcasgd', 'nag', 'signum', 'lbsgd'}
     if args.optimizer in has_momentum:
         optimizer_params['momentum'] = args.mom
 
-    monitor = mx.mon.Monitor(
-        args.monitor, pattern=".*") if args.monitor > 0 else None
-
-    # A limited number of optimizers have a warmup period
-    has_warmup = {'lbsgd', 'lbnag'}
-    if args.optimizer in has_warmup:
-        if 'dist' in args.kv_store:
-            nworkers = kv.num_workers
-        else:
-            nworkers = 1
-        epoch_size = args.num_examples / args.batch_size / nworkers
-
-        if epoch_size < 1:
-            epoch_size = 1
-        macrobatch_size = args.macrobatch_size
-        if macrobatch_size < args.batch_size * nworkers:
-            macrobatch_size = args.batch_size * nworkers
-        #batch_scale = round(float(macrobatch_size) / args.batch_size / nworkers +0.4999)
-        batch_scale = math.ceil(
-            float(macrobatch_size) / args.batch_size / nworkers)
-        optimizer_params['updates_per_epoch'] = epoch_size
-        optimizer_params['begin_epoch'] = args.load_epoch if args.load_epoch else 0
-        optimizer_params['batch_scale'] = batch_scale
-        optimizer_params['warmup_strategy'] = args.warmup_strategy
-        optimizer_params['warmup_epochs'] = args.warmup_epochs
-        optimizer_params['num_epochs'] = args.num_epochs
-
-    if args.initializer == 'default':
-        initializer = mx.init.Xavier(
-            rnd_type='gaussian', factor_type="in", magnitude=2)
-    # initializer   = mx.init.Xavier(factor_type="in", magnitude=2.34),
-    elif args.initializer == 'xavier':
-        initializer = mx.init.Xavier()
-    elif args.initializer == 'msra':
-        initializer = mx.init.MSRAPrelu()
-    elif args.initializer == 'orthogonal':
-        initializer = mx.init.Orthogonal()
-    elif args.initializer == 'normal':
-        initializer = mx.init.Normal()
-    elif args.initializer == 'uniform':
-        initializer = mx.init.Uniform()
-    elif args.initializer == 'one':
-        initializer = mx.init.One()
-    elif args.initializer == 'zero':
-        initializer = mx.init.Zero()
-
     # evaluation metrices
     if not args.no_metrics:
-        eval_metrics = ['crossentropy', 'accuracy']
+        eval_metrics = ['accuracy']
         eval_metrics.append(mx.metric.create(
             'top_k_accuracy', top_k=5))
     else:
         eval_metrics = []
 
-    supported_loss = ['ce', 'nll_loss']
-    if len(args.loss) > 0:
-        # ce or nll loss is only applicable to softmax output
-        loss_type_list = args.loss.split(',')
-        if 'softmax_output' in network.list_outputs():
-            for loss_type in loss_type_list:
-                loss_type = loss_type.strip()
-                if loss_type == 'nll':
-                    loss_type = 'nll_loss'
-                if loss_type not in supported_loss:
-                    logging.warning(loss_type + ' is not an valid loss type, only cross-entropy or ' \
-                                    'negative likelihood loss is supported!')
-                else:
-                    eval_metrics.append(mx.metric.create(loss_type))
-        else:
-            logging.warning("The output is not softmax_output, loss argument will be skipped!")
-
-    # callbacks that run after each batch
-    batch_end_callbacks = []
-    batch_end_callbacks.append(mx.callback.Speedometer(
-        args.batch_size, args.disp_batches))
-
-    if 'batch_end_callback' in kwargs:
-        cbs = kwargs['batch_end_callback']
-        batch_end_callbacks += cbs if isinstance(cbs, list) else [cbs]
-
-
-    report = Report('resnet{}'.format(args.num_layers), len(args.gpus.split(',')), sys.argv)
-
+    train, val = data_loader(args, kv)
     train = BenchmarkingDataIter(train, args.benchmark_iters)
-    val = BenchmarkingDataIter(val, args.benchmark_iters)
+    if val is not None:
+        val = BenchmarkingDataIter(val, args.benchmark_iters)
 
-    class Gatherer:
-        def __init__(self, report, mode, data_iter, total_bs=None):
-            self.report = report
-            self.mode = mode
-            self.total_bs = total_bs
-            self.data_iter = data_iter
-            self.clear()
-
-        def clear(self):
-            self.num = 0
-            self.top1 = 0
-            self.top5 = 0
-            self.loss = 0
-            self.time = 0
-            self.tic = 0
-
-        def gather_metrics(self, data):
-            params = dict(data.eval_metric.get_global_name_value())
-
-            if self.num != 0:
-                self.time += time.time() - self.tic
-            self.num += 1
-            if not args.no_metrics:
-                self.top1 = params['accuracy']
-                self.top5 = params['top_k_accuracy_5']
-                self.loss = params['cross-entropy']
-
-            self.tic = time.time()
-
-        def add_metrics(self, *a, **k):
-            top1 = self.top1 * 100
-            top5 = self.top5 * 100
-            loss = self.loss
-            if self.num <= 1:
-                time = float('nan')
-            else:
-                time = self.time / (self.num - 1)
-            data = self.data_iter.get_avg_time_and_clear()
-            if self.total_bs is not None:
-                compute_ips = self.total_bs / (time - data)
-                total_ips = self.total_bs / time
-
-            if not args.no_metrics:
-                self.report.add_value('{}.top1'.format(self.mode), top1)
-                self.report.add_value('{}.top5'.format(self.mode), top5)
-                self.report.add_value('{}.loss'.format(self.mode), loss)
-            self.report.add_value('{}.time'.format(self.mode), time)
-            # self.report.add_value('{}.data'.format(self.mode), data)
-            if self.total_bs is not None:
-                # self.report.add_value('{}.compute_ips'.format(self.mode), compute_ips)
-                self.report.add_value('{}.total_ips'.format(self.mode), total_ips)
-            self.clear()
-
-    def save_report(*a, **k):
-        report.set_total_duration(time.time() - start_time)
-        if args.report:
-            report.save(args.report)
-
-    train_gatherer = Gatherer(report, 'train', train, args.batch_size)
-    eval_gatherer = Gatherer(report, 'val', val, args.batch_size)
-
-    batch_end_callbacks = [train_gatherer.gather_metrics] + batch_end_callbacks
-    epoch_end_callbacks = [train_gatherer.add_metrics, save_report] + epoch_end_callbacks
-
-    eval_batch_end_callbacks = [eval_gatherer.gather_metrics]
-    eval_end_callbacks = [eval_gatherer.add_metrics, save_report]
+    if 'horovod' in args.kv_store:
+        # Fetch and broadcast parameters
+        params = model.collect_params()
+        if params is not None:
+            hvd.broadcast_parameters(params, root_rank=0)
 
     # run
-    model.fit(train,
-              begin_epoch=args.load_epoch if args.load_epoch else 0,
-              num_epoch=args.num_epochs if not args.only_inference else 0,
-              eval_data=val,
-              eval_metric=eval_metrics,
-              kvstore=kv,
-              optimizer=args.optimizer,
-              optimizer_params=optimizer_params,
-              initializer=initializer,
-              arg_params=arg_params,
-              aux_params=aux_params,
-              batch_end_callback=batch_end_callbacks,
-              epoch_end_callback=epoch_end_callbacks, #checkpoint if args.use_dali else ,,
-              eval_batch_end_callback=eval_batch_end_callbacks,
-              eval_end_callback=eval_end_callbacks,
-              allow_missing=True,
-              monitor=monitor)
+    if args.mode in ['train_val', 'train']:
+        model_fit(
+            args,
+            model,
+            train,
+            begin_epoch=args.begin_epoch,
+            num_epoch=args.num_epochs,
+            eval_data=val,
+            eval_metric=eval_metrics,
+            kvstore=args.kv_store,
+            kv=kv,
+            optimizer=args.optimizer,
+            optimizer_params=optimizer_params,
+            lr_scheduler=lr_scheduler,
+            report=report,
+            model_prefix=args.model_prefix,
+            print_loss=not args.no_metrics,
+        )
+    elif args.mode == 'val':
+        for epoch in range(args.num_epochs):  # loop for benchmarking
+            score = model_score(args, model, val, eval_metrics, args.kv_store, report=report)
+            for name, value in zip(*score):
+                logging.info('Validation {:20}: {}'.format(name, value))
+    else:
+        raise ValueError('Wrong mode')
 
-    if args.only_inference:
-        for epoch in range(args.num_epochs):
-            score = model.score(val, eval_metrics, batch_end_callback=eval_batch_end_callbacks, score_end_callback=eval_end_callbacks, epoch=epoch)
-            print('-------------')
-            for name, value in score:
-                print('{}: {}'.format(name, value))
+    mx.nd.waitall()
 
-    if args.profile_server_suffix:
-        mx.profiler.set_state(state='run', profile_process='server')
-    if args.profile_worker_suffix:
-        mx.profiler.set_state(state='run', profile_process='worker')
+    report.set_total_duration(time.time() - start_time)
+    if args.report:
+        suffix = '-{}'.format(hvd.rank()) if 'horovod' in args.kv_store and hvd.rank() != 0 else ''
+        report.save(args.report + suffix)
 
-    save_report()
-
-    print('Experiment took: {} sec'.format(report.total_duration))
+    logging.info('Experiment took: {} sec'.format(report.total_duration))
