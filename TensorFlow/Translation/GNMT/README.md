@@ -36,7 +36,7 @@ This repository provides a script and recipe to train the GNMT v2 model to achie
         * [Training performance results](#training-performance-results)
             * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-(8x-v100-16G))
         * [Inference performance results](#inference-performance-results)
-            * [Inference performance: NVIDIA DGX-1 (8x V100 16G)](#inference-performance-nvidia-dgx-1-(8x-v100-16G))
+            * [Inference performance: NVIDIA T4](#inference-performance-nvidia-t4)
 - [Release notes](#release-notes)
     * [Changelog](#changelog)
     * [Known issues](#known-issues)
@@ -178,7 +178,7 @@ v2 model.
 
 This repository contains Dockerfile which extends the TensorFlow NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 -   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
--   [TensorFlow 19.05-py3 NGC container or later](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)
+-   [TensorFlow 19.07-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)
 -   [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
 
 For more information about how to get started with NGC containers, see the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
@@ -232,13 +232,13 @@ argument.
 To launch mixed precision training on 1 GPU, run:
 
 ```
-python nmt.py --output_dir=results --batch_size=192 --learning_rate=8e-4
+python nmt.py --output_dir=results --batch_size=128 --learning_rate=5e-4
 ```
 
 To launch mixed precision training on 8 GPUs, run:
 
 ```
-python nmt.py --output_dir=results --batch_size=1536 --num_gpus=8 --learning_rate=2e-3
+python nmt.py --output_dir=results --batch_size=1024 --num_gpus=8 --learning_rate=2e-3
 ```
 
 To launch FP32 training on 1 GPU, run:
@@ -515,12 +515,12 @@ accuracy in training and inference.
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 16G)
 
 Our results were obtained by running the `nmt.py` script in the
-tensorflow-19.06-py3 NGC container on NVIDIA DGX-1 with (8x V100 16G)  GPUs.
+tensorflow-19.07-py3 NGC container on NVIDIA DGX-1 with (8x V100 16G)  GPUs.
 
-| **GPUs** | **Batch size / GPU - mixed precision** | **Batch size / GPU - FP32** |**Accuracy - mixed precision (BLEU)** | **Accuracy - FP32 (BLEU)** | **Time to train - mixed precision** | **Time to train - FP32** | **Time to train speedup (FP32 to mixed precision)** |
-| --- | --- | --- | ----- | ----- | -------- | -------- | ---- |
-|  1  | 192 | 128 | 24.90 | 24.84 | 610 min  | 1237 min | 2.03 |
-|  8  | 192 | 128 | 24.33 | 24.34 | 156 min  | 237 min  | 1.52 |
+| **GPUs** | **Batch size / GPU** |**Accuracy - mixed precision (BLEU)** | **Accuracy - FP32 (BLEU)** | **Time to train - mixed precision** | **Time to train - FP32** | **Time to train speedup (FP32 to mixed precision)** |
+| --- | --- | ----- | ----- | -------- | -------- | ---- |
+|  1  | 128 | 24.90 | 24.84 | 763 min  | 1237 min | 1.62 |
+|  8  | 128 | 24.33 | 24.34 | 168 min  | 237 min  | 1.41 |
 
 
 In the following plot, the BLEU scores after each training epoch for different
@@ -534,26 +534,26 @@ configurations are displayed.
 The GNMT v2 model was trained for 6 epochs, starting from 6 different initial
 random seeds. After each training epoch, the model was evaluated on the test
 dataset and the BLEU score was recorded. The training was performed in the
-tensorflow-19.06-py3 NGC container on NVIDIA DGX-1 with 8 Tesla V100 16G GPUs.
+tensorflow-19.07-py3 NGC container on NVIDIA DGX-1 with 8 Tesla V100 16G GPUs.
 
 In the following table, the BLEU scores after each training epoch for different
 initial random seeds are displayed.
 
 | **Epoch** | **Average** | **Standard deviation** | **Minimum** | **Maximum** | **Median** |
 | --- | ------ | ----- | ------ | ------ | ------ |
-|  1  | 19.706 | 0.106 | 19.590 | 19.860 | 19.710 |
-|  2  | 21.694 | 0.214 | 21.420 | 21.970 | 21.770 |
-|  3  | 22.424 | 0.252 | 22.030 | 22.690 | 22.550 |
-|  4  | 22.954 | 0.093 | 22.820 | 23.090 | 22.920 |
-|  5  | 23.814 | 0.090 | 23.670 | 23.950 | 23.810 |
-|  6  | 24.328 | 0.100 | 24.200 | 24.460 | 24.340 |
+|  1  | 20.365 | 0.096 | 20.200 | 20.480 | 20.385 |
+|  2  | 22.002 | 0.080 | 21.900 | 22.110 | 22.000 |
+|  3  | 22.793 | 0.078 | 22.690 | 22.890 | 22.790 |
+|  4  | 23.220 | 0.160 | 22.890 | 23.360 | 23.260 |
+|  5  | 24.007 | 0.153 | 23.870 | 24.220 | 23.925 |
+|  6  | 24.362 | 0.167 | 24.210 | 24.710 | 24.310 |
 
 
 #### Inference accuracy results
 
 ##### Inference accuracy: NVIDIA DGX-1 (8x V100 16G)
 
-Our results were obtained by running the `scripts/translate.py` script in the tensorflow-19.06-py3 NGC container on NVIDIA DGX-1 8x V100 16G GPUs.
+Our results were obtained by running the `scripts/translate.py` script in the tensorflow-19.07-py3 NGC container on NVIDIA DGX-1 8x V100 16G GPUs.
 
 * For mixed precision: `python scripts/translate.py --output_dir=/path/to/trained/model --beam_width 1,2,5 --infer_batch_size 128`
 
@@ -569,14 +569,14 @@ Our results were obtained by running the `scripts/translate.py` script in the te
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 16G)
 
-Our results were obtained by running the `nmt.py` script in the tensorflow-19.06-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
+Our results were obtained by running the `nmt.py` script in the tensorflow-19.07-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
 Performance numbers (in tokens per second) were averaged over an entire
 training epoch.
 
-| **GPUs** | **Batch size / GPU - mixed precision** | **Batch size / GPU - FP32** | **Throughput - mixed precision (tokens/s)** | **Throughput - FP32 (tokens/s)** | **Throughput speedup (FP32 - mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
-| --- | --- | --- | ------- | ------ | ---- | ---- | ---- |
-|  1  | 192 | 128 | 28 959  | 14 106 | 2.05 | 1.00 | 1.00 |
-|  8  | 192 | 128 | 165 908 | 93 688 | 1.77 | 5.73 | 6.64 |
+| **GPUs** | **Batch size / GPU** | **Throughput - mixed precision (tokens/s)** | **Throughput - FP32 (tokens/s)** | **Throughput speedup (FP32 - mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
+| --- | --- | ------- | ------ | ---- | ---- | ---- |
+|  1  | 128 | 23 011  | 14 106 | 1.63 | 1.00 | 1.00 |
+|  8  | 128 | 138 106 | 93 688 | 1.47 | 6.00 | 6.64 |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide)
 outlined above.
@@ -600,33 +600,38 @@ python scripts/translate.py --output_dir=/path/to/trained/model --beam_width 1,2
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide)
 outlined above.
 
-##### Inference performance: NVIDIA DGX-1 (8x V100 16G)
+##### Inference performance: NVIDIA T4
 
-Our results were obtained by running the `scripts/translate.py` script in the tensorflow-19.06-py3 NGC container on NVIDIA DGX-1 (8x V100 16G) GPUs.
+Our results were obtained by running the `scripts/translate.py` script in the tensorflow-19.07-py3 NGC container on NVIDIA T4.
 
-| **Batch size** | **Beam size** | **Mixed precision tokens/s** | **FP32 tokens/s** | **Speedup** | **Mixed precision average latency (ms)** | **FP32 average latency (ms)** | **Average latency speedup** | **Mixed precision latency 50% (ms)** | **FP32 latency 50% (ms)** | **Latency 50% speedup** | **Mixed precision latency 90% (ms)** | **FP32 latency 90% (ms)** | **Latency 90% speedup** | **Mixed precision latency 95% (ms)** | **FP32 latency 95% (ms)** | **Latency 95% speedup** | **Mixed precision latency 99% (ms)** | **FP32 latency 99% (ms)** | **Latency 99% speedup** | **Mixed precision latency 100% (ms)** | **FP32 latency 100% (ms)** | **Latency 100% speedup** |
-|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-|1|1|563|544|1.035|96|99|1.035|89|92|1.035|160|166|1.039|180|188|1.042|215|224|1.045|271|276|1.021|
-|1|2|516|521|0.990|104|103|0.990|97|96|0.989|172|172|1.003|193|192|0.997|240|236|0.983|285|275|0.965|
-|1|5|471|485|0.972|113|110|0.971|105|102|0.974|187|181|0.970|209|204|0.978|269|259|0.965|296|289|0.979|
-|2|1|840|855|0.983|129|126|0.983|122|120|0.982|193|191|0.987|212|209|0.987|250|247|0.989|305|281|0.921|
-|2|2|790|806|0.980|136|134|0.980|129|126|0.982|204|200|0.978|226|222|0.983|270|269|0.996|294|289|0.983|
-|2|5|747|701|1.066|143|153|1.065|135|143|1.061|213|228|1.071|240|258|1.074|293|315|1.074|310|328|1.057|
-|4|1|1403|1400|1.002|154|154|1.002|151|150|0.996|214|215|1.005|228|228|0.998|284|285|1.005|289|290|1.003|
-|4|2|1382|1268|1.090|156|170|1.090|152|166|1.094|218|237|1.089|239|258|1.083|281|304|1.082|293|329|1.121|
-|4|5|1304|1236|1.055|164|173|1.055|158|167|1.056|233|247|1.059|259|276|1.063|291|308|1.060|296|316|1.065|
-|8|1|2482|2294|1.082|174|188|1.082|173|188|1.091|226|244|1.082|243|265|1.090|281|307|1.089|287|315|1.096|
-|8|2|2346|2271|1.033|184|190|1.033|183|188|1.027|249|256|1.027|264|270|1.023|291|299|1.027|294|302|1.029|
-|8|5|2120|1886|1.124|202|227|1.124|198|223|1.122|279|312|1.116|302|344|1.139|312|351|1.126|314|356|1.133|
-|32|1|7581|7203|1.052|228|240|1.052|226|236|1.046|293|302|1.030|299|309|1.035|302|316|1.047|302|320|1.060|
-|32|2|6734|5804|1.160|256|297|1.160|254|297|1.168|324|374|1.156|329|377|1.145|333|381|1.142|339|385|1.136|
-|32|5|4962|3834|1.294|345|446|1.294|340|445|1.310|431|550|1.277|433|556|1.285|436|560|1.285|442|566|1.280|
-|128|1|19533|14782|1.321|354|467|1.321|352|462|1.312|396|528|1.334|398|530|1.331|400|530|1.325|400|530|1.324|
-|128|2|14636|10174|1.439|471|677|1.438|488|703|1.441|513|742|1.447|515|743|1.441|518|743|1.435|519|743|1.433|
-|128|5|8513|5170|1.647|804|1324|1.647|852|1410|1.656|864|1425|1.650|865|1431|1.654|866|1438|1.660|867|1440|1.662|
-|512|1|34401|20544|1.675|803|1345|1.675|818|1372|1.678|830|1396|1.682|831|1396|1.680|832|1396|1.678|832|1396|1.678|
-|512|2|21084|12414|1.698|1308|2220|1.698|1343|2284|1.700|1350|2290|1.696|1351|2290|1.694|1352|2290|1.693|1353|2290|1.693|
-|512|5|10254|5374|1.908|2669|5093|1.908|2745|5316|1.936|2759|5321|1.929|2761|5322|1.927|2763|5322|1.926|2764|5322|1.926|
+Reported mixed precision speedups are relative to FP32 numbers for corresponding configuration.
+
+| **Batch size** | **Beam size** | **Mixed precision tokens/s** | **Speedup** | **Mixed precision average latency (ms)** | **Average latency speedup** | **Mixed precision latency 50% (ms)** | **Latency 50% speedup** | **Mixed precision latency 90% (ms)** | **Latency 90% speedup** | **Mixed precision latency 95% (ms)** | **Latency 95% speedup** | **Mixed precision latency 99% (ms)** | **Latency 99% speedup** | **Mixed precision latency 100% (ms)** | **Latency 100% speedup** |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| 1     | 1     | 643   | 1.278 | 84    | 1.278 | 78    | 1.279 | 138   | 1.309 | 154   | 1.312 | 180   | 1.304 | 220   | 1.296 |
+| 1     | 2     | 584   | 1.693 | 92    | 1.692 | 86    | 1.686 | 150   | 1.743 | 168   | 1.737 | 201   | 1.770 | 236   | 1.742 |
+| 1     | 5     | 552   | 1.702 | 97    | 1.701 | 90    | 1.696 | 158   | 1.746 | 176   | 1.738 | 218   | 1.769 | 244   | 1.742 |
+| 2     | 1     | 948   | 1.776 | 114   | 1.776 | 108   | 1.769 | 170   | 1.803 | 184   | 1.807 | 218   | 1.783 | 241   | 1.794 |
+| 2     | 2     | 912   | 1.761 | 118   | 1.760 | 112   | 1.763 | 175   | 1.776 | 192   | 1.781 | 226   | 1.770 | 246   | 1.776 |
+| 2     | 5     | 832   | 1.900 | 128   | 1.900 | 121   | 1.910 | 192   | 1.912 | 214   | 1.922 | 258   | 1.922 | 266   | 1.905 |
+| 4     | 1     | 1596  | 1.792 | 135   | 1.792 | 132   | 1.791 | 187   | 1.799 | 197   | 1.815 | 241   | 1.784 | 245   | 1.796 |
+| 4     | 2     | 1495  | 1.928 | 144   | 1.927 | 141   | 1.926 | 201   | 1.927 | 216   | 1.936 | 250   | 1.956 | 264   | 1.890 |
+| 4     | 5     | 1308  | 1.702 | 164   | 1.702 | 159   | 1.702 | 230   | 1.722 | 251   | 1.742 | 283   | 1.708 | 288   | 1.699 |
+| 8     | 1     | 2720  | 1.981 | 159   | 1.981 | 158   | 1.992 | 204   | 1.975 | 219   | 1.986 | 249   | 1.987 | 252   | 1.966 |
+| 8     | 2     | 2554  | 1.809 | 169   | 1.808 | 168   | 1.829 | 224   | 1.797 | 237   | 1.783 | 260   | 1.807 | 262   | 1.802 |
+| 8     | 5     | 1979  | 1.768 | 216   | 1.768 | 213   | 1.780 | 292   | 1.797 | 319   | 1.793 | 334   | 1.760 | 336   | 1.769 |
+| 32    | 1     | 7449  | 1.775 | 232   | 1.774 | 231   | 1.777 | 292   | 1.789 | 300   | 1.760 | 301   | 1.768 | 301   | 1.768 |
+| 32    | 2     | 5569  | 1.670 | 309   | 1.669 | 311   | 1.672 | 389   | 1.652 | 392   | 1.665 | 401   | 1.651 | 404   | 1.644 |
+| 32    | 5     | 3079  | 1.867 | 556   | 1.867 | 555   | 1.865 | 692   | 1.858 | 695   | 1.860 | 702   | 1.847 | 703   | 1.847 |
+| 128   | 1     | 12986 | 1.662 | 532   | 1.662 | 529   | 1.667 | 607   | 1.643 | 608   | 1.645 | 609   | 1.647 | 609   | 1.647 |
+| 128   | 2     | 7856  | 1.734 | 878   | 1.734 | 911   | 1.755 | 966   | 1.742 | 967   | 1.741 | 968   | 1.744 | 968   | 1.744 |
+| 128   | 5     | 3361  | 1.683 | 2036  | 1.682 | 2186  | 1.678 | 2210  | 1.673 | 2210  | 1.674 | 2211  | 1.674 | 2211  | 1.674 |
+| 512   | 1     | 14932 | 1.825 | 1851  | 1.825 | 1889  | 1.808 | 1927  | 1.801 | 1928  | 1.800 | 1929  | 1.800 | 1930  | 1.799 |
+| 512   | 2     | 8109  | 1.786 | 3400  | 1.786 | 3505  | 1.783 | 3520  | 1.782 | 3523  | 1.781 | 3525  | 1.781 | 3525  | 1.781 |
+| 512   | 5     | 3370  | 1.802 | 8123  | 1.801 | 8376  | 1.798 | 8391  | 1.804 | 8394  | 1.804 | 8396  | 1.805 | 8397  | 1.805 |
+
+
+## Release notes
 
 ### Changelog
 1. Mar 18, 2019
