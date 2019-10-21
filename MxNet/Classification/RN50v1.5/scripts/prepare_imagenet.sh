@@ -1,3 +1,4 @@
+#!/bin/bash
 # Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,8 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+if [ $# -lt 2 ] ; then
+    echo "usage: $0 raw_dataset prepared_dataset"
+    exit 1
+fi
 
-# This script launches ResNet50 inference benchmark in FP32 on 1 GPU with 1,2,4,32,64,96 batch size
-# Usage ./INFER_BENCHMARK_FP32.sh <additionals flags>
-
-python benchmark.py -n 1 -b 1,2,4,32,64,96 --only-inference -e 3 -w 1 -i 100 -o report.json $@
+cd "$2" &&
+python /opt/mxnet/tools/im2rec.py --list --recursive train "$1/train" &&
+python /opt/mxnet/tools/im2rec.py --list --recursive val "$1/val" &&
+python /opt/mxnet/tools/im2rec.py --pass-through --num-thread 40 train "$1/train" &&
+python /opt/mxnet/tools/im2rec.py --pass-through --num-thread 40 val "$1/val" &&
+echo "Dataset was prepared succesfully!"

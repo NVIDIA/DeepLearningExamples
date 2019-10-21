@@ -146,12 +146,47 @@ class ResnetModel(object):
             if not self.model_hparams.use_dali:
                 features = normalized_inputs(features)
 
+            mixup = 0
+            eta = 0
+            
+            if mode == tf.estimator.ModeKeys.TRAIN:        
+                eta = params['label_smoothing']
+                mixup = params['mixup']
+                
+            if mode != tf.estimator.ModeKeys.PREDICT: 
+                one_hot_smoothed_labels = tf.one_hot(labels, 1001, 
+                                                     on_value = 1 - eta + eta/1001,
+                                                     off_value = eta/1001)
+                if mixup != 0:
+
+                    LOGGER.log("Using mixup training with beta=", params['mixup'])
+                    beta_distribution = tf.distributions.Beta(params['mixup'], params['mixup'])
+
+                    feature_coefficients = beta_distribution.sample(sample_shape=[params['batch_size'], 1, 1, 1])      
+
+                    reversed_feature_coefficients = tf.subtract(tf.ones(shape=feature_coefficients.shape), feature_coefficients)
+
+                    rotated_features = tf.reverse(features, axis=[0])      
+
+                    features = feature_coefficients * features + reversed_feature_coefficients * rotated_features
+
+                    label_coefficients = tf.squeeze(feature_coefficients, axis=[2, 3])
+
+                    rotated_labels = tf.reverse(one_hot_smoothed_labels, axis=[0])    
+
+                    reversed_label_coefficients = tf.subtract(tf.ones(shape=label_coefficients.shape), label_coefficients)
+
+                    one_hot_smoothed_labels = label_coefficients * one_hot_smoothed_labels + reversed_label_coefficients * rotated_labels
+                
+                
             # Update Global Step
             global_step = tf.train.get_or_create_global_step()
             tf.identity(global_step, name="global_step_ref")
 
             tf.identity(features, name="features_ref")
-            tf.identity(labels, name="labels_ref")
+            
+            if mode == tf.estimator.ModeKeys.TRAIN:
+                tf.identity(labels, name="labels_ref")
 
             probs, logits = self.build_model(
                 features,
@@ -210,13 +245,9 @@ class ResnetModel(object):
                     'accuracy_top1': acc_top1,
                     'accuracy_top5': acc_top5
                 }
-                if "label_smoothing" in params.keys() and params['label_smoothing'] != 0.0:
-                    one_hot_labels = tf.one_hot(labels, 1001)
-                    cross_entropy = tf.losses.softmax_cross_entropy(
-                        logits=logits, onehot_labels=one_hot_labels,
-                        label_smoothing=params['label_smoothing'])
-                else:
-                    cross_entropy = tf.losses.sparse_softmax_cross_entropy(logits=logits, labels=labels)
+                
+                cross_entropy = tf.losses.softmax_cross_entropy(
+                    logits=logits, onehot_labels=one_hot_smoothed_labels)
 
                 assert (cross_entropy.dtype == tf.float32)
                 tf.identity(cross_entropy, name='cross_entropy_loss_ref')

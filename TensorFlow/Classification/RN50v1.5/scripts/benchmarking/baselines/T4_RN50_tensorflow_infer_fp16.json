@@ -1,0 +1,31 @@
+{
+    "metric_keys": [
+        "total_ips"
+    ], 
+    "metrics": {
+        "1": {
+            "1": {
+                "total_ips": 90.0
+            }, 
+            "2": {
+                "total_ips": 180.0
+            }, 
+            "4": {
+                "total_ips": 360.0
+            }, 
+            "8": {
+                "total_ips": 500.0
+            }
+        }
+    }, 
+    "model": "", 
+    "ngpus": [
+        1
+    ], 
+    "bs": [
+        1, 
+        2, 
+        4, 
+        8
+    ]
+}

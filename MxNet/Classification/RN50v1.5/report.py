@@ -21,15 +21,21 @@
 # - "metrics"        : per epoch metrics for train and validation
 #                      (some of below metrics may not exist in the report,
 #                       depending on application arguments)
-#       - "train.top1"      : training top1 accuracy in epoch.
-#       - "train.top5"      : training top5 accuracy in epoch.
-#       - "train.loss"      : training loss in epoch.
-#       - "train.time"      : average training time of iteration in seconds.
-#       - "train.total_ips" : training speed (data and compute time taken into account) for epoch in images/sec.
-#       - "val.top1", "val.top5", "val.loss", "val.time", "val.total_ips" : the same but for validation.
+#       - "train.top1"        : training top1 accuracy in epoch.
+#       - "train.top5"        : training top5 accuracy in epoch.
+#       - "train.loss"        : training loss in epoch.
+#       - "train.total_ips"   : training speed (data and compute time taken into account) for epoch in images/sec.
+#       - "train.latency_avg" : average latency of one iteration in seconds.
+#       - "train.latency_50"  : median latency of one iteration in seconds.
+#       - "train.latency_90"  : 90th percentile latency of one iteration in seconds.
+#       - "train.latency_95"  : 95th percentile latency of one iteration in seconds.
+#       - "train.latency_99"  : 99th percentile latency of one iteration in seconds.
+#       - "train.latency_100" : highest observed latency of one iteration in seconds.
+#       - "val.top1", "val.top5", "val.time", "val.total_ips", "val.latency_avg", "val.latency_50",
+#         "val.latency_90", "val.latency_95", "val.latency_99", "val.latency_100"      : the same but for validation.
 
 import json
-from collections import defaultdict, OrderedDict
+from collections import OrderedDict
 
 class Report:
     def __init__(self, model_name, ngpus, cmd):
@@ -37,15 +43,21 @@ class Report:
         self.ngpus = ngpus
         self.cmd = cmd
         self.total_duration = 0
-        self.metrics = defaultdict(lambda: [])
+        self.metrics = OrderedDict()
 
     def add_value(self, metric, value):
+        if metric not in self.metrics:
+            self.metrics[metric] = []
         self.metrics[metric].append(value)
 
     def set_total_duration(self, duration):
         self.total_duration = duration
 
     def save(self, filename):
+        with open(filename, 'w') as f:
+            f.write(self.get_report())
+
+    def get_report(self):
         report = OrderedDict([
             ('model', self.model_name),
             ('ngpus', self.ngpus),
@@ -53,5 +65,4 @@ class Report:
             ('cmd', self.cmd),
             ('metrics', self.metrics),
         ])
-        with open(filename, 'w') as f:
-            json.dump(report, f, indent=4)
+        return json.dumps(report, indent=4)

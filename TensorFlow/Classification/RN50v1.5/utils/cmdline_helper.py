@@ -36,7 +36,7 @@ def parse_cmdline():
 
     p.add_argument(
         '--mode',
-        choices=['train', 'train_and_evaluate', 'evaluate', 'training_benchmark', 'inference_benchmark'],
+        choices=['train', 'train_and_evaluate', 'evaluate', 'predict', 'training_benchmark', 'inference_benchmark'],
         type=str,
         default='train_and_evaluate',
         required=False,
@@ -60,16 +60,33 @@ def parse_cmdline():
     )
     
     p.add_argument(
+        '--export_dir',
+        required=False,
+        default=None,
+        type=str,
+        help="Directory in which to write exported SavedModel."
+    )
+
+    p.add_argument(        
+        '--to_predict',
+        required=False,
+        default=None,
+        type=str,
+        help="Path to file or directory of files to run prediction on."
+    )
+    
+    p.add_argument(
         '--batch_size', 
         type=int, 
-        required=True, 
+        required=False, 
         help="""Size of each minibatch per GPU."""
     )
 
     p.add_argument(
         '--num_iter',
         type=int, 
-        required=True, 
+        required=False, 
+        default=1,
         help="""Number of iterations to run."""
     )
 
@@ -77,7 +94,8 @@ def parse_cmdline():
         '--iter_unit',
         choices=['epoch', 'batch'],
         type=str,
-        required=True,
+        required=False,    
+        default='epoch',
         help="""Unit of iterations."""
     )
 
@@ -98,6 +116,15 @@ def parse_cmdline():
         required=False,
         help=argparse.SUPPRESS 
     )
+    
+    p.add_argument(
+        '--model_dir',
+        type=str,
+        required=False,
+        default=None,
+        help="""Directory in which to write model. If undefined, results dir will be used."""
+    )
+
 
     p.add_argument(
         '--results_dir',
@@ -172,6 +199,14 @@ def parse_cmdline():
         help="""The value of label smoothing."""
     )
     
+    p.add_argument(
+        '--mixup',
+        type=float,
+        default=0.0,
+        required=False,
+        help="""The alpha parameter for mixup (if 0 then mixup is not applied)."""
+    )
+    
     _add_bool_argument(
         parser=p,
         name="use_static_loss_scaling",
@@ -211,7 +246,7 @@ def parse_cmdline():
         required=False,
         help="Use cosine learning rate schedule."
     )
-
+    
     p.add_argument(
         '--seed', 
         type=int, 
@@ -225,6 +260,14 @@ def parse_cmdline():
         default=0.7,
         help="""Limit memory fraction used by training script for DALI"""
     )
+    
+    p.add_argument(
+        '--gpu_id',
+        type=int,
+        default=0,        
+        help="""Specify ID of the target GPU on multi-device platform. Effective only for single-GPU mode."""
+    )
+    
     
     FLAGS, unknown_args = p.parse_known_args()
 

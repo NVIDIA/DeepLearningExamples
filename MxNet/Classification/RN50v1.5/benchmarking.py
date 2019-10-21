@@ -52,11 +52,14 @@ class BenchmarkingDataIter:
     def __getattr__(self, attr):
         return getattr(self.data_iter, attr)
 
-    def get_avg_time_and_clear(self):
+    def get_avg_time(self):
         if self.num <= 1:
             avg = float('nan')
         else:
             avg = self.overall_time / (self.num - 1)
+        return avg
+
+    def reset(self):
         self.overall_time = 0
         self.num = 0
-        return avg
+        self.data_iter.reset()

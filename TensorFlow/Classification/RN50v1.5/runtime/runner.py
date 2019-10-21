@@ -59,6 +59,7 @@ class Runner(object):
         use_tf_amp=False,
         use_dali=False,
         gpu_memory_fraction=1.0,
+        gpu_id=0,
         
         # ======== Debug Flags ======== #
         debug_verbosity=0,
@@ -145,7 +146,8 @@ class Runner(object):
             use_tf_amp=use_tf_amp,
             use_xla=use_xla,
             use_dali=use_dali,
-            gpu_memory_fraction=gpu_memory_fraction
+            gpu_memory_fraction=gpu_memory_fraction,
+            gpu_id=gpu_id
         )
 
         run_config_additional = tf.contrib.training.HParams(
@@ -204,10 +206,10 @@ class Runner(object):
             return worker_batch_size
 
     @staticmethod
-    def _get_session_config(mode, use_xla, use_dali, gpu_memory_fraction):
+    def _get_session_config(mode, use_xla, use_dali, gpu_memory_fraction, gpu_id=0):
 
-        if mode not in ["train", 'validation', 'benchmark']:
-            raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark')" % mode)
+        if mode not in ["train", 'validation', 'benchmark', 'inference']:
+            raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark', 'inference')" % mode)
 
         # Limit available GPU memory (tune the size)
         if use_dali:
@@ -223,7 +225,8 @@ class Runner(object):
 
         config.allow_soft_placement = True
         config.log_device_placement = False
-
+    
+        config.gpu_options.visible_device_list = str(gpu_id)
 
         if hvd_utils.is_using_hvd():
             config.gpu_options.visible_device_list = str(hvd.local_rank())
@@ -245,10 +248,10 @@ class Runner(object):
         return config
 
     @staticmethod
-    def _get_run_config(mode, model_dir, use_xla, use_dali, gpu_memory_fraction, seed=None):
+    def _get_run_config(mode, model_dir, use_xla, use_dali, gpu_memory_fraction, gpu_id=0, seed=None):
 
-        if mode not in ["train", 'validation', 'benchmark']:
-            raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark')" % mode)
+        if mode not in ["train", 'validation', 'benchmark', 'inference']:
+            raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark', 'inference')" % mode)
 
         if seed is not None:
             if hvd_utils.is_using_hvd():
@@ -264,7 +267,7 @@ class Runner(object):
             save_summary_steps=100 if mode in ['train', 'validation'] else 1e9,  # disabled in benchmark mode
             save_checkpoints_steps=None,
             save_checkpoints_secs=None,
-            session_config=Runner._get_session_config(mode=mode, use_xla=use_xla, use_dali=use_dali, gpu_memory_fraction=gpu_memory_fraction),
+            session_config=Runner._get_session_config(mode=mode, use_xla=use_xla, use_dali=use_dali, gpu_memory_fraction=gpu_memory_fraction, gpu_id=gpu_id),
             keep_checkpoint_max=5,
             keep_checkpoint_every_n_hours=1e6,  # disabled
             log_step_count_steps=1e9,
@@ -285,10 +288,10 @@ class Runner(object):
 
         return config
 
-    def _get_estimator(self, mode, run_params, use_xla, use_dali, gpu_memory_fraction):
+    def _get_estimator(self, mode, run_params, use_xla, use_dali, gpu_memory_fraction, gpu_id=0):
 
-        if mode not in ["train", 'validation', 'benchmark']:
-            raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark')" % mode)
+        if mode not in ["train", 'validation', 'benchmark', 'inference']:
+            raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark', 'inference')" % mode)
 
         run_config = Runner._get_run_config(
             mode=mode,
@@ -296,7 +299,9 @@ class Runner(object):
             use_xla=use_xla,
             use_dali=use_dali,
             gpu_memory_fraction=gpu_memory_fraction,
+            gpu_id=gpu_id,
             seed=self.run_hparams.seed
+            
         )
 
         return tf.estimator.Estimator(
@@ -319,6 +324,7 @@ class Runner(object):
         log_every_n_steps=1,
         loss_scale=256,
         label_smoothing=0.0,
+        mixup=0.0,
         use_cosine_lr=False,
         use_static_loss_scaling=False,
         is_benchmark=False
@@ -424,6 +430,7 @@ class Runner(object):
             'loss_scale': loss_scale,
             'apply_loss_scaling': use_static_loss_scaling,
             'label_smoothing': label_smoothing,
+            'mixup': mixup,
             'num_decay_steps': num_decay_steps,
             'use_cosine_lr': use_cosine_lr
         }
@@ -433,7 +440,8 @@ class Runner(object):
             run_params=estimator_params,
             use_xla=self.run_hparams.use_xla,
             use_dali=self.run_hparams.use_dali,
-            gpu_memory_fraction=self.run_hparams.gpu_memory_fraction
+            gpu_memory_fraction=self.run_hparams.gpu_memory_fraction,
+            gpu_id=self.run_hparams.gpu_id
         )
 
         def training_data_fn():
@@ -500,7 +508,8 @@ class Runner(object):
         batch_size,
         warmup_steps=50,
         log_every_n_steps=1,
-        is_benchmark=False
+        is_benchmark=False,
+        export_dir=None,
     ):
 
         if iter_unit not in ["epoch", "batch"]:
@@ -519,7 +528,8 @@ class Runner(object):
             run_params=estimator_params,
             use_xla=self.run_hparams.use_xla,
             use_dali=self.run_hparams.use_dali,
-            gpu_memory_fraction=self.run_hparams.gpu_memory_fraction
+            gpu_memory_fraction=self.run_hparams.gpu_memory_fraction,         
+            gpu_id=self.run_hparams.gpu_id
         )
 
         if self.run_hparams.data_dir is not None:
@@ -614,7 +624,61 @@ class Runner(object):
             LOGGER.log('Top-1 Accuracy: %.3f' % float(eval_results['top1_accuracy'] * 100))
             LOGGER.log('Top-5 Accuracy: %.3f' % float(eval_results['top5_accuracy'] * 100))
 
+            #def get_serving_input_receiver_fn(batch_size, height, width, num_channels, data_format, dtype=tf.float32):   
+            
+            if export_dir is not None:
+                LOGGER.log('Exporting to', export_dir)
+                input_receiver_fn = data_utils.get_serving_input_receiver_fn(
+                    batch_size=None,                        
+                    height=self.run_hparams.height,
+                    width=self.run_hparams.width,
+                    num_channels=self.run_hparams.n_channels,
+                    data_format=self.run_hparams.input_format,
+                    dtype=self.run_hparams.dtype)
+                
+                image_classifier.export_savedmodel(export_dir, input_receiver_fn)
+            
         except KeyboardInterrupt:
             print("Keyboard interrupt")
 
         LOGGER.log('Ending Model Evaluation ...')
+        
+    def predict(self, to_predict):
+
+        estimator_params = {}
+            
+        if to_predict is not None:
+            filenames = runner_utils.parse_inference_input(to_predict)
+            
+        image_classifier = self._get_estimator(
+            mode='inference',
+            run_params=estimator_params,
+            use_xla=self.run_hparams.use_xla,
+            use_dali=self.run_hparams.use_dali,
+            gpu_memory_fraction=self.run_hparams.gpu_memory_fraction
+        )
+      
+        inference_hooks = []
+        
+        def inference_data_fn():
+            return data_utils.get_inference_input_fn(
+                        filenames=filenames,
+                        height=self.run_hparams.height,
+                        width=self.run_hparams.width,
+                        num_threads=self.run_hparams.num_preprocessing_threads
+                )
+        try:
+            inference_results = image_classifier.predict(
+                input_fn=inference_data_fn,
+                predict_keys=None,
+                hooks=inference_hooks,
+                yield_single_examples=True
+            )
+            
+            for result in inference_results:
+                LOGGER.log(result['classes'], str(result['probabilities'][result['classes']]))
+
+        except KeyboardInterrupt:
+            print("Keyboard interrupt")
+
+        LOGGER.log('Ending Inference ...')

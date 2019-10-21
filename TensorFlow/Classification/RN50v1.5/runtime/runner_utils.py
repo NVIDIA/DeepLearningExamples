@@ -82,6 +82,22 @@ def parse_tfrecords_dataset(data_dir, mode, iter_unit, num_iter, global_batch_si
     return filenames, num_samples, num_steps, num_epochs, num_decay_steps
 
 
+def parse_inference_input(to_predict):
+    
+    filenames = []
+    
+    image_formats = ['.jpg', '.jpeg', '.JPEG', '.JPG', '.png', '.PNG']
+    
+    if os.path.isdir(to_predict):
+        filenames = [f for f in os.listdir(to_predict) 
+                     if os.path.isfile(os.path.join(to_predict, f)) 
+                     and os.path.splitext(f)[1] in image_formats]
+        
+    elif os.path.isfile(to_predict):
+        filenames.append(to_predict)
+      
+    return filenames
+
 def parse_dali_idx_dataset(data_idx_dir, mode):
     
     if data_idx_dir is not None:
