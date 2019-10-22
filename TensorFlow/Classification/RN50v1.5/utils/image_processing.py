@@ -22,7 +22,7 @@ import tensorflow as tf
 _RESIZE_MIN = 256
 _DEFAULT_IMAGE_SIZE = 224
 
-__all__ = ['preprocess_image_record']
+__all__ = ['preprocess_image_record', 'preprocess_image_file']
 
 
 def _deserialize_image_record(record):
@@ -136,10 +136,11 @@ def preprocess_image_record(record, height, width, num_channels, is_training=Fal
 
     imgdata, label, bbox, text = _deserialize_image_record(record)
     label -= 1
+    
     try:
         image = _decode_jpeg(imgdata, channels=3)
     except:
-        image = tf.image.decode_png(imgdata, channels=3)
+        image = tf.image.decode_image(imgdata, channels=3)
 
     if is_training:
         # For training, we want to randomize some of the distortions.
@@ -150,3 +151,23 @@ def preprocess_image_record(record, height, width, num_channels, is_training=Fal
         image = _central_crop(image, height, width)
 
     return image, label
+
+
+def preprocess_image_file(filename, height, width, num_channels, is_training=False):
+    
+    imgdata = tf.read_file(filename)
+
+    try:
+        image = _decode_jpeg(imgdata, channels=3)
+    except:
+        image = tf.image.decode_image(imgdata, channels=3)
+        
+    if is_training:
+        # For training, we want to randomize some of the distortions.
+        image = _crop_and_filp(image, bbox, num_channels)
+        image = _resize_image(image, height, width)
+    else:
+        image = _aspect_preserving_resize(image, _RESIZE_MIN)
+        image = _central_crop(image, height, width)
+
+    return image, filename

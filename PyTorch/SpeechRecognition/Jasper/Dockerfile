@@ -12,17 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:19.06-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:19.09-py3 
 FROM ${FROM_IMAGE_NAME}
-
-
-WORKDIR /tmp/unique_for_apex
-RUN pip uninstall -y apex || :
-RUN pip uninstall -y apex || :
-
-RUN SHA=ToUcHMe git clone https://github.com/NVIDIA/apex.git
-WORKDIR /tmp/unique_for_apex/apex
-RUN pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
 
 
 RUN apt-get update && apt-get install -y libsndfile1 && apt-get install -y sox && rm -rf /var/lib/apt/lists/*
@@ -31,4 +22,3 @@ WORKDIR /workspace/jasper
 
 COPY . .
 RUN pip install --disable-pip-version-check -U -r requirements.txt
-

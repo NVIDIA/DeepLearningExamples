@@ -1,15 +1,27 @@
 #!/bin/bash
 
+# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 bert_model=${1:-"large"}
-precision=${2:-"fp16"}
-use_xla=${3:-"true"}
-num_gpu=${4:-"8"}
-task=${5:-"squad"}
+use_xla=${2:-"true"}
+num_gpu=${3:-"8"}
+task=${4:-"squad"}
 
 if [ "$bert_model" = "large" ] ; then
-    export BERT_DIR=data/pretrained_models_google/uncased_L-24_H-1024_A-16
+    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16
 else
-    export BERT_DIR=data/pretrained_models_google/uncased_L-12_H-768_A-12
+    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-12_H-768_A-12
 fi
 
 echo  "BERT directory set as " $BERT_DIR
@@ -24,12 +36,6 @@ if [ ! -d "$RESULTS_DIR" ] ; then
    exit -1
 fi
 echo "Results directory set as " $RESULTS_DIR
-
-use_fp16=""
-if [ "$precision" = "fp16" ] ; then
-        export TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE=1
-        use_fp16="--use_fp16"
-fi
 
 
 if [ "$use_xla" = "true" ] ; then
@@ -53,7 +59,7 @@ fi
 LOGFILE="${RESULTS_DIR}/${task}_training_benchmark_bert_${bert_model}_gpu_${num_gpu}.log"
 
 if [ "$task" = "squad" ] ; then
-    export SQUAD_DIR=data/squad/v1.1
+    export SQUAD_DIR=data/download/squad/v1.1
     epochs="2.0"
     echo "Squad directory set as " $SQUAD_DIR
 
@@ -76,11 +82,9 @@ if [ "$task" = "squad" ] ; then
 
                 if [ "$precision" = "fp16" ] ; then
                     echo "fp16 activated!"
-                    export TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE=1
                     use_fp16="--use_fp16"
                 else
                     echo "fp32 activated!"
-                    export TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE=0
                     use_fp16=""
                 fi
 

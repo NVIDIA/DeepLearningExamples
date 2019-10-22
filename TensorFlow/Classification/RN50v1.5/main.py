@@ -37,14 +37,15 @@ if __name__ == "__main__":
 
     RUNNING_CONFIG = tf.contrib.training.HParams(
         mode=FLAGS.mode,
-
+        
         # ======= Directory HParams ======= #
         log_dir=FLAGS.results_dir,
-        model_dir=FLAGS.results_dir,
+        model_dir=FLAGS.model_dir if FLAGS.model_dir is not None else FLAGS.results_dir,
         summaries_dir=FLAGS.results_dir,
         data_dir=FLAGS.data_dir,
         data_idx_dir=FLAGS.data_idx_dir,
-
+        export_dir=FLAGS.export_dir,
+        
         # ========= Model HParams ========= #
         n_classes=1001,
         input_format='NHWC',
@@ -53,7 +54,7 @@ if __name__ == "__main__":
         height=224,
         width=224,
         n_channels=3,
-
+        
         # ======= Training HParams ======== #
         iter_unit=FLAGS.iter_unit,
         num_iter=FLAGS.num_iter,
@@ -66,6 +67,7 @@ if __name__ == "__main__":
         momentum=FLAGS.momentum,
         loss_scale=FLAGS.loss_scale,
         label_smoothing=FLAGS.label_smoothing,
+        mixup=FLAGS.mixup,
         use_cosine_lr=FLAGS.use_cosine_lr,
         use_static_loss_scaling=FLAGS.use_static_loss_scaling,
         distort_colors=False,
@@ -75,6 +77,7 @@ if __name__ == "__main__":
         use_tf_amp=FLAGS.use_tf_amp,
         use_dali=FLAGS.use_dali,
         gpu_memory_fraction=FLAGS.gpu_memory_fraction,
+        gpu_id=FLAGS.gpu_id,
         
         seed=FLAGS.seed,
     )
@@ -95,12 +98,14 @@ if __name__ == "__main__":
         model_dir=RUNNING_CONFIG.model_dir,
         data_dir=RUNNING_CONFIG.data_dir,
         data_idx_dir=RUNNING_CONFIG.data_idx_dir,
+        
 
         # ======= Optimization HParams ======== #
         use_xla=RUNNING_CONFIG.use_xla,
         use_tf_amp=RUNNING_CONFIG.use_tf_amp,
         use_dali=RUNNING_CONFIG.use_dali,
         gpu_memory_fraction=RUNNING_CONFIG.gpu_memory_fraction,
+        gpu_id=RUNNING_CONFIG.gpu_id,
         seed=RUNNING_CONFIG.seed
     )
 
@@ -118,6 +123,7 @@ if __name__ == "__main__":
             momentum=RUNNING_CONFIG.momentum,
             loss_scale=RUNNING_CONFIG.loss_scale,       
             label_smoothing=RUNNING_CONFIG.label_smoothing,
+            mixup=RUNNING_CONFIG.mixup,
             use_static_loss_scaling=RUNNING_CONFIG.use_static_loss_scaling,
             use_cosine_lr=RUNNING_CONFIG.use_cosine_lr,
             is_benchmark=RUNNING_CONFIG.mode == 'training_benchmark',
@@ -137,5 +143,19 @@ if __name__ == "__main__":
                 warmup_steps=RUNNING_CONFIG.warmup_steps,
                 batch_size=RUNNING_CONFIG.batch_size,
                 log_every_n_steps=RUNNING_CONFIG.log_every_n_steps,
-                is_benchmark=RUNNING_CONFIG.mode == 'inference_benchmark'
+                is_benchmark=RUNNING_CONFIG.mode == 'inference_benchmark',
+                export_dir=RUNNING_CONFIG.export_dir
             )
+            
+    if RUNNING_CONFIG.mode == 'predict':
+        if FLAGS.to_predict is None:
+            raise ValueError("No data to predict on.")
+        
+        if not os.path.isfile(FLAGS.to_predict):
+            raise ValueError("Only prediction on single images is supported!")
+        
+        if hvd_utils.is_using_hvd():
+            raise NotImplementedError("Only single GPU inference is implemented.")
+            
+        elif not hvd_utils.is_using_hvd() or hvd.rank() == 0:
+              runner.predict(FLAGS.to_predict)

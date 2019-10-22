@@ -1,4 +1,19 @@
-init_checkpoint=${1:-"/results/model.ckpt"}
+#!/bin/bash
+
+# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+init_checkpoint=${1:-"/results/models/bert_large_fp16_384_v1/model.ckpt-5474"}
 batch_size=${2:-"8"}
 precision=${3:-"fp16"}
 use_xla=${4:-"true"}
@@ -14,9 +29,9 @@ trtis_engine_count=${13:-1}
 trtis_model_overwrite=${14:-"False"}
 
 if [ "$bert_model" = "large" ] ; then
-    export BERT_DIR=data/pretrained_models_google/uncased_L-24_H-1024_A-16
+    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16
 else
-    export BERT_DIR=data/pretrained_models_google/uncased_L-12_H-768_A-12
+    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-12_H-768_A-12
 fi
 
 if [ ! -d "$BERT_DIR" ] ; then

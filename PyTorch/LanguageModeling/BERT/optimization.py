@@ -13,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """PyTorch optimization for BERT model."""
 
 import math
@@ -24,6 +25,7 @@ from torch.nn.utils import clip_grad_norm_
 from apex.optimizers import FusedAdam
 from apex.multi_tensor_apply import multi_tensor_applier
 import amp_C
+
 multi_tensor_l2norm = amp_C.multi_tensor_l2norm
 lamb_compute_update = amp_C.multi_tensor_lamb_stage1_cuda
 lamb_apply_update = amp_C.multi_tensor_lamb_stage2_cuda

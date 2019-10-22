@@ -34,58 +34,37 @@
 # limitations under the License.
 
 import os
+import sys
 import argparse
 import logging
-logging.basicConfig(level=logging.DEBUG)
-import data, dali, fit
 import mxnet as mx
 import numpy as np
 
-def set_imagenet_aug(aug):
-    # standard data augmentation setting for imagenet training
-    aug.set_defaults(rgb_mean='123.68,116.779,103.939', rgb_std='58.393,57.12,57.375')
-    aug.set_defaults(random_crop=0, random_resized_crop=1, random_mirror=1)
-    aug.set_defaults(min_random_area=0.08)
-    aug.set_defaults(max_random_aspect_ratio=4./3., min_random_aspect_ratio=3./4.)
-    aug.set_defaults(brightness=0.4, contrast=0.4, saturation=0.4, pca_noise=0.1)
+import data, dali
+import fit
+import models
 
-if __name__ == '__main__':
-    # parse args
-    parser = argparse.ArgumentParser(description="train resnet on imagenet",
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train classification models on ImageNet",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    models.add_model_args(parser)
     fit.add_fit_args(parser)
     data.add_data_args(parser)
     dali.add_dali_args(parser)
     data.add_data_aug_args(parser)
-    
-    # Instead, to get standard resnet augmentation on a per-use basis, invoke as in:
-    # train_imagenet.py --set-resnet-aug ...
-    # Finally, to get the legacy MXNet v1.2 training settings on a per-use basis, invoke as in:
-    # train_imagenet.py --set-data-aug-level 3
-    parser.set_defaults(
-        # network
-        num_layers       = 50,
+    return parser.parse_args()
 
-        # data
-        resize           = 256,
-        num_classes      = 1000,
-        num_examples     = 1281167,
-        image_shape      = '3,224,224',
-        min_random_scale = 1, # if input image has min size k, suggest to use
-                              # 256.0/x, e.g. 0.533 for 480
-        # train
-        num_epochs       = 90,
-        lr_step_epochs   = '30,60,80',
-        dtype            = 'float32'
-    )
-    args = parser.parse_args()
+def setup_logging(args):
+    head = '{asctime}:{levelname}: {message}'
+    logging.basicConfig(level=logging.DEBUG, format=head, style='{',
+                        handlers=[logging.StreamHandler(sys.stderr), logging.FileHandler(args.log)])
+    logging.info('Start with arguments {}'.format(args))
 
-    if not args.use_dali:
-        data.set_data_aug_level(parser, 0)
+if __name__ == '__main__':
+    args = parse_args()
+    setup_logging(args)
 
-    # load network
-    import resnet as net
-    sym = net.get_symbol(**vars(args))
+    model = models.get_model(**vars(args))
+    data_loader = data.get_data_loader(args)
 
-    # train
-    fit.fit(args, sym, dali.get_rec_iter)
+    fit.fit(args, model, data_loader)

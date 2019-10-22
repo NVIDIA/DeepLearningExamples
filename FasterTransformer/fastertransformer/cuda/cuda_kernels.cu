@@ -197,11 +197,9 @@ void add_bias_input_layernorm(__half* out, const __half* input, const __half* bi
 template <typename T>
 void add_bias_act_kernelLauncher(T* out, const T* bias, int m, int n, cudaStream_t stream)
 {
-//  dim3 grid(m / 64);
   dim3 grid(m / 4);
   dim3 block(n / 4);
-  assert(block.x > 1024);
-//  dim3 block(n);
+  assert(block.x <= 1024);
   add_bias_act<T><<<grid, block, 0, stream>>>(out, bias, m, n);
 }
 
@@ -209,9 +207,9 @@ template<typename T>
 void add_bias_input_layernorm_kernelLauncher(T* out, const T* input, const T* bias, 
   const T* gamma, const T* beta, int m, int n, cudaStream_t stream)
 {
-  assert(n > 1024);
   dim3 grid(m);
   dim3 block(n);
+  assert(block.x <= 1024);
   add_bias_input_layernorm<T><<<grid, block, 0, stream>>>(out, input, bias, gamma, beta, m, n);
 }
 
@@ -220,9 +218,9 @@ template <>
 void add_bias_input_layernorm_kernelLauncher(__half* out, const __half* input, const __half* bias, 
   const __half* gamma, const __half* beta, int m, int n, cudaStream_t stream)
 {
-  assert(n / 2 > 1024);
   dim3 grid(m);
   dim3 block(n / 2);
+  assert(block.x <= 1024);
   add_bias_input_layernorm<__half><<<grid, block, 0, stream>>>(out, input, bias, gamma, beta, m, n);
 }
 

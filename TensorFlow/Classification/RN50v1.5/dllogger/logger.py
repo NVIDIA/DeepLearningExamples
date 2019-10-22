@@ -261,7 +261,7 @@ class _ParentStdOutBackend(object):
             prefix=self.prefix, token=self.token, ver=self.version, secs=now, 
             model=_data['model'],
             call_site=call_site, msg=msg)
-
+        
         self.logger.debug(message)
 
     def timed_block_start(self, name):

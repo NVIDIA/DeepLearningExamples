@@ -19,5 +19,6 @@ set(cuda_kernel_files
 )
 
 add_library(fastertransformer STATIC ${cuda_kernel_files})
+set_target_properties(fastertransformer PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON)
 target_link_libraries(fastertransformer PUBLIC -lcublas -lcudart ${CMAKE_THREAD_LIBS_INIT})
 

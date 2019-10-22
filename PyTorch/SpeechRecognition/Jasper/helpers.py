@@ -43,7 +43,7 @@ def add_ctc_labels(labels):
         raise ValueError("labels must be a list of symbols")
     labels.append("<BLANK>")
     return labels
- 
+
 def __ctc_decoder_predictions_tensor(tensor, labels):
     """
     Takes output of greedy ctc decoder and performs ctc decoding algorithm to
@@ -136,7 +136,7 @@ def __gather_transcripts(transcript_list: list, transcript_len_list: list,
 
 def process_evaluation_batch(tensors: dict, global_vars: dict, labels: list):
     """
-    Processes results of an iteration and saves it in global_vars 
+    Processes results of an iteration and saves it in global_vars
     Args:
         tensors: dictionary with results of an evaluation iteration, e.g. loss, predictions, transcript, and output
         global_vars: dictionary where processes results of iteration are saved
@@ -162,11 +162,11 @@ def process_evaluation_batch(tensors: dict, global_vars: dict, labels: list):
 
 def process_evaluation_epoch(global_vars: dict, tag=None):
     """
-    Processes results from each worker at the end of evaluation and combine to final result 
+    Processes results from each worker at the end of evaluation and combine to final result
     Args:
         global_vars: dictionary containing information of entire evaluation
     Return:
-        wer: final word error rate 
+        wer: final word error rate
         loss: final loss
     """
     if 'EvalLoss' in global_vars:
@@ -200,7 +200,7 @@ def process_evaluation_epoch(global_vars: dict, tag=None):
 
 
 def norm(x):
-    if not isinstance(x, List):
+    if not isinstance(x, list):
         if not isinstance(x, tuple):
             return x
     return x[0]
@@ -220,4 +220,3 @@ def model_multi_gpu(model, multi_gpu=False):
         model = DDP(model)
         print('DDP(model)')
     return model
-

@@ -1,6 +1,6 @@
 # Jasper For PyTorch
 
-This repository provides a script and recipe to train the Jasper model to achieve state of the art  the paper accuracy of the acoustic model, and is tested and maintained by NVIDIA.
+This repository provides scripts to train the Jasper model to achieve near state of the art accuracy and perform high-performance inference using NVIDIA TensorRT. This repository is tested and maintained by NVIDIA.
 
 ## Table Of Contents
 - [Model overview](#model-overview)
@@ -23,6 +23,7 @@ This repository provides a script and recipe to train the Jasper model to achiev
    * [Training process](#training-process)
    * [Inference process](#inference-process)
    * [Evaluation process](#evaluation-process)
+   * [Inference process with TensorRT](#inference-process-with-tensorrt)
 - [Performance](#performance)
    * [Benchmarking](#benchmarking)
        * [Training performance benchmark](#training-performance-benchmark)
@@ -50,7 +51,7 @@ This repository provides an implementation of the Jasper model in PyTorch from t
 The Jasper model is an end-to-end neural acoustic model for automatic speech recognition (ASR) that provides near state-of-the-art results on LibriSpeech among end-to-end ASR models without any external data. The Jasper architecture of convolutional layers was designed to facilitate fast GPU inference, by allowing whole sub-blocks to be fused into a single GPU kernel. This is important for meeting strict real-time requirements of ASR systems in deployment.
 
 The results of the acoustic model are combined with the results of external language models to get the top-ranked word sequences
-corresponding to a given audio segment. This post-processing step is called decoding. 
+corresponding to a given audio segment. This post-processing step is called decoding.
 
 This repository is a PyTorch implementation of Jasper and provides scripts to train the Jasper 10x5 model with dense residuals from scratch on the [Librispeech](http://www.openslr.org/12) dataset to achieve the greedy decoding results of the original paper.
 The original reference code provides Jasper as part of a research toolkit in TensorFlow [openseq2seq](https://github.com/NVIDIA/OpenSeq2Seq).
@@ -85,7 +86,7 @@ Each sub-block applies the following operations in sequence: 1D-Convolution, Bat
 Each block input is connected directly to the last subblock of all following blocks via a residual connection, which is referred to as `dense residual` in the paper.
 Every block differs in kernel size and number of filters, which are increasing in size from the bottom to the top layers.
 Irrespective of the exact block configuration parameters B and R, every Jasper model has four additional convolutional blocks:
-one immediately succeeding the input layer (Prologue) and three at the end of the B blocks (Epilogue).  
+one immediately succeeding the input layer (Prologue) and three at the end of the B blocks (Epilogue).
 
 The Prologue is to decimate the audio signal
 in time in order to process a shorter time sequence for efficiency. The Epilogue with dilation captures a bigger context around an audio time step, which decreases the model word error rate (WER).
@@ -96,7 +97,7 @@ The paper achieves best results with Jasper 10x5 with dense residual connections
 The following features were implemented in this model:
 
 * GPU-supported feature extraction with data augmentation options [SpecAugment](https://arxiv.org/abs/1904.08779) and [Cutout](https://arxiv.org/pdf/1708.04552.pdf)
-* offline and online [Speed Perturbation](https://www.danielpovey.com/files/2015_interspeech_augmentation.pdf) 
+* offline and online [Speed Perturbation](https://www.danielpovey.com/files/2015_interspeech_augmentation.pdf)
 * data-parallel multi-GPU training and evaluation
 * AMP with dynamic loss scaling for Tensor Core training
 * FP16 inference with AMP
@@ -153,7 +154,7 @@ For information about:
 
 For training, mixed precision can be enabled by setting the flag: `train.py --fp16`. You can change this behavior and execute the training in
 single precision by removing the `--fp16` flag for the `train.py` training
-script. For example, in the bash scripts `scripts/train.sh`, `scripts/inference.sh`, etc. the precision can be specified with the variable `PRECISION` by setting it to either `PRECISION=’fp16’` or  `PRECISION=’fp32’`. 
+script. For example, in the bash scripts `scripts/train.sh`, `scripts/inference.sh`, etc. the precision can be specified with the variable `PRECISION` by setting it to either `PRECISION=’fp16’` or  `PRECISION=’fp32’`.
 
 Mixed precision is enabled in PyTorch by using the Automatic Mixed Precision
 (AMP) library from [APEX](https://github.com/NVIDIA/apex) that casts variables
@@ -169,7 +170,7 @@ value to be used can be
 For an in-depth walk through on AMP, check out sample usage
 [here](https://nvidia.github.io/apex/amp.html#). [APEX](https://github.com/NVIDIA/apex) is a PyTorch extension that contains
 utility libraries, such as AMP, which require minimal network code changes to
-leverage tensor cores performance.
+leverage Tensor Cores performance.
 
 The following steps were needed to enable mixed precision training in Jasper:
 
@@ -178,7 +179,7 @@ The following steps were needed to enable mixed precision training in Jasper:
 from apex import amp
 ```
 
-* Initialize AMP and wrap the model and the optimizer 
+* Initialize AMP and wrap the model and the optimizer
 ```
    model, optimizer = amp.initialize(
      min_loss_scale=1.0,
@@ -188,7 +189,7 @@ from apex import amp
 
 ```
 
-* Apply `scale_loss` context manager 
+* Apply `scale_loss` context manager
 ```
 with amp.scale_loss(loss, optimizer) as scaled_loss:
     scaled_loss.backward()
@@ -216,11 +217,11 @@ The following section lists the requirements in order to start training and eval
 
 ### Requirements
 
-This repository contains a `Dockerfile` which extends the PyTorch 19.06-py3 NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
+This repository contains a `Dockerfile` which extends the PyTorch 19.09-py3 NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 19.06-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
-* [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) based GPU
+* [PyTorch 19.09-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
+* [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
 
 Further required python packages are listed in `requirements.txt`, which are automatically installed with the Docker container built. To manually install them, run
 ```bash
@@ -240,7 +241,7 @@ For those unable to use the PyTorch NGC container, to set up the required enviro
 
 ## Quick Start Guide
 
-To train your model using mixed precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the Jasper model on the Librispeech dataset. For details concerning training and inference, see [Advanced](#Advanced).
+To train your model using mixed precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the Jasper model on the Librispeech dataset. For details concerning training and inference, see [Advanced](#Advanced) section.
 
 1. Clone the repository.
 ```bash
@@ -265,7 +266,7 @@ and mapped to the corresponding directories `<DATA_DIR>`, `<CHECKPOINT_DIR>`, `<
 
 4. Download and preprocess the dataset.
 
-No GPU is required for data download and preprocessing. Therefore, if GPU usage is a limited resource, launch the container for this section on a CPU machine by following Steps 2 and 3. 
+No GPU is required for data download and preprocessing. Therefore, if GPU usage is a limited resource, launch the container for this section on a CPU machine by following Steps 2 and 3.
 
 Note: Downloading and preprocessing the dataset requires 500GB of free disk space and can take several hours to complete.
 
@@ -290,7 +291,7 @@ Once the data download is complete, the following folders should exist:
    * `test-clean/`
    * `test-other/`
 
-Since `/datasets/` is mounted to `<DATA_DIR>` on the host (see Step 3),  once the dataset is downloaded it is accessible from outside of the container at `<DATA_DIR>/LibriSpeech`.
+Since `/datasets/` is mounted to `<DATA_DIR>` on the host (see Step 3),  once the dataset is downloaded it will be accessible from outside of the container at `<DATA_DIR>/LibriSpeech`.
 
 
 Next, convert the data into WAV files and add speed perturbation with 0.9 and 1.1 to the training files:
@@ -317,8 +318,8 @@ Once the data is converted, the following additional files and folders should ex
 
 5. Start training.
 
-Inside the container, use the following script to start training. 
-Make sure the downloaded and preprocessed dataset is located at `<DATA_DIR>/LibriSpeech` on the host (see Step 3), which corresponds to `/datasets/LibriSpeech` inside the container. 
+Inside the container, use the following script to start training.
+Make sure the downloaded and preprocessed dataset is located at `<DATA_DIR>/LibriSpeech` on the host (see Step 3), which corresponds to `/datasets/LibriSpeech` inside the container.
 
 ```bash
 bash scripts/train.sh [OPTIONS]
@@ -330,7 +331,7 @@ More details on available [OPTIONS] can be found in [Parameters](#parameters) an
 6. Start validation/evaluation.
 
 Inside the container, use the following script to run evaluation.
- Make sure the downloaded and preprocessed dataset is located at `<DATA_DIR>/LibriSpeech` on the host (see Step 3), which corresponds to `/datasets/LibriSpeech` inside the container. 
+ Make sure the downloaded and preprocessed dataset is located at `<DATA_DIR>/LibriSpeech` on the host (see Step 3), which corresponds to `/datasets/LibriSpeech` inside the container.
 ```bash
 bash scripts/evaluation.sh [OPTIONS]
 ```
@@ -342,7 +343,9 @@ More details on available [OPTIONS] can be found in [Parameters](#parameters) an
 7. Start inference/predictions.
 
 Inside the container, use the following script to run inference.
- Make sure the downloaded and preprocessed dataset is located at `<DATA_DIR>/LibriSpeech` on the host (see Step 3), which corresponds to `/datasets/LibriSpeech` inside the container. 
+ Make sure the downloaded and preprocessed dataset is located at `<DATA_DIR>/LibriSpeech` on the host (see Step 3), which corresponds to `/datasets/LibriSpeech` inside the container.
+A pretrained model checkpoint can be downloaded from `NGC model repository`[https://ngc.nvidia.com/catalog/models/nvidia:jasperpyt_fp16].
+
 ```bash
 bash scripts/inference.sh [OPTIONS]
 ```
@@ -364,7 +367,7 @@ In the `root` directory, the most important files are:
 * `model.py` - Contains the model architecture
 * `dataset.py` - Contains the data loader and related functionality
 * `optimizer.py` - Contains the optimizer
-* `inference_benchmark.py` - Serves as inference benchmarking script that measures the latency of pre-processing and the acoustic model 
+* `inference_benchmark.py` - Serves as inference benchmarking script that measures the latency of pre-processing and the acoustic model
 * `requirements.py` - Contains the required dependencies that are installed when building the Docker container
 * `Dockerfile` - Container with the basic set of dependencies to run Jasper
 
@@ -380,9 +383,9 @@ The `scripts/` folder encapsulates all the one-click scripts required for runnin
 
 
 Other folders included in the `root` directory are:
+* `notebooks/` - Contains Jupyter notebook
 * `configs/` - Model configurations
 * `utils/` - Contains the necessary files for data download and  processing
-
 * `parts/` - Contains the necessary files for data pre-processing
 
 ### Parameters
@@ -438,7 +441,7 @@ SEED: seed for random number generator and useful for ensuring reproducibility. 
 BATCH_SIZE: data batch size.(default: 64)
 ```
 
-The `scripts/inference_benchmark.sh` script pads all input to the same length and computes the mean, 90%, 95%, 99% percentile of latency for the specified number of inference steps. Latency is measured in millisecond per batch. The `scripts/inference_benchmark.sh` 
+The `scripts/inference_benchmark.sh` script pads all input to the same length and computes the mean, 90%, 95%, 99% percentile of latency for the specified number of inference steps. Latency is measured in millisecond per batch. The `scripts/inference_benchmark.sh`
 measures latency for a single GPU and extends  `scripts/inference.sh` by :
 ```bash
  MAX_DURATION: filters out input audio data that exceeds a maximum number of seconds. This ensures that when all filtered audio samples are padded to maximum length that length will stay under this specified threshold (default: 36)
@@ -538,7 +541,7 @@ Apart from the default arguments as listed in the [Parameters](#parameters) sect
 ### Evaluation process
 
 Evaluation is performed using the `inference.py` script along with parameters defined in `scripts/evaluation.sh`.
-The `scripts/evaluation.sh` script runs a job on a a single GPU, taking a pre-trained Jasper model checkpoint and running it on the specified dataset.
+The `scripts/evaluation.sh` script runs a job on a single GPU, taking a pre-trained Jasper model checkpoint and running it on the specified dataset.
 Apart from the default arguments as listed in the [Parameters](#parameters) section, by default the evaluation script:
 
 * Uses a batch size of 64
@@ -551,6 +554,9 @@ Apart from the default arguments as listed in the [Parameters](#parameters) sect
 * Has cudnn benchmark disabled
 
 
+### Inference Process with TensorRT
+NVIDIA TensorRT is a platform for high-performance deep learning inference. It includes a deep learning inference optimizer and runtime that delivers low latency and high-throughput for deep learning inference applications. Jasper’s architecture, which is of deep convolutional nature, is designed to facilitate fast GPU inference. After optimizing the compute-intensive acoustic model with NVIDIA TensorRT, inference throughput increased by up to 1.8x over native PyTorch. 
+More information on how to perform inference using TensorRT and speed up comparison between TensorRT and native PyTorch can be found in the subfolder [./trt/README.md](trt/README.md)
 
 ## Performance
 
@@ -604,12 +610,12 @@ The results for Jasper Large's word error rate from the original paper after gre
 
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 32G)
 
-Our results were obtained by running the `scripts/train.sh` training script in the PyTorch 19.06-py3 NGC container with NVIDIA DGX-1 with (8x V100 32G) GPUs.
+Our results were obtained by running the `scripts/train.sh` training script in the PyTorch 19.09-py3 NGC container with NVIDIA DGX-1 with (8x V100 32G) GPUs.
 The following tables report the word error rate(WER) of the acoustic model with greedy decoding on all LibriSpeech dev and test datasets for mixed precision training.
 
 FP16 (seed #6)
 
-| **Number of GPUs**    | **Batch size per GPU**    | **dev-clean WER** | **dev-other WER**| **test-clean WER**| **test-other WER**| **Total time to train with FP16 (Hrs)** | 
+| **Number of GPUs**    | **Batch size per GPU**    | **dev-clean WER** | **dev-other WER**| **test-clean WER**| **test-other WER**| **Total time to train with FP16 (Hrs)** |
 |---    |---    |---    |---    |---    |---    |---    |
 |8 |64| 3.51|11.14|3.74|11.06|100
 
@@ -619,7 +625,7 @@ FP32 training matches the results of mixed precision training and takes approxim
 
 ##### Training stability test
 
-The following table compares greedy decoding word error rates across 8 different training runs with different seeds for mixed precision training. 
+The following table compares greedy decoding word error rates across 8 different training runs with different seeds for mixed precision training.
 
 | **FP16, 8x GPUs** | **seed #1** | **seed #2** | **seed #3** | **seed #4** | **seed #5** | **seed #6** | **seed #7** | **seed #8** | **mean** | **std** |
 |:-----------:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|
@@ -632,7 +638,7 @@ The following table compares greedy decoding word error rates across 8 different
 
 #### Training performance results
 
-Our results were obtained by running the `scripts/train.sh` training script in the PyTorch 19.06-py3 NGC container. Performance (in sequences per second) is the steady-state throughput.
+Our results were obtained by running the `scripts/train.sh` training script in the PyTorch 19.09-py3 NGC container. Performance (in sequences per second) is the steady-state throughput.
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 16G)
 
@@ -700,7 +706,7 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 #### Inference performance results
 
-Our results were obtained by running the `scripts/inference_benchmark.sh` script in the PyTorch 19.06-py3 NGC container on NVIDIA DGX-1, DGX-2 and T4 on a single GPU. Performance numbers (latency in milliseconds per batch) were averaged over 1000 iterations.
+Our results were obtained by running the `scripts/inference_benchmark.sh` script in the PyTorch 19.09-py3 NGC container on NVIDIA DGX-1, DGX-2 and T4 on a single GPU. Performance numbers (latency in milliseconds per batch) were averaged over 1000 iterations.
 
 ##### Inference performance: NVIDIA DGX-1 (1x V100 16G)
 
@@ -800,6 +806,9 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 ## Release notes
 
 ### Changelog
+September 2019
+* Inference support for TRT 6
+* Jupyter notebook for inference
 
 July 2019
 * Initial release
@@ -808,9 +817,3 @@ July 2019
 ### Known issues
 
 There are no known issues in this release.
-
-
-
-
-
-

@@ -88,7 +88,7 @@ T blockReduceMax(T val)
   __syncthreads();
 
 
-  val = (threadIdx.x < (blockDim.x >> 5 )) ? shared[lane] : 0;
+  val = (threadIdx.x < (blockDim.x >> 5 )) ? shared[lane] : -1e20f;
   val = warpReduceMax(val);
 
   return val;
@@ -204,7 +204,7 @@ void softmax_kernel(T* qk_buf_, const T* attr_mask, const int batch_size, const 
       
       mask_val = (1.0f - mask_val) * -10000.0f;
 
-      float tmp = threadIdx.x < seq_len ? (float)(qk * (float)scaler + mask_val): -1e-20f;
+      float tmp = threadIdx.x < seq_len ? (float)(qk * (float)scaler + mask_val): -1e20f;
 
       float max_val = blockReduceMax<float>(tmp);
 
@@ -248,7 +248,7 @@ void softmax_kernel_v2(T* qk_buf_, const T* attr_mask, const int batch_size, con
       
     mask_val = (1.0f - mask_val) * -10000.0f;
 
-    float tmp = threadIdx.x < seq_len ? (float)(qk * (float)scaler + mask_val) : -1e-20f;
+    float tmp = threadIdx.x < seq_len ? (float)(qk * (float)scaler + mask_val) : -1e20f;
     float max_val = blockReduceMax<float>(tmp);
     if(threadIdx.x == 0)
       s_max = max_val;
@@ -324,10 +324,9 @@ void OpenMultiHeadAttention<OpType_>::multiHeadAttr_nofuse_kernelLauncher(
 
     if(OpType_ == OperationType::FP32)
     {
-//      const int word_per_block = 32;
       const int word_per_block = 1;
-      assert(k > 1024);
-      assert(m / word_per_block * 3 > 65536);
+      assert(k <= 1024);
+      assert(m / word_per_block * 3 <= 65536);
 
       dim3 grid(m / word_per_block * 3);
       dim3 block(k);
@@ -339,8 +338,6 @@ void OpenMultiHeadAttention<OpType_>::multiHeadAttr_nofuse_kernelLauncher(
       const int word_per_block = 1;
       grid.x = batch_size * seq_len / word_per_block;
       block.x = head_num * size_per_head * word_per_block / 2;
-
-      assert(block.x);
 
       add_QKV_bias<DataType_><<<grid, block, 0, stream>>>(Q, bias_Q, K, bias_K, V, bias_V, q_buf_, k_buf_, 
       v_buf_, batch_size, seq_len, head_num, size_per_head / 2, word_per_block);
@@ -400,11 +397,10 @@ void OpenMultiHeadAttention<OpType_>::multiHeadAttr_nofuse_kernelLauncher(
     if(OpType_ == OperationType::HALF)
     {
       const int seq_per_block = 4;
-  //    const int seq_per_block = 1;
       grid.x = batch_size * head_num * seq_len / seq_per_block;
       block.x = seq_per_block * size_per_head / 2;
 
-      assert(grid.x * seq_per_block != batch_size * head_num * seq_len);
+      assert(grid.x * seq_per_block == batch_size * head_num * seq_len);
 
       transpose<DataType_><<<grid, block, 0, stream>>>(transpose_dst_, dst, 
           batch_size, seq_len, head_num, size_per_head / 2);

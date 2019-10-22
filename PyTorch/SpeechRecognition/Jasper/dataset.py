@@ -13,7 +13,7 @@
 # limitations under the License.
 
 """
-This file contains classes and functions related to data loading  
+This file contains classes and functions related to data loading
 """
 import torch
 import numpy as np
@@ -66,7 +66,7 @@ class DistributedBucketBatchSampler(Sampler):
             bucket_start = self.bucket_size * bucket
             bucket_end = min(bucket_start + self.bucket_size, self.index_count)
             indices[bucket_start:bucket_end] = indices[bucket_start:bucket_end][torch.randperm(bucket_end - bucket_start, generator=g)]
-        
+
         tile_indices = torch.randperm(self.index_count // self.tile_size, generator=g)
         for tile_index in tile_indices:
             start_index = self.tile_size * tile_index + self.batch_size * self.rank
@@ -93,7 +93,7 @@ class data_prefetcher():
             return
         with torch.cuda.stream(self.stream):
             self.next_input = [ x.cuda(non_blocking=True) for x in self.next_input]
-            
+
     def __next__(self):
         torch.cuda.current_stream().wait_stream(self.stream)
         input = self.next_input
@@ -133,7 +133,7 @@ def seq_collate_fn(batch):
     return batched_audio_signal, torch.stack(audio_lengths), batched_transcript, \
          torch.stack(transcript_lengths)
 
-class AudioToTextDataLayer:  
+class AudioToTextDataLayer:
     """Data layer with data loader
     """
     def __init__(self, **kwargs):
@@ -205,7 +205,7 @@ class AudioToTextDataLayer:
                 sampler=self.sampler
             )
         else:
-            raise RuntimeError("Sampler {} not supported".format(sampler_type)) 
+            raise RuntimeError("Sampler {} not supported".format(sampler_type))
 
     def __len__(self):
         return len(self._dataset)
@@ -214,9 +214,9 @@ class AudioToTextDataLayer:
     def data_iterator(self):
         return self._dataloader
 
-class AudioDataset(Dataset):  
+class AudioDataset(Dataset):
     def __init__(self, dataset_dir, manifest_filepath, labels, featurizer, max_duration=None, pad_to_max=False,
-                 min_duration=None, blank_index=0, max_utts=0, normalize=True, sort_by_duration=False, 
+                 min_duration=None, blank_index=0, max_utts=0, normalize=True, sort_by_duration=False,
                  trim=False, speed_perturbation=False):
         """Dataset that loads tensors via a json file containing paths to audio files, transcripts, and durations
         (in seconds). Each entry is a different audio sample.
@@ -264,6 +264,3 @@ class AudioDataset(Dataset):
 
     def __len__(self):
         return len(self.manifest)
-
-
-

@@ -1,4 +1,5 @@
 # coding=utf-8
+# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
 # Copyright 2018 The Google AI Language Team Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """Run BERT on SQuAD 1.1 and SQuAD 2.0."""
 
 from __future__ import absolute_import, division, print_function
@@ -113,6 +115,10 @@ flags.DEFINE_integer("save_checkpoints_steps", 1000,
 
 flags.DEFINE_integer("iterations_per_loop", 1000,
                      "How many steps to make in each estimator call.")
+
+flags.DEFINE_integer("num_accumulation_steps", 1,
+                     "Number of accumulation steps before gradient update" 
+                      "Global batch size = num_accumulation_steps * train_batch_size")
 
 flags.DEFINE_integer(
     "n_best_size", 20,
@@ -231,17 +237,17 @@ def get_frozen_tftrt_model(bert_config, shape, use_one_hot_embeddings, init_chec
 
     num_nodes = len(frozen_graph.node)
     print('Converting graph using TensorFlow-TensorRT...')
-    import tensorflow.contrib.tensorrt as trt
-    frozen_graph = trt.create_inference_graph(
+    from tensorflow.python.compiler.tensorrt import trt_convert as trt
+    converter = trt.TrtGraphConverter(
         input_graph_def=frozen_graph,
-        outputs=output_node_names,
-        max_batch_size=FLAGS.predict_batch_size,
+        nodes_blacklist=output_node_names,
         max_workspace_size_bytes=(4096 << 20) - 1000,
         precision_mode = "FP16" if FLAGS.use_fp16 else "FP32",
         minimum_segment_size=4,
         is_dynamic_op=True,
         maximum_cached_engines=1000
     )
+    frozen_graph = converter.convert()
 
     print('Total node count before and after TF-TRT conversion:',
           num_nodes, '->', len(frozen_graph.node))
@@ -336,7 +342,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
       total_loss = (start_loss + end_loss) / 2.0
 
       train_op = optimization.create_optimizer(
-          total_loss, learning_rate, num_train_steps, num_warmup_steps, hvd, amp=use_fp16)
+          total_loss, learning_rate, num_train_steps, num_warmup_steps, hvd, False, use_fp16, FLAGS.num_accumulation_steps)
 
       output_spec = tf.estimator.EstimatorSpec(
           mode=mode,
@@ -899,6 +905,8 @@ def main(_):
 
   if FLAGS.horovod:
     hvd.init()
+  if FLAGS.use_fp16:
+    os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
 
   bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
 
@@ -911,7 +919,7 @@ def main(_):
 
   master_process = True
   training_hooks = []
-  global_batch_size = FLAGS.train_batch_size
+  global_batch_size = FLAGS.train_batch_size * FLAGS.num_accumulation_steps
   hvd_rank = 0
   hvd_local_rank = 0
 
@@ -921,7 +929,7 @@ def main(_):
 
       tf.logging.info("Multi-GPU training with TF Horovod")
       tf.logging.info("hvd.size() = %d hvd.rank() = %d", hvd.size(), hvd.rank())
-      global_batch_size = FLAGS.train_batch_size * hvd.size()
+      global_batch_size = FLAGS.train_batch_size * hvd.size() * FLAGS.num_accumulation_steps
       learning_rate = learning_rate * hvd.size()
       master_process = (hvd.rank() == 0)
       hvd_rank = hvd.rank()

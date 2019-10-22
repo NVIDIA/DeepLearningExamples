@@ -29,12 +29,14 @@ This repository provides a script and recipe to train the ResNet-50 v1.5 model t
     * [Results](#results)
         * [Training accuracy results](#training-accuracy-results)
             * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
+            * [NVIDIA DGX-1 (8x V100 32G)](#nvidia-dgx-1-8x-v100-32g)
         * [Training performance results](#training-performance-results)
             * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
             * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-16x-v100-32g)
         * [Inference performance results](#inference-performance-results)
             * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
             * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-16x-v100-32g)
+            * [NVIDIA T4 (1x T4)](#nvidia-t4-1x-t4-16g)
 * [Release notes](#release-notes)
     * [Changelog](#changelog)
     * [Known issues](#known-issues)
@@ -79,6 +81,8 @@ during first 5 epochs according to [Training ImageNet in 1 hour](https://arxiv.o
     * 50 Epochs -> configuration that reaches 75.9% top1 accuracy
 
     * 90 Epochs -> 90 epochs is a standard for ResNet50
+    
+    * 250 Epochs -> best possible accuracy. For 250 epoch training we also use [MixUp regularization](https://arxiv.org/pdf/1710.09412.pdf).
 
 ### Data Augmentation
 
@@ -172,7 +176,7 @@ The following section list the requirements that you need to meet in order to us
 This repository contains Dockerfile which extends the Tensorflow NGC container and encapsulates all dependencies.  Aside from these dependencies, ensure you have the following software:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [TensorFlow 19.06-py3 NGC container or later](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)
+* [TensorFlow 19.08-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)
 * [NVIDIA Volta based GPU](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
 
 For more information about how to get started with NGC containers, see the
@@ -181,7 +185,7 @@ following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning
 * [Accessing And Pulling From The NGC container registry](https://docs.nvidia.com/deeplearning/dgx/user-guide/index.html#accessing_registry)
 * [Running Tensorflow](https://docs.nvidia.com/deeplearning/dgx/tensorflow-release-notes/running.html#running).
 
-For those unable to use the [TensorFlow 19.06-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) to set up the required environment or create your own container, see the versioned [NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html).
+For those unable to use the [TensorFlow 19.08-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) to set up the required environment or create your own container, see the versioned [NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html).
 
 ## Quick Start Guide
 To train your model using mixed precision with tensor cores, perform the following steps using the default parameters of the ResNet-50 v1.5 model on the [ImageNet](http://www.image-net.org/) dataset. For the specifics concerning training and inference, see the [Advanced](#advanced) section.
@@ -279,7 +283,7 @@ The script for training end evaluating the ResNet-50 v1.5 model have a variety o
 
 ##### Common parameters
 `--mode`
-: allow specification of mode in which the script will run: train, train_and_evaluate, evaluate, training_benchmark or inference_benchmark
+: allow specification of mode in which the script will run: train, train_and_evaluate, evaluate, predict, training_benchmark or inference_benchmark
 
 `--data_dir` `--data_idx_dir`
 : allow specification of dataset location 
@@ -325,6 +329,8 @@ The script for training end evaluating the ResNet-50 v1.5 model have a variety o
 `--loss_scale`
 : value of static loss scale. This parameter will have no effect if `--use_auto_loss_scaling` is set.
 
+`--mixup`        
+: value of alpha parameter for mixup (if 0 then mixup is not applied) (default: 0)
 
 ##### Utility parameters
 `--help`
@@ -378,6 +384,17 @@ To run a configuration that is not based on the default parameters, use:
     * FP16
         `mpiexec --allow-run-as-root --bind-to socket -np <num_gpus> python ./main.py --batch_size=256 --use_tf_amp --data_dir=<path to imagenet> --results_dir=<path to results>`
 
+### Inference process
+To run inference on single examples on checkpoint with model script, use: 
+
+`python main.py --mode predict --model_dir <path to model> --to_predict <path to image> --results_dir <path to results>`
+
+
+To run inference on a SavedModel with dedicated script, use:
+
+`python scripts/inference/predict.py -m <path to model>  -f <path to image>`
+
+
 ## Performance
 
 ### Benchmarking
@@ -428,29 +445,40 @@ The following sections provide details on how we achieved our results in trainin
 
 #### Training accuracy results
 
-##### Training accuracy: NVIDIA DGX-1 (8x V100 16G)
+##### NVIDIA DGX-1 (8x V100 16G)
 
-Our results were obtained by running the `./scripts/RN50_{FP16, FP32}_{1, 4, 8}GPU.sh` script in
+Our results were obtained by running 50 epochs training using the `./scripts/RN50_{FP16, FP32}_{1, 4, 8}GPU.sh` script in
 the tensorflow-19.07-py3 Docker container on NVIDIA DGX-1 with 8 V100 16G GPUs.
 
 
 | **number of GPUs** | **mixed precision top1** | **mixed precision training time** | **FP32 top1** | **FP32 training time** |
 |:------------------:|:------------------------:|:---------------------------------:|:-------------:|:----------------------:|
-| **1**                  | 76.18                    | 41.3h                             | 76.38         | 89.4h                  |
-| **4**                  | 76.30                    | 10.5h                             | 76.30         | 22.4h                  |
-| **8**                  | 76.18                    | 5.6h                              | 76.26         | 11.5h                  |
+| **1**                  | 76.21                    | 13.3h                             | 76.14         | 50.42h                  |
+| **4**                  | 76.13                    | 3.58h                             | 76.11         | 12.65h                  |
+| **8**                  | 76.08                    | 1.87h                              | 76.12        | 6.38h                  |
 
+##### NVIDIA DGX-1 (8x V100 32G)
+
+Our results were obtained by running 50 epochs training using the `./scripts/RN50_{FP16, FP32}_{1, 4, 8}GPU.sh` script in
+the tensorflow-19.07-py3 Docker container on NVIDIA DGX-1 with 8 V100 32G GPUs.
+
+
+| **number of GPUs** | **mixed precision top1** | **mixed precision training time** | **FP32 top1** | **FP32 training time** |
+|:------------------:|:------------------------:|:---------------------------------:|:-------------:|:----------------------:|
+| **1**                  | 76.14                    | 13.79h                             | 76.06         | 51.38h                  |
+| **4**                  | 76.07                    | 3.72h                             | 76.17         | 12.7h                  |
+| **8**                  | 76.04                   | 1.91h                              | 76.02         | 6.43h                  |
 
 
 #### Training performance results
 
 ##### NVIDIA DGX-1 (8x V100 16G)
-The results were obtained by running the `./scripts/benchmarking/DGX1V_trainbench_fp16.sh` and `./scripts/benchmarking/DGX1V_trainbench_fp32.sh` scripts in the tensorflow-19.06-py3 Docker container on NVIDIA DGX-1 with 8 V100 16G GPU.
+The results were obtained by running the `./scripts/benchmarking/DGX1V_trainbench_fp16.sh` and `./scripts/benchmarking/DGX1V_trainbench_fp32.sh` scripts in the tensorflow-19.07-py3 Docker container on NVIDIA DGX-1 with 8 V100 16G GPU.
 
 
 | **number of GPUs** | **mixed precision img/s** | **FP32 img/s** | **mixed precision speedup** | **mixed precision weak scaling** | **FP32 weak scaling** |
 |:------------------:|:-------------------------:|:--------------:|:---------------------------:|:--------------------------------:|:---------------------:|
-| **1**                  | 802.1                     | 364.9          | 2.20                        | 1.00                             | 1.00                  |
+| **1**                  | 825.2                     | 364.9          | 2.20                        | 1.00                             | 1.00                  |
 | **4**                  | 3197.4                    | 1419.4         | 2.25                        | 3.96                             | 3.89                  |
 | **8**                  | 6209.9                    | 2778.5         | 2.24                        | 7.74                             | 7.61                  |
 
@@ -458,13 +486,13 @@ The results were obtained by running the `./scripts/benchmarking/DGX1V_trainbenc
 
 | **number of GPUs** | **mixed precision img/s** | **mixed precision + XLA img/s** | **XLA speedup** | 
 |:------------------:|:-------------------------:|:-------------------------------:|:---------------:|
-| **1**              | 802.1                     | 1177.9                          | 1.47            |
-| **4**              | 3197.4                    | 4654.1                          | 1.45            |
-| **8**              | 6209.9                    | 8104.4                          | 1.30            |
+| **1**              | 825.2                     | 1335.9                          | 1.61            |
+| **4**              | 3197.4                    | 4964.9                          | 1.55            |
+| **8**              | 6209.9                    | 9518.8                         | 1.53            |
 
 
 ##### NVIDIA DGX-2 (16x V100 32G)
-The results were obtained by running the `./scripts/benchmarking/DGX2_trainbench_fp16.sh` and `./scripts/benchmarking/DGX2_trainbench_fp32.sh` scripts in the tensorflow-19.06-py3 Docker container on NVIDIA DGX-2 with 16 V100 32G GPU.
+The results were obtained by running the `./scripts/benchmarking/DGX2_trainbench_fp16.sh` and `./scripts/benchmarking/DGX2_trainbench_fp32.sh` scripts in the tensorflow-19.07-py3 Docker container on NVIDIA DGX-2 with 16 V100 32G GPU.
 
 | **number of GPUs** | **mixed precision img/s** | **FP32 img/s** | **mixed precision speedup** | **mixed precision weak scaling** | **FP32 weak scaling** |
 |:------------------:|:-------------------------:|:--------------:|:---------------------------:|:--------------------------------:|:---------------------:|
@@ -485,7 +513,7 @@ The results were obtained by running the `./scripts/benchmarking/DGX2_trainbench
 #### Inference performance results
 
 ##### NVIDIA DGX-1 (8x V100 16G)
-The results were obtained by running the `./scripts/benchmarking/DGX1V_inferbench_fp16.sh` and `./scripts/benchmarking/DGX1V_inferbench_fp32.sh` scripts in the tensorflow-19.06-py3 Docker container on a single GPU of NVIDIA DGX-1 with 8 V100 16G GPUs.
+The results were obtained by running the `./scripts/benchmarking/DGX1V_inferbench_fp16.sh` and `./scripts/benchmarking/DGX1V_inferbench_fp32.sh` scripts in the tensorflow-19.07-py3 Docker container on a single GPU of NVIDIA DGX-1 with 8 V100 16G GPUs.
 
 | **batch size** | **mixed precision img/s** | **FP32 img/s** | **mixed precision + XLA img/s** |
 |:--------------:|:-------------------------:|:--------------:|:-------------------------------:|
@@ -501,7 +529,7 @@ The results were obtained by running the `./scripts/benchmarking/DGX1V_inferbenc
 
 
 ##### NVIDIA DGX-2 (16x V100 32G)
-The results were obtained by running the `./scripts/benchmarking/DGX2_inferbench_fp16.sh` and `./scripts/benchmarking/DGX2_inferbench_fp32.sh` scripts in the tensorflow-19.05-py3 Docker container on a single GPU of NVIDIA DGX-2 with 16 V100 32G GPUs.
+The results were obtained by running the `./scripts/benchmarking/DGX2_inferbench_fp16.sh` and `./scripts/benchmarking/DGX2_inferbench_fp32.sh` scripts in the tensorflow-19.07-py3 Docker container on a single GPU of NVIDIA DGX-2 with 16 V100 32G GPUs.
 
 | **batch size** | **mixed precision img/s** | **FP32 img/s** | **mixed precision + XLA img/s** |
 |:--------------:|:-------------------------:|:--------------:|:-------------------------------:|
@@ -515,6 +543,16 @@ The results were obtained by running the `./scripts/benchmarking/DGX2_inferbench
 |       **128** |  2126.5 |  1168.8 |  3469.6 |        
 |       **256** |  2203.6 |  N/A    |  3713.2 | 
 
+##### NVIDIA T4 (1x T4 16G)
+The results were obtained by running the `./scripts/benchmarking/T4_inferbench_fp16.sh` and `./scripts/benchmarking/T4_inferbench_fp32.sh` scripts in the tensorflow-19.07-py3 Docker container on a single T4 GPU.
+
+| **batch size** | **mixed precision img/s** | **FP32 img/s** | **mixed precision + XLA img/s** |
+|:--------------:|:-------------------------:|:--------------:|:-------------------------------:|
+|         **1** |    173.2 |   138.7 |    204.2 |       
+|         **2** |   302.1 |   207.6 |  359.8 | 
+|         **4** |   450.3 |   267.4 |   660.0 |          
+|         **8** |  558.7 |   305.9 |  924.7 |          
+
 ## Release notes
 
 ### Changelog
@@ -526,6 +564,11 @@ The results were obtained by running the `./scripts/benchmarking/DGX2_inferbench
   * Added benchmark results for DGX-2 and XLA-enabled DGX-1 and DGX-2.
 3. July 15, 2019
   * Added Cosine learning rate schedule
+3. August 15, 2019
+  * Added mixup regularization
+  * Added T4 benchmarks
+  * Improved inference capabilities
+  * Added SavedModel export 
   
 ### Known issues
 There are no known issues with this model.

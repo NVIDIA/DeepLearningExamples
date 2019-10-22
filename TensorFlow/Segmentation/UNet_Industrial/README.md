@@ -219,6 +219,11 @@ cd scripts/
 ./UNet_FP32_EVAL.sh <path to result repository> <path to dataset> <DAGM2007 classID (1-10)>
 ```
 
+If you wish to evaluate external checkpoint, make sure to put the TF ckpt files inside a folder named "checkpoints"
+and provide its parent path as `<path to result repository>` in the example above. 
+Be aware that the script will not fail if it does not find the checkpoint. 
+It will randomly initialize the weights and run performance tests.
+
 ## Advanced
 
 The following sections provide greater details of the dataset, running training and inference, and the training results.
@@ -506,8 +511,11 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 ## Release notes
 
 ### Changelog
-March 18, 2019
-* Initial release
+
+* October 2019
+  * Jupyter notebooks added
+* March,2019
+  * Initial release
 
 ### Known issues
 There are no known issues with this model.

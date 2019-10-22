@@ -1,5 +1,18 @@
 #!/bin/bash
 
+# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
 train_batch_size=${1:-8192}
 learning_rate=${2:-"6e-3"}
@@ -18,11 +31,11 @@ allreduce_post_accumulation=${14:-"true"}
 allreduce_post_accumulation_fp16=${15:-"true"}
 accumulate_into_fp16=${16:-"false"}
 
-train_batch_size_phase2=${1:-4096}
-learning_rate_phase2=${2:-"4e-3"}
-warmup_proportion_phase2=${5:-"0.128"}
-train_steps_phase2=${6:-1563}
-gradient_accumulation_steps_phase2=${11:-512}
+train_batch_size_phase2=${17:-4096}
+learning_rate_phase2=${18:-"4e-3"}
+warmup_proportion_phase2=${19:-"0.128"}
+train_steps_phase2=${20:-1563}
+gradient_accumulation_steps_phase2=${21:-512}
 
 DATASET=hdf5_lower_case_1_seq_len_128_max_pred_20_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/books_wiki_en_corpus # change this for other datasets
 DATA_DIR=$BERT_PREP_WORKING_DIR/${DATASET}/
@@ -108,13 +121,7 @@ CMD+=" $ALL_REDUCE_POST_ACCUMULATION"
 CMD+=" $ALL_REDUCE_POST_ACCUMULATION_FP16"
 CMD+=" $ACCUMULATE_INTO_FP16"
 CMD+=" --do_train"
-
-if [ "$num_gpus" -gt 1  ] ; then
-   CMD="python3 -m torch.distributed.launch --nproc_per_node=$num_gpus $CMD"
-else
-   CMD="python3  $CMD"
-fi
-
+CMD="python3 -m torch.distributed.launch --nproc_per_node=$num_gpus $CMD"
 
 if [ "$create_logfile" = "true" ] ; then
   export GBS=$(expr $train_batch_size \* $num_gpus)
@@ -145,7 +152,7 @@ throughput=`cat $LOGFILE | grep Iteration | tail -1 | awk -F'it/s' '{print $1}' 
 loss=`cat $LOGFILE | grep 'Average Loss' | tail -1 | awk -F'Average Loss =' '{print $2}' | awk -F' ' '{print $1}' | egrep -o [0-9.]+`
 final_loss=`cat $LOGFILE | grep 'Total Steps' | tail -1 | awk -F'Final Loss =' '{print $2}' | awk -F' ' '{print $1}' | egrep -o [0-9.]+`
 
-train_perf=$(awk 'BEGIN {print ('$throughput' * '$num_gpus' * '$train_batch_size')}')
+train_perf=$(awk 'BEGIN {print ('$throughput' * '$num_gpus' * '$train_batch_size' / '$gradient_accumulation_steps' )}')
 echo " training throughput phase1: $train_perf sequences/second"
 echo "average loss: $loss"
 echo "final loss: $final_loss"
@@ -207,13 +214,7 @@ CMD+=" $ALL_REDUCE_POST_ACCUMULATION"
 CMD+=" $ALL_REDUCE_POST_ACCUMULATION_FP16"
 CMD+=" $ACCUMULATE_INTO_FP16"
 CMD+=" --do_train --phase2 --resume_from_checkpoint --phase1_end_step=$train_steps"
-
-if [ "$num_gpus" -gt 1  ] ; then
-   CMD="python3 -m torch.distributed.launch --nproc_per_node=$num_gpus $CMD"
-else
-   CMD="python3  $CMD"
-fi
-
+CMD="python3 -m torch.distributed.launch --nproc_per_node=$num_gpus $CMD"
 
 if [ "$create_logfile" = "true" ] ; then
   export GBS=$(expr $train_batch_size_phase2 \* $num_gpus)
@@ -239,7 +240,8 @@ throughput=`cat $LOGFILE | grep Iteration | tail -1 | awk -F'it/s' '{print $1}' 
 loss=`cat $LOGFILE | grep 'Average Loss' | tail -1 | awk -F'Average Loss =' '{print $2}' | awk -F' ' '{print $1}' | egrep -o [0-9.]+`
 final_loss=`cat $LOGFILE | grep 'Total Steps' | tail -1 | awk -F'Final Loss =' '{print $2}' | awk -F' ' '{print $1}' | egrep -o [0-9.]+`
 
-train_perf=$(awk 'BEGIN {print ('$throughput' * '$num_gpus' * '$train_batch_size_phase2')}')
+train_perf=$(awk 'BEGIN {print ('$throughput' * '$num_gpus' * '$train_batch_size_phase2' / '$gradient_accumulation_steps_phase2')}')
+
 echo " training throughput phase2: $train_perf sequences/second"
 echo "average loss: $loss"
 echo "final loss: $final_loss"

@@ -223,7 +223,7 @@ def main():
                   dropout=args.dropout)
 
     optimizer = FusedAdam(model.parameters(), lr=args.learning_rate,
-                          betas=(args.beta1, args.beta2), eps=args.eps, eps_inside_sqrt=False)
+                          betas=(args.beta1, args.beta2), eps=args.eps)
 
     criterion = nn.BCEWithLogitsLoss(reduction='none') # use torch.mean() with dim later to avoid copy to host
     # Move model and loss to GPU
@@ -252,6 +252,7 @@ def main():
 
     if args.load_checkpoint_path:
         state_dict = torch.load(args.load_checkpoint_path)
+        state_dict = {k.replace('module.', '') : v for k,v in state_dict.items()}
         model.load_state_dict(state_dict)
 
     if args.mode == 'test':

@@ -55,7 +55,7 @@ dither = 0.00001
 feat_type = "logfbank"
 normalize_transcripts = true
 trim_silence = true
-pad_to = 16 
+pad_to = 16
 
 
 [encoder]

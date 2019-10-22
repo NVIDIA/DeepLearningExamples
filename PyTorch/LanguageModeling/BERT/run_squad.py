@@ -1,7 +1,6 @@
 # coding=utf-8
+# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
 # Copyright 2018 The Google AI Language Team Authors and The HugginFace Inc. team.
-# Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -13,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """Run BERT on SQuAD."""
 
 from __future__ import absolute_import, division, print_function
@@ -40,6 +40,7 @@ from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from modeling import BertForQuestionAnswering, BertConfig, WEIGHTS_NAME, CONFIG_NAME
 from optimization import BertAdam, warmup_linear
 from tokenization import (BasicTokenizer, BertTokenizer, whitespace_tokenize)
+from utils import is_main_process
 
 if sys.version_info[0] == 2:
     import cPickle as pickle
@@ -923,9 +924,11 @@ def main():
     model = BertForQuestionAnswering(config)
     # model = BertForQuestionAnswering.from_pretrained(args.bert_model,
                 # cache_dir=os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE), 'distributed_{}'.format(args.local_rank)))
-    print("USING CHECKOINT")
+    if is_main_process():
+        print("LOADING CHECKOINT")
     model.load_state_dict(torch.load(args.init_checkpoint, map_location='cpu')["model"], strict=False)
-    print("USED CHECKPOINT \n\n")
+    if is_main_process():
+        print("LOADED CHECKPOINT")
     model.to(device)
     if args.fp16 and args.old:
         model.half()

@@ -50,10 +50,11 @@ def create_test_data(test_ratings, test_negs, args):
     stable_indices = torch.gather(indices, 1, indices_order) #[0,1,3,2]
     # produce -1 mask
     dup_mask = (sorted_items[:,0:-1] == sorted_items[:,1:])
-    dup_mask = torch.cat((torch.zeros_like(test_pos, dtype=torch.uint8), dup_mask),dim=1)
-    dup_mask = torch.gather(dup_mask,1,stable_indices.sort()[1])
+    dup_mask = dup_mask.type(torch.uint8)
+    dup_mask = torch.cat((torch.zeros_like(test_pos, dtype=torch.uint8), dup_mask), dim=1)
+    dup_mask = torch.gather(dup_mask, 1, stable_indices.sort()[1])
     # produce real sample indices to later check in topk
-    sorted_items, indices = (test_items != test_pos).sort()
+    sorted_items, indices = (test_items != test_pos).type(torch.uint8).sort()
     sum_item_indices = sorted_items.float()+indices.float()/len(indices[0])
     indices_order = torch.sort(sum_item_indices)[1]
     stable_indices = torch.gather(indices, 1, indices_order)

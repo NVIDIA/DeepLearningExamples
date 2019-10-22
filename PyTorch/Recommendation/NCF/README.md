@@ -225,7 +225,7 @@ This will result in a checkpoint file being written to `/data/checkpoints/model.
 The trained model can be evaluated by passing the `--mode` test flag to the `run.sh` script:
 
 ```bash
-python -m torch.distributed.launch --nproc_per_node=8 ncf.py --data /data/cache/ml-20m  --mode test --checkpoint-path /data/checkpoints/model.pth
+python -m torch.distributed.launch --nproc_per_node=1 ncf.py --data /data/cache/ml-20m  --mode test --load_checkpoint_path /data/checkpoints/model.pth
 ```
 
 
@@ -552,6 +552,9 @@ The following table shows the best inference throughput:
     * Updated performance tables.
     * Default container changed to PyTorch 19.06-py3.
     * Caching validation negatives between runs
+4. September, 2019
+    * Adjusting for API changes in PyTorch and APEX
+    * Checkpoints loading fix
 
 
 ### Known issues

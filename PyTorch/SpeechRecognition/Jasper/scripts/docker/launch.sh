@@ -27,4 +27,5 @@ docker run -it --rm \
   -v "$DATA_DIR":/datasets \
   -v "$CHECKPOINT_DIR":/checkpoints/ \
   -v "$RESULT_DIR":/results/ \
+  -v $PWD:/code \
   jasper bash

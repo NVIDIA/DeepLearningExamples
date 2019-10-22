@@ -98,7 +98,11 @@ def eval(
                 t_processed_signal, p_length_e = audio_processor(x=inp)
                 torch.cuda.synchronize()
                 t1 = time.perf_counter()
-                t_log_probs_e, _ = encoderdecoder((t_processed_signal, p_length_e))
+                
+                if args.use_conv_mask:
+                    t_log_probs_e, t_encoded_len_e  = encoderdecoder((t_processed_signal, p_length_e))
+                else:
+                    t_log_probs_e  = encoderdecoder(t_processed_signal)
                 torch.cuda.synchronize()
                 stop_time = time.perf_counter()
 
@@ -115,13 +119,13 @@ def eval(
                 durations_dnn.append(time_dnn)
                 durations_dnn_and_prep.append(time_prep_and_dnn)
                 seq_lens.append(t_processed_signal.shape[-1])
-                            
+
             if it >= steps:
-                
+
                 wer, _ = process_evaluation_epoch(_global_var_dict)
                 print("==========>>>>>>Evaluation of all iterations WER: {0}\n".format(wer))
                 break
-        
+
         ratios = [0.9,  0.95,0.99, 1.]
         latencies_dnn = take_durations_and_output_percentile(durations_dnn, ratios)
         latencies_dnn_and_prep = take_durations_and_output_percentile(durations_dnn_and_prep, ratios)
@@ -131,7 +135,7 @@ def eval(
 
 def take_durations_and_output_percentile(durations, ratios):
     durations = np.asarray(durations) * 1000 # in ms
-    latency = durations 
+    latency = durations
 
     latency = latency[5:]
     mean_latency = np.mean(latency)
@@ -167,11 +171,12 @@ def main(args):
     dataset_vocab = jasper_model_definition['labels']['labels']
     ctc_vocab = add_ctc_labels(dataset_vocab)
 
-    val_manifest = args.val_manifest 
+    val_manifest = args.val_manifest
     featurizer_config = jasper_model_definition['input_eval']
     featurizer_config["optimization_level"] = optim_level
+    args.use_conv_mask = jasper_model_definition['encoder'].get('convmask', True)
     if args.max_duration is not None:
-        featurizer_config['max_duration'] = args.max_duration  
+        featurizer_config['max_duration'] = args.max_duration
     if args.pad_to is not None:
         featurizer_config['pad_to'] = args.pad_to if args.pad_to >= 0 else "max"
 
@@ -181,7 +186,7 @@ def main(args):
     print_dict(featurizer_config)
 
     data_layer = AudioToTextDataLayer(
-                            dataset_dir=args.dataset_dir, 
+                            dataset_dir=args.dataset_dir,
                             featurizer_config=featurizer_config,
                             manifest_filepath=val_manifest,
                             labels=dataset_vocab,
@@ -226,16 +231,16 @@ def main(args):
             opt_level=AmpOptimizations[optim_level])
 
     eval(
-        data_layer=data_layer, 
+        data_layer=data_layer,
         audio_processor=audio_preprocessor,
-        encoderdecoder=encoderdecoder, 
-        greedy_decoder=greedy_decoder, 
+        encoderdecoder=encoderdecoder,
+        greedy_decoder=greedy_decoder,
         labels=ctc_vocab,
         args=args)
 
 if __name__=="__main__":
     args = parse_args()
-    
+
     print_dict(vars(args))
 
     main(args)

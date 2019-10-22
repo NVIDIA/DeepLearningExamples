@@ -9,7 +9,12 @@ __pycache__/
 *.so
 
 #Data
-data/*/*/
+data/download
+data/extracted
+data/formatted_one_article_per_line
+data/sharded
+data/hdf5*
+data/tfrecord*
 data/*/*.zip
 
 #Resutls

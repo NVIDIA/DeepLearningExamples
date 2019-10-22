@@ -210,10 +210,7 @@ class ProfilerHook(tf.train.SessionRunHook):
             (avg_processing_speed, total_processing_hours, total_processing_minutes, total_processing_seconds)
         )
 
-        perf_dict = {
-            'throughput': str(avg_processing_speed),
-            'processing_time': str(total_processing_time)
-        }
+        perf_dict = {'throughput': str(avg_processing_speed), 'processing_time': str(total_processing_time)}
 
         perf_filename = "performances_%s.json" % ("train" if self._is_training else "eval")
 

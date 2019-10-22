@@ -28,6 +28,7 @@ parser = argparse.ArgumentParser(description='Tesnorflow Benchmark Tests')
 parser.add_argument('--bs', default=[1], type=int, nargs='+')
 parser.add_argument('--ngpus', default=[1], type=int, nargs='+')
 parser.add_argument('--perf_args', default=[], type=str, nargs='*')
+parser.add_argument('--gpu_id', default=0, type=int)
 
 parser.add_argument(
     '--mode',
@@ -55,7 +56,7 @@ parser.add_argument('--results_dir', default="/results", type=str, metavar='<PAT
 
 args = parser.parse_args()
 
-command = "{{}} main.py --mode={mode}_benchmark --batch_size={batch_size} --warmup_steps={bench_warmup} --num_iter={num_iter} --precision={precision} --iter_unit=batch --data_dir={data_dir} --results_dir={results_dir}/{exp_name} {perf_args}"
+command = "{{}} main.py --mode={mode}_benchmark --batch_size={batch_size} --warmup_steps={bench_warmup} --num_iter={num_iter} --precision={precision} --iter_unit=batch --data_dir={data_dir} --results_dir={results_dir}/{exp_name} --gpu_id={gpu_id} {perf_args}"
 
 benchmark_filenames = {'training': 'training_benchmark.json', 'inference': 'eval_benchmark.json'}
 
@@ -93,6 +94,7 @@ def benchmark(command, metrics, args):
                 data_dir=args.data_dir,
                 results_dir=args.results_dir,
                 exp_name=exp_name,
+                gpu_id=args.gpu_id,
                 perf_args=perf_args_str
             )
             print(cmd)

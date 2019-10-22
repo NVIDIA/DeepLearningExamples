@@ -1,4 +1,5 @@
 # coding=utf-8
+# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
 # Copyright 2018 The Google AI Language Team Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """BERT finetuning runner."""
 
 from __future__ import absolute_import
@@ -103,7 +105,9 @@ flags.DEFINE_integer("save_checkpoints_steps", 1000,
 
 flags.DEFINE_integer("iterations_per_loop", 1000,
                      "How many steps to make in each estimator call.")
-
+flags.DEFINE_integer("num_accumulation_steps", 1,
+                     "Number of accumulation steps before gradient update" 
+                      "Global batch size = num_accumulation_steps * train_batch_size")
 flags.DEFINE_bool("use_fp16", False, "Whether to use fp32 or fp16 arithmetic on GPU.")
 
 flags.DEFINE_bool("use_xla", False, "Whether to enable XLA JIT compilation.")
@@ -240,17 +244,17 @@ def get_frozen_tftrt_model(bert_config, shape, num_labels, use_one_hot_embedding
 
     num_nodes = len(frozen_graph.node)
     print('Converting graph using TensorFlow-TensorRT...')
-    import tensorflow.contrib.tensorrt as trt
-    frozen_graph = trt.create_inference_graph(
+    from tensorflow.python.compiler.tensorrt import trt_convert as trt
+    converter = trt.TrtGraphConverter(
         input_graph_def=frozen_graph,
-        outputs=output_node_names, 
-        max_batch_size=FLAGS.predict_batch_size,
+        nodes_blacklist=output_node_names,
         max_workspace_size_bytes=(4096 << 20) - 1000,
         precision_mode = "FP16" if FLAGS.use_fp16 else "FP32",
         minimum_segment_size=4,
         is_dynamic_op=True,
         maximum_cached_engines=1000
     )
+    frozen_graph = converter.convert()
 
     print('Total node count before and after TF-TRT conversion:',
           num_nodes, '->', len(frozen_graph.node))
@@ -264,7 +268,7 @@ def get_frozen_tftrt_model(bert_config, shape, num_labels, use_one_hot_embedding
 
 
 
-def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
+def model_fn_builder(task_name, bert_config, num_labels, init_checkpoint, learning_rate,
                      num_train_steps, num_warmup_steps,
                      use_one_hot_embeddings, hvd=None):
   """Returns `model_fn` closure for Estimator."""
@@ -272,6 +276,25 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
   def model_fn(features, labels, mode, params):  # pylint: disable=unused-argument
     """The `model_fn` for Estimator."""
 
+    def metric_fn(per_example_loss, label_ids, logits):
+        predictions = tf.argmax(logits, axis=-1, output_type=tf.int32)
+        if task_name == "cola":
+            FN, FN_op = tf.metrics.false_negatives(labels=label_ids, predictions=predictions)
+            FP, FP_op = tf.metrics.false_positives(labels=label_ids, predictions=predictions)
+            TP, TP_op = tf.metrics.true_positives(labels=label_ids, predictions=predictions)
+            TN, TN_op = tf.metrics.true_negatives(labels=label_ids, predictions=predictions)
+
+            MCC = (TP * TN - FP * FN) / ((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)) ** 0.5
+            MCC_op = tf.group(FN_op, TN_op, TP_op, FP_op, tf.identity(MCC, name="MCC"))
+            return {"MCC": (MCC, MCC_op)}
+        else:
+            accuracy = tf.metrics.accuracy(
+                labels=label_ids, predictions=predictions)
+            loss = tf.metrics.mean(values=per_example_loss)
+            return {
+                "eval_accuracy": accuracy,
+                "eval_loss": loss,
+            }
     tf.logging.info("*** Features ***")
     for name in sorted(features.keys()):
       tf.logging.info("  name = %s, shape = %s" % (name, features[name].shape))
@@ -294,16 +317,6 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
             output_spec = tf.estimator.EstimatorSpec(
                 mode=mode, predictions=predictions)
         elif mode == tf.estimator.ModeKeys.EVAL:
-            def metric_fn(per_example_loss, label_ids, logits):
-              predictions = tf.argmax(logits, axis=-1, output_type=tf.int32)
-              accuracy = tf.metrics.accuracy(
-                  labels=label_ids, predictions=predictions)
-              loss = tf.metrics.mean(values=per_example_loss)
-              return {
-                  "eval_accuracy": accuracy,
-                  "eval_loss": loss,
-              }
-
             eval_metric_ops = metric_fn(per_example_loss, label_ids, logits)
             output_spec = tf.estimator.EstimatorSpec(
                 mode=mode,
@@ -335,23 +348,13 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate,
 
       train_op = optimization.create_optimizer(
           total_loss, learning_rate, num_train_steps, num_warmup_steps,
-          hvd, FLAGS.use_fp16)
+          hvd, False, FLAGS.use_fp16, FLAGS.num_accumulation_steps)
 
       output_spec = tf.estimator.EstimatorSpec(
           mode=mode,
           loss=total_loss,
           train_op=train_op)
     elif mode == tf.estimator.ModeKeys.EVAL:
-
-      def metric_fn(per_example_loss, label_ids, logits):
-        predictions = tf.argmax(logits, axis=-1, output_type=tf.int32)
-        accuracy = tf.metrics.accuracy(label_ids, predictions)
-        loss = tf.metrics.mean(per_example_loss)
-        return {
-            "eval_accuracy": accuracy,
-            "eval_loss": loss,
-        }
-
       eval_metric_ops = metric_fn(per_example_loss, label_ids, logits)
       output_spec = tf.estimator.EstimatorSpec(
           mode=mode,
@@ -424,7 +427,8 @@ def main(_):
 
   if FLAGS.horovod:
     hvd.init()
-
+  if FLAGS.use_fp16:
+    os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
   processors = {
       "cola": ColaProcessor,
       "mnli": MnliProcessor,
@@ -460,7 +464,7 @@ def main(_):
 
   master_process = True
   training_hooks = []
-  global_batch_size = FLAGS.train_batch_size
+  global_batch_size = FLAGS.train_batch_size * FLAGS.num_accumulation_steps
   hvd_rank = 0
 
   config = tf.ConfigProto()
@@ -468,7 +472,7 @@ def main(_):
 
       tf.logging.info("Multi-GPU training with TF Horovod")
       tf.logging.info("hvd.size() = %d hvd.rank() = %d", hvd.size(), hvd.rank())
-      global_batch_size = FLAGS.train_batch_size * hvd.size()
+      global_batch_size = FLAGS.train_batch_size * FLAGS.num_accumulation_steps * hvd.size()
       master_process = (hvd.rank() == 0)
       hvd_rank = hvd.rank()
       config.gpu_options.allow_growth = True
@@ -517,6 +521,7 @@ def main(_):
         end_index = start_index + (num_examples_per_rank)
 
   model_fn = model_fn_builder(
+      task_name=task_name,
       bert_config=bert_config,
       num_labels=len(label_list),
       init_checkpoint=FLAGS.init_checkpoint,
