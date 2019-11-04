@@ -799,9 +799,6 @@ Our results were obtained by running the `scripts/run_pretraining.sh` and `scrip
 |1 | 4| 8| 512|8.36 |30.08 | 3.68| 1.00| 1.00
 |4 | 4| 8| 512|31.52 |116.80 | 3.70| 3.84| 3.82
 | 8| 4| 8| 512|62.72 |231.68 | 3.69| 7.68| 7.61
-|1 |N/A | 10| 512|N/A |46.00| N/A| N/A| 1.0
-|4 |N/A | 10| 512|N/A |164.00 | N/A| N/A| 3.57
-| 8|N/A | 10| 512|N/A |325.60| N/A| N/A| 7.08
 
 
 ###### Fine-tuning NVIDIA DGX-1 With 32G
@@ -832,10 +829,7 @@ Our results were obtained by running the `scripts/run_pretraining.sh` and `scrip
 |4 | 4 |8 | 512| 34.4| 124.16| 3.60| 3.82| 3.84
 |8 | 4 | 8| 512| 68.16| 247.04| 3.62| 7.57| 7.64
 |16 | 4 | 8| 512| 135.68| 488.96| 3.60| 15.08| 15.13
-|1 | N/A | 10 | 512|N/A | 47.40| N/A| N/A| 1.00
-|4 | N/A |10 | 512| N/A| 165.60| N/A| N/A| 3.49
-|8 | N/A | 10| 512| N/A| 325.60| N/A| N/A| 6.87
-|16 | N/A | 10| 512| N/A| 648.00| N/A| N/A| 13.67
+
 
 ###### Pre-training on multiple NVIDIA DGX-2H With 32G
 
