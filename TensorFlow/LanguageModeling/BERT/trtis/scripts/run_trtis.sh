@@ -22,8 +22,8 @@ doc_stride=${6:-"128"}
 bert_model=${7:-"large"}
 squad_version=${8:-"1.1"}
 trtis_version_name=${9:-1}
-trtis_model_name=${10:-"bert"}
-trtis_export_model=${11:-"true"}
+trtis_model_name=${10:-"bert_onnx"}
+trtis_export_model=${11:-"false"}
 trtis_dyn_batching_delay=${12:-0}
 trtis_engine_count=${13:-1}
 trtis_model_overwrite=${14:-"False"}
@@ -68,19 +68,19 @@ echo
 if [ "$trtis_export_model" = "true" ] ; then
    echo "Exporting model as: Name - $trtis_model_name Version - $trtis_version_name"
 
-      bash scripts/trtis/export_model.sh $init_checkpoint $batch_size $precision $use_xla $seq_length \
+      bash trtis/scripts/export_model.sh $init_checkpoint $batch_size $precision $use_xla $seq_length \
          $doc_stride $BERT_DIR $RESULTS_DIR $trtis_version_name $trtis_model_name \
          $trtis_dyn_batching_delay $trtis_engine_count $trtis_model_overwrite
 fi
 
 # Start TRTIS server in detached state
-bash scripts/docker/launch_server.sh $precision
+bash trtis/scripts/launch_server.sh $precision
 
 # Wait until server is up. curl on the health of the server and sleep until its ready
-bash scripts/trtis/wait_for_trtis_server.sh localhost
+bash trtis/scripts/wait_for_trtis_server.sh localhost
 
 # Start TRTIS client for inference and evaluate results
-bash scripts/trtis/run_client.sh $batch_size $seq_length $doc_stride $trtis_version_name $trtis_model_name \
+bash trtis/scripts/run_client.sh $batch_size $seq_length $doc_stride $trtis_version_name $trtis_model_name \
     $BERT_DIR $squad_version
 
 

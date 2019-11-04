@@ -28,9 +28,7 @@ This repository provides a script and recipe to train the BERT model for TensorF
     * [Multi-node](#multi-node)
   * [Inference process](#inference-process)
   * [Deploying the BERT model using TensorRT Inference Server](#deploying-the-bert-model-using-tensorrt-inference-server)
-    * [Performance analysis for TensorRT Inference Server](#performance-analysis-for-tensorrt-inference-server)
-      * [Advanced Details](#advanced-details)
-    * [Running the TensorRT Inference Server and client](#running-the-tensorrt-inference-server-and-client)
+  * [BioBERT](#biobert)
 - [Performance](#performance)
   * [Benchmarking](#benchmarking)
     * [Training performance benchmark](#training-performance-benchmark)
@@ -138,6 +136,8 @@ Multi-GPU training with Horovod - Our model uses Horovod to implement efficient 
 
 [LAMB](https://arxiv.org/pdf/1904.00962.pdf) stands for Layerwise Adaptive Moments based optimizer, is a large batch optimization technique that helps accelerate training of deep neural networks using large minibatches. It allows using a global batch size of 65536 and 32768 on sequence lengths 128 and 512 respectively, compared to a batch size of 256 for Adam. The optimized implementation accumulates 1024 gradients batches in phase 1 and 4096 steps in phase 2 before updating weights once. This results in 27% training speedup on a single DGX2 node. On multi-node systems, LAMB allows scaling up to 1024 GPUs resulting in training speedups of up to 17x in comparison to [Adam](https://arxiv.org/pdf/1412.6980.pdf). Adam has limitations on the learning rate that can be used since it is applied globally on all parameters whereas LAMB follows a layerwise learning rate strategy.
 
+NVLAMB adds necessary tweaks to [LAMB version 1](https://arxiv.org/abs/1904.00962v1), to ensure correct convergence. The algorithm is as follows:
+  ![NVLAMB](data/images/images_nvlamb.png)
 
 ### Mixed precision training
 
@@ -183,7 +183,7 @@ The following section lists the requirements in order to start training the BERT
 
 This repository contains `Dockerfile` which extends the TensorFlow NGC container and encapsulates some dependencies.  Aside from these dependencies, ensure you have the following components:
 - [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-- [TensorFlow 19.06-py3+](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container
+- [TensorFlow 19.08-py3+](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container
 - [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
 
 For more information about how to get started with NGC containers, see the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
@@ -227,7 +227,7 @@ bash scripts/data_download.sh
 
 The script launches a Docker container with the current directory mounted and downloads the datasets to a `data/` folder on the host.
 
-Note: The dataset is 170GB+ and takes 15+ hours to download. Expired dataset links are ignored during data download.
+Note: The dataset is 170GB+ and takes 15+ hours to download. The BookCorpus server could sometimes get overloaded and also contain broken links resulting in HTTP 403 and 503 errors. You can either skip the missing files or retry downloading at a later time. Expired dataset links are ignored during data download.
 
 4. Download the pretrained models from NGC.
 
@@ -617,102 +617,13 @@ I0312 23:14:00.550973 140287431493376 run_squad.py:1397] 0 Inference Performance
 
 ### Deploying the BERT model using TensorRT Inference Server
 
-The [NVIDIA TensorRT Inference Server](https://github.com/NVIDIA/tensorrt-inference-server) provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server.
+The [NVIDIA TensorRT Inference Server](https://github.com/NVIDIA/tensorrt-inference-server) provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server. More information on how to perform inference using `TensorRT Inference Server` can be found in the subfolder `./trtis/README.md`.
 
-A typical TensorRT Inference Server pipeline can be broken down into the following 8 steps:
-1. Client serializes the inference request into a message and sends it to the server (Client Send)
-2. Message travels over the network from the client to the server (Network)
-3. Message arrives at server, and is deserialized (Server Receive)
-4. Request is placed on the queue (Server Queue)
-5. Request is removed from the queue and computed (Server Compute)
-6. Completed request is serialized in a message and sent back to the client (Server Send)
-7. Completed message travels over network from the server to the client (Network)
-8. Completed message is deserialized by the client and processed as a completed inference request (Client Receive)
+### BioBERT
 
-Generally, for local clients, steps 1-4 and 6-8 will only occupy a small fraction of time, compared to steps 5-6. As backend deep learning systems like BERT are rarely exposed directly to end users, but instead only interfacing with local front-end servers, for the sake of BERT, we can consider that all clients are local.
-In this section, we will go over how to launch TensorRT Inference Server and client and get the best performant solution that fits your specific application needs.
+Many works, including [BioBERT](https://arxiv.org/pdf/1901.08746.pdf), [SciBERT](https://arxiv.org/pdf/1903.10676.pdf), [NCBI-BERT](https://arxiv.org/pdf/1906.05474.pdf), [ClinicalBERT (MIT)](https://arxiv.org/pdf/1904.03323.pdf), [ClinicalBERT (NYU, Princeton)](https://arxiv.org/pdf/1904.05342.pdf), and others at [BioNLP’19 workshop](https://aclweb.org/aclwiki/BioNLP_Workshop), show that pre-training of BERT on large biomedical text corpus such as [PubMed](https://www.ncbi.nlm.nih.gov/pubmed/) results in better performance in biomedical text-mining tasks.
 
-Note: The following instructions are run from outside the container and call `docker run` commands as required.
-
-#### Performance analysis for TensorRT Inference Server
-
-Based on the figures 2 and 3 below, we recommend using the Dynamic Batcher with `max_batch_size = 8`, `max_queue_delay_microseconds` as large as possible to fit within your latency window (the values used below are extremely large to exaggerate their effect), and only 1 instance of the engine. The largest improvements to both throughput and latency come from increasing the batch size due to efficiency gains in the GPU with larger batches. The Dynamic Batcher combines the best of both worlds by efficiently batching together a large number of simultaneous requests, while also keeping latency down for infrequent requests. We recommend only 1 instance of the engine due to the negligible improvement to throughput at the cost of significant increases in latency. Many models can benefit from multiple engine instances but as the figures below show, that is not the case for this model.
-
-![](data/images/trtis_base_summary.png?raw=true)
-
-Figure 2: Latency vs Throughput for BERT Base, FP16, Sequence Length = 128 using various configurations available in TensorRT Inference Server
-
-![](data/images/trtis_large_summary.png?raw=true)
-
-Figure 3: Latency vs Throughput for BERT Large, FP16, Sequence Length = 384 using various configurations available in TensorRT Inference Server
-
-##### Advanced Details
-
-This section digs deeper into the performance numbers and configurations corresponding to running TensorRT Inference Server for BERT fine tuning for Question Answering. It explains the tradeoffs in selecting maximum batch sizes, batching techniques and number of inference engines on the same GPU to understand how we arrived at the optimal configuration specified previously.
-
-Results can be reproduced by running `generate_figures.sh`. It exports the TensorFlow BERT model as a `tensorflow_savedmodel` that TensorRT Inference Server accepts, builds a matching [TensorRT Inference Server model config](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-guide/docs/model_configuration.html#), starts the server on localhost in a detached state and runs [perf_client](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-guide/docs/client.html#performance-example-application) for various configurations.
-
-```bash
-bash scripts/trtis/generate_figures.sh <bert_model> <seq_length> <precision> <init_checkpoint>
-```
-
-All results below are obtained on a single DGX-1 V100 32GB GPU for BERT Base, Sequence Length = 128 and FP16 precision running on a local server. Latencies are indicated by bar plots using the left axis. Throughput is indicated by the blue line plot using the right axis. X-axis indicates the concurrency - the maximum number of inference requests that can be in the pipeline at any given time. For example, when the concurrency is set to 1, the client waits for an inference request to be completed (Step 8) before it sends another to the server (Step 1).  A high number of concurrent requests can reduce the impact of network latency on overall throughput.
-
-###### Maximum batch size
-
-As we can see in Figure 4, the throughput at BS=1, Client Concurrent Requests = 64 is 119 and in Figure 5, the throughput at BS=8, Client Concurrent Requests = 8 is 517, respectively giving a speedup of ~4.3x
-
-Note: We compare BS=1, Client Concurrent Requests = 64 to BS=8, Client Concurrent Requests = 8 to keep the Total Number of Outstanding Requests equal between the two different modes. Where Total Number of Outstanding Requests = Batch Size * Client Concurrent Requests. This is also why there are 8 times as many bars on the BS=1 chart than the BS=8 chart.
-
-Increasing the batch size from 1 to 8 results in an increase in compute time by 1.8x (8.38ms to 15.46ms) showing that computation is more efficient at higher batch sizes. Hence, an optimal batch size would be the maximum batch size that can both fit in memory and is within the preferred latency threshold.
-
-![](data/images/trtis_bs_1.png?raw=true)
-
-Figure 4: Latency & Throughput vs Concurrency at Batch size = 1
-
-![](data/images/trtis_bs_8.png?raw=true)
-
-Figure 5: Latency & Throughput vs Concurrency at Batch size = 8
-
-###### Batching techniques
-
-Static batching is a feature of the inference server that allows inference requests to be served as they are received. It is preferred in scenarios where low latency is desired at the cost of throughput when the GPU is under utilized.
-
-Dynamic batching is a feature of the inference server that allows inference requests to be combined by the server, so that a batch is created dynamically, resulting in an increased throughput. It is preferred in scenarios where we would like to maximize throughput and GPU utilization at the cost of higher latencies. You can set the [Dynamic Batcher parameters](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-master-branch-guide/docs/model_configuration.html#dynamic-batcher) `max_queue_delay_microseconds` to indicate the maximum amount of time you are willing to wait and ‘preferred_batchsize’ to indicate your optimal batch sizes in the TensorRT Inference Server model config.
-
-Figures 6 and 7 emphasize the increase in overall throughput with dynamic batching. At low numbers of concurrent requests, the increased throughput comes at the cost of increasing latency as the requests are queued up to `max_queue_delay_microseconds`. The effect of `preferred_batchsize` for dynamic batching is visually depicted by the dip in Server Queue time at integer multiples of the preferred batch sizes. At higher numbers of concurrent requests, observe that the throughput approach a maximum limit as we saturate the GPU utilization.
-
-![](data/images/trtis_static.png?raw=true)
-
-Figure 6: Latency & Throughput vs Concurrency using Static Batching at `Batch size` = 1
-
-![](data/images/trtis_dynamic.png?raw=true)
-
-Figure 7: Latency & Throughput vs Concurrency using Dynamic Batching at `Batch size` = 1, `preferred_batchsize` = [4, 8] and `max_queue_delay_microseconds` = 5000
-
-###### Model execution instance count
-
-TensorRT Inference Server enables us to launch multiple engines in separate CUDA streams by setting the `instance_group_count` parameter to improve both latency and throughput. Multiple engines are useful when the model doesn’t saturate the GPU allowing the GPU to run multiple instances of the model in parallel.
-
-Figures 8 and 9 show a drop in queue time as more models are available to serve an inference request. However, this is countered by an increase in compute time as multiple models compete for resources. Since BERT is a large model which utilizes the majority of the GPU, the benefit to running multiple engines is not seen.
-
-![](data/images/trtis_ec_1.png?raw=true)
-
-Figure 8: Latency & Throughput vs Concurrency at Batch size = 1, Engine Count = 1
-(One copy of the model loaded in GPU memory)
-
-![](data/images/trtis_ec_4.png?raw=true)
-
-Figure 9: Latency & Throughput vs Concurrency at Batch size = 1, Engine count = 4
-(Four copies the model loaded in GPU memory)
-
-#### Running the TensorRT Inference Server and client
-
-The `run_trtis.sh` script exports the TensorFlow BERT model as a `tensorflow_savedmodel` that TensorRT Inference Server accepts, builds a matching [TensorRT Inference Server model config](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-guide/docs/model_configuration.html#), starts the server on local host in a detached state, runs client and then evaluates the validity of predictions on the basis of exact match and F1 score all in one step.
-
-```bash
-bash scripts/trtis/run_trtis.sh <init_checkpoint> <batch_size> <precision> <use_xla> <seq_length> <doc_stride> <bert_model> <squad_version> <trtis_version_name> <trtis_model_name> <trtis_export_model> <trtis_dyn_batching_delay> <trtis_engine_count> <trtis_model_overwrite>
-```
+More information on how to download a biomedical corpus and pre-train as well as finetune for biomedical tasks can be found in the subfolder `./biobert/README.md`.
 
 ## Performance
 
@@ -736,17 +647,16 @@ This script runs 2 epochs by default on the SQuAD v1.1 dataset and extracts perf
 Inference benchmarking can be performed by running the script:
 
 ``` bash
-scripts/finetune_inference_benchmark.sh <bert_model> <use_xla> squad
+scripts/finetune_inference_benchmark.sh <bert_model> squad
 ```
 
-This script runs 1024 eval iterations by default on the SQuAD v1.1 dataset and extracts performance and latency numbers for various batch sizes and sequence lengths in both FP16 and FP32. These numbers are saved at `/results/squad_train_benchmark_bert_<bert_model>.log`.
+This script runs 1024 eval iterations by default on the SQuAD v1.1 dataset and extracts performance and latency numbers for various batch sizes and sequence lengths in both FP16 with XLA and FP32 without XLA. These numbers are saved at `/results/squad_train_benchmark_bert_<bert_model>.log`.
 
 ### Results
 
 The following sections provide details on how we achieved our performance and accuracy in training and inference for pre-training using LAMB optimizer as well as fine tuning for Question Answering. All results are on BERT-large model unless otherwise mentioned. All fine tuning results are on SQuAD v1.1 using a sequence length of 384 unless otherwise mentioned.
 
 #### Training accuracy results
-
 
 ##### Training accuracy
 
@@ -759,32 +669,32 @@ Our results were obtained by running the `scripts/run_pretraining_lamb.sh` train
 | DGX1  | 8  | 16, 2 | 512, 2048 | 247.51 | 1.43 |
 | DGX2  | 16 | 64, 8 | 64, 256 | 108.16 | 1.58 |
 
-
 ###### Pre-training accuracy: multi-node
 
 Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 19.08-py3 NGC container.
 
-| **DGX System** | **Nodes** | **Precision** | **Batch Size/GPU: Phase1, Phase2** | **Accumulation Steps: Phase1, Phase2** | **Time to Train (Hrs)**  | **Final Loss**|
+| **DGX System** | **Nodes** | **Precision** | **Batch Size/GPU: Phase1, Phase2** | **Accumulation Steps: Phase1, Phase2** | **Time to Train (Hrs)** | **Final Loss** |
 |----------------|-----------|---------------|------------------------------------|----------------------------------------|----------------|-------------------------|
-| DGX1  | 4  | FP16 | 32, 2 | 32, 128 | 48.66 | 1.48 |
-| DGX1  | 16 | FP16 | 32, 2 | 32, 128 | 24.35 | 1.53 |
-| DGX1  | 32 | FP16 | 32, 2 | 32, 128 | 12.98 | 1.61 |
-| DGX1  | 32 | FP32 | 32, 2 | 32, 128 | 30.92 | 1.49 |
-| DGX2H | 4  | FP16 | 64, 8 | 16, 64  | 25.85 | 1.56 |
-| DGX2H | 16 | FP16 | 64, 8 | 8, 32   | 7.9   | 1.57 |
-| DGX2H | 32 | FP16 | 64, 8 | 4, 16   | 4.77  | 1.61 |
-| DGX2H | 32 | FP32 | 32, 4 | 8, 32   | 12.72 | 1.53 |
+| DGX1  | 4  | FP16 | 16, 4 |128, 256| 62.49 | 1.72 |
+| DGX1  | 16 | FP16 | 16, 4 | 32, 64 | 16.58 | 1.76 |
+| DGX1  | 32 | FP16 | 16, 2 | 16, 64 | 9.85  | 1.71 |
+| DGX2H | 1  | FP16 | 32, 8 |128, 256| 69.27 | 1.59 |
+| DGX2H | 4  | FP16 | 32, 8 | 32, 64 | 22.17 | 1.60 |
+| DGX2H | 16 | FP16 | 32, 8 | 8, 16  | 6.25  | 1.56 |
+| DGX2H | 32 | FP16 | 32, 8 | 4, 8   | 3.73  | 1.58 |
+| DGX2H | 64 | FP16 | 32, 8 | 2, 4   | 2.44  | 1.64 |
+| DGX2H | 64 | FP32 | 32, 4 | 2, 8   | 5.76  | 1.66 |
 
-Note: Time to train includes upto 16 minutes of start up time for every restart. Experiments were run on clusters with a maximum wall clock time of 8 hours and 2 hours for DGX1 and DGX2H systems respectively.
+Note: Time to train includes upto 16 minutes of start up time for every restart. Experiments were run on clusters with a maximum wall clock time of 8 hours.
 
 ###### Fine-tuning accuracy for SQuAD: NVIDIA DGX-2 (16x V100 32G)
 
-Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs.
 
 
 | **GPUs** | **Batch size / GPU** | **Accuracy - FP32** | **Accuracy - mixed precision** | **Time to Train - FP32 (Hrs)** | **Time to Train - mixed precision (Hrs)** |
 |:---:|:----:|:----:|:---:|:----:|:----:|
-| 16 | 4 |90.94|90.84|0.38|0.27|
+| 16 | 4 |90.94|90.84|0.44|0.16|
 
 
 ##### Training stability test
@@ -818,17 +728,17 @@ The following tables compare `F1` scores across 5 different training runs with d
 
 ###### Pre-training training performance: single-node on 16G
 
-Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance (in sentences per second) is the steady state throughput.
+Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance (in sentences per second) is the steady state throughput.
 
 
 | **GPUs** | **Sequence Length**| **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
 |:-------:|:-----:|:-------:|:-------:|:-------:|:-------------:|:------:|:------:|
-| 1 | 128 | 16, 8 | 80.1  | 23.1  | 3.47 | 1    | 1    |
-| 4 | 128 | 16, 8 | 282.1 | 85    | 3.32 | 3.52 | 3.68 |
-| 8 | 128 | 16, 8 | 540.4 | 166.1 | 3.25 | 6.75 | 7.19 |
-| 1 | 512 | 4, 2  | 10.9  | 5.3   | 2.06 | 1    | 1    |
-| 4 | 512 | 4, 2  | 35.6  | 19.5  | 1.83 | 3.27 | 3.68 |
-| 8 | 512 | 4, 2  | 61.1  | 37.9  | 1.61 | 5.61 | 7.15 |
+| 1 | 128 | 16,8 | 91.30  | 23.90  | 3.82 | 1.00 | 1.00 |
+| 4 | 128 | 16,8 | 297.70 | 86.90  | 3.43 | 3.26 | 3.64 |
+| 8 | 128 | 16,8 | 578.60 | 167.80 | 3.45 | 6.34 | 7.02 |
+| 1 | 512 | 4,1  | 20.00  | 4.00   | 5.00 | 1.00 | 1.00 |
+| 4 | 512 | 4,1  | 66.80  | 13.50  | 4.95 | 3.34 | 3.38 |
+| 8 | 512 | 4,1  | 129.50 | 26.30  | 4.92 | 6.48 | 6.58 |
 
 Note: The respective values for FP32 runs that use a batch size of 16, 4 in sequence lengths 128 and 512 respectively are not available due to out of memory errors that arise.
 
@@ -838,29 +748,26 @@ Our results were obtained by running the `run.sub` training script in the Tensor
 
 | **Nodes** | **Sequence Length**| **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
 |:-------:|:-----:|:-------:|:-------:|:-------:|:-------------:|:------:|:------:|
-| 1  | 128 | 16,8 | 440.3  | 167.9  | 2.62 | 1.00  | 1.00  |
-| 4  | 128 | 16,8 | 1712.3 | 600.7  | 2.85 | 3.89  | 3.58  |
-| 16 | 128 | 16,8 | 4833.5 | 2186.2 | 2.21 | 10.98 | 13.02 |
-| 32 | 128 | 16,8 | 9742.9 | 4020.9 | 2.42 | 22.13 | 23.95 |
-| 1  | 512 | 2,1  | 74.9   | 26     | 2.88 | 0.00  | 0.00  |
-| 4  | 512 | 2,1  | 257.5  | 91.2   | 2.82 | 1.00  | 1.00  |
-| 16 | 512 | 2,1  | 899.7  | 313    | 2.87 | 3.44  | 3.51  |
-| 32 | 512 | 2,1  | 1737.1 | 579.4  | 3.0  | 23.19 | 22.28 |
+| 1  | 128 | 16,4 | 571.877  | 109.366 | 5.229019988 | 1.00  | 1.00  |
+| 4  | 128 | 16,4 | 2028.85  | 386.23  | 5.252958082 | 3.55  | 3.53  |
+| 16 | 128 | 16,4 | 7299.88  | 1350.49 | 5.405356574 | 12.76 | 12.35 |
+| 32 | 128 | 16,4 | 13917.37 | 2555.25 | 5.446578613 | 24.34 | 23.36 |
+| 1  | 512 | 4,1  | 128.94   | 25.65   | 5.026900585 | 1.00  | 1.00  |
+| 4  | 512 | 4,1  | 466      | 92.36   | 5.045474231 | 3.61  | 3.60  |
+| 16 | 512 | 4,1  | 1632     | 325.22  | 5.018141566 | 12.66 | 12.68 |
+| 32 | 512 | 4,1  | 3076     | 614.18  | 5.008303755 | 23.86 | 23.94 |
 
 Note: The respective values for FP32 runs that use a batch size of 16, 2 in sequence lengths 128 and 512 respectively are not available due to out of memory errors that arise.
 
 ###### Fine-tuning training performance for SQuAD on 16G
 
-Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
 
-| **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
+| **GPUs** | **Batch size / GPU: mixed precision, FP32** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
 |:---:|:---:|:------:|:-----:|:----:|:----:|:----:|
-| 1 | 2 | 7.19 |14.37|2.0 |1.0 |1.0 |
-| 4 | 2 |25.61 |40.44|1.58|3.56|2.81|
-| 8 | 2 |49.79 |74.61|1.5 |6.92|5.19|
-| 1 | 3 |  -   |17.2 | -  | -  |1.0 |
-| 4 | 3 |  -   |50.71| -  | -  |2.95|
-| 8 | 3 |  -   |91.88| -  | -  |5.34|
+| 1 | 3,2 | 17.17 | 7.35  | 2.336054422 | 1.00 | 1.00 |
+| 4 | 3,2 | 50.68 | 26.38 | 1.921152388 | 3.59 | 2.95 |
+| 8 | 3,2 | 89.98 | 50.17 | 1.793502093 | 6.83 | 5.24 |
 
 Note: The respective values for FP32 runs that use a batch size of 3 are not available due to out of memory errors that arise. Batch size of 3 is only available on using FP16.
 
@@ -870,32 +777,29 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 ###### Pre-training training performance: single-node on 32G
 
-Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. Performance (in sentences per second) is the steady state throughput.
+Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. Performance (in sentences per second) is the steady state throughput.
 
 | **GPUs** | **Sequence Length**| **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
 |:-------:|:-----:|:-------:|:-------:|:-------:|:-------------:|:------:|:------:|
-| 1 | 128 | 48,32 | 130.2 | 33.5  | 3.89 | 1    | 1    |
-| 4 | 128 | 48,32 | 462.1 | 127.7 | 3.62 | 3.55 | 3.81 |
-| 8 | 128 | 48,32 | 874.8 | 255.4 | 3.43 | 6.72 | 7.62 |
-| 1 | 512 | 8, 4  | 22.1  | 6.3   | 3.51 | 1    | 1    |
-| 4 | 512 | 8, 4  | 80.4  | 24    | 3.35 | 3.64 | 3.81 |
-| 8 | 512 | 8, 4  | 155   | 47.1  | 3.29 | 7.01 | 7.48 |
+| 1 | 128 | 48,32 | 140.30 | 34.30  | 4.09 | 1.00 | 1.00 |
+| 4 | 128 | 48,32 | 504.40 | 131.70 | 3.83 | 3.60 | 3.84 |
+| 8 | 128 | 48,32 | 986.80 | 260.10 | 3.79 | 7.03 | 7.58 |
+| 1 | 512 | 8,4   | 25.60  | 6.50   | 3.94 | 1.00 | 1.00 |
+| 4 | 512 | 8,4   | 89.90  | 24.70  | 3.64 | 3.51 | 3.80 |
+| 8 | 512 | 8,4   | 176.70 | 48.60  | 3.64 | 6.90 | 7.48 |
 
 Note: The respective values for FP32 runs that use a batch size of 48, 8 in sequence lengths 128 and 512 respectively are not available due to out of memory errors that arise.
 
 ###### Fine-tuning training performance for SQuAD on 32G
 
-Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
 
 
-| **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
+| **GPUs** | **Batch size / GPU: mixed precision, FP32** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
 |---|---|-----|------|----|----|----|
-| 1 | 4 | 8.74|20.55 |2.35|1.0 |1.0 |
-| 4 | 4 |32.22|57.58 |1.79|3.69|2.81|
-| 8 | 4 |62.69|100.22|1.60|7.17|4.88|
-| 1 | 10|  -  |31.33 | -  | -  |1.0 |
-| 4 | 10|  -  |94.19 | -  | -  |3.0|
-| 8 | 10|  -  |155.53| -  | -  |4.96|
+| 1 | 10,4 | 33.79  | 9     | 3.754444444 | 1.00 | 1.00 |
+| 4 | 10,4 | 103.38 | 32.5  | 3.180923077 | 3.61 | 3.06 |
+| 8 | 10,4 | 172.46 | 63.54 | 2.714195782 | 7.06 | 5.10 |
 
 Note: The respective values for FP32 runs that use a batch size of 10 are not available due to out of memory errors that arise. Batch size of 10 is only available on using FP16.
 
@@ -905,52 +809,50 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 ###### Pre-training training performance: single-node on DGX-2 32G
 
-Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance (in sentences per second) is the steady state throughput.
+Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance (in sentences per second) is the steady state throughput.
 
 | **GPUs** | **Sequence Length**| **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
 |:-------:|:-----:|:-------:|:-------:|:-------:|:-------------:|:------:|:------:|
-| 1 | 128 | 48,32 | 141.3 | 35.8  | 3.946927374 | 1    | 1     |
-| 4 | 128 | 48,32 | 520.4 | 138.8 | 3.749279539 | 3.68 | 3.88  |
-| 8 | 128 | 48,32 | 1024  | 275.1 | 3.722282806 | 7.25 | 7.68  |
-| 16| 128 | 48,32 | 1907  | 533   | 3.577861163 | 13.5 | 14.89 |
-| 1 | 512 | 8, 4  | 23.9  | 6.8   | 3.514705882 | 1    | 1     |
-| 4 | 512 | 8, 4  | 89.8  | 25.8  | 3.480620155 | 3.76 | 3.79  |
-| 8 | 512 | 8, 4  | 177.2 | 51    | 3.474509804 | 7.41 | 7.5   |
-| 16| 512 | 8, 4  | 332.2 | 94.2  | 3.526539278 | 13.9 | 13.85 |
+| 1  | 128 | 48,32 | 143.20  | 36.30  | 3.94 | 1.00  | 1.00  |
+| 4  | 128 | 48,32 | 538.30  | 141.50 | 3.80 | 3.76  | 3.90  |
+| 8  | 128 | 48,32 | 1057.30 | 281.30 | 3.76 | 7.38  | 7.75  |
+| 16 | 128 | 48,32 | 1990.70 | 516.80 | 3.85 | 13.90 | 14.24 |
+| 1  | 512 | 8,4   | 26.90   | 6.90   | 3.90 | 1.00  | 1.00  |
+| 4  | 512 | 8,4   | 96.30   | 26.40  | 3.65 | 3.58  | 3.83  |
+| 8  | 512 | 8,4   | 189.00  | 52.40  | 3.61 | 7.03  | 7.59  |
+| 16 | 512 | 8,4   | 354.30  | 96.50  | 3.67 | 13.17 | 13.99 |
 
 Note: The respective values for FP32 runs that use a batch size of 48, 8 in sequence lengths 128 and 512 respectively are not available due to out of memory errors that arise.
 
-###### Pre-training training performance: multi-node on DGX-2 32G
+###### Pre-training training performance: multi-node on DGX-2H 32G
 
 Our results were obtained by running the `run.sub` training script in the TensorFlow 19.08-py3 NGC container using multiple NVIDIA DGX-2 with 16x V100 32G GPUs. Performance (in sentences per second) is the steady state throughput.
 
 
 | **Nodes** | **Sequence Length**| **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
 |:-------:|:-----:|:-------:|:-------:|:-------:|:-------------:|:------:|:------:|
-| 1  | 128 | 32, 32 | 1806.7  | 599.3  | 3.01 | 1    | 1    |
-| 4  | 128 | 32, 32 | 4088.7  | 1762.3 | 2.32 | 2.26 | 2.94 |
-| 16 | 128 | 32, 32 | 14719.6 | 6400.2 | 2.30 | 8.15 | 10.68|
-| 32 | 128 | 32, 32 | 27303.6 | 12203.6| 2.24 | 15.11| 20.36|
-| 1  | 512 | 8, 4   | 269.7   | 109.6  | 2.46 | 1    | 1    |
-| 4  | 512 | 8, 4   | 960.9   | 268.5  | 3.58 | 3.56 | 2.45 |
-| 16 | 512 | 8, 4   | 3726.3  | 965    | 3.86 | 13.82| 8.8  |
-| 32 | 512 | 8, 4   | 6192.7  | 1800.3 | 3.44 | 22.96| 16.43|
+| 1  | 128 | 32,32 | 1758.32  | 602.22   | 2.92 | 1.00  | 1.00  |
+| 4  | 128 | 32,32 | 6379.94  | 2261.10  | 2.82 | 3.63  | 3.75  |
+| 16 | 128 | 32,32 | 23846.92 | 8875.42  | 2.69 | 13.56 | 14.74 |
+| 32 | 128 | 32,32 | 46191.78 | 17445.53 | 2.65 | 26.27 | 28.97 |
+| 64 | 128 | 32,32 | 89195.63 | 34263.71 | 2.60 | 50.73 | 56.90 |
+| 1  | 512 | 8,4   | 383.35   | 109.97   | 3.49 | 1.00  | 1.00  |
+| 4  | 512 | 8,4   | 1408.75  | 400.93   | 3.51 | 3.67  | 3.65  |
+| 16 | 512 | 8,4   | 5344.10  | 1559.96  | 3.43 | 13.94 | 14.19 |
+| 32 | 512 | 8,4   | 10323.75 | 3061.39  | 3.37 | 26.93 | 27.84 |
+| 64 | 512 | 8,4   | 19766.57 | 6029.48  | 3.28 | 51.56 | 54.83 |
 
 
 ###### Fine-tuning training performance for SQuAD on DGX-2 32G
 
-Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
 
-| **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
+| **GPUs** | **Batch size / GPU: mixed precision, FP32** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
 |---|---|------|------|----|-----|-----|
-|  1| 4 | 9.39 | 20.69 |2.20| 1.0  | 1.0  |
-|  4| 4 | 34.63| 62.79|1.81| 3.69  | 3.03 |
-|  8| 4 | 66.95|111.47|1.66| 7.13  | 5.39 |
-| 16| 4 |126.09|179.09|1.42| 13.43 |8.66  |
-|  1| 10| -    | 32.72| -  | -     | 1.0  |
-|  4| 10| -    |100.73| -  | -     | 3.07 |
-|  8| 10| -    |168.92| -  | -     | 5.16 |
-| 16| 10| -    |249.54| -  | -     | 7.63 |
+| 1  | 10,4 |      36.30  |      9.59   | 3.785192909 | 1.00  | 1.00 |
+| 4  | 10,4 |      115.67 |      35.46  | 3.261985336 | 3.70  | 3.19 |
+| 8  | 10,4 |      197.16 |      68.00  | 2.899411765 | 7.09  | 5.43 |
+| 16 | 10,4 |      304.72 |      111.62 | 2.729976707 | 11.64 | 8.39 |
 
 
 Note: The respective values for FP32 runs that use a batch size of 10 are not available due to out of memory errors that arise. Batch size of 10 is only available on using FP16.
@@ -967,63 +869,63 @@ Our results were obtained by running the `scripts/run_pretraining_lamb.sh` scrip
 
 | **Sequence Length**| **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** |
 |:-----:|:-------:|:-------:|:-------:|:-------------:|
-|128    |8, 8     |349.49   | 104.03  | 3.36          |
+|128    |8, 8     |349.51   | 104.31  | 3.35          |
 
 ###### Fine-tuning inference performance for SQuAD on 16G
 
-Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-1 with 1x V100 16G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
+Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 1x V100 16G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 
 BERT LARGE FP16
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 89.4                         | 1.19                                         | 11.19               | 11.29           | 11.44           | 11.71           |
-| 128             | 2          | 162.29                       | 1.56                                         | 12.32               | 12.5            | 12.57           | 12.74           |
-| 128             | 4          | 263.44                       | 2.24                                         | 15.18               | 15.32           | 15.54           | 17              |
-| 128             | 8          | 374.33                       | 2.98                                         | 21.37               | 21.56           | 21.72           | 23.23           |
-| 384             | 1          | 64.57                        | 1.87                                         | 15.49               | 15.61           | 15.73           | 16.18           |
-| 384             | 2          | 94.04                        | 2.47                                         | 21.27               | 21.34           | 21.4            | 21.9            |
-| 384             | 4          | 118.81                       | 2.96                                         | 33.67               | 33.89           | 34.37           | 36.18           |
-| 384             | 8          | 137.65                       | 3.26                                         | 58.12               | 58.53           | 59.34           | 61.32           |
+| 128 | 1 | 95.87  | 1.433462919 | 10.43 | 10.61 | 10.71 | 11.27 |
+| 128 | 2 | 168.02 | 1.871046771 | 11.9  | 12.08 | 12.18 | 12.32 |
+| 128 | 4 | 263.08 | 2.617451    | 15.2  | 14.86 | 14.95 | 15.55 |
+| 128 | 8 | 379.78 | 3.414366628 | 21.07 | 20.94 | 21.03 | 21.49 |
+| 384 | 1 | 67.52  | 2.274932615 | 14.81 | 14.93 | 15.05 | 15.38 |
+| 384 | 2 | 93.8   | 2.929419113 | 21.32 | 20.75 | 20.83 | 21.43 |
+| 384 | 4 | 118.97 | 3.397201599 | 33.62 | 33.17 | 33.37 | 33.85 |
+| 384 | 8 | 138.43 | 3.838879645 | 57.79 | 57    | 57.38 | 58.19 |
 
 BERT LARGE FP32
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 75.28                        | 13.28               | 13.4            | 13.49           | 13.66           |
-| 128             | 2          | 104.16                       | 19.2                | 19.51           | 19.69           | 20.83           |
-| 128             | 4          | 117.4                        | 34.07               | 34.4            | 34.76           | 36.99           |
-| 128             | 8          | 125.63                       | 63.68               | 64.58           | 65.1            | 67.54           |
-| 384             | 1          | 34.53                        | 28.96               | 29.32           | 29.61           | 31.08           |
-| 384             | 2          | 38.03                        | 52.59               | 53.16           | 53.75           | 55.5            |
-| 384             | 4          | 40.16                        | 99.6                | 100.76          | 101.62          | 103.4           |
-| 384             | 8          | 42.2                         | 189.57              | 190.82          | 191.47          | 193.27          |
+| 128 | 1 | 66.88  | 14.95  | 14.96  | 15.41  | 18.02  |
+| 128 | 2 | 89.8   | 22.27  | 22.46  | 22.53  | 22.84  |
+| 128 | 4 | 100.51 | 39.8   | 39.91  | 40.06  | 41.04  |
+| 128 | 8 | 111.23 | 71.92  | 72.42  | 72.58  | 73.63  |
+| 384 | 1 | 29.68  | 33.7   | 33.85  | 33.91  | 34.62  |
+| 384 | 2 | 32.02  | 62.47  | 63.06  | 63.28  | 63.66  |
+| 384 | 4 | 35.02  | 114.21 | 114.69 | 114.82 | 115.85 |
+| 384 | 8 | 36.06  | 221.86 | 222.7  | 223.03 | 223.53 |
 
 BERT BASE FP16
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 196.58                       | 1.19                                         | 5.09                | 5.18            | 5.23            | 5.42            |
-| 128             | 2          | 361.92                       | 1.41                                         | 5.53                | 5.62            | 5.67            | 5.85            |
-| 128             | 4          | 605.43                       | 1.79                                         | 6.61                | 6.71            | 6.8             | 7.04            |
-| 128             | 8          | 916                          | 2.18                                         | 8.73                | 8.83            | 8.95            | 9.19            |
-| 384             | 1          | 154.05                       | 1.58                                         | 6.49                | 6.6             | 6.72            | 7.05            |
-| 384             | 2          | 238.89                       | 1.99                                         | 8.37                | 8.42            | 8.47            | 9.1             |
-| 384             | 4          | 327.18                       | 2.47                                         | 12.23               | 12.3            | 12.36           | 13.08           |
-| 384             | 8          | 390.95                       | 2.82                                         | 20.46               | 20.5            | 20.8            | 21.89           |
+| 128 | 1 | 204.33 | 1.459187317 | 4.89  | 5.14  | 5.32  | 5.54  |
+| 128 | 2 | 375.19 | 1.779501043 | 5.33  | 5.47  | 5.58  | 5.87  |
+| 128 | 4 | 606.98 | 2.198645271 | 6.59  | 6.49  | 6.55  | 6.83  |
+| 128 | 8 | 902.6  | 2.69023278  | 8.86  | 8.62  | 8.72  | 9.22  |
+| 384 | 1 | 154.33 | 1.990070922 | 6.48  | 6.59  | 6.65  | 7.04  |
+| 384 | 2 | 225.7  | 2.386087324 | 8.86  | 8.45  | 8.53  | 9.16  |
+| 384 | 4 | 317.93 | 3.044431677 | 12.58 | 12.34 | 12.39 | 13.01 |
+| 384 | 8 | 393.44 | 3.672547372 | 20.33 | 20.06 | 20.38 | 21.38 |
 
 BERT BASE FP32
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 165.51                       | 6.04                | 6.19            | 6.3             | 6.62            |
-| 128             | 2          | 257.54                       | 7.77                | 7.86            | 7.92            | 8.28            |
-| 128             | 4          | 338.52                       | 11.82               | 11.98           | 12.05           | 12.27           |
-| 128             | 8          | 419.94                       | 19.05               | 19.25           | 19.35           | 20.12           |
-| 384             | 1          | 97.4                         | 10.27               | 10.39           | 10.44           | 10.56           |
-| 384             | 2          | 119.84                       | 16.69               | 16.78           | 16.85           | 17.66           |
-| 384             | 4          | 132.5                        | 30.19               | 30.41           | 30.5            | 31.13           |
-| 384             | 8          | 138.63                       | 57.71               | 58.15           | 58.37           | 59.33           |
+| 128 | 1 | 140.03 | 7.14  | 7.6   | 7.78  | 7.97  |
+| 128 | 2 | 210.84 | 9.49  | 9.59  | 9.65  | 10.57 |
+| 128 | 4 | 276.07 | 14.49 | 14.61 | 14.71 | 15.16 |
+| 128 | 8 | 335.51 | 23.84 | 23.79 | 23.89 | 24.94 |
+| 384 | 1 | 77.55  | 12.89 | 13.01 | 13.05 | 14.26 |
+| 384 | 2 | 94.59  | 21.14 | 21.14 | 21.23 | 21.86 |
+| 384 | 4 | 104.43 | 38.3  | 38.38 | 38.45 | 39.15 |
+| 384 | 8 | 107.13 | 74.68 | 75.05 | 75.19 | 76.2  |
 
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
@@ -1032,67 +934,67 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 ###### Pre-training inference performance on 32G
 
-Our results were obtained by running the `scripts/run_pretraining_lamb.sh` script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-1 with 1x V100 32G GPUs.
+Our results were obtained by running the `scripts/run_pretraining_lamb.sh` script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 1x V100 32G GPUs.
 
 | **Sequence Length**| **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** |
 |:-----:|:-------:|:-------:|:-------:|:-------------:|
-|128    |8, 8     |304.88   | 100.88  | 3.02          |
+|128    |8, 8     |345.50   | 101.84  | 3.39          |
 
 ###### Fine-tuning inference performance for SQuAD on 32G
 
-Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-1 with 1x V100 32G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
+Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 1x V100 32G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 
 BERT LARGE FP16
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 86.4                         | 1.18                                         | 11.57               | 11.74           | 11.86           | 12.04           |
-| 128             | 2          | 155.32                       | 1.52                                         | 12.88               | 12.98           | 13.05           | 13.31           |
-| 128             | 4          | 252.18                       | 2.18                                         | 15.86               | 15.78           | 15.89           | 17.01           |
-| 128             | 8          | 359.19                       | 2.88                                         | 22.27               | 22.44           | 22.58           | 23.94           |
-| 384             | 1          | 62.45                        | 1.84                                         | 16.01               | 16.16           | 16.23           | 16.42           |
-| 384             | 2          | 89.34                        | 2.37                                         | 22.39               | 22.45           | 22.53           | 23.13           |
-| 384             | 4          | 113.77                       | 2.84                                         | 35.16               | 35.24           | 35.33           | 35.9            |
-| 384             | 8          | 131.9                        | 3.13                                         | 60.65               | 61              | 61.49           | 65.3            |
+| 128 | 1 | 87.75  | 1.352913969 | 11.4  | 11.46 | 18.77 | 19.06 |
+| 128 | 2 | 159.87 | 1.833161335 | 12.51 | 12.69 | 12.79 | 12.98 |
+| 128 | 4 | 254.65 | 2.622014003 | 15.71 | 15.49 | 15.59 | 16.03 |
+| 128 | 8 | 365.51 | 3.377783939 | 21.89 | 21.72 | 21.94 | 23.79 |
+| 384 | 1 | 63.11  | 2.153924915 | 15.84 | 17.3  | 19.22 | 19.37 |
+| 384 | 2 | 89.61  | 2.884132604 | 22.32 | 21.83 | 21.96 | 23.8  |
+| 384 | 4 | 114.9  | 3.395390071 | 34.81 | 34.33 | 34.47 | 35.15 |
+| 384 | 8 | 132.79 | 3.814708417 | 60.25 | 59.4  | 59.77 | 60.7  |
 
 BERT LARGE FP32
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 73.42                        | 13.62               | 13.78           | 13.85           | 14.13           |
-| 128             | 2          | 102.47                       | 19.52               | 19.66           | 19.73           | 19.98           |
-| 128             | 4          | 115.76                       | 34.55               | 34.86           | 35.34           | 37.87           |
-| 128             | 8          | 124.84                       | 64.08               | 64.78           | 65.78           | 69.55           |
-| 384             | 1          | 33.93                        | 29.47               | 29.7            | 29.8            | 29.98           |
-| 384             | 2          | 37.62                        | 53.16               | 53.52           | 53.73           | 55.03           |
-| 384             | 4          | 39.99                        | 100.02              | 100.91          | 101.69          | 106.63          |
-| 384             | 8          | 42.09                        | 190.08              | 191.35          | 192.29          | 196.47          |
+| 128 | 1 | 64.86  | 15.42  | 16.32  | 17.55  | 20.89  |
+| 128 | 2 | 87.21  | 22.93  | 23.06  | 24.17  | 31.93  |
+| 128 | 4 | 97.12  | 41.19  | 41.38  | 41.5   | 44.13  |
+| 128 | 8 | 108.21 | 73.93  | 74.34  | 74.48  | 74.77  |
+| 384 | 1 | 29.3   | 34.13  | 34.21  | 34.25  | 34.76  |
+| 384 | 2 | 31.07  | 64.38  | 64.83  | 64.95  | 65.42  |
+| 384 | 4 | 33.84  | 118.22 | 119.01 | 119.57 | 120.06 |
+| 384 | 8 | 34.81  | 229.84 | 230.72 | 231.22 | 232.96 |
 
 BERT BASE FP16
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 192.89                       | 1.19                                         | 5.18                | 5.29            | 5.35            | 5.55            |
-| 128             | 2          | 348.23                       | 1.37                                         | 5.74                | 5.91            | 6.02            | 6.26            |
-| 128             | 4          | 592.54                       | 1.79                                         | 6.75                | 6.96            | 7.08            | 7.34            |
-| 128             | 8          | 888.58                       | 2.15                                         | 9                   | 9.11            | 9.22            | 9.5             |
-| 384             | 1          | 148.64                       | 1.57                                         | 6.73                | 6.82            | 6.87            | 7.06            |
-| 384             | 2          | 230.74                       | 1.96                                         | 8.67                | 8.75            | 8.87            | 9.44            |
-| 384             | 4          | 318.45                       | 2.42                                         | 12.56               | 12.65           | 12.76           | 13.36           |
-| 384             | 8          | 380.14                       | 2.72                                         | 21.05               | 21.1            | 21.25           | 21.83           |
+| 128 | 1 | 198.72 | 1.393352966 | 5.03  | 5.3   | 5.47  | 5.69  |
+| 128 | 2 | 338.44 | 1.611158717 | 5.91  | 6.04  | 9.77  | 9.94  |
+| 128 | 4 | 599.62 | 2.24804109  | 6.67  | 6.6   | 6.66  | 6.83  |
+| 128 | 8 | 858.56 | 2.63370042  | 9.32  | 10.01 | 10.04 | 10.39 |
+| 384 | 1 | 150.28 | 1.948146228 | 6.65  | 6.76  | 6.82  | 7.21  |
+| 384 | 2 | 200.68 | 2.200197347 | 9.97  | 9.88  | 9.94  | 10.08 |
+| 384 | 4 | 305.72 | 3.01707293  | 13.08 | 12.86 | 12.97 | 13.71 |
+| 384 | 8 | 373.64 | 3.61249154  | 21.41 | 21.98 | 22.03 | 22.61 |
 
 BERT BASE FP32
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 161.69                       | 6.18                | 6.26            | 6.31            | 6.51            |
-| 128             | 2          | 254.84                       | 7.85                | 8               | 8.09            | 8.29            |
-| 128             | 4          | 331.72                       | 12.06               | 12.17           | 12.26           | 12.51           |
-| 128             | 8          | 412.85                       | 19.38               | 19.6            | 19.72           | 20.13           |
-| 384             | 1          | 94.42                        | 10.59               | 10.71           | 10.8            | 11.36           |
-| 384             | 2          | 117.64                       | 17                  | 17.07           | 17.1            | 17.83           |
-| 384             | 4          | 131.72                       | 30.37               | 30.64           | 30.77           | 31.26           |
-| 384             | 8          | 139.75                       | 57.25               | 57.74           | 58.08           | 59.53           |
+| 128 | 1 | 142.62 | 7.01  | 7.07  | 7.44  | 9.23  |
+| 128 | 2 | 210.06 | 9.52  | 9.63  | 9.69  | 10.22 |
+| 128 | 4 | 266.73 | 15    | 15.77 | 15.91 | 16.79 |
+| 128 | 8 | 325.99 | 24.54 | 24.52 | 24.6  | 25    |
+| 384 | 1 | 77.14  | 12.96 | 13.01 | 13.03 | 13.67 |
+| 384 | 2 | 91.21  | 21.93 | 21.93 | 21.99 | 22.31 |
+| 384 | 4 | 101.33 | 39.47 | 39.69 | 39.82 | 40.88 |
+| 384 | 8 | 103.43 | 77.34 | 77.76 | 77.9  | 78.45 |
 
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
@@ -1101,126 +1003,126 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 ###### Pre-training inference performance on DGX-2 32G
 
-Our results were obtained by running the `scripts/run_pretraining_lamb.sh` script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-2 with 1x V100 32G GPUs.
+Our results were obtained by running the `scripts/run_pretraining_lamb.sh` script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-2 with 1x V100 32G GPUs.
 
 | **Sequence Length**| **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** |
 |:-----:|:-------:|:-------:|:-------:|:-------------:|
-|128    |8, 8     |350.63   | 106.36  | 3.30          |
+|128    |8, 8     |366.24   | 107.88  | 3.39          |
 
 ###### Fine-tuning inference performance for SQuAD on DGX-2  32G
 
-Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA DGX-2 with 1x V100 32G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
+Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-2 with 1x V100 32G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 
 BERT LARGE FP16
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 79                           | 1.18                                         | 12.66               | 13.13           | 13.36           | 14.49           |
-| 128             | 2          | 151.28                       | 1.52                                         | 13.22               | 13.66           | 13.89           | 14.84           |
-| 128             | 4          | 250.41                       | 2.18                                         | 15.97               | 16.13           | 16.3            | 17.81           |
-| 128             | 8          | 369.76                       | 2.88                                         | 21.64               | 21.88           | 22.08           | 26.35           |
-| 384             | 1          | 61.66                        | 1.84                                         | 16.22               | 16.46           | 16.62           | 17.26           |
-| 384             | 2          | 91.54                        | 2.37                                         | 21.85               | 22.11           | 22.3            | 23.44           |
-| 384             | 4          | 121.04                       | 2.84                                         | 33.05               | 33.08           | 33.31           | 34.97           |
-| 384             | 8          | 142.03                       | 3.13                                         | 56.33               | 56.46           | 57.49           | 59.85           |
+| 128 | 1 | 96.22  | 1.371045882 | 10.39 | 10.78 | 10.9  | 11.43 |
+| 128 | 2 | 171.66 | 1.835935829 | 11.65 | 11.86 | 12.04 | 12.45 |
+| 128 | 4 | 262.89 | 2.566032211 | 15.22 | 15.13 | 15.24 | 15.91 |
+| 128 | 8 | 394.23 | 3.441253492 | 20.29 | 20.22 | 20.6  | 22.19 |
+| 384 | 1 | 69.69  | 2.278195489 | 14.35 | 14.39 | 14.58 | 15.68 |
+| 384 | 2 | 96.35  | 2.909118357 | 20.76 | 20.25 | 20.32 | 21.54 |
+| 384 | 4 | 124.06 | 3.42612538  | 32.24 | 31.87 | 32.14 | 33.02 |
+| 384 | 8 | 144.28 | 3.876410532 | 55.45 | 54.77 | 55.16 | 55.93 |
 
 BERT LARGE FP32
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 70.1                         | 14.27               | 14.6            | 14.84           | 15.38           |
-| 128             | 2          | 101.3                        | 19.74               | 20.09           | 20.27           | 20.77           |
-| 128             | 4          | 122.19                       | 32.74               | 32.99           | 33.39           | 36.76           |
-| 128             | 8          | 134.09                       | 59.66               | 60.36           | 61.79           | 69.33           |
-| 384             | 1          | 34.52                        | 28.97               | 29.28           | 29.46           | 31.78           |
-| 384             | 2          | 39.84                        | 50.21               | 50.61           | 51.53           | 54              |
-| 384             | 4          | 42.79                        | 93.48               | 94.73           | 96.52           | 104.37          |
-| 384             | 8          | 45.91                        | 174.24              | 175.34          | 176.59          | 183.76          |
+| 128 | 1 | 70.18  | 14.25  | 14.7   | 14.88  | 15.35  |
+| 128 | 2 | 93.5   | 21.39  | 21.83  | 22.04  | 22.85  |
+| 128 | 4 | 102.45 | 39.04  | 39.28  | 39.42  | 40.5   |
+| 128 | 8 | 114.56 | 69.83  | 70.5   | 70.74  | 72.78  |
+| 384 | 1 | 30.59  | 32.69  | 33.14  | 33.32  | 33.86  |
+| 384 | 2 | 33.12  | 60.38  | 60.91  | 61.12  | 61.67  |
+| 384 | 4 | 36.21  | 110.46 | 111.1  | 111.26 | 112.15 |
+| 384 | 8 | 37.22  | 214.95 | 215.69 | 216.13 | 217.96 |
 
 BERT BASE FP16
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 172.33                       | 1.19                                         | 5.8                 | 5.94            | 6               | 6.27            |
-| 128             | 2          | 315.17                       | 1.37                                         | 6.35                | 6.64            | 6.78            | 7.07            |
-| 128             | 4          | 549.36                       | 1.79                                         | 7.28                | 7.47            | 7.6             | 8.05            |
-| 128             | 8          | 872.67                       | 2.15                                         | 9.17                | 9.33            | 9.5             | 9.92            |
-| 384             | 1          | 138.52                       | 1.57                                         | 7.22                | 7.45            | 7.52            | 7.84            |
-| 384             | 2          | 222.05                       | 1.96                                         | 9.01                | 9.11            | 9.24            | 10.94           |
-| 384             | 4          | 314.47                       | 2.42                                         | 12.72               | 12.87           | 13.01           | 14.42           |
-| 384             | 8          | 392.32                       | 2.72                                         | 20.39               | 20.44           | 20.67           | 22.16           |
+| 128 | 1 | 207.01 | 1.455050257 | 4.83  | 5.23  | 5.38  | 5.59  |
+| 128 | 2 | 405.92 | 1.808429119 | 4.93  | 4.99  | 5.04  | 5.2   |
+| 128 | 4 | 646.8  | 2.258695349 | 6.18  | 6.06  | 6.14  | 6.55  |
+| 128 | 8 | 909.41 | 2.616781285 | 8.8   | 8.86  | 8.96  | 9.52  |
+| 384 | 1 | 153.97 | 1.959653812 | 6.49  | 6.88  | 7.01  | 7.2   |
+| 384 | 2 | 229.46 | 2.366298855 | 8.72  | 8.57  | 8.67  | 8.97  |
+| 384 | 4 | 333.2  | 3.078913325 | 12    | 11.74 | 11.85 | 12.86 |
+| 384 | 8 | 403.02 | 3.646579805 | 19.85 | 19.83 | 20    | 21.11 |
 
 BERT BASE FP32
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 161.69                       | 6.18                | 6.26            | 6.31            | 6.51            |
-| 128             | 2          | 254.84                       | 7.85                | 8               | 8.09            | 8.29            |
-| 128             | 4          | 331.72                       | 12.06               | 12.17           | 12.26           | 12.51           |
-| 128             | 8          | 412.85                       | 19.38               | 19.6            | 19.72           | 20.13           |
-| 384             | 1          | 94.42                        | 10.59               | 10.71           | 10.8            | 11.36           |
-| 384             | 2          | 117.64                       | 17                  | 17.07           | 17.1            | 17.83           |
-| 384             | 4          | 131.72                       | 30.37               | 30.64           | 30.77           | 31.26           |
-| 384             | 8          | 139.75                       | 57.25               | 57.74           | 58.08           | 59.53           |
+| 128 | 1 | 142.27 | 7.03  | 7.39  | 7.45  | 11.7  |
+| 128 | 2 | 224.46 | 8.91  | 9     | 9.08  | 9.66  |
+| 128 | 4 | 286.36 | 13.97 | 14.46 | 14.52 | 14.82 |
+| 128 | 8 | 347.53 | 23.02 | 23.23 | 23.4  | 24.12 |
+| 384 | 1 | 78.57  | 12.73 | 13.01 | 13.1  | 14.06 |
+| 384 | 2 | 96.97  | 20.62 | 21    | 21.15 | 21.82 |
+| 384 | 4 | 108.22 | 36.96 | 37.05 | 37.18 | 38.12 |
+| 384 | 8 | 110.52 | 72.38 | 73.06 | 73.32 | 74.64 |
 
 
 ##### Inference performance: NVIDIA Tesla T4 (1x T4 16G)
 
 ###### Fine-tuning inference performance for SQuAD on Tesla T4 16G
 
-Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 19.06-py3 NGC container on NVIDIA Tesla T4 with 1x T4 16G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
+Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA Tesla T4 with 1x T4 16G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 
 BERT LARGE FP16
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 53.56                        | 1.18                                         | 18.67               | 20.22           | 20.31           | 20.49           |
-| 128             | 2          | 95.39                        | 1.52                                         | 20.97               | 22.86           | 23.15           | 23.73           |
-| 128             | 4          | 137.44                       | 2.18                                         | 29.1                | 30.34           | 30.62           | 31.5            |
-| 128             | 8          | 166.19                       | 2.88                                         | 48.14               | 49.38           | 49.73           | 50.86           |
-| 384             | 1          | 34.28                        | 1.84                                         | 29.17               | 30.58           | 30.77           | 31.28           |
-| 384             | 2          | 41.89                        | 2.37                                         | 47.74               | 49.05           | 49.34           | 50              |
-| 384             | 4          | 47.15                        | 2.84                                         | 84.83               | 86.79           | 87.41           | 88.73           |
-| 384             | 8          | 50.28                        | 3.13                                         | 159.11              | 161.75          | 162.85          | 165.72          |
+| 128 | 1 | 54.53  | 1.552234557 | 18.34  | 19.09  | 19.28  | 21.74  |
+| 128 | 2 | 95.59  | 2.521498285 | 20.92  | 21.86  | 22.61  | 23.33  |
+| 128 | 4 | 133.2  | 3.434760186 | 30.03  | 30.32  | 30.43  | 31.06  |
+| 128 | 8 | 168.85 | 4.352926012 | 47.38  | 48.21  | 48.56  | 49.25  |
+| 384 | 1 | 33.58  | 2.87008547  | 29.78  | 30.3   | 30.46  | 31.69  |
+| 384 | 2 | 41.31  | 3.576623377 | 48.41  | 49.03  | 49.26  | 50.04  |
+| 384 | 4 | 47.08  | 3.94635373  | 84.96  | 86.88  | 87.38  | 88.3   |
+| 384 | 8 | 50.08  | 4.254885302 | 159.76 | 162.37 | 163.23 | 165.79 |
 
 BERT LARGE FP32
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128 | 1 | 40.34  | 24.79  | 26.97  | 27.38  | 28.21  |
-| 128 | 2 | 45.17  | 44.27  | 46.01  | 46.6   | 47.68  |
-| 128 | 4 | 47.39  | 84.41  | 86.31  | 86.92  | 88.14  |
-| 128 | 8 | 46.98  | 170.29 | 173.35 | 174.15 | 175.48 |
-| 384 | 1 | 14.07  | 71.06  | 73     | 73.42  | 73.99  |
-| 384 | 2 | 14.91  | 134.17 | 136.72 | 137.51 | 138.66 |
-| 384 | 4 | 14.44  | 277.03 | 281.89 | 282.63 | 284.41 |
-| 384 | 8 | 14.95  | 534.94 | 540.45 | 542.32 | 544.75 |
+| 128 | 1 | 35.13 | 28.46  | 29.89  | 30.12  | 30.6   |
+| 128 | 2 | 37.91 | 52.76  | 54.01  | 54.29  | 54.84  |
+| 128 | 4 | 38.78 | 103.14 | 105.39 | 106.05 | 107.4  |
+| 128 | 8 | 38.79 | 206.22 | 209.63 | 210.2  | 211.5  |
+| 384 | 1 | 11.7  | 85.5   | 87.18  | 87.43  | 88     |
+| 384 | 2 | 11.55 | 173.19 | 176.13 | 177.02 | 178.4  |
+| 384 | 4 | 11.93 | 335.41 | 340.26 | 341.76 | 343.54 |
+| 384 | 8 | 11.77 | 679.77 | 686.01 | 686.79 | 689.24 |
 
 BERT BASE FP16
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128             | 1          | 107.3                        | 1.19                                         | 9.32                | 10.18           | 10.32           | 11.48           |
-| 128             | 2          | 185.18                       | 1.37                                         | 10.8                | 11.71           | 12.11           | 12.35           |
-| 128             | 4          | 335.47                       | 1.79                                         | 11.92               | 12.58           | 12.72           | 13.36           |
-| 128             | 8          | 454.12                       | 2.15                                         | 17.62               | 18.45           | 18.68           | 19.25           |
-| 384             | 1          | 83.5                         | 1.57                                         | 11.98               | 12.71           | 12.93           | 13.29           |
-| 384             | 2          | 117.75                       | 1.96                                         | 16.99               | 17.62           | 17.83           | 19.48           |
-| 384             | 4          | 139.08                       | 2.42                                         | 28.76               | 29.59           | 29.85           | 30.74           |
-| 384             | 8          | 149.93                       | 2.72                                         | 53.36               | 54.83           | 55.48           | 56.93           |
+| 12.71 | 13.1  | 13.22 | 1.552234557 | 18.34  | 19.09  | 19.28  | 21.74  |
+| 11.16 | 12.85 | 12.97 | 2.521498285 | 20.92  | 21.86  | 22.61  | 23.33  |
+| 11.82 | 11.9  | 13.21 | 3.434760186 | 30.03  | 30.32  | 30.43  | 31.06  |
+| 17.88 | 18.08 | 18.82 | 4.352926012 | 47.38  | 48.21  | 48.56  | 49.25  |
+| 11.83 | 12.95 | 15.44 | 2.87008547  | 29.78  | 30.3   | 30.46  | 31.69  |
+| 16.91 | 17.08 | 19.38 | 3.576623377 | 48.41  | 49.03  | 49.26  | 50.04  |
+| 28.89 | 29.23 | 30.84 | 3.94635373  | 84.96  | 86.88  | 87.38  | 88.3   |
+| 54.58 | 55.19 | 56.31 | 4.254885302 | 159.76 | 162.37 | 163.23 | 165.79 |
 
 BERT BASE FP32
 
 | Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
-| 128 | 1 | 92.82  | 10.77  | 11.06 | 11.11  | 11.24 |
-| 128 | 2 | 127.87 | 15.64  | 16.2  | 16.4   | 16.86 |
-| 128 | 4 | 151.68 | 26.37  | 27.26 | 27.48  | 27.98 |
-| 128 | 8 | 164.51 | 48.63  | 50.36 | 50.72  | 51.52 |
-| 384 | 1 | 45.64  | 21.91  | 23.39 | 23.66  | 24.14 |
-| 384 | 2 | 48.11  | 41.57  | 42.99 | 43.47  | 44.44 |
-| 384 | 4 | 48.64  | 82.24  | 84.35 | 84.97  | 86.2  |
-| 384 | 8 | 48.04  | 166.51 | 169.9 | 170.84 | 172.6 |
+| 128 | 1 | 64.15  | 15.59  | 19.77  | 21.03  | 21.82  |
+| 128 | 2 | 110.69 | 18.07  | 18.92  | 20.77  | 21.6   |
+| 128 | 4 | 125.8  | 31.8   | 32.82  | 33.11  | 33.93  |
+| 128 | 8 | 127.55 | 62.72  | 63.9   | 64.28  | 65.25  |
+| 384 | 1 | 35.46  | 28.2   | 28.83  | 28.95  | 29.43  |
+| 384 | 2 | 37.15  | 53.83  | 54.75  | 55.08  | 56.01  |
+| 384 | 4 | 36.86  | 108.53 | 110.57 | 111.16 | 112.48 |
+| 384 | 8 | 36.1   | 221.61 | 225.94 | 226.94 | 228.58 |
 
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
@@ -1229,11 +1131,16 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 ### Changelog
 
+November 2019
+- Pre-training and Finetuning on BioMedical tasks and corpus
+
+October 2019
+- Disabling Grappler Optimizations for improved performance
+
 September 2019
 - Pre-training using LAMB
 - Multi Node support
 - Fine Tuning support for GLUE (CoLA, MNLI, MRPC)
-- Jupyter Notebooks
 
 July 2019
 - Results obtained using 19.06

@@ -26,6 +26,8 @@ import modeling
 import optimization
 import tensorflow as tf
 import glob
+from utils.utils import LogEvalRunHook
+from tensorflow.core.protobuf import rewriter_config_pb2
 
 flags = tf.flags
 
@@ -244,6 +246,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
 
     initialized_variable_names = {}
     if init_checkpoint and (hvd is None or hvd.rank() == 0):
+      print("Loading checkpoint", init_checkpoint)
       (assignment_map, initialized_variable_names
       ) = modeling.get_assignment_map_from_checkpoint(tvars, init_checkpoint)
 
@@ -528,7 +531,9 @@ def main(_):
       tf.logging.info("**************************")
 
 #    config.gpu_options.per_process_gpu_memory_fraction = 0.7
-  if FLAGS.use_xla: config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
+  if FLAGS.use_xla: 
+      config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
+      config.graph_options.rewrite_options.memory_optimization = rewriter_config_pb2.RewriterConfig.NO_MEM_OPT
 
   run_config = tf.estimator.RunConfig(
       model_dir=FLAGS.output_dir,
@@ -590,8 +595,29 @@ def main(_):
         is_training=False,
         hvd=None if not FLAGS.horovod else hvd)
 
+    eval_hooks = [LogEvalRunHook(FLAGS.eval_batch_size)]
+    eval_start_time = time.time()
     result = estimator.evaluate(
-        input_fn=eval_input_fn, steps=FLAGS.max_eval_steps)
+        input_fn=eval_input_fn, steps=FLAGS.max_eval_steps, hooks=eval_hooks)
+
+    eval_time_elapsed = time.time() - eval_start_time
+    eval_time_wo_overhead = eval_hooks[-1].total_time
+
+    num_sentences = (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.eval_batch_size
+
+    ss_sentences_per_second = num_sentences * 1.0 / eval_time_wo_overhead
+
+    tf.logging.info("-----------------------------")
+    tf.logging.info("Total Inference Time = %0.2f for Sentences = %d", eval_time_elapsed,
+                    eval_hooks[-1].count * FLAGS.eval_batch_size)
+    tf.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", eval_time_wo_overhead,
+                    (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.eval_batch_size)
+    tf.logging.info("Summary Inference Statistics on EVAL set")
+    tf.logging.info("Batch size = %d", FLAGS.eval_batch_size)
+    tf.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
+    tf.logging.info("Precision = %s", "fp16" if FLAGS.use_fp16 else "fp32")
+    tf.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+    tf.logging.info("-----------------------------")
 
     output_eval_file = os.path.join(FLAGS.output_dir, "eval_results.txt")
     with tf.gfile.GFile(output_eval_file, "w") as writer:

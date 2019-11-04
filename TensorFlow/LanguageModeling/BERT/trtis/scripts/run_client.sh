@@ -35,7 +35,7 @@ if [ ! -d "$SQUAD_DIR" ] ; then
 fi
 
 bash scripts/docker/launch.sh \
-   "python run_squad_trtis_client.py \
+   "python trtis/run_squad_trtis_client.py \
       --trtis_model_name=$trtis_model_name \
       --trtis_model_version=$trtis_version_name \
       --vocab_file=$BERT_DIR/vocab.txt \

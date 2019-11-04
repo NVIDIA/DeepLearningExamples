@@ -921,7 +921,6 @@ def main(_):
   training_hooks = []
   global_batch_size = FLAGS.train_batch_size * FLAGS.num_accumulation_steps
   hvd_rank = 0
-  hvd_local_rank = 0
 
   config = tf.ConfigProto()
   learning_rate = FLAGS.learning_rate
@@ -933,7 +932,6 @@ def main(_):
       learning_rate = learning_rate * hvd.size()
       master_process = (hvd.rank() == 0)
       hvd_rank = hvd.rank()
-      hvd_local_rank = hvd.local_rank()
       config.gpu_options.allow_growth = True
       config.gpu_options.visible_device_list = str(hvd.local_rank())
       if hvd.size() > 1:
@@ -976,15 +974,15 @@ def main(_):
     tmp_filenames = [os.path.join(FLAGS.output_dir, "train.tf_record")]
 
     if FLAGS.horovod:
-      tmp_filenames = [os.path.join(FLAGS.output_dir, "train.tf_record{}".format(i)) for i in range(hvd.local_size())]
-      num_examples_per_local_rank = len(train_examples) // hvd.local_size()
-      remainder = len(train_examples) % hvd.local_size()
-      if hvd.local_rank() < remainder:
-        start_index = hvd.local_rank() * (num_examples_per_local_rank+1)
-        end_index = start_index + num_examples_per_local_rank + 1
+      tmp_filenames = [os.path.join(FLAGS.output_dir, "train.tf_record{}".format(i)) for i in range(hvd.size())]
+      num_examples_per_rank = len(train_examples) // hvd.size()
+      remainder = len(train_examples) % hvd.size()
+      if hvd.rank() < remainder:
+        start_index = hvd.rank() * (num_examples_per_rank+1)
+        end_index = start_index + num_examples_per_rank + 1
       else:
-        start_index = hvd.local_rank() * num_examples_per_local_rank + remainder
-        end_index = start_index + (num_examples_per_local_rank)
+        start_index = hvd.rank() * num_examples_per_rank + remainder
+        end_index = start_index + (num_examples_per_rank)
 
 
   model_fn = model_fn_builder(
@@ -1005,7 +1003,7 @@ def main(_):
     # We write to a temporary file to avoid storing very large constant tensors
     # in memory.
     train_writer = FeatureWriter(
-        filename=tmp_filenames[hvd_local_rank],
+        filename=tmp_filenames[hvd_rank],
         is_training=True)
     convert_examples_to_features(
         examples=train_examples[start_index:end_index],
@@ -1025,10 +1023,6 @@ def main(_):
     tf.logging.info("  Num steps = %d", num_train_steps)
     tf.logging.info("  LR = %f", learning_rate)
     del train_examples
-    if FLAGS.horovod:
-        barrier = hvd.allreduce(tf.constant(0))
-        with tf.Session(config=config) as sess:
-          sess.run(barrier)
 
     train_input_fn = input_fn_builder(
         input_file=tmp_filenames,

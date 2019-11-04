@@ -23,6 +23,7 @@ COPY --from=trt /workspace/build/perf_client /workspace/build/perf_client
 COPY --from=trt /workspace/build/dist/dist/tensorrtserver*.whl /tmp/
 RUN pip install /tmp/tensorrtserver*.whl && rm /tmp/tensorrtserver*.whl
 
+
 WORKDIR /workspace/bert
 COPY . .
 
