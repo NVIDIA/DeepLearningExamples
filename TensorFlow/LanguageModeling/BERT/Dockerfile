@@ -1,6 +1,6 @@
 ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:19.08-py3
 
-FROM tensorrtserver_client as trt
+#FROM tensorrtserver_client as trt
 
 FROM ${FROM_IMAGE_NAME}
 
@@ -22,6 +22,7 @@ COPY --from=trt /workspace/build/perf_client /workspace/build/perf_client
 #Copy the python wheel and install with pip
 COPY --from=trt /workspace/build/dist/dist/tensorrtserver*.whl /tmp/
 RUN pip install /tmp/tensorrtserver*.whl && rm /tmp/tensorrtserver*.whl
+
 
 WORKDIR /workspace/bert
 COPY . .

@@ -14,8 +14,7 @@
 # limitations under the License.
 
 bert_model=${1:-"large"}
-use_xla=${2:-"true"}
-task=${3:-"squad"}
+task=${2:-"squad"}
 
 if [ "$bert_model" = "large" ] ; then
     export BERT_DIR=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16
@@ -25,13 +24,6 @@ fi
 echo  "BERT directory set as " $BERT_DIR
 
 init_checkpoint="$BERT_DIR/bert_model.ckpt"
-
-if [ "$use_xla" = "true" ] ; then
-    use_xla_tag="--use_xla"
-    echo "XLA activated"
-else
-    use_xla_tag=""
-fi
 
 #Edit to save logs & checkpoints in a different directory
 RESULTS_DIR=/results
@@ -49,8 +41,7 @@ if [ "$task" = "squad" ] ; then
     echo "Squad directory set as " $SQUAD_DIR
 
     echo "Inference performance benchmarking for BERT $bert_model from $BERT_DIR" >> $LOGFILE
-    echo "Precision $precision" >> $LOGFILE
-    echo "Sequence-Length Batch-size Precision Throughput-Average(sent/sec) Latency-Average(ms) Latency-50%(ms) Latency-90%(ms) Latency-95%(ms) Latency-99%(ms) Latency-100%(ms)" >> $LOGFILE
+    echo "Precision Sequence-Length Batch-size Precision Throughput-Average(sent/sec) Latency-Average(ms) Latency-50%(ms) Latency-90%(ms) Latency-95%(ms) Latency-99%(ms) Latency-100%(ms)" >> $LOGFILE
 
     for seq_len in 128 384; do
 
@@ -60,11 +51,13 @@ if [ "$task" = "squad" ] ; then
 
 
         if [ "$precision" = "fp16" ] ; then
-            echo "fp16 activated!"
+            echo "fp16 and XLA activated!"
             use_fp16="--use_fp16"
+            use_xla_tag="--use_xla"
         else
             echo "fp32 activated!"
             use_fp16=""
+            use_xla_tag=""
         fi
 
         python run_squad.py \
@@ -80,7 +73,7 @@ if [ "$task" = "squad" ] ; then
         "$use_fp16" \
         $use_xla_tag --num_eval_iterations=1024 |& tee $tmp_file
 
-        perf=`cat $tmp_file | grep -F 'Throughput Average (sentences/sec)' | awk -F'= ' '{print $2}'`
+        perf=`cat $tmp_file | grep -F 'Throughput Average (sentences/sec) =' | tail -1 | awk -F'= ' '{print $2}'`
         la=`cat $tmp_file | grep -F 'Latency Average (ms)' | awk -F'= ' '{print $2}'`
         l50=`cat $tmp_file | grep -F 'Latency Confidence Level 50 (ms)' | awk -F'= ' '{print $2}'`
         l90=`cat $tmp_file | grep -F 'Latency Confidence Level 90 (ms)' | awk -F'= ' '{print $2}'`
@@ -88,7 +81,7 @@ if [ "$task" = "squad" ] ; then
         l99=`cat $tmp_file | grep -F 'Latency Confidence Level 99 (ms)' | awk -F'= ' '{print $2}'`
         l100=`cat $tmp_file | grep -F 'Latency Confidence Level 100 (ms)' | awk -F'= ' '{print $2}'`
 
-        echo "$seq_len $bs $precision $perf $la $l50 $l90 $l95 $l99 $l100" >> $LOGFILE
+        echo "$precision $seq_len $bs $precision $perf $la $l50 $l90 $l95 $l99 $l100" >> $LOGFILE
 
      done
      done

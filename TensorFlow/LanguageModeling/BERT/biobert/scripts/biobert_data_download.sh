@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,15 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.idea/
-.git/
-__pycache__/
-results/
-data/binary
-data/download
-data/extracted
-data/formatted_one_article_per_line
-data/sharded
-data/hdf5*
-data/tfrecord*
-checkpoints/
+docker run --runtime=nvidia -v $PWD:/workspace/bert \
+    --rm --shm-size=1g --ulimit memlock=-1 \
+    --ulimit stack=67108864 --ipc=host -t -i \
+    bert bash -c "bash data/create_biobert_datasets_from_start.sh"

@@ -32,7 +32,7 @@ then
     if [ ! "$(docker inspect -f "{{.State.Running}}" trt_server_cont)" = "true" ] ; then
 
         echo "Launching TRTIS server"
-        bash scripts/docker/launch_server.sh $precision
+        bash trtis/scripts/launch_server.sh $precision
         SERVER_LAUNCHED=true
 
         function cleanup_server {
@@ -47,7 +47,7 @@ then
 fi
 
 # Wait until server is up. curl on the health of the server and sleep until its ready
-bash scripts/trtis/wait_for_trtis_server.sh $SERVER_HOSTNAME
+bash trtis/scripts/wait_for_trtis_server.sh $SERVER_HOSTNAME
 
 TIMESTAMP=$(date "+%y%m%d_%H%M")
 
