@@ -63,11 +63,17 @@ def init_bn(module):
 
 
 def get_model(model_name, model_config, to_cuda,
-              uniform_initialize_bn_weight=False):
+              uniform_initialize_bn_weight=False, rename=False):
     """ Code chooses a model based on name"""
     model = None
     if model_name == 'Tacotron2':
-        model = Tacotron2(**model_config)
+        if rename:
+            class Tacotron2_extra(Tacotron2):
+                def forward(self, inputs, input_lengths):
+                    return self.infer(inputs, input_lengths)
+            model = Tacotron2_extra(**model_config)
+        else:
+            model = Tacotron2(**model_config)
     elif model_name == 'WaveGlow':
         model = WaveGlow(**model_config)
     else:

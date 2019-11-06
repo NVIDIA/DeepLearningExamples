@@ -111,12 +111,12 @@ def unwrap_distributed(state_dict):
     return new_state_dict
 
 
-def load_and_setup_model(model_name, parser, checkpoint, amp_run):
+def load_and_setup_model(model_name, parser, checkpoint, amp_run, rename=False):
     model_parser = models.parse_model_args(model_name, parser, add_help=False)
     model_args, _ = model_parser.parse_known_args()
 
     model_config = models.get_model_config(model_name, model_args)
-    model = models.get_model(model_name, model_config, to_cuda=True)
+    model = models.get_model(model_name, model_config, to_cuda=True, rename=rename)
 
     if checkpoint is not None:
         state_dict = torch.load(checkpoint)['state_dict']
@@ -131,7 +131,7 @@ def load_and_setup_model(model_name, parser, checkpoint, amp_run):
     model.eval()
 
     if amp_run:
-        model, _ = amp.initialize(model, [], opt_level="O3")
+        model.half()
 
     return model
 
@@ -217,6 +217,10 @@ def main():
                                     args.amp_run)
     denoiser = Denoiser(waveglow).cuda()
 
+    tacotron2.forward = tacotron2.infer
+    type(tacotron2).forward = type(tacotron2).infer
+    jitted_tacotron2 = torch.jit.script(tacotron2)
+
     texts = []
     try:
         f = open(args.input, 'r')
@@ -231,7 +235,7 @@ def main():
         input_lengths = torch.IntTensor([sequence.size(1)]).cuda().long()
         for i in range(3):
             with torch.no_grad():
-                _, mel, _, _, mel_lengths = tacotron2.infer(sequence, input_lengths)
+                mel, mel_lengths = jitted_tacotron2(sequence, input_lengths)
                 _ = waveglow.infer(mel)
 
     LOGGER.iteration_start()
@@ -241,7 +245,7 @@ def main():
     sequences_padded, input_lengths = prepare_input_sequence(texts)
 
     with torch.no_grad(), MeasureTime(measurements, "tacotron2_time"):
-        _, mel, _, _, mel_lengths = tacotron2.infer(sequences_padded, input_lengths)
+        mel, mel_lengths = jitted_tacotron2(sequences_padded, input_lengths)
 
     with torch.no_grad(), MeasureTime(measurements, "waveglow_time"):
         audios = waveglow.infer(mel, sigma=args.sigma_infer)

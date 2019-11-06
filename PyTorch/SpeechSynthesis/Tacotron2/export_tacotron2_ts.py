@@ -1,5 +1,5 @@
 # *****************************************************************************
-#  Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
+#  Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions are met:
@@ -25,42 +25,43 @@
 #
 # *****************************************************************************
 
-import numpy as np
-from scipy.io.wavfile import read
 import torch
-import os
+import argparse
+from inference import checkpoint_from_distributed, unwrap_distributed, load_and_setup_model
+from dllogger.autologging import log_hardware, log_args
+
+def parse_args(parser):
+    """
+    Parse commandline arguments.
+    """
+    parser.add_argument('--tacotron2', type=str, required=True,
+                        help='full path to the Tacotron2 model checkpoint file')
+
+    parser.add_argument('-o', '--output', type=str, default="trtis_repo/tacotron/1/model.pt",
+                        help='filename for the Tacotron 2 TorchScript model')
+    parser.add_argument('--amp-run', action='store_true',
+                        help='inference with AMP')
+
+    return parser
 
 
-def get_mask_from_lengths(lengths):
-    max_len = torch.max(lengths).item()
-    ids = torch.arange(0, max_len, device=lengths.device, dtype=lengths.dtype)
-    mask = (ids < lengths.unsqueeze(1)).byte()
-    mask = torch.le(mask, 0)
-    return mask
+def main():
 
+    parser = argparse.ArgumentParser(
+        description='PyTorch Tacotron 2 Inference')
+    parser = parse_args(parser)
+    args = parser.parse_args()
 
-def load_wav_to_torch(full_path):
-    sampling_rate, data = read(full_path)
-    return torch.FloatTensor(data.astype(np.float32)), sampling_rate
+    log_args(args)    
+    tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2,
+                                     args.amp_run, rename=True)
+    
+    jitted_tacotron2 = torch.jit.script(tacotron2)
 
+    torch.jit.save(jitted_tacotron2, args.output)
+    
 
-def load_filepaths_and_text(dataset_path, filename, split="|"):
-    with open(filename, encoding='utf-8') as f:
-        def split_line(root, line):
-            parts = line.strip().split(split)
-            if len(parts) > 2:
-                raise Exception(
-                    "incorrect line format for file: {}".format(filename))
-            path = os.path.join(root, parts[0])
-            text = parts[1]
-            return path,text
-        filepaths_and_text = [split_line(dataset_path, line) for line in f]
-    return filepaths_and_text
+if __name__ == '__main__':
+    main()
 
-
-def to_gpu(x):
-    x = x.contiguous()
-
-    if torch.cuda.is_available():
-        x = x.cuda(non_blocking=True)
-    return torch.autograd.Variable(x)
+    

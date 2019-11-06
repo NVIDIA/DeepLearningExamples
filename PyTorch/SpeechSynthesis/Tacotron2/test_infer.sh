@@ -6,7 +6,7 @@ PRECISION="fp32"
 NUM_ITERS=1003 # extra 3 iterations for warmup
 TACOTRON2_CKPT="checkpoint_Tacotron2_1500_fp32"
 WAVEGLOW_CKPT="checkpoint_WaveGlow_1000_fp32"
-
+AMP_RUN=""
 
 while [ -n "$1" ]
 do
@@ -41,6 +41,11 @@ do
     shift
 done
 
+if [ "$PRECISION" = "amp" ]
+then
+    AMP_RUN="--amp-run"
+fi
+
 LOG_SUFFIX=bs${BATCH_SIZE}_il${INPUT_LENGTH}_${PRECISION}
 NVLOG_FILE=nvlog_${LOG_SUFFIX}.json
 TMP_LOGFILE=tmp_log_${LOG_SUFFIX}.log
@@ -51,7 +56,7 @@ python test_infer.py \
        --tacotron2 $TACOTRON2_CKPT \
        --waveglow $WAVEGLOW_CKPT \
        --batch-size $BATCH_SIZE \
-       --input-length $INPUT_LENGTH $AMP_RUN $CPU_RUN \
+       --input-length $INPUT_LENGTH $AMP_RUN \
        --log-file $NVLOG_FILE \
        --num-iters $NUM_ITERS \
        |& tee $TMP_LOGFILE
