@@ -1,21 +1,40 @@
-## Clone the repository.
+
+## Table of Contents
+* [Setup](#setup)
+   * [Clone the repository.](#clone-the-repository)
+   * [Obtain models to be loaded in TRTIS.](#obtain-models-to-be-loaded-in-trtis)
+   * [Obtain Tacotron 2 and WaveGlow checkpoints.](#obtain-tacotron-2-and-waveglow-checkpoints)
+      * [Download pretrained checkpoints.](#download-pretrained-checkpoints)
+      * [Train Tacotron 2 and WaveGlow models.](#train-tacotron-2-and-waveglow-models)
+   * [Obtain Tacotron 2 TorchScript.](#obtain-tacotron-2-torchscript)
+      * [Export Tacotron 2 model using TorchScript](#export-tacotron-2-model-using-torchscript)
+   * [Obtain WaveGlow TRT engine.](#obtain-waveglow-trt-engine)
+      * [Export WaveGlow model to TRT](#export-waveglow-model-to-trt)
+   * [Setting up the TRTIS server](#setting-up-the-trtis-server)
+   * [Setting up the TRTIS notebook client](#setting-up-the-trtis-notebook-client)
+   * [Running the TRTIS server](#running-the-trtis-server)
+   * [Running the TRTIS notebook client](#running-the-trtis-notebook-client)
+
+## Setup
+
+### Clone the repository.
 ```bash
 git clone https://github.com/NVIDIA/DeepLearningExamples.git
 cd DeepLearningExamples/PyTorch/SpeechSynthesis/Tacotron2
 ```
 
-## Obtain models to be loaded in TRTIS.
+### Obtain models to be loaded in TRTIS.
 
 We prepared Tacotron 2 and WaveGlow models that are ready to be loaded in TRTIS,
 so you don't need to train and export the models. Please follow the instructions 
 below to learn how to train, export or simply donwload the pretrained models.
 
-## Obtain Tacotron 2 and WaveGlow checkpoints.
+### Obtain Tacotron 2 and WaveGlow checkpoints.
 
 You can either download pretrained models or train the models yourself. Both
 options are described in the following sections.
 
-### Download pretrained checkpoints.
+#### Download pretrained checkpoints.
 
 If you want to use a pretrained checkpoints, download them from [NGC](https://ngc.nvidia.com/catalog/models):
 
@@ -23,7 +42,7 @@ If you want to use a pretrained checkpoints, download them from [NGC](https://ng
 - [WaveGlow checkpoint](https://ngc.nvidia.com/models/nvidia:waveglow256pyt_fp16)
 
 
-### Train Tacotron 2 and WaveGlow models.
+#### Train Tacotron 2 and WaveGlow models.
 
 To train the models, follow the QuickStart section in the `Tacotron2/README.md`
 file by executing points 1-5 in the Docker container. To train WaveGlow, use
@@ -37,22 +56,26 @@ This will train the WaveGlow model with smaller number of residual connections
 in the coupling layer networks and larger segment length. Training should take 
 about 100 hours on DGX-1 (8x V100 16G).
 
-## Obtain Tacotron 2 TorchScript.
+### Obtain Tacotron 2 TorchScript.
 
-Start the Tacotron 2 docker container. 
-Inside the container, from the model root directory type:
+First, you need to create a folder structure for the model to be loaded in TRTIS server.
+Follow the Tacotron 2 Quick Start Guide (points 1-4) to start the container.
+Inside the container, type:
 ```bash
+cd /workspace/tacotron2/
 python export_tacotron2_ts_config.py --amp-run
 ```
 
-This will export the folder structure of the TRTIS repository and the config file of Tacotron 2. By default, it will be found in the `trtis_repo/tacotron` folder.
+This will export the folder structure of the TRTIS repository and the config file of Tacotron 2. 
+By default, it will be found in the `trtis_repo/tacotron` folder.
 
-You can export the Tacotron 2 model yourself as explained in the next section, or download it from:
+We will use TorchScript to export and load the Tacotron 2 model in TRTIS.
+You can either  export the Tacotron 2 model yourself as explained in the next section, or download it from:
 - [Tacotron2 TorchScript](https://ngc.nvidia.com/models/nvidia:tacotron2pyt_jit_fp16)
 
-Move the model to `trtis_repo/tacotron2/1/model.pt`
+Move the downloaded model to `trtis_repo/tacotron2/1/model.pt`
 
-### Export Tacotron 2 model using TorchScript
+#### Export Tacotron 2 model using TorchScript
 
 To export the Tacotron 2 model using TorchScript, type:
 ```bash
@@ -63,20 +86,22 @@ This will save the model as ``trtis_repo/tacotron/1/model.pt``.
 
 ### Obtain WaveGlow TRT engine.
 
-From the model root directory, type:
+For WaveGlow, we also need to create the folder strucutre that will be used by TRTIS server. 
+Inside the container, type:
 ```bash
 cd /workspace/tacotron2/
 python export_waveglow_trt_config.py --amp-run
 ```
 
-This will export the folder structure of the TRTIS repository and the config file of Waveglow. By default, it will be found in the `trtis_repo/waveglow` folder.
+This will export the folder structure of the TRTIS repository and the config file of Waveglow. 
+By default, it will be found in the `trtis_repo/waveglow` folder.
 
 You can export the WaveGlow model yourself as explained in the next section, or download it from:
 - [WaveGlow TRT engine](https://ngc.nvidia.com/models/nvidia:waveglow256pyt_trt_fp16)
 
-Move the model to `trtis_repo/waveglow/1/model.plan`
+Move the downloaded model to `trtis_repo/waveglow/1/model.plan`
 
-### Export WaveGlow model to TRT
+#### Export WaveGlow model to TRT
 
 Before exporting the model, you need to install onnx-tensorrt by typing:
 ```bash
@@ -101,7 +126,7 @@ onnx2trt <exported_waveglow_onnx> -o trtis_repo/waveglow/1/model.plan -b 1 -w 85
 ```
 Save the folder structure under `trtis_repo` and its contents into the Tacotron 2 repo outside the container. Now exit the Tacotron 2 container.
 
-## Setting up the TRTIS server
+### Setting up the TRTIS server
 
 Download the TRTIS container by typing:
 ```bash
@@ -109,7 +134,7 @@ docker pull nvcr.io/nvidia/tensorrtserver:19.10-py3
 docker tag nvcr.io/nvidia/tensorrtserver:19.10-py3 tensorrtserver:19.10
 ```
 
-## Setting up the TRTIS notebook client
+### Setting up the TRTIS notebook client
 
 Now go to the root directory of the Tacotron 2 repo, and type: 
 
@@ -117,7 +142,7 @@ Now go to the root directory of the Tacotron 2 repo, and type:
 docker build -f Dockerfile_trtis_client --network=host -t speech_ai__tts_only:demo .
 ```
 
-## Running the TRTIS server
+### Running the TRTIS server
 
 To run the server, type in the root directory of the Tacotron 2 repo:
 ```bash
@@ -127,7 +152,7 @@ NV_GPU=1 nvidia-docker run -ti --ipc=host --network=host --rm -p8000:8000 -p8001
 The flag `NV_GPU` selects the GPU the server is going to see. If we want it to see all the available GPUs, then run the above command without this flag.
 By default, the model repository will be in `trtis_repo/`.
 
-## Running the TRTIS notebook client
+### Running the TRTIS notebook client
 
 Leave the server running. In another terminal, type in the Tacotron 2 repo:
 ```bash
