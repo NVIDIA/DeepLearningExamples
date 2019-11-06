@@ -29,7 +29,7 @@ cd DeepLearningExamples/PyTorch/SpeechSynthesis/Tacotron2
 
 We prepared Tacotron 2 and WaveGlow models that are ready to be loaded in TRTIS,
 so you don't need to train and export the models. Please follow the instructions 
-below to learn how to train, export or simply donwload the pretrained models.
+below to learn how to train, export or simply download the pretrained models.
 
 ### Obtain Tacotron 2 and WaveGlow checkpoints.
 
