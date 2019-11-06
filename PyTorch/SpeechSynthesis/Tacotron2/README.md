@@ -702,6 +702,7 @@ October 2019
 
 November 2019
 * Implemented training resume from checkpoint
+* Added notebook for running Tacotron 2 and WaveGlow in TRTIS.
 
 ### Known issues
 
