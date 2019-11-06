@@ -4,6 +4,12 @@ git clone https://github.com/NVIDIA/DeepLearningExamples.git
 cd DeepLearningExamples/PyTorch/SpeechSynthesis/Tacotron2
 ```
 
+## Obtain models to be loaded in TRTIS.
+
+We prepared Tacotron 2 and WaveGlow models that are ready to be loaded in TRTIS.
+If you want to create your own models, please follow the instructions on how to 
+train and export the models below.
+
 ## Obtain Tacotron 2 and WaveGlow checkpoints.
 
 You can either download pretrained models or train the models yourself. Both
@@ -74,7 +80,7 @@ With the model exported to ONNX, type the following to obtain a TRT engine and s
 ```bash
 onnx2trt <exported_waveglow_onnx> -o trtis_repo/waveglow/1/model.plan -b 1 -w 8589934592
 ```
-Save the folder structure under `trtis_repo` and its contents into the Tacotron 2 repo outside the container. Now exit the Tacotron 2 container. 
+Save the folder structure under `trtis_repo` and its contents into the Tacotron 2 repo outside the container. Now exit the Tacotron 2 container.
 
 ## Setting up the TRTIS server
 
