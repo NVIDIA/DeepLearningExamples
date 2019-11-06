@@ -6,9 +6,9 @@ cd DeepLearningExamples/PyTorch/SpeechSynthesis/Tacotron2
 
 ## Obtain models to be loaded in TRTIS.
 
-We prepared Tacotron 2 and WaveGlow models that are ready to be loaded in TRTIS.
-If you want to create your own models, please follow the instructions on how to 
-train and export the models below.
+We prepared Tacotron 2 and WaveGlow models that are ready to be loaded in TRTIS,
+so you don't need to train and export the models. Please follow the instructions 
+below to learn how to train, export or simply donwload thr pretrained models.
 
 ## Obtain Tacotron 2 and WaveGlow checkpoints.
 
@@ -17,13 +17,17 @@ options are described in the following sections.
 
 ### Download pretrained checkpoints.
 
-Simply download checkpoints from:
+If you want to use a pretrained checkpoints, download them from [NGC](https://ngc.nvidia.com/catalog/models):
+
+- [Tacotron2 checkpoint](https://ngc.nvidia.com/models/nvidia:tacotron2pyt_fp16)
+- [WaveGlow checkpoint](https://ngc.nvidia.com/models/nvidia:waveglow256pyt_fp16)
+
 
 ### Train Tacotron 2 and WaveGlow models.
 
-Follow the QuickStart section in the `Tacotron2/README.md` file by executing
-points 1-5 in the Docker container. To train WaveGlow, use the following command
-instead of the one given in QuickStart point 5:
+To train the models, follow the QuickStart section in the `Tacotron2/README.md`
+file by executing points 1-5 in the Docker container. To train WaveGlow, use
+the following command instead of the one given in QuickStart point 5:
 
 ```bash
 python -m multiproc train.py -m WaveGlow -o output/ --amp-run -lr 1e-4 --epochs 2001 --wn-channels 256 -bs 12 --segment-length 16000 --weight-decay 0 --grad-clip-thresh 65504.0 --cudnn-benchmark --cudnn-enabled --log-file output/nvlog.json
@@ -32,14 +36,20 @@ python -m multiproc train.py -m WaveGlow -o output/ --amp-run -lr 1e-4 --epochs 
 This will train the WaveGlow model with smaller number of residual connections
 and larger segment length. Training should take about 100 hours.
 
-## Export Tacotron 2 model using TorchScript
+## Obtain Tacotron 2 TorchScript.
 
 Start the Tacotron 2 docker container. 
 Inside the container, from the model root directory type:
 ```bash
 python export_tacotron2_ts_config.py --amp-run
 ```
+
 This will export the folder structure of the TRTIS repository and the config file of Tacotron 2. By default, it will be found in the `trtis_repo/tacotron` folder.
+
+- [Tacotron2 TorchScript](https://ngc.nvidia.com/models/nvidia:tacotron2pyt_jit_fp16)
+Move the model to `trtis_repo/tacotron2/1/model.pt`
+
+### Export Tacotron 2 model using TorchScript
 
 Now type:
 ```bash
@@ -48,16 +58,7 @@ python export_tacotron2_ts.py --tacotron2 <tacotron2_checkpoint> -o trtis_repo/t
 
 This will save the model as ``trtis_repo/tacotron/1/model.pt``.
 
-
-## Export WaveGlow model to TRT
-
-Before exporting the model, you need to install onnx-tensorrt by typing:
-```bash
-cd /workspace && git clone https://github.com/onnx/onnx-tensorrt.git
-cd /workspace/onnx-tensorrt/ && git submodule update --init --recursive
-cd /workspace/onnx-tensorrt && mkdir -p build
-cd /workspace/onnx-tensorrt/build && cmake .. -DCMAKE_CXX_FLAGS=-isystem\ /usr/local/cuda/include && make -j12 && make install
-```
+### Obtain WaveGlow TRT engine.
 
 Now, type:
 ```bash
@@ -66,6 +67,18 @@ python export_waveglow_trt_config.py --amp-run
 ```
 
 This will export the folder structure of the TRTIS repository and the config file of Waveglow. By default, it will be found in the `trtis_repo/waveglow` folder.
+
+- [WaveGlow TRT engine](https://ngc.nvidia.com/models/nvidia:waveglow256pyt_trt_fp16)
+
+### Export WaveGlow model to TRT
+
+Before exporting the model, you need to install onnx-tensorrt by typing:
+```bash
+cd /workspace && git clone https://github.com/onnx/onnx-tensorrt.git
+cd /workspace/onnx-tensorrt/ && git submodule update --init --recursive
+cd /workspace/onnx-tensorrt && mkdir -p build
+cd /workspace/onnx-tensorrt/build && cmake .. -DCMAKE_CXX_FLAGS=-isystem\ /usr/local/cuda/include && make -j12 && make install
+```
 
 In order to export the model into the ONNX intermediate format, type:
 
