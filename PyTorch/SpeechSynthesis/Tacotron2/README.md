@@ -1,4 +1,4 @@
-# Tacotron 2 And WaveGlow v1.7 For PyTorch
+# Tacotron 2 And WaveGlow v1.10 For PyTorch
 
 This repository provides a script and recipe to train Tacotron 2 and WaveGlow
 v1.6 models to achieve state of the art accuracy, and is tested and maintained by NVIDIA.
@@ -33,13 +33,13 @@ v1.6 models to achieve state of the art accuracy, and is tested and maintained b
       * [Inference performance benchmark](#inference-performance-benchmark)
    * [Results](#results)
       * [Training accuracy results](#training-accuracy-results)
-         * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
+         * [Training accuracy: NVIDIA DGX-1 (8x V100 16G)](#training-accuracy-nvidia-dgx-1-8x-v100-16g)
       * [Training performance results](#training-performance-results)
-         * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
+         * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16g)
          * [Expected training time](#expected-training-time)
       * [Inference performance results](#inference-performance-results)
-         * [NVIDIA V100 16G](#nvidia-v100-16g)
-         * [NVIDIA T4](#nvidia-t4)
+         * [Inference performance: NVIDIA V100 16G](#inference-performance-nvidia-v100-16g)
+         * [Inference performance: NVIDIA T4](#inference-performance-nvidia-t4)
 * [Release notes](#release-notes)
    * [Changelog](#changelog)
    * [Known issues](#known-issues)
@@ -471,7 +471,7 @@ To run inference, issue:
 ```bash
 python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --include-warmup -i phrases/phrase.txt --amp-run
 ```
-Here, `Tacotron2_checkpoint` and `WaveGlow_checkpoint` are pre-trained 
+Here, `Tacotron2_checkpoint` and `WaveGlow_checkpoint` are pre-trained
 checkpoints for the respective models, and `phrases/phrase.txt` contains input 
 phrases. The number of text lines determines the inference batch size. Audio 
 will be saved in the output folder. The audio files [audio_fp16](./audio/audio_fp16.wav)
@@ -564,7 +564,7 @@ and accuracy in training and inference.
 
 #### Training accuracy results
 
-##### NVIDIA DGX-1 (8x V100 16G)
+##### Training accuracy: NVIDIA DGX-1 (8x V100 16G)
 
 Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{AMP,FP32}_DGX1_16GB_8GPU.sh` training script in the PyTorch-19.06-py3
 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
@@ -594,7 +594,7 @@ WaveGlow FP32 loss - batch size 4 (mean and std over 16 runs)
 
 #### Training performance results
 
-##### NVIDIA DGX-1 (8x V100 16G)
+##### Training performance: NVIDIA DGX-1 (8x V100 16G)
 
 Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{AMP,FP32}_DGX1_16GB_8GPU.sh`
 training script in the PyTorch-19.06-py3 NGC container on NVIDIA DGX-1 with
@@ -648,26 +648,27 @@ deviation, and latency confidence intervals. Throughput is measured
 as the number of generated audio samples per second. RTF is the real-time factor
 which tells how many seconds of speech are generated in 1 second of compute.
 
-##### NVIDIA V100 16G
+##### Inference performance: NVIDIA DGX-1 (1x V100 16G)
 
-|Batch size|Input length|Precision|Avg latency (s)|Latency std (s)|Latency confidence interval 50% (s)|Latency confidence interval 100% (s)|Throughput (samples/sec)|Speed-up with mixed precision|Avg mels generated (81 mels=1 sec of speech)|Avg audio length (s)|Avg RTF|
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-|1| 128| FP16| 1.73| 0.07| 1.72| 2.11|  89,162| 1.09| 601| 6.98| 4.04|
-|4| 128| FP16| 4.21| 0.17| 4.19| 4.84| 145,800| 1.16| 600| 6.97| 1.65|
-|1| 128| FP32| 1.85| 0.06| 1.84| 2.19|  81,868| 1.00| 590| 6.85| 3.71|
-|4| 128| FP32| 4.80| 0.15| 4.79| 5.43| 125,930| 1.00| 590| 6.85| 1.43|
+|Batch size|Input length|Precision|Avg latency (s)|Latency std (s)|Latency confidence interval 90% (s)|Latency confidence interval 95% (s)|Latency confidence interval 99% (s)|Throughput (samples/sec)|Speed-up with mixed precision|Avg mels generated (81 mels=1 sec of speech)|Avg audio length (s)|Avg RTF|
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+|1| 128| FP16| 1.27| 0.06| 1.34| 1.38| 1.41| 121,190| 1.37| 603| 7.00| 5.51|
+|4| 128| FP16| 2.32| 0.09| 2.42| 2.45| 2.59| 277,711| 2.03| 628| 7.23| 3.12|
+|1| 128| FP32| 1.70| 0.05| 1.77| 1.79| 1.84|  88,650| 1.00| 590| 6.85| 4.03|
+|4| 128| FP32| 4.56| 0.12| 4.72| 4.77| 4.87| 136,518| 1.00| 608| 7.06| 1.55|
 
-##### NVIDIA T4
+##### Inference performance: NVIDIA T4
 
-|Batch size|Input length|Precision|Avg latency (s)|Latency std (s)|Latency confidence interval 50% (s)|Latency confidence interval 100% (s)|Throughput (samples/sec)|Speed-up with mixed precision|Avg mels generated (81 mels=1 sec of speech)|Avg audio length (s)|Avg RTF|
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-|1| 128| FP16|  3.16| 0.13|  3.16|  3.81| 48,792| 1.23| 603| 7.00| 2.21|
-|4| 128| FP16| 11.45| 0.49| 11.39| 14.38| 53,771| 1.22| 601| 6.98| 0.61|
-|1| 128| FP32|  3.82| 0.11|  3.81|  4.24| 39,603| 1.00| 591| 6.86| 1.80|
-|4| 128| FP32| 13.80| 0.45| 13.74| 16.09| 43,915| 1.00| 592| 6.87| 0.50|
+|Batch size|Input length|Precision|Avg latency (s)|Latency std (s)|Latency confidence interval 90% (s)|Latency confidence interval 95% (s)|Latency confidence interval 99% (s)|Throughput (samples/sec)|Speed-up with mixed precision|Avg mels generated (81 mels=1 sec of speech)|Avg audio length (s)|Avg RTF|
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+|1| 128| FP16|  3.13| 0.13|  3.28|  3.36|  3.46| 49,276| 1.26| 602| 6.99| 2.24|
+|4| 128| FP16| 11.98| 0.42| 12.44| 12.70| 13.29| 53,676| 1.23| 628| 7.29| 0.61| 
+|1| 128| FP32|  3.88| 0.12|  4.04|  4.09|  4.19| 38,964| 1.00| 591| 6.86| 1.77|
+|4| 128| FP32| 14.34| 0.42| 14.89| 15.08| 15.55| 43,489| 1.00| 609| 7.07| 0.49|
+
 
 Our results were obtained by running the `./run_latency_tests.sh` script in
-the PyTorch-19.06-py3 NGC container. Please note that to reproduce the results,
+the PyTorch-19.09-py3 NGC container. Please note that to reproduce the results,
 you need to provide pretrained checkpoints for Tacotron 2 and WaveGlow. Please
 edit the script to provide your checkpoint filenames.
 
@@ -696,7 +697,13 @@ August 2019
 September 2019
 * Introduced inference statistics
 
+October 2019
+* Tacotron 2 inference with torch.jit.script
+
+November 2019
+* Implemented training resume from checkpoint
+* Added notebook for running Tacotron 2 and WaveGlow in TRTIS.
+
 ### Known issues
 
 There are no known issues in this release.
-

@@ -69,12 +69,6 @@ def parse_args(parser):
                         help='Model to train')
     parser.add_argument('--log-file', type=str, default='nvlog.json',
                         help='Filename for logging')
-    parser.add_argument('--phrase-path', type=str, default=None,
-                        help='Path to phrase sequence file used for sample generation')
-    parser.add_argument('--waveglow-checkpoint', type=str, default=None,
-                        help='Path to pre-trained WaveGlow checkpoint for sample generation')
-    parser.add_argument('--tacotron2-checkpoint', type=str, default=None,
-                        help='Path to pre-trained Tacotron2 checkpoint for sample generation')
     parser.add_argument('--anneal-steps', nargs='*',
                         help='Epochs after which decrease learning rate')
     parser.add_argument('--anneal-factor', type=float, choices=[0.1, 0.3], default=0.1,
@@ -86,6 +80,8 @@ def parse_args(parser):
                           help='Number of total epochs to run')
     training.add_argument('--epochs-per-checkpoint', type=int, default=50,
                           help='Number of epochs per checkpoint')
+    training.add_argument('--checkpoint-path', type=str, default='',
+                          help='Checkpoint path to resume training')
     training.add_argument('--seed', type=int, default=1234,
                           help='Seed for PyTorch random number generators')
     training.add_argument('--dynamic-loss-scaling', type=bool, default=True,
@@ -183,54 +179,37 @@ def init_distributed(args, world_size, rank, group_name):
     print("Done initializing distributed")
 
 
-def save_checkpoint(model, epoch, config, filepath):
+def save_checkpoint(model, optimizer, epoch, config, amp_run, filepath):
     print("Saving model and optimizer state at epoch {} to {}".format(
         epoch, filepath))
-    torch.save({'epoch': epoch,
-                'config': config,
-                'state_dict': model.state_dict()}, filepath)
+    checkpoint = {'epoch': epoch,
+                  'cuda_rng_state_all': torch.cuda.get_rng_state_all(),
+                  'random_rng_state': torch.random.get_rng_state(),
+                  'config': config,
+                  'state_dict': model.state_dict(),
+                  'optimizer': optimizer.state_dict()}
+    if amp_run:
+        checkpoint['amp'] = amp.state_dict()
+
+    torch.save(checkpoint, filepath)
 
 
-def save_sample(model_name, model, waveglow_path, tacotron2_path, phrase_path, filepath, sampling_rate):
-    if phrase_path is None:
-        return
-    phrase = torch.load(phrase_path, map_location='cpu')
-    if model_name == 'Tacotron2':
-        if waveglow_path is None:
-            raise Exception(
-                "WaveGlow checkpoint path is missing, could not generate sample")
-        with torch.no_grad():
-            checkpoint = torch.load(waveglow_path, map_location='cpu')
-            waveglow = models.get_model(
-                'WaveGlow', checkpoint['config'], to_cuda=False)
-            waveglow.eval()
-            model.eval()
-            mel = model.infer(phrase.cuda())[0].cpu()
-            model.train()
-            audio = waveglow.infer(mel, sigma=0.6)
-    elif model_name == 'WaveGlow':
-        if tacotron2_path is None:
-            raise Exception(
-                "Tacotron2 checkpoint path is missing, could not generate sample")
-        with torch.no_grad():
-            checkpoint = torch.load(tacotron2_path, map_location='cpu')
-            tacotron2 = models.get_model(
-                'Tacotron2', checkpoint['config'], to_cuda=False)
-            tacotron2.eval()
-            mel = tacotron2.infer(phrase)[0].cuda()
-            model.eval()
-            audio = model.infer(mel, sigma=0.6).cpu()
-            model.train()
-    else:
-        raise NotImplementedError(
-            "unknown model requested: {}".format(model_name))
-    audio = audio[0].numpy()
-    audio = audio.astype('int16')
-    write_wav(filepath, sampling_rate, audio)
+def load_checkpoint(model, optimizer, epoch, config, amp_run, filepath):
+
+    checkpoint = torch.load(filepath, map_location='cpu')
+
+    epoch[0] = checkpoint['epoch']+1
+    torch.cuda.set_rng_state_all(checkpoint['cuda_rng_state_all'])
+    torch.random.set_rng_state(checkpoint['random_rng_state'])
+    config = checkpoint['config']
+    model.load_state_dict(checkpoint['state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+
+    if amp_run:
+        amp.load_state_dict(checkpoint['amp'])
 
 # adapted from: https://discuss.pytorch.org/t/opinion-eval-should-be-a-context-manager/18998/3
 # Following snippet is licensed under MIT license
-
 
 @contextmanager
 def evaluating(model):
@@ -364,6 +343,14 @@ def main():
     except AttributeError:
         sigma = None
 
+    start_epoch = [0]
+
+    if args.checkpoint_path is not "":
+        load_checkpoint(model, optimizer, start_epoch, model_config,
+                        args.amp_run, args.checkpoint_path)
+
+    start_epoch = start_epoch[0]
+
     criterion = loss_functions.get_loss_function(model_name, sigma)
 
     try:
@@ -391,7 +378,7 @@ def main():
 
     LOGGER.log(key=tags.TRAIN_LOOP)
 
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs):
         LOGGER.epoch_start()
         epoch_start_time = time.time()
         LOGGER.log(key=tags.TRAIN_EPOCH_START, value=epoch)
@@ -406,6 +393,9 @@ def main():
 
         # if overflow at the last iteration then do not save checkpoint
         overflow = False
+
+        if distributed_run:
+            train_loader.sampler.set_epoch(epoch)
 
         for i, batch in enumerate(train_loader):
             print("Batch: {}/{} epoch {}".format(i, len(train_loader), epoch))
@@ -489,10 +479,8 @@ def main():
         if (epoch % args.epochs_per_checkpoint == 0) and args.rank == 0:
             checkpoint_path = os.path.join(
                 args.output_directory, "checkpoint_{}_{}".format(model_name, epoch))
-            save_checkpoint(model, epoch, model_config, checkpoint_path)
-            save_sample(model_name, model, args.waveglow_checkpoint,
-                        args.tacotron2_checkpoint, args.phrase_path,
-                        os.path.join(args.output_directory, "sample_{}_{}.wav".format(model_name, iteration)), args.sampling_rate)
+            save_checkpoint(model, optimizer, epoch, model_config,
+                            args.amp_run, checkpoint_path)
 
         LOGGER.epoch_stop()
 
