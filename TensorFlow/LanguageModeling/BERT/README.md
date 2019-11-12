@@ -640,7 +640,7 @@ Training benchmarking can be performed by running the script:
 scripts/finetune_train_benchmark.sh <bert_model> <use_xla> <num_gpu> squad
 ```
 
-This script runs 2 epochs by default on the SQuAD v1.1 dataset and extracts performance numbers for various batch sizes and sequence lengths in both FP16 and FP32. These numbers are saved at `/results/squad_inference_benchmark_bert_<bert_model>_gpu_<num_gpu>.log`.
+This script runs 2 epochs by default on the SQuAD v1.1 dataset and extracts performance numbers for various batch sizes and sequence lengths in both FP16 and FP32. These numbers are saved at `/results/squad_train_benchmark_bert_<bert_model>_gpu_<num_gpu>.log`.
 
 #### Inference performance benchmark
 
@@ -650,7 +650,7 @@ Inference benchmarking can be performed by running the script:
 scripts/finetune_inference_benchmark.sh <bert_model> squad
 ```
 
-This script runs 1024 eval iterations by default on the SQuAD v1.1 dataset and extracts performance and latency numbers for various batch sizes and sequence lengths in both FP16 with XLA and FP32 without XLA. These numbers are saved at `/results/squad_train_benchmark_bert_<bert_model>.log`.
+This script runs 1024 eval iterations by default on the SQuAD v1.1 dataset and extracts performance and latency numbers for various batch sizes and sequence lengths in both FP16 with XLA and FP32 without XLA. These numbers are saved at `/results/squad_inference_benchmark_bert_<bert_model>.log`.
 
 ### Results
 
