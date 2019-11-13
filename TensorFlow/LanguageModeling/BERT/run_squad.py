@@ -202,7 +202,6 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
 
 def get_frozen_tftrt_model(bert_config, shape, use_one_hot_embeddings, init_checkpoint):
   tf_config = tf.ConfigProto()
-  tf_config.gpu_options.allow_growth = True
   output_node_names = ['unstack']
 
   with tf.Session(config=tf_config) as tf_sess:
@@ -932,7 +931,6 @@ def main(_):
       learning_rate = learning_rate * hvd.size()
       master_process = (hvd.rank() == 0)
       hvd_rank = hvd.rank()
-      config.gpu_options.allow_growth = True
       config.gpu_options.visible_device_list = str(hvd.local_rank())
       if hvd.size() > 1:
           training_hooks.append(hvd.BroadcastGlobalVariablesHook(0))

@@ -22,23 +22,22 @@ This folder provides a script and recipe to train BERT for TensorFlow to achieve
   * [Benchmarking](#benchmarking)
     * [Training performance benchmark](#training-performance-benchmark)
     * [Inference performance benchmark](#inference-performance-benchmark)
-  * [Results](#results)
-    * [Training accuracy results](#training-accuracy-results)
-      * [Training accuracy](#training-accuracy)
-        *[Pre-training accuracy](#pre-training-accuracy)
-        *[Fine-tuning accuracy](#fine-tuning-accuracy)
-          *[Fine-tuning accuracy for NER Chem](#fine-tuning-accuracy-for-ner-chem)
-      * [Training stability test](#training-stability-test)
-        * [Fine-tuning stability test](#fine-tuning-stability-test)
-    * [Training performance results](#training-performance-results)
-  	* [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16g)
-    	  * [Pre-training training performance: multi-node on 16G](#pre-training-training-performance-multi-node-on-16g)
-    	  * [Fine-tuning training performance for NER on 16G](#fine-tuning-training-performance-for-ner-on-16g)
-  	* [Training performance: NVIDIA DGX-1 (8x V100 32G)](#training-performance-nvidia-dgx-1-8x-v100-32g)
-    	  * [Fine-tuning training performance for NER on 32G](#fine-tuning-training-performance-for-ner-on-32g)
-  	* [Training performance: NVIDIA DGX-2 (16x V100 32G)](#training-performance-nvidia-dgx-2-16x-v100-32g)
-  	  * [Pre-training training performance: multi-node on DGX-2 32G](#pre-training-training-performance-multi-node-on-dgx-2-32g)
-    	  * [Fine-tuning training performance for NER on DGX-2 32G](#fine-tuning-training-performance-for-ner-on-dgx-2-32g)
+* [Results](#results)
+  * [Training accuracy results](#training-accuracy-results)
+    * [Pre-training accuracy](#pre-training-accuracy)
+    * [Fine-tuning accuracy](#fine-tuning-accuracy)
+      * [Fine-tuning accuracy for NER Chem](#fine-tuning-accuracy-for-ner-chem)
+  * [Training stability test](#training-stability-test)
+    * [Fine-tuning stability test](#fine-tuning-stability-test)
+  * [Training performance results](#training-performance-results)
+    * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16g)
+      * [Pre-training training performance: multi-node on 16G](#pre-training-training-performance-multi-node-on-16g)
+      * [Fine-tuning training performance for NER on 16G](#fine-tuning-training-performance-for-ner-on-16g)
+    * [Training performance: NVIDIA DGX-1 (8x V100 32G)](#training-performance-nvidia-dgx-1-8x-v100-32g)
+      * [Fine-tuning training performance for NER on 32G](#fine-tuning-training-performance-for-ner-on-32g)
+    * [Training performance: NVIDIA DGX-2 (16x V100 32G)](#training-performance-nvidia-dgx-2-16x-v100-32g)
+      * [Pre-training training performance: multi-node on DGX-2 32G](#pre-training-training-performance-multi-node-on-dgx-2-32g)
+      * [Fine-tuning training performance for NER on DGX-2 32G](#fine-tuning-training-performance-for-ner-on-dgx-2-32g)
 * [Release notes](#release-notes)
   * [Changelog](#changelog)
   * [Known issues](#known-issues)
@@ -86,7 +85,7 @@ To download and preprocess pre-training data as well as the required vocab files
 bash biobert/scripts/biobert_data_download.sh
 ```
 
-Datasets for finetuning can be obtained from this (repository) [https://github.com/ncbi-nlp/BLUE_Benchmark/releases/tag/0.1]
+Datasets for finetuning can be obtained from this (repository)[https://github.com/ncbi-nlp/BLUE_Benchmark/releases/tag/0.1]
 
 Place them in `/workspace/bert/data/biobert/` to be automatically picked up by our scripts.
 
@@ -100,7 +99,7 @@ bash scripts/docker/launch.sh
 
 5. Download the pre-trained checkpoint, vocabulary, and configuration files.
 
-We have uploaded checkpoints for fine tuning and pre-training on BioMedical Corpus’s on the NGC Model Registry. You can download them directly from the [NGC model catalog](https://ngc.nvidia.com/catalog/models). 
+We have uploaded checkpoints for fine tuning and pre-training on BioMedical Corpus’s on the NGC Model Registry. You can download them directly from the [NGC model catalog](https://ngc.nvidia.com/catalog/models).
 
 Place our `BioBERT checkpoints` in the `results/` to easily access it in your scripts.
 
@@ -358,7 +357,7 @@ mpi_command="mpirun -np 16 -H localhost:16 \
      python run_ner.py --horovod --use_fp16 --use_xla \
       --vocab_file=$BERT_DIR/vocab.txt \
      --bert_config_file=$BERT_DIR/bert_config.json \
-     --output_dir=/results --data_dir=$DATA_DIR”
+     --output_dir=/results --data_dir=$DATA_DIR"
 ```
 
 #### Multi-node
@@ -420,33 +419,31 @@ biobert/scripts/biobert_finetune_inference_benchmark.sh <task> <bert_model> <cas
 
 This script runs inference on the test and dev sets and extracts performance and latency numbers for various batch sizes and sequence lengths in both FP16 with XLA and FP32 without XLA. These numbers are saved at `/results/tf_bert_biobert_<task>_training_benchmark__<bert_model>_<cased/uncased>_num_gpu_<num_gpu>_<DATESTAMP>`
 
-### Results
+## Results
 
 The following sections provide detailed results of downstream fine-tuning task on NER and RE benchmark tasks.
 
-#### Training accuracy results
- 
-##### Training accuracy
- 
-###### Pre-training accuracy
- 
+### Training accuracy results
+
+#### Pre-training accuracy
+
 Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 19.08-py3 NGC container.
- 
+
 | **DGX System** | **Nodes** | **Precision** | **Batch Size/GPU: Phase1, Phase2** | **Accumulation Steps: Phase1, Phase2** | **Time to Train (Hrs)** | **Final Loss** |
 |----------------|-----------|---------------|------------------------------------|----------------------------------------|----------------|-------------------------|
 | DGX2H | 4 | FP16 | 128, 16 | 8, 32 | 19.14 | 0.88 |
 | DGX2H | 16 | FP16 | 128, 16 | 2, 8 | 4.81  | 0.86 |
 | DGX2H | 32 | FP16 | 128, 16 | 1, 4 | 2.65  | 0.87 |
 
-###### Fine-tuning accuracy
- 
+#### Fine-tuning accuracy
+
 | **Task** | **F1** | **Precision** | **Recall** |
 |:-------:|:----:|:----:|:----:|
 | NER BC5CDR-chemical | 93.47 | 93.03 | 93.91 |
 | NER BC5CDR-disease | 86.22 | 85.05 | 87.43 |
 | RE Chemprot | 76.27 | 77.62 | 74.98 |
 
-####### Fine-tuning accuracy for NER Chem
+##### Fine-tuning accuracy for NER Chem
 
 Our results were obtained by running the `biobert/scripts/ner_bc5cdr-chem.sh` training script in the TensorFlow 19.08-py3 NGC container.
 
@@ -457,9 +454,9 @@ Our results were obtained by running the `biobert/scripts/ner_bc5cdr-chem.sh` tr
 | DGX-2 32G | 64 |93.66|93.47|12.26|8.16|
 
 
-##### Training stability test
+### Training stability test
 
-###### Fine-tuning stability test:
+#### Fine-tuning stability test:
 
 The following tables compare F1 scores scores across 5 different training runs on the NER Chemical task with different seeds, for both FP16 and FP32.  The runs showcase consistent convergence on all 5 seeds with very little deviation.
 
@@ -469,14 +466,14 @@ The following tables compare F1 scores scores across 5 different training runs o
 | F1 Score (FP32)  | 93.1      | 93.28   | 93.33   | 93.45   | 93.17   | 93.27 | 0.14 |
 
 
-#### Training performance results
- 
-##### Training performance: NVIDIA DGX-1 (8x V100 16G)
- 
-###### Pre-training training performance: multi-node on DGX-1 16G
- 
+### Training performance results
+
+#### Training performance: NVIDIA DGX-1 (8x V100 16G)
+
+##### Pre-training training performance: multi-node on DGX-1 16G
+
 Our results were obtained by running the `biobert/scripts/run_biobert.sub` training script in the TensorFlow 19.08-py3 NGC container using multiple NVIDIA DGX-1 with 8x V100 16G GPUs. Performance (in sentences per second) is the steady state throughput.
- 
+
 | **Nodes** | **Sequence Length**| **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
 |:-------:|:-----:|:-------:|:-------:|:-------:|:-------------:|:------:|:------:|
 | 1  | 128 | 64,32 | 2762.06  | 744.48   | 3.71 | 1.00  | 1.00  |
@@ -487,46 +484,46 @@ Our results were obtained by running the `biobert/scripts/run_biobert.sub` train
 | 4  | 512 | 8,8   | 1593.00  | 604.36   | 2.64 | 3.68  | 3.77  |
 | 16 | 512 | 8,8   | 5941.82  | 2356.44  | 2.52 | 13.74 | 14.69 |
 | 32 | 512 | 8,8   | 11483.73 | 4631.29  | 2.48 | 26.56 | 28.88 |
- 
+
 Note: The respective values for FP32 runs that use a batch size of 16, 2 in sequence lengths 128 and 512 respectively are not available due to out of memory errors that arise.
- 
-###### Fine-tuning training performance for NER on DGX-1 16G
- 
+
+##### Fine-tuning training performance for NER on DGX-1 16G
+
 Our results were obtained by running the `biobert/scripts/ner_bc5cdr-chem.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
- 
+
 | **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
 |:---:|:---:|:------:|:-----:|:----:|:----:|:----:|
 | 1 | 64 | 147.71 | 348.84  | 2.36 | 1.00 | 1.00 |
 | 4 | 64 | 583.78 | 1145.46 | 1.96 | 3.95 | 3.28 |
 | 8 | 64 | 981.22 | 1964.85 | 2.00 | 6.64 | 5.63 |
- 
+
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
- 
-##### Training performance: NVIDIA DGX-1 (8x V100 32G)
- 
- 
-###### Fine-tuning training performance for NER on DGX-1 32G
- 
+
+#### Training performance: NVIDIA DGX-1 (8x V100 32G)
+
+
+##### Fine-tuning training performance for NER on DGX-1 32G
+
 Our results were obtained by running the `biobert/scripts/ner_bc5cdr-chem.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
- 
- 
+
+
 | **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
 |:---:|:---:|:------:|:-----:|:----:|:----:|:----:|
 | 1 | 64 | 144.1 | 417.39  | 2.89 | 1.00 | 1.00 |
 | 4 | 64 | 525.15 | 1354.14 | 2.57 | 3.64 | 3.24 |
 | 8 | 64 | 969.4 | 2341.39 | 2.41 | 6.73 | 5.61 |
- 
- 
+
+
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
- 
-##### Training performance: NVIDIA DGX-2 (16x V100 32G)
- 
- 
-###### Pre-training training performance: multi-node on DGX-2H 32G
- 
+
+#### Training performance: NVIDIA DGX-2 (16x V100 32G)
+
+
+##### Pre-training training performance: multi-node on DGX-2H 32G
+
 Our results were obtained by running the `biobert/scripts/run_biobert.sub` training script in the TensorFlow 19.08-py3 NGC container using multiple NVIDIA DGX-2H with 16x V100 32G GPUs. Performance (in sentences per second) is the steady state throughput.
- 
- 
+
+
 | **Nodes** | **Sequence Length**| **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
 |:-------:|:-----:|:-------:|:-------:|:-------:|:-------------:|:------:|:------:|
 | 1  | 128 | 128,128 | 7772.18   | 2165.04   | 3.59 | 1.00  | 1.00  |
@@ -539,32 +536,32 @@ Our results were obtained by running the `biobert/scripts/run_biobert.sub` train
 | 16 | 512 | 16,16   | 18405.65  | 6418.09   | 2.87 | 14.61 | 15.39 |
 | 32 | 512 | 16,16   | 36071.06  | 12713.67  | 2.84 | 28.63 | 30.49 |
 | 64 | 512 | 16,16   | 69950.86  | 25245.96  | 2.77 | 55.51 | 60.55 |
- 
- 
-###### Fine-tuning training performance for NER on DGX-2 32G
- 
+
+
+##### Fine-tuning training performance for NER on DGX-2 32G
+
 Our results were obtained by running the `biobert/scripts/ner_bc5cdr-chem.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
- 
+
 | **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
 |:---:|:---:|:------:|:-----:|:----:|:----:|:----:|
 | 1 | 64 | 139.59 | 475.54  | 3.4 | 1.00 | 1.00 |
 | 4 | 64 | 517.08 | 1544.01 | 2.98 | 3.70 | 3.25 |
 | 8 | 64 | 1009.84 | 2695.34 | 2.66 | 7.23 | 5.67 |
 | 16 | 64 | 1997.73 | 4268.81 | 2.13 | 14.31 | 8.98 |
- 
+
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
- 
+
 ## Release notes
- 
+
 ### Changelog
- 
+
 November 2019
 - Initial release
- 
+
 ### Known issues
- 
- 
+
+
 - There are no known issues with the model.
- 
- 
+
+
 
