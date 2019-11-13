@@ -1,3 +1,24 @@
+# Copyright (c) 2017 Elad Hoffer
+# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import logging
 from operator import itemgetter
 
@@ -28,17 +49,17 @@ def build_collate_fn(batch_first=False, parallel=True, sort=False):
 
         :param seq: list of sequences
         """
-        lengths = [len(s) for s in seq]
+        lengths = torch.tensor([len(s) for s in seq], dtype=torch.int64)
         batch_length = max(lengths)
 
-        shape = (batch_length, len(seq))
+        shape = (len(seq), batch_length)
         seq_tensor = torch.full(shape, config.PAD, dtype=torch.int64)
 
         for i, s in enumerate(seq):
             end_seq = lengths[i]
-            seq_tensor[:end_seq, i].copy_(s[:end_seq])
+            seq_tensor[i, :end_seq].copy_(s[:end_seq])
 
-        if batch_first:
+        if not batch_first:
             seq_tensor = seq_tensor.t()
 
         return (seq_tensor, lengths)
@@ -79,6 +100,71 @@ def build_collate_fn(batch_first=False, parallel=True, sort=False):
         return parallel_collate
     else:
         return single_collate
+
+
+class RawTextDataset(Dataset):
+    def __init__(self, raw_data=None, raw_datafile=None, tokenizer=None,
+                 sort=False, max_size=None):
+        self.tokenizer = tokenizer
+        self.sorted = False
+
+        if raw_datafile:
+            with open(raw_datafile, 'r') as f:
+                self.raw_data = f.readlines()
+        else:
+            self.raw_data = raw_data
+
+        if max_size:
+            self.raw_data = self.raw_data[:max_size]
+
+        self.lengths = [len(s.split()) for s in self.raw_data]
+
+        if sort:
+            self.sort_by_length()
+
+    def __getitem__(self, idx):
+        raw = self.raw_data[idx]
+        tokenized = self.tokenizer.tokenize(raw)
+        return tokenized
+
+    def unsort(self, array):
+        """
+        "Unsorts" given array (restores original order of elements before
+        dataset was sorted by sequence length).
+
+        :param array: array to be "unsorted"
+        """
+        if self.sorted:
+            inverse = sorted(enumerate(self.indices), key=itemgetter(1))
+            array = [array[i[0]] for i in inverse]
+        return array
+
+    def sort_by_length(self):
+        output = sorted(
+            enumerate(self.raw_data),
+            key=lambda x: len(x[1].split()),
+            )
+        self.indices, self.raw_data = zip(*output)
+        self.lengths = [self.lengths[idx] for idx in self.indices]
+        self.sorted = True
+
+    def __len__(self):
+        return len(self.raw_data)
+
+    def get_loader(self, batch_size=1, num_workers=0, batch_first=False,
+                   pad=False, repeat=1):
+
+        collate_fn = build_collate_fn(batch_first, parallel=False,
+                                      sort=True)
+        sampler = StaticDistributedSampler(self, batch_size, pad, repeat)
+
+        return DataLoader(self,
+                          batch_size=batch_size,
+                          collate_fn=collate_fn,
+                          sampler=sampler,
+                          num_workers=num_workers,
+                          pin_memory=True,
+                          drop_last=False)
 
 
 class TextDataset(Dataset):

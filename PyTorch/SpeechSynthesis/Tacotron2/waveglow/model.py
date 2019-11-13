@@ -69,7 +69,7 @@ class Invertible1x1Conv(torch.nn.Module):
         if reverse:
             if not hasattr(self, 'W_inverse'):
                 # Reverse computation
-                W_inverse = W.inverse()
+                W_inverse = W.float().inverse()
                 W_inverse = Variable(W_inverse[..., None])
                 if z.type() == 'torch.cuda.HalfTensor' or z.type() == 'torch.HalfTensor':
                     W_inverse = W_inverse.half()
@@ -78,12 +78,8 @@ class Invertible1x1Conv(torch.nn.Module):
             return z
         else:
             # Forward computation
-            log_det_W = torch.logdet(W)
-            log_det_W = batch_size * n_of_groups * log_det_W
-            if z.dtype == torch.float16:
-                z = self.conv(z.float()).half()
-            else:
-                z = self.conv(z)
+            log_det_W = batch_size * n_of_groups * torch.logdet(W.float())
+            z = self.conv(z)
             return z, log_det_W
 
 
@@ -275,6 +271,50 @@ class WaveGlow(torch.nn.Module):
             audio.size(0), -1).data
         return audio
 
+
+    def infer_onnx(self, spect, z, sigma=1.0):
+
+        spect = self.upsample(spect)
+        # trim conv artifacts. maybe pad spec to kernel multiple
+        time_cutoff = self.upsample.kernel_size[0] - self.upsample.stride[0]
+        spect = spect[:, :, :-time_cutoff]
+
+        length_spect_group = int(spect.size(2)/8)
+        mel_dim = 80
+
+        spect = torch.squeeze(spect, 3)
+        spect = spect.view((1, mel_dim, length_spect_group, self.n_group))
+        spect = spect.permute(0, 2, 1, 3)
+        spect = spect.contiguous()
+        spect = spect.view((1, length_spect_group, self.n_group*mel_dim))
+        spect = spect.permute(0, 2, 1)
+        spect = torch.unsqueeze(spect, 3)
+
+        audio = z[:, :self.n_remaining_channels, :, :]
+        z = z[:, self.n_remaining_channels:self.n_group, :, :]
+        audio = sigma*audio
+
+        for k in reversed(range(self.n_flows)):
+            n_half = int(audio.size(1) / 2)
+            audio_0 = audio[:, :n_half, :, :]
+            audio_1 = audio[:, n_half:(n_half+n_half), :, :]
+
+            output = self.WN[k]((audio_0, spect))
+            s = output[:, n_half:(n_half+n_half), :, :]
+            b = output[:, :n_half, :, :]
+            audio_1 = (audio_1 - b) / torch.exp(s)
+            audio = torch.cat([audio_0, audio_1], 1)
+
+            audio = self.convinv[k](audio)
+
+            if k % self.n_early_every == 0 and k > 0:
+                audio = torch.cat((z[:, :self.n_early_size, :, :], audio), 1)
+                z = z[:, self.n_early_size:self.n_group, :, :]
+
+        audio = torch.squeeze(audio, 3)
+        audio = audio.permute(0,2,1).contiguous().view(1, (length_spect_group * self.n_group))
+
+        return audio
     @staticmethod
     def remove_weightnorm(model):
         waveglow = model

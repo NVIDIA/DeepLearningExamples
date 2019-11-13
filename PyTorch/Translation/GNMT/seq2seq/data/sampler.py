@@ -1,3 +1,23 @@
+# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import logging
 
 import torch
@@ -183,7 +203,7 @@ class BucketingSampler(DistributedSampler):
         bucket_ids.clamp_(0, num_buckets - 1)
 
         # build buckets
-        all_indices = torch.tensor(range(self.data_len))
+        all_indices = torch.arange(self.data_len)
         self.buckets = []
         self.num_samples = 0
         global_bs = self.global_batch_size
@@ -226,7 +246,7 @@ class BucketingSampler(DistributedSampler):
 
 
 class StaticDistributedSampler(Sampler):
-    def __init__(self, dataset, batch_size, pad, world_size=None, rank=None):
+    def __init__(self, dataset, batch_size, pad, repeat=1, world_size=None, rank=None):
         """
         Constructor for the StaticDistributedSampler.
 
@@ -247,11 +267,12 @@ class StaticDistributedSampler(Sampler):
         global_batch_size = batch_size * world_size
 
         data_len = len(dataset)
-        num_samples = (data_len + global_batch_size - 1) \
+        repeated_data_len = int(len(dataset) * repeat)
+        num_samples = (repeated_data_len + global_batch_size - 1) \
             // global_batch_size * global_batch_size
         self.num_samples = num_samples
 
-        indices = list(range(data_len))
+        indices = list(range(repeated_data_len))
         if pad:
             # pad dataset to a multiple of global_batch_size samples, uses
             # sample with idx 0 as pad
@@ -267,6 +288,7 @@ class StaticDistributedSampler(Sampler):
         indices = indices.view(-1)
         # remove temporary pad
         indices = indices[indices != -1]
+        indices = indices % data_len
         indices = indices.tolist()
         self.indices = indices
 

@@ -134,7 +134,6 @@ def get_dali_train_loader(dali_cpu=False):
                 data_dir = traindir, crop = 224, dali_cpu=dali_cpu)
 
         pipe.build()
-        test_run = pipe.run()
         train_loader = DALIClassificationIterator(pipe, size = int(pipe.epoch_size("Reader") / world_size))
 
         return DALIWrapper(train_loader, num_classes, one_hot), int(pipe.epoch_size("Reader") / (world_size * batch_size))
@@ -158,7 +157,6 @@ def get_dali_val_loader():
                 data_dir = valdir,
                 crop = 224, size = 256)
         pipe.build()
-        test_run = pipe.run()
         val_loader = DALIClassificationIterator(pipe, size = int(pipe.epoch_size("Reader") / world_size))
 
         return DALIWrapper(val_loader, num_classes, one_hot), int(pipe.epoch_size("Reader") / (world_size * batch_size))

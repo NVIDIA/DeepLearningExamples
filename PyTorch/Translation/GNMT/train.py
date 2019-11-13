@@ -1,8 +1,31 @@
 #!/usr/bin/env python
+
+# Copyright (c) 2017 Elad Hoffer
+# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import argparse
 import logging
 import os
 import sys
+import time
 from ast import literal_eval
 
 import torch.nn as nn
@@ -17,9 +40,10 @@ from seq2seq.data.dataset import LazyParallelDataset
 from seq2seq.data.dataset import ParallelDataset
 from seq2seq.data.dataset import TextDataset
 from seq2seq.data.tokenizer import Tokenizer
-from seq2seq.inference.inference import Translator
+from seq2seq.inference.translator import Translator
 from seq2seq.models.gnmt import GNMT
 from seq2seq.train.smoothing import LabelSmoothing
+from seq2seq.train.table import TrainingTable
 
 
 def parse_args():
@@ -44,17 +68,55 @@ def parse_args():
     dataset = parser.add_argument_group('dataset setup')
     dataset.add_argument('--dataset-dir', default='data/wmt16_de_en',
                          help='path to the directory with training/test data')
-    dataset.add_argument('--max-size', default=None, type=int,
-                         help='use at most MAX_SIZE elements from training \
-                         dataset (useful for benchmarking), by default \
-                         uses entire dataset')
+
+    dataset.add_argument('--src-lang',
+                         default='en',
+                         help='source language')
+    dataset.add_argument('--tgt-lang',
+                         default='de',
+                         help='target language')
+
+    dataset.add_argument('--vocab',
+                         default='vocab.bpe.32000',
+                         help='path to the vocabulary file \
+                         (relative to DATASET_DIR directory)')
+    dataset.add_argument('-bpe', '--bpe-codes', default='bpe.32000',
+                         help='path to the file with bpe codes \
+                         (relative to DATASET_DIR directory)')
+
+    dataset.add_argument('--train-src',
+                         default='train.tok.clean.bpe.32000.en',
+                         help='path to the training source data file \
+                         (relative to DATASET_DIR directory)')
+    dataset.add_argument('--train-tgt',
+                         default='train.tok.clean.bpe.32000.de',
+                         help='path to the training target data file \
+                         (relative to DATASET_DIR directory)')
+
+    dataset.add_argument('--val-src',
+                         default='newstest_dev.tok.clean.bpe.32000.en',
+                         help='path to the validation source data file \
+                         (relative to DATASET_DIR directory)')
+    dataset.add_argument('--val-tgt',
+                         default='newstest_dev.tok.clean.bpe.32000.de',
+                         help='path to the validation target data file \
+                         (relative to DATASET_DIR directory)')
+
+    dataset.add_argument('--test-src',
+                         default='newstest2014.tok.bpe.32000.en',
+                         help='path to the test source data file \
+                         (relative to DATASET_DIR directory)')
+    dataset.add_argument('--test-tgt',
+                         default='newstest2014.de',
+                         help='path to the test target data file \
+                         (relative to DATASET_DIR directory)')
 
     # results
     results = parser.add_argument_group('results setup')
     results.add_argument('--results-dir', default='results',
                          help='path to directory with results, it will be \
                          automatically created if it does not exist')
-    results.add_argument('--save', default='gnmt',
+    results.add_argument('--save-dir', default='gnmt',
                          help='defines subdirectory within RESULTS_DIR for \
                          results from this training run')
     results.add_argument('--print-freq', default=10, type=int,
@@ -63,7 +125,7 @@ def parse_args():
     # model
     model = parser.add_argument_group('model setup')
     model.add_argument('--hidden-size', default=1024, type=int,
-                       help='model hidden size')
+                       help='hidden size of the model')
     model.add_argument('--num-layers', default=4, type=int,
                        help='number of RNN layers in encoder and in decoder')
     model.add_argument('--dropout', default=0.2, type=float,
@@ -79,12 +141,16 @@ def parse_args():
 
     # setup
     general = parser.add_argument_group('general setup')
-    general.add_argument('--math', default='fp16', choices=['fp16', 'fp32'],
-                         help='arithmetic type')
+    general.add_argument('--math', default='fp16',
+                         choices=['fp16', 'fp32', 'manual_fp16'],
+                         help='precision')
     general.add_argument('--seed', default=None, type=int,
                          help='master seed for random number generators, if \
                          "seed" is undefined then the master seed will be \
                          sampled from random.SystemRandom()')
+    general.add_argument('--prealloc-mode', default='always', type=str,
+                         choices=['off', 'once', 'always'],
+                         help='controls preallocation')
 
     exclusive_group(group=general, name='eval', default=True,
                     help='run validation and test after every epoch')
@@ -94,9 +160,16 @@ def parse_args():
                     help='enables cuda')
     exclusive_group(group=general, name='cudnn', default=True,
                     help='enables cudnn')
+    exclusive_group(group=general, name='log-all-ranks', default=True,
+                    help='enables logging from all distributed ranks, if \
+                    disabled then only logs from rank 0 are reported')
 
     # training
     training = parser.add_argument_group('training setup')
+    dataset.add_argument('--train-max-size', default=None, type=int,
+                         help='use at most TRAIN_MAX_SIZE elements from \
+                         training dataset (useful for benchmarking), by \
+                         default uses entire dataset')
     training.add_argument('--train-batch-size', default=128, type=int,
                           help='training batch size per worker')
     training.add_argument('--train-global-batch-size', default=None, type=int,
@@ -118,10 +191,10 @@ def parse_args():
     training.add_argument('--grad-clip', default=5.0, type=float,
                           help='enables gradient clipping and sets maximum \
                           norm of gradients')
-    training.add_argument('--max-length-train', default=50, type=int,
+    training.add_argument('--train-max-length', default=50, type=int,
                           help='maximum sequence length for training \
                           (including special BOS and EOS tokens)')
-    training.add_argument('--min-length-train', default=0, type=int,
+    training.add_argument('--train-min-length', default=0, type=int,
                           help='minimum sequence length for training \
                           (including special BOS and EOS tokens)')
     training.add_argument('--train-loader-workers', default=2, type=int,
@@ -146,6 +219,15 @@ def parse_args():
                            default="{}",
                            help='extra options for the optimizer')
 
+    # mixed precision loss scaling
+    loss_scaling = parser.add_argument_group(
+        'mixed precision loss scaling setup'
+        )
+    loss_scaling.add_argument('--init-scale', type=float, default=8192,
+                              help='initial loss scale')
+    loss_scaling.add_argument('--upscale-interval', type=float, default=128,
+                              help='loss upscaling interval')
+
     # scheduler
     scheduler = parser.add_argument_group('learning rate scheduler setup')
     scheduler.add_argument('--warmup-steps', type=str, default='200',
@@ -163,10 +245,10 @@ def parse_args():
     val = parser.add_argument_group('validation setup')
     val.add_argument('--val-batch-size', default=64, type=int,
                      help='batch size for validation')
-    val.add_argument('--max-length-val', default=125, type=int,
+    val.add_argument('--val-max-length', default=125, type=int,
                      help='maximum sequence length for validation \
                      (including special BOS and EOS tokens)')
-    val.add_argument('--min-length-val', default=0, type=int,
+    val.add_argument('--val-min-length', default=0, type=int,
                      help='minimum sequence length for validation \
                      (including special BOS and EOS tokens)')
     val.add_argument('--val-loader-workers', default=0, type=int,
@@ -176,10 +258,10 @@ def parse_args():
     test = parser.add_argument_group('test setup')
     test.add_argument('--test-batch-size', default=128, type=int,
                       help='batch size for test')
-    test.add_argument('--max-length-test', default=150, type=int,
+    test.add_argument('--test-max-length', default=150, type=int,
                       help='maximum sequence length for test \
                       (including special BOS and EOS tokens)')
-    test.add_argument('--min-length-test', default=0, type=int,
+    test.add_argument('--test-min-length', default=0, type=int,
                       help='minimum sequence length for test \
                       (including special BOS and EOS tokens)')
     test.add_argument('--beam-size', default=5, type=int,
@@ -229,6 +311,18 @@ def parse_args():
 
     args = parser.parse_args()
 
+    args.lang = {'src': args.src_lang, 'tgt': args.tgt_lang}
+
+    args.save_dir = os.path.join(args.results_dir, args.save_dir)
+    args.vocab = os.path.join(args.dataset_dir, args.vocab)
+    args.bpe_codes = os.path.join(args.dataset_dir, args.bpe_codes)
+    args.train_src = os.path.join(args.dataset_dir, args.train_src)
+    args.train_tgt = os.path.join(args.dataset_dir, args.train_tgt)
+    args.val_src = os.path.join(args.dataset_dir, args.val_src)
+    args.val_tgt = os.path.join(args.dataset_dir, args.val_tgt)
+    args.test_src = os.path.join(args.dataset_dir, args.test_src)
+    args.test_tgt = os.path.join(args.dataset_dir, args.test_tgt)
+
     args.warmup_steps = literal_eval(args.warmup_steps)
     args.remain_steps = literal_eval(args.remain_steps)
     args.decay_interval = literal_eval(args.decay_interval)
@@ -236,12 +330,29 @@ def parse_args():
     return args
 
 
+def set_iter_size(train_iter_size, train_global_batch_size, train_batch_size):
+    """
+    Automatically set train_iter_size based on train_global_batch_size,
+    world_size and per-worker train_batch_size
+
+    :param train_global_batch_size: global training batch size
+    :param train_batch_size: local training batch size
+    """
+    if train_global_batch_size is not None:
+        global_bs = train_global_batch_size
+        bs = train_batch_size
+        world_size = utils.get_world_size()
+        assert global_bs % (bs * world_size) == 0
+        train_iter_size = global_bs // (bs * world_size)
+        logging.info(f'Global batch size was set, '
+                     f'Setting train_iter_size to {train_iter_size}')
+    return train_iter_size
+
+
 def build_criterion(vocab_size, padding_idx, smoothing):
     if smoothing == 0.:
         logging.info(f'Building CrossEntropyLoss')
-        loss_weight = torch.ones(vocab_size)
-        loss_weight[padding_idx] = 0
-        criterion = nn.CrossEntropyLoss(weight=loss_weight, size_average=False)
+        criterion = nn.CrossEntropyLoss(ignore_index=padding_idx, size_average=False)
     else:
         logging.info(f'Building LabelSmoothingLoss (smoothing: {smoothing})')
         criterion = LabelSmoothing(padding_idx, smoothing)
@@ -249,46 +360,39 @@ def build_criterion(vocab_size, padding_idx, smoothing):
     return criterion
 
 
-@utils.timer('TOTAL RUNTIME', sync_gpu=False)
 def main():
     """
     Launches data-parallel multi-gpu training.
     """
+    training_start = time.time()
     args = parse_args()
     device = utils.set_device(args.cuda, args.local_rank)
-    distributed = utils.init_distributed(args.cuda)
+    utils.init_distributed(args.cuda)
     args.rank = utils.get_rank()
 
     if not args.cudnn:
         torch.backends.cudnn.enabled = False
 
     # create directory for results
-    save_path = os.path.join(args.results_dir, args.save)
-    args.save_path = save_path
-    os.makedirs(save_path, exist_ok=True)
+    os.makedirs(args.save_dir, exist_ok=True)
 
     # setup logging
     log_filename = f'log_rank_{utils.get_rank()}.log'
-    utils.setup_logging(os.path.join(save_path, log_filename))
+    utils.setup_logging(args.log_all_ranks,
+                        os.path.join(args.save_dir, log_filename))
 
     if args.env:
         utils.log_env_info()
 
-    logging.info(f'Saving results to: {save_path}')
+    logging.info(f'Saving results to: {args.save_dir}')
     logging.info(f'Run arguments: {args}')
 
-    # automatically set train_iter_size based on train_global_batch_size,
-    # world_size and per-worker train_batch_size
-    if args.train_global_batch_size is not None:
-        global_bs = args.train_global_batch_size
-        bs = args.train_batch_size
-        world_size = utils.get_world_size()
-        assert global_bs % (bs * world_size) == 0
-        args.train_iter_size = global_bs // (bs * world_size)
-        logging.info(f'Global batch size was set in the config, '
-                     f'Setting train_iter_size to {args.train_iter_size}')
+    args.train_iter_size = set_iter_size(args.train_iter_size,
+                                         args.train_global_batch_size,
+                                         args.train_batch_size)
 
-    worker_seeds, shuffling_seeds = utils.setup_seeds(args.seed, args.epochs,
+    worker_seeds, shuffling_seeds = utils.setup_seeds(args.seed,
+                                                      args.epochs,
                                                       device)
     worker_seed = worker_seeds[args.rank]
     logging.info(f'Worker {args.rank} is using worker seed: {worker_seed}')
@@ -296,48 +400,54 @@ def main():
 
     # build tokenizer
     pad_vocab = utils.pad_vocabulary(args.math)
-    tokenizer = Tokenizer(os.path.join(args.dataset_dir, config.VOCAB_FNAME),
-                          pad_vocab)
+    tokenizer = Tokenizer(args.vocab, args.bpe_codes, args.lang, pad_vocab)
 
     # build datasets
     train_data = LazyParallelDataset(
-        src_fname=os.path.join(args.dataset_dir, config.SRC_TRAIN_FNAME),
-        tgt_fname=os.path.join(args.dataset_dir, config.TGT_TRAIN_FNAME),
+        src_fname=args.train_src,
+        tgt_fname=args.train_tgt,
         tokenizer=tokenizer,
-        min_len=args.min_length_train,
-        max_len=args.max_length_train,
+        min_len=args.train_min_length,
+        max_len=args.train_max_length,
         sort=False,
-        max_size=args.max_size)
+        max_size=args.train_max_size,
+        )
 
     val_data = ParallelDataset(
-        src_fname=os.path.join(args.dataset_dir, config.SRC_VAL_FNAME),
-        tgt_fname=os.path.join(args.dataset_dir, config.TGT_VAL_FNAME),
+        src_fname=args.val_src,
+        tgt_fname=args.val_tgt,
         tokenizer=tokenizer,
-        min_len=args.min_length_val,
-        max_len=args.max_length_val,
-        sort=True)
+        min_len=args.val_min_length,
+        max_len=args.val_max_length,
+        sort=True,
+        )
 
     test_data = TextDataset(
-        src_fname=os.path.join(args.dataset_dir, config.SRC_TEST_FNAME),
+        src_fname=args.test_src,
         tokenizer=tokenizer,
-        min_len=args.min_length_test,
-        max_len=args.max_length_test,
-        sort=True)
+        min_len=args.test_min_length,
+        max_len=args.test_max_length,
+        sort=True,
+        )
 
     vocab_size = tokenizer.vocab_size
 
     # build GNMT model
     model_config = {'hidden_size': args.hidden_size,
+                    'vocab_size': vocab_size,
                     'num_layers': args.num_layers,
-                    'dropout': args.dropout, 'batch_first': False,
-                    'share_embedding': args.share_embedding}
-    model = GNMT(vocab_size=vocab_size, **model_config)
+                    'dropout': args.dropout,
+                    'batch_first': False,
+                    'share_embedding': args.share_embedding,
+                    }
+    model = GNMT(**model_config).to(device)
     logging.info(model)
 
     batch_first = model.batch_first
 
     # define loss function (criterion) and optimizer
-    criterion = build_criterion(vocab_size, config.PAD, args.smoothing)
+    criterion = build_criterion(vocab_size, config.PAD,
+                                args.smoothing).to(device)
 
     opt_config = {'optimizer': args.optimizer, 'lr': args.lr}
     opt_config.update(literal_eval(args.optimizer_extra))
@@ -380,48 +490,52 @@ def main():
                             tokenizer=tokenizer,
                             loader=test_loader,
                             beam_size=args.beam_size,
-                            max_seq_len=args.max_length_test,
+                            max_seq_len=args.test_max_length,
                             len_norm_factor=args.len_norm_factor,
                             len_norm_const=args.len_norm_const,
                             cov_penalty_factor=args.cov_penalty_factor,
-                            cuda=args.cuda,
                             print_freq=args.print_freq,
-                            dataset_dir=args.dataset_dir,
-                            target_bleu=args.target_bleu,
-                            save_path=args.save_path)
+                            reference=args.test_tgt,
+                            )
 
     # create trainer
     total_train_iters = len(train_loader) // args.train_iter_size * args.epochs
-    save_info = {'model_config': model_config, 'config': args, 'tokenizer':
-                 tokenizer.get_state()}
+    save_info = {
+        'model_config': model_config,
+        'config': args,
+        'tokenizer': tokenizer.get_state()
+        }
+    loss_scaling = {
+        'init_scale': args.init_scale,
+        'upscale_interval': args.upscale_interval
+        }
     trainer_options = dict(
+        model=model,
         criterion=criterion,
         grad_clip=args.grad_clip,
         iter_size=args.train_iter_size,
-        save_path=save_path,
+        save_dir=args.save_dir,
         save_freq=args.save_freq,
         save_info=save_info,
         opt_config=opt_config,
         scheduler_config=scheduler_config,
         train_iterations=total_train_iters,
-        batch_first=batch_first,
         keep_checkpoints=args.keep_checkpoints,
         math=args.math,
+        loss_scaling=loss_scaling,
         print_freq=args.print_freq,
-        cuda=args.cuda,
-        distributed=distributed,
         intra_epoch_eval=args.intra_epoch_eval,
-        translator=translator)
+        translator=translator,
+        prealloc_mode=args.prealloc_mode,
+        )
 
-    trainer_options['model'] = model
     trainer = trainers.Seq2SeqTrainer(**trainer_options)
 
     # optionally resume from a checkpoint
     if args.resume:
         checkpoint_file = args.resume
         if os.path.isdir(checkpoint_file):
-            checkpoint_file = os.path.join(
-                checkpoint_file, 'model_best.pth')
+            checkpoint_file = os.path.join(checkpoint_file, 'model_best.pth')
         if os.path.isfile(checkpoint_file):
             trainer.load(checkpoint_file)
         else:
@@ -429,6 +543,7 @@ def main():
 
     # training loop
     best_loss = float('inf')
+    training_perf = []
     break_training = False
     test_bleu = None
     for epoch in range(args.start_epoch, args.epochs):
@@ -438,6 +553,7 @@ def main():
 
         trainer.epoch = epoch
         train_loss, train_perf = trainer.optimize(train_loader)
+        training_perf.append(train_perf)
 
         # evaluate on validation set
         if args.eval:
@@ -452,8 +568,17 @@ def main():
 
         if args.eval:
             utils.barrier()
-            test_bleu, break_training = translator.run(calc_bleu=True,
-                                                       epoch=epoch)
+            eval_fname = f'eval_epoch_{epoch}'
+            eval_path = os.path.join(args.save_dir, eval_fname)
+            _, eval_stats = translator.run(
+                calc_bleu=True,
+                epoch=epoch,
+                eval_path=eval_path,
+                )
+            test_bleu = eval_stats['bleu']
+            if args.target_bleu and test_bleu >= args.target_bleu:
+                logging.info(f'Target accuracy reached')
+                break_training = True
 
         acc_log = []
         acc_log += [f'Summary: Epoch: {epoch}']
@@ -477,12 +602,22 @@ def main():
             break
 
     utils.barrier()
+    training_stop = time.time()
+    training_time = training_stop - training_start
+    logging.info(f'Total training time {training_time:.0f} s')
+
+    table = TrainingTable()
+    avg_training_perf = sum(training_perf) / len(training_perf)
+    table.add(utils.get_world_size(), args.train_batch_size, test_bleu,
+              avg_training_perf, training_time)
+    if utils.get_rank() == 0:
+        table.write('Training Summary', args.math)
+
     passed = utils.benchmark(test_bleu, args.target_bleu,
                              train_perf, args.target_perf)
-    return passed
+    if not passed:
+        sys.exit(1)
 
 
 if __name__ == '__main__':
-    passed = main()
-    if not passed:
-        sys.exit(1)
+    main()

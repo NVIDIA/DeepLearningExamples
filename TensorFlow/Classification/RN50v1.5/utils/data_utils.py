@@ -22,6 +22,7 @@ import horovod.tensorflow as hvd
 
 from utils import image_processing
 from utils import hvd_utils
+from utils import dali_utils
 
 __all__ = ["get_synth_input_fn", "normalized_inputs"]
 
@@ -130,6 +131,49 @@ def get_tfrecords_input_fn(filenames, batch_size, height, width, training, disto
 
     return ds
 
+def get_inference_input_fn(filenames, height, width, num_threads):
+    
+    ds = tf.data.Dataset.from_tensor_slices(filenames)
+
+    counter = tf.data.Dataset.range(sys.maxsize)
+    ds = tf.data.Dataset.zip((ds, counter))
+
+    def preproc_func(record, counter_):
+        return image_processing.preprocess_image_file(record, height, width, _NUM_CHANNELS, is_training=False)
+    
+    ds = ds.apply(
+        tf.data.experimental.map_and_batch(
+            map_func=preproc_func,
+            num_parallel_calls=num_threads,
+            batch_size=1
+        )
+    )
+
+    ds = ds.prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
+    
+    return ds
+
+    
+    
+def get_dali_input_fn(filenames, idx_filenames, batch_size, height, width, training, distort_color, num_threads, deterministic):
+
+    if idx_filenames is None:
+        raise ValueError("Must provide idx_filenames for DALI's reader")
+        
+    preprocessor = dali_utils.DALIPreprocessor(
+        filenames,
+        idx_filenames,
+        height, width,
+        batch_size,
+        num_threads,
+        dali_cpu=False,
+        deterministic=deterministic,
+        training=training)
+    
+    images, labels = preprocessor.get_device_minibatches()
+    
+    return (images, labels)
+
 
 def normalized_inputs(inputs):
 
@@ -148,3 +192,19 @@ def normalized_inputs(inputs):
     inputs = tf.subtract(inputs, means_per_channel)
 
     return tf.divide(inputs, 255.0)
+
+def get_serving_input_receiver_fn(batch_size, height, width, num_channels, data_format, dtype=tf.float32):
+    
+    if data_format not in ["NHWC", "NCHW"]:
+        raise ValueError("Unknown data_format: %s" % str(data_format))
+
+    if data_format == "NHWC":
+        input_shape = [batch_size] + [height, width, num_channels]
+    else:
+        input_shape = [batch_size] + [num_channels, height, width]
+        
+    def serving_input_receiver_fn():
+        features = tf.placeholder(dtype=dtype, shape=input_shape, name='input_tensor')
+        return tf.estimator.export.TensorServingInputReceiver(features=features, receiver_tensors=features)
+    
+    return serving_input_receiver_fn

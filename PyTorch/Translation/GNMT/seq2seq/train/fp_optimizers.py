@@ -1,11 +1,33 @@
+# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import logging
 import math
 
 import torch
 from torch.nn.utils import clip_grad_norm_
+import apex.amp._amp_state
+from apex import amp
 
 
-class Fp16Optimizer:
+class FP16Optimizer:
     """
     Mixed precision optimizer with dynamic loss scaling and backoff.
     https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#scalefactor
@@ -34,12 +56,12 @@ class Fp16Optimizer:
         for param, new_param in zip(params, new_params):
             param.data.copy_(new_param.data)
 
-    def __init__(self, fp16_model, grad_clip=float('inf'), loss_scale=8192,
+    def __init__(self, model, grad_clip=float('inf'), loss_scale=8192,
                  dls_downscale=2, dls_upscale=2, dls_upscale_interval=128):
         """
         Constructor for the Fp16Optimizer.
 
-        :param fp16_model: model (previously casted to half)
+        :param model: model
         :param grad_clip: coefficient for gradient clipping, max L2 norm of the
             gradients
         :param loss_scale: initial loss scale
@@ -51,7 +73,7 @@ class Fp16Optimizer:
         :param dls_upscale_interval: interval for loss scale upscaling
         """
         logging.info('Initializing fp16 optimizer')
-        self.initialize_model(fp16_model)
+        self.initialize_model(model)
 
         self.since_last_invalid = 0
         self.loss_scale = loss_scale
@@ -66,9 +88,11 @@ class Fp16Optimizer:
 
         :param model: fp16 model
         """
+        logging.info('Converting model to half precision')
+        model.half()
         logging.info('Initializing fp32 clone weights')
-        self.fp16_model = model
-        self.fp16_model.zero_grad()
+        self.model = model
+        self.model.zero_grad()
         self.fp32_params = [param.to(torch.float32).detach()
                             for param in model.parameters()]
 
@@ -93,7 +117,7 @@ class Fp16Optimizer:
         loss.backward()
 
         if update:
-            self.set_grads(self.fp32_params, self.fp16_model.parameters())
+            self.set_grads(self.fp32_params, self.model.parameters())
             if self.loss_scale != 1.0:
                 for param in self.fp32_params:
                     param.grad.data /= self.loss_scale
@@ -103,7 +127,7 @@ class Fp16Optimizer:
             if math.isfinite(norm):
                 scheduler.step()
                 optimizer.step()
-                self.set_weights(self.fp16_model.parameters(),
+                self.set_weights(self.model.parameters(),
                                  self.fp32_params)
                 self.since_last_invalid += 1
             else:
@@ -118,10 +142,10 @@ class Fp16Optimizer:
                 logging.info(f'Upscaling, new scale: {self.loss_scale}')
                 self.since_last_invalid = 0
 
-            self.fp16_model.zero_grad()
+            self.model.zero_grad()
 
 
-class Fp32Optimizer:
+class FP32Optimizer:
     """
     Standard optimizer, computes backward and applies weight update.
     """
@@ -158,6 +182,57 @@ class Fp32Optimizer:
         if update:
             if self.grad_clip != float('inf'):
                 clip_grad_norm_(self.model.parameters(), self.grad_clip)
+            scheduler.step()
+            optimizer.step()
+            self.model.zero_grad()
+
+
+class AMPOptimizer:
+    """
+    Optimizer compatible with AMP.
+    Uses AMP to apply loss scaling, computes backward and applies weight
+    update.
+    """
+    def __init__(self, model, grad_clip=None, loss_scale=8192,
+                 dls_upscale_interval=128):
+        """
+        Constructor for the AMPOptimizer
+
+        :param model: model
+        :param grad_clip: coefficient for gradient clipping, max L2 norm of the
+            gradients
+        """
+        logging.info('Initializing amp optimizer')
+        self.initialize_model(model)
+        self.grad_clip = grad_clip
+
+        loss_scaler = apex.amp._amp_state.loss_scalers[0]
+        loss_scaler._loss_scale = loss_scale
+        loss_scaler._scale_seq_len = dls_upscale_interval
+
+    def initialize_model(self, model):
+        """
+        Initializes state of the model.
+
+        :param model: model
+        """
+        self.model = model
+        self.model.zero_grad()
+
+    def step(self, loss, optimizer, scheduler, update=True):
+        """
+        Performs one step of the optimizer.
+
+        :param loss: value of loss function
+        :param optimizer: optimizer
+        :param update: if True executes weight update
+        """
+        with amp.scale_loss(loss, optimizer) as scaled_loss:
+            scaled_loss.backward()
+
+        if update:
+            if self.grad_clip != float('inf'):
+                clip_grad_norm_(amp.master_params(optimizer), self.grad_clip)
             scheduler.step()
             optimizer.step()
             self.model.zero_grad()

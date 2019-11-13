@@ -1,3 +1,24 @@
+# Copyright (c) 2017 Elad Hoffer
+# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import torch
 
 from seq2seq.data.config import BOS
@@ -8,7 +29,7 @@ class SequenceGenerator:
     """
     Generator for the autoregressive inference with beam search decoding.
     """
-    def __init__(self, model, beam_size=5, max_seq_len=100, cuda=False,
+    def __init__(self, model, beam_size=5, max_seq_len=100,
                  len_norm_factor=0.6, len_norm_const=5,
                  cov_penalty_factor=0.1):
         """
@@ -21,14 +42,12 @@ class SequenceGenerator:
         :param model: model which implements generate method
         :param beam_size: decoder beam size
         :param max_seq_len: maximum decoder sequence length
-        :param cuda: whether to use cuda
         :param len_norm_factor: length normalization factor
         :param len_norm_const: length normalization constant
         :param cov_penalty_factor: coverage penalty factor
         """
 
         self.model = model
-        self.cuda = cuda
         self.beam_size = beam_size
         self.max_seq_len = max_seq_len
         self.len_norm_factor = len_norm_factor
@@ -51,18 +70,17 @@ class SequenceGenerator:
             lengths: (batch_size) - lengths of generated translations
             counter: number of iterations of the decoding loop
         """
+        device = initial_input.device
         max_seq_len = self.max_seq_len
 
-        translation = torch.zeros(batch_size, max_seq_len, dtype=torch.int64)
-        lengths = torch.ones(batch_size, dtype=torch.int64)
-        active = torch.arange(0, batch_size, dtype=torch.int64)
-        base_mask = torch.arange(0, batch_size, dtype=torch.int64)
-
-        if self.cuda:
-            translation = translation.cuda()
-            lengths = lengths.cuda()
-            active = active.cuda()
-            base_mask = base_mask.cuda()
+        translation = torch.zeros(batch_size, max_seq_len, dtype=torch.int64,
+                                  device=device)
+        lengths = torch.ones(batch_size, dtype=torch.int64,
+                             device=device)
+        active = torch.arange(0, batch_size, dtype=torch.int64,
+                              device=device)
+        base_mask = torch.arange(0, batch_size, dtype=torch.int64,
+                                 device=device)
 
         translation[:, 0] = BOS
         words, context = initial_input, initial_context
@@ -118,6 +136,7 @@ class SequenceGenerator:
             lengths: (batch_size) - lengths of generated translations
             counter: number of iterations of the decoding loop
         """
+        device = initial_input.device
         beam_size = self.beam_size
         norm_const = self.len_norm_const
         norm_factor = self.len_norm_factor
@@ -125,25 +144,19 @@ class SequenceGenerator:
         cov_penalty_factor = self.cov_penalty_factor
 
         translation = torch.zeros(batch_size * beam_size, max_seq_len,
-                                  dtype=torch.int64)
-        lengths = torch.ones(batch_size * beam_size, dtype=torch.int64)
-        scores = torch.zeros(batch_size * beam_size, dtype=torch.float32)
-
-        active = torch.arange(0, batch_size * beam_size, dtype=torch.int64)
-        base_mask = torch.arange(0, batch_size * beam_size, dtype=torch.int64)
+                                  dtype=torch.int64, device=device)
+        lengths = torch.ones(batch_size * beam_size,
+                             dtype=torch.int64, device=device)
+        scores = torch.zeros(batch_size * beam_size,
+                             dtype=torch.float32, device=device)
+        active = torch.arange(0, batch_size * beam_size,
+                              dtype=torch.int64, device=device)
+        base_mask = torch.arange(0, batch_size * beam_size,
+                                 dtype=torch.int64, device=device)
         global_offset = torch.arange(0, batch_size * beam_size, beam_size,
-                                     dtype=torch.int64)
-
-        eos_beam_fill = torch.tensor([0] + (beam_size - 1) * [float('-inf')])
-
-        if self.cuda:
-            translation = translation.cuda()
-            lengths = lengths.cuda()
-            active = active.cuda()
-            base_mask = base_mask.cuda()
-            scores = scores.cuda()
-            global_offset = global_offset.cuda()
-            eos_beam_fill = eos_beam_fill.cuda()
+                                     device=device, dtype=torch.int64)
+        eos_beam_fill = torch.tensor([0] + (beam_size - 1) * [float('-inf')],
+                                     dtype=torch.float32, device=device)
 
         translation[:, 0] = BOS
 
@@ -182,9 +195,8 @@ class SequenceGenerator:
         context[1] = context[1].contiguous().view(batch_size * beam_size)
         # context[1]: (batch * beam)
 
-        accu_attn_scores = torch.zeros(batch_size * beam_size, seq)
-        if self.cuda:
-            accu_attn_scores = accu_attn_scores.cuda()
+        accu_attn_scores = torch.zeros(batch_size * beam_size, seq,
+                                       dtype=torch.float32, device=device)
 
         counter = 0
         for idx in range(1, self.max_seq_len):

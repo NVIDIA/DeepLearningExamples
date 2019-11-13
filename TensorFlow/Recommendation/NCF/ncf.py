@@ -55,7 +55,7 @@ def parse_args():
                                         " Filtering model")
     parser.add_argument('--data', type=str,
                         help='path to test and training data files')
-    parser.add_argument('-e', '--epochs', type=int, default=40,
+    parser.add_argument('-e', '--epochs', type=int, default=30,
                         help='number of epochs to train for')
     parser.add_argument('-b', '--batch-size', type=int, default=1048576,
                         help='number of examples for each iteration')
@@ -98,12 +98,11 @@ def parse_args():
     parser.add_argument('--checkpoint-dir', default='/data/checkpoints/', type=str,
                         help='Path to the store the result checkpoint file for training, \
                               or to read from for evaluation')
+    parser.add_argument('--load-checkpoint-path', default=None, type=str,
+                        help='Path to the checkpoint for initialization. If None will initialize with random weights')
     parser.add_argument('--mode', choices=['train', 'test'], default='train', type=str,
                         help='Passing "test" will only run a single evaluation, \
                               otherwise full training will be performed')
-    parser.add_argument('--no-neg-trick', action='store_true', dest='no_neg_trick',
-                        help='do not use negative sample generation shortcut to speed up data \
-                              augmentation (will increase GPU memory consumption)')
     parser.add_argument('--eval-after', type=int, default=8,
                         help='Perform evaluations only after this many epochs')
     parser.add_argument('--verbose', action='store_true',
@@ -233,7 +232,6 @@ def main():
         test_items,
         args.valid_users_per_batch,
         args.valid_negative,
-        use_neg_trick=False if args.no_neg_trick else True
         )
 
     # Create tensorflow session and saver
@@ -274,7 +272,7 @@ def main():
             'sigmoid': True,
             'loss_scale': args.loss_scale
         },
-        eval_only=False if args.mode == 'train' else True
+        mode='TRAIN' if args.mode == 'train' else 'EVAL'
     )
     saver = tf.train.Saver()
 
@@ -287,11 +285,16 @@ def main():
     # Prepare evaluation data
     data_generator.prepare_eval_data()
 
+    if args.load_checkpoint_path:
+        saver.restore(sess, args.load_checkpoint_path)
+    else:
+        # Manual initialize weights
+        sess.run(tf.global_variables_initializer())
+
     # If test mode, run one eval
     if args.mode == 'test':
-        saver.restore(sess, args.checkpoint_dir)
-        eval_start = time.time()
         sess.run(tf.local_variables_initializer())
+        eval_start = time.time()
         for user_batch, item_batch, dup_batch \
             in zip(data_generator.eval_users, data_generator.eval_items, data_generator.dup_mask):
             sess.run(
@@ -316,6 +319,9 @@ def main():
         if hvd.rank() == 0:
             LOGGER.log("Eval Time: {:.4f}, HR: {:.4f}, NDCG: {:.4f}"
                        .format(eval_duration, hit_rate, ndcg))
+
+            eval_throughput = pos_test_users.shape[0] * (args.valid_negative + 1) / eval_duration
+            LOGGER.log('Average Eval Throughput: {:.4f}'.format(eval_throughput))
         return
 
     # Performance Metrics
@@ -326,8 +332,6 @@ def main():
     time_to_train = 0.0
     best_hr = 0
     best_epoch = 0
-    # Manual initialize weights
-    sess.run(tf.global_variables_initializer())
     # Buffers for global metrics
     global_hr_sum = np.ones(1)
     global_hr_count = np.ones(1)
@@ -419,6 +423,7 @@ def main():
                 if hit_rate > best_hr:
                     best_hr = hit_rate
                     best_epoch = epoch
+                    time_to_best =  time.time() - begin_train
                     if not args.verbose:
                         log_string = "New Best Epoch: {:02d}, Train Time: {:.4f}, Eval Time: {:.4f}, HR: {:.4f}, NDCG: {:.4f}"
                         LOGGER.log(
@@ -441,6 +446,11 @@ def main():
         eval_times = np.array(eval_times)
         eval_throughputs = pos_test_users.shape[0]*(args.valid_negative+1) / eval_times
         LOGGER.log(' ')
+
+        LOGGER.log('batch_size: {}'.format(args.batch_size))
+        LOGGER.log('num_gpus: {}'.format(hvd.size()))
+        LOGGER.log('AMP: {}'.format(1 if args.amp else 0))
+        LOGGER.log('seed: {}'.format(args.seed))
         LOGGER.log('Minimum Train Time per Epoch: {:.4f}'.format(np.min(train_times)))
         LOGGER.log('Average Train Time per Epoch: {:.4f}'.format(np.mean(train_times)))
         LOGGER.log('Average Train Throughput:     {:.4f}'.format(np.mean(train_throughputs)))
@@ -449,6 +459,7 @@ def main():
         LOGGER.log('Average Eval Throughput:      {:.4f}'.format(np.mean(eval_throughputs)))
         LOGGER.log('First Epoch to hit:           {}'.format(first_to_target))
         LOGGER.log('Time to Train:                {:.4f}'.format(time_to_train))
+        LOGGER.log('Time to Best:                 {:.4f}'.format(time_to_best))
         LOGGER.log('Best HR:                      {:.4f}'.format(best_hr))
         LOGGER.log('Best Epoch:                   {}'.format(best_epoch))
 

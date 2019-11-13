@@ -31,10 +31,11 @@
 
 #!/bin/bash
 set -e
+set -x
 
 DATASET_NAME=${1:-'ml-20m'}
-RAW_DATADIR='/data'
-CACHED_DATADIR='/data/cache/'${DATASET_NAME}
+RAW_DATADIR=${2:-'/data'}
+CACHED_DATADIR=${3:-"${RAW_DATADIR}/cache/${DATASET_NAME}"}
 
 # you can add another option to this case in order to support other datasets
 case ${DATASET_NAME} in
@@ -51,9 +52,17 @@ case ${DATASET_NAME} in
 	exit 1
 esac
 
-mkdir -p ${RAW_DATADIR}
-mkdir -p ${CACHED_DATADIR}
-rm -f log
+if [ ! -d ${RAW_DATADIR} ]; then
+    mkdir -p ${RAW_DATADIR}
+fi
+
+if [ ! -d ${CACHED_DATADIR} ]; then
+    mkdir -p ${CACHED_DATADIR}
+fi
+
+if [ -f log ]; then
+    rm -f log
+fi
 
 if [ ! -f ${ZIP_PATH} ]; then
     echo 'Dataset not found, downloading...'
@@ -76,6 +85,6 @@ else
 fi
 
 echo "Dataset $DATASET_NAME successfully prepared at: $CACHED_DATADIR\n"
-echo 'You can now run the training with: python -m torch.distributed.launch --nproc_per_node=<number_of_GPUs> ncf.py --data /data/cache/ml-20m'
+echo "You can now run the training with: python -m torch.distributed.launch --nproc_per_node=<number_of_GPUs> ncf.py --data ${CACHED_DATADIR}"
 
 

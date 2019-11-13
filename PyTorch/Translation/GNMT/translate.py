@@ -1,20 +1,41 @@
 #!/usr/bin/env python
+
+# Copyright (c) 2017 Elad Hoffer
+# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import argparse
 import logging
-import os
+import itertools
+import sys
 import warnings
-from ast import literal_eval
 from itertools import product
 
 import torch
-import torch.distributed as dist
 
 import seq2seq.utils as utils
-from seq2seq.data.dataset import TextDataset
+from seq2seq.data.dataset import RawTextDataset
 from seq2seq.data.tokenizer import Tokenizer
-from seq2seq.inference.inference import Translator
+from seq2seq.inference.translator import Translator
 from seq2seq.models.gnmt import GNMT
-from seq2seq.utils import setup_logging
+from seq2seq.inference import tables
 
 
 def parse_args():
@@ -37,18 +58,22 @@ def parse_args():
 
     # dataset
     dataset = parser.add_argument_group('data setup')
-    dataset.add_argument('--dataset-dir', default='data/wmt16_de_en/',
-                         help='path to directory with training/test data')
-    dataset.add_argument('-i', '--input', required=True,
-                         help='full path to the input file (tokenized)')
-    dataset.add_argument('-o', '--output', required=True,
-                         help='full path to the output file (tokenized)')
+    dataset.add_argument('-o', '--output', required=False,
+                         help='full path to the output file \
+                         if not specified, then the output will be printed')
     dataset.add_argument('-r', '--reference', default=None,
                          help='full path to the file with reference \
-                         translations (for sacrebleu)')
+                         translations (for sacrebleu, raw text)')
     dataset.add_argument('-m', '--model', required=True,
                          help='full path to the model checkpoint file')
-    exclusive_group(group=dataset, name='sort', default=True,
+
+    source = dataset.add_mutually_exclusive_group(required=True)
+    source.add_argument('-i', '--input', required=False,
+                        help='full path to the input file (raw text)')
+    source.add_argument('-t', '--input-text', nargs='+', required=False,
+                        help='raw input text')
+
+    exclusive_group(group=dataset, name='sort', default=False,
                     help='sorts dataset by sequence length')
 
     # parameters
@@ -68,9 +93,9 @@ def parse_args():
     # general setup
     general = parser.add_argument_group('general setup')
     general.add_argument('--math', nargs='+', default=['fp16'],
-                         choices=['fp16', 'fp32'], help='arithmetic type')
+                         choices=['fp16', 'fp32'], help='precision')
 
-    exclusive_group(group=general, name='env', default=True,
+    exclusive_group(group=general, name='env', default=False,
                     help='print info about execution env')
     exclusive_group(group=general, name='bleu', default=True,
                     help='compares with reference translation and computes \
@@ -94,6 +119,28 @@ def parse_args():
     general.add_argument('--print-freq', '-p', default=1, type=int,
                          help='print log every PRINT_FREQ batches')
 
+    # benchmarking
+    benchmark = parser.add_argument_group('benchmark setup')
+    benchmark.add_argument('--target-perf', default=None, type=float,
+                           help='target inference performance (in tokens \
+                           per second)')
+    benchmark.add_argument('--target-bleu', default=None, type=float,
+                           help='target accuracy')
+
+    benchmark.add_argument('--repeat', nargs='+', default=[1], type=float,
+                           help='loops over the dataset REPEAT times, flag \
+                           accepts multiple arguments, one for each specified \
+                           batch size')
+    benchmark.add_argument('--warmup', default=0, type=int,
+                           help='warmup iterations for performance counters')
+    benchmark.add_argument('--percentiles', nargs='+', type=int,
+                           default=(50, 90, 95, 99, 100),
+                           help='Percentiles for confidence intervals for \
+                           throughput/latency benchmarks')
+    exclusive_group(group=benchmark, name='tables', default=False,
+                    help='print accuracy, throughput and latency results in \
+                    tables')
+
     # distributed
     distributed = parser.add_argument_group('distributed setup')
     distributed.add_argument('--rank', default=0, type=int,
@@ -103,11 +150,22 @@ def parse_args():
 
     args = parser.parse_args()
 
+    if args.input_text:
+        args.bleu = False
+
     if args.bleu and args.reference is None:
         parser.error('--bleu requires --reference')
 
     if 'fp16' in args.math and not args.cuda:
         parser.error('--math fp16 requires --cuda')
+
+    if len(list(product(args.math, args.batch_size, args.beam_size))) > 1:
+        args.target_bleu = None
+        args.target_perf = None
+
+    args.repeat = dict(itertools.zip_longest(args.batch_size,
+                                             args.repeat,
+                                             fillvalue=1))
 
     return args
 
@@ -119,9 +177,10 @@ def main():
     with length normalization and coverage penalty.
     """
     args = parse_args()
-    utils.set_device(args.cuda, args.local_rank)
+    device = utils.set_device(args.cuda, args.local_rank)
     utils.init_distributed(args.cuda)
-    setup_logging()
+    args.rank = utils.get_rank()
+    utils.setup_logging()
 
     if args.env:
         utils.log_env_info()
@@ -139,55 +198,107 @@ def main():
     # build GNMT model
     tokenizer = Tokenizer()
     tokenizer.set_state(checkpoint['tokenizer'])
-    vocab_size = tokenizer.vocab_size
     model_config = checkpoint['model_config']
     model_config['batch_first'] = args.batch_first
-    model = GNMT(vocab_size=vocab_size, **model_config)
+    model_config['vocab_size'] = tokenizer.vocab_size
+    model = GNMT(**model_config)
     model.load_state_dict(checkpoint['state_dict'])
+
+    # construct the dataset
+    if args.input:
+        data = RawTextDataset(raw_datafile=args.input,
+                              tokenizer=tokenizer,
+                              sort=args.sort,
+                              )
+    elif args.input_text:
+        data = RawTextDataset(raw_data=args.input_text,
+                              tokenizer=tokenizer,
+                              sort=args.sort,
+                              )
+
+    latency_table = tables.LatencyTable(args.percentiles)
+    throughput_table = tables.ThroughputTable(args.percentiles)
+    accuracy_table = tables.AccuracyTable('BLEU')
+
+    dtype = {'fp32': torch.FloatTensor, 'fp16': torch.HalfTensor}
 
     for (math, batch_size, beam_size) in product(args.math, args.batch_size,
                                                  args.beam_size):
         logging.info(f'math: {math}, batch size: {batch_size}, '
                      f'beam size: {beam_size}')
-        if math == 'fp32':
-            dtype = torch.FloatTensor
-        if math == 'fp16':
-            dtype = torch.HalfTensor
-        model.type(dtype)
 
-        if args.cuda:
-            model = model.cuda()
+        model.type(dtype[math])
+        model = model.to(device)
         model.eval()
 
-        # construct the dataset
-        test_data = TextDataset(src_fname=args.input,
-                                tokenizer=tokenizer,
-                                sort=args.sort)
-
         # build the data loader
-        test_loader = test_data.get_loader(batch_size=batch_size,
-                                           batch_first=args.batch_first,
-                                           shuffle=False,
-                                           pad=True,
-                                           num_workers=0)
+        loader = data.get_loader(
+            batch_size=batch_size,
+            batch_first=args.batch_first,
+            pad=True,
+            repeat=args.repeat[batch_size],
+            num_workers=0,
+            )
 
         # build the translator object
-        translator = Translator(model=model,
-                                tokenizer=tokenizer,
-                                loader=test_loader,
-                                beam_size=beam_size,
-                                max_seq_len=args.max_seq_len,
-                                len_norm_factor=args.len_norm_factor,
-                                len_norm_const=args.len_norm_const,
-                                cov_penalty_factor=args.cov_penalty_factor,
-                                cuda=args.cuda,
-                                print_freq=args.print_freq,
-                                dataset_dir=args.dataset_dir)
+        translator = Translator(
+            model=model,
+            tokenizer=tokenizer,
+            loader=loader,
+            beam_size=beam_size,
+            max_seq_len=args.max_seq_len,
+            len_norm_factor=args.len_norm_factor,
+            len_norm_const=args.len_norm_const,
+            cov_penalty_factor=args.cov_penalty_factor,
+            print_freq=args.print_freq,
+            )
 
         # execute the inference
-        translator.run(calc_bleu=args.bleu, eval_path=args.output,
-                       reference_path=args.reference, summary=True)
+        output, stats = translator.run(
+            calc_bleu=args.bleu,
+            eval_path=args.output,
+            summary=True,
+            warmup=args.warmup,
+            reference_path=args.reference,
+            )
+
+        # print translated outputs
+        if not args.output and args.rank == 0:
+            logging.info(f'Translated output:')
+            for out in output:
+                print(out)
+
+        key = (batch_size, beam_size)
+        latency_table.add(key, {math: stats['runtimes']})
+        throughput_table.add(key, {math: stats['throughputs']})
+        accuracy_table.add(key, {math: stats['bleu']})
+
+    if args.tables:
+        accuracy_table.write('Inference accuracy', args.math)
+
+        if 'fp16' in args.math and 'fp32' in args.math:
+            relative = 'fp32'
+        else:
+            relative = None
+
+        if 'fp32' in args.math:
+            throughput_table.write('Inference throughput', 'fp32')
+        if 'fp16' in args.math:
+            throughput_table.write('Inference throughput', 'fp16',
+                                   relative=relative)
+
+        if 'fp32' in args.math:
+            latency_table.write('Inference latency', 'fp32')
+        if 'fp16' in args.math:
+            latency_table.write('Inference latency', 'fp16',
+                                relative=relative, reverse_speedup=True)
+
+    passed = utils.benchmark(stats['bleu'], args.target_bleu,
+                             stats['tokens_per_sec'], args.target_perf)
+    return passed
 
 
 if __name__ == '__main__':
-    main()
+    passed = main()
+    if not passed:
+        sys.exit(1)

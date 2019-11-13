@@ -1,3 +1,17 @@
+# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
 import time
 from argparse import ArgumentParser
@@ -34,7 +48,7 @@ def generate_mean_std(args):
     mean = mean.view(*view)
     std = std.view(*view)
 
-    if args.fp16:
+    if args.amp:
         mean = mean.half()
         std = std.half()
 
@@ -90,7 +104,6 @@ def make_parser():
                              ' When it is not provided, pretrained model from torchvision'
                              ' will be downloaded.')
     parser.add_argument('--num-workers', type=int, default=4)
-    parser.add_argument('--fp16', action='store_true')
     parser.add_argument('--amp', action='store_true')
 
     # Distributed
@@ -102,8 +115,6 @@ def make_parser():
 
 
 def train(train_loop_func, logger, args):
-    if args.amp:
-        amp_handle = amp.init(enabled=args.fp16)
     # Check that GPUs are actually available
     use_cuda = not args.no_cuda
 
@@ -149,29 +160,23 @@ def train(train_loop_func, logger, args):
         ssd300.cuda()
         loss_func.cuda()
 
-    if args.fp16 and not args.amp:
-        ssd300 = network_to_half(ssd300)
+    optimizer = torch.optim.SGD(tencent_trick(ssd300), lr=args.learning_rate,
+                                    momentum=args.momentum, weight_decay=args.weight_decay)
+    scheduler = MultiStepLR(optimizer=optimizer, milestones=args.multistep, gamma=0.1)
+    if args.amp:
+        ssd300, optimizer = amp.initialize(ssd300, optimizer, opt_level='O2')
 
     if args.distributed:
         ssd300 = DDP(ssd300)
 
-    optimizer = torch.optim.SGD(tencent_trick(ssd300), lr=args.learning_rate,
-                                    momentum=args.momentum, weight_decay=args.weight_decay)
-    scheduler = MultiStepLR(optimizer=optimizer, milestones=args.multistep, gamma=0.1)
-    if args.fp16:
-        if args.amp:
-            optimizer = amp_handle.wrap_optimizer(optimizer)
-        else:
-            optimizer = FP16_Optimizer(optimizer, static_loss_scale=128.)
     if args.checkpoint is not None:
         if os.path.isfile(args.checkpoint):
-            load_checkpoint(ssd300, args.checkpoint)
+            load_checkpoint(ssd300.module if args.distributed else ssd300, args.checkpoint)
             checkpoint = torch.load(args.checkpoint,
                                     map_location=lambda storage, loc: storage.cuda(torch.cuda.current_device()))
             start_epoch = checkpoint['epoch']
             iteration = checkpoint['iteration']
             scheduler.load_state_dict(checkpoint['scheduler'])
-            ssd300.load_state_dict(checkpoint['model'])
             optimizer.load_state_dict(checkpoint['optimizer'])
         else:
             print('Provided checkpoint is not path to a file')

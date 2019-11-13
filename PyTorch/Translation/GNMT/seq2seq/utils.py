@@ -1,3 +1,24 @@
+# Copyright (c) 2017 Elad Hoffer
+# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import logging.config
 import os
 import random
@@ -61,7 +82,7 @@ def broadcast_seeds(seeds, device):
     :param device: torch.device
     """
     if torch.distributed.is_available() and torch.distributed.is_initialized():
-        seeds_tensor = torch.LongTensor(seeds).to(device)
+        seeds_tensor = torch.tensor(seeds, dtype=torch.int64, device=device)
         torch.distributed.broadcast(seeds_tensor, 0)
         seeds = seeds_tensor.tolist()
     return seeds
@@ -110,13 +131,10 @@ def setup_seeds(master_seed, epochs, device):
 
 def barrier():
     """
-    Works as a temporary distributed barrier, currently pytorch
-    doesn't implement barrier for NCCL backend.
-    Calls all_reduce on dummy tensor and synchronizes with GPU.
+    Call torch.distributed.barrier() if distritubed is in use
     """
     if torch.distributed.is_available() and torch.distributed.is_initialized():
-        torch.distributed.all_reduce(torch.cuda.FloatTensor(1))
-        torch.cuda.synchronize()
+        torch.distributed.barrier()
 
 
 def get_rank():
@@ -165,7 +183,7 @@ def timer(name, ndigits=2, sync_gpu=True):
     logging.info(f'TIMER {name} {elapsed}')
 
 
-def setup_logging(log_file=os.devnull):
+def setup_logging(log_all_ranks=True, log_file=os.devnull):
     """
     Configures logging.
     By default logs from all workers are printed to the console, entries are
@@ -174,15 +192,19 @@ def setup_logging(log_file=os.devnull):
     Full logs with timestamps are saved to the log_file file.
     """
     class RankFilter(logging.Filter):
-        def __init__(self, rank):
+        def __init__(self, rank, log_all_ranks):
             self.rank = rank
+            self.log_all_ranks = log_all_ranks
 
         def filter(self, record):
             record.rank = self.rank
-            return True
+            if self.log_all_ranks:
+                return True
+            else:
+                return (self.rank == 0)
 
     rank = get_rank()
-    rank_filter = RankFilter(rank)
+    rank_filter = RankFilter(rank, log_all_ranks)
 
     logging_format = "%(asctime)s - %(levelname)s - %(rank)s - %(message)s"
     logging.basicConfig(level=logging.DEBUG,
@@ -240,7 +262,7 @@ def log_env_info():
 
 
 def pad_vocabulary(math):
-    if math == 'fp16':
+    if math == 'fp16' or math == 'manual_fp16':
         pad_vocab = 8
     elif math == 'fp32':
         pad_vocab = 1
@@ -265,78 +287,6 @@ def benchmark(test_acc, target_acc, test_perf, target_perf):
     passed &= test(test_perf, target_perf, 'Performance')
     return passed
 
-class AverageMeter:
-    """
-    Computes and stores the average and current value
-    """
-    def __init__(self, skip_first=True):
-        self.reset()
-        self.skip = skip_first
-
-    def reset(self):
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        self.val = val
-
-        if self.skip:
-            self.skip = False
-        else:
-            self.sum += val * n
-            self.count += n
-            self.avg = self.sum / self.count
-
-    def reduce(self, op):
-        """
-        Reduces average value over all workers.
-
-        :param op: 'sum' or 'mean', reduction operator
-        """
-        if op not in ('sum', 'mean'):
-            raise NotImplementedError
-
-        distributed = (get_world_size() > 1)
-        if distributed:
-            # Backward/forward compatibility around
-            # https://github.com/pytorch/pytorch/commit/540ef9b1fc5506369a48491af8a285a686689b36 and
-            # https://github.com/pytorch/pytorch/commit/044d00516ccd6572c0d6ab6d54587155b02a3b86
-            # To accomodate change in Pytorch's distributed API
-            if hasattr(dist, "get_backend"):
-                _backend = dist.get_backend()
-                if hasattr(dist, "DistBackend"):
-                    backend_enum_holder = dist.DistBackend
-                else:
-                    backend_enum_holder = dist.Backend
-            else:
-                _backend = dist._backend
-                backend_enum_holder = dist.dist_backend
-
-            cuda = _backend == backend_enum_holder.NCCL
-
-            if cuda:
-                avg = torch.cuda.FloatTensor([self.avg])
-                _sum = torch.cuda.FloatTensor([self.sum])
-            else:
-                avg = torch.FloatTensor([self.avg])
-                _sum = torch.FloatTensor([self.sum])
-
-            try:
-                _reduce_op = dist.ReduceOp
-            except AttributeError:
-                _reduce_op = dist.reduce_op
-
-            dist.all_reduce(avg, op=_reduce_op.SUM)
-            dist.all_reduce(_sum, op=_reduce_op.SUM)
-            self.avg = avg.item()
-            self.sum = _sum.item()
-
-            if op == 'mean':
-                self.avg /= get_world_size()
-                self.sum /= get_world_size()
-
 
 def debug_tensor(tensor, name):
     """
@@ -352,3 +302,62 @@ def debug_tensor(tensor, name):
     logging.info(f'MIN: {tensor.min()} MAX: {tensor.max()} '
                  f'AVG: {tensor.mean()} STD: {tensor.std()} '
                  f'NAN: {np.isnan(tensor).sum()} INF: {np.isinf(tensor).sum()}')
+
+
+class AverageMeter:
+    """
+    Computes and stores the average and current value
+    """
+    def __init__(self, warmup=0, keep=False):
+        self.reset()
+        self.warmup = warmup
+        self.keep = keep
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+        self.iters = 0
+        self.vals = []
+
+    def update(self, val, n=1):
+        self.iters += 1
+        self.val = val
+
+        if self.iters > self.warmup:
+            self.sum += val * n
+            self.count += n
+            self.avg = self.sum / self.count
+            if self.keep:
+                self.vals.append(val)
+
+    def reduce(self, op):
+        """
+        Reduces average value over all workers.
+
+        :param op: 'sum' or 'mean', reduction operator
+        """
+        if op not in ('sum', 'mean'):
+            raise NotImplementedError
+
+        distributed = (get_world_size() > 1)
+        if distributed:
+            backend = dist.get_backend()
+            cuda = (backend == dist.Backend.NCCL)
+
+            if cuda:
+                avg = torch.cuda.FloatTensor([self.avg])
+                _sum = torch.cuda.FloatTensor([self.sum])
+            else:
+                avg = torch.FloatTensor([self.avg])
+                _sum = torch.FloatTensor([self.sum])
+
+            dist.all_reduce(avg)
+            dist.all_reduce(_sum)
+            self.avg = avg.item()
+            self.sum = _sum.item()
+
+            if op == 'mean':
+                self.avg /= get_world_size()
+                self.sum /= get_world_size()

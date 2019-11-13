@@ -25,21 +25,21 @@
 #
 # *****************************************************************************
 
-from tacotron2.text import text_to_sequence
 import models
 import torch
 import argparse
 import numpy as np
-from scipy.io.wavfile import write
 import json
 import time
 
-from inference import checkpoint_from_distributed, unwrap_distributed, load_and_setup_model
+from inference import checkpoint_from_distributed, unwrap_distributed, load_and_setup_model, MeasureTime
 
 from dllogger.logger import LOGGER
 import dllogger.logger as dllg
 from dllogger import tags
 from dllogger.autologging import log_hardware, log_args
+
+from apex import amp
 
 def parse_args(parser):
     """
@@ -47,39 +47,15 @@ def parse_args(parser):
     """
     parser.add_argument('-m', '--model-name', type=str, default='', required=True,
                         help='Model to train')
-    parser.add_argument('--input-text', type=str, default=None,
-                        help='Path to tensor containing text (when running Tacotron2)')
-    parser.add_argument('--input-mels', type=str, default=None,
-                        help='Path to tensor containing mels (when running WaveGlow)')
     parser.add_argument('-sr', '--sampling-rate', default=22050, type=int,
                         help='Sampling rate')
-    parser.add_argument('--fp16-run', action='store_true',
-                        help='inference in fp16')
+    parser.add_argument('--amp-run', action='store_true',
+                        help='inference with AMP')
     parser.add_argument('-bs', '--batch-size', type=int, default=1)
-    parser.add_argument('--create-benchmark', action='store_true')
+    parser.add_argument('--log-file', type=str, default='nvlog.json',
+                        help='Filename for logging')
 
     return parser
-
-
-def collate_text(batch):
-    """Collate's training batch from normalized text and mel-spectrogram
-    PARAMS
-    ------
-    batch: [text_normalized]
-    """
-    # Right zero-pad all one-hot text sequences to max input length
-    input_lengths, ids_sorted_decreasing = torch.sort(
-        torch.LongTensor([len(x) for x in batch]),
-        dim=0, descending=True)
-    max_input_len = input_lengths[0]
-
-    text_padded = torch.LongTensor(len(batch), max_input_len)
-    text_padded.zero_()
-    for i in range(len(ids_sorted_decreasing)):
-        text = batch[ids_sorted_decreasing[i]]
-        text_padded[i, :text.size(0)] = text
-
-    return text_padded, input_lengths
 
 
 def main():
@@ -92,11 +68,7 @@ def main():
     parser = parse_args(parser)
     args, _ = parser.parse_known_args()
 
-    log_file = ("qa/baselines/" + args.model_name + "_inferbench_BS" + str(args.batch_size) + "_FP" + ("16" if args.fp16_run else "32") +
-                "_DGX1_16GB_1GPU_single" + ".json") \
-                if args.create_benchmark else \
-                   (args.model_name + "_infer_BS" + str(args.batch_size) + "_FP" + ("16" if args.fp16_run else "32") + \
-                   "_DGX1_16GB_1GPU_single" + ".json")
+    log_file = args.log_file
 
     LOGGER.set_model_name("Tacotron2_PyT")
     LOGGER.set_backends([
@@ -107,67 +79,47 @@ def main():
     ])
     LOGGER.register_metric("items_per_sec",
                            metric_scope=dllg.TRAIN_ITER_SCOPE)
+    LOGGER.register_metric("latency",
+                           metric_scope=dllg.TRAIN_ITER_SCOPE)
 
     log_hardware()
     log_args(args)
 
-    # ## uncomment to generate new padded text
-    # texts = []
-    # f = open('qa/ljs_text_train_subset_2500.txt', 'r')
-    # texts = f.readlines()
-    # sequence = []
-    # for i, text in enumerate(texts):
-    #     sequence.append(torch.IntTensor(text_to_sequence(text, ['english_cleaners'])))
+    model = load_and_setup_model(args.model_name, parser, None, args.amp_run)
 
-    # text_padded, input_lengths = collate_text(sequence)
-    # text_padded = torch.autograd.Variable(text_padded).cuda().long()
-    # torch.save(text_padded, "qa/text_padded.pt")
-    # torch.save(input_lengths, "qa/input_lengths.pt")
-
-    model = load_and_setup_model(args.model_name, parser, None, args.fp16_run)
-
-    dry_runs = 3
-    num_iters = (16+dry_runs) if args.create_benchmark else (1+dry_runs)
+    warmup_iters = 3
+    num_iters = 1+warmup_iters
 
     for i in range(num_iters):
-        ## skipping the first inference which is slower
-        if i >= dry_runs:
+        if i >= warmup_iters:
             LOGGER.iteration_start()
 
+        measurements = {}
+
         if args.model_name == 'Tacotron2':
-            text_padded = torch.load(args.input_text)
-            text_padded = text_padded[:args.batch_size]
-            text_padded = torch.autograd.Variable(text_padded).cuda().long()
-
-            t0 = time.time()
-            with torch.no_grad():
-                _, mels, _, _ = model.infer(text_padded)
-            t1 = time.time()
-            inference_time= t1 - t0
-            num_items = text_padded.size(0)*text_padded.size(1)
-
-            # # ## uncomment to generate new padded mels
-            # torch.save(mels, "qa/mel_padded.pt")
+            text_padded = torch.randint(low=0, high=148, size=(args.batch_size, 140),
+                                        dtype=torch.long).cuda()
+            input_lengths = torch.IntTensor([text_padded.size(1)]*args.batch_size).cuda().long()
+            with torch.no_grad(), MeasureTime(measurements, "inference_time"):
+                mels, _ = model.infer(text_padded, input_lengths)
+            num_items = mels.size(0)*mels.size(2)
 
         if args.model_name == 'WaveGlow':
-            mel_padded = torch.load(args.input_mels)
-            mel_padded = torch.cat((mel_padded, mel_padded, mel_padded, mel_padded))
-            mel_padded = mel_padded[:args.batch_size]
-            mel_padded = mel_padded.cuda()
-
-            if args.fp16_run:
+            n_mel_channels = model.upsample.in_channels
+            num_mels = 895
+            mel_padded = torch.zeros(args.batch_size, n_mel_channels,
+                                     num_mels).normal_(-5.62, 1.98).cuda()
+            if args.amp_run:
                 mel_padded = mel_padded.half()
 
-            t0 = time.time()
-            with torch.no_grad():
+            with torch.no_grad(), MeasureTime(measurements, "inference_time"):
                 audios = model.infer(mel_padded)
                 audios = audios.float()
-            t1 = time.time()
-            inference_time = t1 - t0
             num_items = audios.size(0)*audios.size(1)
 
-        if i >= dry_runs:
-            LOGGER.log(key="items_per_sec", value=(num_items/inference_time))
+        if i >= warmup_iters:
+            LOGGER.log(key="items_per_sec", value=(num_items/measurements['inference_time']))
+            LOGGER.log(key="latency", value=measurements['inference_time'])
             LOGGER.iteration_stop()
 
     LOGGER.finish()

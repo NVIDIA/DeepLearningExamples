@@ -40,7 +40,8 @@ class FairseqOptimizer(object):
         """Return a torch.optim.optimizer.Optimizer instance."""
         if not hasattr(self, '_optimizer'):
             raise NotImplementedError
-        if not isinstance(self._optimizer, torch.optim.Optimizer):
+        #TODO: this shouldn't be dependent of args.amp
+        if not isinstance(self._optimizer, torch.optim.Optimizer) and not self.args.amp:
             raise ValueError('_optimizer must be an instance of torch.optim.Optimizer')
         return self._optimizer
 

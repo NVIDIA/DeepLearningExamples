@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,15 +35,15 @@ class COCOPipeline(Pipeline):
         super(COCOPipeline, self).__init__(batch_size=batch_size, device_id=device_id,
                                            num_threads=num_threads, seed = seed)
 
-        try:
+        if torch.distributed.is_initialized():
             shard_id = torch.distributed.get_rank()
-        except RuntimeError:
+        else:
             shard_id = 0
 
         self.input = ops.COCOReader(file_root = file_root, annotations_file = annotations_file,
                             shard_id = shard_id, num_shards = num_gpus, ratio=True, ltrb=True, random_shuffle=True,
                                     skip_empty=True)
-        self.decode = ops.HostDecoder(device = "cpu", output_type = types.RGB)
+        self.decode = ops.ImageDecoder(device = "cpu", output_type = types.RGB)
 
         # Augumentation techniques
         self.crop = ops.SSDRandomCrop(device="cpu", num_attempts=1)
@@ -163,7 +163,7 @@ class DALICOCOIterator(object):
         for p in self._pipes:
             p._prefetch()
         for p in self._pipes:
-            outputs.append(p._share_outputs())
+            outputs.append(p.share_outputs())
         for i in range(self._num_gpus):
             dev_id = self._pipes[i].device_id
             out_images = []
@@ -237,8 +237,8 @@ class DALICOCOIterator(object):
                 pyt_offsets[j] = torch.IntTensor(bbox_offsets[j])
 
         for p in self._pipes:
-            p._release_outputs()
-            p._run()
+            p.release_outputs()
+            p.schedule_run()
 
         copy_db_index = self._current_data_batch
         # Change index for double buffering

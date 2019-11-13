@@ -69,7 +69,7 @@ def parse_tacotron2_args(parent, add_help=False):
                          help='Number of units in decoder LSTM')
     decoder.add_argument('--prenet-dim', default=256, type=int,
                          help='Number of ReLU units in prenet layers')
-    decoder.add_argument('--max-decoder-steps', default=1000, type=int,
+    decoder.add_argument('--max-decoder-steps', default=2000, type=int,
                          help='Maximum number of output mel spectrograms')
     decoder.add_argument('--gate-threshold', default=0.5, type=float,
                          help='Probability threshold for stop token')

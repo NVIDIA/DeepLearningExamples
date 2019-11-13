@@ -1,4 +1,4 @@
-#!/usr/bin/env python3 -u
+    #!/usr/bin/env python3 -u
 # Copyright (c) 2017-present, Facebook, Inc.
 # All rights reserved.
 #
@@ -71,10 +71,12 @@ def main(args):
     print('| num. model params: {}'.format(sum(p.numel() for p in model.parameters())))
 
     # Build trainer
-    if args.fp16:
+    if args.fp16 and not args.amp:
         trainer = FP16Trainer(args, task, model, criterion)
+    elif args.fp16 and args.amp:
+        raise ValueError('Cannot use AMP and fp16 simultaneously')
     else:
-        if torch.cuda.get_device_capability(0)[0] >= 7:
+        if torch.cuda.get_device_capability(0)[0] >= 7 and not args.amp:
             print('| NOTICE: your device may support faster training with --fp16')
         trainer = Trainer(args, task, model, criterion)
     if (args.online_eval or args.target_bleu) and not args.remove_bpe:
@@ -115,11 +117,10 @@ def main(args):
     valid_losses = [None]
     valid_subsets = args.valid_subset.split(',')
 
-    while lr >= args.min_lr and epoch_itr.epoch < max_epoch and trainer.get_num_updates() < max_update and current_bleu < tgt_bleu:
 
+    while lr >= args.min_lr and epoch_itr.epoch < max_epoch and trainer.get_num_updates() < max_update and current_bleu < tgt_bleu:
         # train for one epoch
         train(args, trainer, task, epoch_itr)
-
         if epoch_itr.epoch % args.validate_interval == 0:
             valid_losses = validate(args, trainer, task, epoch_itr, valid_subsets)
 
@@ -366,29 +367,15 @@ def score(args, trainer, task, epoch_itr, subset):
 
     if args.distributed_world_size > 1:
         _all_gather_bleu_scorer(scorer)
-        chunked_predictions = []
-        while True:
-            if len(predictions)>100:
-                chunked_predictions.append(predictions[:100])
-                predictions = predictions[100:]
-            else:
-                chunked_predictions.append(predictions)
-                break
-
-        reduced_predictions = []
-        for chunk in chunked_predictions:
-            torch.cuda.synchronize()
-            reduced_predictions += distributed_utils.all_gather_list(chunk, max_size=65000)
-            torch.cuda.synchronize()
+        predictions = _all_gather_predictions(predictions)
 
     with open(os.path.join(args.data, 'sacrebleu_reference.de'), 'r') as reference:
         refs = [reference.readlines()]
     #reducing indexed predictions as strings is more memory efficient than reducing tuples
-    predictions = [item for sublist in reduced_predictions for item in sublist]
     predictions = [tuple(item.split('\t')) for item in predictions]
     predictions = [(int(item[0]), item[1]) for item in predictions]
     predictions.sort(key=lambda tup: tup[0])
-    predictions = [hypo[1] + ('\n' if hypo[-1]!='\n' else '')  for hypo in predictions]
+    predictions = [hypo[1] + ('\n' if hypo[1][-1]!='\n' else '')  for hypo in predictions]
     sacrebleu_score = sacrebleu.corpus_bleu(predictions, refs, lowercase=args.ignore_case)
     print(f'|Detokenized {sacrebleu_score}')
     if gen_timer.sum != 0:
@@ -400,6 +387,36 @@ def score(args, trainer, task, epoch_itr, subset):
     print('| Eval completed in: {:.2f}s'.format(time.time()-begin))
 
     return scorer.score(order=4), sacrebleu_score.score
+
+def _all_gather_predictions(predictions):
+    ready = False
+    all_ready = False
+    reduced_predictions = []
+    max_size = 65000
+    while not all_ready:
+        lst_len = len(predictions)
+        size = 2000     #some extra space for python stuff
+        n = 0
+        while n < lst_len:
+            str_len = len(predictions[n].encode('utf8')) + 8 # per string pickle overhead
+            if size + str_len >= max_size:
+                break
+            size += str_len
+            n += 1
+        chunk = predictions[:n]
+        predictions = predictions[n:]
+        if not predictions:
+            ready = True
+        chunk = (ready, chunk)
+        torch.cuda.synchronize()
+        gathered = distributed_utils.all_gather_list(chunk, max_size=65000)
+        torch.cuda.synchronize()
+        reduced_predictions += [t[1] for t in gathered]
+        all_ready = all([t[0] for t in gathered])
+
+    reduced_predictions = [item for sublist in reduced_predictions for item in sublist]
+
+    return reduced_predictions
 
 def _all_gather_bleu_scorer(scorer):
     stats = distributed_utils.all_gather_list(scorer.stat)

@@ -332,6 +332,7 @@ To achieve same results, follow the [Quick start guide](#quick-start-guide) outl
 
 March 2019
  * Initial release
+
 May 2019
  * Test scripts updated
 

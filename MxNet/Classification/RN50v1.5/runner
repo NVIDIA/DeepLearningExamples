@@ -14,77 +14,56 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os, socket
-from argparse import ArgumentParser
-import warnings
+import os
+import argparse
+from pathlib import Path
 
-
-optparser = ArgumentParser(description="train resnet50 with MXNet")
-optparser.add_argument("-n", "--n-GPUs", type=int, default=8, help="number of GPUs to use; " +\
-                       "default = 8")
-optparser.add_argument("-b", "--batch-size", type=int, default=208, help="batch size per GPU; " +\
-                       "default = 208")
-optparser.add_argument("-e", "--num-epochs", type=int, default=90, help="number of epochs; " +\
-                       "default = 90")
-optparser.add_argument("-l", "--lr", type=float, default=0.1, help="learning rate; default = 0.1; " +\
-                       "IMPORTANT: true learning rate will be calculated as `lr * batch_size/256`")
-optparser.add_argument("--no-val", action="store_true",
-                       help="if set no validation will be performed")
-optparser.add_argument("--no-dali", action="store_true", default=False,
-                       help="use default MXNet pipeline instead of DALI")
-optparser.add_argument("--data-root", type=str, help="Directory with RecordIO data files", default="/data/imagenet/train-val-recordio-passthrough")
-optparser.add_argument("--data-nthreads", type=int, help="number of threads for data loading; default = 40", default=40)
-optparser.add_argument("--dtype", type=str, help="Precision, float16 or float32", default="float16")
+optparser = argparse.ArgumentParser(description='Train classification models on ImageNet',
+                                    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+optparser.add_argument('-n', '--ngpus', type=int, default=1, help='number of GPUs to use')
+optparser.add_argument('-b', '--batch-size', type=int, default=192, help='batch size per GPU')
+optparser.add_argument('-e', '--num-epochs', type=int, default=90, help='number of epochs')
+optparser.add_argument('-l', '--lr', type=float, default=0.256, help='learning rate; '
+                       'IMPORTANT: true learning rate will be calculated as `lr * batch_size / 256`')
+optparser.add_argument('--data-root', type=Path, help='Directory with RecordIO data files', default=Path('/data/imagenet/train-val-recordio-passthrough'))
+optparser.add_argument('--dtype', help='Precision', default='float16', choices=('float32', 'float16'))
+optparser.add_argument('--kv-store', default='horovod', choices=('device', 'horovod'), help='key-value store type')
+optparser.add_argument('--data-backend', default='dali-gpu', choices=('dali-gpu', 'dali-cpu', 'mxnet', 'synthetic'), help='data backend')
 
 opts, args = optparser.parse_known_args()
 
-if opts.dtype == "float16":
-    n_ch = str(4 - int(opts.no_dali))
+if opts.dtype == 'float16':
+    n_ch = str(4 - int(opts.data_backend == 'mxnet'))
 else:
     n_ch = str(3)
 
-opts.batch_size *= opts.n_GPUs
+opts.batch_size *= opts.ngpus
+opts.lr *= opts.batch_size / 256
 
-opts.lr *= opts.batch_size/256
-
-command = ""
-command += "python "+os.path.dirname(__file__)+"/train.py"
-command += " --num-layers 50"
-command += " --data-train " + opts.data_root + "/train.rec"
-command += " --data-train-idx " + opts.data_root + "/train.idx"
-if not opts.no_val:
-    command += " --data-val " + opts.data_root + "/val.rec"
-    command += " --data-val-idx " + opts.data_root + "/val.idx"
-command += " --data-nthreads " + str(opts.data_nthreads)
-command += " --optimizer sgd --dtype " + opts.dtype
-command += " --lr-step-epochs 30,60,80 --max-random-area 1"
-command += " --min-random-area 0.05 --max-random-scale 1"
-command += " --min-random-scale 1 --min-random-aspect-ratio 0.75"
-command += " --max-random-aspect-ratio 1.33 --max-random-shear-ratio 0"
-command += " --max-random-rotate-angle 0 --random-resized-crop 1"
-command += " --random-crop 0 --random-mirror 1"
-command += " --image-shape "+n_ch+",224,224 --warmup-epochs 5"
-command += " --disp-batches 20"
-command += " --batchnorm-mom 0.9 --batchnorm-eps 1e-5"
+command = []
+if 'horovod' in opts.kv_store:
+    command += ['horovodrun', '-np', str(opts.ngpus)]
+command += ['python', str(Path(__file__).parent / "train.py")]
+command += ['--data-train', str(opts.data_root / "train.rec")]
+command += ['--data-train-idx', str(opts.data_root / "train.idx")]
+command += ['--data-val', str(opts.data_root / "val.rec")]
+command += ['--data-val-idx', str(opts.data_root / "val.idx")]
+command += ['--dtype', opts.dtype]
+command += ['--image-shape', n_ch + ',224,224']
 if opts.dtype == 'float16':
-    command += " --fuse-bn-relu 1"
-    command += " --input-layout NHWC --conv-layout NHWC"
-    command += " --batchnorm-layout NHWC --pooling-layout NHWC"
-    command += " --conv-algo 1 --force-tensor-core 1"
-    command += " --fuse-bn-add-relu 1"
+    command += '--fuse-bn-relu 1 --fuse-bn-add-relu 1'.split()
+    command += '--input-layout NCHW --conv-layout NHWC ' \
+               '--batchnorm-layout NHWC --pooling-layout NHWC'.split()
 
-command += " --kv-store device"
-if not opts.no_dali:
-    command += " --use-dali"
-    command += " --dali-prefetch-queue 2 --dali-nvjpeg-memory-padding 64"
-command += " --lr "+str(opts.lr)
-command += " --gpus " + str(list(range(opts.n_GPUs))).replace(' ', '').replace('[', '').replace(']', '')
-command += " --batch-size " + str(opts.batch_size)
-command += " --num-epochs " + str(opts.num_epochs)
+command += ['--kv-store', opts.kv_store]
+command += ['--data-backend', opts.data_backend]
+command += ['--lr', str(opts.lr)]
+command += ['--gpus', ','.join(list(map(str, range(opts.ngpus))))]
+command += ['--batch-size', str(opts.batch_size)]
+command += ['--num-epochs', str(opts.num_epochs)]
 
+command += args
 
-for arg in args:
-    command += " " + arg
 
 os.environ['MXNET_UPDATE_ON_KVSTORE'] = "0"
 os.environ['MXNET_EXEC_ENABLE_ADDTO'] = "1"
@@ -92,5 +71,11 @@ os.environ['MXNET_USE_TENSORRT'] = "0"
 os.environ['MXNET_GPU_WORKER_NTHREADS'] = "2"
 os.environ['MXNET_GPU_COPY_NTHREADS'] = "1"
 os.environ['MXNET_OPTIMIZER_AGGREGATION_SIZE'] = "54"
+os.environ['HOROVOD_CYCLE_TIME'] = "0.1"
+os.environ['HOROVOD_FUSION_THRESHOLD'] = "67108864"
+os.environ['HOROVOD_NUM_NCCL_STREAMS'] = "2"
+os.environ['MXNET_HOROVOD_NUM_GROUPS'] = "16"
+os.environ['MXNET_EXEC_BULK_EXEC_MAX_NODE_TRAIN_FWD'] = "999"
+os.environ['MXNET_EXEC_BULK_EXEC_MAX_NODE_TRAIN_BWD'] = "25"
 
-exit(os.system('/bin/bash -c "'+command+'"'))
+os.execvp(command[0], command)

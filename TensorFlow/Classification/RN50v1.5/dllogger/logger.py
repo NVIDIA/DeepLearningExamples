@@ -48,7 +48,7 @@ _data = OrderedDict([
     ])
 
 def get_caller(root_dir=None):
-    stack_files = [s.filename.split('/')[-1] for s in inspect.stack()]
+    stack_files = [s[1].split('/')[-1] for s in inspect.stack()]
     stack_index = 0
     while stack_index < len(stack_files) and stack_files[stack_index] != 'logger.py':
         stack_index += 1
@@ -58,7 +58,7 @@ def get_caller(root_dir=None):
 
     caller = inspect.stack()[stack_index]
 
-    return "%s:%d" % (stack_files[stack_index], caller.lineno)
+    return "%s:%d" % (stack_files[stack_index], caller[2])
 
 class StandardMeter(object):
 
@@ -261,7 +261,7 @@ class _ParentStdOutBackend(object):
             prefix=self.prefix, token=self.token, ver=self.version, secs=now, 
             model=_data['model'],
             call_site=call_site, msg=msg)
-
+        
         self.logger.debug(message)
 
     def timed_block_start(self, name):

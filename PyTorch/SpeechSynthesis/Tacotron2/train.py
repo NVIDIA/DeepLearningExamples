@@ -39,7 +39,6 @@ from torch.nn.parameter import Parameter
 import torch.distributed as dist
 from torch.utils.data.distributed import DistributedSampler
 
-from apex.fp16_utils import FP16_Optimizer
 from apex.parallel import DistributedDataParallel as DDP
 
 import models
@@ -51,6 +50,10 @@ import dllogger.logger as dllg
 from dllogger import tags
 from dllogger.autologging import log_hardware, log_args
 from scipy.io.wavfile import write as write_wav
+
+from apex import amp
+amp.lists.functional_overrides.FP32_FUNCS.remove('softmax')
+amp.lists.functional_overrides.FP16_FUNCS.append('softmax')
 
 
 def parse_args(parser):
@@ -66,12 +69,6 @@ def parse_args(parser):
                         help='Model to train')
     parser.add_argument('--log-file', type=str, default='nvlog.json',
                         help='Filename for logging')
-    parser.add_argument('--phrase-path', type=str, default=None,
-                        help='Path to phrase sequence file used for sample generation')
-    parser.add_argument('--waveglow-checkpoint', type=str, default=None,
-                        help='Path to pre-trained WaveGlow checkpoint for sample generation')
-    parser.add_argument('--tacotron2-checkpoint', type=str, default=None,
-                        help='Path to pre-trained Tacotron2 checkpoint for sample generation')
     parser.add_argument('--anneal-steps', nargs='*',
                         help='Epochs after which decrease learning rate')
     parser.add_argument('--anneal-factor', type=float, choices=[0.1, 0.3], default=0.1,
@@ -79,20 +76,24 @@ def parse_args(parser):
 
     # training
     training = parser.add_argument_group('training setup')
-    training.add_argument('--epochs', type=int, required=True,  # default=1500,
+    training.add_argument('--epochs', type=int, required=True,
                           help='Number of total epochs to run')
-    training.add_argument('--epochs-per-checkpoint', type=int, default=10,
+    training.add_argument('--epochs-per-checkpoint', type=int, default=50,
                           help='Number of epochs per checkpoint')
+    training.add_argument('--checkpoint-path', type=str, default='',
+                          help='Checkpoint path to resume training')
     training.add_argument('--seed', type=int, default=1234,
                           help='Seed for PyTorch random number generators')
     training.add_argument('--dynamic-loss-scaling', type=bool, default=True,
                           help='Enable dynamic loss scaling')
-    training.add_argument('--fp16-run', action='store_true',
-                          help='Enable fp16')
-    training.add_argument('--cudnn-enabled', type=bool, default=True,
+    training.add_argument('--amp-run', action='store_true',
+                          help='Enable AMP')
+    training.add_argument('--cudnn-enabled', action='store_true',
                           help='Enable cudnn')
-    training.add_argument('--cudnn-benchmark', type=bool, default=False,
+    training.add_argument('--cudnn-benchmark', action='store_true',
                           help='Run cudnn benchmark')
+    training.add_argument('--disable-uniform-initialize-bn-weight', action='store_true',
+                          help='disable uniform initialization of batchnorm layer weight')
 
     optimization = parser.add_argument_group('optimization setup')
     optimization.add_argument(
@@ -110,7 +111,7 @@ def parse_args(parser):
 
     # dataset parameters
     dataset = parser.add_argument_group('dataset parameters')
-    dataset.add_argument('--load-mel-from-disk', default=False, type=bool,
+    dataset.add_argument('--load-mel-from-disk', action='store_true',
                          help='Loads mel spectrograms from disk instead of computing them on the fly')
     dataset.add_argument('--training-files',
                          default='filelists/ljs_audio_text_train_filelist.txt',
@@ -163,46 +164,6 @@ def reduce_tensor(tensor, num_gpus):
     return rt
 
 
-# shamelessly copied from apex/fp16_utils/fp16_optimizer.py
-# commit 34582381e289287e6d09490b69c0840718729f2e
-FLOAT_TYPES = (torch.FloatTensor, torch.cuda.FloatTensor)
-HALF_TYPES = (torch.HalfTensor, torch.cuda.HalfTensor)
-
-
-def conversion_helper(val, conversion):
-    """Apply conversion to val. Recursively apply conversion if `val` is a nested tuple/list structure."""
-    if not isinstance(val, (tuple, list)):
-        return conversion(val)
-    rtn = [conversion_helper(v, conversion) for v in val]
-    if isinstance(val, tuple):
-        rtn = tuple(rtn)
-    return rtn
-
-
-def fp32_to_fp16(val):
-    """Convert fp32 `val` to fp16"""
-    def half_conversion(val):
-        val_typecheck = val
-        if isinstance(val_typecheck, (Parameter, Variable)):
-            val_typecheck = val.data
-        if isinstance(val_typecheck, FLOAT_TYPES):
-            val = val.half()
-        return val
-    return conversion_helper(val, half_conversion)
-
-
-def fp16_to_fp32(val):
-    """Convert fp16 `val` to fp32"""
-    def float_conversion(val):
-        val_typecheck = val
-        if isinstance(val_typecheck, (Parameter, Variable)):
-            val_typecheck = val.data
-        if isinstance(val_typecheck, HALF_TYPES):
-            val = val.float()
-        return val
-    return conversion_helper(val, float_conversion)
-
-
 def init_distributed(args, world_size, rank, group_name):
     assert torch.cuda.is_available(), "Distributed mode requires CUDA."
     print("Initializing Distributed")
@@ -218,60 +179,37 @@ def init_distributed(args, world_size, rank, group_name):
     print("Done initializing distributed")
 
 
-def save_checkpoint(model, epoch, config, filepath):
+def save_checkpoint(model, optimizer, epoch, config, amp_run, filepath):
     print("Saving model and optimizer state at epoch {} to {}".format(
         epoch, filepath))
-    torch.save({'epoch': epoch,
-                'config': config,
-                'state_dict': model.state_dict()}, filepath)
+    checkpoint = {'epoch': epoch,
+                  'cuda_rng_state_all': torch.cuda.get_rng_state_all(),
+                  'random_rng_state': torch.random.get_rng_state(),
+                  'config': config,
+                  'state_dict': model.state_dict(),
+                  'optimizer': optimizer.state_dict()}
+    if amp_run:
+        checkpoint['amp'] = amp.state_dict()
+
+    torch.save(checkpoint, filepath)
 
 
-def save_sample(model_name, model, waveglow_path, tacotron2_path, phrase_path, filepath, sampling_rate, fp16):
-    if phrase_path is None:
-        return
-    phrase = torch.load(phrase_path, map_location='cpu')
-    if model_name == 'Tacotron2':
-        if waveglow_path is None:
-            raise Exception(
-                "WaveGlow checkpoint path is missing, could not generate sample")
-        with torch.no_grad():
-            checkpoint = torch.load(waveglow_path, map_location='cpu')
-            waveglow = models.get_model(
-                'WaveGlow', checkpoint['config'], to_fp16=False, to_cuda=False)
-            waveglow.eval()
-            model.eval()
-            mel = model.infer(phrase.cuda())[0].cpu()
-            model.train()
-            if fp16:
-                mel = mel.float()
-            audio = waveglow.infer(mel, sigma=0.6)
-    elif model_name == 'WaveGlow':
-        if tacotron2_path is None:
-            raise Exception(
-                "Tacotron2 checkpoint path is missing, could not generate sample")
-        with torch.no_grad():
-            checkpoint = torch.load(tacotron2_path, map_location='cpu')
-            tacotron2 = models.get_model(
-                'Tacotron2', checkpoint['config'], to_fp16=False, to_cuda=False)
-            tacotron2.eval()
-            mel = tacotron2.infer(phrase)[0].cuda()
-            model.eval()
-            if fp16:
-                mel = mel.half()
-            audio = model.infer(mel, sigma=0.6).cpu()
-            model.train()
-            if fp16:
-                audio = audio.float()
-    else:
-        raise NotImplementedError(
-            "unknown model requested: {}".format(model_name))
-    audio = audio[0].numpy()
-    audio = audio.astype('int16')
-    write_wav(filepath, sampling_rate, audio)
+def load_checkpoint(model, optimizer, epoch, config, amp_run, filepath):
+
+    checkpoint = torch.load(filepath, map_location='cpu')
+
+    epoch[0] = checkpoint['epoch']+1
+    torch.cuda.set_rng_state_all(checkpoint['cuda_rng_state_all'])
+    torch.random.set_rng_state(checkpoint['random_rng_state'])
+    config = checkpoint['config']
+    model.load_state_dict(checkpoint['state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+
+    if amp_run:
+        amp.load_state_dict(checkpoint['amp'])
 
 # adapted from: https://discuss.pytorch.org/t/opinion-eval-should-be-a-context-manager/18998/3
 # Following snippet is licensed under MIT license
-
 
 @contextmanager
 def evaluating(model):
@@ -286,7 +224,7 @@ def evaluating(model):
 
 
 def validate(model, criterion, valset, iteration, batch_size, world_size,
-             collate_fn, distributed_run, rank, batch_to_gpu, fp16_run):
+             collate_fn, distributed_run, rank, batch_to_gpu):
     """Handles all the validation scoring and printing"""
     with evaluating(model), torch.no_grad():
         val_sampler = DistributedSampler(valset) if distributed_run else None
@@ -298,12 +236,8 @@ def validate(model, criterion, valset, iteration, batch_size, world_size,
         val_loss = 0.0
         for i, batch in enumerate(val_loader):
             x, y, len_x = batch_to_gpu(batch)
-            if fp16_run:
-                y_pred = model(fp32_to_fp16(x))
-                loss = criterion(fp16_to_fp32(y_pred), y)
-            else:
-                y_pred = model(x)
-                loss = criterion(y_pred, y)
+            y_pred = model(x)
+            loss = criterion(y_pred, y)
             if distributed_run:
                 reduced_val_loss = reduce_tensor(loss.data, world_size).item()
             else:
@@ -363,6 +297,8 @@ def main():
                            metric_scope=dllg.EPOCH_SCOPE)
     LOGGER.register_metric("train_epoch_items/sec",
                            metric_scope=dllg.EPOCH_SCOPE)
+    LOGGER.register_metric("train_epoch_avg_items/sec",
+                           metric_scope=dllg.EPOCH_SCOPE)
     LOGGER.register_metric("train_epoch_avg_loss",
                            metric_scope=dllg.EPOCH_SCOPE)
 
@@ -388,21 +324,32 @@ def main():
 
     model_config = models.get_model_config(model_name, args)
     model = models.get_model(model_name, model_config,
-                             to_fp16=args.fp16_run, to_cuda=True)
-    if distributed_run:
+                             to_cuda=True,
+                             uniform_initialize_bn_weight=not args.disable_uniform_initialize_bn_weight)
+
+    if not args.amp_run and distributed_run:
         model = DDP(model)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate,
                                  weight_decay=args.weight_decay)
 
-    if args.fp16_run:
-        optimizer = FP16_Optimizer(
-            optimizer, dynamic_loss_scale=args.dynamic_loss_scaling)
+    if args.amp_run:
+        model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
+        if distributed_run:
+            model = DDP(model)
 
     try:
         sigma = args.sigma
     except AttributeError:
         sigma = None
+
+    start_epoch = [0]
+
+    if args.checkpoint_path is not "":
+        load_checkpoint(model, optimizer, start_epoch, model_config,
+                        args.amp_run, args.checkpoint_path)
+
+    start_epoch = start_epoch[0]
 
     criterion = loss_functions.get_loss_function(model_name, sigma)
 
@@ -431,7 +378,7 @@ def main():
 
     LOGGER.log(key=tags.TRAIN_LOOP)
 
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs):
         LOGGER.epoch_start()
         epoch_start_time = time.time()
         LOGGER.log(key=tags.TRAIN_EPOCH_START, value=epoch)
@@ -441,16 +388,20 @@ def main():
 
         # used to calculate avg loss over epoch
         train_epoch_avg_loss = 0.0
+        train_epoch_avg_items_per_sec = 0.0
         num_iters = 0
 
         # if overflow at the last iteration then do not save checkpoint
         overflow = False
 
+        if distributed_run:
+            train_loader.sampler.set_epoch(epoch)
+
         for i, batch in enumerate(train_loader):
+            print("Batch: {}/{} epoch {}".format(i, len(train_loader), epoch))
             LOGGER.iteration_start()
             iter_start_time = time.time()
             LOGGER.log(key=tags.TRAIN_ITER_START, value=i)
-            print("Batch: {}/{} epoch {}".format(i, len(train_loader), epoch))
 
             start = time.perf_counter()
             adjust_learning_rate(epoch, optimizer, args.learning_rate,
@@ -459,12 +410,8 @@ def main():
             model.zero_grad()
             x, y, num_items = batch_to_gpu(batch)
 
-            if args.fp16_run:
-                y_pred = model(fp32_to_fp16(x))
-                loss = criterion(fp16_to_fp32(y_pred), y)
-            else:
-                y_pred = model(x)
-                loss = criterion(y_pred, y)
+            y_pred = model(x)
+            loss = criterion(y_pred, y)
 
             if distributed_run:
                 reduced_loss = reduce_tensor(loss.data, args.world_size).item()
@@ -483,9 +430,11 @@ def main():
             # accumulate number of items processed in this epoch
             reduced_num_items_epoch += reduced_num_items
 
-            if args.fp16_run:
-                optimizer.backward(loss)
-                grad_norm = optimizer.clip_master_grads(args.grad_clip_thresh)
+            if args.amp_run:
+                with amp.scale_loss(loss, optimizer) as scaled_loss:
+                    scaled_loss.backward()
+                grad_norm = torch.nn.utils.clip_grad_norm_(
+                    amp.master_params(optimizer), args.grad_clip_thresh)
             else:
                 loss.backward()
                 grad_norm = torch.nn.utils.clip_grad_norm_(
@@ -493,15 +442,17 @@ def main():
 
             optimizer.step()
 
-            overflow = optimizer.overflow if args.fp16_run else False
             iteration += 1
 
             LOGGER.log(key=tags.TRAIN_ITER_STOP, value=i)
 
             iter_stop_time = time.time()
             iter_time = iter_stop_time - iter_start_time
+            items_per_sec = reduced_num_items/iter_time
+            train_epoch_avg_items_per_sec += items_per_sec
+
             LOGGER.log(key="train_iter_items/sec",
-                       value=(reduced_num_items/iter_time))
+                       value=items_per_sec)
             LOGGER.log(key="iter_time", value=iter_time)
             LOGGER.iteration_stop()
 
@@ -511,6 +462,8 @@ def main():
 
         LOGGER.log(key="train_epoch_items/sec",
                    value=(reduced_num_items_epoch/epoch_time))
+        LOGGER.log(key="train_epoch_avg_items/sec",
+                   value=(train_epoch_avg_items_per_sec/num_iters if num_iters > 0 else 0.0))
         LOGGER.log(key="train_epoch_avg_loss", value=(
             train_epoch_avg_loss/num_iters if num_iters > 0 else 0.0))
         LOGGER.log(key="epoch_time", value=epoch_time)
@@ -519,17 +472,15 @@ def main():
 
         validate(model, criterion, valset, iteration,
                  args.batch_size, args.world_size, collate_fn,
-                 distributed_run, args.rank, batch_to_gpu, args.fp16_run)
+                 distributed_run, args.rank, batch_to_gpu)
 
         LOGGER.log(key=tags.EVAL_STOP, value=epoch)
 
-        if not overflow and (epoch % args.epochs_per_checkpoint == 0) and args.rank == 0:
+        if (epoch % args.epochs_per_checkpoint == 0) and args.rank == 0:
             checkpoint_path = os.path.join(
                 args.output_directory, "checkpoint_{}_{}".format(model_name, epoch))
-            save_checkpoint(model, epoch, model_config, checkpoint_path)
-            save_sample(model_name, model, args.waveglow_checkpoint,
-                        args.tacotron2_checkpoint, args.phrase_path,
-                        os.path.join(args.output_directory, "sample_{}_{}.wav".format(model_name, iteration)), args.sampling_rate, args.fp16_run)
+            save_checkpoint(model, optimizer, epoch, model_config,
+                            args.amp_run, checkpoint_path)
 
         LOGGER.epoch_stop()
 

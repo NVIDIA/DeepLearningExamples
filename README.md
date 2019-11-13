@@ -1,4 +1,4 @@
-# NVIDIA Deep Learning Examples for Volta Tensor Cores
+# NVIDIA Deep Learning Examples for Tensor Cores
 
 ## Introduction
 This repository provides the latest deep learning example networks for training.  These examples focus on achieving the best performance and convergence from NVIDIA Volta Tensor Cores.
@@ -25,13 +25,16 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 ### Natural Language Processing
 - __GNMT__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Translation/GNMT)] [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Translation/GNMT)]
 - __Transformer__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Translation/Transformer)]
-- __BERT__ [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/LanguageModeling/BERT)]
+- __BERT__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/LanguageModeling/BERT)][[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/LanguageModeling/BERT)]
 
 ### Recommender Systems
 - __NCF__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Recommendation/NCF)] [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Recommendation/NCF)]
 
 ### Text to Speech
 - __Tacotron & WaveGlow__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2)]
+
+### Speech Recognition
+- __Jasper__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechRecognition/Jasper)]
 
 ## NVIDIA support
 In each of the network READMEs, we indicate the level of support that will be provided. The range is from ongoing updates and improvements to a point-in-time release for thought leadership.
@@ -41,3 +44,6 @@ We're posting these examples on GitHub to better support the community, facilita
 
 ## Known issues
 In each of the network READMEs, we indicate any known issues and encourage the community to provide feedback.
+
+
+

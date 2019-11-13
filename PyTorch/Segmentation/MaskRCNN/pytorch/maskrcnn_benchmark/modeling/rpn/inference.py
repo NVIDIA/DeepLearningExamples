@@ -164,6 +164,7 @@ class RPNPostProcessor(torch.nn.Module):
             keep = [None for _ in range(N)]
 
         result = []
+        keep = keep.to(torch.bool)
         for proposal, score, im_shape, k in zip(proposals, objectness, image_shapes, keep):
             if use_fast_cuda_path:
                 # Note: Want k to be applied per-image instead of all-at-once in batched code earlier
@@ -228,7 +229,7 @@ class RPNPostProcessor(torch.nn.Module):
             box_sizes = [len(boxlist) for boxlist in boxlists]
             post_nms_top_n = min(self.fpn_post_nms_top_n, len(objectness))
             _, inds_sorted = torch.topk(objectness, post_nms_top_n, dim=0, sorted=True)
-            inds_mask = torch.zeros_like(objectness, dtype=torch.uint8)
+            inds_mask = torch.zeros_like(objectness, dtype=torch.bool)
             inds_mask[inds_sorted] = 1
             inds_mask = inds_mask.split(box_sizes)
             for i in range(num_images):

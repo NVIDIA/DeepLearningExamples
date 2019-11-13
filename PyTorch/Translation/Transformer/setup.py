@@ -57,22 +57,6 @@ strided_batched_gemm = CUDAExtension(
                         }
 )
 
-fused_dropout_add = CUDAExtension(
-                        name='fused_dropout_add_cuda',
-                        sources=['fairseq/models/fused_dropout_add/fused_dropout_add_cuda.cpp', 'fairseq/models/fused_dropout_add/fused_dropout_add_cuda_kernel.cu'],
-                        extra_compile_args={
-                                'cxx': ['-O2',],
-                                'nvcc':['--gpu-architecture=sm_70','-O3','--use_fast_math', '--expt-extended-lambda'],
-                        }
-)
-fused_relu_dropout = CUDAExtension(
-                        name='fused_relu_dropout_cuda',
-                        sources=['fairseq/models/fused_relu_dropout/fused_relu_dropout_cuda.cpp', 'fairseq/models/fused_relu_dropout/fused_relu_dropout_cuda_kernel.cu'],
-                        extra_compile_args={
-                                'cxx': ['-O2',],
-                                'nvcc':['--gpu-architecture=sm_70','-O3','--use_fast_math', '--expt-extended-lambda'],
-                        }
-)
 batch_utils = CppExtension(
                         name='fairseq.data.batch_C',
                         sources=['fairseq/data/csrc/make_batches.cpp'],
@@ -88,7 +72,7 @@ setup(
     license=license,
     install_requires=reqs.strip().split('\n'),
     packages=find_packages(),
-    ext_modules=[bleu, strided_batched_gemm, fused_dropout_add, fused_relu_dropout, batch_utils],
+    ext_modules=[bleu, strided_batched_gemm, batch_utils],
     cmdclass={
                 'build_ext': BuildExtension
     },
