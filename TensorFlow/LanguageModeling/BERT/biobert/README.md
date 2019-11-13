@@ -86,7 +86,7 @@ To download and preprocess pre-training data as well as the required vocab files
 bash biobert/scripts/biobert_data_download.sh
 ```
 
-Datasets for finetuning can be obtained from this (repository) [https://github.com/ncbi-nlp/BLUE_Benchmark/releases/tag/0.1]
+Datasets for finetuning can be obtained from this [repository](https://github.com/ncbi-nlp/BLUE_Benchmark/releases/tag/0.1)
 
 Place them in `/workspace/bert/data/biobert/` to be automatically picked up by our scripts.
 
