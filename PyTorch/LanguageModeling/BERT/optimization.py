@@ -340,7 +340,8 @@ class BertAdam(Optimizer):
                 if p.grad is None:
                     continue
                 grad_list.append(p)
-                
+
+        dummy_overflow_buf = torch.cuda.IntTensor([0])        
         global_grad_norm = multi_tensor_applier(
                         multi_tensor_l2norm,
                         dummy_overflow_buf,
