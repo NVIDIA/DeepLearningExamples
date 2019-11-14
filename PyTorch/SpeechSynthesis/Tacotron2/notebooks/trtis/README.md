@@ -19,7 +19,7 @@ below to learn how to train, export --- or simply download the pretrained models
 
 You can either download the pretrained checkpoints or train the models yourself.
 
-#### Download pretrained checkpoints.
+#### (Option 1) Download pretrained checkpoints.
 
 If you want to use a pretrained checkpoints, download them from [NGC](https://ngc.nvidia.com/catalog/models):
 
@@ -27,7 +27,7 @@ If you want to use a pretrained checkpoints, download them from [NGC](https://ng
 - [WaveGlow checkpoint](https://ngc.nvidia.com/models/nvidia:waveglow256pyt_fp16)
 
 
-#### Train Tacotron 2 and WaveGlow models.
+#### (Option 2) Train Tacotron 2 and WaveGlow models.
 
 In order to train the models, follow the QuickStart section in the `Tacotron2/README.md`
 file by executing points 1-5. You have to train WaveGlow in a different way than described there. Use
@@ -52,25 +52,25 @@ python export_tacotron2_ts_config.py --amp-run
 ```
 
 This will export the folder structure of the TRTIS repository and the config file of Tacotron 2. 
-By default, it will be found in the `trtis_repo/tacotron` folder.
+By default, it will be found in the `trtis_repo/tacotron2` folder.
 
 Now there are two ways to proceed.
 
-#### Download the Tacotron 2 TorchScript model.
+#### (Option 1) Download the Tacotron 2 TorchScript model.
 
 Download the Tacotron 2 TorchScript model from:
 - [Tacotron2 TorchScript](https://ngc.nvidia.com/models/nvidia:tacotron2pyt_jit_fp16)
 
 Move the downloaded model to `trtis_repo/tacotron2/1/model.pt`
 
-#### Export the Tacotron 2 model using TorchScript.
+#### (Option 2) Export the Tacotron 2 model using TorchScript.
 
 To export the Tacotron 2 model using TorchScript, type:
 ```bash
 python export_tacotron2_ts.py --tacotron2 <tacotron2_checkpoint> -o trtis_repo/tacotron2/1/model.pt --amp-run
 ```
 
-This will save the model as ``trtis_repo/tacotron/1/model.pt``.
+This will save the model as ``trtis_repo/tacotron2/1/model.pt``.
 
 ### Setup WaveGlow TRT engine.
 
@@ -86,14 +86,14 @@ By default, it will be found in the `trtis_repo/waveglow` folder.
 
 There are two ways to proceed. 
 
-#### Download the WaveGlow TRT engine.
+#### (Option 1) Download the WaveGlow TRT engine.
 
 Download the WaveGlow TRT engine from:
 - [WaveGlow TRT engine](https://ngc.nvidia.com/models/nvidia:waveglow256pyt_trt_fp16)
 
 Move the downloaded model to `trtis_repo/waveglow/1/model.plan`
 
-#### Export the WaveGlow model to TRT.
+#### (Option 2) Export the WaveGlow model to TRT.
 
 Before exporting the model, you need to install onnx-tensorrt by typing:
 ```bash
