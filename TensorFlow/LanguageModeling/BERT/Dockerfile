@@ -1,6 +1,6 @@
 ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:19.08-py3
 
-FROM tensorrtserver_client as trt
+FROM nvcr.io/nvidia/tensorrtserver:19.10-py3-clientsdk as trt
 
 FROM ${FROM_IMAGE_NAME}
 
@@ -17,10 +17,10 @@ RUN git clone https://github.com/titipata/pubmed_parser
 RUN pip3 install /workspace/pubmed_parser
 
 #Copy the perf_client over
-COPY --from=trt /workspace/build/perf_client /workspace/build/perf_client
+COPY --from=trt /workspace/build/trtis-clients/src/clients/c++/perf_client /workspace/build/perf_client
 
 #Copy the python wheel and install with pip
-COPY --from=trt /workspace/build/dist/dist/tensorrtserver*.whl /tmp/
+COPY --from=trt /workspace/install/python/tensorrtserver*.whl /tmp/
 RUN pip install /tmp/tensorrtserver*.whl && rm /tmp/tensorrtserver*.whl
 
 
