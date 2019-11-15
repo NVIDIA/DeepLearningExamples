@@ -245,7 +245,7 @@ def validate(model, criterion, valset, iteration, batch_size, world_size,
             val_loss += reduced_val_loss
         val_loss = val_loss / (i + 1)
 
-    LOGGER.log(key="val_iter_loss", value=reduced_val_loss)
+    LOGGER.log(key="val_iter_loss", value=val_loss)
 
 
 def adjust_learning_rate(epoch, optimizer, learning_rate,
