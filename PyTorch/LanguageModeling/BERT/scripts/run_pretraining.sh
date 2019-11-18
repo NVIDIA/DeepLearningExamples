@@ -29,26 +29,24 @@ seed=${12:-$RANDOM}
 job_name=${13:-"bert_lamb_pretraining"}
 allreduce_post_accumulation=${14:-"true"}
 allreduce_post_accumulation_fp16=${15:-"true"}
-accumulate_into_fp16=${16:-"false"}
-
 train_batch_size_phase2=${17:-4096}
 learning_rate_phase2=${18:-"4e-3"}
 warmup_proportion_phase2=${19:-"0.128"}
 train_steps_phase2=${20:-1563}
 gradient_accumulation_steps_phase2=${21:-512}
-
 DATASET=hdf5_lower_case_1_seq_len_128_max_pred_20_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/books_wiki_en_corpus # change this for other datasets
-DATA_DIR=$BERT_PREP_WORKING_DIR/${DATASET}/
+DATA_DIR_PHASE1=${22:-$BERT_PREP_WORKING_DIR/${DATASET}/}
 BERT_CONFIG=bert_config.json
-RESULTS_DIR=/workspace/bert/results
+CODEDIR=${24:-"/workspace/bert"}
+init_checkpoint=${25:-"None"}
+RESULTS_DIR=$CODEDIR/results
 CHECKPOINTS_DIR=$RESULTS_DIR/checkpoints
-
 
 mkdir -p $CHECKPOINTS_DIR
 
 
-if [ ! -d "$DATA_DIR" ] ; then
-   echo "Warning! $DATA_DIR directory missing. Training cannot start"
+if [ ! -d "$DATA_DIR_PHASE1" ] ; then
+   echo "Warning! $DATA_DIR_PHASE1 directory missing. Training cannot start"
 fi
 if [ ! -d "$RESULTS_DIR" ] ; then
    echo "Error! $RESULTS_DIR directory missing."
@@ -94,15 +92,15 @@ if [ "$allreduce_post_accumulation_fp16" == "true" ] ; then
    ALL_REDUCE_POST_ACCUMULATION_FP16="--allreduce_post_accumulation_fp16"
 fi
 
-ACCUMULATE_INTO_FP16=""
-if [ "$accumulate_into_fp16" == "true" ] ; then
-   ACCUMULATE_INTO_FP16="--accumulate_into_fp16"
+INIT_CHECKPOINT=""
+if [ "$init_checkpoint" != "None" ] ; then
+   INIT_CHECKPOINT="--init_checkpoint=$init_checkpoint"
 fi
 
-echo $DATA_DIR
-INPUT_DIR=$DATA_DIR
-CMD=" /workspace/bert/run_pretraining.py"
-CMD+=" --input_dir=$DATA_DIR"
+echo $DATA_DIR_PHASE1
+INPUT_DIR=$DATA_DIR_PHASE1
+CMD=" $CODEDIR/run_pretraining.py"
+CMD+=" --input_dir=$DATA_DIR_PHASE1"
 CMD+=" --output_dir=$CHECKPOINTS_DIR"
 CMD+=" --config_file=$BERT_CONFIG"
 CMD+=" --bert_model=bert-large-uncased"
@@ -119,9 +117,11 @@ CMD+=" $ACCUMULATE_GRADIENTS"
 CMD+=" $CHECKPOINT"
 CMD+=" $ALL_REDUCE_POST_ACCUMULATION"
 CMD+=" $ALL_REDUCE_POST_ACCUMULATION_FP16"
-CMD+=" $ACCUMULATE_INTO_FP16"
+CMD+=" $INIT_CHECKPOINT"
 CMD+=" --do_train"
+
 CMD="python3 -m torch.distributed.launch --nproc_per_node=$num_gpus $CMD"
+
 
 if [ "$create_logfile" = "true" ] ; then
   export GBS=$(expr $train_batch_size \* $num_gpus)
@@ -160,7 +160,7 @@ echo "final loss: $final_loss"
 #Start Phase2
 
 DATASET=hdf5_lower_case_1_seq_len_512_max_pred_80_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/books_wiki_en_corpus # change this for other datasets
-DATA_DIR=$BERT_PREP_WORKING_DIR/${DATASET}/
+DATA_DIR_PHASE2=${23:-$BERT_PREP_WORKING_DIR/${DATASET}/}
 
 PREC=""
 if [ "$precision" = "fp16" ] ; then
@@ -187,15 +187,10 @@ if [ "$allreduce_post_accumulation_fp16" == "true" ] ; then
    ALL_REDUCE_POST_ACCUMULATION_FP16="--allreduce_post_accumulation_fp16"
 fi
 
-ACCUMULATE_INTO_FP16=""
-if [ "$accumulate_into_fp16" == "true" ] ; then
-   ACCUMULATE_INTO_FP16="--accumulate_into_fp16"
-fi
-
-echo $DATA_DIR
-INPUT_DIR=$DATA_DIR
-CMD=" /workspace/bert/run_pretraining.py"
-CMD+=" --input_dir=$DATA_DIR"
+echo $DATA_DIR_PHASE2
+INPUT_DIR=$DATA_DIR_PHASE2
+CMD=" $CODEDIR/run_pretraining.py"
+CMD+=" --input_dir=$DATA_DIR_PHASE2"
 CMD+=" --output_dir=$CHECKPOINTS_DIR"
 CMD+=" --config_file=$BERT_CONFIG"
 CMD+=" --bert_model=bert-large-uncased"
@@ -212,8 +207,8 @@ CMD+=" $ACCUMULATE_GRADIENTS"
 CMD+=" $CHECKPOINT"
 CMD+=" $ALL_REDUCE_POST_ACCUMULATION"
 CMD+=" $ALL_REDUCE_POST_ACCUMULATION_FP16"
-CMD+=" $ACCUMULATE_INTO_FP16"
 CMD+=" --do_train --phase2 --resume_from_checkpoint --phase1_end_step=$train_steps"
+
 CMD="python3 -m torch.distributed.launch --nproc_per_node=$num_gpus $CMD"
 
 if [ "$create_logfile" = "true" ] ; then
@@ -241,7 +236,6 @@ loss=`cat $LOGFILE | grep 'Average Loss' | tail -1 | awk -F'Average Loss =' '{pr
 final_loss=`cat $LOGFILE | grep 'Total Steps' | tail -1 | awk -F'Final Loss =' '{print $2}' | awk -F' ' '{print $1}' | egrep -o [0-9.]+`
 
 train_perf=$(awk 'BEGIN {print ('$throughput' * '$num_gpus' * '$train_batch_size_phase2' / '$gradient_accumulation_steps_phase2')}')
-
 echo " training throughput phase2: $train_perf sequences/second"
 echo "average loss: $loss"
 echo "final loss: $final_loss"
