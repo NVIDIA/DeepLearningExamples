@@ -64,4 +64,7 @@ ENV CONFIG_PATH="/root/.jupyter/jupyter_notebook_config.py"
 
 COPY "jupyter_notebook_config.py" ${CONFIG_PATH}
 
-ENTRYPOINT ["sh", "-c", "jupyter notebook --allow-root -y --no-browser --ip=0.0.0.0 --config=${CONFIG_PATH}"]
+RUN git clone https://github.com/NVIDIA/DeepLearningExamples.git
+WORKDIR /notebooks/DeepLearningExamples/PyTorch/Segmentation/MaskRCNN/pytorch/demo
+
+ENTRYPOINT ["sh", "-c", "jupyter notebook --allow-root -y --no-browser --ip=0.0.0.0 --config=/root/.jupyter/jupyter_notebook_config.py"]
