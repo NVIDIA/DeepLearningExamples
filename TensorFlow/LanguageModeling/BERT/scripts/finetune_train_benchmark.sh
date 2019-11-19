@@ -77,6 +77,7 @@ if [ "$task" = "squad" ] ; then
         for batch_size in 1 2 4; do
             for precision in fp16 fp32; do
                 res_dir=${RESULTS_DIR}/bert_${bert_model}_gpu_${num_gpu}_sl_${seq_len}_prec_${precision}_bs_${batch_size}
+                mkdir -p $res_dir
                 tmp_file="${res_dir}/${task}_training_benchmark.log"
 
                 if [ "$precision" = "fp16" ] ; then
