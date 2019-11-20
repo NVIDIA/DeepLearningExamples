@@ -29,7 +29,7 @@ ENV PATH=$CONDA_PREFIX/bin:$PATH
 ENV CONDA_AUTO_UPDATE_CONDA=false
 
 RUN conda install -y ipython
-RUN pip install ninja yacs cython matplotlib opencv-python
+RUN pip install ninja yacs cython matplotlib opencv-python jupyter
 
 # Install PyTorch 1.0 Nightly and OpenCV
 RUN conda install -y pytorch-nightly -c pytorch \
@@ -55,4 +55,5 @@ RUN git clone https://github.com/facebookresearch/maskrcnn-benchmark.git \
  && cd maskrcnn-benchmark \
  && python setup.py build develop
 
-WORKDIR /maskrcnn-benchmark
+RUN git clone https://github.com/NVIDIA/DeepLearningExamples.git
+WORKDIR /notebooks/DeepLearningExamples/PyTorch/Segmentation/MaskRCNN/pytorch/demo
