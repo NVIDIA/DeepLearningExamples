@@ -629,7 +629,8 @@ def main(_):
 
 if __name__ == "__main__":
   flags.mark_flag_as_required("input_files_dir")
-  flags.mark_flag_as_required("eval_files_dir")
+  if FLAGS.do_eval:
+    flags.mark_flag_as_required("eval_files_dir")
   flags.mark_flag_as_required("bert_config_file")
   flags.mark_flag_as_required("output_dir")
   if FLAGS.use_xla and FLAGS.manual_fp16:
