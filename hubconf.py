@@ -357,9 +357,9 @@ def nvidia_ssd(pretrained=True, **kwargs):
 
     if pretrained:
         if fp16:
-            checkpoint = 'https://developer.nvidia.com/joc-ssd-fp16-pyt-20190225'
+            checkpoint = 'https://api.ngc.nvidia.com/v2/models/nvidia/ssdpyt_fp16/versions/1/files/nvidia_ssdpyt_fp16_20190225.pt'
         else:
-            checkpoint = 'https://developer.nvidia.com/joc-ssd-fp32-pyt-20190225'
+            checkpoint = 'https://api.ngc.nvidia.com/v2/models/nvidia/ssdpyt_fp32/versions/1/files/nvidia_ssdpyt_fp32_20190225.pt'
         ckpt_file = _download_checkpoint(checkpoint, force_reload)
         ckpt = torch.load(ckpt_file)
         ckpt = ckpt['model']
