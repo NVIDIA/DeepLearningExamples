@@ -56,7 +56,8 @@ T blockReduceSum(T val)
 
   __syncthreads();
 
-  val = (threadIdx.x < (blockDim.x >> 5 )) ? shared[lane] : (T)(0.0f);
+  int block_span = (blockDim.x + warpSize - 1) >> 5;
+  val = (threadIdx.x < block_span) ? shared[lane] : (T)(0.0f);
   val = warpReduceSum<T>(val);
                               
   return val;
@@ -88,7 +89,8 @@ T blockReduceMax(T val)
   __syncthreads();
 
 
-  val = (threadIdx.x < (blockDim.x >> 5 )) ? shared[lane] : -1e20f;
+  int block_span = (blockDim.x + warpSize - 1) >> 5;
+  val = (threadIdx.x < block_span) ? shared[lane] : -1e20f;
   val = warpReduceMax(val);
 
   return val;
