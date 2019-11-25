@@ -497,7 +497,7 @@ def main():
         ]
     if args.fp16:
         try:
-            from apex.optimizers import FP16_Optimizer
+            from apex.contrib.optimizers import FP16_Optimizer
             from apex.optimizers import FusedAdam
         except ImportError:
             raise ImportError("Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")

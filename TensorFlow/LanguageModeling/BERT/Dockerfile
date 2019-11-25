@@ -1,6 +1,6 @@
 ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:19.08-py3
 
-FROM tensorrtserver_client as trt
+#FROM tensorrtserver_client as trt
 
 FROM ${FROM_IMAGE_NAME}
 
