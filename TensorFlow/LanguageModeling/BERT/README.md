@@ -640,7 +640,7 @@ Training benchmarking can be performed by running the script:
 scripts/finetune_train_benchmark.sh <bert_model> <use_xla> <num_gpu> squad
 ```
 
-This script runs 2 epochs by default on the SQuAD v1.1 dataset and extracts performance numbers for various batch sizes and sequence lengths in both FP16 and FP32. These numbers are saved at `/results/squad_inference_benchmark_bert_<bert_model>_gpu_<num_gpu>.log`.
+This script runs 2 epochs by default on the SQuAD v1.1 dataset and extracts performance numbers for various batch sizes and sequence lengths in both FP16 and FP32. These numbers are saved at `/results/squad_train_benchmark_bert_<bert_model>_gpu_<num_gpu>.log`.
 
 #### Inference performance benchmark
 
@@ -650,7 +650,7 @@ Inference benchmarking can be performed by running the script:
 scripts/finetune_inference_benchmark.sh <bert_model> squad
 ```
 
-This script runs 1024 eval iterations by default on the SQuAD v1.1 dataset and extracts performance and latency numbers for various batch sizes and sequence lengths in both FP16 with XLA and FP32 without XLA. These numbers are saved at `/results/squad_train_benchmark_bert_<bert_model>.log`.
+This script runs 1024 eval iterations by default on the SQuAD v1.1 dataset and extracts performance and latency numbers for various batch sizes and sequence lengths in both FP16 with XLA and FP32 without XLA. These numbers are saved at `/results/squad_inference_benchmark_bert_<bert_model>.log`.
 
 ### Results
 
@@ -763,7 +763,7 @@ Note: The respective values for FP32 runs that use a batch size of 16, 2 in sequ
 
 Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
 
-| **GPUs** | **Batch size / GPU: mixed precision, FP32** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
+| **GPUs** | **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
 |:---:|:---:|:------:|:-----:|:----:|:----:|:----:|
 | 1 | 3,2 | 17.17 | 7.35  | 2.336054422 | 1.00 | 1.00 |
 | 4 | 3,2 | 50.68 | 26.38 | 1.921152388 | 3.59 | 2.95 |
@@ -795,7 +795,7 @@ Note: The respective values for FP32 runs that use a batch size of 48, 8 in sequ
 Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
 
 
-| **GPUs** | **Batch size / GPU: mixed precision, FP32** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
+| **GPUs** | **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
 |---|---|-----|------|----|----|----|
 | 1 | 10,4 | 33.79  | 9     | 3.754444444 | 1.00 | 1.00 |
 | 4 | 10,4 | 103.38 | 32.5  | 3.180923077 | 3.61 | 3.06 |
@@ -847,7 +847,7 @@ Our results were obtained by running the `run.sub` training script in the Tensor
 
 Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
 
-| **GPUs** | **Batch size / GPU: mixed precision, FP32** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
+| **GPUs** | **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
 |---|---|------|------|----|-----|-----|
 | 1  | 10,4 |      36.30  |      9.59   | 3.785192909 | 1.00  | 1.00 |
 | 4  | 10,4 |      115.67 |      35.46  | 3.261985336 | 3.70  | 3.19 |
