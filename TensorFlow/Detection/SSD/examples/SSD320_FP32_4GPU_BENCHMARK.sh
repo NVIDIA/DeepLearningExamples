@@ -1,3 +1,17 @@
+# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 CKPT_DIR=${1:-"/results/SSD320_FP32_4GPU"}
 PIPELINE_CONFIG_PATH=${2:-"/workdir/models/research/configs"}"/ssd320_bench.config"
 GPUS=4
@@ -22,7 +36,7 @@ TRAIN_LOG=$(mpirun --allow-run-as-root \
                --model_dir=${CKPT_DIR} \
                --alsologtostder \
                "${@:3}" 2>&1)
-PERF=$(echo "$TRAIN_LOG" | awk -v GPUS=$GPUS '/global_step\/sec/{ array[num++]=$2 } END { for (x = 3*num/4; x < num; ++x) { sum += array[x] }; print GPUS*32*4*sum/num " img/s"}')
+PERF=$(echo "$TRAIN_LOG" | sed -n 's|.*global_step/sec: \(\S\+\).*|\1|p' | python -c "import sys; x = sys.stdin.readlines(); x = [float(a) for a in x[int(len(x)*3/4):]]; print(32*$GPUS*sum(x)/len(x), 'img/s')")
 
 mkdir -p $CKPT_DIR
 echo "$GPUS GPUs single precision training performance: $PERF" | tee $CKPT_DIR/train_log
