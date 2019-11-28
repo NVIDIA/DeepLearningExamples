@@ -29,7 +29,7 @@ wget http://download.tensorflow.org/models/resnet_v1_50_2016_08_28.tar.gz
 tar -xzf resnet_v1_50_2016_08_28.tar.gz
 mkdir -p resnet_v1_50
 mv resnet_v1_50.ckpt resnet_v1_50/model.ckpt
-nvidia-docker run --rm -it -u 123 -v $COCO_DIR:/data/coco2017_tfrecords $CONTAINER bash -c '
+docker run --rm -u 123 -v $COCO_DIR:/data/coco2017_tfrecords $CONTAINER bash -c '
 # Create TFRecords
 bash /workdir/models/research/object_detection/dataset_tools/download_and_preprocess_mscoco.sh \
     /data/coco2017_tfrecords'
