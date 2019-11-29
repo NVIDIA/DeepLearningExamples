@@ -656,7 +656,6 @@ def main(_):
       global_batch_size = FLAGS.train_batch_size * hvd.size()
       master_process = (hvd.rank() == 0)
       hvd_rank = hvd.rank()
-      config.gpu_options.allow_growth = True
       config.gpu_options.visible_device_list = str(hvd.local_rank())
       if hvd.size() > 1:
         training_hooks.append(hvd.BroadcastGlobalVariablesHook(0))

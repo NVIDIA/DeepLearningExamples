@@ -523,7 +523,6 @@ def main(_):
   config = tf.ConfigProto()
   if FLAGS.horovod:
     config.gpu_options.visible_device_list = str(hvd.local_rank())
-    config.gpu_options.allow_growth = True
     if hvd.rank() == 0:
       tf.logging.info("***** Configuaration *****")
       for key in FLAGS.__flags.keys():

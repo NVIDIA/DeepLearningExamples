@@ -38,12 +38,12 @@ EXPORT_MODEL_ARGS="${precision} ${use_xla} ${seq_length} ${doc_stride} ${BERT_DI
 PERF_CLIENT_ARGS="1000 10 20 localhost"
 
 # Start Server
-./trtis/scripts/launch_server.sh $precision
+bash trtis/scripts/launch_server.sh $precision
 
 # Restart Server
 restart_server() {
 docker kill trt_server_cont
-./trtis/scripts/launch_server.sh $precision
+bash trtis/scripts/launch_server.sh $precision
 }
 
 ############## Dynamic Batching Comparison ##############
@@ -53,32 +53,32 @@ TRTIS_ENGINE_COUNT=1
 
 # Dynamic batching 10 ms
 TRTIS_DYN_BATCHING_DELAY=10
-.trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
+bash trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
 restart_server
 sleep 15
-./trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
+bash trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
 
 # Dynamic batching 5 ms
 TRTIS_DYN_BATCHING_DELAY=5
-./trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
+bash trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
 restart_server
 sleep 15
-./trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
+bash trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
 
 # Dynamic batching 2 ms
 TRTIS_DYN_BATCHING_DELAY=2
-./trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
+bash trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
 restart_server
 sleep 15
-./trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
+bash trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
 
 
 # Static Batching (i.e. Dynamic batching 0 ms)
 TRTIS_DYN_BATCHING_DELAY=0
-./trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
+bash trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
 restart_server
 sleep 15
-./trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
+bash trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
 
 
 # ############## Engine Count Comparison ##############
@@ -88,24 +88,24 @@ TRTIS_DYN_BATCHING_DELAY=0
 
 # Engine Count = 4
 TRTIS_ENGINE_COUNT=4
-./trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
+bash trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
 restart_server
 sleep 15
-./trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
+bash trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
 
 # Engine Count = 2
 TRTIS_ENGINE_COUNT=2
-./trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
+bash trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
 restart_server
 sleep 15
-./trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
+bash trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
 
 # Engine Count = 1
 TRTIS_ENGINE_COUNT=1
-./trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
+bash trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
 restart_server
 sleep 15
-./trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
+bash trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
 
 
 ############## Batch Size Comparison ##############
@@ -115,32 +115,32 @@ CLIENT_BATCH_SIZE=1
 TRTIS_ENGINE_COUNT=1 
 TRTIS_DYN_BATCHING_DELAY=0 
 
-./trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
+bash trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
 restart_server
 sleep 15
-./trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} 1000 10 64 localhost
+bash trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} 1000 10 64 localhost
 
 # BATCH=2 Generate model and perf
 SERVER_BATCH_SIZE=2
 CLIENT_BATCH_SIZE=2
-./trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
+bash trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
 restart_server
 sleep 15
-./trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} 1000 10 32 localhost
+bash trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} 1000 10 32 localhost
 
 # BATCH=4 Generate model and perf
 SERVER_BATCH_SIZE=4
 CLIENT_BATCH_SIZE=4
-./trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
+bash trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
 restart_server
 sleep 15
-./trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} 1000 10 16 localhost
+bash trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} 1000 10 16 localhost
 
 # BATCH=8 Generate model and perf
 SERVER_BATCH_SIZE=8
 CLIENT_BATCH_SIZE=8
-./trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
+bash trtis/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRTIS_DYN_BATCHING_DELAY} ${TRTIS_ENGINE_COUNT} ${TRTIS_MODEL_OVERWRITE}
 restart_server
 sleep 15
-./trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} 1000 10 8 localhost
+bash trtis/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} 1000 10 8 localhost
 

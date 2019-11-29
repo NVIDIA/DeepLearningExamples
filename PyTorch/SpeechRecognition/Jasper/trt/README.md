@@ -1,4 +1,3 @@
-
 # Jasper Inference For TensorRT
 
 This is subfolder of the Jasper for PyTorch repository, tested and maintained by NVIDIA, and provides scripts to perform high-performance inference using NVIDIA TensorRT. Jasper is a neural acoustic model for speech recognition. Its network architecture is designed to facilitate fast GPU inference. More information about Jasper and its training and be found in the [root directory](../README.md). 
