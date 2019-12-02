@@ -20,6 +20,8 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 - __Mask R-CNN__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Segmentation/MaskRCNN)]
 - __U-Net(industrial)__ [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Industrial)]
 - __U-Net(medical)__ [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Medical)]
+- __VNet__ [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/VNet)]
+
 
 
 ### Natural Language Processing
@@ -31,6 +33,8 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 
 ### Recommender Systems
 - __NCF__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Recommendation/NCF)] [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Recommendation/NCF)]
+- __VAE-CF__ [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Recommendation/VAE-CF)]
+
 
 ### Text to Speech
 - __Tacotron & WaveGlow__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2)]

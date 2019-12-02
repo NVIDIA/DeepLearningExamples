@@ -1,0 +1,4 @@
+SimpleITK==1.1.0
+requests
+googledrivedownloader
+tf2onnx
