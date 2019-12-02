@@ -320,7 +320,7 @@ Our results were obtained by running the `main.py` training script in the Tensor
 | GPUs | Batch size / GPU | Accuracy - FP32 | Accuracy - mixed precision  | Time to train - FP32 (s) |  Time to train - mixed precision (s) | Time to train speedup (FP32 to mixed precision) |
 |---|---|---|---|---|---|---|
 | 1 | 24576 | 0.42863  | 0.42824 | 357.6| 205.9  | 1.737 |
-| 8 | 3072  | 0.42763  | 0.42766 | 43.2 | 59.7    | 1.381 |
+| 8 | 3072  | 0.42763  | 0.42766 | 59.7 | 43.2   | 1.381 |
 
 
 #### Training performance results
