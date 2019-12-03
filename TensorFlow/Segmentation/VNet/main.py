@@ -26,8 +26,8 @@ import shutil
 import horovod.tensorflow as hvd
 import tensorflow as tf
 
-import dllogger.dllogger as DLLogger
-from dllogger.dllogger import StdOutBackend, JSONStreamBackend, Verbosity
+import dllogger as DLLogger
+from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
 from hooks.profiling_hook import ProfilingHook
 from hooks.train_hook import TrainHook
 from utils.cmd_util import PARSER
