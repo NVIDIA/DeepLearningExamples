@@ -1,4 +1,4 @@
-# Variational Autoencoder for Collaborative Filtering 19.11 for TensorFlow
+# Variational Autoencoder for Collaborative Filtering for TensorFlow
 
 This repository provides a script and recipe to train the Variational Autoencoder model for TensorFlow to achieve state-of-the-art accuracy on a Collaborative Filtering task and is tested and maintained by NVIDIA.
 
@@ -29,12 +29,11 @@ This repository provides a script and recipe to train the Variational Autoencode
         * [Inference performance benchmark](#inference-performance-benchmark)
     * [Results](#results)
         * [Training accuracy results](#training-accuracy-results)
-            * [Training accuracy: NVIDIA DGX-1 (8x V100 16G)](#training-accuracy-nvidia-dgx-1-(8x-v100-16G))
-            * [Training stability test](#training-stability-test)
+            * [Training accuracy: NVIDIA DGX-1 (8x V100 16G)](#training-accuracy-nvidia-dgx-1-8x-v100-16g)
         * [Training performance results](#training-performance-results)
-            * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-(8x-v100-16G))
+            * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16g)
         * [Inference performance results](#inference-performance-results)
-            * [Inference performance: NVIDIA DGX-1 (1x V100 16G)](#inference-performance-nvidia-dgx-1-(1x-v100-16G))
+            * [Inference performance: NVIDIA DGX-1 (1x V100 16G)](#inference-performance-nvidia-dgx-1-1x-v100-16g)
 - [Release notes](#release-notes)
     * [Changelog](#changelog)
     * [Known issues](#known-issues)
@@ -42,7 +41,7 @@ This repository provides a script and recipe to train the Variational Autoencode
 
 ## Model overview
 
-The Variational Autoencoder (VAE) shown here is an optimized implementation of the architecture first described in Variational [Autoencoders for Collaborative Filtering] (https://arxiv.org/abs/1802.05814) and can be used for recommendation tasks. The main differences between this model and the original one are the performance optimizations, such as using sparse matrices, mixed precision, larger mini-batches and multiple GPUs. These changes enabled us to achieve a significantly better speed while maintaining the same accuracy. Because of our fast implementation, we’ve also been able to carry out an extensive hyperparameter search to slightly improve the accuracy metrics.
+The Variational Autoencoder (VAE) shown here is an optimized implementation of the architecture first described in [Variational Autoencoders for Collaborative Filtering](https://arxiv.org/abs/1802.05814) and can be used for recommendation tasks. The main differences between this model and the original one are the performance optimizations, such as using sparse matrices, mixed precision, larger mini-batches and multiple GPUs. These changes enabled us to achieve a significantly better speed while maintaining the same accuracy. Because of our fast implementation, we’ve also been able to carry out an extensive hyperparameter search to slightly improve the accuracy metrics.
 
 When using Variational Autoencoder for Collaborative Filtering (VAE-CF), you can quickly train a recommendation model for a collaborative filtering task. The required input data consists of pairs of user-item IDs for each interaction between a user and an item. With a trained model, you can run inference to predict what items are a new user most likely to interact with. 
 
@@ -83,10 +82,12 @@ The following features are supported by this model:
          
 #### Features
 
-Horovod
+##### Horovod
+
 Horovod is a distributed training framework for TensorFlow, Keras, PyTorch and MXNet. The goal of Horovod is to make distributed deep learning fast and easy to use. For more information about how to get started with Horovod, see the [Horovod: Official repository](https://github.com/horovod/horovod).
 
-Multi-GPU training with Horovod
+##### Multi-GPU training with Horovod
+
 Our model uses Horovod to implement efficient multi-GPU training with NCCL. For details, see example sources in this repository or see the [TensorFlow tutorial](https://github.com/horovod/horovod/#usage).
 
 
@@ -134,14 +135,12 @@ For those unable to use the TensorFlow NGC container, to set up the required env
 To train your model using mixed precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the VAE-CF model on the [MovieLens 20m dataset](https://grouplens.org/datasets/movielens/20m/). For the specifics concerning training and inference, see the [Advanced](#advanced) section.
 
 1. Clone the repository.
-
 ```bash
 git clone https://github.com/NVIDIA/DeepLearningExamples
 cd DeepLearningExamples/Tensorflow/Recommendation/VAE_CF
 ```
 
 2. Build the VAE TensorFlow NGC container.
-
 ```bash
 docker build . -t vae
 ``` 
@@ -160,11 +159,9 @@ python3 prepare_dataset.py
 ```bash
 python3 main.py --train --use_tf_amp --checkpoint_dir ./checkpoints
 ```
+
 6. Start validation/evaluation.
-
 The model is exported to the default `model_dir` and can be loaded and tested using:
-
-
 ```bash
 python3 main.py --test --use_tf_amp --checkpoint_dir ./checkpoints
 ```
