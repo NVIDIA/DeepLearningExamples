@@ -1,13 +1,14 @@
 ---
 name: Bug report
 about: Create a report to help us improve
-title: "[Model / Framework ] What is the problem?"
+title: "[Model/Framework] What is the problem?"
 labels: bug
 assignees: ''
 
 ---
 
-**Related to Model / Framework**
+Related to **Model/Framework(s)** 
+*(e.g. GNMT/PyTorch or FasterTransformer/All)*
 
 **Describe the bug**
 A clear and concise description of what the bug is.
