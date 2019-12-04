@@ -19,6 +19,7 @@
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/register_types.h"
+#include <cuda_runtime.h>
 #include <cuda_fp16.h>
 namespace tensorflow 
 {
@@ -162,6 +163,12 @@ class BertTransformerOp : public OpKernel
             context,
             param,
             encoder_transformer_));
+      // free objects created on the heap
+      delete encoder_transformer_;
+    }
+
+    ~BertTransformerOp() {
+      cublasDestroy(cublas_handle_);
     }
     private:
     int batch_size_, from_seq_len_, to_seq_len_, head_num_, size_per_head_;
