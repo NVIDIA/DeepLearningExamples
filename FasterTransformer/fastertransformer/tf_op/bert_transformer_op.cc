@@ -93,9 +93,9 @@ class BertTransformerOp : public OpKernel
     {
       typedef BertEncoderTransformerTraits<traits_::OpType, cuda::OpenMultiHeadAttention> EncoderTraits_;
       BertEncoderTransformer<EncoderTraits_> *encoder_transformer_;
+      fastertransformer::Allocator<AllocatorType::TF> allocator_(context);
       try
       {
-        fastertransformer::Allocator<AllocatorType::TF> allocator_(context);
         encoder_transformer_ = new BertEncoderTransformer<EncoderTraits_>(allocator_, 
           batch_size_, from_seq_len_, to_seq_len_, head_num_, size_per_head_);
       }

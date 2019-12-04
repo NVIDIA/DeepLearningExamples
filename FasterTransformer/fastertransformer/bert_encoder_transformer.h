@@ -90,7 +90,7 @@ class BertEncoderTransformerTraits<OperationType::HALF, MultiHeadAttention_>
 template<class Traits_>
 class BertEncoderTransformer:IEncoderTransformer<Traits_::OpType>
 {
-  const IAllocator& allocator_;
+  IAllocator& allocator_;
   typename Traits_::MultiHeadAttention *attention_;
   typedef typename Traits_::DataType DataType_;
   EncoderInitParam<DataType_> param_;
@@ -112,7 +112,7 @@ class BertEncoderTransformer:IEncoderTransformer<Traits_::OpType>
   int head_num_;
   int size_per_head_;
   public:
-  BertEncoderTransformer(const IAllocator& allocator, int batch_size, int from_seq_len, 
+  BertEncoderTransformer(IAllocator& allocator, int batch_size, int from_seq_len,
       int to_seq_len, int head_num, int size_per_head): 
     allocator_(allocator), batch_size_(batch_size), from_seq_len_(from_seq_len),
     to_seq_len_(to_seq_len), head_num_(head_num), size_per_head_(size_per_head){

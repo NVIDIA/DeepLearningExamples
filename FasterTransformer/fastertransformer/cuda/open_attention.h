@@ -68,7 +68,7 @@ class OpenMultiHeadAttention: IMultiHeadAttention<OpType_>
   const cudaDataType_t AType_ = Traits_::AType;
   const cudaDataType_t BType_ = Traits_::BType;
   const cudaDataType_t CType_ = Traits_::CType;
-  const IAllocator& allocator_;
+  IAllocator& allocator_;
   MultiHeadInitParam<DataType_> param_;
 
   int cublasAlgo_[3];
@@ -91,7 +91,7 @@ class OpenMultiHeadAttention: IMultiHeadAttention<OpType_>
   int size_per_head_;
  public:
   //Ctor
-  OpenMultiHeadAttention(const IAllocator& allocator, int batch_size, int from_seq_len, 
+  OpenMultiHeadAttention(IAllocator& allocator, int batch_size, int from_seq_len,
       int to_seq_len, int head_num, int size_per_head): 
     allocator_(allocator), batch_size_(batch_size), from_seq_len_(from_seq_len), to_seq_len_(to_seq_len), 
     head_num_(head_num), size_per_head_(size_per_head)

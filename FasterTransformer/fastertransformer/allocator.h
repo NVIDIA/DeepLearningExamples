@@ -40,8 +40,8 @@ namespace fastertransformer{
 
 class IAllocator{
  public:
-  virtual void* malloc(size_t size) const = 0;
-  virtual void free(void* ptr) const = 0;
+  virtual void* malloc(size_t size) = 0;
+  virtual void free(void* ptr) = 0;
 };
 
 template<AllocatorType AllocType_>
@@ -53,7 +53,7 @@ class Allocator<AllocatorType::CUDA> : public IAllocator{
  public:
   Allocator(int device_id): device_id_(device_id){}
 
-  void* malloc(size_t size) const {
+  void* malloc(size_t size) {
     void* ptr = nullptr;
     int o_device = 0;
     check_cuda_error(get_set_device(device_id_, &o_device));
@@ -62,7 +62,7 @@ class Allocator<AllocatorType::CUDA> : public IAllocator{
     return ptr;
   }
   
-  void free(void* ptr) const {
+  void free(void* ptr) {
     int o_device = 0;
     check_cuda_error(get_set_device(device_id_, &o_device));
     check_cuda_error(cudaFree(ptr));
@@ -79,25 +79,30 @@ using namespace tensorflow;
 template<>
 class Allocator<AllocatorType::TF> : public IAllocator{
   OpKernelContext *context_;
+  std::vector<Tensor> allocated_tensors_;
  public:
   Allocator(OpKernelContext *context): context_(context){}
 
-  void* malloc(size_t size) const {
-    Tensor buf;
+  void* malloc(size_t size) {
     long long int buf_size = (long long int)size;
-    tensorflow::Status status = context_->allocate_temp(DT_UINT8, TensorShape{buf_size}, &buf);
-
+    Tensor temporary_memory;
+    tensorflow::Status status = context_->allocate_temp(DT_UINT8, TensorShape{buf_size}, &temporary_memory);
     if(status != tensorflow::Status::OK())
-      throw std::runtime_error("TF error: context->allocate_temp failed");
+      throw std::runtime_error("[@BertTransformer::allocate], allocate memory failed");
 
-    auto flat = buf.flat<uint8>();
+    // Hold the reference of the allocated tensors until the end of the
+    // allocator, tensorflow will deallocate tensors until that point.
+    allocated_tensors_.push_back(temporary_memory);
+
+    auto flat = temporary_memory.flat<uint8>();
     void* ptr = (void*)flat.data();
     return ptr;
   }
   
-  void free(void* ptr) const {
-    printf("call from allocator free\n");
-    return;
+  void free(void* ptr) {
+      VLOG(2) << "[@BertTransformer::free] deallocating " << ptr << "\n";
+      // do nothing here, tensorflow will deallocate for us.
+      return;
   }
 };
 #endif
