@@ -19,6 +19,7 @@
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/register_types.h"
+#include "tensorflow/core/platform/logging.h"
 #include <cuda_fp16.h>
 namespace tensorflow 
 {
@@ -49,19 +50,47 @@ REGISTER_OP("BertTransformer")
   .Input("output_layernorm_gamma: T")
   .Output("output: T")
   .Attr("T: {float, half}")
-  .Attr("batch_size: int >= 1")
   .Attr("from_seq_len: int >= 1")
   .Attr("to_seq_len: int >= 1")
   .Attr("head_num: int >= 1")
   .Attr("size_per_head: int >= 1")
   .SetShapeFn([](shape_inference::InferenceContext *c) {
-      int batch_size, from_seq_len, to_seq_len, head_num, size_per_head;
-      c->GetAttr("batch_size", &batch_size);
+      int from_seq_len, to_seq_len, head_num, size_per_head;
       c->GetAttr("from_seq_len", &from_seq_len);
       c->GetAttr("to_seq_len", &to_seq_len);
       c->GetAttr("head_num", &head_num);
       c->GetAttr("size_per_head", &size_per_head);
-      c->set_output(0, c->MakeShape({batch_size * from_seq_len, head_num * size_per_head}));
+      int rank = c->Rank(c->input(0));
+      if (rank != 2 && rank != 3) {
+        return errors::InvalidArgument("[@BertTransformer::ShapeInference] "
+                "invalid rank (from_tensor@input[0]): ",
+                rank,
+                ", should be 2 or 3");
+      }
+      // calculate batch size
+      shape_inference::DimensionOrConstant from_len_dim((int64) from_seq_len);
+      shape_inference::DimensionHandle output_dim1;
+      shape_inference::DimensionHandle batch_dim;
+      shape_inference::ShapeHandle input0;
+
+      TF_RETURN_IF_ERROR(c->WithRank(c->input(0), rank, &input0));
+      if (rank == 3) { // embedding_output, [batch_size, seq_len, hidden_size]
+        batch_dim = c->Dim(c->input(0), 0);
+      } else { // should be 2, transformer's output, [batch_size*seq_len, hidden_size]
+        shape_inference::DimensionHandle tmp;
+        TF_RETURN_IF_ERROR(c->Divide(c->Dim(c->input(0), 0), from_len_dim,
+                            true, &tmp));
+        batch_dim = tmp;
+      }
+
+      TF_RETURN_IF_ERROR(c->Multiply(batch_dim, from_len_dim, &output_dim1));
+
+      VLOG(2) << "[@BertTransformer::ShapeInference] batch_size: "
+              << c->Value(shape_inference::DimensionOrConstant(batch_dim))
+              << ", output shape: [" << c->Value(shape_inference::DimensionOrConstant(output_dim1))
+              << "," << head_num * size_per_head << "]\n";
+
+      c->set_output(0, c->MakeShape({output_dim1, head_num * size_per_head}));
       return Status::OK();
       });
 template <typename Device, typename T>
@@ -70,7 +99,6 @@ class BertTransformerOp : public OpKernel
   public:
     explicit BertTransformerOp(OpKernelConstruction *context) : OpKernel(context)
     {
-      OP_REQUIRES_OK(context, context->GetAttr("batch_size", &batch_size_));
       OP_REQUIRES_OK(context, context->GetAttr("from_seq_len", &from_seq_len_));
       OP_REQUIRES_OK(context, context->GetAttr("to_seq_len", &to_seq_len_));
       OP_REQUIRES_OK(context, context->GetAttr("head_num", &head_num_));
@@ -91,6 +119,22 @@ class BertTransformerOp : public OpKernel
 
     void Compute(OpKernelContext *context) override
     {
+      int rank = (int) context->input(0).dims();
+      if (rank != 2 && rank != 3) {
+        OP_REQUIRES(context, false,
+                    errors::InvalidArgument("[@BertTransformer::Compute] "
+                                            "invalid rank (from_tensor@input[0]): ",
+                                            rank,
+                                            ", should be 2 or 3"));
+      } else if (rank == 3) { // [batch_size, from_seq_len, hidden_size]
+        batch_size_ = (int) context->input(0).dim_size(0);
+      } else { // [batch_size * from_seq_len, hidden_size]
+        batch_size_ = (int) context->input(0).dim_size(0)/from_seq_len_;
+      }
+
+      VLOG(2) << "[@BertTransformer::Compute] getting batch size: "
+              << batch_size_ << "\n";
+
       typedef BertEncoderTransformerTraits<traits_::OpType, cuda::OpenMultiHeadAttention> EncoderTraits_;
       BertEncoderTransformer<EncoderTraits_> *encoder_transformer_;
       try

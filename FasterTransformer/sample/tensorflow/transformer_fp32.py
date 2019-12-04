@@ -325,7 +325,7 @@ def transformer_single(input_tensor, params, layer_idx):
       params[val_off + 0], params[val_off + 2], params[val_off + 4], params[val_off + 1], params[val_off + 3], params[val_off + 5], attention_mask, 
       params[val_off + 6], params[val_off + 7], params[val_off + 8], params[val_off + 9], params[val_off + 10], 
       params[val_off + 11], params[val_off + 12], params[val_off + 13], params[val_off + 14], params[val_off + 15], 
-      batch_size = batch_size, from_seq_len = seq_len, to_seq_len = seq_len, head_num = head_num, size_per_head = size_per_head)
+      from_seq_len = seq_len, to_seq_len = seq_len, head_num = head_num, size_per_head = size_per_head)
   return output
 
 def transformer_own(input_tensor, params):
