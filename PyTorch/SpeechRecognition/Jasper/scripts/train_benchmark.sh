@@ -15,6 +15,8 @@
 #!/bin/bash
 
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
+SCRIPT_DIR=$(cd $(dirname $0); pwd)
+PROJECT_DIR=${SCRIPT_DIR}/..
 
 DATA_DIR=${1:-"/datasets/LibriSpeech"}
 MODEL_CONFIG=${2:-"configs/jasper10x5dr_sp_offline_specaugment.toml"}
@@ -30,7 +32,7 @@ BATCH_SIZE=${11:-64}
 LEARNING_RATE=${12:-"0.015"}
 GRADIENT_ACCUMULATION_STEPS=${13:-1}
 PRINT_FREQUENCY=${14:-1}
-
+USE_PROFILER=${USE_PROFILER:-"false"}
 
 PREC=""
 if [ "$PRECISION" = "fp16" ] ; then
@@ -59,8 +61,11 @@ else
    CUDNN=""
 fi
 
-
-CMD=" train.py"
+if [ "${USE_PROFILER}" = "true" ] ; then
+    PYTHON_ARGS+="-m cProfile  -s cumtime"
+fi
+    
+CMD="${PYTHON_ARGS} ${PROJECT_DIR}/train.py"
 CMD+=" --batch_size=$BATCH_SIZE"
 CMD+=" --num_epochs=400"
 CMD+=" --output_dir=$RESULT_DIR"
@@ -78,7 +83,7 @@ CMD+=" --eval_freq=100000"
 CMD+=" --max_duration=$MAX_DURATION"
 CMD+=" --pad_to_max"
 CMD+=" --train_freq=$PRINT_FREQUENCY"
-CMD+=" --lr_decay"
+CMD+=" --lr_decay "
 CMD+=" $CUDNN"
 CMD+=" $PREC"
 CMD+=" $STEPS"

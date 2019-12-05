@@ -24,6 +24,7 @@ This repository provides scripts to train the Jasper model to achieve near state
    * [Inference process](#inference-process)
    * [Evaluation process](#evaluation-process)
    * [Inference process with TensorRT](#inference-process-with-tensorrt)
+   * [Inference process with TensorRT Inference Server](#inference-process-with-tensorrt-inference-server)
 - [Performance](#performance)
    * [Benchmarking](#benchmarking)
        * [Training performance benchmark](#training-performance-benchmark)
@@ -33,9 +34,9 @@ This repository provides scripts to train the Jasper model to achieve near state
            * [Training accuracy: NVIDIA DGX-1 (8x V100 32G)](#training-accuracy-nvidia-dgx-1-8x-v100-32G)
            * [Training stability test](#training-stability-test)
        * [Training performance results](#training-performance-results)
-           * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16G)
-           * [Training performance: NVIDIA DGX-1 (8x V100 32G)](#training-performance-nvidia-dgx-1-8x-v100-32G)
-           * [Training performance: NVIDIA DGX-2 (16x V100 32G)](#training-performance-nvidia-dgx-2-16x-v100-32G)
+         * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16G)
+         * [Training performance: NVIDIA DGX-1 (8x V100 32G)](#training-performance-nvidia-dgx-1-8x-v100-32G)
+         * [Training performance: NVIDIA DGX-2 (16x V100 32G)](#training-performance-nvidia-dgx-2-16x-v100-32G)
        * [Inference performance results](#inference-performance-results)
            * [Inference performance: NVIDIA DGX-1 (1x V100 16G)](#inference-performance-nvidia-dgx-1-1x-v100-16G)
            * [Inference performance: NVIDIA DGX-1 (1x V100 32G)](#inference-performance-nvidia-dgx-1-1x-v100-32G)
@@ -217,10 +218,10 @@ The following section lists the requirements in order to start training and eval
 
 ### Requirements
 
-This repository contains a `Dockerfile` which extends the PyTorch 19.09-py3 NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
+This repository contains a `Dockerfile` which extends the PyTorch 19.10-py3 NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 19.09-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
+* [PyTorch 19.10-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
 * [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
 
 Further required python packages are listed in `requirements.txt`, which are automatically installed with the Docker container built. To manually install them, run
@@ -383,7 +384,7 @@ The `scripts/` folder encapsulates all the one-click scripts required for runnin
 
 
 Other folders included in the `root` directory are:
-* `notebooks/` - Contains Jupyter notebook
+* `notebooks/` - Contains Jupyter notebooks and example audio files
 * `configs/` - Model configurations
 * `utils/` - Contains the necessary files for data download and  processing
 * `parts/` - Contains the necessary files for data pre-processing
@@ -558,6 +559,11 @@ Apart from the default arguments as listed in the [Parameters](#parameters) sect
 NVIDIA TensorRT is a platform for high-performance deep learning inference. It includes a deep learning inference optimizer and runtime that delivers low latency and high-throughput for deep learning inference applications. Jasper’s architecture, which is of deep convolutional nature, is designed to facilitate fast GPU inference. After optimizing the compute-intensive acoustic model with NVIDIA TensorRT, inference throughput increased by up to 1.8x over native PyTorch. 
 More information on how to perform inference using TensorRT and speed up comparison between TensorRT and native PyTorch can be found in the subfolder [./trt/README.md](trt/README.md)
 
+### Inference Process with TensorRT Inference Server
+The NVIDIA TensorRT Inference Server provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server.
+More information on how to perform inference using TensorRT Inference Server with different model backends can be found in the subfolder [./trtis/README.md](trtis/README.md)
+
+
 ## Performance
 
 ### Benchmarking
@@ -610,7 +616,7 @@ The results for Jasper Large's word error rate from the original paper after gre
 
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 32G)
 
-Our results were obtained by running the `scripts/train.sh` training script in the PyTorch 19.09-py3 NGC container with NVIDIA DGX-1 with (8x V100 32G) GPUs.
+Our results were obtained by running the `scripts/train.sh` training script in the PyTorch 19.10-py3 NGC container with NVIDIA DGX-1 with (8x V100 32G) GPUs.
 The following tables report the word error rate(WER) of the acoustic model with greedy decoding on all LibriSpeech dev and test datasets for mixed precision training.
 
 FP16 (seed #6)
@@ -638,7 +644,7 @@ The following table compares greedy decoding word error rates across 8 different
 
 #### Training performance results
 
-Our results were obtained by running the `scripts/train.sh` training script in the PyTorch 19.09-py3 NGC container. Performance (in sequences per second) is the steady-state throughput.
+Our results were obtained by running the `scripts/train.sh` training script in the PyTorch 19.10-py3 NGC container. Performance (in sequences per second) is the steady-state throughput.
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 16G)
 
@@ -706,7 +712,7 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 #### Inference performance results
 
-Our results were obtained by running the `scripts/inference_benchmark.sh` script in the PyTorch 19.09-py3 NGC container on NVIDIA DGX-1, DGX-2 and T4 on a single GPU. Performance numbers (latency in milliseconds per batch) were averaged over 1000 iterations.
+Our results were obtained by running the `scripts/inference_benchmark.sh` script in the PyTorch 19.10-py3 NGC container on NVIDIA DGX-1, DGX-2 and T4 on a single GPU. Performance numbers (latency in milliseconds per batch) were averaged over 1000 iterations.
 
 ##### Inference performance: NVIDIA DGX-1 (1x V100 16G)
 
@@ -804,13 +810,19 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 ## Release notes
+December 2019
+* Inference support for TRT 6 with dynamic shapes
+* Inference support for TensorRT Inference Server with acoustic model backends in ONNX, PyTorch JIT, TensorRT
+* Jupyter notebook for inference with TensorRT Inference Server
 
-### Changelog
+November 2019
+* Google Colab notebook for inference with native TensorRT
+
 September 2019
-* Inference support for TRT 6
+* Inference support for TensorRT 6 with static shapes
 * Jupyter notebook for inference
 
-July 2019
+August 2019
 * Initial release
 
 

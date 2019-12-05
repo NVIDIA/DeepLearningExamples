@@ -1,31 +1,38 @@
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-
 #!/bin/bash
+SCRIPT_DIR=$(cd $(dirname $0); pwd)
+JASPER_REPO=${JASPER_REPO:-"${SCRIPT_DIR}/../.."}
 
-DATA_DIR=$1
-CHECKPOINT_DIR=$2
-RESULT_DIR=$3
+# Launch TRT JASPER container.
 
-docker run -it --rm \
+DATA_DIR=${DATA_DIR:-"/datasets"}
+CHECKPOINT_DIR=${CHECKPOINT_DIR:-"/checkpoints"}
+RESULT_DIR=${RESULT_DIR:-"/results"}
+PROGRAM_PATH=${PROGRAM_PATH}
+    
+
+MOUNTS=""
+if [ ! -z "$DATA_DIR" ]; 
+then
+    MOUNTS="$MOUNTS -v $DATA_DIR:/datasets "
+fi
+
+if [ ! -z "$CHECKPOINT_DIR" ]; 
+then
+    MOUNTS="$MOUNTS -v $CHECKPOINT_DIR:/checkpoints "
+fi
+
+if [ ! -z "$RESULT_DIR" ]; 
+then
+    MOUNTS="$MOUNTS -v $RESULT_DIR:/results "
+fi
+
+echo $MOUNTS
+nvidia-docker run -it --rm \
   --runtime=nvidia \
   --shm-size=4g \
   --ulimit memlock=-1 \
   --ulimit stack=67108864 \
-  -v "$DATA_DIR":/datasets \
-  -v "$CHECKPOINT_DIR":/checkpoints/ \
-  -v "$RESULT_DIR":/results/ \
-  -v $PWD:/code \
-  jasper bash
+  ${MOUNTS} \
+  -v ${JASPER_REPO}:/jasper \
+  ${EXTRA_JASPER_ENV} \
+  jasper:latest bash $PROGRAM_PATH
