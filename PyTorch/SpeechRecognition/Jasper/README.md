@@ -810,6 +810,9 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 ## Release notes
+
+### Changelog
+
 December 2019
 * Inference support for TRT 6 with dynamic shapes
 * Inference support for TensorRT Inference Server with acoustic model backends in ONNX, PyTorch JIT, TensorRT
