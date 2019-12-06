@@ -2,3 +2,6 @@ results/
 *__pycache__
 checkpoints/
 .git/
+datasets/
+external/tensorrt-inference-server/
+checkpoints/

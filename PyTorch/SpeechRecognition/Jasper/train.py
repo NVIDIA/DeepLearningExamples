@@ -24,10 +24,9 @@ import random
 import numpy as np
 import math
 from dataset import AudioToTextDataLayer
-from helpers import monitor_asr_train_progress, process_evaluation_batch, process_evaluation_epoch, Optimization, add_ctc_labels, AmpOptimizations, model_multi_gpu, print_dict, print_once
+from helpers import monitor_asr_train_progress, process_evaluation_batch, process_evaluation_epoch,  add_ctc_labels, AmpOptimizations, model_multi_gpu, print_dict, print_once
 from model import AudioPreprocessing, CTCLossNM, GreedyCTCDecoder, Jasper
 from optimizers import Novograd, AdamW
-
 
 def lr_policy(initial_lr, step, N):
     """
@@ -114,7 +113,15 @@ def train(
                 t_audio_signal_e, t_a_sig_length_e, t_transcript_e, t_transcript_len_e = tensors
 
                 model.eval()
-                t_log_probs_e, t_encoded_len_e = model(x=(t_audio_signal_e, t_a_sig_length_e))
+                if optim_level == 1:
+                  with amp.disable_casts():
+                      t_processed_signal_e, t_processed_sig_length_e = audio_preprocessor(t_audio_signal_e, t_a_sig_length_e) 
+                else:
+                  t_processed_signal_e, t_processed_sig_length_e = audio_preprocessor(t_audio_signal_e, t_a_sig_length_e)
+                if jasper_encoder.use_conv_mask:
+                    t_log_probs_e, t_encoded_len_e = model.forward((t_processed_signal_e, t_processed_sig_length_e))
+                else:
+                    t_log_probs_e = model.forward(t_processed_signal_e)
                 t_loss_e = ctc_loss(log_probs=t_log_probs_e, targets=t_transcript_e, input_length=t_encoded_len_e, target_length=t_transcript_len_e)
                 t_predictions_e = greedy_decoder(log_probs=t_log_probs_e)
 
@@ -138,6 +145,10 @@ def train(
     train_dataloader = data_layer.data_iterator
     epoch = args.start_epoch
     step = epoch * args.step_per_epoch
+
+    audio_preprocessor = model.module.audio_preprocessor if hasattr(model, 'module') else model.audio_preprocessor
+    data_spectr_augmentation = model.module.data_spectr_augmentation if hasattr(model, 'module') else model.data_spectr_augmentation
+    jasper_encoder = model.module.jasper_encoder if hasattr(model, 'module') else model.jasper_encoder
 
     while True:
         if multi_gpu:
@@ -165,13 +176,22 @@ def train(
 
             t_audio_signal_t, t_a_sig_length_t, t_transcript_t, t_transcript_len_t = tensors
             model.train()
+            if optim_level == 1:
+              with amp.disable_casts():
+                  t_processed_signal_t, t_processed_sig_length_t = audio_preprocessor(t_audio_signal_t, t_a_sig_length_t) 
+            else:
+              t_processed_signal_t, t_processed_sig_length_t = audio_preprocessor(t_audio_signal_t, t_a_sig_length_t)
+            t_processed_signal_t = data_spectr_augmentation(t_processed_signal_t)
+            if jasper_encoder.use_conv_mask:
+                t_log_probs_t, t_encoded_len_t = model.forward((t_processed_signal_t, t_processed_sig_length_t))
+            else:
+                t_log_probs_t = model.forward(t_processed_signal_t)
             
-            t_log_probs_t, t_encoded_len_t = model(x=(t_audio_signal_t, t_a_sig_length_t))
             t_loss_t = ctc_loss(log_probs=t_log_probs_t, targets=t_transcript_t, input_length=t_encoded_len_t, target_length=t_transcript_len_t)
             if args.gradient_accumulation_steps > 1:
                     t_loss_t = t_loss_t / args.gradient_accumulation_steps
 
-            if optim_level in AmpOptimizations:
+            if optim_level >=0 and optim_level <=3:
                 with amp.scale_loss(t_loss_t, optimizer) as scaled_loss:
                     scaled_loss.backward()
             else:
@@ -189,7 +209,6 @@ def train(
                     train_wer = monitor_asr_train_progress(e_tensors, labels=labels)
                     print_once("Loss@Step: {0}  ::::::: {1}".format(step, str(average_loss)))
                     print_once("Step time: {0} seconds".format(time.time() - last_iter_start))
-
                 if step > 0 and step % args.eval_frequency == 0:
                     print_once("Doing Evaluation ....................... ......  ... .. . .")
                     eval()
@@ -224,15 +243,16 @@ def main(args):
         torch.cuda.set_device(args.local_rank)
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
 
+
     multi_gpu = torch.distributed.is_initialized()
     if multi_gpu:
         print_once("DISTRIBUTED TRAINING with {} gpus".format(torch.distributed.get_world_size()))
-
+                
     # define amp optimiation level
     if args.fp16:
-        optim_level = Optimization.mxprO1
+        optim_level = 1
     else:
-        optim_level = Optimization.mxprO0
+        optim_level = 0
 
     jasper_model_definition = toml.load(args.model_toml)
     dataset_vocab = jasper_model_definition['labels']['labels']
@@ -251,8 +271,9 @@ def main(args):
         assert(args.max_duration > 0)
         featurizer_config['max_duration'] = args.max_duration
         featurizer_config_eval['max_duration'] = args.max_duration
-        featurizer_config['pad_to'] = "max"
-        featurizer_config_eval['pad_to'] = "max"
+        featurizer_config['pad_to'] = -1        
+        featurizer_config_eval['pad_to'] = -1
+        
     print_once('model_config')
     print_dict(jasper_model_definition)
 
@@ -325,32 +346,27 @@ def main(args):
                         weight_decay=args.weight_decay)
     else:
         raise ValueError("invalid optimizer choice: {}".format(args.optimizer_kind))
-
-
-    if optim_level in AmpOptimizations:
+    if optim_level >= 0 and optim_level <=3:
         model, optimizer = amp.initialize(
             min_loss_scale=1.0,
             models=model,
             optimizers=optimizer,
             opt_level=AmpOptimizations[optim_level])
-
     if args.ckpt is not None:
         optimizer.load_state_dict(checkpoint['optimizer'])
 
     model = model_multi_gpu(model, multi_gpu)
 
-    train(
-        data_layer=data_layer,
-        data_layer_eval=data_layer_eval,
-        model=model,
-        ctc_loss=ctc_loss,
-        greedy_decoder=greedy_decoder,
-        optimizer=optimizer,
-        labels=ctc_vocab,
-        optim_level=optim_level,
-        multi_gpu=multi_gpu,
-        fn_lr_policy=fn_lr_policy if args.lr_decay else None,
-        args=args)
+
+    train(data_layer, data_layer_eval, model, \
+          ctc_loss=ctc_loss, \
+          greedy_decoder=greedy_decoder, \
+          optimizer=optimizer, \
+          labels=ctc_vocab, \
+          optim_level=optim_level, \
+          multi_gpu=multi_gpu, \
+          fn_lr_policy=fn_lr_policy if args.lr_decay else None, \
+          args=args)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Jasper')
