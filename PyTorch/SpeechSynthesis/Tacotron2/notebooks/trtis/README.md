@@ -48,7 +48,7 @@ Follow the Tacotron 2 Quick Start Guide (points 1-4) to start the container.
 Inside the container, type:
 ```bash
 cd /workspace/tacotron2/
-python export_tacotron2_ts_config.py --amp-run
+python exports/export_tacotron2_ts_config.py --amp-run
 ```
 
 This will export the folder structure of the TRTIS repository and the config file of Tacotron 2. 
@@ -67,7 +67,7 @@ Move the downloaded model to `trtis_repo/tacotron2/1/model.pt`
 
 To export the Tacotron 2 model using TorchScript, type:
 ```bash
-python export_tacotron2_ts.py --tacotron2 <tacotron2_checkpoint> -o trtis_repo/tacotron2/1/model.pt --amp-run
+python exports/export_tacotron2_ts.py --tacotron2 <tacotron2_checkpoint> -o trtis_repo/tacotron2/1/model.pt --amp-run
 ```
 
 This will save the model as ``trtis_repo/tacotron2/1/model.pt``.
@@ -78,7 +78,7 @@ For WaveGlow, we also need to create the folder structure that will be used by t
 Inside the container, type:
 ```bash
 cd /workspace/tacotron2/
-python export_waveglow_trt_config.py --amp-run
+python exports/export_waveglow_trt_config.py --amp-run
 ```
 
 This will export the folder structure of the TRTIS repository and the config file of Waveglow. 
@@ -106,7 +106,7 @@ cd /workspace/onnx-tensorrt/build && cmake .. -DCMAKE_CXX_FLAGS=-isystem\ /usr/l
 In order to export the model into the ONNX intermediate representation, type:
 
 ```bash
-python export_waveglow_trt.py --waveglow <waveglow_checkpoint> --wn-channels 256 --amp-run
+python exports/export_waveglow_onnx.py --waveglow <waveglow_checkpoint> --wn-channels 256 --amp-run
 ```
 
 This will save the model as `waveglow.onnx` (you can change its name with the flag `--output <filename>`).

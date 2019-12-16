@@ -25,43 +25,90 @@
 #
 # *****************************************************************************
 
-import torch
+
+import os
 import argparse
-from inference import checkpoint_from_distributed, unwrap_distributed, load_and_setup_model
-from dllogger.autologging import log_hardware, log_args
+
 
 def parse_args(parser):
     """
-    Parse commandline arguments.
+        Parse commandline arguments. 
     """
-    parser.add_argument('--tacotron2', type=str, required=True,
-                        help='full path to the Tacotron2 model checkpoint file')
-
-    parser.add_argument('-o', '--output', type=str, default="trtis_repo/tacotron/1/model.pt",
-                        help='filename for the Tacotron 2 TorchScript model')
+    parser.add_argument("--trtis_model_name",
+                        type=str,
+                        default='tacotron2',
+                        help="exports to appropriate directory for TRTIS")
+    parser.add_argument("--trtis_model_version",
+                        type=int,
+                        default=1,
+                        help="exports to appropriate directory for TRTIS")
+    parser.add_argument("--trtis_max_batch_size",
+                        type=int,
+                        default=8,
+                        help="Specifies the 'max_batch_size' in the TRTIS model config.\
+                              See the TRTIS documentation for more info.")
     parser.add_argument('--amp-run', action='store_true',
                         help='inference with AMP')
-
     return parser
 
 
 def main():
-
     parser = argparse.ArgumentParser(
-        description='PyTorch Tacotron 2 Inference')
+        description='PyTorch Tacotron 2 TRTIS config exporter')
     parser = parse_args(parser)
     args = parser.parse_args()
-
-    log_args(args)    
-    tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2,
-                                     args.amp_run, rename=True)
     
-    jitted_tacotron2 = torch.jit.script(tacotron2)
-
-    torch.jit.save(jitted_tacotron2, args.output)
+    # prepare repository
+    model_folder = os.path.join('./trtis_repo', args.trtis_model_name)
+    version_folder = os.path.join(model_folder, str(args.trtis_model_version))
+    if not os.path.exists(version_folder):
+        os.makedirs(version_folder)
     
+    # build the config for TRTIS
+    config_filename = os.path.join(model_folder, "config.pbtxt")
+    config_template = r"""
+name: "{model_name}"
+platform: "pytorch_libtorch"
+max_batch_size: {max_batch_size}
+input [
+  {{
+    name: "sequence__0"
+    data_type: TYPE_INT64
+    dims: [-1]
+  }},
+  {{
+    name: "input_lengths__1"
+    data_type: TYPE_INT64
+    dims: [1]
+    reshape: {{ shape: [ ] }}
+  }}
+]
+output [
+  {{
+    name: "mel_outputs_postnet__0"
+    data_type: {fp_type}
+    dims: [80,-1]
+  }},
+  {{
+    name: "mel_lengths__1"
+    data_type: TYPE_INT32
+    dims: [1]
+    reshape: {{ shape: [ ] }}
+  }}
+]
+"""
+    
+    config_values = {
+        "model_name": args.trtis_model_name,
+        "max_batch_size": args.trtis_max_batch_size,
+        "fp_type": "TYPE_FP16" if args.amp_run else "TYPE_FP32"
+    }
+    
+    with open(model_folder + "/config.pbtxt", "w") as file:
+        final_config_str = config_template.format_map(config_values)
+        file.write(final_config_str)
+
 
 if __name__ == '__main__':
     main()
 
-    

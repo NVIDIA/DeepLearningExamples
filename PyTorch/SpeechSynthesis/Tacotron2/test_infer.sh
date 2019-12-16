@@ -7,6 +7,7 @@ NUM_ITERS=1003 # extra 3 iterations for warmup
 TACOTRON2_CKPT="checkpoint_Tacotron2_1500_fp32"
 WAVEGLOW_CKPT="checkpoint_WaveGlow_1000_fp32"
 AMP_RUN=""
+TEST_PROGRAM="test_infer.py"
 
 while [ -n "$1" ]
 do
@@ -27,8 +28,24 @@ do
 	    NUM_ITERS="$2"
 	    shift
 	    ;;
+	--test)
+	    TEST_PROGRAM="$2"
+	    shift
+	    ;;
 	--tacotron2)
 	    TACOTRON2_CKPT="$2"
+	    shift
+	    ;;
+	--encoder)
+	    ENCODER_CKPT="$2"
+	    shift
+	    ;;
+	--decoder)
+	    DECODER_CKPT="$2"
+	    shift
+	    ;;
+	--postnet)
+	    POSTNET_CKPT="$2"
 	    shift
 	    ;;
 	--waveglow)
@@ -51,9 +68,17 @@ NVLOG_FILE=nvlog_${LOG_SUFFIX}.json
 TMP_LOGFILE=tmp_log_${LOG_SUFFIX}.log
 LOGFILE=log_${LOG_SUFFIX}.log
 
+
+if [ "$TEST_PROGRAM" = "trt/test_infer_trt.py" ]
+then
+    MODELS="--encoder $ENCODER_CKPT --decoder $DECODER_CKPT --postnet $POSTNET_CKPT"
+else
+    MODELS="--tacotron2 $TACOTRON2_CKPT"
+fi
+
 set -x
-python test_infer.py \
-       --tacotron2 $TACOTRON2_CKPT \
+python $TEST_PROGRAM \
+       $MODELS \
        --waveglow $WAVEGLOW_CKPT \
        --batch-size $BATCH_SIZE \
        --input-length $INPUT_LENGTH $AMP_RUN \
@@ -67,7 +92,8 @@ PERF=$(cat $TMP_LOGFILE | grep -F 'Throughput average (samples/sec)' | awk -F'= 
 NUM_MELS=$(cat $TMP_LOGFILE | grep -F 'Number of mels per audio average' | awk -F'= ' '{print $2}')
 LATENCY=$(cat $TMP_LOGFILE | grep -F 'Latency average (seconds)' | awk -F'= ' '{print $2}')
 LATENCYSTD=$(cat $TMP_LOGFILE | grep -F 'Latency std (seconds)' | awk -F'= ' '{print $2}')
-LATENCY50=$(cat $TMP_LOGFILE | grep -F 'Latency cl 50 (seconds)' | awk -F'= ' '{print $2}')
-LATENCY100=$(cat $TMP_LOGFILE | grep -F 'Latency cl 100 (seconds)' | awk -F'= ' '{print $2}')
+LATENCY90=$(cat $TMP_LOGFILE | grep -F 'Latency cl 90 (seconds)' | awk -F'= ' '{print $2}')
+LATENCY95=$(cat $TMP_LOGFILE | grep -F 'Latency cl 95 (seconds)' | awk -F'= ' '{print $2}')
+LATENCY99=$(cat $TMP_LOGFILE | grep -F 'Latency cl 99 (seconds)' | awk -F'= ' '{print $2}')
 
-echo "$BATCH_SIZE,$INPUT_LENGTH,$PRECISION,$NUM_ITERS,$LATENCY,$LATENCYSTD,$LATENCY50,$LATENCY100,$PERF,$NUM_MELS" >> $LOGFILE
+echo "$BATCH_SIZE,$INPUT_LENGTH,$PRECISION,$NUM_ITERS,$LATENCY,$LATENCYSTD,$LATENCY90,$LATENCY95,$LATENCY99,$PERF,$NUM_MELS" >> $LOGFILE

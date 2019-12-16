@@ -45,10 +45,9 @@ import models
 import loss_functions
 import data_functions
 
-from dllogger.logger import LOGGER
-import dllogger.logger as dllg
-from dllogger import tags
-from dllogger.autologging import log_hardware, log_args
+import dllogger as DLLogger
+from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
+
 from scipy.io.wavfile import write as write_wav
 
 from apex import amp
@@ -61,7 +60,7 @@ def parse_args(parser):
     Parse commandline arguments.
     """
 
-    parser.add_argument('-o', '--output_directory', type=str, required=True,
+    parser.add_argument('-o', '--output', type=str, required=True,
                         help='Directory to save checkpoints')
     parser.add_argument('-d', '--dataset-path', type=str,
                         default='./', help='Path to dataset')
@@ -154,6 +153,9 @@ def parse_args(parser):
     distributed.add_argument('--dist-backend', default='nccl', type=str, choices={'nccl'},
                              help='Distributed run backend')
 
+    benchmark = parser.add_argument_group('benchmark')
+    benchmark.add_argument('--bench-class', type=str, default='')
+
     return parser
 
 
@@ -223,8 +225,8 @@ def evaluating(model):
             model.train()
 
 
-def validate(model, criterion, valset, iteration, batch_size, world_size,
-             collate_fn, distributed_run, rank, batch_to_gpu):
+def validate(model, criterion, valset, epoch, batch_iter, batch_size,
+             world_size, collate_fn, distributed_run, rank, batch_to_gpu):
     """Handles all the validation scoring and printing"""
     with evaluating(model), torch.no_grad():
         val_sampler = DistributedSampler(valset) if distributed_run else None
@@ -245,11 +247,11 @@ def validate(model, criterion, valset, iteration, batch_size, world_size,
             val_loss += reduced_val_loss
         val_loss = val_loss / (i + 1)
 
-    LOGGER.log(key="val_iter_loss", value=val_loss)
+        DLLogger.log(step=(epoch, batch_iter, epoch), data={'val_iter_loss': val_loss})
+        return val_loss
 
-
-def adjust_learning_rate(epoch, optimizer, learning_rate,
-                         anneal_steps, anneal_factor):
+def adjust_learning_rate(iteration, epoch, optimizer, learning_rate,
+                         anneal_steps, anneal_factor, rank):
 
     p = 0
     if anneal_steps is not None:
@@ -263,8 +265,7 @@ def adjust_learning_rate(epoch, optimizer, learning_rate,
         lr = learning_rate*(anneal_factor ** p)
 
     if optimizer.param_groups[0]['lr'] != lr:
-        LOGGER.log_event("learning_rate changed",
-                         value=str(optimizer.param_groups[0]['lr']) + " -> " + str(lr))
+        DLLogger.log(step=(epoch, iteration), data={'learning_rate changed': str(optimizer.param_groups[0]['lr'])+" -> "+str(lr)})
 
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
@@ -276,51 +277,38 @@ def main():
     parser = parse_args(parser)
     args, _ = parser.parse_known_args()
 
-    LOGGER.set_model_name("Tacotron2_PyT")
-    LOGGER.set_backends([
-        dllg.StdOutBackend(log_file=None,
-                           logging_scope=dllg.TRAIN_ITER_SCOPE, iteration_interval=1),
-        dllg.JsonBackend(log_file=args.log_file if args.rank == 0 else None,
-                         logging_scope=dllg.TRAIN_ITER_SCOPE, iteration_interval=1)
-    ])
+    if 'LOCAL_RANK' in os.environ and 'WORLD_SIZE' in os.environ:
+        local_rank = int(os.environ['LOCAL_RANK'])
+        world_size = int(os.environ['WORLD_SIZE'])
+    else:
+        local_rank = args.rank
+        world_size = args.world_size
 
-    LOGGER.timed_block_start("run")
-    LOGGER.register_metric(tags.TRAIN_ITERATION_LOSS,
-                           metric_scope=dllg.TRAIN_ITER_SCOPE)
-    LOGGER.register_metric("iter_time",
-                           metric_scope=dllg.TRAIN_ITER_SCOPE)
-    LOGGER.register_metric("epoch_time",
-                           metric_scope=dllg.EPOCH_SCOPE)
-    LOGGER.register_metric("run_time",
-                           metric_scope=dllg.RUN_SCOPE)
-    LOGGER.register_metric("val_iter_loss",
-                           metric_scope=dllg.EPOCH_SCOPE)
-    LOGGER.register_metric("train_epoch_items/sec",
-                           metric_scope=dllg.EPOCH_SCOPE)
-    LOGGER.register_metric("train_epoch_avg_items/sec",
-                           metric_scope=dllg.EPOCH_SCOPE)
-    LOGGER.register_metric("train_epoch_avg_loss",
-                           metric_scope=dllg.EPOCH_SCOPE)
+    distributed_run = world_size > 1
 
-    log_hardware()
+    if local_rank == 0:
+        DLLogger.init(backends=[JSONStreamBackend(Verbosity.DEFAULT,
+                                                  args.output+'/'+args.log_file),
+                                StdOutBackend(Verbosity.VERBOSE)])
+    else:
+        DLLogger.init(backends=[])
+
+    for k,v in vars(args).items():
+        DLLogger.log(step="PARAMETER", data={k:v})
+    DLLogger.log(step="PARAMETER", data={'model_name':'Tacotron2_PyT'})
 
     model_name = args.model_name
     parser = models.parse_model_args(model_name, parser)
-    parser.parse_args()
-
-    args = parser.parse_args()
-
-    log_args(args)
+    args, _ = parser.parse_known_args()
 
     torch.backends.cudnn.enabled = args.cudnn_enabled
     torch.backends.cudnn.benchmark = args.cudnn_benchmark
 
-    distributed_run = args.world_size > 1
     if distributed_run:
-        init_distributed(args, args.world_size, args.rank, args.group_name)
+        init_distributed(args, world_size, local_rank, args.group_name)
 
-    LOGGER.log(key=tags.RUN_START)
     run_start_time = time.time()
+    DLLogger.log(step=tuple(), data={'run_start': run_start_time})
 
     model_config = models.get_model_config(model_name, args)
     model = models.get_model(model_name, model_config,
@@ -374,21 +362,22 @@ def main():
     batch_to_gpu = data_functions.get_batch_to_gpu(model_name)
 
     iteration = 0
+    train_epoch_avg_items_per_sec = 0.0
+    val_loss = 0.0
+    num_iters = 0
+
     model.train()
 
-    LOGGER.log(key=tags.TRAIN_LOOP)
-
     for epoch in range(start_epoch, args.epochs):
-        LOGGER.epoch_start()
         epoch_start_time = time.time()
-        LOGGER.log(key=tags.TRAIN_EPOCH_START, value=epoch)
-
+        DLLogger.log(step=(epoch,) , data={'train_epoch_start': epoch_start_time})
         # used to calculate avg items/sec over epoch
         reduced_num_items_epoch = 0
 
         # used to calculate avg loss over epoch
         train_epoch_avg_loss = 0.0
         train_epoch_avg_items_per_sec = 0.0
+
         num_iters = 0
 
         # if overflow at the last iteration then do not save checkpoint
@@ -398,14 +387,14 @@ def main():
             train_loader.sampler.set_epoch(epoch)
 
         for i, batch in enumerate(train_loader):
-            print("Batch: {}/{} epoch {}".format(i, len(train_loader), epoch))
-            LOGGER.iteration_start()
             iter_start_time = time.time()
-            LOGGER.log(key=tags.TRAIN_ITER_START, value=i)
+            DLLogger.log(step=(epoch, i),
+                         data={'glob_iter/iters_per_epoch': str(iteration)+"/"+str(len(train_loader))})
+            DLLogger.log(step=(epoch, i), data={'train_iter_start': iter_start_time})
 
             start = time.perf_counter()
-            adjust_learning_rate(epoch, optimizer, args.learning_rate,
-                                 args.anneal_steps, args.anneal_factor)
+            adjust_learning_rate(iteration, epoch, optimizer, args.learning_rate,
+                                 args.anneal_steps, args.anneal_factor, local_rank)
 
             model.zero_grad()
             x, y, num_items = batch_to_gpu(batch)
@@ -414,7 +403,7 @@ def main():
             loss = criterion(y_pred, y)
 
             if distributed_run:
-                reduced_loss = reduce_tensor(loss.data, args.world_size).item()
+                reduced_loss = reduce_tensor(loss.data, world_size).item()
                 reduced_num_items = reduce_tensor(num_items.data, 1).item()
             else:
                 reduced_loss = loss.item()
@@ -422,7 +411,7 @@ def main():
             if np.isnan(reduced_loss):
                 raise Exception("loss is NaN")
 
-            LOGGER.log(key=tags.TRAIN_ITERATION_LOSS, value=reduced_loss)
+            DLLogger.log(step=(epoch,i), data={'train_iter_loss': reduced_loss})
 
             train_epoch_avg_loss += reduced_loss
             num_iters += 1
@@ -442,60 +431,49 @@ def main():
 
             optimizer.step()
 
-            iteration += 1
-
-            LOGGER.log(key=tags.TRAIN_ITER_STOP, value=i)
-
             iter_stop_time = time.time()
             iter_time = iter_stop_time - iter_start_time
             items_per_sec = reduced_num_items/iter_time
             train_epoch_avg_items_per_sec += items_per_sec
 
-            LOGGER.log(key="train_iter_items/sec",
-                       value=items_per_sec)
-            LOGGER.log(key="iter_time", value=iter_time)
-            LOGGER.iteration_stop()
+            DLLogger.log(step=(epoch, i), data={'train_iter_items/sec': items_per_sec})
+            DLLogger.log(step=(epoch, i), data={'train_iter_stop': iter_stop_time})
+            DLLogger.log(step=(epoch, i), data={'train_iter_time': iter_time})
+            iteration += 1
 
-        LOGGER.log(key=tags.TRAIN_EPOCH_STOP, value=epoch)
+
         epoch_stop_time = time.time()
         epoch_time = epoch_stop_time - epoch_start_time
 
-        LOGGER.log(key="train_epoch_items/sec",
-                   value=(reduced_num_items_epoch/epoch_time))
-        LOGGER.log(key="train_epoch_avg_items/sec",
-                   value=(train_epoch_avg_items_per_sec/num_iters if num_iters > 0 else 0.0))
-        LOGGER.log(key="train_epoch_avg_loss", value=(
-            train_epoch_avg_loss/num_iters if num_iters > 0 else 0.0))
-        LOGGER.log(key="epoch_time", value=epoch_time)
+        DLLogger.log(step=(epoch,), data={'train_epoch_items/sec': reduced_num_items_epoch/epoch_time})
+        DLLogger.log(step=(epoch,), data={'train_epoch_avg_items/sec':
+                                          (train_epoch_avg_items_per_sec/num_iters if num_iters > 0 else 0.0)})
+        DLLogger.log(step=(epoch,), data={'train_epoch_avg_loss': (train_epoch_avg_loss/num_iters if num_iters > 0 else 0.0)})
+        DLLogger.log(step=(epoch,), data={'epoch_time': epoch_time})
 
-        LOGGER.log(key=tags.EVAL_START, value=epoch)
+        val_loss = validate(model, criterion, valset, epoch, i,
+                            args.batch_size, world_size, collate_fn,
+                            distributed_run, local_rank, batch_to_gpu)
 
-        validate(model, criterion, valset, iteration,
-                 args.batch_size, args.world_size, collate_fn,
-                 distributed_run, args.rank, batch_to_gpu)
-
-        LOGGER.log(key=tags.EVAL_STOP, value=epoch)
-
-        if (epoch % args.epochs_per_checkpoint == 0) and args.rank == 0:
+        if (epoch % args.epochs_per_checkpoint == 0) and local_rank == 0 and args.bench_class == "":
             checkpoint_path = os.path.join(
-                args.output_directory, "checkpoint_{}_{}".format(model_name, epoch))
+                args.output, "checkpoint_{}_{}".format(model_name, epoch))
             save_checkpoint(model, optimizer, epoch, model_config,
                             args.amp_run, checkpoint_path)
+        if local_rank == 0:
+            DLLogger.flush()
 
-        LOGGER.epoch_stop()
 
     run_stop_time = time.time()
+    DLLogger.log(step=tuple(), data={'run_stop': run_start_time})
     run_time = run_stop_time - run_start_time
-    LOGGER.log(key="run_time", value=run_time)
-    LOGGER.log(key=tags.RUN_FINAL)
+    DLLogger.log(step=tuple(), data={'run_time': run_time})
+    DLLogger.log(step=tuple(), data={'train_items_per_sec':
+                                     (train_epoch_avg_items_per_sec/num_iters if num_iters > 0 else 0.0)})
+    DLLogger.log(step=tuple(), data={'val_loss': val_loss})
 
-    print("training time", run_stop_time - run_start_time)
-
-    LOGGER.timed_block_stop("run")
-
-    if args.rank == 0:
-        LOGGER.finish()
-
+    if local_rank == 0:
+        DLLogger.flush()
 
 if __name__ == '__main__':
     main()

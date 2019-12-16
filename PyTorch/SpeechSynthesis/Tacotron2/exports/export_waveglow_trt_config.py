@@ -28,7 +28,6 @@
 
 import os
 import argparse
-from dllogger.autologging import log_hardware, log_args
 
 
 def parse_args(parser):
@@ -37,17 +36,12 @@ def parse_args(parser):
     """
     parser.add_argument("--trtis_model_name",
                         type=str,
-                        default='tacotron2',
+                        default='waveglow',
                         help="exports to appropriate directory for TRTIS")
     parser.add_argument("--trtis_model_version",
                         type=int,
                         default=1,
                         help="exports to appropriate directory for TRTIS")
-    parser.add_argument("--trtis_max_batch_size",
-                        type=int,
-                        default=8,
-                        help="Specifies the 'max_batch_size' in the TRTIS model config.\
-                              See the TRTIS documentation for more info.")
     parser.add_argument('--amp-run', action='store_true',
                         help='inference with AMP')
     return parser
@@ -55,11 +49,9 @@ def parse_args(parser):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='PyTorch Tacotron 2 TRTIS config exporter')
+        description='PyTorch WaveGlow TRTIS config exporter')
     parser = parse_args(parser)
     args = parser.parse_args()
-    
-    log_args(args)    
     
     # prepare repository
     model_folder = os.path.join('./trtis_repo', args.trtis_model_name)
@@ -71,39 +63,26 @@ def main():
     config_filename = os.path.join(model_folder, "config.pbtxt")
     config_template = r"""
 name: "{model_name}"
-platform: "pytorch_libtorch"
-max_batch_size: {max_batch_size}
-input [
-  {{
-    name: "sequence__0"
-    data_type: TYPE_INT64
-    dims: [-1]
-  }},
-  {{
-    name: "input_lengths__1"
-    data_type: TYPE_INT64
-    dims: [1]
-    reshape: {{ shape: [ ] }}
-  }}
-]
-output [
-  {{
-    name: "mel_outputs_postnet__0"
-    data_type: {fp_type}
-    dims: [80,-1]
-  }},
-  {{
-    name: "mel_lengths__1"
-    data_type: TYPE_INT32
-    dims: [1]
-    reshape: {{ shape: [ ] }}
-  }}
-]
+platform: "tensorrt_plan"
+input {{
+  name: "0"
+  data_type: {fp_type}
+  dims: [1, 80, 620, 1]
+}}
+input {{
+  name: "1"
+  data_type: {fp_type}
+  dims: [1, 8, 19840, 1]
+}}
+output {{
+  name: "1991"
+  data_type: {fp_type}
+  dims: [1, 158720]
+}}
 """
     
     config_values = {
         "model_name": args.trtis_model_name,
-        "max_batch_size": args.trtis_max_batch_size,
         "fp_type": "TYPE_FP16" if args.amp_run else "TYPE_FP32"
     }
     

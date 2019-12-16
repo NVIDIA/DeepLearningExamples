@@ -28,9 +28,10 @@
 import torch
 import argparse
 
-from inference import checkpoint_from_distributed, unwrap_distributed, load_and_setup_model
+import sys
+sys.path.append('./')
 
-from dllogger.autologging import log_args
+from inference import checkpoint_from_distributed, unwrap_distributed, load_and_setup_model
 
 def parse_args(parser):
     """
@@ -38,8 +39,8 @@ def parse_args(parser):
     """
     parser.add_argument('--waveglow', type=str, required=True,
                         help='full path to the WaveGlow model checkpoint file')
-    parser.add_argument('-o', '--output', type=str, default="waveglow.onnx",
-                        help='filename for the exported WaveGlow TRT engine')
+    parser.add_argument('-o', '--output', type=str, required=True,
+                        help='Directory for the exported WaveGlow ONNX model')
     parser.add_argument('--amp-run', action='store_true',
                         help='inference with AMP')
     parser.add_argument('-s', '--sigma-infer', default=0.6, type=float)
@@ -112,9 +113,38 @@ def convert_1d_to_2d_(glow):
 
     glow.cuda()
 
+def test_inference(waveglow):
+
+
+    from scipy.io.wavfile import write
+
+    mel = torch.load("mel.pt").cuda()
+    # mel = torch.load("mel_spectrograms/LJ001-0015.wav.pt").cuda()
+    # mel = mel.unsqueeze(0)
+    mel_lengths = [mel.size(2)]
+    stride = 256
+    kernel_size = 1024
+    n_group = 8
+    z_size2 = (mel.size(2)-1)*stride+(kernel_size-1)+1
+    # corresponds to cutoff in infer_onnx
+    z_size2 = z_size2 - (kernel_size-stride)
+    z_size2 = z_size2//n_group
+    z = torch.randn(1, n_group, z_size2, 1).cuda()
+    mel = mel.unsqueeze(3)
+
+    with torch.no_grad():
+        audios = waveglow(mel, z)
+
+    for i, audio in enumerate(audios):
+        audio = audio[:mel_lengths[i]*256]
+        audio = audio/torch.max(torch.abs(audio))
+        write("audio_pyt.wav", 22050, audio.cpu().numpy())
+
+
 def export_onnx(parser, args):
 
-    waveglow = load_and_setup_model('WaveGlow', parser, args.waveglow, args.amp_run)
+    waveglow = load_and_setup_model('WaveGlow', parser, args.waveglow,
+                                    args.amp_run, forward_is_infer=False)
 
     # 80 mel channels, 620 mel spectrograms ~ 7 seconds of speech
     mel = torch.randn(1, 80, 620).cuda()
@@ -140,7 +170,18 @@ def export_onnx(parser, args):
         if args.amp_run:
             waveglow.half()
         mel = mel.unsqueeze(3)
-        torch.onnx.export(waveglow, (mel, z), args.output)
+
+        opset_version = 10
+        torch.onnx.export(waveglow, (mel, z), args.output+"/"+"waveglow.onnx",
+                          opset_version=opset_version,
+                          do_constant_folding=True,
+                          input_names=["mel", "z"],
+                          output_names=["audio"],
+                          dynamic_axes={"mel":   {0: "batch_size", 2: "mel_seq"},
+                                        "z":     {0: "batch_size", 2: "z_seq"},
+                                        "audio": {0: "batch_size", 1: "audio_seq"}})
+
+    test_inference(waveglow)
 
 
 def main():
@@ -149,8 +190,6 @@ def main():
         description='PyTorch Tacotron 2 Inference')
     parser = parse_args(parser)
     args, _ = parser.parse_known_args()
-
-    log_args(args)
 
     export_onnx(parser, args)
 

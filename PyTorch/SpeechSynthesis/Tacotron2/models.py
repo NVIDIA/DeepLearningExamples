@@ -63,19 +63,25 @@ def init_bn(module):
 
 
 def get_model(model_name, model_config, to_cuda,
-              uniform_initialize_bn_weight=False, rename=False):
+              uniform_initialize_bn_weight=False, forward_is_infer=False):
     """ Code chooses a model based on name"""
     model = None
     if model_name == 'Tacotron2':
-        if rename:
-            class Tacotron2_extra(Tacotron2):
+        if forward_is_infer:
+            class Tacotron2__forward_is_infer(Tacotron2):
                 def forward(self, inputs, input_lengths):
                     return self.infer(inputs, input_lengths)
-            model = Tacotron2_extra(**model_config)
+            model = Tacotron2__forward_is_infer(**model_config)
         else:
             model = Tacotron2(**model_config)
     elif model_name == 'WaveGlow':
-        model = WaveGlow(**model_config)
+        if forward_is_infer:
+            class WaveGlow__forward_is_infer(WaveGlow):
+                def forward(self, spect, sigma=1.0):
+                    return self.infer(spect, sigma)
+            model = WaveGlow__forward_is_infer(**model_config)
+        else:
+            model = WaveGlow(**model_config)
     else:
         raise NotImplementedError(model_name)
 
