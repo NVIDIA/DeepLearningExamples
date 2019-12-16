@@ -691,6 +691,7 @@ def main():
             scheduler_sparse = None
     elif args.scheduler == 'inv_sqrt':
         # originally used for Transformer (in Attention is all you need)
+        scheduler_sparse = None
         def lr_lambda(step):
             # return a multiplier instead of a learning rate
             if step == 0 and args.warmup_step == 0:
