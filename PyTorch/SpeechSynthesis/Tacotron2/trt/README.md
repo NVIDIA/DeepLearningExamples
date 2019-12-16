@@ -42,27 +42,27 @@ and store them in `./checkpoints` directory:
     ```
 
 4. Start an interactive session in the NGC container to run training/inference.
-After you build the container image, you can start an interactive CLI session with:
+   After you build the container image, you can start an interactive CLI session with:
 
     ```bash
     bash scripts/docker/interactive.sh
     ```
 
 5. Export the models to ONNX intermediate representations (ONNX IRs).
-Export Tacotron 2 to three ONNX parts: Encoder, Decoder, and Postnet:
+   Export Tacotron 2 to three ONNX parts: Encoder, Decoder, and Postnet:
 
 	```bash
 	python exports/export_tacotron2_onnx.py --tacotron2 ./checkpoints/nvidia_tacotron2pyt_fp16_20190427 -o output/
 	```
 
-Export WaveGlow to ONNX IR:
+    Export WaveGlow to ONNX IR:
 
 	```bash
 	python exports/export_waveglow_onnx.py --waveglow ./checkpoints/nvidia_waveglow256pyt_fp16 --wn-channels 256 -o output/
 	```
 
-After running the above commands, there should be four new files in `./output/`
-directory: `encoder.onnx`, `decoder_iter.onnx`, `postnet.onnx`, and 'waveglow.onnx`.
+	After running the above commands, there should be four new files in `./output/`
+	directory: `encoder.onnx`, `decoder_iter.onnx`, `postnet.onnx`, and 'waveglow.onnx`.
 
 6. Export the ONNX IRs to TensorRT engines:
 
@@ -70,9 +70,9 @@ directory: `encoder.onnx`, `decoder_iter.onnx`, `postnet.onnx`, and 'waveglow.on
 	python trt/export_onnx2trt.py --encoder output/encoder.onnx --decoder output/decoder_iter.onnx --postnet output/postnet.onnx --waveglow output/waveglow.onnx -o output/ --fp16
 	```
 
-After running the command, there should be four new files in `./output/`
-directory: `encoder_fp16.engine`, `decoder_iter_fp16.engine`, 
-`postnet_fp16.engine`, and 'waveglow_fp16.engine`.
+	After running the command, there should be four new files in `./output/`
+	directory: `encoder_fp16.engine`, `decoder_iter_fp16.engine`, 
+	`postnet_fp16.engine`, and 'waveglow_fp16.engine`.
 
 7. Run the inference:
 
