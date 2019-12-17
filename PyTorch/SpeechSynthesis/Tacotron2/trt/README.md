@@ -88,7 +88,7 @@ you need to provide pretrained checkpoints for Tacotron 2 and WaveGlow. Please
 edit the script to provide your checkpoint filenames. For all tests in this table,
 we used WaveGlow with 256 residual channels.
 
-|Framework|Batch size|Input length|Precision|Avg latency (s)|Latency std (s)|Latency confidence interval 90% (s)|Latency confidence interval 95% (s)|Latency confidence interval 99% (s)|Throughput (samples/sec)|Speed-up with mixed precision|Avg mels generated (81 mels=1 sec of speech)|Avg audio length (s)|Avg RTF|
+|Framework|Batch size|Input length|Precision|Avg latency (s)|Latency std (s)|Latency confidence interval 90% (s)|Latency confidence interval 95% (s)|Latency confidence interval 99% (s)|Throughput (samples/sec)|Speed-up PyT+TRT/TRT|Avg mels generated (81 mels=1 sec of speech)|Avg audio length (s)|Avg RTF|
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 |PyT+TRT|1| 128| FP16| 1.14| 0.02| 1.16| 1.17| 1.20| 136,865| 1.40| 611| 7.09| 6.20|
 |PyT    |1| 128| FP16| 1.58| 0.07| 1.67| 1.70| 1.74| 98,101| 1.00| 605| 7.03| 4.45|
