@@ -12,7 +12,8 @@ NVIDIA TensorRT is a platform for high-performance deep learning inference.
 It includes a deep learning inference optimizer and runtime that delivers low
 latency and high-throughput for deep learning inference applications. After
 optimizing the compute-intensive acoustic model with NVIDIA TensorRT,
-inference throughput increased by up to *Xx* over native PyTorch.
+inference throughput increased by up to 1.4x over native PyTorch in mixed 
+precision.
 
 
 ## Quick Start Guide
