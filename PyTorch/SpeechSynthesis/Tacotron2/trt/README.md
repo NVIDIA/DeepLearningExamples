@@ -1,19 +1,11 @@
-# Tacotron 2 and WaveGlow Inference For TensorRT
+# Tacotron 2 and WaveGlow Inference with TensorRT
 
-This is subfolder of the Tacotron 2 for PyTorch repository, tested and
-maintained by NVIDIA, and provides scripts to perform high-performance
-inference using NVIDIA TensorRT.
-The Tacotron 2 and WaveGlow models form a text-to-speech (TTS) system that
-enables users to synthesize natural sounding speech from raw transcripts
-without any additional information such as patterns and/or rhythms of speech.
-More information about the TTS system and its training can be found in the
+This is subfolder of the Tacotron 2 for PyTorch repository, tested and maintained by NVIDIA, and provides scripts to perform high-performance inference using NVIDIA TensorRT.
+
+The Tacotron 2 and WaveGlow models form a text-to-speech (TTS) system that enables users to synthesize natural sounding speech from raw transcripts without any additional information such as patterns and/or rhythms of speech. More information about the TTS system and its training can be found in the
 [Tacotron 2 PyTorch README](../README.md).
-NVIDIA TensorRT is a platform for high-performance deep learning inference.
-It includes a deep learning inference optimizer and runtime that delivers low
-latency and high-throughput for deep learning inference applications. After
-optimizing the compute-intensive acoustic model with NVIDIA TensorRT,
-inference throughput increased by up to 1.4x over native PyTorch in mixed 
-precision.
+
+NVIDIA TensorRT is a platform for high-performance deep learning inference. It includes a deep learning inference optimizer and runtime that delivers low latency and high-throughput for deep learning inference applications. After optimizing the compute-intensive acoustic model with NVIDIA TensorRT, inference throughput increased by up to 1.4x over native PyTorch in mixed  precision.
 
 
 ## Quick Start Guide
@@ -23,17 +15,16 @@ precision.
 	```bash
     git clone https://github.com/NVIDIA/DeepLearningExamples
     cd DeepLearningExamples/PyTorch/SpeechSynthesis/Tacotron2
-    ```
+   ```
 
-2. Download pretrained checkpoints from [NGC](https://ngc.nvidia.com/catalog/models)
-and store them in `./checkpoints` directory:
+2. Download pretrained checkpoints from [NGC](https://ngc.nvidia.com/catalog/models) and copy them to the `./checkpoints` directory:
 
 - [Tacotron2 checkpoint](https://ngc.nvidia.com/models/nvidia:tacotron2pyt_fp16)
 - [WaveGlow checkpoint](https://ngc.nvidia.com/models/nvidia:waveglow256pyt_fp16)
 
     ```bash
     mkdir -p checkpoints
-    mv <Tacotron2_checkpoint> <WaveGlow_checkpoint> ./checkpoints/
+    cp <Tacotron2_and_WaveGlow_checkpoints> ./checkpoints/
     ```
 
 3. Build the Tacotron 2 and WaveGlow PyTorch NGC container.
@@ -49,10 +40,18 @@ and store them in `./checkpoints` directory:
     bash scripts/docker/interactive.sh
     ```
 
-5. Export the models to ONNX intermediate representations (ONNX IRs).
+5. Verify that TensorRT version installed is 7.0 or greater. If necessary, download and install the latest release from https://developer.nvidia.com/nvidia-tensorrt-download
+
+    ```bash
+    pip list | grep tensorrt
+    dpkg -l | grep TensorRT
+    ```
+
+6. Export the models to ONNX intermediate representation (ONNX IR).
    Export Tacotron 2 to three ONNX parts: Encoder, Decoder, and Postnet:
 
 	```bash
+   mkdir -p output
 	python exports/export_tacotron2_onnx.py --tacotron2 ./checkpoints/nvidia_tacotron2pyt_fp16_20190427 -o output/
 	```
 
@@ -62,20 +61,19 @@ and store them in `./checkpoints` directory:
 	python exports/export_waveglow_onnx.py --waveglow ./checkpoints/nvidia_waveglow256pyt_fp16 --wn-channels 256 -o output/
 	```
 
-	After running the above commands, there should be four new files in `./output/`
-	directory: `encoder.onnx`, `decoder_iter.onnx`, `postnet.onnx`, and 'waveglow.onnx`.
+	After running the above commands, there should be four new ONNX files in `./output/` directory:
+    `encoder.onnx`, `decoder_iter.onnx`, `postnet.onnx`, and `waveglow.onnx`.
 
-6. Export the ONNX IRs to TensorRT engines:
+7. Export the ONNX IRs to TensorRT engines with fp16 mode enabled:
 
 	```bash
 	python trt/export_onnx2trt.py --encoder output/encoder.onnx --decoder output/decoder_iter.onnx --postnet output/postnet.onnx --waveglow output/waveglow.onnx -o output/ --fp16
 	```
 
-	After running the command, there should be four new files in `./output/`
-	directory: `encoder_fp16.engine`, `decoder_iter_fp16.engine`, 
-	`postnet_fp16.engine`, and 'waveglow_fp16.engine`.
+	After running the command, there should be four new engine files in `./output/` directory:
+    `encoder_fp16.engine`, `decoder_iter_fp16.engine`, `postnet_fp16.engine`, and `waveglow_fp16.engine`.
 
-7. Run the inference:
+8. Run TTS inference pipeline with fp16:
 
 	```bash
 	python trt/inference_trt.py -i phrases/phrase.txt --encoder output/encoder_fp16.engine --decoder output/decoder_iter_fp16.engine --postnet output/postnet_fp16.engine --waveglow output/waveglow_fp16.engine -o output/
@@ -83,11 +81,7 @@ and store them in `./checkpoints` directory:
 
 ## Inference performance: NVIDIA T4
 
-Our results were obtained by running the `./trt/run_latency_tests_trt.sh` script in
-the PyTorch-19.11-py3 NGC container. Please note that to reproduce the results,
-you need to provide pretrained checkpoints for Tacotron 2 and WaveGlow. Please
-edit the script to provide your checkpoint filenames. For all tests in this table,
-we used WaveGlow with 256 residual channels.
+Our results were obtained by running the `./trt/run_latency_tests_trt.sh` script in the PyTorch-19.11-py3 NGC container. Please note that to reproduce the results, you need to provide pretrained checkpoints for Tacotron 2 and WaveGlow. Please edit the script to provide your checkpoint filenames. For all tests in this table, we used WaveGlow with 256 residual channels.
 
 |Framework|Batch size|Input length|Precision|Avg latency (s)|Latency std (s)|Latency confidence interval 90% (s)|Latency confidence interval 95% (s)|Latency confidence interval 99% (s)|Throughput (samples/sec)|Speed-up PyT+TRT/TRT|Avg mels generated (81 mels=1 sec of speech)|Avg audio length (s)|Avg RTF|
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
