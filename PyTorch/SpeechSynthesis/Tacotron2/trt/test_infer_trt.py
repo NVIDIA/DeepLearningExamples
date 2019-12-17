@@ -25,16 +25,13 @@
 #
 # *****************************************************************************
 
-from tacotron2.text import text_to_sequence
-import models
 import torch
 import argparse
 import numpy as np
 from scipy.io.wavfile import write
-
+import tensorrt as trt
 import sys
-
-from inference import checkpoint_from_distributed, unwrap_distributed, MeasureTime, prepare_input_sequence
+sys.path.append('./')
 
 import time
 import dllogger as DLLogger
@@ -42,19 +39,31 @@ from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
 
 from apex import amp
 
+from inference import MeasureTime, prepare_input_sequence
+from test_infer import print_stats
+from trt.inference_trt import infer_tacotron2_trt, infer_waveglow_trt
+from trt.trt_utils import load_engine
+import models
+
+from test_infer import print_stats
+
 def parse_args(parser):
     """
     Parse commandline arguments.
     """
-    parser.add_argument('--tacotron2', type=str,
-                        help='full path to the Tacotron2 model checkpoint file')
-    parser.add_argument('--waveglow', type=str,
-                        help='full path to the WaveGlow model checkpoint file')
+    parser.add_argument('--encoder', type=str, required=True,
+                        help='full path to the Encoder TRT engine')
+    parser.add_argument('--decoder', type=str, required=True,
+                        help='full path to the DecoderIter TRT engine')
+    parser.add_argument('--postnet', type=str, required=True,
+                        help='full path to the Postnet TRT engine')
+    parser.add_argument('--waveglow', type=str, required=True,
+                        help='full path to the WaveGlow TRT engine')
     parser.add_argument('-s', '--sigma-infer', default=0.6, type=float)
     parser.add_argument('-sr', '--sampling-rate', default=22050, type=int,
                         help='Sampling rate')
-    parser.add_argument('--amp-run', action='store_true',
-                        help='inference with AMP')
+    parser.add_argument('--fp16', action='store_true',
+                        help='inference ')
     parser.add_argument('--log-file', type=str, default='nvlog.json',
                         help='Filename for logging')
     parser.add_argument('--stft-hop-length', type=int, default=256,
@@ -66,76 +75,7 @@ def parse_args(parser):
     parser.add_argument('-bs', '--batch-size', type=int, default=1,
                         help='Batch size')
 
-
     return parser
-
-
-def load_and_setup_model(model_name, parser, checkpoint, amp_run, to_cuda=True):
-    model_parser = models.parse_model_args(model_name, parser, add_help=False)
-    model_args, _ = model_parser.parse_known_args()
-
-    model_config = models.get_model_config(model_name, model_args)
-    model = models.get_model(model_name, model_config, to_cuda=to_cuda)
-
-    if checkpoint is not None:
-        if to_cuda:
-            state_dict = torch.load(checkpoint)['state_dict']
-        else:
-            state_dict = torch.load(checkpoint,map_location='cpu')['state_dict']
-        if checkpoint_from_distributed(state_dict):
-            state_dict = unwrap_distributed(state_dict)
-
-        model.load_state_dict(state_dict)
-
-    if model_name == "WaveGlow":
-        model = model.remove_weightnorm(model)
-
-    model.eval()
-
-    if amp_run:
-        model, _ = amp.initialize(model, [], opt_level="O3")
-
-    return model
-
-
-def print_stats(measurements_all):
-
-    print(np.mean(measurements_all['latency'][1:]),
-          np.mean(measurements_all['throughput'][1:]),
-          np.mean(measurements_all['pre_processing'][1:]),
-          np.mean(measurements_all['type_conversion'][1:])+
-          np.mean(measurements_all['storage'][1:])+
-          np.mean(measurements_all['data_transfer'][1:]),
-          np.mean(measurements_all['num_mels_per_audio'][1:]))
-
-    throughput = measurements_all['throughput']
-    preprocessing = measurements_all['pre_processing']
-    type_conversion = measurements_all['type_conversion']
-    storage = measurements_all['storage']
-    data_transfer = measurements_all['data_transfer']
-    postprocessing = [sum(p) for p in zip(type_conversion,storage,data_transfer)]
-    latency = measurements_all['latency']
-    num_mels_per_audio = measurements_all['num_mels_per_audio']
-
-    latency.sort()
-
-    cf_50 = max(latency[:int(len(latency)*0.50)])
-    cf_90 = max(latency[:int(len(latency)*0.90)])
-    cf_95 = max(latency[:int(len(latency)*0.95)])
-    cf_99 = max(latency[:int(len(latency)*0.99)])
-    cf_100 = max(latency[:int(len(latency)*1.0)])
-
-    print("Throughput average (samples/sec) = {:.4f}".format(np.mean(throughput)))
-    print("Preprocessing average (seconds) = {:.4f}".format(np.mean(preprocessing)))
-    print("Postprocessing average (seconds) = {:.4f}".format(np.mean(postprocessing)))
-    print("Number of mels per audio average = {}".format(np.mean(num_mels_per_audio)))
-    print("Latency average (seconds) = {:.4f}".format(np.mean(latency)))
-    print("Latency std (seconds) = {:.4f}".format(np.std(latency)))
-    print("Latency cl 50 (seconds) = {:.4f}".format(cf_50))
-    print("Latency cl 90 (seconds) = {:.4f}".format(cf_90))
-    print("Latency cl 95 (seconds) = {:.4f}".format(cf_95))
-    print("Latency cl 99 (seconds) = {:.4f}".format(cf_99))
-    print("Latency cl 100 (seconds) = {:.4f}".format(cf_100))
 
 
 def main():
@@ -147,6 +87,20 @@ def main():
         description='PyTorch Tacotron 2 Inference')
     parser = parse_args(parser)
     args, unknown_args = parser.parse_known_args()
+
+    TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+    encoder = load_engine(args.encoder, TRT_LOGGER)
+    decoder_iter = load_engine(args.decoder, TRT_LOGGER)
+    postnet = load_engine(args.postnet, TRT_LOGGER)
+    waveglow = load_engine(args.waveglow, TRT_LOGGER)
+
+    # initialize CUDA state
+    torch.cuda.init()
+    # create TRT contexts for each engine
+    encoder_context = encoder.create_execution_context()
+    decoder_context = decoder_iter.create_execution_context()
+    postnet_context = postnet.create_execution_context()
+    waveglow_context = waveglow.create_execution_context()
 
     DLLogger.init(backends=[JSONStreamBackend(Verbosity.DEFAULT, args.log_file),
                             StdOutBackend(Verbosity.VERBOSE)])
@@ -166,11 +120,6 @@ def main():
                         "num_mels_per_audio": [],
                         "throughput": []}
 
-    print("args:", args, unknown_args)
-
-    tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2, args.amp_run)
-    waveglow = load_and_setup_model('WaveGlow', parser, args.waveglow, args.amp_run)
-
     texts = ["The forms of printed letters should be beautiful, and that their arrangement on the page should be reasonable and a help to the shapeliness of the letters themselves. The forms of printed letters should be beautiful, and that their arrangement on the page should be reasonable and a help to the shapeliness of the letters themselves."]
     texts = [texts[0][:args.input_length]]
     texts = texts*args.batch_size
@@ -187,10 +136,12 @@ def main():
         with torch.no_grad():
             with MeasureTime(measurements, "latency"):
                 with MeasureTime(measurements, "tacotron2_latency"):
-                    mel, mel_lengths = tacotron2.infer(sequences_padded, input_lengths)
+                    mel, mel_lengths = infer_tacotron2_trt(encoder, decoder_iter, postnet,
+                                                           encoder_context, decoder_context, postnet_context,
+                                                           sequences_padded, input_lengths, measurements)
 
                 with MeasureTime(measurements, "waveglow_latency"):
-                    audios = waveglow.infer(mel, sigma=args.sigma_infer)
+                    audios = infer_waveglow_trt(waveglow, waveglow_context, mel, measurements)
 
         num_mels = mel.size(0)*mel.size(2)
         num_samples = audios.size(0)*audios.size(1)
@@ -215,8 +166,12 @@ def main():
 
         if iter >= warmup_iters:
             for k,v in measurements.items():
-                measurements_all[k].append(v)
-                DLLogger.log(step=(iter-warmup_iters), data={k: v})
+                if k in measurements_all.keys():
+                    measurements_all[k].append(v)
+                    DLLogger.log(step=(iter-warmup_iters), data={k: v})
+
+    with encoder_context, decoder_context, postnet_context, waveglow_context:
+        pass
 
     DLLogger.flush()
 
