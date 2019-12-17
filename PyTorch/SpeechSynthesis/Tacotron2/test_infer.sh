@@ -8,6 +8,7 @@ TACOTRON2_CKPT="checkpoint_Tacotron2_1500_fp32"
 WAVEGLOW_CKPT="checkpoint_WaveGlow_1000_fp32"
 AMP_RUN=""
 TEST_PROGRAM="test_infer.py"
+WN_CHANNELS=512
 
 while [ -n "$1" ]
 do
@@ -52,6 +53,10 @@ do
 	    WAVEGLOW_CKPT="$2"
 	    shift
 	    ;;
+	--wn-channels)
+	    WN_CHANNELS="$2"
+	    shift
+	    ;;
 	*)
 	    echo "Option $1 not recognized"
     esac
@@ -84,6 +89,7 @@ python $TEST_PROGRAM \
        --input-length $INPUT_LENGTH $AMP_RUN \
        --log-file $NVLOG_FILE \
        --num-iters $NUM_ITERS \
+       --wn-channels $WN_CHANNELS \
        |& tee $TMP_LOGFILE
 set +x
 

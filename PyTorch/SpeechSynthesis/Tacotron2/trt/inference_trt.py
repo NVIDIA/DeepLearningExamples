@@ -199,7 +199,7 @@ def infer_tacotron2_trt(encoder, decoder_iter, postnet,
     mel_lengths = torch.zeros([memory.size(0)], dtype=torch.int32, device = device)
     not_finished = torch.ones([memory.size(0)], dtype=torch.int32, device = device)
     mel_outputs, gate_outputs, alignments = (torch.zeros(1, device = device), torch.zeros(1, device = device), torch.zeros(1, device = device))
-    gate_threshold = 0.6
+    gate_threshold = 0.5
     max_decoder_steps = 1664
     first_iter = True
 
@@ -330,13 +330,14 @@ def main():
     measurements = {}
 
     sequences, sequence_lengths = prepare_input_sequence(texts)
-
+    print("|||sequence_lengths", sequence_lengths)
     sequences = sequences.to(torch.int32)
     sequence_lengths = sequence_lengths.to(torch.int32)
-    mel, mel_lengths = infer_tacotron2_trt(encoder, decoder_iter, postnet,
-                                           encoder_context, decoder_context, postnet_context,
-                                           sequences, sequence_lengths, measurements)
-    audios = infer_waveglow_trt(waveglow, waveglow_context, mel, measurements)
+    with MeasureTime(measurements, "latency"):
+        mel, mel_lengths = infer_tacotron2_trt(encoder, decoder_iter, postnet,
+                                               encoder_context, decoder_context, postnet_context,
+                                               sequences, sequence_lengths, measurements)
+        audios = infer_waveglow_trt(waveglow, waveglow_context, mel, measurements)
 
     with encoder_context, decoder_context,  postnet_context, waveglow_context:
         pass
@@ -352,17 +353,23 @@ def main():
         audio_path = args.output + "audio_"+str(i)+"_trt.wav"
         write(audio_path, args.sampling_rate, audio.cpu().numpy())
 
+
     DLLogger.log(step=0, data={"tacotron2_encoder_latency": measurements['tacotron2_encoder_time']})
     DLLogger.log(step=0, data={"tacotron2_decoder_latency": measurements['tacotron2_decoder_time']})
     DLLogger.log(step=0, data={"tacotron2_postnet_latency": measurements['tacotron2_postnet_time']})
     DLLogger.log(step=0, data={"waveglow_latency": measurements['waveglow_time']})
-    DLLogger.log(step=0, data={"latency": (measurements['tacotron2_encoder_time']+
-                                           measurements['tacotron2_decoder_time']+
-                                           measurements['tacotron2_postnet_time']+
-                                           measurements['waveglow_time'])})
+    DLLogger.log(step=0, data={"latency": measurements['latency']})
+
     if args.waveglow_ckpt != "":
         DLLogger.log(step=0, data={"denoiser": measurements['denoiser']})
     DLLogger.flush()
+
+    prec = "fp16" if "fp16" in args.encoder else "fp32"
+    latency = measurements['latency']
+    throughput = audios.size(1)/latency
+    log_data = "1,"+str(sequence_lengths[0].item())+","+prec+","+str(latency)+","+str(throughput)+","+str(mel_lengths[0].item())+"\n"
+    with open("log_bs1_"+prec+".log", 'a') as f:
+        f.write(log_data)
 
 if __name__ == "__main__":
     main()

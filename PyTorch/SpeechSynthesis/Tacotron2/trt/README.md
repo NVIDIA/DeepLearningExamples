@@ -85,9 +85,12 @@ and store them in `./checkpoints` directory:
 Our results were obtained by running the `./trt/run_latency_tests_trt.sh` script in
 the PyTorch-19.11-py3 NGC container. Please note that to reproduce the results,
 you need to provide pretrained checkpoints for Tacotron 2 and WaveGlow. Please
-edit the script to provide your checkpoint filenames.
+edit the script to provide your checkpoint filenames. For all tests in this table,
+we used WaveGlow with 256 residual channels.
 
-|Batch size|Input length|Precision|Avg latency (s)|Latency std (s)|Latency confidence interval 90% (s)|Latency confidence interval 95% (s)|Latency confidence interval 99% (s)|Throughput (samples/sec)|Speed-up with mixed precision|Avg mels generated (81 mels=1 sec of speech)|Avg audio length (s)|Avg RTF|
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-|1| 128| FP16| | | | | | | | | | |
-|1| 128| FP32| | | | | | | | | | |
+|Framework|Batch size|Input length|Precision|Avg latency (s)|Latency std (s)|Latency confidence interval 90% (s)|Latency confidence interval 95% (s)|Latency confidence interval 99% (s)|Throughput (samples/sec)|Speed-up with mixed precision|Avg mels generated (81 mels=1 sec of speech)|Avg audio length (s)|Avg RTF|
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+|PyT+TRT|1| 128| FP16| 1.14| 0.02| 1.16| 1.17| 1.20| 136,865| 1.40| 611| 7.09| 6.20|
+|PyT    |1| 128| FP16| 1.58| 0.07| 1.67| 1.70| 1.74| 98,101| 1.00| 605| 7.03| 4.45|
+|PyT+TRT|1| 128| FP32| 1.79| 0.01| 1.80| 1.81| 1.84| 86,690| 1.00| 605| 7.02| 3.92|
+|PyT    |1| 128| FP32| 1.77| 0.08| 1.88| 1.92| 2.00| 86,529| 1.00| 600| 6.96| 3.92|
