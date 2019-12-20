@@ -93,20 +93,21 @@ class HybridTrainPipe(Pipeline):
 
         if dali_cpu:
             dali_device = "cpu"
-            self.decode = ops.HostDecoderRandomCrop(device=dali_device, output_type=types.RGB,
-                                                    random_aspect_ratio=[0.75, 4./3.],
-                                                    random_area=[0.08, 1.0],
-                                                    num_attempts=100)
+            self.decode = ops.ImageDecoder(device=dali_device, output_type=types.RGB)
         else:
             dali_device = "gpu"
             # This padding sets the size of the internal nvJPEG buffers to be able to handle all images from full-sized ImageNet
             # without additional reallocations
-            self.decode = ops.nvJPEGDecoderRandomCrop(device="mixed", output_type=types.RGB, device_memory_padding=211025920, host_memory_padding=140544512,
-                                                      random_aspect_ratio=[0.75, 4./3.],
-                                                      random_area=[0.08, 1.0],
-                                                      num_attempts=100)
+            self.decode = ops.ImageDecoder(device="mixed", output_type=types.RGB, device_memory_padding=211025920, host_memory_padding=140544512)
 
-        self.res = ops.Resize(device=dali_device, resize_x=crop, resize_y=crop)
+        self.res = ops.RandomResizedCrop(
+                device=dali_device,
+                size=[crop, crop],
+                interp_type=types.INTERP_LINEAR,
+                random_aspect_ratio=[0.75, 4./3.],
+                random_area=[0.08, 1.0],
+                num_attempts=100)
+
         self.cmnp = ops.CropMirrorNormalize(device = "gpu",
                                             output_dtype = types.FLOAT,
                                             output_layout = types.NCHW,
@@ -141,7 +142,7 @@ class HybridValPipe(Pipeline):
                 num_shards = world_size,
                 random_shuffle = False)
 
-        self.decode = ops.nvJPEGDecoder(device = "mixed", output_type = types.RGB)
+        self.decode = ops.ImageDecoder(device = "mixed", output_type = types.RGB)
         self.res = ops.Resize(device = "gpu", resize_shorter = size)
         self.cmnp = ops.CropMirrorNormalize(device = "gpu",
                 output_dtype = types.FLOAT,
