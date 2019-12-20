@@ -1,26 +1,48 @@
 # ResNet50 v1.5 For PyTorch
 
+This repository provides a script and recipe to train the ResNet50 model to
+achieve state-of-the-art accuracy, and is tested and maintained by NVIDIA.
+
 ## Table Of Contents
+
 * [Model overview](#model-overview)
+  * [Model architecture](#model-architecture)
   * [Default configuration](#default-configuration)
+    * [Optimizer](#optimizer)
+    * [Data augmentation](#data-augmentation)
+  * [DALI](#dali)
+  * [Feature support matrix](#feature-support-matrix)
+    * [Features](#features)
   * [Mixed precision training](#mixed-precision-training)
     * [Enabling mixed precision](#enabling-mixed-precision)
 * [Setup](#setup)
   * [Requirements](#requirements)
 * [Quick Start Guide](#quick-start-guide)
 * [Advanced](#advanced)
+  * [Scripts and sample code](#scripts-and-sample-code)
+    * [Parameters](#parameters)
+    * [Command-line options](#command-line-options)
+    * [Getting the data](#getting-the-data)
+        * [Dataset guidelines](#dataset-guidelines)
+        * [Multi-dataset](#multi-dataset)
+    * [Training process](#training-process)
+    * [Inference process](#inference-process)
+
 * [Performance](#performance)
   * [Benchmarking](#benchmarking)
     * [Training performance benchmark](#training-performance-benchmark)
     * [Inference performance benchmark](#inference-performance-benchmark)
   * [Results](#results)
     * [Training accuracy results](#training-accuracy-results)
-      * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-(8x-v100-16G))
-      * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-(16x-v100-32G))
+      * [Training accuracy: NVIDIA DGX-1 (8x V100 16G)](#training-accuracy-nvidia-dgx-1-(8x-v100-16G))
+      * [Example plots](*example-plots)
     * [Training performance results](#training-performance-results)
-      * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-(8x-v100-16G))
-      * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-(16x-v100-32G))
-    * [Inference performance results](#inference-performance-results)
+      * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-(8x-v100-16G))
+    * [Training time for 90 epochs](#training-time-for-90-epochs)
+      * [Training time: NVIDIA DGX-1 (8x V100 16G)](#training-time-nvidia-dgx-1-(8x-v100-16G))
+  * [Inference performance results](#inference-performance-results)
+      * [Inference performance: NVIDIA DGX-1 (1x V100 16G)](#inference-performance-nvidia-dgx-1-(1x-v100-16G))
+      * [Inference performance: NVIDIA T4](#inference-performance-nvidia-t4)
 * [Release notes](#release-notes)
   * [Changelog](#changelog)
   * [Known issues](#known-issues)
@@ -37,33 +59,35 @@ The model is initialized as described in [Delving deep into rectifiers: Surpassi
 
 ### Default configuration
 
+The following sections highlight the default configurations for the ResNet50 model.
+
 #### Optimizer
 
-This model trains for 90 epochs, with standard ResNet v1.5 setup:
+This model uses SGD with momentum optimizer with the following hyperparameters:
 
-* SGD with momentum (0.875)
+* Momentum (0.875)
 
-* Learning rate = 0.256 for 256 batch size, for other batch sizes we lineary
+* Learning rate (LR) = 0.256 for 256 batch size, for other batch sizes we lineary
 scale the learning rate.
 
 * Learning rate schedule - we use cosine LR schedule
 
 * For bigger batch sizes (512 and up) we use linear warmup of the learning rate
-during first couple of epochs
+during the first couple of epochs
 according to [Training ImageNet in 1 hour](https://arxiv.org/abs/1706.02677).
-Warmup length depends on total training length.
+Warmup length depends on the total training length.
 
-* Weight decay: 3.0517578125e-05 (1/32768).
+* Weight decay (WD)= 3.0517578125e-05 (1/32768).
 
 * We do not apply WD on Batch Norm trainable parameters (gamma/bias)
 
-* Label Smoothing: 0.1
+* Label smoothing = 0.1
 
 * We train for:
 
     * 50 Epochs -> configuration that reaches 75.9% top1 accuracy
 
-    * 90 Epochs -> 90 epochs is a standard for ResNet50
+    * 90 Epochs -> 90 epochs is a standard for ImageNet networks
 
     * 250 Epochs -> best possible accuracy.
 
@@ -105,15 +129,30 @@ and this recipe keeps the original assumption that validation is done on 224px i
 
 Using 288px images means that a lot more FLOPs are needed during inference to reach the same accuracy.
 
+### Feature support matrix
+
+The following features are supported by this model:
+
+| Feature               | ResNet50
+|-----------------------|--------------------------
+|[DALI](https://docs.nvidia.com/deeplearning/sdk/dali-release-notes/index.html)   |   Yes
+|[APEX AMP](https://nvidia.github.io/apex/amp.html) | Yes |
+
+#### Features
+
+- NVIDIA DALI - DALI is a library accelerating data preparation pipeline. To accelerate your input pipeline, you only need to define your data loader
+with the DALI library. For more information about DALI, refer to the [DALI product documentation](https://docs.nvidia.com/deeplearning/sdk/index.html#data-loading).
+
+- [APEX](https://github.com/NVIDIA/apex) is a PyTorch extension that contains utility libraries, such as [Automatic Mixed Precision (AMP)](https://nvidia.github.io/apex/amp.html), which require minimal network code changes to leverage Tensor Cores performance. Refer to the [Enabling mixed precision](#enabling-mixed-precision) section for more details.
+
 ### DALI
 
-For DGX2 configurations we use [NVIDIA DALI](https://github.com/NVIDIA/DALI),
+We use [NVIDIA DALI](https://github.com/NVIDIA/DALI),
 which speeds up data loading when CPU becomes a bottleneck.
-DALI can also use CPU, and it outperforms the pytorch native dataloader.
+DALI can use CPU or GPU, and outperforms the PyTorch native dataloader.
 
 Run training with `--data-backends dali-gpu` or `--data-backends dali-cpu` to enable DALI.
 For DGX1 we recommend `--data-backends dali-cpu`, for DGX2 we recommend `--data-backends dali-gpu`.
-
 
 ### Mixed precision training
 
@@ -131,7 +170,7 @@ For information about:
 
 #### Enabling mixed precision
 
-Mixed precision is enabled in PyTorch by using the Automatic Mixed Precision (AMP),  library from [APEX](https://github.com/NVIDIA/apex) that casts variables to half-precision upon retrieval,
+Mixed precision is enabled in PyTorch by using the Automatic Mixed Precision (AMP), a library from [APEX](https://github.com/NVIDIA/apex) that casts variables to half-precision upon retrieval,
 while storing variables in single-precision format. Furthermore, to preserve small gradient magnitudes in backpropagation, a [loss scaling](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#lossscaling) step must be included when applying gradients.
 In PyTorch, loss scaling can be easily applied by using scale_loss() method provided by AMP. The scaling value to be used can be [dynamic](https://nvidia.github.io/apex/fp16_utils.html#apex.fp16_utils.DynamicLossScaler) or fixed.
 
@@ -168,13 +207,15 @@ To enable mixed precision, you can:
 
 ## Setup
 
+The following section lists the requirements that you need to meet in order to start training the ResNet50 model.
+
 ### Requirements
 
-Ensure you meet the following requirements:
+This repository contains Dockerfile which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 19.05-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch) or newer
-* (optional) NVIDIA Volta GPU (see section below) - for best training performance using mixed precision
+* [PyTorch 19.10-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch) or newer
+* [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
 
 For more information about how to get started with NGC containers, see the
 following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning
@@ -183,21 +224,23 @@ DGX Documentation:
 * [Accessing And Pulling From The NGC Container Registry](https://docs.nvidia.com/deeplearning/dgx/user-guide/index.html#accessing_registry)
 * [Running PyTorch](https://docs.nvidia.com/deeplearning/dgx/pytorch-release-notes/running.html#running)
 
+For those unable to use the PyTorch NGC container, to set up the required environment or create your own container, see the versioned [NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html).
+
 ## Quick Start Guide
 
 ### 1. Clone the repository.
 ```
 git clone https://github.com/NVIDIA/DeepLearningExamples
-cd DeepLearningExamples/PyTorch/Classification/RN50v1.5/
+cd DeepLearningExamples/PyTorch/Classification/
 ```
 
 ### 2. Download and preprocess the dataset.
 
-The ResNet50 v1.5 script operates on ImageNet 1k, a widely popular image classification dataset from ILSVRC challenge.
+The ResNet50 script operates on ImageNet 1k, a widely popular image classification dataset from the ILSVRC challenge.
 
 PyTorch can work directly on JPEGs, therefore, preprocessing/augmentation is not needed.
 
-1. Download the images from http://image-net.org/download-images
+1. [Download the images](http://image-net.org/download-images).
 
 2. Extract the training data:
   ```bash
@@ -223,49 +266,63 @@ docker build . -t nvidia_rn50
 
 ### 4. Start an interactive session in the NGC container to run training/inference.
 ```
-nvidia-docker run --rm -it -v <path to imagenet>:/imagenet --ipc=host nvidia_rn50
+nvidia-docker run --rm -it -v <path to imagenet>:/data/imagenet --ipc=host nvidia_rn50
 ```
 
-### 5. Running training
+### 5. Start training
 
 To run training for a standard configuration (DGX1V/DGX2V, FP16/FP32, 50/90/250 Epochs),
 run one of the scripts in the `./resnet50v1.5/training` directory
 called `./resnet50v1.5/training/{DGX1, DGX2}_RN50_{AMP, FP16, FP32}_{50,90,250}E.sh`.
 
-Ensure imagenet is mounted in the `/imagenet` directory.
+Ensure ImageNet is mounted in the `/data/imagenet` directory.
 
 Example:
-    `bash ./resnet50v1.5/training/DGX1_RN50_FP16_250E.sh`
-   
+    `bash ./resnet50v1.5/training/DGX1_RN50_FP16_250E.sh <path were to store checkpoints and logs>`
+
+### 6. Start inference
+
+To run inference on ImageNet on a checkpointed model, run:
+
+`python ./main.py --arch resnet50 --evaluate --epochs 1 --resume <path to checkpoint> -b <batch size> <path to imagenet>`
+
+To run inference on JPEG image, you have to first extract the model weights from checkpoint:
+
+`python checkpoint2model.py --checkpoint-path <path to checkpoint> --weight-path <path where weights will be stored>`
+
+Then run classification script:
+
+`python classify.py --arch resnet50 -c fanin --weights <path to weights from previous step> --precision AMP|FP16|FP32 --image <path to JPEG image>`
+
+
+## Advanced
+
+The following sections provide greater details of the dataset, running training and inference, and the training results.
+
+### Scripts and sample code
+
 To run a non standard configuration use:
 
 * For 1 GPU
     * FP32
         `python ./main.py --arch resnet50 -c fanin --label-smoothing 0.1 <path to imagenet>`
-    * FP16
-        `python ./main.py --arch resnet50 -c fanin --label-smoothing 0.1 --fp16 --static-loss-scale 256 <path to imagenet>`
-    * AMP
         `python ./main.py --arch resnet50 -c fanin --label-smoothing 0.1 --amp --static-loss-scale 256 <path to imagenet>`
 
 * For multiple GPUs
     * FP32
         `python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 -c fanin --label-smoothing 0.1 <path to imagenet>`
-    * FP16
-        `python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 -c fanin --label-smoothing 0.1 --fp16 --static-loss-scale 256 <path to imagenet>`
     * AMP
         `python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 -c fanin --label-smoothing 0.1 --amp --static-loss-scale 256 <path to imagenet>`
 
 Use `python ./main.py -h` to obtain the list of available options in the `main.py` script.
 
-### 6. Running inference
-
-To run inference on a checkpointed model run:
-
-`python ./main.py --arch resnet50 --evaluate --epochs 1 --resume <path to checkpoint> -b <batch size> <path to imagenet>`
-
-## Advanced
 
 ### Commmand-line options:
+
+To see the full list of available options and their descriptions, use the `-h` or `--help` command-line option, for example:
+
+`python main.py -h`
+
 
 ```
 usage: main.py [-h] [--data-backend BACKEND] [--arch ARCH]
@@ -289,12 +346,14 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   --data-backend BACKEND
-                        data backend: pytorch | dali-gpu | dali-cpu (default:
-                        pytorch)
+                        data backend: pytorch | syntetic | dali-gpu | dali-cpu
+                        (default: dali-cpu)
   --arch ARCH, -a ARCH  model architecture: resnet18 | resnet34 | resnet50 |
-                        resnet101 | resnet152 (default: resnet50)
+                        resnet101 | resnet152 | resnet50 | se-
+                        resnet50 (default: resnet50)
   --model-config CONF, -c CONF
-                        model configs: classic | fanin(default: classic)
+                        model configs: classic | fanin | grp-fanin | grp-
+                        fanout(default: classic)
   -j N, --workers N     number of data loading workers (default: 5)
   --epochs N            number of total epochs to run
   -b N, --batch-size N  mini-batch size (default: 256) per gpu
@@ -341,9 +400,83 @@ optional arguments:
   --workspace DIR       path to directory where checkpoints will be stored
 ```
 
+
+### Dataset guidelines
+
+To use your own dataset, divide it in directories as in the following scheme:
+
+ - Training images - `train/<class id>/<image>`
+ - Validation images - `val/<class id>/<image>`
+
+If your dataset's has number of classes different than 1000, you need to add a custom config
+in the `image_classification/resnet.py` file.
+
+```python
+resnet_versions = {
+    ...
+    'resnet50-custom' : {
+       'net' : ResNet,
+       'block' : Bottleneck,
+       'layers' : [3, 4, 6, 3],
+       'widths' : [64, 128, 256, 512],
+       'expansion' : 4,
+       'num_classes' : <custom number of classes>,
+       }
+}
+```
+
+After adding the config, run the training script with `--arch resnet50-custom` flag.
+
+### Training process
+
+All the results of the training will be stored in the directory specified with `--workspace` argument.
+Script will store:
+ - most recent checkpoint - `checkpoint.pth.tar` (unless `--no-checkpoints` flag is used).
+ - checkpoint with best validation accuracy - `model_best.pth.tar` (unless `--no-checkpoints` flag is used).
+ - JSON log - in the file specified with `--raport-file` flag.
+
+Metrics gathered through training:
+
+ - `train.loss` - training loss
+ - `train.total_ips` - training speed measured in images/second
+ - `train.compute_ips` - training speed measured in images/second, not counting data loading
+ - `train.data_time` - time spent on waiting on data
+ - `train.compute_time` - time spent in forward/backward pass
+
+### Inference process
+
+Validation is done every epoch, and can be also run separately on a checkpointed model.
+
+`python ./main.py --arch resnet50 --evaluate --epochs 1 --resume <path to checkpoint> -b <batch size> <path to imagenet>`
+
+Metrics gathered through training:
+
+ - `val.loss` - validation loss
+ - `val.top1` - validation top1 accuracy
+ - `val.top5` - validation top5 accuracy
+ - `val.total_ips` - inference speed measured in images/second
+ - `val.compute_ips` - inference speed measured in images/second, not counting data loading
+ - `val.data_time` - time spent on waiting on data
+ - `val.compute_time` - time spent on inference
+
+
+To run inference on JPEG image, you have to first extract the model weights from checkpoint:
+
+`python checkpoint2model.py --checkpoint-path <path to checkpoint> --weight-path <path where weights will be stored>`
+
+Then run classification script:
+
+`python classify.py --arch resnet50 -c fanin --weights <path to weights from previous step> --precision AMP|FP16|FP32 --image <path to JPEG image>`
+
+Example output:
+
+
+
 ## Performance
 
 ### Benchmarking
+
+The following section shows how to run benchmarks measuring the model performance in training and inference modes.
 
 #### Training performance benchmark
 
@@ -364,7 +497,7 @@ To benchmark training, run:
     * AMP
 `python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 --training-only -p 1 --raport-file benchmark.json --amp --static-loss-scale 256 --epochs 1 --prof 100 <path to imagenet>`
 
-Each of this scripts will run 100 iterations and save results in benchmark.json file
+Each of these scripts will run 100 iterations and save results in the `benchmark.json` file.
 
 #### Inference performance benchmark
 
@@ -382,15 +515,18 @@ To benchmark inference, run:
 
 `python ./main.py --arch resnet50 -p 1 --raport-file benchmark.json --epochs 1 --prof 100 --evaluate --amp <path to imagenet>`
 
-Each of this scripts will run 100 iterations and save results in benchmark.json file
-
+Each of these scripts will run 100 iterations and save results in the `benchmark.json` file.
 
 
 ### Results
 
-#### Training Accuracy Results
+Our results were obtained by running the applicable training script     in the pytorch-19.10 NGC container.
 
-##### NVIDIA DGX-1 (8x V100 16G)
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+
+#### Training accuracy results
+
+##### Training accuracy: NVIDIA DGX-1 (8x V100 16G)
 
 | **epochs** | **Mixed Precision Top1** | **FP32 Top1** |
 |:-:|:-:|:-:|
@@ -398,7 +534,7 @@ Each of this scripts will run 100 iterations and save results in benchmark.json 
 | 90 | 77.23 +/- 0.04 | 77.08 +/- 0.08 |
 | 250 | 78.42 +/- 0.04 | 78.30 +/- 0.16 |
 
-##### NVIDIA DGX-2 (16x V100 32G)
+##### Training accuracy: NVIDIA DGX-2 (16x V100 32G)
 
 | **epochs** | **Mixed Precision Top1** | **FP32 Top1** |
 |:-:|:-:|:-:|
@@ -408,7 +544,9 @@ Each of this scripts will run 100 iterations and save results in benchmark.json 
 
 
 
-##### Example plots (90 Epochs configuration on DGX1V)
+##### Example plots
+
+The following images show a 250 epochs configuration on a DGX-1V.
 
 ![ValidationLoss](./img/loss_plot.png)
 
@@ -416,164 +554,112 @@ Each of this scripts will run 100 iterations and save results in benchmark.json 
 
 ![ValidationTop5](./img/top5_plot.png)
 
-#### Training Performance Results
+#### Training performance results
 
-##### NVIDIA DGX1-16G (8x V100 16G)
+##### Traininig performance: NVIDIA DGX1-16G (8x V100 16G)
 
-| **# of GPUs** | **Mixed Precision** | **FP32** | **Mixed Precision speedup** | **Mixed Precision Strong Scaling** | **FP32 Strong Scaling** |
+| **GPUs** | **Mixed Precision** | **FP32** | **Mixed Precision speedup** | **Mixed Precision Strong Scaling** | **FP32 Strong Scaling** |
 |:-:|:-:|:-:|:-:|:-:|:-:|
 | 1 | 893.09 img/s | 380.44 img/s | 2.35x | 1.00x | 1.00x |
 | 8 | 6888.75 img/s | 2945.37 img/s | 2.34x | 7.71x | 7.74x |
 
-##### NVIDIA DGX1-32G (8x V100 32G)
+##### Traininig performance: NVIDIA DGX1-32G (8x V100 32G)
 
-| **# of GPUs** | **Mixed Precision** | **FP32** | **Mixed Precision speedup** | **Mixed Precision Strong Scaling** | **FP32 Strong Scaling** |
+| **GPUs** | **Mixed Precision** | **FP32** | **Mixed Precision speedup** | **Mixed Precision Strong Scaling** | **FP32 Strong Scaling** |
 |:-:|:-:|:-:|:-:|:-:|:-:|
 | 1 | 849.63 img/s | 373.93 img/s | 2.27x | 1.00x | 1.00x |
 | 8 | 6614.15 img/s | 2911.22 img/s | 2.27x | 7.78x | 7.79x |
 
-##### NVIDIA DGX2 (16x V100 32G)
+##### Traininig performance: NVIDIA DGX2 (16x V100 32G)
 
-| **# of GPUs** | **Mixed Precision** | **FP32** | **Mixed Precision speedup** | **Mixed Precision Strong Scaling** | **FP32 Strong Scaling** |
+| **GPUs** | **Mixed Precision** | **FP32** | **Mixed Precision speedup** | **Mixed Precision Strong Scaling** | **FP32 Strong Scaling** |
 |:-:|:-:|:-:|:-:|:-:|:-:|
 | 1 | 894.41 img/s | 402.23 img/s | 2.22x | 1.00x | 1.00x |
 | 16 | 13443.82 img/s | 6263.41 img/s | 2.15x | 15.03x | 15.57x |
 
 #### Training Time for 90 Epochs
 
-##### NVIDIA DGX-1 (8x V100 16G)
+##### Training time: NVIDIA DGX-1 (8x V100 16G)
 
-| **# of GPUs** | **Mixed Precision training time** | **FP32 training time** |
+| **GPUs** | **Mixed Precision training time** | **FP32 training time** |
 |:-:|:-:|:-:|
 | 1 | ~ 41 h | ~ 95 h |
 | 8 | ~ 7 h | ~ 14 h |
 
-##### NVIDIA DGX-2 (16x V100 32G)
+##### Training time: NVIDIA DGX-2 (16x V100 32G)
 
-| **# of GPUs** | **Mixed Precision training time** | **FP32 training time** |
+| **GPUs** | **Mixed Precision training time** | **FP32 training time** |
 |:-:|:-:|:-:|
 | 1 | ~ 41 h | ~ 90 h |
 | 16 | ~ 5 h | ~ 8 h |
 
 
 
-#### Inference Performance Results
+#### Inference performance results
 
-##### NVIDIA VOLTA V100 16G on DGX1V
-
-###### FP32 Inference Latency
-
-| **batch_size** | **FP32 50.0%** | **FP32 90.0%** | **FP32 99.0%** | **FP32 100.0%** |
-|:-:|:-:|:-:|:-:|:-:|
-| 1 | 6.91ms | 7.25ms | 10.92ms | 11.70ms |
-| 2 | 7.16ms | 7.41ms | 9.11ms | 14.58ms |
-| 4 | 7.29ms | 7.58ms | 10.09ms | 13.75ms |
-| 8 | 9.81ms | 10.46ms | 12.75ms | 15.36ms |
-| 16 | 15.76ms | 15.88ms | 16.63ms | 17.49ms |
-| 32 | 28.60ms | 28.71ms | 29.30ms | 30.81ms |
-| 64 | 53.68ms | 53.86ms | 54.23ms | 54.86ms |
-| 128 | 104.21ms | 104.68ms | 105.00ms | 106.19ms |
-| 256 | N/A | N/A | N/A | N/A |
-
-###### Mixed Precision Inference Latency
-
-| **batch_size** | **AMP @50.0%** | **speedup** | **AMP @90.0%** | **speedup** | **AMP @99.0%** | **speedup** | **AMP @100.0%** | **speedup** |
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| 1 | 8.25ms | 0.8x | 9.32ms | 0.8x | 12.79ms | 0.9x | 14.29ms | 0.8x |
-| 2 | 7.95ms | 0.9x | 8.75ms | 0.8x | 12.31ms | 0.7x | 15.92ms | 0.9x |
-| 4 | 8.52ms | 0.9x | 9.20ms | 0.8x | 10.60ms | 1.0x | 11.23ms | 1.2x |
-| 8 | 8.78ms | 1.1x | 9.31ms | 1.1x | 10.82ms | 1.2x | 12.54ms | 1.2x |
-| 16 | 8.77ms | 1.8x | 9.05ms | 1.8x | 12.81ms | 1.3x | 14.05ms | 1.2x |
-| 32 | 14.03ms | 2.0x | 14.14ms | 2.0x | 14.92ms | 2.0x | 15.06ms | 2.0x |
-| 64 | 25.91ms | 2.1x | 26.05ms | 2.1x | 26.17ms | 2.1x | 27.17ms | 2.0x |
-| 128 | 50.11ms | 2.1x | 50.28ms | 2.1x | 50.68ms | 2.1x | 51.43ms | 2.1x |
-| 256 | 96.70ms | N/A | 96.91ms | N/A | 97.14ms | N/A | 98.04ms | N/A |
-
-###### FP32 Inference throughput
-
-| **batch_size** | **FP32 @50.0%** | **FP32 @90.0%** | **FP32 @99.0%** | **FP32 @100.0%** |
-|:-:|:-:|:-:|:-:|:-:|
-| 1 | 140 img/s | 133 img/s | 89 img/s | 70 img/s |
-| 2 | 271 img/s | 259 img/s | 208 img/s | 132 img/s |
-| 4 | 531 img/s | 506 img/s | 325 img/s | 248 img/s |
-| 8 | 782 img/s | 729 img/s | 523 img/s | 513 img/s |
-| 16 | 992 img/s | 970 img/s | 832 img/s | 624 img/s |
-| 32 | 1101 img/s | 1093 img/s | 963 img/s | 871 img/s |
-| 64 | 1179 img/s | 1161 img/s | 1102 img/s | 1090 img/s |
-| 128 | 1220 img/s | 1213 img/s | 1159 img/s | 1148 img/s |
-| 256 | N/A | N/A | N/A | N/A |
-
-###### Mixed Precision Inference throughput
-
-| **batch_size** | **AMP @50.0%** | **speedup** | **AMP @90.0%** | **speedup** | **AMP @99.0%** | **speedup** | **AMP @100.0%** | **speedup** |
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| 1 | 118 img/s | 0.8x | 104 img/s | 0.8x | 76 img/s | 0.9x | 66 img/s | 0.9x |
-| 2 | 244 img/s | 0.9x | 220 img/s | 0.8x | 153 img/s | 0.7x | 123 img/s | 0.9x |
-| 4 | 455 img/s | 0.9x | 423 img/s | 0.8x | 367 img/s | 1.1x | 275 img/s | 1.1x |
-| 8 | 886 img/s | 1.1x | 836 img/s | 1.1x | 626 img/s | 1.2x | 471 img/s | 0.9x |
-| 16 | 1771 img/s | 1.8x | 1713 img/s | 1.8x | 1100 img/s | 1.3x | 905 img/s | 1.5x |
-| 32 | 2217 img/s | 2.0x | 1949 img/s | 1.8x | 1619 img/s | 1.7x | 1385 img/s | 1.6x |
-| 64 | 2416 img/s | 2.0x | 2212 img/s | 1.9x | 1993 img/s | 1.8x | 1985 img/s | 1.8x |
-| 128 | 2524 img/s | 2.1x | 2287 img/s | 1.9x | 2046 img/s | 1.8x | 1503 img/s | 1.3x |
-| 256 | 2626 img/s | N/A | 2149 img/s | N/A | 1533 img/s | N/A | 1346 img/s | N/A |
-
-##### NVIDIA T4
+##### Inference performance: NVIDIA DGX-1 (1x V100 16G)
 
 ###### FP32 Inference Latency
 
-| **batch_size** | **FP32 50.0%** | **FP32 90.0%** | **FP32 99.0%** | **FP32 100.0%** |
-|:-:|:-:|:-:|:-:|:-:|
-| 1 | 5.19ms | 5.65ms | 10.97ms | 14.06ms |
-| 2 | 5.39ms | 5.95ms | 9.81ms | 13.17ms |
-| 4 | 6.65ms | 7.34ms | 9.65ms | 13.26ms |
-| 8 | 10.13ms | 10.33ms | 13.87ms | 16.51ms |
-| 16 | 16.76ms | 17.15ms | 21.06ms | 25.66ms |
-| 32 | 31.02ms | 31.12ms | 32.41ms | 34.93ms |
-| 64 | 57.60ms | 57.84ms | 58.05ms | 59.69ms |
-| 128 | 110.91ms | 111.15ms | 112.16ms | 112.20ms |
-| 256 | N/A | N/A | N/A | N/A |
+| **batch size** | **Throughput Avg** | **Latency Avg** | **Latency 90%** | **Latency 95%** | **Latency 99%** |
+|:-:|:-:|:-:|:-:|:-:|:-:|
+| 1 | 136.82 img/s | 7.12ms | 7.25ms | 8.36ms | 10.92ms |
+| 2 | 266.86 img/s | 7.27ms | 7.41ms | 7.85ms | 9.11ms |
+| 4 | 521.76 img/s | 7.44ms | 7.58ms | 8.14ms | 10.09ms |
+| 8 | 766.22 img/s | 10.18ms | 10.46ms | 10.97ms | 12.75ms |
+| 16 | 976.36 img/s | 15.79ms | 15.88ms | 15.95ms | 16.63ms |
+| 32 | 1092.27 img/s | 28.63ms | 28.71ms | 28.76ms | 29.30ms |
+| 64 | 1161.55 img/s | 53.69ms | 53.86ms | 53.90ms | 54.23ms |
+| 128 | 1209.12 img/s | 104.24ms | 104.68ms | 104.80ms | 105.00ms |
+| 256 | N/A | N/A | N/A | N/A | N/A |
 
 ###### Mixed Precision Inference Latency
 
-| **batch_size** | **AMP @50.0%** | **speedup** | **AMP @90.0%** | **speedup** | **AMP @99.0%** | **speedup** | **AMP @100.0%** | **speedup** |
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| 1 | 5.75ms | 0.9x | 5.92ms | 1.0x | 11.58ms | 0.9x | 15.17ms | 0.9x |
-| 2 | 5.66ms | 1.0x | 6.05ms | 1.0x | 11.52ms | 0.9x | 18.27ms | 0.7x |
-| 4 | 5.86ms | 1.1x | 6.33ms | 1.2x | 8.90ms | 1.1x | 11.89ms | 1.1x |
-| 8 | 6.43ms | 1.6x | 7.31ms | 1.4x | 12.41ms | 1.1x | 13.12ms | 1.3x |
-| 16 | 8.85ms | 1.9x | 9.86ms | 1.7x | 17.01ms | 1.2x | 19.01ms | 1.3x |
-| 32 | 15.42ms | 2.0x | 15.61ms | 2.0x | 18.66ms | 1.7x | 29.76ms | 1.2x |
-| 64 | 28.50ms | 2.0x | 28.69ms | 2.0x | 31.06ms | 1.9x | 34.26ms | 1.7x |
-| 128 | 54.82ms | 2.0x | 54.96ms | 2.0x | 55.27ms | 2.0x | 60.48ms | 1.9x |
-| 256 | 106.47ms | N/A | 106.62ms | N/A | 107.03ms | N/A | 111.27ms | N/A |
+| **batch size** | **Throughput Avg** | **Latency Avg** | **Latency 90%** | **Latency 95%** | **Latency 99%** |
+|:-:|:-:|:-:|:-:|:-:|:-:|
+| 1 | 114.97 img/s | 8.56ms | 9.32ms | 11.43ms | 12.79ms |
+| 2 | 238.70 img/s | 8.20ms | 8.75ms | 9.49ms | 12.31ms |
+| 4 | 448.69 img/s | 8.67ms | 9.20ms | 9.97ms | 10.60ms |
+| 8 | 875.00 img/s | 8.88ms | 9.31ms | 9.80ms | 10.82ms |
+| 16 | 1746.07 img/s | 8.89ms | 9.05ms | 9.56ms | 12.81ms |
+| 32 | 2004.28 img/s | 14.07ms | 14.14ms | 14.31ms | 14.92ms |
+| 64 | 2254.60 img/s | 25.93ms | 26.05ms | 26.07ms | 26.17ms |
+| 128 | 2360.14 img/s | 50.14ms | 50.28ms | 50.34ms | 50.68ms |
+| 256 | 2342.13 img/s | 96.74ms | 96.91ms | 96.99ms | 97.14ms |
 
-###### FP32 Inference throughput
 
-| **batch_size** | **FP32 @50.0%** | **FP32 @90.0%** | **FP32 @99.0%** | **FP32 @100.0%** |
-|:-:|:-:|:-:|:-:|:-:|
-| 1 | 186 img/s | 171 img/s | 79 img/s | 57 img/s |
-| 2 | 359 img/s | 320 img/s | 122 img/s | 113 img/s |
-| 4 | 570 img/s | 529 img/s | 391 img/s | 204 img/s |
-| 8 | 757 img/s | 707 img/s | 479 img/s | 432 img/s |
-| 16 | 918 img/s | 899 img/s | 750 img/s | 615 img/s |
-| 32 | 1017 img/s | 1011 img/s | 932 img/s | 756 img/s |
-| 64 | 1101 img/s | 1096 img/s | 1034 img/s | 1015 img/s |
-| 128 | 1148 img/s | 1145 img/s | 1096 img/s | 874 img/s |
-| 256 | N/A | N/A | N/A | N/A |
 
-###### Mixed Precision Inference throughput
+##### Inference performance: NVIDIA T4
 
-| **batch_size** | **AMP @50.0%** | **speedup** | **AMP @90.0%** | **speedup** | **AMP @99.0%** | **speedup** | **AMP @100.0%** | **speedup** |
-|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
-| 1 | 169 img/s | 0.9x | 163 img/s | 1.0x | 79 img/s | 1.0x | 55 img/s | 1.0x |
-| 2 | 343 img/s | 1.0x | 311 img/s | 1.0x | 122 img/s | 1.0x | 107 img/s | 0.9x |
-| 4 | 662 img/s | 1.2x | 612 img/s | 1.2x | 430 img/s | 1.1x | 215 img/s | 1.1x |
-| 8 | 1207 img/s | 1.6x | 1055 img/s | 1.5x | 601 img/s | 1.3x | 384 img/s | 0.9x |
-| 16 | 1643 img/s | 1.8x | 1552 img/s | 1.7x | 908 img/s | 1.2x | 824 img/s | 1.3x |
-| 32 | 1919 img/s | 1.9x | 1674 img/s | 1.7x | 1393 img/s | 1.5x | 1021 img/s | 1.4x |
-| 64 | 2201 img/s | 2.0x | 1772 img/s | 1.6x | 1569 img/s | 1.5x | 1342 img/s | 1.3x |
-| 128 | 2311 img/s | 2.0x | 1833 img/s | 1.6x | 1261 img/s | 1.2x | 1107 img/s | 1.3x |
-| 256 | 2389 img/s | N/A | 1841 img/s | N/A | 1280 img/s | N/A | 1164 img/s | N/A |
+###### FP32 Inference Latency
+
+| **batch size** | **Throughput Avg** | **Latency Avg** | **Latency 90%** | **Latency 95%** | **Latency 99%** |
+|:-:|:-:|:-:|:-:|:-:|:-:|
+| 1 | 179.85 img/s | 5.51ms | 5.65ms | 7.34ms | 10.97ms |
+| 2 | 348.12 img/s | 5.67ms | 5.95ms | 6.33ms | 9.81ms |
+| 4 | 556.27 img/s | 7.03ms | 7.34ms | 8.13ms | 9.65ms |
+| 8 | 740.43 img/s | 10.32ms | 10.33ms | 10.60ms | 13.87ms |
+| 16 | 909.17 img/s | 17.19ms | 17.15ms | 18.13ms | 21.06ms |
+| 32 | 999.07 img/s | 31.07ms | 31.12ms | 31.17ms | 32.41ms |
+| 64 | 1090.47 img/s | 57.62ms | 57.84ms | 57.91ms | 58.05ms |
+| 128 | 1142.46 img/s | 110.94ms | 111.15ms | 111.23ms | 112.16ms |
+| 256 | N/A | N/A | N/A | N/A | N/A |
+
+###### Mixed Precision Inference Latency
+
+| **batch size** | **Throughput Avg** | **Latency Avg** | **Latency 90%** | **Latency 95%** | **Latency 99%** |
+|:-:|:-:|:-:|:-:|:-:|:-:|
+| 1 | 163.78 img/s | 6.05ms | 5.92ms | 7.98ms | 11.58ms |
+| 2 | 333.43 img/s | 5.91ms | 6.05ms | 6.63ms | 11.52ms |
+| 4 | 645.45 img/s | 6.04ms | 6.33ms | 7.01ms | 8.90ms |
+| 8 | 1164.15 img/s | 6.73ms | 7.31ms | 8.04ms | 12.41ms |
+| 16 | 1606.42 img/s | 9.53ms | 9.86ms | 10.52ms | 17.01ms |
+| 32 | 1857.29 img/s | 15.67ms | 15.61ms | 16.14ms | 18.66ms |
+| 64 | 2011.62 img/s | 28.64ms | 28.69ms | 28.82ms | 31.06ms |
+| 128 | 2083.90 img/s | 54.87ms | 54.96ms | 54.99ms | 55.27ms |
+| 256 | 2043.72 img/s | 106.51ms | 106.62ms | 106.68ms | 107.03ms |
+
+
 
 
 

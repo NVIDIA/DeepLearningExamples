@@ -27,94 +27,182 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-import random
-import json
 from collections import OrderedDict
+import dllogger
+import numpy as np
 
 
-class IterationMeter(object):
+def format_step(step):
+    if isinstance(step, str):
+        return step
+    s = ""
+    if len(step) > 0:
+        s += "Epoch: {} ".format(step[0])
+    if len(step) > 1:
+        s += "Iteration: {} ".format(step[1])
+    if len(step) > 2:
+        s += "Validation Iteration: {} ".format(step[2])
+    if len(step) == 0:
+        s = "Summary:"
+    return s
+
+
+PERF_METER = lambda: Meter(AverageMeter(), AverageMeter(), AverageMeter())
+LOSS_METER = lambda: Meter(AverageMeter(), AverageMeter(), MinMeter())
+ACC_METER = lambda: Meter(AverageMeter(), AverageMeter(), MaxMeter())
+LR_METER = lambda: Meter(LastMeter(), LastMeter(), LastMeter())
+
+LAT_100 = lambda: Meter(QuantileMeter(1), QuantileMeter(1), QuantileMeter(1))
+LAT_99 = lambda: Meter(QuantileMeter(0.99), QuantileMeter(0.99), QuantileMeter(0.99))
+LAT_95 = lambda: Meter(QuantileMeter(0.95), QuantileMeter(0.95), QuantileMeter(0.95))
+
+class Meter(object):
+    def __init__(self, iteration_aggregator, epoch_aggregator, run_aggregator):
+        self.run_aggregator = run_aggregator
+        self.epoch_aggregator = epoch_aggregator
+        self.iteration_aggregator = iteration_aggregator
+
+    def record(self, val, n=1):
+        self.iteration_aggregator.record(val, n=n)
+
+    def get_iteration(self):
+        v, n = self.iteration_aggregator.get_val()
+        return v
+
+    def reset_iteration(self):
+        v, n = self.iteration_aggregator.get_data()
+        self.iteration_aggregator.reset()
+        if v is not None:
+            self.epoch_aggregator.record(v, n=n)
+
+    def get_epoch(self):
+        v, n = self.epoch_aggregator.get_val()
+        return v
+
+    def reset_epoch(self):
+        v, n = self.epoch_aggregator.get_data()
+        self.epoch_aggregator.reset()
+        if v is not None:
+            self.run_aggregator.record(v, n=n)
+
+    def get_run(self):
+        v, n = self.run_aggregator.get_val()
+        return v
+
+    def reset_run(self):
+        self.run_aggregator.reset()
+
+
+class QuantileMeter(object):
+    def __init__(self, q):
+        self.q = q
+        self.reset()
+
+    def reset(self):
+        self.vals = []
+        self.n = 0
+
+    def record(self, val, n=1):
+        if isinstance(val, list):
+            self.vals += val
+            self.n += len(val)
+        else:
+            self.vals += [val] * n
+            self.n += n
+
+    def get_val(self):
+        if not self.vals:
+            return None, self.n
+        return np.quantile(self.vals, self.q, interpolation='nearest'), self.n
+
+    def get_data(self):
+        return self.vals, self.n
+
+
+class MaxMeter(object):
     def __init__(self):
         self.reset()
 
     def reset(self):
-        self.last = 0
+        self.max = None
+        self.n = 0
 
-    def record(self, val, n = 1):
+    def record(self, val, n=1):
+        if self.max is None:
+            self.max = val
+        else:
+            self.max = max(self.max, val)
+        self.n = n
+
+    def get_val(self):
+        return self.max, self.n
+
+    def get_data(self):
+        return self.max, self.n
+
+
+class MinMeter(object):
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.min = None
+        self.n = 0
+
+    def record(self, val, n=1):
+        if self.min is None:
+            self.min = val
+        else:
+            self.min = max(self.min, val)
+        self.n = n
+
+    def get_val(self):
+        return self.min, self.n
+
+    def get_data(self):
+        return self.min, self.n
+
+
+class LastMeter(object):
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.last = None
+        self.n = 0
+
+    def record(self, val, n=1):
         self.last = val
+        self.n = n
 
     def get_val(self):
-        return None
+        return self.last, self.n
 
-    def get_last(self):
-        return self.last
-
-
-class EpochMeter(object):
-    def __init__(self):
-        self.reset()
-
-    def reset(self):
-        self.val = 0
-
-    def record(self, val, n = 1):
-        self.val = val
-
-    def get_val(self):
-        return self.val
-
-    def get_last(self):
-        return None
+    def get_data(self):
+        return self.last, self.n
 
 
 class AverageMeter(object):
-    def __init__(self, ret_last=True, ret_val=True):
+    def __init__(self):
         self.reset()
-        self.ret_last = ret_last
-        self.ret_val = ret_val
 
     def reset(self):
         self.n = 0
         self.val = 0
-        self.last = 0
 
-    def record(self, val, n = 1):
-        self.last = val
+    def record(self, val, n=1):
         self.n += n
         self.val += val * n
 
     def get_val(self):
-        if self.ret_val:
-            if self.n == 0:
-                return 0.0
-            return self.val / self.n
-        else:
-            return None
+        if self.n == 0:
+            return None, 0
+        return self.val / self.n, self.n
 
-    def get_last(self):
-        if self.ret_last:
-            return self.last
-        else:
-            return None
-
-
-class RunningMeter(object):
-    def __init__(self, decay):
-        self.decay = decay
-
-    def reset(self):
-        self.val = 0
-        self.last = 0
-
-    def record(self, val, n = 1):
-        self.last = val
-        decay = 1 - ((1 - self.decay) ** n)
-        self.val = (1 - decay) * self.val + decay * val
-
-    def get_val(self):
-        return self.val
-
-    def get_last(self):
-        return self.last
+    def get_data(self):
+        if self.n == 0:
+            return None, 0
+        return self.val / self.n, self.n
 
 
 class Logger(object):
@@ -126,15 +214,16 @@ class Logger(object):
         self.backends = backends
         self.print_interval = print_interval
         self.verbose = verbose
+        dllogger.init(backends)
 
-    def log_run_tag(self, name, val):
-        for b in self.backends:
-            b.log_run_tag(name, val)
+    def log_parameter(self, data, verbosity=0):
+        dllogger.log(step="PARAMETER", data=data, verbosity=verbosity)
 
-    def register_metric(self, metric_name, meter, log_level=0):
+    def register_metric(self, metric_name, meter, verbosity=0, metadata={}):
         if self.verbose:
             print("Registering metric: {}".format(metric_name))
-        self.metrics[metric_name] = {'meter' : meter, 'level' : log_level}
+        self.metrics[metric_name] = {'meter': meter, 'level': verbosity}
+        dllogger.metadata(metric_name, metadata)
 
     def log_metric(self, metric_name, val, n=1):
         self.metrics[metric_name]['meter'].record(val, n=n)
@@ -148,178 +237,74 @@ class Logger(object):
     def end_iteration(self, val=False):
         it = self.val_iteration if val else self.iteration
         if (it % self.print_interval == 0):
-            for b in self.backends:
-                if val:
-                    b.log_iteration_metric('val.it', it)
-                else:
-                    b.log_iteration_metric('it', it)
+            metrics = {
+                n: m
+                for n, m in self.metrics.items() if n.startswith('val') == val
+            }
+            step = (self.epoch,
+                    self.iteration) if not val else (self.epoch,
+                                                     self.iteration,
+                                                     self.val_iteration)
 
-                f = lambda l: filter(lambda m : m['level'] <= b.level)
-                for n, m in [(n, m) for n, m in self.metrics.items() if m['level'] <= b.level and n.startswith('val') == val]:
-                    mv = m['meter'].get_last()
-                    if mv is not None:
-                        b.log_iteration_metric(n, mv)
+            verbositys = {m['level'] for _, m in metrics.items()}
+            for ll in verbositys:
+                llm = {n: m for n, m in metrics.items() if m['level'] == ll}
 
-                b.log_end_iteration()
+                dllogger.log(step=step,
+                         data={
+                             n: m['meter'].get_iteration()
+                             for n, m in llm.items()
+                         },
+                         verbosity=ll)
+
+            for n, m in metrics.items():
+                m['meter'].reset_iteration()
+
+            dllogger.flush()
 
     def start_epoch(self):
         self.epoch += 1
         self.iteration = 0
         self.val_iteration = 0
 
-        for b in self.backends:
-            b.log_epoch_metric('ep', self.epoch)
-
-        for n, m in [(n, m) for n, m in self.metrics.items() if m['level'] <= b.level]:
-            m['meter'].reset()
+        for n, m in self.metrics.items():
+            m['meter'].reset_epoch()
 
     def end_epoch(self):
-        for b in self.backends:
-            for n, m in [(n, m) for n, m in self.metrics.items() if m['level'] <= b.level]:
-                mv = m['meter'].get_val()
-                if mv is not None:
-                    b.log_epoch_metric(n, mv)
-            b.log_end_epoch()
+        for n, m in self.metrics.items():
+            m['meter'].reset_iteration()
+
+        verbositys = {m['level'] for _, m in self.metrics.items()}
+        for ll in verbositys:
+            llm = {n: m for n, m in self.metrics.items() if m['level'] == ll}
+            dllogger.log(step=(self.epoch, ),
+                     data={n: m['meter'].get_epoch()
+                           for n, m in llm.items()})
 
     def end(self):
-        for b in self.backends:
-            b.end()
+        for n, m in self.metrics.items():
+            m['meter'].reset_epoch()
 
-    def iteration_generator_wrapper(self, gen, val = False):
+        verbositys = {m['level'] for _, m in self.metrics.items()}
+        for ll in verbositys:
+            llm = {n: m for n, m in self.metrics.items() if m['level'] == ll}
+            dllogger.log(step=tuple(),
+                     data={n: m['meter'].get_run()
+                           for n, m in llm.items()})
+
+        for n, m in self.metrics.items():
+            m['meter'].reset_epoch()
+
+        dllogger.flush()
+
+    def iteration_generator_wrapper(self, gen, val=False):
         for g in gen:
-            self.start_iteration(val = val)
+            self.start_iteration(val=val)
             yield g
-            self.end_iteration(val = val)
+            self.end_iteration(val=val)
 
     def epoch_generator_wrapper(self, gen):
         for g in gen:
             self.start_epoch()
             yield g
             self.end_epoch()
-
-
-class JsonBackend(object):
-    def __init__(self, filename, log_level=0):
-        self.level = log_level
-        self.filename = filename
-        self.json_log = OrderedDict([
-                ('run'  , OrderedDict()),
-                ('epoch', OrderedDict()),
-                ('iter' , OrderedDict()),
-                ('event', OrderedDict()),
-                ])
-
-    def log_run_tag(self, name, val):
-        self.json_log['run'][name] = val
-
-    def log_end_epoch(self):
-        pass
-
-    def log_end_iteration(self):
-        pass
-
-    def log_epoch_metric(self, name, val):
-        if not name in self.json_log['epoch'].keys():
-            self.json_log['epoch'][name] = []
-
-        self.json_log['epoch'][name].append(val)
-
-        if name != 'ep':
-            if name in self.json_log['iter'].keys():
-                self.json_log['iter'][name].append([])
-        else:
-            if not 'it' in self.json_log['iter'].keys():
-                self.json_log['iter']['it'] = []
-
-            self.json_log['iter']['it'].append([])
-
-    def log_iteration_metric(self, name, val):
-        if not (name in self.json_log['iter'].keys()):
-            self.json_log['iter'][name] = [[]]
-
-        self.json_log['iter'][name][-1].append(val)
-
-    def end(self):
-        print(json.dump(self.json_log, open(self.filename, 'w')))
-
-
-class StdOut1LBackend(object):
-    def __init__(self, iters, val_iters, epochs, log_level=0):
-        self.level = log_level
-        self.iteration = 0
-        self.total_iterations = iters
-        self.total_val_iterations = val_iters
-        self.epoch = 0
-        self.total_epochs = epochs
-        self.iteration_metrics = {}
-        self.epoch_metrics = {}
-        self.mode = 'train'
-
-    def log_run_tag(self, name, val):
-        print("{} : {}".format(name, val))
-
-    def log_end_epoch(self):
-        print("Summary Epoch: {}/{};\t{}".format(
-            self.epoch, self.total_epochs,
-            "\t".join(["{} : {:.3f}".format(m,v) for m, v in self.epoch_metrics.items()])))
-
-        self.epoch_metrics = {}
-
-    def log_end_iteration(self):
-        md = "Validation" if self.mode == 'val' else ""
-        ti = self.total_val_iterations if self.mode == 'val' else self.total_iterations
-        print("Epoch: {}/{} {} Iteration: {}/{};\t{}".format(
-            self.epoch, self.total_epochs, md, self.iteration, ti,
-            "\t".join(["{} : {:.3f}".format(m,v) for m, v in self.iteration_metrics.items()])))
-
-        self.iteration_metrics = {}
-
-    def log_epoch_metric(self, name, value):
-        if name == 'ep':
-            self.epoch = value
-            self.iteration = 0
-        else:
-            self.epoch_metrics[name] = value
-
-    def log_iteration_metric(self, name, value):
-        if name == 'it' or name == 'val.it':
-            self.mode = 'train' if name == 'it' else 'val'
-            self.iteration = value
-        else:
-            self.iteration_metrics[name] = value
-
-    def end(self):
-        pass
-
-
-
-class StdOutBackend(object):
-    def __init__(self, iters, epochs, log_level=0):
-        self.level = log_level
-        self.iteration = 0
-        self.epoch = 0
-
-    def log_run_tag(self, name, val):
-        print("{} : {}".format(name, val))
-
-    def log_end_epoch(self):
-        pass
-
-    def log_end_iteration(self):
-        pass
-
-    def log_epoch_metric(self, name, value):
-        if name == 'ep':
-            self.epoch = value
-            self.iteration = 0
-        else:
-            print("Summary Epoch: {};  {} = {:.3f}".format(self.epoch, name, value))
-
-    def log_iteration_metric(self, name, value):
-        if name == 'it' or name == 'val.it':
-            self.iteration = value
-        else:
-            print("Epoch: {} Iteration: {};  {} = {:.3f}".format(self.epoch, self.iteration, name, value))
-
-    def end(self):
-        pass

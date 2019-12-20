@@ -139,12 +139,12 @@ def main():
         # each process's rank
         dist_rank = args.nproc_per_node * args.node_rank + local_rank
         current_env["RANK"] = str(dist_rank)
+        current_env["LOCAL_RANK"] = str(local_rank)
 
         # spawn the processes
         cmd = [sys.executable,
                "-u",
-               args.training_script,
-               "--local_rank={}".format(local_rank)] + args.training_script_args
+               args.training_script] + args.training_script_args
 
         print(cmd)
 
@@ -165,13 +165,13 @@ def main():
                 elif ret != 0:
                     error = True
             time.sleep(1)
-    
+
         if error:
             for p in processes:
                 if p.poll() is None:
                     p.terminate()
             exit(1)
-    
+
     except KeyboardInterrupt:
         for p in processes:
             p.terminate()
