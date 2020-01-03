@@ -82,7 +82,7 @@ def main(unused_argv):
   flags.mark_flag_as_required('model_dir')
   flags.mark_flag_as_required('pipeline_config_path')
   session_config = tf.ConfigProto()
-  session_config.gpu_options.allow_growth = True
+  session_config.gpu_options.per_process_gpu_memory_fraction=0.9
   session_config.gpu_options.visible_device_list = str(hvd.local_rank())
   if FLAGS.allow_xla:
       session_config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1

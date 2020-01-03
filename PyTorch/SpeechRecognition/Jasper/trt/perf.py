@@ -24,39 +24,54 @@ import trtutils
 import perfprocedures
 from model import GreedyCTCDecoder
 from helpers import __ctc_decoder_predictions_tensor
+import caffe2.python.onnx.backend as c2backend
+import onnxruntime as ort
 
-def main(args):
+import torch
+from torch import nn
+from torch.nn import functional as F
 
+
+def main(args):        
+    print ("Getting component")
     # Get shared utility across PyTorch and TRT
     pyt_components, saved_onnx = perfutils.get_pytorch_components_and_onnx(args)
 
+    print ("Getting engine")
     # Get a TRT engine. See function for argument parsing logic
-    engine = get_engine(args)
+    engine = trtutils.get_engine(args)
+    print ("Got engine.")
 
     if args.wav:
-        audio_processor = pyt_components['audio_preprocessor']
-        audio_processor.eval()
-        greedy_decoder = GreedyCTCDecoder()
-        input_wav, seq_len = pyt_components['input_wav']
-        features = audio_processor((input_wav, seq_len))
-        features = perfutils.adjust_shape(features, args.seq_len)
-        with engine.create_execution_context() as context:
-            t_log_probs_e, copyto, inference, copyfrom= perfprocedures.do_inference(context, features[0], 1)
-        log_probs=perfutils.torchify_trt_out(t_log_probs_e, 1)
-        
-        t_predictions_e = greedy_decoder(log_probs=log_probs)
-        hypotheses = __ctc_decoder_predictions_tensor(t_predictions_e, labels=perfutils.get_vocab())
-        print("INTERENCE TIME: {} ms".format(inference*1000.0))
-        print("TRANSCRIPT: ", hypotheses[0])
+        with torch.no_grad():
+            audio_processor = pyt_components['audio_preprocessor']
+            audio_processor.eval()
+            greedy_decoder = GreedyCTCDecoder()
+            input_wav, num_audio_samples = pyt_components['input_wav']
+            features = audio_processor(input_wav, num_audio_samples)
+            features = perfutils.adjust_shape(features, args)
+            if not args.engine_path:
+                outputs = engine.run(None, {'FEATURES': features[0].data.cpu().numpy()})
+                inference = 1.0
+                t_log_probs_e = outputs[0]
+                t_log_probs_e=perfutils.torchify_trt_out(t_log_probs_e, t_log_probs_e.shape)
+            else:
+                with engine.create_execution_context() as context:
+                    t_log_probs_e, copyto, inference, copyfrom= perfprocedures.do_inference(context, [features[0]])
+            t_predictions_e = greedy_decoder(t_log_probs_e)
+            hypotheses = __ctc_decoder_predictions_tensor(t_predictions_e, labels=perfutils.get_vocab())
+            print("INTERENCE TIME: {} ms".format(inference*1000.0))
+            print("TRANSCRIPT: ", hypotheses)
+            return
 
-        return
-
-    
     wer, preds, times = perfprocedures.compare_times_trt_pyt_exhaustive(engine,
                                                                         pyt_components,
-                                                                        num_steps=args.num_steps)
+                                                                        args)
+
     string_header, string_data = perfutils.do_csv_export(wer, times, args.batch_size, args.seq_len)
+
     if args.csv_path is not None:
+        print ("Exporting to " + args.csv_path)
         with open(args.csv_path, 'a+') as f:
             # See if header is there, if so, check that it matches
             f.seek(0) # Read from start of file
@@ -93,6 +108,7 @@ def parse_args():
     parser.add_argument("--val_manifest", type=str, help="JSON manifest of dataset.")
     parser.add_argument("--onnx_path", default=None, type=str, help="Path to onnx model for engine creation")
     parser.add_argument("--seq_len", default=None, type=int, help="Generate an ONNX export with this fixed sequence length, and save to --onnx_path. Requires also using --onnx_path and --ckpt_path.")
+    parser.add_argument("--max_seq_len", default=3600, type=int, help="Max sequence length for TRT engine build. Default works with TRTIS benchmark. Set it larger than seq_len")
     parser.add_argument("--ckpt_path", default=None, type=str, help="If provided, will also construct pytorch acoustic model")
     parser.add_argument("--max_duration", default=None, type=float, help="Maximum possible length of audio data in seconds")
     parser.add_argument("--num_steps", default=-1, type=int, help="Number of inference steps to run")
@@ -104,35 +120,11 @@ def parse_args():
     parser.add_argument("--pyt_prediction_path", type=str, default=None, help="File to write predictions inferred with pytorch")
     parser.add_argument("--verbose", action="store_true", default=False, help="If set, will verbosely describe TRT engine building and deserialization as well as TRT inference")
     parser.add_argument("--wav", type=str, help='absolute path to .wav file (16KHz)')
-    parser.add_argument("--max_workspace_size", default=4*1024*1024*1024, type=int, help="Maximum batch size for constructed engine; needed when building")
+    parser.add_argument("--max_workspace_size", default=0, type=int, help="Maximum GPU memory workspace size for constructed engine; needed when building")
+    parser.add_argument("--transpose", action="store_true", default=False, help="If set, will transpose input")
+    parser.add_argument("--dynamic_shape", action="store_true", default=False, help="If set, use dynamic shape")
 
     return parser.parse_args()
-
-def get_engine(args):
-    '''Get a TRT engine
-
-    If --should_serialize is present, always build from ONNX and store result in --engine_path.
-    Else If an engine is provided as an argument (--engine_path) use that one.
-    Otherwise, make one from onnx (--onnx_load_path), but don't serialize it.
-    '''
-    engine = None
-
-    if args.engine_path is not None and args.use_existing_engine:
-        engine = trtutils.deserialize_engine(args.engine_path, args.verbose)
-    elif args.engine_path is not None and args.onnx_path is not None:
-        # Build a new engine and serialize it.
-        engine = trtutils.build_engine_from_parser(args.onnx_path, args.engine_batch_size, args.trt_fp16, args.verbose, args.max_workspace_size)
-        with open(args.engine_path, 'wb') as f:
-            f.write(engine.serialize())
-    else:
-        raise Exception("One of the following sets of arguments must be provided:\n"+
-                        "<engine_path> + --use_existing_engine\n"+
-                        "<engine_path> + <onnx_path>\n"+
-                        "in order to construct a TRT engine")
-    if engine is None:
-        raise Exception("Failed to acquire TRT engine")
-
-    return engine
 
 if __name__ == "__main__":
     args = parse_args()

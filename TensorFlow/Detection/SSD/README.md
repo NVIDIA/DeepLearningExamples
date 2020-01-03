@@ -3,39 +3,40 @@
 This repository provides a script and recipe to train SSD320 v1.2 to achieve state of the art accuracy, and is tested and maintained by NVIDIA.
 
 ## Table Of Contents
-* [The model](#the-model)
+* [Model overview](#model-overview)
   * [Default configuration](#default-configuration)
 * [Setup](#setup)
   * [Requirements](#requirements)
-* [Quick start guide](#quick-start-guide)
-* [Details](#details)
+* [Quick Start Guide](#quick-start-guide)
+* [Advanced](#advanced)
   * [Command line options](#command-line-options)
   * [Getting the data](#getting-the-data)
   * [Training process](#training-process)
     * [Data preprocessing](#data-preprocessing)
     * [Data augmentation](#data-augmentation)
   * [Enabling mixed precision](#enabling-mixed-precision)
-* [Benchmarking](#benchmarking)
-  * [Training performance benchmark](#training-performance-benchmark)
-  * [Inference performance benchmark](#inference-performance-benchmark)
-* [Results](#results)
-  * [Training accuracy results](#training-accuracy-results)
-  * [Training performance results](#training-performance-results)
-  * [Inference performance results](#inference-performance-results)
-* [Changelog](#changelog)
-* [Known issues](#known-issues)
+* [Performance](#performance)
+  * [Benchmarking](#benchmarking)
+    * [Training performance benchmark](#training-performance-benchmark)
+    * [Inference performance benchmark](#inference-performance-benchmark)
+  * [Results](#results)
+    * [Training accuracy results](#training-accuracy-results)
+    * [Training performance results](#training-performance-results)
+    * [Inference performance results](#inference-performance-results)
+* [Release notes](#release-notes)
+  * [Changelog](#changelog)
+  * [Known issues](#known-issues)
 
-## The model
+## Model overview
 
 The SSD320 v1.2 model is based on the [SSD: Single Shot MultiBox Detector](https://arxiv.org/abs/1512.02325) paper, which describes SSD as “a method for detecting objects in images using a single deep neural network”.
 
-We have altered the network in order to improve accuracy and increase throughput. Changes we have made include:
+Our implementation is based on the existing [model from the TensorFlow models repository](https://github.com/tensorflow/models/blob/master/research/object_detection/samples/configs/ssd_resnet50_v1_fpn_shared_box_predictor_640x640_coco14_sync.config).
+The network was altered in order to improve accuracy and increase throughput. Changes include:
 - Replacing the VGG backbone with the more popular ResNet50.
 - Adding multi-scale detection to the backbone using [Feature Pyramid Networks](https://arxiv.org/pdf/1612.03144.pdf).
 - Replacing the original hard negative mining loss function with [Focal Loss](https://arxiv.org/pdf/1708.02002.pdf).
 - Decreasing the input size to 320 x 320.
-
-Our implementation is based on the existing [model from the TensorFlow models repository](https://github.com/tensorflow/models/blob/master/research/object_detection/samples/configs/ssd_resnet50_v1_fpn_shared_box_predictor_640x640_coco14_sync.config).
 
 This model trains with mixed precision tensor cores on NVIDIA Volta GPUs, therefore you can get results much faster than training without tensor cores. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
 
@@ -160,7 +161,7 @@ If you want to run inference with tensor cores acceleration, run:
 bash examples/SSD320_evaluate.sh <path to checkpoint>
 ```
 
-## Details
+## Advanced
 
 The following sections provide greater details of the dataset, running training and inference, and the training results.
 
@@ -230,10 +231,12 @@ For information about:
 - How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp) from the TensorFlow User Guide.
 - Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
 
-## Benchmarking
+## Performance
+
+### Benchmarking
 The following section shows how to run benchmarks measuring the model performance in training and inference modes.
 
-### Training performance benchmark
+#### Training performance benchmark
 Training benchmark was run in various scenarios on V100 16G GPU. For each scenario, batch size was set to 32. 
 
 To benchmark training, run:
@@ -247,7 +250,7 @@ Where the `{NGPU}` defines number of GPUs used in benchmark, and the `{PREC}` de
 The benchmark runs training with only 1200 steps and computes average training speed of last 300 steps.
 
 
-### Inference performance benchmark
+#### Inference performance benchmark
 Inference benchmark was run with various batch-sizes on V100 16G GPU.
 For inference we are using single GPU setting. Examples are taken from the validation dataset.
 
@@ -267,11 +270,11 @@ We were using default values for the extra arguments during the experiments. For
 bash examples/SSD320_FP16_inference.sh --help
 ```
 
-## Results
+### Results
 
 The following sections provide details on how we achieved our performance and accuracy in training and inference.
 
-### Training accuracy results
+#### Training accuracy results
 Our results were obtained by running the `./examples/SSD320_FP{16,32}_{1,4,8}GPU.sh` script in the TensorFlow-19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
 All the results are obtained with batch size set to 32.
 
@@ -288,7 +291,7 @@ Here are example graphs of FP32 and FP16 training on 8 GPU configuration:
 
 ![ValidationAccuracy](./img/validation_accuracy.png)
 
-### Training performance results
+#### Training performance results
 
 Our results were obtained by running:
 
@@ -311,7 +314,7 @@ Those results can be improved when [XLA](https://www.tensorflow.org/xla) is used
 in conjunction with mixed precision, delivering up to 2x speedup over FP32 on a single GPU (~179 img/s).
 However XLA is still considered experimental.
 
-### Inference performance results
+#### Inference performance results
 
 Our results were obtained by running the `examples/SSD320_FP{16,32}_inference.sh` script in the TensorFlow-19.03-py3 NGC container on NVIDIA DGX-1 with 1x V100 16G GPUs.
 
@@ -328,7 +331,9 @@ Our results were obtained by running the `examples/SSD320_FP{16,32}_inference.sh
 
 To achieve same results, follow the [Quick start guide](#quick-start-guide) outlined above.
 
-## Changelog
+## Release notes
+
+### Changelog
 
 March 2019
  * Initial release

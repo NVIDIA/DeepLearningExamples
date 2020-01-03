@@ -26,7 +26,7 @@ import toml
 import torch
 from apex import amp
 from dataset import AudioToTextDataLayer
-from helpers import process_evaluation_batch, process_evaluation_epoch, Optimization, add_ctc_labels, AmpOptimizations, print_dict
+from helpers import process_evaluation_batch, process_evaluation_epoch, add_ctc_labels, AmpOptimizations, print_dict
 from model import AudioPreprocessing, GreedyCTCDecoder, JasperEncoderDecoder
 
 def parse_args():
@@ -88,21 +88,16 @@ def eval(
                 dl_device = torch.device("cuda")
                 for d in data:
                     tensors.append(d.to(dl_device))
-
-
+     
                 t_audio_signal_e, t_a_sig_length_e, t_transcript_e, t_transcript_len_e = tensors
-
-                inp=(t_audio_signal_e, t_a_sig_length_e)
                 torch.cuda.synchronize()
                 t0 = time.perf_counter()
-                t_processed_signal, p_length_e = audio_processor(x=inp)
+                t_processed_signal = audio_processor(t_audio_signal_e, t_a_sig_length_e)
                 torch.cuda.synchronize()
                 t1 = time.perf_counter()
                 
-                if args.use_conv_mask:
-                    t_log_probs_e, t_encoded_len_e  = encoderdecoder((t_processed_signal, p_length_e))
-                else:
-                    t_log_probs_e  = encoderdecoder(t_processed_signal)
+                t_log_probs_e, _  = encoderdecoder.infer(t_processed_signal)
+
                 torch.cuda.synchronize()
                 stop_time = time.perf_counter()
 
@@ -118,7 +113,7 @@ def eval(
                 process_evaluation_batch(values_dict, _global_var_dict, labels=labels)
                 durations_dnn.append(time_dnn)
                 durations_dnn_and_prep.append(time_prep_and_dnn)
-                seq_lens.append(t_processed_signal.shape[-1])
+                seq_lens.append(t_processed_signal[0].shape[-1])
 
             if it >= steps:
 
@@ -135,7 +130,7 @@ def eval(
 
 def take_durations_and_output_percentile(durations, ratios):
     durations = np.asarray(durations) * 1000 # in ms
-    latency = durations
+    latency = durations 
 
     latency = latency[5:]
     mean_latency = np.mean(latency)
@@ -162,9 +157,9 @@ def main(args):
     assert(torch.cuda.is_available())
 
     if args.fp16:
-        optim_level = Optimization.mxprO3
+        optim_level = 3
     else:
-        optim_level = Optimization.mxprO0
+        optim_level = 0
     batch_size = args.batch_size
 
     jasper_model_definition = toml.load(args.model_toml)
@@ -174,11 +169,16 @@ def main(args):
     val_manifest = args.val_manifest
     featurizer_config = jasper_model_definition['input_eval']
     featurizer_config["optimization_level"] = optim_level
-    args.use_conv_mask = jasper_model_definition['encoder'].get('convmask', True)
+
     if args.max_duration is not None:
         featurizer_config['max_duration'] = args.max_duration
+    
+    # TORCHSCRIPT: Cant use mixed types. Using -1 for "max"
     if args.pad_to is not None:
-        featurizer_config['pad_to'] = args.pad_to if args.pad_to >= 0 else "max"
+        featurizer_config['pad_to'] = args.pad_to if args.pad_to >= 0 else -1
+    
+    if featurizer_config['pad_to'] == "max":
+        featurizer_config['pad_to'] = -1
 
     print('model_config')
     print_dict(jasper_model_definition)
@@ -191,7 +191,7 @@ def main(args):
                             manifest_filepath=val_manifest,
                             labels=dataset_vocab,
                             batch_size=batch_size,
-                            pad_to_max=featurizer_config['pad_to'] == "max",
+                            pad_to_max=featurizer_config['pad_to'] == -1,
                             shuffle=False,
                             multi_gpu=False)
 
