@@ -1,6 +1,44 @@
 # BERT For TensorFlow
 
-This repository provides a script and recipe to train the BERT model for TensorFlow to achieve state-of-the-art accuracy, and is tested and maintained by NVIDIA.
+## Exporting NGC BERT Checkpoint to SavedModel
+
+1. Download BERT Checkpoint from NGC Model Registry, download vocab file, and create input file for inference
+```
+# Edit the model/checkpoints to download in this script
+bash ngc/download_bert.sh
+```
+
+2. Build trtserver and bert client Docker images
+```
+bash scripts/docker/build.sh
+```
+
+3. Export model to SavedModel format
+```
+# Change values of init_checkpoint (and BERT_DIR if necessary) for given checkpoint
+bash trtis/scripts/export_model.sh
+```
+
+4. Run inference on model with TRTIS and verify results
+```
+# Change values of init_checkpoint (and BERT_DIR if necessary) for given checkpoint
+bash trtis/scripts/run_trtis.sh
+
+# Verify results from Apollo 11 questions
+cat results/predictions.json
+
+{
+    "Q1": "Project Mercury",
+    "Q2": "The Apollo program",
+    "Q3": "1968",
+    "Q4": "John F. Kennedy",
+    "Q5": "Soviet Union",
+    "Q6": "1961 to 1972",
+    "Q7": "Gemini missions",
+    "Q8": "Skylab"
+}
+```
+
 
 ## Table Of Contents
 
