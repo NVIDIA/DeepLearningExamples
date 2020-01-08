@@ -92,7 +92,7 @@ def run_client():
 
     prof_request = grpc_service_pb2.server__status__pb2.model__config__pb2.ModelConfig()
 
-    prof_response = stub.Profile(prof_request)
+    prof_response = stub.Status(prof_request)
 
     status_ctx = ServerStatusContext(url, protocol, model_name=model_name, verbose=verbose)
 
@@ -188,9 +188,9 @@ def run_client():
     time_list.sort()
 
     avg = np.mean(time_list)
-    cf_95 = max(time_list[:int(len(time_list) * 0.95)])
-    cf_99 = max(time_list[:int(len(time_list) * 0.99)])
-    cf_100 = max(time_list[:int(len(time_list) * 1)])
+    cf_95 = max(time_list[:int(len(time_list) * 0.95)] or [1])
+    cf_99 = max(time_list[:int(len(time_list) * 0.99)] or [1])
+    cf_100 = max(time_list[:int(len(time_list) * 1)] or [1])
     print("-----------------------------")
     print("Summary Statistics")
     print("Batch size =", FLAGS.predict_batch_size)

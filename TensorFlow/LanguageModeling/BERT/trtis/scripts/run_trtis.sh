@@ -13,7 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-init_checkpoint=${1:-"/results/models/bert_large_fp16_384_v1/model.ckpt-5474"}
+#init_checkpoint=${1:-"/results/models/bert_large_fp16_384_v1/model.ckpt-5474"}
+init_checkpoint=${1:-"/workspace/bert/data/finetuned_model_fp16/model.ckpt-8144"}
 batch_size=${2:-"8"}
 precision=${3:-"fp16"}
 use_xla=${4:-"true"}
@@ -27,17 +28,18 @@ trtis_export_model=${11:-"false"}
 trtis_dyn_batching_delay=${12:-0}
 trtis_engine_count=${13:-1}
 trtis_model_overwrite=${14:-"False"}
+export BERT_DIR=${7:-"/workspace/bert/config.qa/"}
 
-if [ "$bert_model" = "large" ] ; then
-    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16
-else
-    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-12_H-768_A-12
-fi
+#if [ "$bert_model" = "large" ] ; then
+#    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16
+#else
+#    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-12_H-768_A-12
+#fi
 
-if [ ! -d "$BERT_DIR" ] ; then
-   echo "Error! $BERT_DIR directory missing. Please mount pretrained BERT dataset."
-   exit -1
-fi
+#if [ ! -d "$BERT_DIR" ] ; then
+#   echo "Error! $BERT_DIR directory missing. Please mount pretrained BERT dataset."
+#   exit -1
+#fi
 
 # Need to ignore case on some variables
 trtis_export_model=$(echo "$trtis_export_model" | tr '[:upper:]' '[:lower:]')

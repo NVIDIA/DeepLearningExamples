@@ -13,18 +13,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-init_checkpoint=${1:-"/results/models/bert_large_fp16_384_v1/model.ckpt-5474"}
+#init_checkpoint=${1:-"/results/models/bert_large_fp16_384_v1/model.ckpt-5474"}
+init_checkpoint=${1:-"/workspace/bert/data/finetuned_model_fp16/model.ckpt-8144"}
 batch_size=${2:-"8"}
 precision=${3:-"fp16"}
 use_xla=${4:-"true"}
 seq_length=${5:-"384"}
 doc_stride=${6:-"128"}
-BERT_DIR=${7:-"data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16"}
+#BERT_DIR=${7:-"data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16"}
+BERT_DIR=${7:-"/workspace/bert/config.qa/"}
 trtis_model_version=${8:-1}
 trtis_model_name=${9:-"bert"}
 trtis_dyn_batching_delay=${10:-0}
 trtis_engine_count=${11:-1}
 trtis_model_overwrite=${12:-"False"}
+
+
 
 additional_args="--trtis_model_version=$trtis_model_version --trtis_model_name=$trtis_model_name --trtis_max_batch_size=$batch_size \
                  --trtis_model_overwrite=$trtis_model_overwrite --trtis_dyn_batching_delay=$trtis_dyn_batching_delay \
@@ -43,7 +47,7 @@ fi
 echo "Additional args: $additional_args"
 
 bash scripts/docker/launch.sh \
-    python run_squad.py \
+       python run_squad.py \
        --vocab_file=${BERT_DIR}/vocab.txt \
        --bert_config_file=${BERT_DIR}/bert_config.json \
        --init_checkpoint=${init_checkpoint} \
