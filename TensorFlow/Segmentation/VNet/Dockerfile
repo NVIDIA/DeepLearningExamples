@@ -4,7 +4,6 @@ ADD . /workspace/vnet
 WORKDIR /workspace/vnet
 
 RUN pip install --upgrade pip
-RUN pip install --user git+https://github.com/NVIDIA/dllogger
 RUN pip install --disable-pip-version-check -r requirements.txt
 
 
