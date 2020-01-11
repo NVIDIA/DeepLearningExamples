@@ -16,13 +16,18 @@
 
 
 export NUM_STEPS=100
-export FORCE_ENGINE_REBUILD="true"
-export CHECKPOINT="/checkpoints/jasper.pt"
-export CREATE_LOGFILE="false"
-for prec in fp16;
+export FORCE_ENGINE_REBUILD="false"
+export CHECKPOINT=${CHECKPOINT:-"/checkpoints/jasper_fp16.pt"}
+export CREATE_LOGFILE="true"
+prec=fp16
+export TRT_PRECISION=$prec
+export PYTORCH_PRECISION=$prec
+
+trap "exit" INT
+
+for use_dynamic in yes no;
 do
-    export TRT_PRECISION=$prec
-    export PYTORCH_PRECISION=$prec
+    export USE_DYNAMIC_SHAPE=${use_dynamic}
     export CSV_PATH="/results/${prec}.csv"
     for nf in 208 304 512 704 1008 1680;
     do

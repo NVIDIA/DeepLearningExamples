@@ -1,7 +1,11 @@
 [submodule "PyTorch/Translation/Transformer/cutlass"]
-	path = PyTorch/Translation/Transformer/cutlass
-	url = https://github.com/NVIDIA/cutlass.git
+    path = PyTorch/Translation/Transformer/cutlass
+    url = https://github.com/NVIDIA/cutlass.git
 [submodule "TensorFlow/LanguageModeling/BERT/tensorrt-inference-server"]
-        path = TensorFlow/LanguageModeling/BERT/tensorrt-inference-server
-        url = https://github.com/NVIDIA/tensorrt-inference-server.git
-	branch = r19.06
+    path = TensorFlow/LanguageModeling/BERT/tensorrt-inference-server
+    url = https://github.com/NVIDIA/tensorrt-inference-server.git
+    branch = r19.08
+[submodule "PyTorch/SpeechRecognition/Jasper/external/tensorrt-inference-server"]
+    path = PyTorch/SpeechRecognition/Jasper/external/tensorrt-inference-server
+    url = https://github.com/NVIDIA/tensorrt-inference-server.git
+    branch = r19.06

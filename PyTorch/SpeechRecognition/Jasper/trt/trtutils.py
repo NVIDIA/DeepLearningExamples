@@ -15,8 +15,9 @@
 '''
 import pycuda.driver as cuda
 import tensorrt as trt
+import onnxruntime as ort
+import numpy as np
 
-# Simple class: more explicit than dealing with 2-tuple
 class HostDeviceMem(object):
     '''Type for managing host and device buffers
 
@@ -32,22 +33,48 @@ class HostDeviceMem(object):
     def __repr__(self):
         return self.__str__()
 
-def build_engine_from_parser(model_path, batch_size, is_fp16=True, is_verbose=False, max_workspace_size=4*1024*1024*1024):
+def build_engine_from_parser(args):
     '''Builds TRT engine from an ONNX file
     Note that network output 1 is unmarked so that the engine will not use
     vestigial length calculations associated with masked_fill
     '''
-    TRT_LOGGER = trt.Logger(trt.Logger.VERBOSE) if is_verbose else trt.Logger(trt.Logger.WARNING)
-    with trt.Builder(TRT_LOGGER) as builder:
-        builder.max_batch_size = batch_size
-        builder.fp16_mode = is_fp16
-        builder.max_workspace_size = max_workspace_size
-        with builder.create_network() as network:
-            with trt.OnnxParser(network, TRT_LOGGER) as parser:
-                with open(model_path, 'rb') as model:
-                    parser.parse(model.read())
-                
-                return builder.build_cuda_engine(network)
+    TRT_LOGGER = trt.Logger(trt.Logger.VERBOSE) if args.verbose else trt.Logger(trt.Logger.WARNING)
+    builder = trt.Builder(TRT_LOGGER)
+    builder.max_batch_size = 64
+
+    if args.trt_fp16:
+        builder.fp16_mode = True
+        print("Optimizing for FP16")
+        config_flags = 1 << int(trt.BuilderFlag.FP16) # | 1 << int(trt.BuilderFlag.STRICT_TYPES)
+        max_size = 4*1024*1024*1024
+        max_len = args.max_seq_len
+    else:
+        config_flags = 0
+        max_size = 4*1024*1024*1024
+        max_len = args.max_seq_len
+    if args.max_workspace_size > 0:
+        builder.max_workspace_size = args.max_workspace_size
+    else:
+        builder.max_workspace_size = max_size
+        
+    config = builder.create_builder_config()
+    config.flags = config_flags
+    
+    if args.dynamic_shape:
+        profile = builder.create_optimization_profile()
+        if args.transpose:
+            profile.set_shape("FEATURES", min=(1,192,64), opt=(args.engine_batch_size,256,64), max=(builder.max_batch_size, max_len, 64))
+        else:
+            profile.set_shape("FEATURES", min=(1,64,192), opt=(args.engine_batch_size,64,256), max=(builder.max_batch_size, 64, max_len))        
+        config.add_optimization_profile(profile)    
+    explicit_batch = 1 << (int)(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+    network = builder.create_network(explicit_batch)
+
+    with trt.OnnxParser(network, TRT_LOGGER) as parser:
+        with open(args.onnx_path, 'rb') as model:
+            parsed = parser.parse(model.read())
+            print ("Parsing returned ", parsed, "dynamic_shape= " , args.dynamic_shape, "\n")
+            return builder.build_engine(network, config=config)
 
 def deserialize_engine(engine_path, is_verbose):
     '''Deserializes TRT engine at engine_path
@@ -58,7 +85,7 @@ def deserialize_engine(engine_path, is_verbose):
     return engine
 
 
-def allocate_buffers_with_existing_inputs(engine, inp, batch_size=1):
+def allocate_buffers_with_existing_inputs(context, inp):
     '''
     allocate_buffers() (see TRT python samples) but uses an existing inputs on device
 
@@ -66,27 +93,63 @@ def allocate_buffers_with_existing_inputs(engine, inp, batch_size=1):
           would be produced by allocate_buffers(). That is, inputs are in the
           order defined by iterating through `engine`
     '''
-
     # Add input to bindings
-    bindings = []
+    bindings = [0,0]
     outputs = []
-    stream = cuda.Stream()
-    inp_idx = 0
+    engine = context.engine
+    batch_size = inp[0].shape
+    inp_idx = engine.get_binding_index("FEATURES")    
+    inp_b = inp[0].data_ptr()
+    assert(inp[0].is_contiguous())
+    bindings[inp_idx] = inp_b
+    sh = inp[0].shape
+    batch_size = sh[0]
+    orig_shape = context.get_binding_shape(inp_idx)
+    if orig_shape[0]==-1:
+        context.set_binding_shape(inp_idx, trt.Dims([batch_size, sh[1], sh[2]]))
 
-    for binding in engine:
-        if engine.binding_is_input(binding):
-            bindings.append(inp[inp_idx])
-            inp_idx += 1
-        else:
-            # Unchanged from do_inference()
-            size = trt.volume(engine.get_binding_shape(binding)) * batch_size
-            dtype = trt.nptype(engine.get_binding_dtype(binding))
-            # Allocate host and device buffers
-            host_mem = cuda.pagelocked_empty(size, dtype)
-            device_mem = cuda.mem_alloc(host_mem.nbytes*2)
-            # Append the device buffer to device bindings.
-            bindings.append(int(device_mem))
-            # Append to the appropriate list.
-            outputs.append(HostDeviceMem(host_mem, device_mem))
+    assert context.all_binding_shapes_specified
 
-    return outputs, bindings, stream
+    out_idx = engine.get_binding_index("LOGITS")
+    # Allocate output buffer by querying the size from the context. This may be different for different input shapes.
+    out_shape = context.get_binding_shape(out_idx)
+    #print ("Out_shape: ", out_shape)
+    h_output = cuda.pagelocked_empty(tuple(out_shape), dtype=np.float32())
+    # print ("Out bytes: " , h_output.nbytes)
+    d_output = cuda.mem_alloc(h_output.nbytes)
+    bindings[out_idx] = int(d_output)
+    hdm = HostDeviceMem(h_output, d_output)
+    outputs.append(hdm)
+    return outputs, bindings, out_shape
+
+def get_engine(args):
+    '''Get a TRT engine
+
+    If --should_serialize is present, always build from ONNX and store result in --engine_path.
+    Else If an engine is provided as an argument (--engine_path) use that one.
+    Otherwise, make one from onnx (--onnx_load_path), but don't serialize it.
+    '''
+    engine = None
+
+    if args.engine_path is not None and args.use_existing_engine:
+        engine = deserialize_engine(args.engine_path, args.verbose)
+    elif args.engine_path is not None and args.onnx_path is not None:
+        # Build a new engine and serialize it.
+        print("Building TRT engine ....") 
+        engine = build_engine_from_parser(args)
+        if engine is not None:
+            with open(args.engine_path, 'wb') as f:
+                f.write(engine.serialize())
+                print("TRT engine saved at " + args.engine_path + " ...") 
+    elif args.onnx_path is not None:
+        ort_session = ort.InferenceSession(args.onnx_path)
+        return ort_session
+    else:
+        raise Exception("One of the following sets of arguments must be provided:\n"+
+                        "<engine_path> + --use_existing_engine\n"+
+                        "<engine_path> + <onnx_path>\n"+
+                        "in order to construct a TRT engine")
+    if engine is None:
+        raise Exception("Failed to acquire TRT engine")
+
+    return engine
