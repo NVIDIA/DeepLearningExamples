@@ -54,7 +54,8 @@ else
     use_xla_tag=""
 fi
 
-printf -v TAG "tf_bert_finetuning_squad_%s_inf_%s_gbs%d_ckpt_%s" "$bert_model" "$precision" $batch_size "$init_checkpoint"
+ckpt_str=${init_checkpoint//\//-}
+printf -v TAG "tf_bert_finetuning_squad_%s_inf_%s_gbs%d_ckpt_%s" "$bert_model" "$precision" $batch_size "$ckpt_str"
 DATESTAMP=`date +'%y%m%d%H%M%S'`
 #Edit to save logs & checkpoints in a different directory
 RESULTS_DIR=/results
