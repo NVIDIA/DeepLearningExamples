@@ -1,10 +1,8 @@
 ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:19.08-py3
 
-FROM tensorrtserver_client as trt
-
 FROM ${FROM_IMAGE_NAME}
 
-RUN apt-get update && apt-get install -y pbzip2 pv bzip2 libcurl3
+RUN apt-get update && apt-get install -y pbzip2 pv bzip2 libcurl4 curl
 
 RUN pip install toposort networkx pytest nltk tqdm html2text progressbar
 
@@ -17,7 +15,9 @@ RUN git clone https://github.com/titipata/pubmed_parser
 RUN pip3 install /workspace/pubmed_parser
 
 #Copy the perf_client over
-COPY --from=trt /workspace/install/ /workspace/install/
+ARG TRTIS_CLIENTS_URL=https://github.com/NVIDIA/tensorrt-inference-server/releases/download/v1.5.0/v1.5.0_ubuntu1804.clients.tar.gz
+RUN mkdir -p /workspace/install \
+    && curl -L ${TRTIS_CLIENTS_URL} | tar xvz -C /workspace/install
 
 #Install the python wheel with pip
 RUN pip install /workspace/install/python/tensorrtserver*.whl
