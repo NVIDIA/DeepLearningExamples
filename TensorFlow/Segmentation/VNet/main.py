@@ -87,7 +87,7 @@ def main(_):
 
     run_config = tf.estimator.RunConfig(
         save_summary_steps=None,
-        save_checkpoints_steps=dataset.train_steps * FLAGS.train_epochs,
+        save_checkpoints_steps=None if FLAGS.benchmark else dataset.train_steps * FLAGS.train_epoch,
         save_checkpoints_secs=None,
         tf_random_seed=None,
         session_config=config,
@@ -112,22 +112,32 @@ def main(_):
             if hvd.rank() == 0:
                 train_hooks += [TrainHook(FLAGS.log_every, DLLogger)]
 
+        DLLogger.log(step=tuple(), data={"training": "START"})
+
         estimator.train(
             input_fn=lambda: dataset.train_fn(FLAGS.augment),
             steps=steps,
             hooks=train_hooks)
 
+        DLLogger.log(step=tuple(), data={"training": "FINISHED"})
+
     if 'evaluate' in FLAGS.exec_mode:
         if hvd.rank() == 0:
             if FLAGS.train_split >= 1.0:
                 raise ValueError("Missing argument: --train_split < 1.0")
+
+            DLLogger.log(step=tuple(), data={"evaluating": "START"})
+
             result = estimator.evaluate(
                 input_fn=dataset.eval_fn,
                 steps=dataset.eval_steps,
                 hooks=[])
-            DLLogger.log(step=tuple(), data={'background_dice': result['background dice']})
-            DLLogger.log(step=tuple(), data={'anterior_dice': result['Anterior dice']})
-            DLLogger.log(step=tuple(), data={'posterior_dice': result['Posterior dice']})
+
+            DLLogger.log(step=tuple(), data={"evaluating": "FINISH"})
+
+            DLLogger.log(step=tuple(), data={'background_dice': str(result['background dice'])})
+            DLLogger.log(step=tuple(), data={'anterior_dice': str(result['Anterior dice'])})
+            DLLogger.log(step=tuple(), data={'posterior_dice': str(result['Posterior dice'])})
 
     if 'predict' in FLAGS.exec_mode:
         count = 1
