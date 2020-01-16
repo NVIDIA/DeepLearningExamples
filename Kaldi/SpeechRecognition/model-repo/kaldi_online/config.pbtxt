@@ -1,0 +1,149 @@
+name: "kaldi_online"
+platform: "custom"
+default_model_filename: "libkaldi-trtisbackend.so"
+max_batch_size: 2200
+parameters: {
+key: "mfcc_filename"
+value: { 
+string_value:"/data/models/LibriSpeech/conf/mfcc.conf"
+}
+}
+parameters: {
+key: "ivector_filename"
+value: { 
+string_value:"/data/models/LibriSpeech/conf/ivector_extractor.conf"
+}
+}
+parameters: {
+key: "nnet3_rxfilename"
+value: { 
+string_value: "/data/models/LibriSpeech/final.mdl"
+}
+}
+parameters: {
+key: "fst_rxfilename"
+value: { 
+string_value: "/data/models/LibriSpeech/HCLG.fst"
+}
+}
+parameters: {
+key: "word_syms_rxfilename"
+value: { 
+string_value:"/data/models/LibriSpeech/words.txt"
+}
+}
+parameters: [{
+key: "beam"
+value: { 
+string_value:"10"
+}
+},{
+key: "num_worker_threads"
+value: { 
+string_value:"40"
+} 
+},
+{
+key: "max_execution_batch_size"
+value: { 
+string_value:"512"
+}
+}]
+parameters: {
+key: "lattice_beam"
+value: { 
+string_value:"7" 
+}
+}
+parameters: {
+key: "max_active"
+value: { 
+string_value:"10000" 
+}
+}
+parameters: {
+key: "frame_subsampling_factor"
+value: { 
+string_value:"3" 
+}
+}
+parameters: {
+key: "acoustic_scale"
+value: { 
+string_value:"1.0" 
+}
+}
+sequence_batching {
+max_sequence_idle_microseconds:5000000
+  control_input [
+    {
+      name: "START"
+      control [
+        {
+          kind: CONTROL_SEQUENCE_START
+          int32_false_true: [ 0, 1 ]
+        }
+      ]
+    },
+    {
+      name: "READY"
+      control [
+        {
+          kind: CONTROL_SEQUENCE_READY
+          int32_false_true: [ 0, 1 ]
+        }
+      ]
+    },
+    {
+      name: "END"
+      control [
+        {
+          kind: CONTROL_SEQUENCE_END
+          int32_false_true: [ 0, 1 ]
+        }
+      ]
+    },
+    {
+      name: "CORRID"
+      control [
+        {
+          kind: CONTROL_SEQUENCE_CORRID
+    data_type: TYPE_UINT64
+        }
+      ]
+    }
+  ]
+oldest {
+max_candidate_sequences:2200
+preferred_batch_size:[256,512]
+max_queue_delay_microseconds:1000
+}
+},
+
+input [
+  {
+    name: "WAV_DATA"
+    data_type: TYPE_FP32
+    dims: [ 8160 ]
+  },
+  {
+    name: "WAV_DATA_DIM"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  }
+]
+output [
+  {
+    name: "TEXT"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  }
+]
+instance_group [
+  {
+    count: 2
+    kind: KIND_GPU
+  }
+]
+
+
