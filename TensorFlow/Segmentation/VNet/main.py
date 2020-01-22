@@ -95,7 +95,7 @@ def main(_):
 
     run_config = tf.estimator.RunConfig(
         save_summary_steps=None,
-        save_checkpoints_steps=None if FLAGS.benchmark else dataset.train_steps * FLAGS.train_epoch,
+        save_checkpoints_steps=None if FLAGS.benchmark else dataset.train_steps * FLAGS.train_epochs,
         save_checkpoints_secs=None,
         tf_random_seed=None,
         session_config=config,
