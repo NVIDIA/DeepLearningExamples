@@ -509,7 +509,6 @@ class FeatureWriter(object):
     self._writer.close()
 
 def main():
-
     FLAGS = extract_flags()
     tokenizer = tokenization.FullTokenizer(
         vocab_file=FLAGS.vocab_file, do_lower_case=FLAGS.do_lower_case)
