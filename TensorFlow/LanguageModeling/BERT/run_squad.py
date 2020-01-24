@@ -400,7 +400,6 @@ def input_fn_builder(input_file, batch_size, seq_length, is_training, drop_remai
     if is_training:
         d = tf.data.TFRecordDataset(input_file, num_parallel_reads=4)
         if hvd is not None: d = d.shard(hvd.size(), hvd.rank())
-        d = d.apply(tf.data.experimental.ignore_errors())
         d = d.shuffle(buffer_size=100)
         d = d.repeat()
     else:
@@ -1023,7 +1022,7 @@ def main(_):
     del train_examples
 
     train_input_fn = input_fn_builder(
-        input_file=tmp_filenames,
+        input_file=tmp_filenames[hvd_rank],
         batch_size=FLAGS.train_batch_size,
         seq_length=FLAGS.max_seq_length,
         is_training=True,
