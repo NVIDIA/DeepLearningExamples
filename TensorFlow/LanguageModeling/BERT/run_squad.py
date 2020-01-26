@@ -966,22 +966,6 @@ def main(_):
     rng = random.Random(12345)
     rng.shuffle(train_examples)
 
-    start_index = 0 
-    end_index = len(train_examples)
-    tmp_filenames = [os.path.join(FLAGS.output_dir, "train.tf_record")]
-
-    if FLAGS.horovod:
-      tmp_filenames = [os.path.join(FLAGS.output_dir, "train.tf_record{}".format(i)) for i in range(hvd.size())]
-      num_examples_per_rank = len(train_examples) // hvd.size()
-      remainder = len(train_examples) % hvd.size()
-      if hvd.rank() < remainder:
-        start_index = hvd.rank() * (num_examples_per_rank+1)
-        end_index = start_index + num_examples_per_rank + 1
-      else:
-        start_index = hvd.rank() * num_examples_per_rank + remainder
-        end_index = start_index + (num_examples_per_rank)
-
-
   model_fn = model_fn_builder(
       bert_config=bert_config,
       init_checkpoint=FLAGS.init_checkpoint,
@@ -996,14 +980,15 @@ def main(_):
       config=run_config)
 
   if FLAGS.do_train:
-
     # We write to a temporary file to avoid storing very large constant tensors
     # in memory.
+    tmp_filename = os.path.join(FLAGS.output_dir, "train.tf_record")
     train_writer = FeatureWriter(
-        filename=tmp_filenames[hvd_rank],
+        filename=tmp_filename,
         is_training=True)
+
     convert_examples_to_features(
-        examples=train_examples[start_index:end_index],
+        examples=train_examples,
         tokenizer=tokenizer,
         max_seq_length=FLAGS.max_seq_length,
         doc_stride=FLAGS.doc_stride,
@@ -1014,7 +999,7 @@ def main(_):
     train_writer.close()
 
     tf.logging.info("***** Running training *****")
-    tf.logging.info("  Num orig examples = %d", end_index - start_index)
+    tf.logging.info("  Num orig examples = %d", len(train_examples))
     tf.logging.info("  Num split examples = %d", train_writer.num_features)
     tf.logging.info("  Batch size = %d", FLAGS.train_batch_size)
     tf.logging.info("  Num steps = %d", num_train_steps)
@@ -1022,7 +1007,7 @@ def main(_):
     del train_examples
 
     train_input_fn = input_fn_builder(
-        input_file=tmp_filenames[hvd_rank],
+        input_file=tmp_filename,
         batch_size=FLAGS.train_batch_size,
         seq_length=FLAGS.max_seq_length,
         is_training=True,
@@ -1045,7 +1030,6 @@ def main(_):
         tf.logging.info("Throughput Average (sentences/sec) with overhead = %0.2f", avg_sentences_per_second)
         tf.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
         tf.logging.info("-----------------------------")
-
 
   if FLAGS.export_trtis and master_process:
     export_model(estimator, FLAGS.output_dir, FLAGS.init_checkpoint)
