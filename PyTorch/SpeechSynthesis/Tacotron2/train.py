@@ -442,18 +442,18 @@ def main():
             iteration += 1
 
 
-        epoch_stop_time = time.time()
-        epoch_time = epoch_stop_time - epoch_start_time
+            epoch_stop_time = time.time()
+            epoch_time = epoch_stop_time - epoch_start_time
 
-        DLLogger.log(step=(epoch,), data={'train_epoch_items/sec': reduced_num_items_epoch/epoch_time})
-        DLLogger.log(step=(epoch,), data={'train_epoch_avg_items/sec':
+            DLLogger.log(step=(epoch,), data={'train_epoch_items/sec': reduced_num_items_epoch/epoch_time})
+            DLLogger.log(step=(epoch,), data={'train_epoch_avg_items/sec':
                                           (train_epoch_avg_items_per_sec/num_iters if num_iters > 0 else 0.0)})
-        DLLogger.log(step=(epoch,), data={'train_epoch_avg_loss': (train_epoch_avg_loss/num_iters if num_iters > 0 else 0.0)})
-        DLLogger.log(step=(epoch,), data={'epoch_time': epoch_time})
+            DLLogger.log(step=(epoch,), data={'train_epoch_avg_loss': (train_epoch_avg_loss/num_iters if num_iters > 0 else 0.0)})
+            DLLogger.log(step=(epoch,), data={'epoch_time': epoch_time})
 
-        val_loss = validate(model, criterion, valset, epoch, i,
-                            args.batch_size, world_size, collate_fn,
-                            distributed_run, local_rank, batch_to_gpu)
+            val_loss = validate(model, criterion, valset, epoch, i,
+                                args.batch_size, world_size, collate_fn,
+                                distributed_run, local_rank, batch_to_gpu)
 
         if (epoch % args.epochs_per_checkpoint == 0) and local_rank == 0 and args.bench_class == "":
             checkpoint_path = os.path.join(
