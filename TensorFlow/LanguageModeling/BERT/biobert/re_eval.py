@@ -12,7 +12,7 @@ parser.add_argument('--task', type=str,  default="binary", help='default:binary,
 args = parser.parse_args()
 
 
-testdf = pd.read_csv(args.answer_path, sep="\t", index_col=0)
+testdf = pd.read_csv(args.answer_path, sep="\t", header=None)
 preddf = pd.read_csv(args.output_path, sep="\t", header=None)
 
 
@@ -37,9 +37,10 @@ if args.task == "chemprot":
     pred_class = [np.argmax(v) for v in pred]
     str_to_int_mapper = dict()
 
-    for i,v in enumerate(sorted(testdf["label"].unique())):
+    testdf.iloc[:,3] = testdf.iloc[:, 3].fillna("False")
+    for i,v in enumerate(sorted(testdf.iloc[:,3].unique())):
         str_to_int_mapper[v] = i
-    test_answer = [str_to_int_mapper[v] for v in testdf["label"]]
+    test_answer = [str_to_int_mapper[v] for v in testdf.iloc[:,3]]
 
     p,r,f,s = sklearn.metrics.precision_recall_fscore_support(y_pred=pred_class, y_true=test_answer, labels=[0,1,2,3,4], average="micro")
     results = dict()

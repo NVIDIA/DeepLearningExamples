@@ -15,7 +15,7 @@ import tensorflow as tf
 import time
 
 # report latency and throughput during eval
-class LogEvalRunHook(tf.train.SessionRunHook):
+class LogEvalRunHook(tf.estimator.SessionRunHook):
   def __init__(self, global_batch_size, hvd_rank=-1):
     self.global_batch_size = global_batch_size
     self.hvd_rank = hvd_rank
@@ -40,7 +40,7 @@ class LogEvalRunHook(tf.train.SessionRunHook):
       self.total_time += elapsed_secs
 
 # report throughput during training
-class LogTrainRunHook(tf.train.SessionRunHook):
+class LogTrainRunHook(tf.estimator.SessionRunHook):
   def __init__(self, global_batch_size, hvd_rank=-1, save_checkpoints_steps=1000):
     self.global_batch_size = global_batch_size
     self.hvd_rank = hvd_rank
@@ -54,7 +54,7 @@ class LogTrainRunHook(tf.train.SessionRunHook):
 
   def before_run(self, run_context):
     self.t0 = time.time()
-    return tf.train.SessionRunArgs(
+    return tf.estimator.SessionRunArgs(
         fetches=['step_update:0'])
 
   def after_run(self, run_context, run_values):

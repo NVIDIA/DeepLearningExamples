@@ -27,6 +27,7 @@ This repository provides a script and recipe to train the BERT model for TensorF
     * [Fine tuning](#fine-tuning)
     * [Multi-node](#multi-node)
   * [Inference process](#inference-process)
+  * [Inference Process With TensorRT](#inference-process-with-tensorrt)
   * [Deploying the BERT model using TensorRT Inference Server](#deploying-the-bert-model-using-tensorrt-inference-server)
   * [BioBERT](#biobert)
 - [Performance](#performance)
@@ -615,6 +616,9 @@ I0312 23:14:00.550973 140287431493376 run_squad.py:1397] 0 Inference Performance
 {"exact_match": 83.69914853358561, "f1": 90.8477003317459}
 ```
 
+### Inference Process With TensorRT
+NVIDIA TensorRT is a platform for high-performance deep learning inference. It includes a deep learning inference optimizer and runtime that delivers low latency and high-throughput for deep learning inference applications. More information on how to perform inference using TensorRT can be found in the subfolder [./trt/README.md](trt/README.md)
+
 ### Deploying the BERT model using TensorRT Inference Server
 
 The [NVIDIA TensorRT Inference Server](https://github.com/NVIDIA/tensorrt-inference-server) provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server. More information on how to perform inference using `TensorRT Inference Server` can be found in the subfolder `./trtis/README.md`.
@@ -675,6 +679,7 @@ Our results were obtained by running the `scripts/run_pretraining_lamb.sh` train
 
 | **DGX System** | **Nodes** | **Precision** | **Batch Size/GPU: Phase1, Phase2** | **Accumulation Steps: Phase1, Phase2** | **Time to Train (Hrs)** | **Final Loss** |
 |----------------|-----------|---------------|------------------------------------|----------------------------------------|----------------|-------------------------|
+| DGX1  | 1  | FP16 | 16, 4 |512,1024| 299.86| 1.67 |
 | DGX1  | 4  | FP16 | 16, 4 |128, 256| 62.49 | 1.72 |
 | DGX1  | 16 | FP16 | 16, 4 | 32, 64 | 16.58 | 1.76 |
 | DGX1  | 32 | FP16 | 16, 2 | 16, 64 | 9.85  | 1.71 |
@@ -728,7 +733,7 @@ The following tables compare `F1` scores across 5 different training runs with d
 
 ###### Pre-training training performance: single-node on 16G
 
-Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance (in sentences per second) is the steady state throughput.
+Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance (in sentences per second) is the steady state throughput with number of accumulation steps set to 1.
 
 
 | **GPUs** | **Sequence Length**| **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
@@ -744,7 +749,7 @@ Note: The respective values for FP32 runs that use a batch size of 16, 4 in sequ
 
 ###### Pre-training training performance: multi-node on 16G
 
-Our results were obtained by running the `run.sub` training script in the TensorFlow 19.08-py3 NGC container using multiple NVIDIA DGX-1 with 8x V100 16G GPUs. Performance (in sentences per second) is the steady state throughput.
+Our results were obtained by running the `run.sub` training script in the TensorFlow 19.08-py3 NGC container using multiple NVIDIA DGX-1 with 8x V100 16G GPUs. Performance (in sentences per second) is the steady state throughput with number of accumulation steps set to 1.
 
 | **Nodes** | **Sequence Length**| **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
 |:-------:|:-----:|:-------:|:-------:|:-------:|:-------------:|:------:|:------:|
@@ -777,7 +782,7 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 ###### Pre-training training performance: single-node on 32G
 
-Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. Performance (in sentences per second) is the steady state throughput.
+Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. Performance (in sentences per second) is the steady state throughput with number of accumulation steps set to 1.
 
 | **GPUs** | **Sequence Length**| **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
 |:-------:|:-----:|:-------:|:-------:|:-------:|:-------------:|:------:|:------:|
@@ -809,7 +814,7 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 ###### Pre-training training performance: single-node on DGX-2 32G
 
-Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance (in sentences per second) is the steady state throughput.
+Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance (in sentences per second) is the steady state throughput with number of accumulation steps set to 1.
 
 | **GPUs** | **Sequence Length**| **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
 |:-------:|:-----:|:-------:|:-------:|:-------:|:-------------:|:------:|:------:|
@@ -826,7 +831,7 @@ Note: The respective values for FP32 runs that use a batch size of 48, 8 in sequ
 
 ###### Pre-training training performance: multi-node on DGX-2H 32G
 
-Our results were obtained by running the `run.sub` training script in the TensorFlow 19.08-py3 NGC container using multiple NVIDIA DGX-2 with 16x V100 32G GPUs. Performance (in sentences per second) is the steady state throughput.
+Our results were obtained by running the `run.sub` training script in the TensorFlow 19.08-py3 NGC container using multiple NVIDIA DGX-2 with 16x V100 32G GPUs. Performance (in sentences per second) is the steady state throughput with number of accumulation steps set to 1.
 
 
 | **Nodes** | **Sequence Length**| **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
@@ -1130,6 +1135,9 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 ## Release notes
 
 ### Changelog
+
+Janurary 2020
+- Added inference with TensorRT
 
 November 2019
 - Pre-training and Finetuning on BioMedical tasks and corpus

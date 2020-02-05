@@ -425,29 +425,29 @@ def convert_examples_to_features(examples, tokenizer, max_seq_length,
         end_position = 0
 
       if verbose_logging and example_index < 20:
-        tf.logging.info("*** Example ***")
-        tf.logging.info("unique_id: %s" % (unique_id))
-        tf.logging.info("example_index: %s" % (example_index))
-        tf.logging.info("doc_span_index: %s" % (doc_span_index))
-        tf.logging.info("tokens: %s" % " ".join(
+        tf.compat.v1.logging.info("*** Example ***")
+        tf.compat.v1.logging.info("unique_id: %s" % (unique_id))
+        tf.compat.v1.logging.info("example_index: %s" % (example_index))
+        tf.compat.v1.logging.info("doc_span_index: %s" % (doc_span_index))
+        tf.compat.v1.logging.info("tokens: %s" % " ".join(
             [tokenization.printable_text(x) for x in tokens]))
-        tf.logging.info("token_to_orig_map: %s" % " ".join(
+        tf.compat.v1.logging.info("token_to_orig_map: %s" % " ".join(
             ["%d:%d" % (x, y) for (x, y) in six.iteritems(token_to_orig_map)]))
-        tf.logging.info("token_is_max_context: %s" % " ".join([
+        tf.compat.v1.logging.info("token_is_max_context: %s" % " ".join([
             "%d:%s" % (x, y) for (x, y) in six.iteritems(token_is_max_context)
         ]))
-        tf.logging.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
-        tf.logging.info(
+        tf.compat.v1.logging.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
+        tf.compat.v1.logging.info(
             "input_mask: %s" % " ".join([str(x) for x in input_mask]))
-        tf.logging.info(
+        tf.compat.v1.logging.info(
             "segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
         if is_training and example.is_impossible:
-          tf.logging.info("impossible example")
+          tf.compat.v1.logging.info("impossible example")
         if is_training and not example.is_impossible:
           answer_text = " ".join(tokens[start_position:(end_position + 1)])
-          tf.logging.info("start_position: %d" % (start_position))
-          tf.logging.info("end_position: %d" % (end_position))
-          tf.logging.info(
+          tf.compat.v1.logging.info("start_position: %d" % (start_position))
+          tf.compat.v1.logging.info("end_position: %d" % (end_position))
+          tf.compat.v1.logging.info(
               "answer: %s" % (tokenization.printable_text(answer_text)))
 
       feature = InputFeatures(
