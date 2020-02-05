@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import List
 from typing import Optional
 
 import torch
@@ -19,10 +20,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class ProjectedAdaptiveLogSoftmax(torch.jit.ScriptModule):
-    __constants__ = ['n_clusters', 'cutoffs', 'cutoff_ends', 'keep_order']
+class ProjectedAdaptiveLogSoftmax(nn.Module):
+    out_projs: List[Optional[torch.Tensor]]
 
     def __init__(self, n_token, d_embed, d_proj, cutoffs, div_val=1,
+                 tie_projs=None, out_layers_weights=None, out_projs=None,
                  keep_order=False):
         super().__init__()
 
@@ -31,36 +33,78 @@ class ProjectedAdaptiveLogSoftmax(torch.jit.ScriptModule):
         self.d_proj = d_proj
 
         self.cutoffs = cutoffs + [n_token]
-        self.cutoff_ends = type(self.cutoffs)([0]) + self.cutoffs
+        self.cutoff_ends = [0] + self.cutoffs
         self.div_val = div_val
 
         self.shortlist_size = self.cutoffs[0]
         self.n_clusters = len(self.cutoffs) - 1
         self.head_size = self.shortlist_size + self.n_clusters
 
+        self.tie_projs = tie_projs
+
         if self.n_clusters > 0:
             self.cluster_weight = nn.Parameter(torch.zeros(self.n_clusters, self.d_embed))
             self.cluster_bias = nn.Parameter(torch.zeros(self.n_clusters))
 
-        self.out_layers = nn.ModuleList()
+        if not out_layers_weights:
+            self.out_layers_weights = []
+        else:
+            self.out_layers_weights = out_layers_weights
 
-        if d_proj != d_embed:
-            raise RuntimeError('TorchScripted module requires d_proj == d_embed')
-        if div_val != 1:
-            raise RuntimeError('TorchScripted module requires div_val == 1')
+        self.out_layers_biases = []
 
-        self.out_layers.append(nn.Linear(d_embed, n_token))
+        self.out_projs = []
+
+        if div_val == 1:
+            if d_proj != d_embed:
+                for i, tie_proj in enumerate(tie_projs):
+                    if tie_proj:
+                        self.out_projs.append(out_projs[0])
+                    else:
+                        self.out_projs.append(torch.zeros(d_proj, d_embed))
+            else:
+                for i, tie_proj in enumerate(tie_projs):
+                    self.out_projs.append(None)
+        else:
+            for i, tie_proj in enumerate(tie_projs):
+                d_emb_i = d_embed // (div_val ** i)
+                if tie_proj:
+                    self.out_projs.append(out_projs[i])
+                else:
+                    self.out_projs.append(torch.zeros(d_proj, d_emb_i))
+
+        if div_val == 1:
+            self.out_layers_biases.append(
+                (torch.zeros(n_token))
+                )
+            if not out_layers_weights:
+                self.out_layers_weights.append(
+                    nn.Parameter(torch.zeros(n_token, d_embed))
+                    )
+        else:
+            for i in range(len(self.cutoffs)):
+                l_idx, r_idx = self.cutoff_ends[i], self.cutoff_ends[i+1]
+                d_emb_i = d_embed // (div_val ** i)
+
+                self.out_layers_biases.append(
+                    nn.Parameter(torch.zeros(r_idx - l_idx))
+                    )
+                if not out_layers_weights:
+                    self.out_layers_weights.append(
+                        nn.Parameter(torch.zeros(r_idx - l_idx, d_emb_i))
+                        )
 
         self.keep_order = keep_order
 
-    @torch.jit.script_method
     def _compute_logit(self, hidden, weight, bias, proj: Optional[torch.Tensor]):
-        if proj is not None:
-            raise RuntimeError('TorchScripted module requires proj == None')
-        logit = F.linear(hidden, weight, bias=bias)
+        if proj is None:
+            logit = F.linear(hidden, weight, bias=bias)
+        else:
+            logit = torch.einsum('bd,de,ev->bv', (hidden, proj, weight.t()))
+            if bias is not None:
+                logit = logit + bias
         return logit
 
-    @torch.jit.script_method
     def forward(self, hidden, target, keep_order: bool = False):
         '''
             hidden :: [len*bsz x d_proj]
@@ -72,36 +116,37 @@ class ProjectedAdaptiveLogSoftmax(torch.jit.ScriptModule):
                                'in the batch dimension.')
 
         if self.n_clusters == 0:
-            for out_layer in self.out_layers:
-                hidden = self._compute_logit(hidden, out_layer.weight,
-                                             out_layer.bias, None)
-            nll = -F.log_softmax(hidden, dim=-1) \
+            logit = self._compute_logit(hidden, self.out_layers_weights[0],
+                                        self.out_layers_biases[0], self.out_projs[0])
+            nll = -F.log_softmax(logit, dim=-1) \
                     .gather(1, target.unsqueeze(1)).squeeze(1)
         else:
             # construct weights and biases
             weights, biases = [], []
             for i in range(len(self.cutoffs)):
-                for out_layer in self.out_layers:
+                if self.div_val == 1:
                     l_idx, r_idx = self.cutoff_ends[i], self.cutoff_ends[i + 1]
-                    weight_i = out_layer.weight[l_idx:r_idx]
-                    bias_i = out_layer.bias[l_idx:r_idx]
+                    weight_i = self.out_layers_weights[0][l_idx:r_idx]
+                    bias_i = self.out_layers_biases[0][l_idx:r_idx]
+                else:
+                    weight_i = self.out_layers_weights[i]
+                    bias_i = self.out_layers_biases[i]
 
-                    if i == 0:
-                        weight_i = torch.cat(
-                            [weight_i, self.cluster_weight], dim=0)
-                        bias_i = torch.cat(
-                            [bias_i, self.cluster_bias], dim=0)
+                if i == 0:
+                    weight_i = torch.cat(
+                        [weight_i, self.cluster_weight], dim=0)
+                    bias_i = torch.cat(
+                        [bias_i, self.cluster_bias], dim=0)
 
-                    weights.append(weight_i)
-                    biases.append(bias_i)
+                weights.append(weight_i)
+                biases.append(bias_i)
 
-            head_weight, head_bias, head_proj = weights[0], biases[0], None
+            head_weight, head_bias, head_proj = weights[0], biases[0], self.out_projs[0]
 
             head_logit = self._compute_logit(hidden, head_weight, head_bias, head_proj)
             head_logprob = F.log_softmax(head_logit, dim=1)
 
-            nll = torch.zeros_like(target, layout=torch.strided,
-                                   dtype=hidden.dtype, device=hidden.device)
+            nll = torch.zeros_like(target, layout=torch.strided, dtype=hidden.dtype, device=hidden.device)
 
             offset = 0
             cutoff_values = [0] + self.cutoffs
@@ -120,12 +165,11 @@ class ProjectedAdaptiveLogSoftmax(torch.jit.ScriptModule):
                 if i == 0:
                     logprob_i = head_logprob_i.gather(1, target_i[:, None]).squeeze(1)
                 else:
-                    weight_i, bias_i, proj_i = weights[i], biases[i], None
+                    weight_i, bias_i, proj_i = weights[i], biases[i], self.out_projs[i]
 
                     hidden_i = hidden.index_select(0, indices_i)
 
-                    tail_logit_i = self._compute_logit(hidden_i, weight_i,
-                                                       bias_i, proj_i)
+                    tail_logit_i = self._compute_logit(hidden_i, weight_i, bias_i, proj_i)
                     tail_logprob_i = F.log_softmax(tail_logit_i, dim=1)
 
                     logprob_i = head_logprob_i[:, -i] \

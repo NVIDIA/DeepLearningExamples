@@ -1,0 +1,197 @@
+# Base
+wt103: &wt103
+   dataset: wt103
+   data: ../data/wikitext-103/
+
+train: &train
+   <<: *wt103
+   cuda: true
+   n_layer: 16
+   d_model: 512
+   n_head: 8
+   d_head: 64
+   d_inner: 2048
+   dropout: 0.1
+   dropatt: 0.0
+   optim: jitlamb
+   lr: 0.01
+   eta_min: 0.001
+   roll: true
+   warmup_step: 1000
+   max_step: 40000
+   tgt_len: 192
+   mem_len: 192
+   eval_tgt_len: 192
+   batch_size: 256
+   multi_gpu: ddp
+   log_interval: 10
+   eval_interval: 5000
+   vocab: word
+   adaptive: true
+
+eval: &eval
+   <<: *wt103
+   cuda: true
+   tgt_len: 64
+   mem_len: 640
+   clamp_len: 400
+   same_length: true
+   split: test
+
+default:
+   train:
+      <<: *train
+   eval:
+      <<: *eval
+
+
+# Full training configs for DGX-1 (8x V100 16G)
+dgx1_8gpu_fp16: &dgx1_8gpu_fp16
+   train:
+      <<: *train
+      fp16: true
+   eval:
+      <<: *eval
+      fp16: true
+
+dgx1_8gpu_fp32: &dgx1_8gpu_fp32
+   train:
+      <<: *train
+      batch_chunk: 2
+   eval:
+      <<: *eval
+
+dgx1_4gpu_fp16: &dgx1_4gpu_fp16
+   train:
+      <<: *train
+      fp16: true
+      batch_chunk: 2
+   eval:
+      <<: *eval
+      fp16: true
+
+dgx1_4gpu_fp32: &dgx1_4gpu_fp32
+   train:
+      <<: *train
+      batch_chunk: 4
+   eval:
+      <<: *eval
+
+dgx1_2gpu_fp16: &dgx1_2gpu_fp16
+   train:
+      <<: *train
+      fp16: true
+      batch_chunk: 4
+   eval:
+      <<: *eval
+      fp16: true
+
+dgx1_2gpu_fp32: &dgx1_2gpu_fp32
+   train:
+      <<: *train
+      batch_chunk: 8
+   eval:
+      <<: *eval
+
+dgx1_1gpu_fp16: &dgx1_1gpu_fp16
+   train:
+      <<: *train
+      fp16: true
+      batch_chunk: 8
+   eval:
+      <<: *eval
+      fp16: true
+
+dgx1_1gpu_fp32: &dgx1_1gpu_fp32
+   train:
+      <<: *train
+      batch_chunk: 16
+   eval:
+      <<: *eval
+
+# Full training configs for DGX-2 (16x V100 32G)
+dgx2_16gpu_fp16: &dgx2_16gpu_fp16
+   train:
+      <<: *train
+      fp16: true
+   eval:
+      <<: *eval
+      fp16: true
+
+dgx2_16gpu_fp32: &dgx2_16gpu_fp32
+   train:
+      <<: *train
+   eval:
+      <<: *eval
+
+dgx2_8gpu_fp16: &dgx2_8gpu_fp16
+   train:
+      <<: *train
+      fp16: true
+      batch_chunk: 2
+   eval:
+      <<: *eval
+      fp16: true
+
+dgx2_8gpu_fp32: &dgx2_8gpu_fp32
+   train:
+      <<: *train
+      batch_chunk: 2
+   eval:
+      <<: *eval
+
+dgx2_4gpu_fp16: &dgx2_4gpu_fp16
+   train:
+      <<: *train
+      fp16: true
+      batch_chunk: 4
+   eval:
+      <<: *eval
+      fp16: true
+
+dgx2_4gpu_fp32: &dgx2_4gpu_fp32
+   train:
+      <<: *train
+      batch_chunk: 4
+   eval:
+      <<: *eval
+
+dgx2_2gpu_fp16: &dgx2_2gpu_fp16
+   train:
+      <<: *train
+      fp16: true
+      batch_chunk: 8
+   eval:
+      <<: *eval
+      fp16: true
+
+dgx2_2gpu_fp32: &dgx2_2gpu_fp32
+   train:
+      <<: *train
+      batch_chunk: 8
+   eval:
+      <<: *eval
+
+dgx2_1gpu_fp16: &dgx2_1gpu_fp16
+   train:
+      <<: *train
+      fp16: true
+      batch_chunk: 16
+   eval:
+      <<: *eval
+      fp16: true
+
+dgx2_1gpu_fp32: &dgx2_1gpu_fp32
+   train:
+      <<: *train
+      batch_chunk: 16
+   eval:
+      <<: *eval
+
+
+# Training benchmarks
+trainbench: &trainbench
+   train:
+      <<: *train
+      log_interval: 1
+      max_step: 500

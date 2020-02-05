@@ -19,6 +19,9 @@ import shutil
 import sys
 import time
 
+import dllogger
+import torch.utils.collect_env
+
 import utils
 
 
@@ -49,6 +52,15 @@ class AverageMeter:
             self.avg = self.sum / self.count
             if self.keep:
                 self.vals.append(val)
+
+
+def log_env_info():
+    """
+    Prints information about execution environment.
+    """
+    logging.info('Collecting environment information...')
+    env_info = torch.utils.collect_env.get_pretty_env_info()
+    logging.info(f'{env_info}')
 
 
 def benchmark(test_perplexity=None, target_perplexity=None,
@@ -103,6 +115,9 @@ def setup_logging(log_all_ranks=True, filename=os.devnull, filemode='w'):
         logging_format = "%(asctime)s - %(levelname)s - %(rank)s - %(message)s"
     else:
         logging_format = "%(asctime)s - %(levelname)s - %(message)s"
+        if rank != 0:
+            filename = os.devnull
+
     logging.basicConfig(level=logging.DEBUG,
                         format=logging_format,
                         datefmt="%Y-%m-%d %H:%M:%S",
@@ -117,6 +132,21 @@ def setup_logging(log_all_ranks=True, filename=os.devnull, filemode='w'):
     console.setFormatter(formatter)
     logging.getLogger('').addHandler(console)
     logging.getLogger('').addFilter(rank_filter)
+
+
+def setup_dllogger(enabled=True, filename=os.devnull):
+    rank = utils.distributed.get_rank()
+
+    if enabled and rank == 0:
+        backends = [
+            dllogger.JSONStreamBackend(
+                dllogger.Verbosity.VERBOSE,
+                filename,
+                ),
+            ]
+        dllogger.init(backends)
+    else:
+        dllogger.init([])
 
 
 def create_exp_dir(dir_path, scripts_to_save=None, debug=False):

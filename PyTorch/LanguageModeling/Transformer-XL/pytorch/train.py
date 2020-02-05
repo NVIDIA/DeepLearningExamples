@@ -20,31 +20,49 @@ import itertools
 import logging
 import math
 import os
-import time
 import sys
+import time
 
+import dllogger
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from apex.parallel import DistributedDataParallel
+import yaml
+from apex import amp
+from torch.nn.parallel import DistributedDataParallel
 
 import lamb
 import utils
-from apex import amp
 from data_utils import get_lm_corpus
 from mem_transformer import MemTransformerLM
 from utils.data_parallel import BalancedDataParallel
-from utils.exp_utils import create_exp_dir
-from utils.exp_utils import benchmark
 from utils.exp_utils import AverageMeter
+from utils.exp_utils import benchmark
+from utils.exp_utils import create_exp_dir
+from utils.exp_utils import log_env_info
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
+    parent_parser = argparse.ArgumentParser(
         description='PyTorch Transformer-XL Language Model',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        add_help=False,
         )
+
+    parser = argparse.ArgumentParser(parents=[parent_parser], add_help=True)
+    cfg_parser = argparse.ArgumentParser(parents=[parent_parser], add_help=False)
+
+    cfg_parser.add_argument('--config', default='default')
+    cfg_parser.add_argument('--config_file', default='config.yaml')
+
+    config_args, _ = cfg_parser.parse_known_args()
+
+    if config_args.config is not None and config_args.config_file is not None:
+        with open(config_args.config_file) as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)[config_args.config]['train']
+    else:
+        config = {}
 
     general = parser.add_argument_group('general setup')
     general.add_argument('--work_dir', default='LM-TFM', type=str,
@@ -54,7 +72,7 @@ def parse_args():
     general.add_argument('--append_time', action='store_true',
                          help='Automatically append current time to work_dir')
     general.add_argument('--cuda', action='store_true',
-                         help='Use CUDA')
+                         help='Run training on a GPU using CUDA')
     general.add_argument('--fp16', action='store_true',
                          help='Run training in fp16/mixed precision')
     general.add_argument('--restart', type=str, default='',
@@ -65,6 +83,8 @@ def parse_args():
                          help='Enable logging from all distributed ranks')
     general.add_argument('--save-all', action='store_true',
                          help='Save all checkpoints')
+    general.add_argument('--no_env', action='store_true',
+                         help='Do not print info on execution env')
     general.add_argument('--log_interval', type=int, default=10,
                          help='Report interval')
     general.add_argument('--target_throughput', type=float, default=None,
@@ -161,8 +181,13 @@ def parse_args():
                           help='Max number of training steps')
     training.add_argument('--batch_size', type=int, default=256,
                           help='Global batch size')
+    training.add_argument('--local_batch_size', type=int, default=None,
+                          help='Local (per-device) batch size, this setting \
+                          overrides global --batch_size and sets batch_size \
+                          to local_batch_size * world_size')
     training.add_argument('--batch_chunk', type=int, default=1,
-                          help='Split batch into chunks to save memory')
+                          help='Split batch into chunks and train with '
+                          'gradient accumulation')
     training.add_argument('--roll', action='store_true',
                           help='Enable random shifts within each data stream')
     training.add_argument('--tgt_len', type=int, default=192,
@@ -194,12 +219,13 @@ def parse_args():
                      help='Evaluation interval')
 
     dist = parser.add_argument_group('distributed setup')
-    dist.add_argument('--local_rank', default=0, type=int,
-                      help='Used for multi-process training. ' +
-                      'Can either be manually set ' +
-                      'or automatically set by using \'python -m multiproc\'')
+    dist.add_argument('--local_rank',  type=int,
+                      default=os.getenv('LOCAL_RANK', 0),
+                      help='Used for multi-process training.')
 
-    args = parser.parse_args()
+    parser.set_defaults(**config)
+    args, _ = parser.parse_known_args()
+
     args.tied = not args.not_tied
 
     if args.d_embed < 0:
@@ -282,6 +308,10 @@ def weights_init(m, args):
             for i in range(len(m.out_projs)):
                 if m.out_projs[i] is not None:
                     nn.init.normal_(m.out_projs[i], 0.0, args.proj_init_std)
+        if hasattr(m, 'out_layers_weights'):
+            for i in range(len(m.out_layers_weights)):
+                if m.out_layers_weights[i] is not None:
+                    init_weight(m.out_layers_weights[i], args)
     elif classname.find('LayerNorm') != -1:
         if hasattr(m, 'weight'):
             nn.init.normal_(m.weight, 1.0, args.init_std)
@@ -331,14 +361,15 @@ def evaluate(eval_iter, model, args):
     total_len, total_loss = 0, 0.
     with torch.no_grad():
         mems = None
-        for i, (data, target, seq_len) in enumerate(eval_iter):
+        for i, (data, target, seq_len, warm) in enumerate(eval_iter):
             if args.eval_max_steps > 0 and i >= args.eval_max_steps:
                 break
-            ret = model(data, target, mems)
-            loss, mems = ret[0], ret[1:]
-            loss = loss.mean()
-            total_loss += seq_len * loss.float().item()
-            total_len += seq_len
+            loss, mems = model(data, target, mems)
+            loss = loss.float().mean()
+            if warm:
+                assert (not mems) or all([m.size(0) == model.mem_len for m in mems])
+                total_loss += seq_len * loss.item()
+                total_len += seq_len
 
     # Switch back to the training mode
     model.reset_length(tgt_len=args.tgt_len,
@@ -364,7 +395,7 @@ def train(tr_iter, va_iter, model, para_model, model_config, optimizer,
     mems = [None for _ in range(args.batch_chunk)]
     train_iter = tr_iter.get_varlen_iter() if args.varlen else tr_iter
 
-    for batch, (data, target, seq_len) in enumerate(train_iter):
+    for batch, (data, target, seq_len, _) in enumerate(train_iter):
         log_step += 1
         target_tokens += target.numel()
 
@@ -376,8 +407,7 @@ def train(tr_iter, va_iter, model, para_model, model_config, optimizer,
         for i in range(args.batch_chunk):
             data_i = data_chunks[i].contiguous()
             target_i = target_chunks[i].contiguous()
-            ret = para_model(data_i, target_i, mems[i])
-            loss, mems[i] = ret[0], ret[1:]
+            loss, mems[i] = para_model(data_i, target_i, mems[i])
             loss = loss.float().mean().type_as(loss) / args.batch_chunk
 
             if args.fp16:
@@ -408,11 +438,13 @@ def train(tr_iter, va_iter, model, para_model, model_config, optimizer,
                     optimizer_sparse.param_groups[0]['lr'] = curr_lr * 2
             else:
                 if args.scheduler == 'cosine':
-                    scheduler.step(train_step)
+                    scheduler.step(train_step - args.warmup_step)
                     if scheduler_sparse:
-                        scheduler_sparse.step(train_step)
+                        scheduler_sparse.step(train_step - args.warmup_step)
         elif args.scheduler == 'inv_sqrt':
             scheduler.step(train_step)
+            if scheduler_sparse:
+                scheduler_sparse.step(train_step)
 
         if train_step % args.log_interval == 0:
             cur_loss = train_loss / log_step
@@ -432,23 +464,35 @@ def train(tr_iter, va_iter, model, para_model, model_config, optimizer,
             target_tokens = 0
 
             log_str = '| epoch {:3d} step {:>8d} | batches {:>6d} / {:d} | lr {:.3e} ' \
-                '| ms/batch {:5.1f} | tok/s {:>7d} | loss {:5.2f}'.format(
+                '| ms/batch {:5.1f} | tok/s {:7.0f} | loss {:5.2f}'.format(
                     epoch,
                     train_step,
                     batch+1,
                     tr_iter.n_batch,
                     lr,
                     avg_elapsed * 1000,
-                    int(throughput),
+                    throughput,
                     cur_loss,
                     )
 
+            dllogger_data = {
+                'epoch': epoch,
+                'train_batch': batch+1,
+                'lr': lr,
+                'train_time/batch': avg_elapsed * 1000,
+                'train_throughput': throughput,
+                'train_loss': cur_loss,
+                }
+
             if args.dataset in ['enwik8', 'text8']:
                 log_str += ' | bpc {:9.5f}'.format(cur_loss / math.log(2))
+                dllogger_data['train_bits_per_character'] = cur_loss / math.log(2)
             else:
                 log_str += ' | ppl {:9.2f}'.format(math.exp(cur_loss))
+                dllogger_data['train_perplexity'] = math.exp(cur_loss)
 
             logging.info(log_str)
+            dllogger.log(step=train_step, data=dllogger_data)
 
         if train_step % args.eval_interval == 0:
             eval_start_time = time.time()
@@ -463,12 +507,21 @@ def train(tr_iter, va_iter, model, para_model, model_config, optimizer,
                           (time.time() - eval_start_time),
                           val_loss,
                           )
+
+            dllogger_data = {
+                'valid_elapsed': (time.time() - eval_start_time),
+                'valid_loss': val_loss,
+                }
+
             if args.dataset in ['enwik8', 'text8']:
                 log_str += ' | bpc {:9.5f}'.format(val_loss / math.log(2))
+                dllogger_data['valid_bits_per_character'] = val_loss / math.log(2)
             else:
                 log_str += ' | valid ppl {:9.3f}'.format(math.exp(val_loss))
+                dllogger_data['valid_perplexity'] = math.exp(val_loss)
             logging.info(log_str)
             logging.info('-' * 100)
+            dllogger.log(step=train_step, data=dllogger_data)
 
             # Save the model if the validation loss is the best we've seen so far.
             if not best_val_loss or val_loss < best_val_loss:
@@ -529,22 +582,37 @@ def main():
 
     # Setup logging
     if args.log_all_ranks:
-        log_file = f'log_rank_{utils.distributed.get_rank()}.log'
+        log_file = f'train_log_rank_{utils.distributed.get_rank()}.log'
     else:
-        log_file = f'log.log'
+        log_file = f'train_log.log'
+    dllog_file = f'train_log.json'
     log_file = os.path.join(args.work_dir, log_file)
+    dllog_file = os.path.join(args.work_dir, dllog_file)
 
     if args.debug:
         log_file = os.devnull
+        dllog_file = os.devnull
 
     utils.exp_utils.setup_logging(log_all_ranks=args.log_all_ranks,
                                   filename=log_file,
                                   )
+    utils.exp_utils.setup_dllogger(enabled=True, filename=dllog_file)
+
+    if args.local_batch_size is not None:
+        world_size = utils.distributed.get_world_size()
+        args.batch_size = world_size * args.local_batch_size
+        logging.info(f'--local_batch_size was set, adjusting global batch size'
+                     f' to {args.batch_size} (local_batch_size * world_size)')
+
     logging.info(args)
+    dllogger.log(step='PARAMETER', data=vars(args))
+
+    if not args.no_env:
+        log_env_info()
 
     # Set the random seed manually for reproducibility.
-    np.random.seed(args.seed + utils.distributed.get_rank())
-    torch.manual_seed(args.seed + utils.distributed.get_rank())
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
 
     ###########################################################################
     # Load data
@@ -554,12 +622,19 @@ def main():
     vocab = corpus.vocab
     args.n_token = ntokens
 
+    if args.mem_len == 0:
+        eval_mem_len = 0
+    else:
+        eval_mem_len = args.mem_len + args.tgt_len - args.eval_tgt_len
+
     tr_iter = corpus.get_iterator('train', args.batch_size, args.tgt_len,
                                   device=device, ext_len=args.ext_len)
-    va_iter = corpus.get_iterator('valid', args.eval_batch_size, args.eval_tgt_len,
-                                  device=device, ext_len=args.ext_len)
-    te_iter = corpus.get_iterator('test', args.eval_batch_size, args.eval_tgt_len,
-                                  device=device, ext_len=args.ext_len)
+    va_iter = corpus.get_iterator('valid', args.eval_batch_size,
+                                  args.eval_tgt_len, device=device,
+                                  mem_len=eval_mem_len, ext_len=args.ext_len)
+    te_iter = corpus.get_iterator('test', args.eval_batch_size,
+                                  args.eval_tgt_len, device=device,
+                                  mem_len=eval_mem_len, ext_len=args.ext_len)
 
     # adaptive softmax / embedding
     cutoffs, tie_projs = [], [False]
@@ -662,7 +737,10 @@ def main():
 
     if args.multi_gpu == 'ddp' and torch.distributed.is_initialized():
         para_model = DistributedDataParallel(model,
-                                             delay_allreduce=True,
+                                             device_ids=[args.local_rank],
+                                             output_device=args.local_rank,
+                                             broadcast_buffers=False,
+                                             find_unused_parameters=True,
                                              )
     elif args.multi_gpu == 'dp':
         if args.gpu0_bsz >= 0:
@@ -681,17 +759,15 @@ def main():
             max_step = args.max_step
 
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, max_step, eta_min=args.eta_min
-            )
-        if args.sample_softmax > 0:
+            optimizer, max_step - args.warmup_step, eta_min=args.eta_min)
+        if args.sample_softmax > 0 and optimizer_sparse is not None:
             scheduler_sparse = optim.lr_scheduler.CosineAnnealingLR(
-                optimizer_sparse, max_step, eta_min=args.eta_min
-                )
+                optimizer_sparse, max_step - args.warmup_step,
+                eta_min=args.eta_min)
         else:
             scheduler_sparse = None
     elif args.scheduler == 'inv_sqrt':
         # originally used for Transformer (in Attention is all you need)
-        scheduler_sparse = None
         def lr_lambda(step):
             # return a multiplier instead of a learning rate
             if step == 0 and args.warmup_step == 0:
@@ -700,12 +776,19 @@ def main():
                 return 1. / (step ** 0.5) if step > args.warmup_step \
                     else step / (args.warmup_step ** 1.5)
         scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+        if args.sample_softmax > 0 and optimizer_sparse is not None:
+            scheduler_sparse = optim.lr_scheduler.LambdaLR(
+                optimizer_sparse,
+                lr_lambda=lr_lambda
+                )
+        else:
+            scheduler_sparse = None
     elif args.scheduler == 'dev_perf':
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, factor=args.decay_rate, patience=args.patience,
             min_lr=args.lr_min,
             )
-        if args.sample_softmax > 0:
+        if args.sample_softmax > 0 and optimizer_sparse is not None:
             scheduler_sparse = optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer_sparse, factor=args.decay_rate, patience=args.patience,
                 min_lr=args.lr_min,
@@ -739,7 +822,7 @@ def main():
         model.apply(functools.partial(update_dropatt, args=args))
 
     meters = {}
-    warmup = args.mem_len // args.tgt_len + 1
+    warmup = args.mem_len // args.tgt_len + 2
     meters['train_throughput'] = AverageMeter(warmup=warmup)
     ###########################################################################
     # Train
@@ -769,6 +852,7 @@ def main():
     ###########################################################################
     # Test
     ###########################################################################
+    summary = {}
     test_path = os.path.join(args.work_dir, 'checkpoint_best.pt')
     if not args.debug and os.path.exists(test_path):
         # Load the best saved model.
@@ -779,15 +863,26 @@ def main():
         test_start_time = time.time()
         test_loss = evaluate(te_iter, model, args)
         test_loss = utils.distributed.all_reduce_item(test_loss, 'mean')
+        test_elapsed = time.time() - test_start_time
 
         logging.info('=' * 100)
         if args.dataset in ['enwik8', 'text8']:
             logging.info('| End of training | test time: {:5.2f}s | test loss {:5.2f} | test bpc {:9.5f}'.format(
-                time.time() - test_start_time, test_loss, test_loss / math.log(2)))
+                test_elapsed, test_loss, test_loss / math.log(2)))
         else:
             logging.info('| End of training | test time: {:5.2f}s | test loss {:5.2f} | test ppl {:9.3f}'.format(
-                time.time() - test_start_time, test_loss, math.exp(test_loss)))
+                test_elapsed, test_loss, math.exp(test_loss)))
         logging.info('=' * 100)
+
+        summary.update({
+            'test_elapsed': test_elapsed,
+            'test_loss': test_loss,
+            })
+
+        if args.dataset in ['enwik8', 'text8']:
+            summary['test_bits_per_character'] = test_loss / math.log(2)
+        else:
+            summary['test_perplexity'] = math.exp(test_loss)
 
     logging.info(f'Training time: {(elapsed / 60):.2f} minutes')
     logging.info(f'Training throughput: {meters["train_throughput"].avg:.2f} tok/s')
@@ -796,6 +891,14 @@ def main():
         val_perplexity = math.exp(best_val_loss)
     else:
         val_perplexity = None
+
+    summary.update({
+        'train_throughput': meters['train_throughput'].avg,
+        'train_elapsed': elapsed / 60,
+        'valid_loss': best_val_loss,
+        'valid_perplexity': val_perplexity,
+        })
+    dllogger.log(step=tuple(), data=summary)
 
     passed = benchmark(
         target_perplexity=args.target_perplexity,

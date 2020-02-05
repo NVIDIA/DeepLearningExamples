@@ -14,16 +14,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if [[ $1 == 'train' ]]; then
+DISTRIBUTED="-m torch.distributed.launch --nnodes ${WORLD_SIZE} --node_rank ${SLURM_NODEID}  \
+    --master_addr ${MASTER_ADDR} --master_port ${MASTER_PORT} --nproc_per_node=${DGXNGPU}"
+
+echo "MASTER_ADDR ${MASTER_ADDR}"
+echo "MASTER_PORT ${MASTER_PORT}"
+echo "WORLD_SIZE ${WORLD_SIZE}"
+echo "SLURM_NODEID ${SLURM_NODEID}"
+
+if [[ $1 == 'train' ]] || [[ $1 == 'all' ]]; then
     echo 'Run training...'
-    python -m torch.distributed.launch --nproc_per_node="$2" train.py \
+    python ${DISTRIBUTED} train.py \
         --config_file wt103_large.yaml \
-        "${@:3}"
-elif [[ $1 == 'eval' ]]; then
+        --config 8dgx2_16gpu_fp16 \
+        ${@:2}
+fi
+
+if [[ $1 == 'eval' ]] || [[ $1 == 'all' ]]; then
     echo 'Run evaluation...'
-    python -m torch.distributed.launch --nproc_per_node="$2" eval.py \
+    python ${DISTRIBUTED} eval.py \
         --config_file wt103_large.yaml \
-        "${@:3}"
-else
+        --config 8dgx2_16gpu_fp16 \
+        ${@:2}
+fi
+
+if [[ $1 != 'train' ]] && [[ $1 != 'eval' ]] && [[ $1 != 'all' ]]; then
     echo 'unknown argment 1'
 fi

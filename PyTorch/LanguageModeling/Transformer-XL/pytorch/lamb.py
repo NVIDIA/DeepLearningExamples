@@ -36,9 +36,6 @@
 
 """Lamb optimizer."""
 
-import collections
-import math
-
 import torch
 from torch.optim import Optimizer
 
@@ -133,7 +130,11 @@ class Lamb(Optimizer):
 
                 adam_norm = adam_step.norm(p=2)
 
-                trust_ratio = weight_norm / (adam_norm + group['eps'])
+                if weight_norm == 0.0 or adam_norm == 0.0:
+                    trust_ratio = 1
+                else:
+                    trust_ratio = weight_norm / (adam_norm + group['eps'])
+
                 state['weight_norm'] = weight_norm
                 state['adam_norm'] = adam_norm
                 state['trust_ratio'] = trust_ratio
@@ -158,6 +159,8 @@ def lamb_kernel(param, grad, exp_avg, exp_avg_sq, beta1: float,
     adam_norm = adam_step.norm(p=2)
 
     trust_ratio = weight_norm / (adam_norm + eps)
+    trust_ratio = (weight_norm == 0.0) * 1.0 + (weight_norm != 0.0) * trust_ratio
+    trust_ratio = (adam_norm == 0.0) * 1.0 + (adam_norm != 0.0) * trust_ratio
 
     param = param - step_size * trust_ratio * adam_step
     return param, exp_avg, exp_avg_sq

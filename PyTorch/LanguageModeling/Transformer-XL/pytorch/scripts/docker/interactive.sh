@@ -14,4 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-nvidia-docker run --init -it --rm --network=host --ipc=host -v $(dirname $PWD):/workspace/transformer-xl transformer-xl bash
+docker run --gpus all --init -it --rm --network=host --ipc=host -v $(dirname $PWD):/workspace/transformer-xl transformer-xl bash
