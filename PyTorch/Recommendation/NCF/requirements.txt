@@ -1,2 +1,3 @@
 pandas
 tqdm
+-e git://github.com/NVIDIA/dllogger#egg=dllogger
