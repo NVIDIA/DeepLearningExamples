@@ -140,7 +140,7 @@ def nvidia_tacotron2(pretrained=True, **kwargs):
         else:
             checkpoint = 'https://api.ngc.nvidia.com/v2/models/nvidia/tacotron2pyt_fp32/versions/1/files/nvidia_tacotron2pyt_fp32_20190306.pth'
         ckpt_file = _download_checkpoint(checkpoint, force_reload)
-        ckpt = torch.load(ckpt_file)
+        ckpt = torch.load(ckpt_file, **kwargs)
         state_dict = ckpt['state_dict']
         if checkpoint_from_distributed(state_dict):
             state_dict = unwrap_distributed(state_dict)
@@ -197,7 +197,7 @@ def nvidia_waveglow(pretrained=True, **kwargs):
         else:
             checkpoint = 'https://api.ngc.nvidia.com/v2/models/nvidia/waveglowpyt_fp32/versions/1/files/nvidia_waveglowpyt_fp32_20190306.pth'
         ckpt_file = _download_checkpoint(checkpoint, force_reload)
-        ckpt = torch.load(ckpt_file)
+        ckpt = torch.load(ckpt_file, **kwargs)
         state_dict = ckpt['state_dict']
         if checkpoint_from_distributed(state_dict):
             state_dict = unwrap_distributed(state_dict)
