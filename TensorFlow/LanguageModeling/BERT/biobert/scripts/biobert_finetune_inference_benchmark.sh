@@ -134,7 +134,7 @@ elif [ "$task" = "ner_bc5cdr-disease" ] ; then
     done
 
 elif [ "$task" = "rel_chemprot" ] ; then
-  DATASET_DIR=/workspace/bert/data/biobert/ChemProt
+  DATASET_DIR=/workspace/bert/data/biobert/chemprot-data_treeLSTM
 
   LOGFILE="${OUTPUT_DIR}/${task}_training_benchmark_bert_${bert_model}.log"
 

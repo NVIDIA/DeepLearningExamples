@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:19.09-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:19.11-py3
 FROM ${FROM_IMAGE_NAME}
 
 ENV LANG C.UTF-8
@@ -26,5 +26,6 @@ WORKDIR /workspace/transformer-xl/pytorch
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir git+https://github.com/NVIDIA/dllogger.git#egg=dllogger
 
 ADD . /workspace/transformer-xl/pytorch

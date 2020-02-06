@@ -16,9 +16,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.proj_adaptive_softmax import ProjectedAdaptiveLogSoftmax
 from utils.log_uniform_sampler import LogUniformSampler
 from utils.log_uniform_sampler import sample_logits
+from utils.proj_adaptive_softmax import ProjectedAdaptiveLogSoftmax
 
 
 class PositionalEmbedding(nn.Module):
@@ -119,21 +119,21 @@ class MultiHeadAttn(nn.Module):
         head_k = head_k.view(c.size(0), c.size(1), self.n_head, self.d_head)
         head_v = head_v.view(c.size(0), c.size(1), self.n_head, self.d_head)
 
-        # [bsz x qlen x klen x n_head]
-        attn_score = torch.einsum('ibnd,jbnd->bijn', (head_q, head_k))
+        # [bsz x n_head x qlen x klen]
+        attn_score = torch.einsum('ibnd,jbnd->bnij', (head_q, head_k))
         attn_score.mul_(self.scale)
         if attn_mask is not None and attn_mask.any().item():
             if attn_mask.dim() == 2:
-                attn_score.masked_fill_(attn_mask[None, :, :, None], -float('inf'))
+                attn_score.masked_fill_(attn_mask[None, None, :, :], -float('inf'))
             elif attn_mask.dim() == 3:
-                attn_score.masked_fill_(attn_mask[:, :, :, None], -float('inf'))
+                attn_score.masked_fill_(attn_mask[:, None, :, :], -float('inf'))
 
         # [bsz x qlen x klen x n_head]
-        attn_prob = F.softmax(attn_score, dim=2)
+        attn_prob = F.softmax(attn_score, dim=3)
         attn_prob = self.dropatt(attn_prob)
 
-        # [bsz x qlen x klen x n_head] + [klen x bsz x n_head x d_head] -> [qlen x bsz x n_head x d_head]
-        attn_vec = torch.einsum('bijn,jbnd->ibnd', (attn_prob, head_v))
+        # [bsz x n_head x qlen x klen] * [klen x bsz x n_head x d_head] -> [qlen x bsz x n_head x d_head]
+        attn_vec = torch.einsum('bnij,jbnd->ibnd', (attn_prob, head_v))
         attn_vec = attn_vec.contiguous().view(
             attn_vec.size(0), attn_vec.size(1), self.n_head * self.d_head)
 
@@ -203,17 +203,17 @@ class RelMultiHeadAttn(nn.Module):
         return x
 
     def _rel_shift(self, x, zero_triu=False):
-        zero_pad = torch.zeros((x.size(0), x.size(1), 1, x.size(3)),
+        zero_pad = torch.zeros((x.size(0), x.size(1), x.size(2), 1),
                                device=x.device, dtype=x.dtype)
-        x_padded = torch.cat([zero_pad, x], dim=2)
+        x_padded = torch.cat([zero_pad, x], dim=3)
 
-        x_padded = x_padded.view(x.size(0), x.size(2) + 1, x.size(1), x.size(3))
+        x_padded = x_padded.view(x.size(0), x.size(1), x.size(3) + 1, x.size(2))
 
-        x = x_padded[:, 1:].view_as(x)
+        x = x_padded[:, :, 1:].view_as(x)
 
         if zero_triu:
-            ones = torch.ones((x.size(0), x.size(1)))
-            x = x * torch.tril(ones, x.size(1) - x.size(0))[None, :, :, None]
+            ones = torch.ones((x.size(2), x.size(3)))
+            x = x * torch.tril(ones, x.size(3) - x.size(2))[None, None, :, :]
 
         return x
 
@@ -259,29 +259,29 @@ class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
 
         # compute attention score
         rw_head_q = w_head_q + r_w_bias                                # qlen x bsz x n_head x d_head
-        AC = torch.einsum('ibnd,jbnd->bijn', (rw_head_q, w_head_k))    # bsz x qlen x klen x n_head
+        AC = torch.einsum('ibnd,jbnd->bnij', (rw_head_q, w_head_k))    # bsz x n_head x qlen x klen
 
         rr_head_q = w_head_q + r_r_bias
-        BD = torch.einsum('ibnd,jnd->bijn', (rr_head_q, r_head_k))     # bsz x qlen x klen x n_head
+        BD = torch.einsum('ibnd,jnd->bnij', (rr_head_q, r_head_k))     # bsz x n_head x qlen x klen
         BD = self._rel_shift(BD)
 
-        # [bsz x qlen x klen x n_head]
+        # [bsz x n_head x qlen x klen]
         attn_score = AC + BD
         attn_score.mul_(self.scale)
 
         # compute attention probability
         if attn_mask is not None and attn_mask.any().item():
             if attn_mask.dim() == 2:
-                attn_score.masked_fill_(attn_mask[None, :, :, None], -float('inf'))
+                attn_score.masked_fill_(attn_mask[None, None, :, :], -float('inf'))
             elif attn_mask.dim() == 3:
-                attn_score.masked_fill_(attn_mask[:, :, :, None], -float('inf'))
+                attn_score.masked_fill_(attn_mask[:, None, :, :], -float('inf'))
 
-        # [bsz x qlen x klen x n_head]
-        attn_prob = F.softmax(attn_score, dim=2)
+        # [bsz x n_head x qlen x klen]
+        attn_prob = F.softmax(attn_score, dim=3)
         attn_prob = self.dropatt(attn_prob)
 
         # compute attention vector
-        attn_vec = torch.einsum('bijn,jbnd->ibnd', (attn_prob, w_head_v))
+        attn_vec = torch.einsum('bnij,jbnd->ibnd', (attn_prob, w_head_v))
 
         # [qlen x bsz x n_head x d_head]
         attn_vec = attn_vec.contiguous().view(
@@ -343,12 +343,14 @@ class RelLearnableMultiHeadAttn(RelMultiHeadAttn):
             r_emb = r_emb[-klen:]
             r_bias = r_bias[-klen:]
 
+        r_bias = r_bias.t()
+
         # compute attention score
         rw_head_q = w_head_q + r_w_bias[None]                        # qlen x bsz x n_head x d_head
 
-        AC = torch.einsum('ibnd,jbnd->bijn', (rw_head_q, w_head_k))  # bsz x qlen x klen x n_head
-        B_ = torch.einsum('ibnd,jnd->bijn', (w_head_q, r_emb))       # bsz x qlen x klen x n_head
-        D_ = r_bias[None, None, :, :]                                # 1   x 1    x klen x n_head
+        AC = torch.einsum('ibnd,jbnd->bnij', (rw_head_q, w_head_k))  # bsz x n_head x qlen x klen
+        B_ = torch.einsum('ibnd,jnd->bnij', (w_head_q, r_emb))       # bsz x n_head x qlen x klen
+        D_ = r_bias[None, :, None, :]                                # 1   x n_head x    1 x klen
         BD = self._rel_shift(B_ + D_)
 
         # [bsz x qlen x klen x n_head]
@@ -358,16 +360,16 @@ class RelLearnableMultiHeadAttn(RelMultiHeadAttn):
         # compute attention probability
         if attn_mask is not None and attn_mask.any().item():
             if attn_mask.dim() == 2:
-                attn_score.masked_fill_(attn_mask[None, :, :, None], -float('inf'))
+                attn_score.masked_fill_(attn_mask[None, None, :, :], -float('inf'))
             elif attn_mask.dim() == 3:
-                attn_score.masked_fill_(attn_mask[:, :, :, None], -float('inf'))
+                attn_score.masked_fill_(attn_mask[:, None, :, :], -float('inf'))
 
-        # [bsz x qlen x klen x n_head]
-        attn_prob = F.softmax(attn_score, dim=2)
+        # [bsz x n_head x qlen x klen]
+        attn_prob = F.softmax(attn_score, dim=3)
         attn_prob = self.dropatt(attn_prob)
 
         # compute attention vector
-        attn_vec = torch.einsum('bijn,jbnd->ibnd', (attn_prob, w_head_v))
+        attn_vec = torch.einsum('bnij,jbnd->ibnd', (attn_prob, w_head_v))
 
         # [qlen x bsz x n_head x d_head]
         attn_vec = attn_vec.contiguous().view(
@@ -530,6 +532,10 @@ class MemTransformerLM(nn.Module):
 
         self.drop = nn.Dropout(dropout)
 
+        self.tie_weight = tie_weight
+        self.tie_projs = tie_projs
+        self.div_val = div_val
+
         self.n_layer = n_layer
 
         self.tgt_len = tgt_len
@@ -571,26 +577,24 @@ class MemTransformerLM(nn.Module):
         # use sampled softmax
         if sample_softmax > 0:
             self.out_layer = nn.Linear(d_model, n_token)
-            if tie_weight:
-                self.out_layer.weight = self.word_emb.weight
             self.tie_weight = tie_weight
             self.sampler = LogUniformSampler(n_token, sample_softmax)
 
         # use adaptive softmax (including standard softmax)
         else:
-            self.crit = ProjectedAdaptiveLogSoftmax(n_token, d_embed, d_model,
-                                                    cutoffs, div_val=div_val)
-
             if tie_weight:
-                for i in range(len(self.crit.out_layers)):
-                    self.crit.out_layers[i].weight = self.word_emb.emb_layers[i].weight
+                emb_layers = [i.weight for i in self.word_emb.emb_layers]
+            else:
+                emb_layers = None
 
-            if tie_projs:
-                for i, tie_proj in enumerate(tie_projs):
-                    if tie_proj and div_val == 1 and d_model != d_embed:
-                        self.crit.out_projs[i] = self.word_emb.emb_projs[0]
-                    elif tie_proj and div_val != 1:
-                        self.crit.out_projs[i] = self.word_emb.emb_projs[i]
+            emb_projs = self.word_emb.emb_projs
+
+            self.crit = ProjectedAdaptiveLogSoftmax(n_token, d_embed, d_model,
+                                                    cutoffs, div_val=div_val,
+                                                    tie_projs=tie_projs,
+                                                    out_projs=emb_projs,
+                                                    out_layers_weights=emb_layers)
+
 
         self.same_length = same_length
         self.clamp_len = clamp_len
@@ -672,7 +676,7 @@ class MemTransformerLM(nn.Module):
         klen = mlen + qlen
         if self.same_length:
             all_ones = word_emb.new_ones(qlen, klen)
-            mask_len = klen - self.mem_len
+            mask_len = klen - self.mem_len - 1
             if mask_len > 0:
                 mask_shift_len = qlen - mask_len
             else:
@@ -783,10 +787,7 @@ class MemTransformerLM(nn.Module):
             loss = self.crit(pred_hid.view(-1, pred_hid.size(-1)), target.view(-1))
             loss = loss.view(tgt_len, -1)
 
-        if new_mems is None:
-            return [loss]
-        else:
-            return [loss] + new_mems
+        return (loss, new_mems)
 
 
 if __name__ == '__main__':
@@ -826,17 +827,18 @@ if __name__ == '__main__':
     for div_val in [1, 2]:
         for d_embed in [200, 100]:
             model = MemTransformerLM(args.n_token, args.n_layer, args.n_head,
-                                     args.d_model, args.d_head, args.d_inner, args.dropout,
-                                     dropatt=args.dropout, tie_weight=True,
-                                     d_embed=d_embed, div_val=div_val,
-                                     tie_projs=tie_projs, pre_lnorm=True,
-                                     tgt_len=tgt_len, ext_len=ext_len, mem_len=mem_len,
-                                     cutoffs=cutoffs, attn_type=0).to(device)
+                                     args.d_model, args.d_head, args.d_inner,
+                                     args.dropout, dropatt=args.dropout,
+                                     tie_weight=True, d_embed=d_embed,
+                                     div_val=div_val, tie_projs=tie_projs,
+                                     pre_lnorm=True, tgt_len=tgt_len,
+                                     ext_len=ext_len, mem_len=mem_len,
+                                     cutoffs=cutoffs, attn_type=0,
+                                     dtype=None).to(device)
 
             print(sum(p.numel() for p in model.parameters()))
 
-            mems = tuple()
-            for idx, (inp, tgt, seqlen) in enumerate(diter):
+            mems = None
+            for idx, (inp, tgt, seqlen, _) in enumerate(diter):
                 print('batch {}'.format(idx))
-                out = model(inp, tgt, *mems)
-                mems = out[1:]
+                _, mems = model(inp, tgt, mems)

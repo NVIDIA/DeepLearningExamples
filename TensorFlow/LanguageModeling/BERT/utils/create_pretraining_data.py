@@ -135,8 +135,8 @@ def write_instance_to_example_files(instances, tokenizer, max_seq_length,
     total_written += 1
 
     if inst_index < 20:
-      tf.logging.info("*** Example ***")
-      tf.logging.info("tokens: %s" % " ".join(
+      tf.compat.v1.logging.info("*** Example ***")
+      tf.compat.v1.logging.info("tokens: %s" % " ".join(
           [tokenization.printable_text(x) for x in instance.tokens]))
 
       for feature_name in features.keys():
@@ -146,7 +146,7 @@ def write_instance_to_example_files(instances, tokenizer, max_seq_length,
           values = feature.int64_list.value
         elif feature.float_list.value:
           values = feature.float_list.value
-        tf.logging.info(
+        tf.compat.v1.logging.info(
             "%s: %s" % (feature_name, " ".join([str(x) for x in values])))
 
   for writer in writers:
@@ -163,7 +163,7 @@ def write_instance_to_example_files(instances, tokenizer, max_seq_length,
     f.flush()
     f.close()
 
-  tf.logging.info("Wrote %d total instances", total_written)
+  tf.compat.v1.logging.info("Wrote %d total instances", total_written)
 
 
 def create_int_feature(values):

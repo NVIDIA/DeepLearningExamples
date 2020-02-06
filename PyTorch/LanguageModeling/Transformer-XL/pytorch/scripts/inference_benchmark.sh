@@ -14,7 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-MODEL=${MODEL:-"LM-TFM/checkpoint_best.pt"}
+CHECKPOINT=${CHECKPOINT:-"LM-TFM/checkpoint_best.pt"}
+MODEL=${MODEL:-"base"}
 
 BATCH_SIZES=(1 2 4 8 16 32)
 TYPES=("pytorch" "torchscript")
@@ -27,8 +28,8 @@ for (( i = 0; i < ${#TYPES[@]}; i++ )); do
       for (( k = 0; k < ${#MATHS[@]}; k++ )); do
          echo type: ${TYPES[i]} batch size: ${BATCH_SIZES[j]} math: ${MATHS[k]}
 
-         taskset -c 0 bash run_wt103_base.sh eval 1 \
-            --model "${MODEL}" \
+         taskset -c 0 bash run_wt103_"${MODEL}".sh eval 1 \
+            --model "${CHECKPOINT}" \
             --type "${TYPES[i]}" \
             --batch_size "${BATCH_SIZES[j]}" \
             "${MATHS[k]}" \

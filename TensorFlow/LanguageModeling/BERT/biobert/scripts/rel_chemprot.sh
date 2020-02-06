@@ -3,7 +3,7 @@
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
 
 init_checkpoint=${1:-"/results/biobert_tf_uncased_base/model.ckpt-4340"}
-train_batch_size=${2:-64}
+train_batch_size=${2:-8}
 learning_rate=${3:-1.5e-6}
 cased=${4:-false}
 precision=${5:-"fp16"}
@@ -35,7 +35,7 @@ printf -v TAG "tf_bert_biobert_rel_chemprot_%s_%s_gbs%d" "$bert_model" "$precisi
 DATESTAMP=`date +'%y%m%d%H%M%S'`
 
 
-DATASET_DIR=/workspace/bert/data/biobert/ChemProt
+DATASET_DIR=/workspace/bert/data/biobert/chemprot-data_treeLSTM
 OUTPUT_DIR=/results/${TAG}_${DATESTAMP}
 mkdir -p ${OUTPUT_DIR}
 

@@ -30,7 +30,7 @@ from horovod.tensorflow.compression import Compression
 def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None, manual_fp16=False, use_fp16=False, num_accumulation_steps=1,
                      optimizer_type="adam", allreduce_post_accumulation=False):
   """Creates an optimizer training op."""
-  global_step = tf.train.get_or_create_global_step()
+  global_step = tf.compat.v1.train.get_or_create_global_step()
   
   # avoid step change in learning rate at end of warmup phase
   if optimizer_type == "adam":
@@ -47,7 +47,7 @@ def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None,
   learning_rate = tf.constant(value=adjusted_init_lr, shape=[], dtype=tf.float32)
 
   # Implements linear decay of the learning rate.
-  learning_rate = tf.train.polynomial_decay(
+  learning_rate = tf.compat.v1.train.polynomial_decay(
       learning_rate,
       global_step,
       num_train_steps,
@@ -177,7 +177,7 @@ def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None,
   return train_op
 
 
-class AdamWeightDecayOptimizer(tf.train.Optimizer):
+class AdamWeightDecayOptimizer(tf.compat.v1.train.Optimizer):
   """A basic Adam optimizer that includes "correct" L2 weight decay."""
 
   def __init__(self,
@@ -281,7 +281,7 @@ class AdamWeightDecayOptimizer(tf.train.Optimizer):
     return param_name
 
 
-class LAMBOptimizer(tf.train.Optimizer):
+class LAMBOptimizer(tf.compat.v1.train.Optimizer):
   """A LAMB optimizer that includes "correct" L2 weight decay."""
 
   def __init__(self,

@@ -94,7 +94,7 @@ elif [ "$task" = "ner_bc5cdr-disease" ] ; then
 
 elif [ "$task" = "rel_chemprot" ] ; then
   printf -v TAG "tf_bert_biobert_rel_chemprot_inference_%s_%s_" "$bert_model" "$precision"
-  DATASET_DIR=/workspace/bert/data/biobert/ChemProt
+  DATASET_DIR=/workspace/bert/data/biobert/chemprot-data_treeLSTM
   OUTPUT_DIR=/results/${TAG}_${DATESTAMP}
 
   python3 /workspace/bert/run_re.py \

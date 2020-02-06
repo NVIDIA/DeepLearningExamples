@@ -186,12 +186,53 @@ class DataProcessor(object):
     @classmethod
     def _read_tsv(cls, input_file, quotechar=None):
         """Reads a tab separated value file."""
-        with tf.gfile.Open(input_file, "r") as f:
+        with tf.io.gfile.Open(input_file, "r") as f:
             reader = csv.reader(f, delimiter="\t", quotechar=quotechar)
             lines = []
             for line in reader:
                 lines.append(line)
             return lines
+
+class BioBERTChemprotProcessor(DataProcessor):
+  """Processor for the BioBERT data set obtained from
+   (https://github.com/arwhirang/recursive_chemprot/tree/master/Demo/tree_LSTM/data).
+   """
+
+  def get_train_examples(self, data_dir, file_name="trainingPosit_chem"):
+    """See base class."""
+    return self._create_examples(
+        self._read_tsv(os.path.join(data_dir, file_name)), "train")
+
+  def get_dev_examples(self, data_dir, file_name="developPosit_chem"):
+    """See base class."""
+    return self._create_examples(
+        self._read_tsv(os.path.join(data_dir, file_name)), "dev")
+
+  def get_test_examples(self, data_dir, file_name="testPosit_chem"):
+    """See base class."""
+    return self._create_examples(
+        self._read_tsv(os.path.join(data_dir, file_name)), "test")
+
+  def get_labels(self):
+    """See base class."""
+    return ["CPR:3", "CPR:4", "CPR:5", "CPR:6", "CPR:9", "False"]
+
+  def _create_examples(self, lines, set_type):
+    """Creates examples for the training and dev sets."""
+    examples = []
+    for (i, line) in enumerate(lines):
+      guid = "%s-%s" % (set_type, i)
+      if set_type == "test":
+        text_a = tokenization.convert_to_unicode(line[1])
+        label = "False"
+      else:
+        text_a = tokenization.convert_to_unicode(line[1])
+        label = tokenization.convert_to_unicode(line[2])
+        if label == "True":
+            label = tokenization.convert_to_unicode(line[3])
+      examples.append(
+          InputExample(guid=guid, text_a=text_a, text_b=None, label=label))
+    return examples
 
 
 class _ChemProtProcessor(DataProcessor):
@@ -362,14 +403,14 @@ def convert_single_example(ex_index, example, label_list, max_seq_length,
 
     label_id = label_map[example.label]
     if ex_index < 5:
-        tf.logging.info("*** Example ***")
-        tf.logging.info("guid: %s" % (example.guid))
-        tf.logging.info("tokens: %s" % " ".join(
+        tf.compat.v1.logging.info("*** Example ***")
+        tf.compat.v1.logging.info("guid: %s" % (example.guid))
+        tf.compat.v1.logging.info("tokens: %s" % " ".join(
             [tokenization.printable_text(x) for x in tokens]))
-        tf.logging.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
-        tf.logging.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
-        tf.logging.info("segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
-        tf.logging.info("label: %s (id = %d)" % (example.label, label_id))
+        tf.compat.v1.logging.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
+        tf.compat.v1.logging.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
+        tf.compat.v1.logging.info("segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
+        tf.compat.v1.logging.info("label: %s (id = %d)" % (example.label, label_id))
 
     feature = InputFeatures(
         input_ids=input_ids,
@@ -388,7 +429,7 @@ def file_based_convert_examples_to_features(
 
     for (ex_index, example) in enumerate(examples):
         if ex_index % 10000 == 0:
-            tf.logging.info("Writing example %d of %d" % (ex_index, len(examples)))
+            tf.compat.v1.logging.info("Writing example %d of %d" % (ex_index, len(examples)))
 
         feature = convert_single_example(ex_index, example, label_list,
                                          max_seq_length, tokenizer)
@@ -415,11 +456,11 @@ def file_based_input_fn_builder(input_file, batch_size, seq_length, is_training,
     """Creates an `input_fn` closure to be passed to TPUEstimator."""
 
     name_to_features = {
-        "input_ids": tf.FixedLenFeature([seq_length], tf.int64),
-        "input_mask": tf.FixedLenFeature([seq_length], tf.int64),
-        "segment_ids": tf.FixedLenFeature([seq_length], tf.int64),
-        "label_ids": tf.FixedLenFeature([], tf.int64),
-        "is_real_example": tf.FixedLenFeature([], tf.int64),
+        "input_ids": tf.io.FixedLenFeature([seq_length], tf.int64),
+        "input_mask": tf.io.FixedLenFeature([seq_length], tf.int64),
+        "segment_ids": tf.io.FixedLenFeature([seq_length], tf.int64),
+        "label_ids": tf.io.FixedLenFeature([], tf.int64),
+        "is_real_example": tf.io.FixedLenFeature([], tf.int64),
     }
 
     def _decode_record(record, name_to_features):
@@ -529,9 +570,9 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate=Non
     def model_fn(features, labels, mode, params):  # pylint: disable=unused-argument
         """The `model_fn` for TPUEstimator."""
 
-        tf.logging.info("*** Features ***")
+        tf.compat.v1.logging.info("*** Features ***")
         for name in sorted(features.keys()):
-            tf.logging.info("  name = %s, shape = %s" % (name, features[name].shape))
+            tf.compat.v1.logging.info("  name = %s, shape = %s" % (name, features[name].shape))
 
         input_ids = features["input_ids"]
         input_mask = features["input_mask"]
@@ -557,12 +598,12 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint, learning_rate=Non
              ) = modeling.get_assignment_map_from_checkpoint(tvars, init_checkpoint)
             tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
 
-        tf.logging.info("**** Trainable Variables ****")
+        tf.compat.v1.logging.info("**** Trainable Variables ****")
         for var in tvars:
             init_string = ""
             if var.name in initialized_variable_names:
                 init_string = ", *INIT_FROM_CKPT*"
-            tf.logging.info("  name = %s, shape = %s%s", var.name, var.shape,
+            tf.compat.v1.logging.info("  name = %s, shape = %s%s", var.name, var.shape,
                             init_string)
 
         output_spec = None
@@ -663,7 +704,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
     features = []
     for (ex_index, example) in enumerate(examples):
         if ex_index % 10000 == 0:
-            tf.logging.info("Writing example %d of %d" % (ex_index, len(examples)))
+            tf.compat.v1.logging.info("Writing example %d of %d" % (ex_index, len(examples)))
 
         feature = convert_single_example(ex_index, example, label_list,
                                          max_seq_length, tokenizer)
@@ -673,7 +714,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
 
 
 def main(_):
-    tf.logging.set_verbosity(tf.logging.INFO)
+    tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
 
     if FLAGS.horovod:
       hvd.init()
@@ -681,7 +722,7 @@ def main(_):
         os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
 
     processors = {
-        "chemprot": ChemProtProcessor,
+        "chemprot": BioBERTChemprotProcessor,
         'mednli': MedNLIProcessor,
     }
 
@@ -700,7 +741,7 @@ def main(_):
             "was only trained up to sequence length %d" %
             (FLAGS.max_seq_length, bert_config.max_position_embeddings))
 
-    tf.gfile.MakeDirs(FLAGS.output_dir)
+    tf.io.gfile.makedirs(FLAGS.output_dir)
 
     task_name = FLAGS.task_name.lower()
 
@@ -721,7 +762,7 @@ def main(_):
     global_batch_size = FLAGS.train_batch_size
     hvd_rank = 0
 
-    config = tf.ConfigProto()
+    config = tf.compat.v1.ConfigProto()
     if FLAGS.horovod:
       global_batch_size = FLAGS.train_batch_size * hvd.size()
       master_process = (hvd.rank() == 0)
@@ -731,7 +772,7 @@ def main(_):
         training_hooks.append(hvd.BroadcastGlobalVariablesHook(0))
 
     if FLAGS.use_xla:
-        config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
+        config.graph_options.optimizer_options.global_jit_level = tf.compat.v1.OptimizerOptions.ON_1
     run_config = tf.estimator.RunConfig(
       model_dir=FLAGS.output_dir if master_process else None,
       session_config=config,
@@ -739,10 +780,10 @@ def main(_):
       keep_checkpoint_max=1)
 
     if master_process:
-      tf.logging.info("***** Configuaration *****")
+      tf.compat.v1.logging.info("***** Configuaration *****")
       for key in FLAGS.__flags.keys():
-          tf.logging.info('  {}: {}'.format(key, getattr(FLAGS, key)))
-      tf.logging.info("**************************")
+          tf.compat.v1.logging.info('  {}: {}'.format(key, getattr(FLAGS, key)))
+      tf.compat.v1.logging.info("**************************")
 
     train_examples = None
     num_train_steps = None
@@ -791,10 +832,10 @@ def main(_):
     if FLAGS.do_train:
         file_based_convert_examples_to_features(
           train_examples[start_index:end_index], label_list, FLAGS.max_seq_length, tokenizer, tmp_filenames[hvd_rank])
-        tf.logging.info("***** Running training *****")
-        tf.logging.info("  Num examples = %d", len(train_examples))
-        tf.logging.info("  Batch size = %d", FLAGS.train_batch_size)
-        tf.logging.info("  Num steps = %d", num_train_steps)
+        tf.compat.v1.logging.info("***** Running training *****")
+        tf.compat.v1.logging.info("  Num examples = %d", len(train_examples))
+        tf.compat.v1.logging.info("  Batch size = %d", FLAGS.train_batch_size)
+        tf.compat.v1.logging.info("  Num steps = %d", num_train_steps)
         train_input_fn = file_based_input_fn_builder(
             input_file=tmp_filenames,
             batch_size=FLAGS.train_batch_size,
@@ -811,14 +852,14 @@ def main(_):
         ss_sentences_per_second = (num_train_steps - training_hooks[-1].skipped) * global_batch_size * 1.0 / train_time_wo_overhead
 
         if master_process:
-          tf.logging.info("-----------------------------")
-          tf.logging.info("Total Training Time = %0.2f for Sentences = %d", train_time_elapsed,
+          tf.compat.v1.logging.info("-----------------------------")
+          tf.compat.v1.logging.info("Total Training Time = %0.2f for Sentences = %d", train_time_elapsed,
                         num_train_steps * global_batch_size)
-          tf.logging.info("Total Training Time W/O Overhead = %0.2f for Sentences = %d", train_time_wo_overhead,
+          tf.compat.v1.logging.info("Total Training Time W/O Overhead = %0.2f for Sentences = %d", train_time_wo_overhead,
                         (num_train_steps - training_hooks[-1].skipped) * global_batch_size)
-          tf.logging.info("Throughput Average (sentences/sec) with overhead = %0.2f", avg_sentences_per_second)
-          tf.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
-          tf.logging.info("-----------------------------")
+          tf.compat.v1.logging.info("Throughput Average (sentences/sec) with overhead = %0.2f", avg_sentences_per_second)
+          tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+          tf.compat.v1.logging.info("-----------------------------")
 
 
     if FLAGS.do_eval and master_process:
@@ -830,11 +871,11 @@ def main(_):
         file_based_convert_examples_to_features(
             eval_examples, label_list, FLAGS.max_seq_length, tokenizer, eval_file)
 
-        tf.logging.info("***** Running evaluation *****")
-        tf.logging.info("  Num examples = %d (%d actual, %d padding)",
+        tf.compat.v1.logging.info("***** Running evaluation *****")
+        tf.compat.v1.logging.info("  Num examples = %d (%d actual, %d padding)",
                         len(eval_examples), num_actual_eval_examples,
                         len(eval_examples) - num_actual_eval_examples)
-        tf.logging.info("  Batch size = %d", FLAGS.eval_batch_size)
+        tf.compat.v1.logging.info("  Batch size = %d", FLAGS.eval_batch_size)
 
         # This tells the estimator to run through the entire set.
         eval_steps = None
@@ -850,10 +891,10 @@ def main(_):
         result = estimator.evaluate(input_fn=eval_input_fn, steps=eval_steps)
 
         output_eval_file = os.path.join(FLAGS.output_dir, "eval_results.txt")
-        with tf.gfile.GFile(output_eval_file, "w") as writer:
-            tf.logging.info("***** Eval results *****")
+        with tf.io.gfile.GFile(output_eval_file, "w") as writer:
+            tf.compat.v1.logging.info("***** Eval results *****")
             for key in sorted(result.keys()):
-                tf.logging.info("  %s = %s", key, str(result[key]))
+                tf.compat.v1.logging.info("  %s = %s", key, str(result[key]))
                 writer.write("%s = %s\n" % (key, str(result[key])))
 
     if FLAGS.do_predict and master_process:
@@ -865,11 +906,11 @@ def main(_):
                                                 FLAGS.max_seq_length, tokenizer,
                                                 predict_file)
 
-        tf.logging.info("***** Running prediction*****")
-        tf.logging.info("  Num examples = %d (%d actual, %d padding)",
+        tf.compat.v1.logging.info("***** Running prediction*****")
+        tf.compat.v1.logging.info("  Num examples = %d (%d actual, %d padding)",
                         len(predict_examples), num_actual_predict_examples,
                         len(predict_examples) - num_actual_predict_examples)
-        tf.logging.info("  Batch size = %d", FLAGS.predict_batch_size)
+        tf.compat.v1.logging.info("  Batch size = %d", FLAGS.predict_batch_size)
 
         predict_drop_remainder = False
         predict_input_fn = file_based_input_fn_builder(
@@ -884,9 +925,9 @@ def main(_):
 
 
         output_predict_file = os.path.join(FLAGS.output_dir, "test_results.tsv")
-        with tf.gfile.GFile(output_predict_file, "w") as writer:
+        with tf.io.gfile.GFile(output_predict_file, "w") as writer:
             num_written_lines = 0
-            tf.logging.info("***** Predict results *****")
+            tf.compat.v1.logging.info("***** Predict results *****")
             for prediction in estimator.predict(input_fn=predict_input_fn, hooks=eval_hooks,
                                                      yield_single_examples=True):
                 probabilities = prediction["probabilities"]
@@ -912,23 +953,23 @@ def main(_):
         cf_100 = max(time_list[:int(len(time_list) * 1)])
         ss_sentences_per_second = num_sentences * 1.0 / eval_time_wo_overhead
 
-        tf.logging.info("-----------------------------")
-        tf.logging.info("Total Inference Time = %0.2f for Sentences = %d", eval_time_elapsed,
+        tf.compat.v1.logging.info("-----------------------------")
+        tf.compat.v1.logging.info("Total Inference Time = %0.2f for Sentences = %d", eval_time_elapsed,
                         eval_hooks[-1].count * FLAGS.predict_batch_size)
-        tf.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", eval_time_wo_overhead,
+        tf.compat.v1.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", eval_time_wo_overhead,
                         (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.predict_batch_size)
-        tf.logging.info("Summary Inference Statistics")
-        tf.logging.info("Batch size = %d", FLAGS.predict_batch_size)
-        tf.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
-        tf.logging.info("Precision = %s", "fp16" if FLAGS.use_fp16 else "fp32")
-        tf.logging.info("Latency Confidence Level 50 (ms) = %0.2f", cf_50 * 1000)
-        tf.logging.info("Latency Confidence Level 90 (ms) = %0.2f", cf_90 * 1000)
-        tf.logging.info("Latency Confidence Level 95 (ms) = %0.2f", cf_95 * 1000)
-        tf.logging.info("Latency Confidence Level 99 (ms) = %0.2f", cf_99 * 1000)
-        tf.logging.info("Latency Confidence Level 100 (ms) = %0.2f", cf_100 * 1000)
-        tf.logging.info("Latency Average (ms) = %0.2f", avg * 1000)
-        tf.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
-        tf.logging.info("-----------------------------")
+        tf.compat.v1.logging.info("Summary Inference Statistics")
+        tf.compat.v1.logging.info("Batch size = %d", FLAGS.predict_batch_size)
+        tf.compat.v1.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
+        tf.compat.v1.logging.info("Precision = %s", "fp16" if FLAGS.use_fp16 else "fp32")
+        tf.compat.v1.logging.info("Latency Confidence Level 50 (ms) = %0.2f", cf_50 * 1000)
+        tf.compat.v1.logging.info("Latency Confidence Level 90 (ms) = %0.2f", cf_90 * 1000)
+        tf.compat.v1.logging.info("Latency Confidence Level 95 (ms) = %0.2f", cf_95 * 1000)
+        tf.compat.v1.logging.info("Latency Confidence Level 99 (ms) = %0.2f", cf_99 * 1000)
+        tf.compat.v1.logging.info("Latency Confidence Level 100 (ms) = %0.2f", cf_100 * 1000)
+        tf.compat.v1.logging.info("Latency Average (ms) = %0.2f", avg * 1000)
+        tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+        tf.compat.v1.logging.info("-----------------------------")
 
 if __name__ == "__main__":
     flags.mark_flag_as_required("data_dir")
@@ -936,4 +977,4 @@ if __name__ == "__main__":
     flags.mark_flag_as_required("vocab_file")
     flags.mark_flag_as_required("bert_config_file")
     flags.mark_flag_as_required("output_dir")
-    tf.app.run()
+    tf.compat.v1.app.run()

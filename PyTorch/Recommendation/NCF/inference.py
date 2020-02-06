@@ -17,17 +17,14 @@
 import torch.jit
 import time
 from argparse import ArgumentParser
-
+import numpy as np
 import torch
 
 from neumf import NeuMF
 
-from logger.logger import LOGGER, timed_block, timed_function
-from logger.autologging import log_hardware, log_args
-
 from apex import amp
 
-LOGGER.model = 'ncf'
+import dllogger
 
 
 def parse_args():
@@ -51,14 +48,19 @@ def parse_args():
     parser.add_argument('--opt_level', default='O2', type=str,
                         help='Optimization level for Automatic Mixed Precision',
                         choices=['O0', 'O2'])
+    parser.add_argument('--log_path', default='log.json', type=str,
+                        help='Path for the JSON training log')
 
     return parser.parse_args()
 
 
 def main():
-    log_hardware()
     args = parse_args()
-    log_args(args)
+    dllogger.init(backends=[dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE,
+                                                       filename=args.log_path),
+                            dllogger.StdOutBackend(verbosity=dllogger.Verbosity.VERBOSE)])
+
+    dllogger.log(data=vars(args), step='PARAMETER')
 
     model = NeuMF(nb_users=args.n_users, nb_items=args.n_items, mf_dim=args.factors,
                   mlp_layer_sizes=args.layers, dropout=args.dropout)
@@ -85,10 +87,14 @@ def main():
         torch.cuda.synchronize()
         latencies.append(time.time() - start)
 
-    LOGGER.log(key='batch_size', value=args.batch_size)
-    LOGGER.log(key='best_inference_throughput', value=args.batch_size / min(latencies))
-    LOGGER.log(key='best_inference_latency', value=min(latencies))
-    LOGGER.log(key='inference_latencies', value=latencies)
+    dllogger.log(data={'batch_size': args.batch_size,
+                   'best_inference_throughput': args.batch_size / min(latencies),
+                   'best_inference_latency': min(latencies),
+                   'mean_inference_throughput': args.batch_size / np.mean(latencies),
+                   'mean_inference_latency': np.mean(latencies),
+                   'inference_latencies': latencies},
+                 step=tuple())
+    dllogger.flush()
     return
 
 
