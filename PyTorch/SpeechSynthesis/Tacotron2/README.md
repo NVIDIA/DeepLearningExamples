@@ -704,6 +704,9 @@ November 2019
 * Implemented training resume from checkpoint
 * Added notebook for running Tacotron 2 and WaveGlow in TRTIS.
 
+December  2019
+* Added `trt` subfolder for running Tacotron 2 and WaveGlow in TensorRT.
+
 ### Known issues
 
 There are no known issues in this release.

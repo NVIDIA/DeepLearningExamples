@@ -90,7 +90,7 @@ class Attention(nn.Module):
         energies = self.v(torch.tanh(
             processed_query + processed_attention_weights + processed_memory))
 
-        energies = energies.squeeze(-1)
+        energies = energies.squeeze(2)
         return energies
 
     def forward(self, attention_hidden_state, memory, processed_memory,
@@ -107,7 +107,7 @@ class Attention(nn.Module):
         alignment = self.get_alignment_energies(
             attention_hidden_state, processed_memory, attention_weights_cat)
 
-        alignment.masked_fill_(mask, self.score_mask_value)
+        alignment = alignment.masked_fill(mask, self.score_mask_value)
 
         attention_weights = F.softmax(alignment, dim=1)
         attention_context = torch.bmm(attention_weights.unsqueeze(1), memory)

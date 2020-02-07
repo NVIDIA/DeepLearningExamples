@@ -31,6 +31,9 @@ def download_file(url, dest_folder, fname, overwrite=False):
 
     tmp_fpath = fpath + '.tmp'
 
+    if not os.path.exists(os.path.dirname(tmp_fpath)):
+        os.makedirs(os.path.dirname(tmp_fpath))
+
     r = requests.get(url, stream=True)
     file_size = int(r.headers['Content-Length'])
     chunk_size = 1024 * 1024  # 1MB

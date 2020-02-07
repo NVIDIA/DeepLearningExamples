@@ -413,14 +413,14 @@ def convert_single_example(ex_index, example, label_list, max_seq_length,
 
   label_id = label_map[example.label]
   if ex_index < 5 and verbose_logging:
-    tf.logging.info("*** Example ***")
-    tf.logging.info("guid: %s" % (example.guid))
-    tf.logging.info("tokens: %s" % " ".join(
+    tf.compat.v1.logging.info("*** Example ***")
+    tf.compat.v1.logging.info("guid: %s" % (example.guid))
+    tf.compat.v1.logging.info("tokens: %s" % " ".join(
         [tokenization.printable_text(x) for x in tokens]))
-    tf.logging.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
-    tf.logging.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
-    tf.logging.info("segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
-    tf.logging.info("label: %s (id = %d)" % (example.label, label_id))
+    tf.compat.v1.logging.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
+    tf.compat.v1.logging.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
+    tf.compat.v1.logging.info("segment_ids: %s" % " ".join([str(x) for x in segment_ids]))
+    tf.compat.v1.logging.info("label: %s (id = %d)" % (example.label, label_id))
 
   feature = InputFeatures(
       input_ids=input_ids,
@@ -439,7 +439,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
   features = []
   for (ex_index, example) in enumerate(examples):
     if ex_index % 10000 == 0:
-      tf.logging.info("Writing example %d of %d" % (ex_index, len(examples)))
+      tf.compat.v1.logging.info("Writing example %d of %d" % (ex_index, len(examples)))
 
     feature = convert_single_example(ex_index, example, label_list,
                                      max_seq_length, tokenizer, FLAGS.verbose_logging)
@@ -455,7 +455,7 @@ def file_based_convert_examples_to_features(
 
   for (ex_index, example) in enumerate(examples):
     if ex_index % 10000 == 0:
-      tf.logging.info("Writing example %d of %d" % (ex_index, len(examples)))
+      tf.compat.v1.logging.info("Writing example %d of %d" % (ex_index, len(examples)))
 
     feature = convert_single_example(ex_index, example, label_list,
                                      max_seq_length, tokenizer)

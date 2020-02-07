@@ -1,0 +1,5 @@
+SimpleITK==1.1.0
+requests
+googledrivedownloader
+tf2onnx
+git+git://github.com/NVIDIA/dllogger#egg=dllogger

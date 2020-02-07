@@ -1,0 +1,31 @@
+name: "jasper-pyt"
+platform: "pytorch_libtorch"
+default_model_filename: "jasper.pt"
+
+max_batch_size: 64#MAX_BATCH
+input [
+  {
+    name: "AUDIO_FEATURES__0"
+    data_type: TYPE_FP32
+    dims: [64, -1]
+  }
+]
+
+output [
+  {
+    name: "LOG_PROBS__0"
+    data_type: TYPE_FP32
+    dims: [-1, 29]
+  }
+]
+
+instance_group {
+  count: 1#NUM_ENGINES
+  gpus: 0
+  kind: KIND_GPU
+}
+
+#db#dynamic_batching {
+#db#    preferred_batch_size: 64#MAX_BATCH
+#db#    max_queue_delay_microseconds: #MAX_QUEUE
+#db#}

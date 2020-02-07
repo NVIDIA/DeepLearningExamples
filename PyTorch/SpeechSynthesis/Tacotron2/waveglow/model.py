@@ -233,6 +233,7 @@ class WaveGlow(torch.nn.Module):
         return torch.cat(output_audio, 1), log_s_list, log_det_W_list
 
     def infer(self, spect, sigma=1.0):
+
         spect = self.upsample(spect)
         # trim conv artifacts. maybe pad spec to kernel multiple
         time_cutoff = self.upsample.kernel_size[0] - self.upsample.stride[0]
@@ -272,21 +273,22 @@ class WaveGlow(torch.nn.Module):
         return audio
 
 
-    def infer_onnx(self, spect, z, sigma=1.0):
+    def infer_onnx(self, spect, z, sigma=0.9):
 
         spect = self.upsample(spect)
         # trim conv artifacts. maybe pad spec to kernel multiple
         time_cutoff = self.upsample.kernel_size[0] - self.upsample.stride[0]
         spect = spect[:, :, :-time_cutoff]
 
-        length_spect_group = int(spect.size(2)/8)
+        length_spect_group = spect.size(2)//8
         mel_dim = 80
+        batch_size = spect.size(0)
 
         spect = torch.squeeze(spect, 3)
-        spect = spect.view((1, mel_dim, length_spect_group, self.n_group))
+        spect = spect.view((batch_size, mel_dim, length_spect_group, self.n_group))
         spect = spect.permute(0, 2, 1, 3)
         spect = spect.contiguous()
-        spect = spect.view((1, length_spect_group, self.n_group*mel_dim))
+        spect = spect.view((batch_size, length_spect_group, self.n_group*mel_dim))
         spect = spect.permute(0, 2, 1)
         spect = torch.unsqueeze(spect, 3)
 
@@ -312,9 +314,10 @@ class WaveGlow(torch.nn.Module):
                 z = z[:, self.n_early_size:self.n_group, :, :]
 
         audio = torch.squeeze(audio, 3)
-        audio = audio.permute(0,2,1).contiguous().view(1, (length_spect_group * self.n_group))
+        audio = audio.permute(0,2,1).contiguous().view(batch_size, (length_spect_group * self.n_group))
 
         return audio
+
     @staticmethod
     def remove_weightnorm(model):
         waveglow = model

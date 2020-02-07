@@ -119,21 +119,7 @@ class BertAdam(Optimizer):
         loss = None
         if closure is not None:
             loss = closure()
-        
-        grad_list = []
-        for group in self.param_groups:
-            for p in group['params']:
-                if p.grad is None:
-                    continue
-                grad_list.append(p)
-
-        dummy_overflow_buf = torch.cuda.IntTensor([0])        
-        global_grad_norm = multi_tensor_applier(
-                        multi_tensor_l2norm,
-                        dummy_overflow_buf,
-                        [grad_list],
-                        False)[0].item()            
-            
+           
         for group in self.param_groups:
             for p in group['params']:
                 if p.grad is None:
@@ -156,8 +142,8 @@ class BertAdam(Optimizer):
                 beta1, beta2 = group['b1'], group['b2']
 
                 # Add grad clipping
-                if global_grad_norm > group['max_grad_norm']:
-                    p = p * group['max_grad_norm'] / global_grad_norm 
+                if group['max_grad_norm'] > 0:	
+                    clip_grad_norm_(p, group['max_grad_norm'])
 
                 # Decay the first and second moment running average coefficient
                 # In-place operations to update the averages at the same time

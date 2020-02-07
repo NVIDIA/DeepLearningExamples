@@ -14,14 +14,16 @@
 '''Contains helper functions for non-TRT components of JASPER inference
 '''
 
-from model import GreedyCTCDecoder, AudioPreprocessing, Jasper
+from model import GreedyCTCDecoder, AudioPreprocessing, JasperEncoderDecoder
 from dataset import AudioToTextDataLayer
-from helpers import Optimization, AmpOptimizations, process_evaluation_batch, process_evaluation_epoch, add_ctc_labels, norm
+from helpers import AmpOptimizations, process_evaluation_batch, process_evaluation_epoch, add_ctc_labels, norm
 from apex import amp
 import torch
 import torch.nn as nn
 import toml
 from parts.features import audio_from_file
+import onnx
+import os
 
 _global_ctc_labels = None
 def get_vocab():
@@ -94,20 +96,61 @@ def global_process_epoch(is_trt=True):
     return wer
 
 
-def get_onnx(path, acoustic_model, signal_shape, dtype=torch.float):
+
+def get_onnx(path, acoustic_model,  args):
     ''' Get an ONNX model with float weights
 
     Requires an --onnx_save_path and --ckpt_path (so that an acoustic model could be constructed).
     Fixed-length --seq_len must be provided as well.
     '''
+    
+    dynamic_dim = 0
+    if args.dynamic_shape:
+        dynamic_dim = 1 if args.transpose else 2
+
+
+    if args.transpose:
+        signal_shape=(args.engine_batch_size, args.seq_len, 64)
+    else:
+        signal_shape=(args.engine_batch_size, 64, args.seq_len)
+        
     with torch.no_grad():
-        phony_signal = torch.zeros(signal_shape, dtype=dtype, device=torch.device("cuda"))
-        torch.onnx.export(acoustic_model, (phony_signal,), path, input_names=["FEATURES"], output_names=["LOGITS"])
+        phony_signal = torch.zeros(signal_shape, dtype=torch.float, device=torch.device("cuda"))
+        phony_len = torch.IntTensor(len(phony_signal))
+        phony_out = acoustic_model.infer((phony_signal, phony_len))
+        
+        input_names=["FEATURES"]
+        output_names=["LOGITS"]
+
+        if acoustic_model.jasper_encoder.use_conv_mask:
+            input_names.append("FETURES_LEN")
+            output_names.append("LOGITS_LEN")
+            phony_signal = [phony_signal, phony_len]
+        
+        if dynamic_dim > 0:
+            dynamic_axes={
+                "FEATURES" : {0 : "BATCHSIZE", dynamic_dim : "NUM_FEATURES"},
+                "LOGITS" : { 0: "BATCHSIZE", 1 : "NUM_LOGITS"}
+            }
+        else:
+            dynamic_axes = None
+
+        jitted_model = acoustic_model
+        
+        torch.onnx.export(jitted_model, phony_signal, path,
+                          input_names=input_names, output_names=output_names,
+                          opset_version=10,
+                          do_constant_folding=True,
+                          verbose=True,
+                          dynamic_axes=dynamic_axes,
+                          example_outputs = phony_out
+        )
+
         fn=path+".readable"
         with open(fn, 'w') as f:
             #Write human-readable graph representation to file as well.
-            import onnx
             tempModel = onnx.load(path)
+            onnx.checker.check_model(tempModel)
             pgraph = onnx.helper.printable_graph(tempModel.graph)
             f.write(pgraph)
 
@@ -124,16 +167,15 @@ def get_pytorch_components_and_onnx(args):
     _global_ctc_labels= add_ctc_labels(dataset_vocab)
     featurizer_config = model_definition['input_eval']
 
-    optim_level = Optimization.mxprO3 if args.pyt_fp16 else Optimization.mxprO0
+    optim_level = 3 if args.pyt_fp16 else 0
 
     featurizer_config["optimization_level"] = optim_level
-    acoustic_model = None
+
     audio_preprocessor = None
     onnx_path = None
     data_layer = None
     wav = None
     seq_len = None
-    dtype=torch.float
     
     if args.max_duration is not None:
         featurizer_config['max_duration'] = args.max_duration
@@ -146,64 +188,85 @@ def get_pytorch_components_and_onnx(args):
                                            shuffle=False)
     if args.wav is not None:
         args.batch_size=1
-        args.engine_batch_size=1
         wav, seq_len = audio_from_file(args.wav)
         if args.seq_len is None or args.seq_len == 0:
             args.seq_len = seq_len/(featurizer_config['sample_rate']/100)
-        
 
-    model = Jasper(feature_config=featurizer_config,
-                   jasper_model_definition=model_definition,
-                   feat_in=1024,
-                   num_classes=len(get_vocab()))
+    if args.transpose:
+        featurizer_config["transpose_out"] = True
+        model_definition["transpose_in"] = True
 
-    model.cuda()
+    model = JasperEncoderDecoder(jasper_model_definition=model_definition, feat_in=1024, num_classes=len(get_vocab()), transpose_in=args.transpose)
+    model = model.cuda()
     model.eval()
-    acoustic_model = model.acoustic_model
-    audio_preprocessor = model.audio_preprocessor
 
+    audio_preprocessor = AudioPreprocessing(**featurizer_config)
+    audio_preprocessor = audio_preprocessor.cuda()
+    audio_preprocessor.eval()
+    
     if args.ckpt_path is not None:
-        checkpoint = torch.load(args.ckpt_path, map_location="cpu")
-        model.load_state_dict(checkpoint['state_dict'], strict=False)
+        if os.path.isdir(args.ckpt_path):
+            d_checkpoint = torch.load(args.ckpt_path+"/decoder.pt", map_location="cpu")
+            e_checkpoint = torch.load(args.ckpt_path+"/encoder.pt", map_location="cpu")
+            model.jasper_encoder.load_state_dict(e_checkpoint, strict=False)            
+            model.jasper_decoder.load_state_dict(d_checkpoint, strict=False)            
+        else:
+            checkpoint = torch.load(args.ckpt_path, map_location="cpu")
+            model.load_state_dict(checkpoint['state_dict'], strict=False)
+            
+    # if we are to produce engine, not run/create ONNX, postpone AMP initialization
+    # (ONNX parser cannot handle mixed FP16 ONNX yet)
+    if args.pyt_fp16 and args.engine_path is None:
+        amp.initialize(models=model, opt_level=AmpOptimizations[optim_level])
         
     if args.make_onnx:
-        if args.onnx_path is None or acoustic_model is None:
+        if args.onnx_path is None or args.ckpt_path is None:
             raise Exception("--ckpt_path, --onnx_path must be provided when using --make_onnx")
-        onnx_path = get_onnx(args.onnx_path, acoustic_model,
-                             signal_shape=(args.engine_batch_size, 64, args.seq_len), dtype=torch.float)
+        onnx_path = get_onnx(args.onnx_path, model, args)
 
-    if args.pyt_fp16:
-        amp.initialize(models=acoustic_model, opt_level=AmpOptimizations[optim_level])
-        
+    if args.pyt_fp16 and args.engine_path is not None:
+        amp.initialize(models=model, opt_level=AmpOptimizations[optim_level])
+    
     return {'data_layer': data_layer,
             'audio_preprocessor': audio_preprocessor,
-            'acoustic_model': acoustic_model,
+            'acoustic_model': model,
             'input_wav' : (wav, seq_len) }, onnx_path
 
-def adjust_shape(am_input, baked_length):
+def adjust_shape(am_input, args):
     '''Pads or cuts acoustic model input tensor to some fixed_length
 
     '''
-    in_seq_len = am_input[0].shape[2]
-    newSeq=am_input[0]
+    input = am_input[0]    
+    baked_length = args.seq_len
+    
+    if args.transpose:
+        in_seq_len = input.shape[1]
+    else:
+        in_seq_len = input.shape[2]
+
+    if  baked_length is None or in_seq_len == baked_length:
+        return (input, am_input[1])
+
+    if args.transpose:
+        return (input.resize_(input.shape[0], baked_length, 64), am_input[1])
+    
+    newSeq=input
     if in_seq_len > baked_length:
         # Cut extra bits off, no inference done
-        newSeq = am_input[0][...,0:baked_length].contiguous()
+        newSeq = input[...,0:baked_length].contiguous()
     elif in_seq_len < baked_length:
         # Zero-pad to satisfy length
         pad_length = baked_length - in_seq_len
-        newSeq = nn.functional.pad(am_input[0], (0, pad_length), 'constant', 0)
-    return (newSeq,)
+        newSeq = nn.functional.pad(input, (0, pad_length), 'constant', 0)
+    return (newSeq, am_input[1])
 
-def torchify_trt_out(trt_out, batch_size):
+def torchify_trt_out(trt_out, desired_shape):
     '''Reshapes flat data to format for greedy+CTC decoding
-
     Used to convert numpy array on host to PyT Tensor
     '''
-    desired_shape = (batch_size,-1,len(get_vocab()))
-
     # Predictions must be reshaped.
-    return torch.Tensor(trt_out).reshape(desired_shape)
+    ret = torch.from_numpy(trt_out)
+    return ret.reshape((desired_shape[0], desired_shape[1], desired_shape[2]))
 
 def do_csv_export(wers, times, batch_size, num_frames):
     '''Produces CSV header and data for input data
@@ -250,3 +313,4 @@ def do_csv_export(wers, times, batch_size, num_frames):
     string_header = ", ".join(header)
     string_data = ", ".join(data)
     return string_header, string_data
+

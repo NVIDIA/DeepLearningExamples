@@ -85,6 +85,6 @@ else
 fi
 
 echo "Dataset $DATASET_NAME successfully prepared at: $CACHED_DATADIR\n"
-echo "You can now run the training with: python -m torch.distributed.launch --nproc_per_node=<number_of_GPUs> ncf.py --data ${CACHED_DATADIR}"
+echo "You can now run the training with: python -m torch.distributed.launch --nproc_per_node=<number_of_GPUs> --use_env ncf.py --data ${CACHED_DATADIR}"
 
 

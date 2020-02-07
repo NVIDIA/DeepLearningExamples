@@ -1,0 +1,7 @@
+**/.DS_Store
+__pycache__/
+data/
+results/
+*.out
+*.log
+*.json
