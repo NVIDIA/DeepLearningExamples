@@ -60,7 +60,7 @@ def build_engine_from_parser(args):
     config = builder.create_builder_config()
     config.flags = config_flags
     
-    if args.dynamic_shape:
+    if not args.static_shape:
         profile = builder.create_optimization_profile()
         if args.transpose:
             profile.set_shape("FEATURES", min=(1,192,64), opt=(args.engine_batch_size,256,64), max=(builder.max_batch_size, max_len, 64))
@@ -73,7 +73,7 @@ def build_engine_from_parser(args):
     with trt.OnnxParser(network, TRT_LOGGER) as parser:
         with open(args.onnx_path, 'rb') as model:
             parsed = parser.parse(model.read())
-            print ("Parsing returned ", parsed, "dynamic_shape= " , args.dynamic_shape, "\n")
+            print ("Parsing returned ", parsed, "dynamic_shape= " , not args.static_shape, "\n")
             return builder.build_engine(network, config=config)
 
 def deserialize_engine(engine_path, is_verbose):

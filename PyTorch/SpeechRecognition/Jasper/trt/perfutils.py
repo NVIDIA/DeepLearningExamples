@@ -110,9 +110,9 @@ def get_onnx(path, acoustic_model,  args):
 
 
     if args.transpose:
-        signal_shape=(args.engine_batch_size, args.seq_len, 64)
+        signal_shape=(args.engine_batch_size, int(args.seq_len), 64)
     else:
-        signal_shape=(args.engine_batch_size, 64, args.seq_len)
+        signal_shape=(args.engine_batch_size, 64, int(args.seq_len))
         
     with torch.no_grad():
         phony_signal = torch.zeros(signal_shape, dtype=torch.float, device=torch.device("cuda"))
@@ -191,6 +191,7 @@ def get_pytorch_components_and_onnx(args):
         wav, seq_len = audio_from_file(args.wav)
         if args.seq_len is None or args.seq_len == 0:
             args.seq_len = seq_len/(featurizer_config['sample_rate']/100)
+        args.seq_len = int(args.seq_len)
 
     if args.transpose:
         featurizer_config["transpose_out"] = True
@@ -237,7 +238,7 @@ def adjust_shape(am_input, args):
 
     '''
     input = am_input[0]    
-    baked_length = args.seq_len
+    baked_length = int(args.seq_len)
     
     if args.transpose:
         in_seq_len = input.shape[1]
