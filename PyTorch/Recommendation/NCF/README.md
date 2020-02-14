@@ -214,7 +214,7 @@ After the Docker container is launched, the training with the default hyperparam
 
 ```bash
 ./prepare_dataset.sh
-python -m torch.distributed.launch --nproc_per_node=8 ncf.py --data /data/cache/ml-20m
+python -m torch.distributed.launch --nproc_per_node=8 --use_env ncf.py --data /data/cache/ml-20m
 ```
 
 This will result in a checkpoint file being written to `/data/checkpoints/model.pth`.
@@ -225,7 +225,7 @@ This will result in a checkpoint file being written to `/data/checkpoints/model.
 The trained model can be evaluated by passing the `--mode` test flag to the `run.sh` script:
 
 ```bash
-python -m torch.distributed.launch --nproc_per_node=1 ncf.py --data /data/cache/ml-20m  --mode test --load_checkpoint_path /data/checkpoints/model.pth
+python -m torch.distributed.launch --nproc_per_node=1 --use_env ncf.py --data /data/cache/ml-20m  --mode test --load_checkpoint_path /data/checkpoints/model.pth
 ```
 
 
@@ -330,13 +330,13 @@ For a smaller dataset you might experience slower performance.
 To download, preprocess and train on the ML-1m dataset run:
 ```bash
 ./prepare_dataset.sh ml-1m
-python -m torch.distributed.launch --nproc_per_node=8 ncf.py --data /data/cache/ml-1m
+python -m torch.distributed.launch --nproc_per_node=8 --use_env ncf.py --data /data/cache/ml-1m
 ```
 
 ### Training process
 The name of the training script is `ncf.py`. Because of the multi-GPU support, it should always be run with the torch distributed launcher like this:
 ```bash
-python -m torch.distributed.launch --nproc_per_node=<number_of_gpus> ncf.py --data <path_to_dataset> [other_parameters]
+python -m torch.distributed.launch --nproc_per_node=<number_of_gpus> --use_env ncf.py --data <path_to_dataset> [other_parameters]
 ```
 
 The main result of the training are checkpoints stored by default in `/data/checkpoints/`. This location can be controlled
@@ -351,7 +351,7 @@ The HR@10 metric is the number of hits in the entire test set divided by the num
 
 Inference can be launched with the same script used for training by passing the `--mode test` flag:
 ```bash
-python -m torch.distributed.launch --nproc_per_node=<number_of_gpus> ncf.py  --data <path_to_dataset> --mode test [other_parameters]
+python -m torch.distributed.launch --nproc_per_node=<number_of_gpus> --use_env ncf.py  --data <path_to_dataset> --mode test [other_parameters]
 ```
 
 The script will then:
@@ -368,7 +368,7 @@ The script will then:
 NCF training on NVIDIA DGX systems is very fast, therefore, in order to measure train and validation throughput, you can simply run the full training job with: 
 ```bash
 ./prepare_dataset.sh
-python -m torch.distributed.launch --nproc_per_node=8 ncf.py --data /data/cache/ml-20m --epochs 5
+python -m torch.distributed.launch --nproc_per_node=8 --use_env ncf.py --data /data/cache/ml-20m --epochs 5
 ```
 
 At the end of the script, a line reporting the best train throughput is printed.
@@ -379,7 +379,7 @@ At the end of the script, a line reporting the best train throughput is printed.
 Validation throughput can be measured by running the full training job with:
 ```bash
 ./prepare_dataset.sh
-python -m torch.distributed.launch --nproc_per_node=8 ncf.py --data /data/cache/ml-20m --epochs 5
+python -m torch.distributed.launch --nproc_per_node=8 --use_env ncf.py --data /data/cache/ml-20m --epochs 5
 ```
 
 The best validation throughput is reported to the standard output. 
@@ -405,7 +405,7 @@ The training time was measured excluding data downloading, preprocessing, valida
 To reproduce this result, start the NCF Docker container interactively and run:
 ```bash
 ./prepare_dataset.sh
-python -m torch.distributed.launch --nproc_per_node=8 ncf.py --data /data/cache/ml-20m
+python -m torch.distributed.launch --nproc_per_node=8 --use_env ncf.py --data /data/cache/ml-20m
 ```
 
 ##### NVIDIA DGX-1 (8x V100 32G)
@@ -428,7 +428,7 @@ Here's an example validation accuracy curve for mixed precision vs single precis
 To reproduce this result, start the NCF Docker container interactively and run:
 ```bash
 ./prepare_dataset.sh
-python -m torch.distributed.launch --nproc_per_node=8 ncf.py --data /data/cache/ml-20m
+python -m torch.distributed.launch --nproc_per_node=8 --use_env ncf.py --data /data/cache/ml-20m
 ```
 
 ##### NVIDIA DGX-2 (16x V100 32G)
@@ -449,7 +449,7 @@ The training time was measured excluding data downloading, preprocessing, valida
 To reproduce this result, start the NCF Docker container interactively and run:
 ```bash
 ./prepare_dataset.sh
-python -m torch.distributed.launch --nproc_per_node=16 ncf.py --data /data/cache/ml-20m
+python -m torch.distributed.launch --nproc_per_node=16 --use_env ncf.py --data /data/cache/ml-20m
 ```
 
 
@@ -555,7 +555,8 @@ The following table shows the best inference throughput:
 4. September, 2019
     * Adjusting for API changes in PyTorch and APEX
     * Checkpoints loading fix
-
+5. January, 2020
+   * DLLogger support added
 
 ### Known issues
  

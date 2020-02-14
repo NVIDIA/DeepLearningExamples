@@ -201,7 +201,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
   return (start_logits, end_logits)
 
 def get_frozen_tftrt_model(bert_config, shape, use_one_hot_embeddings, init_checkpoint):
-  tf_config = tf.ConfigProto()
+  tf_config = tf.compat.v1.ConfigProto()
   tf_config.gpu_options.allow_growth = True
   output_node_names = ['unstack']
 
@@ -223,14 +223,14 @@ def get_frozen_tftrt_model(bert_config, shape, use_one_hot_embeddings, init_chec
     tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
     tf_sess.run(tf.global_variables_initializer())
     print("LOADED!")
-    tf.logging.info("**** Trainable Variables ****")
+    tf.compat.v1.logging.info("**** Trainable Variables ****")
     for var in tvars:
       init_string = ""
       if var.name in initialized_variable_names:
         init_string = ", *INIT_FROM_CKPT*"
       else:
         init_string = ", *NOTTTTTTTTTTTTTTTTTTTTT"
-        tf.logging.info("  name = %s, shape = %s%s", var.name, var.shape, init_string)
+        tf.compat.v1.logging.info("  name = %s, shape = %s%s", var.name, var.shape, init_string)
 
     frozen_graph = tf.graph_util.convert_variables_to_constants(tf_sess, 
             tf_sess.graph.as_graph_def(), output_node_names)
@@ -254,7 +254,7 @@ def get_frozen_tftrt_model(bert_config, shape, use_one_hot_embeddings, init_chec
     print('TRT node count:',
           len([1 for n in frozen_graph.node if str(n.op) == 'TRTEngineOp']))
     
-    with tf.gfile.GFile("frozen_modelTRT.pb", "wb") as f:
+    with tf.io.gfile.GFile("frozen_modelTRT.pb", "wb") as f:
       f.write(frozen_graph.SerializeToString())      
         
   return frozen_graph
@@ -268,9 +268,9 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
   def model_fn(features, labels, mode, params):  # pylint: disable=unused-argument
     """The `model_fn` for Estimator."""
     if FLAGS.verbose_logging:
-        tf.logging.info("*** Features ***")
+        tf.compat.v1.logging.info("*** Features ***")
         for name in sorted(features.keys()):
-          tf.logging.info("  name = %s, shape = %s" % (name, features[name].shape))
+          tf.compat.v1.logging.info("  name = %s, shape = %s" % (name, features[name].shape))
 
     unique_ids = features["unique_ids"]
     input_ids = features["input_ids"]
@@ -290,7 +290,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
             "start_logits": start_logits,
             "end_logits": end_logits,
         }
-        output_spec = tf.estimator.TPUEstimatorSpec(
+        output_spec = tf.estimator.EstimatorSpec(
             mode=mode, predictions=predictions)
         return output_spec
 
@@ -312,12 +312,12 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
       tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
     
     if FLAGS.verbose_logging:
-        tf.logging.info("**** Trainable Variables ****")
+        tf.compat.v1.logging.info("**** Trainable Variables ****")
         for var in tvars:
           init_string = ""
           if var.name in initialized_variable_names:
             init_string = ", *INIT_FROM_CKPT*"
-          tf.logging.info(" %d name = %s, shape = %s%s", 0 if hvd is None else hvd.rank(), var.name, var.shape,
+          tf.compat.v1.logging.info(" %d name = %s, shape = %s%s", 0 if hvd is None else hvd.rank(), var.name, var.shape,
                           init_string)
 
 
@@ -369,15 +369,15 @@ def input_fn_builder(input_file, batch_size, seq_length, is_training, drop_remai
   """Creates an `input_fn` closure to be passed to Estimator."""
 
   name_to_features = {
-      "unique_ids": tf.FixedLenFeature([], tf.int64),
-      "input_ids": tf.FixedLenFeature([seq_length], tf.int64),
-      "input_mask": tf.FixedLenFeature([seq_length], tf.int64),
-      "segment_ids": tf.FixedLenFeature([seq_length], tf.int64),
+      "unique_ids": tf.io.FixedLenFeature([], tf.int64),
+      "input_ids": tf.io.FixedLenFeature([seq_length], tf.int64),
+      "input_mask": tf.io.FixedLenFeature([seq_length], tf.int64),
+      "segment_ids": tf.io.FixedLenFeature([seq_length], tf.int64),
   }
 
   if is_training:
-    name_to_features["start_positions"] = tf.FixedLenFeature([], tf.int64)
-    name_to_features["end_positions"] = tf.FixedLenFeature([], tf.int64)
+    name_to_features["start_positions"] = tf.io.FixedLenFeature([], tf.int64)
+    name_to_features["end_positions"] = tf.io.FixedLenFeature([], tf.int64)
 
   def _decode_record(record, name_to_features):
     """Decodes a record to a TensorFlow example."""
@@ -428,8 +428,8 @@ def write_predictions(all_examples, all_features, all_results, n_best_size,
                       max_answer_length, do_lower_case, output_prediction_file,
                       output_nbest_file, output_null_log_odds_file):
   """Write final predictions to the json file and log-odds of null if needed."""
-  tf.logging.info("Writing predictions to: %s" % (output_prediction_file))
-  tf.logging.info("Writing nbest to: %s" % (output_nbest_file))
+  tf.compat.v1.logging.info("Writing predictions to: %s" % (output_prediction_file))
+  tf.compat.v1.logging.info("Writing nbest to: %s" % (output_nbest_file))
 
   example_index_to_features = collections.defaultdict(list)
   for feature in all_features:
@@ -599,14 +599,14 @@ def write_predictions(all_examples, all_features, all_results, n_best_size,
 
     all_nbest_json[example.qas_id] = nbest_json
 
-  with tf.gfile.GFile(output_prediction_file, "w") as writer:
+  with tf.io.gfile.GFile(output_prediction_file, "w") as writer:
     writer.write(json.dumps(all_predictions, indent=4) + "\n")
 
-  with tf.gfile.GFile(output_nbest_file, "w") as writer:
+  with tf.io.gfile.GFile(output_nbest_file, "w") as writer:
     writer.write(json.dumps(all_nbest_json, indent=4) + "\n")
 
   if FLAGS.version_2_with_negative:
-    with tf.gfile.GFile(output_null_log_odds_file, "w") as writer:
+    with tf.io.gfile.GFile(output_null_log_odds_file, "w") as writer:
       writer.write(json.dumps(scores_diff_json, indent=4) + "\n")
 
 
@@ -660,7 +660,7 @@ def get_final_text(pred_text, orig_text, do_lower_case):
   start_position = tok_text.find(pred_text)
   if start_position == -1:
     if FLAGS.verbose_logging:
-      tf.logging.info(
+      tf.compat.v1.logging.info(
           "Unable to find text: '%s' in '%s'" % (pred_text, orig_text))
     return orig_text
   end_position = start_position + len(pred_text) - 1
@@ -670,7 +670,7 @@ def get_final_text(pred_text, orig_text, do_lower_case):
 
   if len(orig_ns_text) != len(tok_ns_text):
     if FLAGS.verbose_logging:
-      tf.logging.info("Length not equal after stripping spaces: '%s' vs '%s'",
+      tf.compat.v1.logging.info("Length not equal after stripping spaces: '%s' vs '%s'",
                       orig_ns_text, tok_ns_text)
     return orig_text
 
@@ -688,7 +688,7 @@ def get_final_text(pred_text, orig_text, do_lower_case):
 
   if orig_start_position is None:
     if FLAGS.verbose_logging:
-      tf.logging.info("Couldn't map start position")
+      tf.compat.v1.logging.info("Couldn't map start position")
     return orig_text
 
   orig_end_position = None
@@ -699,7 +699,7 @@ def get_final_text(pred_text, orig_text, do_lower_case):
 
   if orig_end_position is None:
     if FLAGS.verbose_logging:
-      tf.logging.info("Couldn't map end position")
+      tf.compat.v1.logging.info("Couldn't map end position")
     return orig_text
 
   output_text = orig_text[orig_start_position:(orig_end_position + 1)]
@@ -901,7 +901,7 @@ dynamic_batching {{
         file.write(final_config_str)
 
 def main(_):
-  tf.logging.set_verbosity(tf.logging.INFO)
+  tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
 
   if FLAGS.horovod:
     hvd.init()
@@ -912,7 +912,7 @@ def main(_):
 
   validate_flags_or_throw(bert_config)
 
-  tf.gfile.MakeDirs(FLAGS.output_dir)
+  tf.io.gfile.makedirs(FLAGS.output_dir)
 
   tokenizer = tokenization.FullTokenizer(
       vocab_file=FLAGS.vocab_file, do_lower_case=FLAGS.do_lower_case)
@@ -921,25 +921,22 @@ def main(_):
   training_hooks = []
   global_batch_size = FLAGS.train_batch_size * FLAGS.num_accumulation_steps
   hvd_rank = 0
-  hvd_local_rank = 0
 
-  config = tf.ConfigProto()
+  config = tf.compat.v1.ConfigProto()
   learning_rate = FLAGS.learning_rate
   if FLAGS.horovod:
 
-      tf.logging.info("Multi-GPU training with TF Horovod")
-      tf.logging.info("hvd.size() = %d hvd.rank() = %d", hvd.size(), hvd.rank())
+      tf.compat.v1.logging.info("Multi-GPU training with TF Horovod")
+      tf.compat.v1.logging.info("hvd.size() = %d hvd.rank() = %d", hvd.size(), hvd.rank())
       global_batch_size = FLAGS.train_batch_size * hvd.size() * FLAGS.num_accumulation_steps
       learning_rate = learning_rate * hvd.size()
       master_process = (hvd.rank() == 0)
       hvd_rank = hvd.rank()
-      hvd_local_rank = hvd.local_rank()
-      config.gpu_options.allow_growth = True
       config.gpu_options.visible_device_list = str(hvd.local_rank())
       if hvd.size() > 1:
           training_hooks.append(hvd.BroadcastGlobalVariablesHook(0))
   if FLAGS.use_xla:
-    config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
+    config.graph_options.optimizer_options.global_jit_level = tf.compat.v1.OptimizerOptions.ON_1
   run_config = tf.estimator.RunConfig(
       model_dir=FLAGS.output_dir if master_process else None,
       session_config=config,
@@ -947,10 +944,10 @@ def main(_):
       keep_checkpoint_max=1)
 
   if master_process:
-      tf.logging.info("***** Configuaration *****")
+      tf.compat.v1.logging.info("***** Configuaration *****")
       for key in FLAGS.__flags.keys():
-          tf.logging.info('  {}: {}'.format(key, getattr(FLAGS, key)))
-      tf.logging.info("**************************")
+          tf.compat.v1.logging.info('  {}: {}'.format(key, getattr(FLAGS, key)))
+      tf.compat.v1.logging.info("**************************")
 
   train_examples = None
   num_train_steps = None
@@ -976,15 +973,15 @@ def main(_):
     tmp_filenames = [os.path.join(FLAGS.output_dir, "train.tf_record")]
 
     if FLAGS.horovod:
-      tmp_filenames = [os.path.join(FLAGS.output_dir, "train.tf_record{}".format(i)) for i in range(hvd.local_size())]
-      num_examples_per_local_rank = len(train_examples) // hvd.local_size()
-      remainder = len(train_examples) % hvd.local_size()
-      if hvd.local_rank() < remainder:
-        start_index = hvd.local_rank() * (num_examples_per_local_rank+1)
-        end_index = start_index + num_examples_per_local_rank + 1
+      tmp_filenames = [os.path.join(FLAGS.output_dir, "train.tf_record{}".format(i)) for i in range(hvd.size())]
+      num_examples_per_rank = len(train_examples) // hvd.size()
+      remainder = len(train_examples) % hvd.size()
+      if hvd.rank() < remainder:
+        start_index = hvd.rank() * (num_examples_per_rank+1)
+        end_index = start_index + num_examples_per_rank + 1
       else:
-        start_index = hvd.local_rank() * num_examples_per_local_rank + remainder
-        end_index = start_index + (num_examples_per_local_rank)
+        start_index = hvd.rank() * num_examples_per_rank + remainder
+        end_index = start_index + (num_examples_per_rank)
 
 
   model_fn = model_fn_builder(
@@ -1005,7 +1002,7 @@ def main(_):
     # We write to a temporary file to avoid storing very large constant tensors
     # in memory.
     train_writer = FeatureWriter(
-        filename=tmp_filenames[hvd_local_rank],
+        filename=tmp_filenames[hvd_rank],
         is_training=True)
     convert_examples_to_features(
         examples=train_examples[start_index:end_index],
@@ -1018,17 +1015,13 @@ def main(_):
         verbose_logging=FLAGS.verbose_logging)
     train_writer.close()
 
-    tf.logging.info("***** Running training *****")
-    tf.logging.info("  Num orig examples = %d", end_index - start_index)
-    tf.logging.info("  Num split examples = %d", train_writer.num_features)
-    tf.logging.info("  Batch size = %d", FLAGS.train_batch_size)
-    tf.logging.info("  Num steps = %d", num_train_steps)
-    tf.logging.info("  LR = %f", learning_rate)
+    tf.compat.v1.logging.info("***** Running training *****")
+    tf.compat.v1.logging.info("  Num orig examples = %d", end_index - start_index)
+    tf.compat.v1.logging.info("  Num split examples = %d", train_writer.num_features)
+    tf.compat.v1.logging.info("  Batch size = %d", FLAGS.train_batch_size)
+    tf.compat.v1.logging.info("  Num steps = %d", num_train_steps)
+    tf.compat.v1.logging.info("  LR = %f", learning_rate)
     del train_examples
-    if FLAGS.horovod:
-        barrier = hvd.allreduce(tf.constant(0))
-        with tf.Session(config=config) as sess:
-          sess.run(barrier)
 
     train_input_fn = input_fn_builder(
         input_file=tmp_filenames,
@@ -1046,14 +1039,14 @@ def main(_):
     ss_sentences_per_second = (num_train_steps - training_hooks[-1].skipped) * global_batch_size * 1.0 / train_time_wo_overhead
 
     if master_process:
-        tf.logging.info("-----------------------------")
-        tf.logging.info("Total Training Time = %0.2f for Sentences = %d", train_time_elapsed,
+        tf.compat.v1.logging.info("-----------------------------")
+        tf.compat.v1.logging.info("Total Training Time = %0.2f for Sentences = %d", train_time_elapsed,
                         num_train_steps * global_batch_size)
-        tf.logging.info("Total Training Time W/O Overhead = %0.2f for Sentences = %d", train_time_wo_overhead,
+        tf.compat.v1.logging.info("Total Training Time W/O Overhead = %0.2f for Sentences = %d", train_time_wo_overhead,
                         (num_train_steps - training_hooks[-1].skipped) * global_batch_size)
-        tf.logging.info("Throughput Average (sentences/sec) with overhead = %0.2f", avg_sentences_per_second)
-        tf.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
-        tf.logging.info("-----------------------------")
+        tf.compat.v1.logging.info("Throughput Average (sentences/sec) with overhead = %0.2f", avg_sentences_per_second)
+        tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+        tf.compat.v1.logging.info("-----------------------------")
 
 
   if FLAGS.export_trtis and master_process:
@@ -1088,10 +1081,10 @@ def main(_):
         verbose_logging=FLAGS.verbose_logging)
     eval_writer.close()
 
-    tf.logging.info("***** Running predictions *****")
-    tf.logging.info("  Num orig examples = %d", len(eval_examples))
-    tf.logging.info("  Num split examples = %d", len(eval_features))
-    tf.logging.info("  Batch size = %d", FLAGS.predict_batch_size)
+    tf.compat.v1.logging.info("***** Running predictions *****")
+    tf.compat.v1.logging.info("  Num orig examples = %d", len(eval_examples))
+    tf.compat.v1.logging.info("  Num split examples = %d", len(eval_features))
+    tf.compat.v1.logging.info("  Batch size = %d", FLAGS.predict_batch_size)
 
     predict_input_fn = input_fn_builder(
         input_file=eval_writer.filename,
@@ -1106,7 +1099,7 @@ def main(_):
     for result in estimator.predict(
         predict_input_fn, yield_single_examples=True, hooks=eval_hooks):
       if len(all_results) % 1000 == 0:
-        tf.logging.info("Processing example: %d" % (len(all_results)))
+        tf.compat.v1.logging.info("Processing example: %d" % (len(all_results)))
       unique_id = int(result["unique_ids"])
       start_logits = [float(x) for x in result["start_logits"].flat]
       end_logits = [float(x) for x in result["end_logits"].flat]
@@ -1131,23 +1124,23 @@ def main(_):
     cf_100 = max(time_list[:int(len(time_list) * 1)])
     ss_sentences_per_second = num_sentences * 1.0 / eval_time_wo_overhead
 
-    tf.logging.info("-----------------------------")
-    tf.logging.info("Total Inference Time = %0.2f for Sentences = %d", eval_time_elapsed,
+    tf.compat.v1.logging.info("-----------------------------")
+    tf.compat.v1.logging.info("Total Inference Time = %0.2f for Sentences = %d", eval_time_elapsed,
                     eval_hooks[-1].count * FLAGS.predict_batch_size)
-    tf.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", eval_time_wo_overhead,
+    tf.compat.v1.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", eval_time_wo_overhead,
                     (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.predict_batch_size)
-    tf.logging.info("Summary Inference Statistics")
-    tf.logging.info("Batch size = %d", FLAGS.predict_batch_size)
-    tf.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
-    tf.logging.info("Precision = %s", "fp16" if FLAGS.use_fp16 else "fp32")
-    tf.logging.info("Latency Confidence Level 50 (ms) = %0.2f", cf_50 * 1000)
-    tf.logging.info("Latency Confidence Level 90 (ms) = %0.2f", cf_90 * 1000)
-    tf.logging.info("Latency Confidence Level 95 (ms) = %0.2f", cf_95 * 1000)
-    tf.logging.info("Latency Confidence Level 99 (ms) = %0.2f", cf_99 * 1000)
-    tf.logging.info("Latency Confidence Level 100 (ms) = %0.2f", cf_100 * 1000)
-    tf.logging.info("Latency Average (ms) = %0.2f", avg * 1000)
-    tf.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
-    tf.logging.info("-----------------------------")
+    tf.compat.v1.logging.info("Summary Inference Statistics")
+    tf.compat.v1.logging.info("Batch size = %d", FLAGS.predict_batch_size)
+    tf.compat.v1.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
+    tf.compat.v1.logging.info("Precision = %s", "fp16" if FLAGS.use_fp16 else "fp32")
+    tf.compat.v1.logging.info("Latency Confidence Level 50 (ms) = %0.2f", cf_50 * 1000)
+    tf.compat.v1.logging.info("Latency Confidence Level 90 (ms) = %0.2f", cf_90 * 1000)
+    tf.compat.v1.logging.info("Latency Confidence Level 95 (ms) = %0.2f", cf_95 * 1000)
+    tf.compat.v1.logging.info("Latency Confidence Level 99 (ms) = %0.2f", cf_99 * 1000)
+    tf.compat.v1.logging.info("Latency Confidence Level 100 (ms) = %0.2f", cf_100 * 1000)
+    tf.compat.v1.logging.info("Latency Average (ms) = %0.2f", avg * 1000)
+    tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+    tf.compat.v1.logging.info("-----------------------------")
 
     output_prediction_file = os.path.join(FLAGS.output_dir, "predictions.json")
     output_nbest_file = os.path.join(FLAGS.output_dir, "nbest_predictions.json")
@@ -1163,4 +1156,4 @@ if __name__ == "__main__":
   flags.mark_flag_as_required("vocab_file")
   flags.mark_flag_as_required("bert_config_file")
   flags.mark_flag_as_required("output_dir")
-  tf.app.run()
+  tf.compat.v1.app.run()

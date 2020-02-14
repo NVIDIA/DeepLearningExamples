@@ -27,7 +27,7 @@ class PubMedTextFormatting:
         print('PubMed path:', self.pubmed_path)
 
         with open(self.output_filename, mode='w', newline='\n') as ofile:
-            for filename in glob.glob(self.pubmed_path + '/*.xml', recursive=self.recursive):
+            for filename in glob.glob(self.pubmed_path + '/*.xml*', recursive=self.recursive):
                 print('file:', filename)
                 dicts_out = pmp.parse_medline_xml(filename)
                 for dict_out in dicts_out:

@@ -743,9 +743,10 @@ def non_max_suppression(boxlist, thresh, max_output_size, scope=None):
       raise ValueError('boxlist must be a BoxList')
     if not boxlist.has_field('scores'):
       raise ValueError('input boxlist must have \'scores\' field')
-    selected_indices = tf.image.non_max_suppression(
-        boxlist.get(), boxlist.get_field('scores'),
-        max_output_size, iou_threshold=thresh)
+    with tf.device('/CPU:0'):
+        selected_indices = tf.image.non_max_suppression(
+            boxlist.get(), boxlist.get_field('scores'),
+            max_output_size, iou_threshold=thresh)
     return gather(boxlist, selected_indices)
 
 

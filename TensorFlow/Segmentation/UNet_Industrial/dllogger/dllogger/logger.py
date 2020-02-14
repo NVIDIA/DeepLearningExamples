@@ -66,13 +66,25 @@ def get_caller(root_dir=None):
     stack_index = 0
     while stack_index < len(stack_files) and stack_files[stack_index] != 'logger.py':
         stack_index += 1
+
     while (stack_index < len(stack_files) and 
             stack_files[stack_index] in ['logger.py', 'autologging.py', 'contextlib.py']):
         stack_index += 1
 
-    caller = inspect.stack()[stack_index]
+    while True:
+        try:
+            caller_line = inspect.stack()[stack_index].lineno
+            caller_file = stack_files[stack_index]
+            break
+        except IndexError:
+            stack_index -= 1
 
-    return "%s:%d" % (stack_files[stack_index], caller.lineno)
+        if stack_index < 0:
+            caller_line = 0
+            caller_file = "Unknown Calling File"
+            break
+
+    return "%s:%d" % (caller_file, caller_line)
 
 class StandardMeter(object):
 

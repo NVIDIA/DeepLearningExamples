@@ -34,10 +34,8 @@ import time
 
 from inference import checkpoint_from_distributed, unwrap_distributed, load_and_setup_model, MeasureTime
 
-from dllogger.logger import LOGGER
-import dllogger.logger as dllg
-from dllogger import tags
-from dllogger.autologging import log_hardware, log_args
+import dllogger as DLLogger
+from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
 
 from apex import amp
 
@@ -52,6 +50,8 @@ def parse_args(parser):
     parser.add_argument('--amp-run', action='store_true',
                         help='inference with AMP')
     parser.add_argument('-bs', '--batch-size', type=int, default=1)
+    parser.add_argument('-o', '--output', type=str, required=True,
+                        help='Directory to save results')
     parser.add_argument('--log-file', type=str, default='nvlog.json',
                         help='Filename for logging')
 
@@ -70,29 +70,23 @@ def main():
 
     log_file = args.log_file
 
-    LOGGER.set_model_name("Tacotron2_PyT")
-    LOGGER.set_backends([
-        dllg.StdOutBackend(log_file=None,
-                           logging_scope=dllg.TRAIN_ITER_SCOPE, iteration_interval=1),
-        dllg.JsonBackend(log_file,
-                         logging_scope=dllg.TRAIN_ITER_SCOPE, iteration_interval=1)
-    ])
-    LOGGER.register_metric("items_per_sec",
-                           metric_scope=dllg.TRAIN_ITER_SCOPE)
-    LOGGER.register_metric("latency",
-                           metric_scope=dllg.TRAIN_ITER_SCOPE)
+    DLLogger.init(backends=[JSONStreamBackend(Verbosity.DEFAULT,
+                                              args.output+'/'+args.log_file),
+                            StdOutBackend(Verbosity.VERBOSE)])
+    for k,v in vars(args).items():
+        DLLogger.log(step="PARAMETER", data={k:v})
+    DLLogger.log(step="PARAMETER", data={'model_name':'Tacotron2_PyT'})
 
-    log_hardware()
-    log_args(args)
+    model = load_and_setup_model(args.model_name, parser, None, args.amp_run,
+                                 forward_is_infer=True)
 
-    model = load_and_setup_model(args.model_name, parser, None, args.amp_run)
+    if args.model_name == "Tacotron2":
+        model = torch.jit.script(model)
 
     warmup_iters = 3
     num_iters = 1+warmup_iters
 
     for i in range(num_iters):
-        if i >= warmup_iters:
-            LOGGER.iteration_start()
 
         measurements = {}
 
@@ -101,7 +95,7 @@ def main():
                                         dtype=torch.long).cuda()
             input_lengths = torch.IntTensor([text_padded.size(1)]*args.batch_size).cuda().long()
             with torch.no_grad(), MeasureTime(measurements, "inference_time"):
-                _, mels, _, _, _ = model.infer(text_padded, input_lengths)
+                mels, _ = model(text_padded, input_lengths)
             num_items = mels.size(0)*mels.size(2)
 
         if args.model_name == 'WaveGlow':
@@ -113,16 +107,20 @@ def main():
                 mel_padded = mel_padded.half()
 
             with torch.no_grad(), MeasureTime(measurements, "inference_time"):
-                audios = model.infer(mel_padded)
+                audios = model(mel_padded)
                 audios = audios.float()
             num_items = audios.size(0)*audios.size(1)
 
         if i >= warmup_iters:
-            LOGGER.log(key="items_per_sec", value=(num_items/measurements['inference_time']))
-            LOGGER.log(key="latency", value=measurements['inference_time'])
-            LOGGER.iteration_stop()
+            DLLogger.log(step=(i-warmup_iters,), data={"latency": measurements['inference_time']})
+            DLLogger.log(step=(i-warmup_iters,), data={"items_per_sec": num_items/measurements['inference_time']})
 
-    LOGGER.finish()
+    DLLogger.log(step=tuple(),
+                 data={'infer_latency': measurements['inference_time']})
+    DLLogger.log(step=tuple(),
+                 data={'infer_items_per_sec': num_items/measurements['inference_time']})
+
+    DLLogger.flush()
 
 if __name__ == '__main__':
     main()

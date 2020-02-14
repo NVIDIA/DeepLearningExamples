@@ -20,7 +20,10 @@ from __future__ import print_function
 import abc
 import tensorflow as tf
 
-from tensorflow.contrib.rnn.ops import gen_lstm_ops
+try:
+    from tensorflow.python.ops import gen_rnn_ops as gen_ops
+except ImportError:
+    from tensorflow.contrib.rnn.ops import gen_lstm_ops as gen_ops
 from tensorflow.python.framework import function
 from tensorflow.python.layers import base as base_layer
 
@@ -292,7 +295,7 @@ class LSTMBlockFusedCell(LSTMBlockWrapper):
     else:
       max_seq_len = tf.to_int64(tf.reduce_max(sequence_length))
 
-    _, cs, _, _, _, _, h = gen_lstm_ops.block_lstm(
+    _, cs, _, _, _, _, h = gen_ops.block_lstm(
         seq_len_max=max_seq_len,
         x=inputs,
         cs_prev=initial_cell_state,

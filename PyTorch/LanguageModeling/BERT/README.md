@@ -133,6 +133,10 @@ The following features are supported by this model.
 
 [LAMB](https://arxiv.org/pdf/1904.00962.pdf) stands for Layerwise Adaptive Moments based optimizer, is a large batch optimization technique that helps accelerate training of deep neural networks using large minibatches. It allows using a global batch size of 65536 and 32768 on sequence lengths 128 and 512 respectively, compared to a batch size of 256 for Adam. The optimized implementation accumulates 1024 gradients batches in phase 1 and 4096 steps in phase 2 before updating weights once. This results in 15% training speedup. On multi-node systems, LAMB allows scaling up to 1024 GPUs resulting in training speedups of up to 72x in comparison to [Adam](https://arxiv.org/pdf/1412.6980.pdf). Adam has limitations on the learning rate that can be used since it is applied globally on all parameters whereas LAMB follows a layerwise learning rate strategy.
 
+NVLAMB adds necessary tweaks to [LAMB version 1](https://arxiv.org/abs/1904.00962v1), to ensure correct convergence. A guide to implementating the LAMB optimizer can be found in our [article](https://medium.com/@NvidiaAI/a-guide-to-optimizer-implementation-for-bert-at-scale-8338cc7f45fd) on Medium.com. The algorithm is as follows:
+
+  ![NVLAMB](images/nvlamb.png)
+
 ### Mixed precision training
 
 Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format, while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [Tensor Cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing architecture, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using mixed precision training requires two steps:
@@ -155,7 +159,7 @@ Automatic mixed precision can be enabled with the following code changes:
 from apex import amp
 if fp16:
     # Wrap optimizer and model
-    model, optimizer = amp.initialize(model, optimizer, opt_level=<opt_level>, loss_scale=”dynamic”)
+    model, optimizer = amp.initialize(model, optimizer, opt_level=<opt_level>, loss_scale="dynamic")
  
 if fp16:
     with amp.scale_loss(loss, optimizer) as scaled_loss:
@@ -247,7 +251,7 @@ This repository provides scripts to download, verify and extract the following d
 To download, verify, extract the datasets, and create the shards in hdf5 format, run:  
 `/workspace/bert/data/create_datasets_from_start.sh`
 
-Depending on the speed of your internet connection, this process takes about a day to complete.
+Depending on the speed of your internet connection, this process takes about a day to complete. The BookCorpus server could sometimes get overloaded and also contain broken links resulting in HTTP 403 and 503 errors. You can either skip the missing files or retry downloading at a later time.
 
 6. Start pretraining.
 
@@ -337,6 +341,8 @@ The complete list of the available parameters for the `run_pretraining.py` scrip
   --output_dir OUTPUT_DIR        - Path to the output directory where the model
                                 checkpoints will be written.
 
+  --init_checkpoint           - Initial checkpoint to start pretraining from (Usually a BERT pretrained checkpoint)
+
   --max_seq_length MAX_SEQ_LENGTH
                               - The maximum total input sequence length after
                                 WordPiece tokenization. Sequences longer than
@@ -365,6 +371,10 @@ The complete list of the available parameters for the `run_pretraining.py` scrip
                               - Number of update steps to accumulate before
                                 performing a backward/update pass.
 
+  --allreduce_post_accumulation - If set to true, performs allreduce only after the defined number of gradient accumulation steps.
+  
+  --allreduce_post_accumulation_fp16 -  If set to true, performs allreduce after gradient accumulation steps in FP16.
+
   --fp16                      - If set, will perform computations using
                                 automatic mixed precision.
 
@@ -386,6 +396,7 @@ The complete list of the available parameters for the `run_pretraining.py` scrip
 
   --phase1_end_step        - The number of steps phase 1 was trained for. In order to  
                            resume phase 2 the correct way, phase1_end_step should correspond to the --max_steps phase 1 was trained for.
+
 ```
  
 
@@ -566,15 +577,15 @@ Where:
 -   `<seed>` random seed for the run.
 - `<allreduce_post_accumulation>` - If set to `true`, performs allreduce only after the defined number of gradient accumulation steps.
 - `<allreduce_post_accumulation_fp16>` -  If set to `true`, performs allreduce after gradient accumulation steps in FP16.
-- `<accumulate_into_fp16>` - If set to `true`, accumulates/sums the gradients in FP16.
 
-    Note: The above three options need to be set to false when running on fp32. 
+    Note: The above two options need to be set to false when running on fp32. 
     
 -  `<training_batch_size_phase2>` is per-GPU batch size used for training in phase 2. Larger batch sizes run more efficiently, but require more memory.
 -   `<learning_rate_phase2>` is the base learning rate for training phase 2.
 -   `<warmup_proportion_phase2>` is the percentage of training steps used for warm-up at the start of training.
 -   `<training_steps_phase2>` is the total number of training steps for phase 2, to be continued in addition to phase 1.
 -   `<gradient_accumulation_steps_phase2>` an integer indicating the number of steps to accumulate gradients over in phase 2. Effective batch size = `training_batch_size_phase2` / `gradient_accumulation_steps_phase2`.
+-   `<init_checkpoint>` A checkpoint to start the pretraining routine on (Usually a BERT pretrained checkpoint).
 
 For example:
 
@@ -582,9 +593,14 @@ For example:
 
 Trains BERT-large from scratch on a DGX-1 32G using FP16 arithmetic. 90% of the training steps are done with sequence length 128 (phase1 of training) and 10% of the training steps are done with sequence length 512 (phase2 of training).
 
-In order to train on a DGX-1 16G, set `gradient_accumulation_steps` to `512` and `gradient_accumulation_steps_phase2` to `1024` in `scripts/run_pretraining.sh`.
+To train on a DGX-1 16G, set `gradient_accumulation_steps` to `512` and `gradient_accumulation_steps_phase2` to `1024` in `scripts/run_pretraining.sh`.
 
-In order to train on a DGX-2 32G, set `train_batch_size` to `4096`, `train_batch_size_phase2` to `2048`, `num_gpus` to `16`, `gradient_accumulation_steps` to `64` and `gradient_accumulation_steps_phase2` to `256` in `scripts/run_pretraining.sh`
+To train on a DGX-2 32G, set `train_batch_size` to `4096`, `train_batch_size_phase2` to `2048`, `num_gpus` to `16`, `gradient_accumulation_steps` to `64` and `gradient_accumulation_steps_phase2` to `256` in `scripts/run_pretraining.sh`
+
+In order to run pretraining routine on an initial checkpoint, do the following in `scripts/run_pretraining.sh`:
+-   point the `init_checkpoint` variable to location of the checkpoint
+-   set `resume_training` to `true`
+-   Note: The parameter value assigned to `BERT_CONFIG` during training should remain unchanged. Also to resume pretraining on your corpus of choice, the training dataset should be created using the same vocabulary file used in `data/create_datasets_from_start.sh`
 
 ##### Fine-tuning
 
@@ -799,9 +815,6 @@ Our results were obtained by running the `scripts/run_pretraining.sh` and `scrip
 |1 | 4| 8| 512|8.36 |30.08 | 3.68| 1.00| 1.00
 |4 | 4| 8| 512|31.52 |116.80 | 3.70| 3.84| 3.82
 | 8| 4| 8| 512|62.72 |231.68 | 3.69| 7.68| 7.61
-|1 |N/A | 10| 512|N/A |46.00| N/A| N/A| 1.0
-|4 |N/A | 10| 512|N/A |164.00 | N/A| N/A| 3.57
-| 8|N/A | 10| 512|N/A |325.60| N/A| N/A| 7.08
 
 
 ###### Fine-tuning NVIDIA DGX-1 With 32G
@@ -832,10 +845,6 @@ Our results were obtained by running the `scripts/run_pretraining.sh` and `scrip
 |4 | 4 |8 | 512| 34.4| 124.16| 3.60| 3.82| 3.84
 |8 | 4 | 8| 512| 68.16| 247.04| 3.62| 7.57| 7.64
 |16 | 4 | 8| 512| 135.68| 488.96| 3.60| 15.08| 15.13
-|1 | N/A | 10 | 512|N/A | 47.40| N/A| N/A| 1.00
-|4 | N/A |10 | 512| N/A| 165.60| N/A| N/A| 3.49
-|8 | N/A | 10| 512| N/A| 325.60| N/A| N/A| 6.87
-|16 | N/A | 10| 512| N/A| 648.00| N/A| N/A| 13.67
 
 ###### Pre-training on multiple NVIDIA DGX-2H With 32G
 
@@ -876,15 +885,15 @@ Our results were obtained by running the `scripts/run_pretraining_inference.sh` 
 
 ###### Pre-training inference on NVIDIA DGX-1 with 16G
 
-|GPUs | Throughput - FP32(sequences/sec)|Throughput - Mixed Precision(sequences/sec)
-|---------- |---------|---------------
-| 1| 28.32| 94.36
+| GPUs |  Batch Size \(FP32/FP16\) | Throughput \- FP32\(sequences/sec\) | Throughput \- Mixed Precision\(sequences/sec\) |
+|------|---------------------------|-------------------------------------|------------------------------------------------|
+| 1    | 2/4                       | 28\.32                              | 94\.36                                         |
 
 ###### Fine-tuning inference on NVIDIA DGX-1 with 16G
 
-|GPUs | Throughput - FP32(sequences/sec)|Throughput - Mixed Precision(sequences/sec)
-|---------- |---------|---------------
-| 1| 37.64| 119.76
+| GPUs |  Batch Size \(FP32/FP16\) | Throughput \- FP32\(sequences/sec\) | Throughput \- Mixed Precision\(sequences/sec\) |
+|------|---------------------------|-------------------------------------|------------------------------------------------|
+| 1    | 4/4                       | 37\.64                              | 119\.76                                        |
 
 ##### Inference performance: NVIDIA DGX-1 (1x V100 32G)
 
@@ -892,15 +901,15 @@ Our results were obtained by running the `scripts/run_pretraining_inference.sh` 
 
 ###### Pre-training inference on NVIDIA DGX-1 with 32G
 
-|GPUs | Throughput(sequences/sec) - FP32|Throughput - Mixed Precision(sequences/sec)
-|---------- |---------|---------------
-| 1| 27.58| 90.16
+| GPUs |  Batch Size \(FP32/FP16\) | Throughput \- FP32\(sequences/sec\) | Throughput \- Mixed Precision\(sequences/sec\) |
+|------|---------------------------|-------------------------------------|------------------------------------------------|
+| 1    | 4/8                       | 27\.58                              | 90\.16                                         |
 
 ###### Fine-tuning inference on NVIDIA DGX-1 with 32G
 
-|GPUs | Throughput(sequences/sec) - FP32|Throughput - Mixed Precision(sequences/sec)
-|---------- |---------|---------------
-| 1| 37.64| 119.76
+| GPUs |  Batch Size \(FP32/FP16\) | Throughput \- FP32\(sequences/sec\) | Throughput \- Mixed Precision\(sequences/sec\) |
+|------|---------------------------|-------------------------------------|------------------------------------------------|
+| 1    | 4/4                       | 37\.64                              | 119\.76                                        |
 
 ##### Inference performance: NVIDIA DGX-2 (1x V100 32G)
 
@@ -908,15 +917,15 @@ Our results were obtained by running the `scripts/run_pretraining_inference.sh` 
 
 ###### Pre-training inference on NVIDIA DGX-2 with 32G
 
-|GPUs | Throughput - FP32(sequences/sec)|Throughput - Mixed Precision(sequences/sec)
-|---------- |---------|---------------
-| 1| 30.24| 97.72
+| GPUs |  Batch Size \(FP32/FP16\) | Throughput \- FP32\(sequences/sec\) | Throughput \- Mixed Precision\(sequences/sec\) |
+|------|---------------------------|-------------------------------------|------------------------------------------------|
+| 1    | 4/8                       | 30\.24                              | 97\.72                                         |
 
 ###### Fine-tuning inference on NVIDIA DGX-2 with 32G
 
-|GPUs | Throughput - FP32(sequences/sec)|Throughput - Mixed Precision(sequences/sec)
-|---------- |---------|---------------
-| 1| 35.76| 112.60
+| GPUs |  Batch Size \(FP32/FP16\) | Throughput \- FP32\(sequences/sec\) | Throughput \- Mixed Precision\(sequences/sec\) |
+|------|---------------------------|-------------------------------------|------------------------------------------------|
+| 1    | 4/4                       | 35\.76                              | 112\.60                                        |
  
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -925,6 +934,11 @@ The inference performance metrics used were items/second.
 ## Release notes
 
 ### Changelog
+
+November 2019
+- Use LAMB from APEX
+- Code cleanup
+- Bug fix in BertAdam optimizer
 
 September 2019
 - Scripts to support multi-node launch

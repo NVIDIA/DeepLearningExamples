@@ -20,16 +20,20 @@ mkdir -p $OUT_DIR
 
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
 
-init_checkpoint=${1}
-mode=${2:-"train"}
+init_checkpoint=${1:-"/workspace/bert/checkpoints/ckpt_8601.pt"}
+mode=${2:-"train eval"}
 max_steps=${3:-"-1.0"} # if < 0, has no effect
-batch_size=${4:-"12"}
-learning_rate=${5:-"5e-6"}
-precision=${6:-"fp32"}
-num_gpu=${7:-"8"}
-epochs=${8:-"2"}
+batch_size=${4:-"8"}
+learning_rate=${5:-"2e-5"}
+precision=${6:-"fp16"}
+num_gpu=${7:-8}
+epochs=${8:-"3"}
+warmup_proportion=${9:-"0.01"}
+seed=${10:-2}
+vocab_file=${11:-"$BERT_PREP_WORKING_DIR/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt"}
+CONFIG_FILE=${12:-"/workspace/bert/bert_config.json"}
 
-if [ "$mode" != "train" ] ; then
+if [ "$mode" = "eval" ] ; then
   num_gpu=1
 fi
 
@@ -40,38 +44,47 @@ if [ "$precision" = "fp16" ] ; then
 fi
 
 if [ "$num_gpu" = "1" ] ; then
+  export CUDA_VISIBLE_DEVICES=0
   mpi_command=""
 else
-  mpi_command="torch.distributed.launch --nproc_per_node=$num_gpu"
+  unset CUDA_VISIBLE_DEVICES
+  mpi_command=" -m torch.distributed.launch --nproc_per_node=$num_gpu"
 fi
 
-CMD="python -m $mpi_command run_glue.py "
+
+CMD="python $mpi_command run_glue.py "
 CMD+="--task_name MRPC "
 if [ "$mode" = "train" ] ; then
   CMD+="--do_train "
   CMD+="--train_batch_size=$batch_size "
-else
+fi
+if [ "$mode" == "eval" ] ; then
   CMD+="--do_eval "
   CMD+="--eval_batch_size=$batch_size "
 fi
+if [ "$mode" == "train eval" ] ; then
+  CMD+="--do_train "
+  CMD+="--train_batch_size=$batch_size "
+  CMD+="--do_eval "
+  CMD+="--eval_batch_size=$batch_size "
+fi
+
 CMD+="--do_lower_case "
 CMD+="--data_dir $MRPC_DIR "
 CMD+="--bert_model bert-large-uncased "
+CMD+="--seed $seed "
 CMD+="--init_checkpoint $init_checkpoint "
+CMD+="--warmup_proportion $warmup_proportion "
 CMD+="--max_seq_length 128 "
 CMD+="--learning_rate $learning_rate "
 CMD+="--num_train_epochs $epochs "
 CMD+="--max_steps $max_steps "
+CMD+="--vocab_file=$vocab_file "
+CMD+="--config_file=$CONFIG_FILE "
 CMD+="--output_dir $OUT_DIR "
 CMD+="$use_fp16"
 
 LOGFILE=$OUT_DIR/logfile
+
+echo $CMD
 $CMD |& tee $LOGFILE
-
-sed -r 's/
-|(\[A)/\n/g' $LOGFILE > $LOGFILE.edit
-
-throughput=`cat $LOGFILE.edit | grep -E 'Iteration.*[0-9.]+(s/it|it/s)' | tail -1 | egrep -o '[0-9.]+(s/it|it/s)'`
-
-echo "throughput: $throughput"
-

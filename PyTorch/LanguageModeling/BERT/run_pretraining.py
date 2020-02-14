@@ -40,7 +40,8 @@ import multiprocessing
 
 from tokenization import BertTokenizer
 from modeling import BertForPreTraining, BertConfig
-from optimization import BertLAMB
+from apex.optimizers import FusedLAMB
+from schedulers import PolyWarmUpScheduler
 
 from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from utils import is_main_process
@@ -128,6 +129,11 @@ def parse_arguments():
                         help="The output directory where the model checkpoints will be written.")
 
     ## Other parameters
+    parser.add_argument("--init_checkpoint",
+                        default=None,
+                        type=str,
+                        help="The initial checkpoint to start training from.")
+
     parser.add_argument("--max_seq_length",
                         default=512,
                         type=int,
@@ -209,10 +215,6 @@ def parse_arguments():
                         default=False,
                         action='store_true',
                         help="Whether to do fp16 allreduce post accumulation.")
-    parser.add_argument('--accumulate_into_fp16',
-                        default=False,
-                        action='store_true',
-                        help="Whether to use fp16 gradient accumulators.")
     parser.add_argument('--phase1_end_step',
                         type=int,
                         default=7038,
@@ -275,12 +277,17 @@ def prepare_model_and_optimizer(args, device):
     if not args.resume_from_checkpoint:
         global_step = 0
     else:
-        if args.resume_step == -1:
+        if args.resume_step == -1 and not args.init_checkpoint:
             model_names = [f for f in os.listdir(args.output_dir) if f.endswith(".pt")]
             args.resume_step = max([int(x.split('.pt')[0].split('_')[1].strip()) for x in model_names])
-        global_step = args.resume_step
 
-        checkpoint = torch.load(os.path.join(args.output_dir, "ckpt_{}.pt".format(global_step)), map_location="cpu")
+        global_step = args.resume_step if not args.init_checkpoint else 0
+
+        if not args.init_checkpoint:
+            checkpoint = torch.load(os.path.join(args.output_dir, "ckpt_{}.pt".format(global_step)), map_location="cpu")
+        else:
+            checkpoint = torch.load(args.init_checkpoint, map_location="cpu")
+
         model.load_state_dict(checkpoint['model'], strict=False)
         if args.phase2:
             global_step -= args.phase1_end_step
@@ -291,42 +298,31 @@ def prepare_model_and_optimizer(args, device):
     param_optimizer = list(model.named_parameters())
     no_decay = ['bias', 'gamma', 'beta', 'LayerNorm']
     
-    optimizer_grouped_parameters = []
-    names = []
+    optimizer_grouped_parameters = [
+        {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
+        {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}]
 
-    count = 1
-    for n, p in param_optimizer:
-        count += 1
-        if not any(nd in n for nd in no_decay):
-            optimizer_grouped_parameters.append({'params': [p], 'weight_decay': 0.01, 'name': n})
-            names.append({'params': [n], 'weight_decay': 0.01})
-        if any(nd in n for nd in no_decay):
-            optimizer_grouped_parameters.append({'params': [p], 'weight_decay': 0.00, 'name': n})
-            names.append({'params': [n], 'weight_decay': 0.00})
-
-    optimizer = BertLAMB(optimizer_grouped_parameters,
-                         lr=args.learning_rate,
-                         warmup=args.warmup_proportion,
-                         t_total=args.max_steps)
+    optimizer = FusedLAMB(optimizer_grouped_parameters, 
+                          lr=args.learning_rate)
+    lr_scheduler = PolyWarmUpScheduler(optimizer, 
+                                       warmup=args.warmup_proportion, 
+                                       total_steps=args.max_steps)
     if args.fp16:
 
         if args.loss_scale == 0:
-            # optimizer = FP16_Optimizer(optimizer, dynamic_loss_scale=True)
-            model, optimizer = amp.initialize(model, optimizer, opt_level="O2", loss_scale="dynamic", 
-                    master_weights=False if args.accumulate_into_fp16 else True)
+            model, optimizer = amp.initialize(model, optimizer, opt_level="O2", loss_scale="dynamic")
         else:
-            # optimizer = FP16_Optimizer(optimizer, static_loss_scale=args.loss_scale)
-            model, optimizer = amp.initialize(model, optimizer, opt_level="O2", loss_scale=args.loss_scale,
-                    master_weights=False if args.accumulate_into_fp16 else True)
+            model, optimizer = amp.initialize(model, optimizer, opt_level="O2", loss_scale=args.loss_scale)
         amp._amp_state.loss_scalers[0]._loss_scale = 2**20
 
     if args.resume_from_checkpoint:
-        if args.phase2:
+        if args.phase2 or args.init_checkpoint:
             keys = list(checkpoint['optimizer']['state'].keys())
-            #Override hyperparameters from Phase 1
+            #Override hyperparameters from previous checkpoint
             for key in keys:
                 checkpoint['optimizer']['state'][key]['step'] = global_step
             for iter, item in enumerate(checkpoint['optimizer']['param_groups']):
+                checkpoint['optimizer']['param_groups'][iter]['step'] = global_step
                 checkpoint['optimizer']['param_groups'][iter]['t_total'] = args.max_steps
                 checkpoint['optimizer']['param_groups'][iter]['warmup'] = args.warmup_proportion
                 checkpoint['optimizer']['param_groups'][iter]['lr'] = args.learning_rate
@@ -348,7 +344,7 @@ def prepare_model_and_optimizer(args, device):
     elif args.n_gpu > 1:
         model = torch.nn.DataParallel(model)
 
-    return model, optimizer, checkpoint, global_step
+    return model, optimizer, lr_scheduler, checkpoint, global_step
 
 def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
 
@@ -417,7 +413,7 @@ def main():
     device, args = setup_training(args)
 
     # Prepare optimizer
-    model, optimizer, checkpoint, global_step = prepare_model_and_optimizer(args, device)
+    model, optimizer, lr_scheduler, checkpoint, global_step = prepare_model_and_optimizer(args, device)
 
     if is_main_process():
         print("SEED {}".format(args.seed))
@@ -441,7 +437,7 @@ def main():
         # Note: We loop infinitely over epochs, termination is handled via iteration count
         while True:
             thread = None
-            if not args.resume_from_checkpoint or epoch > 0 or args.phase2:
+            if not args.resume_from_checkpoint or epoch > 0 or (args.phase2 and global_step < 1) or args.init_checkpoint:
                 files = [os.path.join(args.input_dir, f) for f in os.listdir(args.input_dir) if
                          os.path.isfile(os.path.join(args.input_dir, f)) and 'training' in f]
                 files.sort()
@@ -475,7 +471,9 @@ def main():
             overflow_buf = None
             if args.allreduce_post_accumulation:
                 overflow_buf = torch.cuda.IntTensor([0])
-
+            
+            if len(files) == 1:
+                f_start_id = -1
             for f_id in range(f_start_id + 1 , len(files)):
                 
    
@@ -516,6 +514,7 @@ def main():
                     average_loss += loss.item()
 
                     if training_steps % args.gradient_accumulation_steps == 0:
+                        lr_scheduler.step()  # learning rate warmup
                         global_step = take_optimizer_step(args, optimizer, model, overflow_buf, global_step)
 
                     if global_step >= args.max_steps:

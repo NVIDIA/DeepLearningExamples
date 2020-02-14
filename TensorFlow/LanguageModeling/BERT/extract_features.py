@@ -183,12 +183,12 @@ def model_fn_builder(bert_config, init_checkpoint, layer_indexes, use_tpu,
     else:
       tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
 
-    tf.logging.info("**** Trainable Variables ****")
+    tf.compat.v1.logging.info("**** Trainable Variables ****")
     for var in tvars:
       init_string = ""
       if var.name in initialized_variable_names:
         init_string = ", *INIT_FROM_CKPT*"
-      tf.logging.info("  name = %s, shape = %s%s", var.name, var.shape,
+      tf.compat.v1.logging.info("  name = %s, shape = %s%s", var.name, var.shape,
                       init_string)
 
     all_layers = model.get_all_encoder_layers()
@@ -280,13 +280,13 @@ def convert_examples_to_features(examples, seq_length, tokenizer):
     assert len(input_type_ids) == seq_length
 
     if ex_index < 5:
-      tf.logging.info("*** Example ***")
-      tf.logging.info("unique_id: %s" % (example.unique_id))
-      tf.logging.info("tokens: %s" % " ".join(
+      tf.compat.v1.logging.info("*** Example ***")
+      tf.compat.v1.logging.info("unique_id: %s" % (example.unique_id))
+      tf.compat.v1.logging.info("tokens: %s" % " ".join(
           [tokenization.printable_text(x) for x in tokens]))
-      tf.logging.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
-      tf.logging.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
-      tf.logging.info(
+      tf.compat.v1.logging.info("input_ids: %s" % " ".join([str(x) for x in input_ids]))
+      tf.compat.v1.logging.info("input_mask: %s" % " ".join([str(x) for x in input_mask]))
+      tf.compat.v1.logging.info(
           "input_type_ids: %s" % " ".join([str(x) for x in input_type_ids]))
 
     features.append(
@@ -320,7 +320,7 @@ def read_examples(input_file):
   """Read a list of `InputExample`s from an input file."""
   examples = []
   unique_id = 0
-  with tf.gfile.GFile(input_file, "r") as reader:
+  with tf.io.gfile.GFile(input_file, "r") as reader:
     while True:
       line = tokenization.convert_to_unicode(reader.readline())
       if not line:
@@ -341,7 +341,7 @@ def read_examples(input_file):
 
 
 def main(_):
-  tf.logging.set_verbosity(tf.logging.INFO)
+  tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.info)
 
   layer_indexes = [int(x) for x in FLAGS.layers.split(",")]
 
@@ -384,7 +384,7 @@ def main(_):
   input_fn = input_fn_builder(
       features=features, seq_length=FLAGS.max_seq_length)
 
-  with codecs.getwriter("utf-8")(tf.gfile.Open(FLAGS.output_file,
+  with codecs.getwriter("utf-8")(tf.io.gfile.Open(FLAGS.output_file,
                                                "w")) as writer:
     for result in estimator.predict(input_fn, yield_single_examples=True):
       unique_id = int(result["unique_id"])

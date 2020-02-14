@@ -16,7 +16,6 @@ from apex import amp
 import torch
 import torch.nn as nn
 from parts.features import FeatureFactory
-from helpers import Optimization
 import random
 
 
@@ -55,23 +54,23 @@ def get_same_padding(kernel_size, stride, dilation):
 class AudioPreprocessing(nn.Module):
     """GPU accelerated audio preprocessing
     """
+    __constants__ = ["optim_level"]
     def __init__(self, **kwargs):
         nn.Module.__init__(self)    # For PyTorch API
-        self.optim_level = kwargs.get('optimization_level', Optimization.nothing)
+        self.optim_level = kwargs.get('optimization_level', 0)
         self.featurizer = FeatureFactory.from_config(kwargs)
+        self.transpose_out = kwargs.get("transpose_out", False)
 
-    def forward(self, x):
-        input_signal, length = x
-        length.requires_grad_(False)
-        if self.optim_level not in  [Optimization.nothing, Optimization.mxprO0, Optimization.mxprO3]:
-            with amp.disable_casts():
-                processed_signal = self.featurizer(x)
-                processed_length = self.featurizer.get_seq_len(length)
+    @torch.no_grad()
+    def forward(self, input_signal, length):
+        processed_signal = self.featurizer(input_signal, length)
+        processed_length = self.featurizer.get_seq_len(length)    
+        if self.transpose_out:
+            processed_signal.transpose_(2,1)
+            return processed_signal, processed_length
         else:
-                processed_signal = self.featurizer(x)
-                processed_length = self.featurizer.get_seq_len(length)
-        return processed_signal, processed_length
-
+            return processed_signal, processed_length
+                
 class SpectrogramAugmentation(nn.Module):
     """Spectrogram augmentation
     """
@@ -131,7 +130,7 @@ class SpecCutoutRegions(nn.Module):
     def forward(self, x):
         sh = x.shape
 
-        mask = torch.zeros(x.shape).byte()
+        mask = torch.zeros(x.shape, dtype=torch.uint8)
 
         for idx in range(sh[0]):
             for i in range(self.cutout_rect_regions):
@@ -148,7 +147,7 @@ class SpecCutoutRegions(nn.Module):
         return x
 
 class JasperEncoder(nn.Module):
-
+    __constants__ = ["use_conv_mask"]    
     """Jasper encoder
     """
     def __init__(self, **kwargs):
@@ -214,83 +213,58 @@ class JasperDecoderForCTC(nn.Module):
         out = self.decoder_layers(encoder_output[-1]).transpose(1, 2)
         return nn.functional.log_softmax(out, dim=2)
 
-class Jasper(nn.Module):
-    """Contains data preprocessing, spectrogram augmentation, jasper encoder and decoder
-    """
-    def __init__(self, **kwargs):
-        nn.Module.__init__(self)
-        if kwargs.get("no_featurizer", False):
-            self.audio_preprocessor = None
-        else:
-            self.audio_preprocessor = AudioPreprocessing(**kwargs.get("feature_config"))
-
-        self.data_spectr_augmentation = SpectrogramAugmentation(**kwargs.get("feature_config"))
-        self.jasper_encoder = JasperEncoder(**kwargs.get("jasper_model_definition"))
-        self.jasper_decoder = JasperDecoderForCTC(feat_in=kwargs.get("feat_in"),
-                                                  num_classes=kwargs.get("num_classes"))
-        self.acoustic_model = JasperAcousticModel(self.jasper_encoder, self.jasper_decoder)
-
-    def num_weights(self):
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
-
-    def forward(self, x):
-
-        # Apply optional preprocessing
-        if self.audio_preprocessor is not None:
-            t_processed_signal, p_length_t = self.audio_preprocessor(x)
-        # Apply optional spectral augmentation
-        if self.training:
-            t_processed_signal = self.data_spectr_augmentation(input_spec=t_processed_signal)
-            
-        if (self.jasper_encoder.use_conv_mask):
-            a_inp = (t_processed_signal, p_length_t)
-        else:
-            a_inp = t_processed_signal
-        # Forward Pass through Encoder-Decoder
-        return self.acoustic_model.forward(a_inp)
-
-
-class JasperAcousticModel(nn.Module):
-    def __init__(self, enc, dec, transpose_in=False):
-        nn.Module.__init__(self)
-        self.jasper_encoder = enc
-        self.jasper_decoder = dec
-        self.transpose_in = transpose_in
-    def forward(self, x):
-        if self.jasper_encoder.use_conv_mask:
-            t_encoded_t, t_encoded_len_t = self.jasper_encoder(x)
-        else:
-            if self.transpose_in:
-                x = x.transpose(1, 2)                
-            t_encoded_t = self.jasper_encoder(x)
-
-        out = self.jasper_decoder(encoder_output=t_encoded_t)
-        if self.jasper_encoder.use_conv_mask:
-            return out, t_encoded_len_t
-        else:
-            return out
-
 class JasperEncoderDecoder(nn.Module):
     """Contains jasper encoder and decoder
     """
     def __init__(self, **kwargs):
         nn.Module.__init__(self)
+        self.transpose_in=kwargs.get("transpose_in", False)
         self.jasper_encoder = JasperEncoder(**kwargs.get("jasper_model_definition"))
         self.jasper_decoder = JasperDecoderForCTC(feat_in=kwargs.get("feat_in"),
                                                   num_classes=kwargs.get("num_classes"))
-        self.acoustic_model = JasperAcousticModel(self.jasper_encoder,
-                                                  self.jasper_decoder,
-                                                  kwargs.get("transpose_in", False))
         
     def num_weights(self):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
+    
     def forward(self, x):
-        return self.acoustic_model.forward(x)
+        if self.jasper_encoder.use_conv_mask:
+            t_encoded_t, t_encoded_len_t = self.jasper_encoder(x)
+        else:
+            if self.transpose_in:
+                x = x.transpose(1, 2)   
+            t_encoded_t = self.jasper_encoder(x)
+            
+        out = self.jasper_decoder(t_encoded_t)
+        if self.jasper_encoder.use_conv_mask:
+            return out, t_encoded_len_t
+        else:
+            return out
+
+    def infer(self, x):
+        if self.jasper_encoder.use_conv_mask:
+            return self.forward(x)
+        else:
+            ret = self.forward(x[0])
+            return ret, len(ret)
+        
+    
+class Jasper(JasperEncoderDecoder):
+    """Contains data preprocessing, spectrogram augmentation, jasper encoder and decoder
+    """
+    def __init__(self, **kwargs):
+        JasperEncoderDecoder.__init__(self, **kwargs)
+        feature_config = kwargs.get("feature_config")
+        if self.transpose_in:
+            feature_config["transpose"] = True
+        self.audio_preprocessor = AudioPreprocessing(**feature_config)
+        self.data_spectr_augmentation = SpectrogramAugmentation(**feature_config)
+
 
 class MaskedConv1d(nn.Conv1d):
     """1D convolution with sequence masking
     """
+    __constants__ = ["use_conv_mask"]
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
                              padding=0, dilation=1, groups=1, bias=False, use_conv_mask=True):
         super(MaskedConv1d, self).__init__(in_channels, out_channels, kernel_size,
@@ -313,16 +287,14 @@ class MaskedConv1d(nn.Conv1d):
             del mask
             del idxs
             lens = self.get_seq_len(lens)
+            return super(MaskedConv1d, self).forward(x), lens
         else:
-            x = inp
-        out = super(MaskedConv1d, self).forward(x)
+            return super(MaskedConv1d, self).forward(inp)
 
-        if self.use_conv_mask:
-            return out, lens
-        else:
-            return out
 
 class JasperBlock(nn.Module):
+    __constants__ = ["use_conv_mask", "conv"]
+
     """Jasper Block. See https://arxiv.org/pdf/1904.03288.pdf
     """
     def __init__(self, inplanes, planes, repeat=3, kernel_size=11, stride=1,
@@ -428,9 +400,8 @@ class GreedyCTCDecoder(nn.Module):
     """
     def __init__(self, **kwargs):
         nn.Module.__init__(self)    # For PyTorch API
-
+    @torch.no_grad()
     def forward(self, log_probs):
-        with torch.no_grad():
             argmx = log_probs.argmax(dim=-1, keepdim=False).int()
             return argmx
 

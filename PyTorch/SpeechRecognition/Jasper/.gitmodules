@@ -1,0 +1,4 @@
+[submodule "external/tensorrt-inference-server"]
+	path = external/tensorrt-inference-server
+	url = https://github.com/NVIDIA/tensorrt-inference-server.git
+	branch = r19.06

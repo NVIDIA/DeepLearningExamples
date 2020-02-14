@@ -64,8 +64,7 @@ if [ "$task" = "squad" ] ; then
     echo "Squad directory set as " $SQUAD_DIR
 
     echo "Training performance benchmarking for BERT $bert_model from $BERT_DIR" >> $LOGFILE
-    echo "Precision $precision" >> $LOGFILE
-    echo "Sequence Length   Batch size  Performance(sent/sec)" >> $LOGFILE
+    echo "Precision Sequence Length   Batch size  Performance(sent/sec)" >> $LOGFILE
 
     for seq_len in 128 384; do
 
@@ -78,6 +77,7 @@ if [ "$task" = "squad" ] ; then
         for batch_size in 1 2 4; do
             for precision in fp16 fp32; do
                 res_dir=${RESULTS_DIR}/bert_${bert_model}_gpu_${num_gpu}_sl_${seq_len}_prec_${precision}_bs_${batch_size}
+                mkdir -p $res_dir
                 tmp_file="${res_dir}/${task}_training_benchmark.log"
 
                 if [ "$precision" = "fp16" ] ; then
@@ -104,8 +104,8 @@ if [ "$task" = "squad" ] ; then
                 "$use_fp16" \
                 $use_xla_tag |& tee $tmp_file
 
-                perf=`cat $tmp_file | grep -F 'Training Performance' | awk -F'= ' '{print $2}'`
-                echo "$seq_len  $batch_size $perf"
+                perf=`cat $tmp_file | grep -F 'Throughput Average (sentences/sec) =' | head -1 | awk -F'= ' '{print $2}' | awk -F' sen' '{print $1}'`
+                echo "$precision $seq_len  $batch_size $perf" >> $LOGFILE
 
             done
         done

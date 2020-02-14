@@ -26,6 +26,8 @@ import modeling
 import optimization
 import tensorflow as tf
 import glob
+from utils.utils import LogEvalRunHook
+from tensorflow.core.protobuf import rewriter_config_pb2
 
 flags = tf.flags
 
@@ -115,7 +117,7 @@ flags.DEFINE_bool("use_xla", False, "Whether to enable XLA JIT compilation.")
 flags.DEFINE_bool("use_fp16", False, "Whether to enable AMP ops.")
 
 # report samples/sec, total loss and learning rate during training
-class _LogSessionRunHook(tf.train.SessionRunHook):
+class _LogSessionRunHook(tf.estimator.SessionRunHook):
   def __init__(self, global_batch_size, num_accumulation_steps, display_every=10, hvd_rank=-1):
     self.global_batch_size = global_batch_size
     self.display_every = display_every
@@ -131,23 +133,23 @@ class _LogSessionRunHook(tf.train.SessionRunHook):
     self.t0 = time.time()
     if self.num_accumulation_steps <= 1:
         if FLAGS.manual_fp16 or FLAGS.use_fp16:
-            return tf.train.SessionRunArgs(
+            return tf.estimator.SessionRunArgs(
                 fetches=['step_update:0', 'total_loss:0',
                          'learning_rate:0', 'nsp_loss:0',
                          'mlm_loss:0', 'loss_scale:0'])
         else:
-            return tf.train.SessionRunArgs(
+            return tf.estimator.SessionRunArgs(
                 fetches=['step_update:0', 'total_loss:0',
                          'learning_rate:0', 'nsp_loss:0',
                          'mlm_loss:0'])
     else:
         if FLAGS.manual_fp16 or FLAGS.use_fp16:
-          return tf.train.SessionRunArgs(
+          return tf.estimator.SessionRunArgs(
               fetches=['step_update:0', 'update_step:0', 'total_loss:0',
                        'learning_rate:0', 'nsp_loss:0',
                        'mlm_loss:0', 'loss_scale:0'])
         else:
-          return tf.train.SessionRunArgs(
+          return tf.estimator.SessionRunArgs(
               fetches=['step_update:0', 'update_step:0', 'total_loss:0',
                        'learning_rate:0', 'nsp_loss:0',
                        'mlm_loss:0'])
@@ -202,9 +204,9 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
   def model_fn(features, labels, mode, params):  # pylint: disable=unused-argument
     """The `model_fn` for TPUEstimator."""
 
-    tf.logging.info("*** Features ***")
+    tf.compat.v1.logging.info("*** Features ***")
     for name in sorted(features.keys()):
-      tf.logging.info("  name = %s, shape = %s" % (name, features[name].shape))
+      tf.compat.v1.logging.info("  name = %s, shape = %s" % (name, features[name].shape))
 
     input_ids = features["input_ids"]
     input_mask = features["input_mask"]
@@ -244,18 +246,19 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
 
     initialized_variable_names = {}
     if init_checkpoint and (hvd is None or hvd.rank() == 0):
+      print("Loading checkpoint", init_checkpoint)
       (assignment_map, initialized_variable_names
       ) = modeling.get_assignment_map_from_checkpoint(tvars, init_checkpoint)
 
       tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
 
     if FLAGS.verbose_logging:
-        tf.logging.info("**** Trainable Variables ****")
+        tf.compat.v1.logging.info("**** Trainable Variables ****")
         for var in tvars:
           init_string = ""
           if var.name in initialized_variable_names:
             init_string = ", *INIT_FROM_CKPT*"
-          tf.logging.info("  %d :: name = %s, shape = %s%s", 0 if hvd is None else hvd.rank(), var.name, var.shape,
+          tf.compat.v1.logging.info("  %d :: name = %s, shape = %s%s", 0 if hvd is None else hvd.rank(), var.name, var.shape,
                           init_string)
 
     output_spec = None
@@ -420,19 +423,19 @@ def input_fn_builder(input_files,
 
     name_to_features = {
         "input_ids":
-            tf.FixedLenFeature([max_seq_length], tf.int64),
+            tf.io.FixedLenFeature([max_seq_length], tf.int64),
         "input_mask":
-            tf.FixedLenFeature([max_seq_length], tf.int64),
+            tf.io.FixedLenFeature([max_seq_length], tf.int64),
         "segment_ids":
-            tf.FixedLenFeature([max_seq_length], tf.int64),
+            tf.io.FixedLenFeature([max_seq_length], tf.int64),
         "masked_lm_positions":
-            tf.FixedLenFeature([max_predictions_per_seq], tf.int64),
+            tf.io.FixedLenFeature([max_predictions_per_seq], tf.int64),
         "masked_lm_ids":
-            tf.FixedLenFeature([max_predictions_per_seq], tf.int64),
+            tf.io.FixedLenFeature([max_predictions_per_seq], tf.int64),
         "masked_lm_weights":
-            tf.FixedLenFeature([max_predictions_per_seq], tf.float32),
+            tf.io.FixedLenFeature([max_predictions_per_seq], tf.float32),
         "next_sentence_labels":
-            tf.FixedLenFeature([1], tf.int64),
+            tf.io.FixedLenFeature([1], tf.int64),
     }
 
     # For training, we want a lot of parallel reading and shuffling.
@@ -491,7 +494,7 @@ def _decode_record(record, name_to_features):
 
 
 def main(_):
-  tf.logging.set_verbosity(tf.logging.INFO)
+  tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
 
   if not FLAGS.do_train and not FLAGS.do_eval:
     raise ValueError("At least one of `do_train` or `do_eval` must be True.")
@@ -505,11 +508,11 @@ def main(_):
 
   bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
 
-  tf.gfile.MakeDirs(FLAGS.output_dir)
+  tf.io.gfile.makedirs(FLAGS.output_dir)
 
   input_files = []
   for input_file_dir in FLAGS.input_files_dir.split(","):
-    input_files.extend(tf.gfile.Glob(os.path.join(input_file_dir, "*")))
+    input_files.extend(tf.io.gfile.glob(os.path.join(input_file_dir, "*")))
 
   if FLAGS.horovod and len(input_files) < hvd.size():
       raise ValueError("Input Files must be sharded")
@@ -517,18 +520,19 @@ def main(_):
       raise ValueError("AMP and Manual Mixed Precision Training are both activated! Error")
 
   is_per_host = tf.contrib.tpu.InputPipelineConfig.PER_HOST_V2
-  config = tf.ConfigProto()
+  config = tf.compat.v1.ConfigProto()
   if FLAGS.horovod:
     config.gpu_options.visible_device_list = str(hvd.local_rank())
-    config.gpu_options.allow_growth = True
     if hvd.rank() == 0:
-      tf.logging.info("***** Configuaration *****")
+      tf.compat.v1.logging.info("***** Configuaration *****")
       for key in FLAGS.__flags.keys():
-          tf.logging.info('  {}: {}'.format(key, getattr(FLAGS, key)))
-      tf.logging.info("**************************")
+          tf.compat.v1.logging.info('  {}: {}'.format(key, getattr(FLAGS, key)))
+      tf.compat.v1.logging.info("**************************")
 
 #    config.gpu_options.per_process_gpu_memory_fraction = 0.7
-  if FLAGS.use_xla: config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
+  if FLAGS.use_xla: 
+      config.graph_options.optimizer_options.global_jit_level = tf.compat.v1.OptimizerOptions.ON_1
+      config.graph_options.rewrite_options.memory_optimization = rewriter_config_pb2.RewriterConfig.NO_MEM_OPT
 
   run_config = tf.estimator.RunConfig(
       model_dir=FLAGS.output_dir,
@@ -562,8 +566,8 @@ def main(_):
       config=run_config)
 
   if FLAGS.do_train:
-    tf.logging.info("***** Running training *****")
-    tf.logging.info("  Batch size = %d", FLAGS.train_batch_size)
+    tf.compat.v1.logging.info("***** Running training *****")
+    tf.compat.v1.logging.info("  Batch size = %d", FLAGS.train_batch_size)
     train_input_fn = input_fn_builder(
         input_files=input_files,
         batch_size=FLAGS.train_batch_size,
@@ -575,12 +579,12 @@ def main(_):
     estimator.train(input_fn=train_input_fn, hooks=training_hooks, max_steps=FLAGS.num_train_steps)
 
   if FLAGS.do_eval and (not FLAGS.horovod or hvd.rank() == 0):
-    tf.logging.info("***** Running evaluation *****")
-    tf.logging.info("  Batch size = %d", FLAGS.eval_batch_size)
+    tf.compat.v1.logging.info("***** Running evaluation *****")
+    tf.compat.v1.logging.info("  Batch size = %d", FLAGS.eval_batch_size)
 
     eval_files = []
     for eval_file_dir in FLAGS.eval_files_dir.split(","):
-        eval_files.extend(tf.gfile.Glob(os.path.join(eval_file_dir, "*")))
+        eval_files.extend(tf.io.gfile.glob(os.path.join(eval_file_dir, "*")))
 
     eval_input_fn = input_fn_builder(
         input_files=eval_files,
@@ -590,14 +594,35 @@ def main(_):
         is_training=False,
         hvd=None if not FLAGS.horovod else hvd)
 
+    eval_hooks = [LogEvalRunHook(FLAGS.eval_batch_size)]
+    eval_start_time = time.time()
     result = estimator.evaluate(
-        input_fn=eval_input_fn, steps=FLAGS.max_eval_steps)
+        input_fn=eval_input_fn, steps=FLAGS.max_eval_steps, hooks=eval_hooks)
+
+    eval_time_elapsed = time.time() - eval_start_time
+    eval_time_wo_overhead = eval_hooks[-1].total_time
+
+    num_sentences = (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.eval_batch_size
+
+    ss_sentences_per_second = num_sentences * 1.0 / eval_time_wo_overhead
+
+    tf.compat.v1.logging.info("-----------------------------")
+    tf.compat.v1.logging.info("Total Inference Time = %0.2f for Sentences = %d", eval_time_elapsed,
+                    eval_hooks[-1].count * FLAGS.eval_batch_size)
+    tf.compat.v1.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", eval_time_wo_overhead,
+                    (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.eval_batch_size)
+    tf.compat.v1.logging.info("Summary Inference Statistics on EVAL set")
+    tf.compat.v1.logging.info("Batch size = %d", FLAGS.eval_batch_size)
+    tf.compat.v1.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
+    tf.compat.v1.logging.info("Precision = %s", "fp16" if FLAGS.use_fp16 else "fp32")
+    tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+    tf.compat.v1.logging.info("-----------------------------")
 
     output_eval_file = os.path.join(FLAGS.output_dir, "eval_results.txt")
-    with tf.gfile.GFile(output_eval_file, "w") as writer:
-      tf.logging.info("***** Eval results *****")
+    with tf.io.gfile.GFile(output_eval_file, "w") as writer:
+      tf.compat.v1.logging.info("***** Eval results *****")
       for key in sorted(result.keys()):
-        tf.logging.info("  %s = %s", key, str(result[key]))
+        tf.compat.v1.logging.info("  %s = %s", key, str(result[key]))
         writer.write("%s = %s\n" % (key, str(result[key])))
 
 
@@ -611,4 +636,4 @@ if __name__ == "__main__":
     print('         This warning message will be removed when the underlying')
     print('         issues have been fixed and you are running a TF version')
     print('         that has that fix.')
-  tf.app.run()
+  tf.compat.v1.app.run()

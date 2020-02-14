@@ -58,8 +58,32 @@ class WaveformFeaturizer(object):
 
         return cls(input_config, augmentor=aa)
 
-constant = 1e-5
-def normalize_batch(x, seq_len, normalize_type):
+
+# @torch.jit.script
+# def normalize_batch_per_feature(x, seq_len):
+#     x_mean = torch.zeros((seq_len.shape[0], x.shape[1]), dtype=x.dtype, device=x.device)
+#     x_std = torch.zeros((seq_len.shape[0], x.shape[1]), dtype=x.dtype, device=x.device)
+
+#     for i in range(x.shape[0]):
+#         x_mean[i, :] = x[i, :, :seq_len[i]].mean(dim=1)
+#         x_std[i, :] = x[i, :, :seq_len[i]].std(dim=1)
+#     # make sure x_std is not zero
+#     x_std += 1e-5
+#     return (x - x_mean.unsqueeze(2)) / x_std.unsqueeze(2)
+
+# @torch.jit.script
+# def normalize_batch_all_features(x, seq_len):
+#     x_mean = torch.zeros(seq_len.shape, dtype=x.dtype, device=x.device)
+#     x_std = torch.zeros(seq_len.shape, dtype=x.dtype, device=x.device)
+#     for i in range(x.shape[0]):
+#         x_mean[i] = x[i, :, :int(seq_len[i])].mean()
+#         x_std[i] = x[i, :, :int(seq_len[i])].std()
+#     # make sure x_std is not zero
+#     x_std += 1e-5
+#     return (x - x_mean.view(-1, 1, 1)) / x_std.view(-1, 1, 1)
+
+@torch.jit.script
+def normalize_batch(x, seq_len, normalize_type: str):
 #    print ("normalize_batch: x, seq_len, shapes: ", x.shape, seq_len, seq_len.shape)
     if normalize_type == "per_feature":
         x_mean = torch.zeros((seq_len.shape[0], x.shape[1]), dtype=x.dtype,
@@ -70,21 +94,22 @@ def normalize_batch(x, seq_len, normalize_type):
             x_mean[i, :] = x[i, :, :seq_len[i]].mean(dim=1)
             x_std[i, :] = x[i, :, :seq_len[i]].std(dim=1)
         # make sure x_std is not zero
-        x_std += constant
+        x_std += 1e-5
         return (x - x_mean.unsqueeze(2)) / x_std.unsqueeze(2)
     elif normalize_type == "all_features":
         x_mean = torch.zeros(seq_len.shape, dtype=x.dtype, device=x.device)
         x_std = torch.zeros(seq_len.shape, dtype=x.dtype, device=x.device)
         for i in range(x.shape[0]):
-            x_mean[i] = x[i, :, :seq_len[i].item()].mean()
-            x_std[i] = x[i, :, :seq_len[i].item()].std()
+            x_mean[i] = x[i, :, :int(seq_len[i])].mean()
+            x_std[i] = x[i, :, :int(seq_len[i])].std()
         # make sure x_std is not zero
-        x_std += constant
+        x_std += 1e-5
         return (x - x_mean.view(-1, 1, 1)) / x_std.view(-1, 1, 1)
     else:
         return x
 
-def splice_frames(x, frame_splicing):
+@torch.jit.script
+def splice_frames(x, frame_splicing: int):
     """ Stacks frames together across feature dim
 
     input is batch_size, feature_dim, num_frames
@@ -92,15 +117,19 @@ def splice_frames(x, frame_splicing):
 
     """
     seq = [x]
-    for n in range(1, frame_splicing):
-        seq.append(torch.cat([x[:, :, :n], x[:, :, n:]], dim=2))
+    # TORCHSCRIPT: JIT doesnt like range(start, stop)
+    for n in range(frame_splicing - 1):
+        seq.append(torch.cat([x[:, :, :n + 1], x[:, :, n + 1:]], dim=2))
     return torch.cat(seq, dim=1)
 
 class SpectrogramFeatures(nn.Module):
+    # For JIT. See https://pytorch.org/docs/stable/jit.html#python-defined-constants
+    __constants__ = ["dither", "preemph", "n_fft", "hop_length", "win_length", "log", "frame_splicing", "window", "normalize", "pad_to", "max_duration", "do_normalize"]
+
     def __init__(self, sample_rate=8000, window_size=0.02, window_stride=0.01,
                        n_fft=None,
-                       window="hamming", normalize="per_feature", log=True, center=True,
-                       dither=constant, pad_to=8, max_duration=16.7,
+                       window="hamming", normalize="per_feature", log=True, 
+                       dither=1e-5, pad_to=8, max_duration=16.7,
                        frame_splicing=1):
         super(SpectrogramFeatures, self).__init__()
         torch_windows = {
@@ -121,13 +150,12 @@ class SpectrogramFeatures(nn.Module):
 
         self.normalize = normalize
         self.log = log
-        self.center = center
         self.dither = dither
         self.pad_to = pad_to
         self.frame_splicing = frame_splicing
 
         max_length = 1 + math.ceil(
-                (max_duration * sample_rate - self.win_length) / self.hop_length
+            (max_duration * sample_rate - self.win_length) / self.hop_length
         )
         max_pad = 16 - (max_length % 16)
         self.max_length = max_length + max_pad
@@ -137,8 +165,7 @@ class SpectrogramFeatures(nn.Module):
             dtype=torch.int)
 
     @torch.no_grad()
-    def forward(self, inp):
-        x, seq_len = inp
+    def forward(self, x, seq_len):
         dtype = x.dtype
 
         seq_len = self.get_seq_len(seq_len)
@@ -154,8 +181,8 @@ class SpectrogramFeatures(nn.Module):
 
         # get spectrogram
         x = torch.stft(x, n_fft=self.n_fft, hop_length=self.hop_length,
-                          win_length=self.win_length, center=self.center,
-                          window=self.window.to(torch.float))
+                       win_length=self.win_length,
+                       window=self.window.to(torch.float))
         x = torch.sqrt(x.pow(2).sum(-1))
 
         # log features if required
@@ -167,22 +194,25 @@ class SpectrogramFeatures(nn.Module):
             x = splice_frames(x, self.frame_splicing)
 
         # normalize if required
-        if self.normalize:
-            x = normalize_batch(x, seq_len, normalize_type=self.normalize)
+        x = normalize_batch(x, seq_len, normalize_type=self.normalize)
 
         # mask to zero any values beyond seq_len in batch, pad to multiple of `pad_to` (for efficiency)
         max_len = x.size(-1)
-        mask = torch.arange(max_len).to(seq_len.dtype).to(seq_len.device).expand(x.size(0), max_len) >= seq_len.unsqueeze(1)
+        mask = torch.arange(max_len, dtype=seq_len.dtype).to(seq_len.device).expand(x.size(0), max_len) >= seq_len.unsqueeze(1)
         x = x.masked_fill(mask.unsqueeze(1).to(device=x.device), 0)
-        del mask
+        
+        # TORCHSCRIPT: Is this del important? It breaks scripting
+        #del mask
+    
         pad_to = self.pad_to
-        if pad_to == "max":
+    
+        # TORCHSCRIPT: Cant have mixed types. Using pad_to < 0 for "max"
+        if pad_to < 0:
             x = nn.functional.pad(x, (0, self.max_length - x.size(-1)))
         elif pad_to > 0:
             pad_amt = x.size(-1) % pad_to
             if pad_amt != 0:
                 x = nn.functional.pad(x, (0, pad_to - pad_amt))
-
         return x.to(dtype)
 
     @classmethod
@@ -194,8 +224,11 @@ class SpectrogramFeatures(nn.Module):
                    max_duration=cfg.get('max_duration', 16.7),
                    dither=cfg.get('dither', 1e-5), pad_to=cfg.get("pad_to", 0),
                    frame_splicing=cfg.get("frame_splicing", 1), log=log)
-
+constant=1e-5
 class FilterbankFeatures(nn.Module):
+    # For JIT. See https://pytorch.org/docs/stable/jit.html#python-defined-constants
+    __constants__ = ["dither", "preemph", "n_fft", "hop_length", "win_length", "center", "log", "frame_splicing", "window", "normalize", "pad_to", "max_duration", "max_length"]
+
     def __init__(self, sample_rate=8000, window_size=0.02, window_stride=0.01,
                        window="hamming", normalize="per_feature", n_fft=None,
                        preemph=0.97,
@@ -204,7 +237,6 @@ class FilterbankFeatures(nn.Module):
                        max_duration=16.7,
                        frame_splicing=1):
         super(FilterbankFeatures, self).__init__()
-#        print("PADDING: {}".format(pad_to))
 
         torch_windows = {
             'hann': torch.hann_window,
@@ -220,6 +252,7 @@ class FilterbankFeatures(nn.Module):
 
         self.normalize = normalize
         self.log = log
+        #TORCHSCRIPT: Check whether or not we need this
         self.dither = dither
         self.frame_splicing = frame_splicing
         self.nfilt = nfilt
@@ -238,26 +271,25 @@ class FilterbankFeatures(nn.Module):
         self.register_buffer("window", window_tensor)
         # Calculate maximum sequence length (# frames)
         max_length = 1 + math.ceil(
-                (max_duration * sample_rate - self.win_length) / self.hop_length
+            (max_duration * sample_rate - self.win_length) / self.hop_length
         )
         max_pad = 16 - (max_length % 16)
         self.max_length = max_length + max_pad
 
-
     def get_seq_len(self, seq_len):
         return torch.ceil(seq_len.to(dtype=torch.float) / self.hop_length).to(
             dtype=torch.int)
-            # dtype=torch.long)
 
-    @torch.no_grad()
-    def forward(self, inp):
-        x, seq_len = inp
-
+    # do stft
+    # TORCHSCRIPT: center removed due to bug
+    def  stft(self, x):
+        return torch.stft(x, n_fft=self.n_fft, hop_length=self.hop_length,
+                          win_length=self.win_length,
+                          window=self.window.to(dtype=torch.float))
+    def forward(self, x, seq_len):
         dtype = x.dtype
 
         seq_len = self.get_seq_len(seq_len)
-
-#        print ("forward: x, seq_len, shapes: ", x.shape, seq_len, seq_len.shape)
         
         # dither
         if self.dither > 0:
@@ -267,13 +299,10 @@ class FilterbankFeatures(nn.Module):
         if self.preemph is not None:
             x = torch.cat((x[:, 0].unsqueeze(1), x[:, 1:] - self.preemph * x[:, :-1]),
                                         dim=1)
-
-        # do stft
-        x = torch.stft(x, n_fft=self.n_fft, hop_length=self.hop_length,
-                       win_length=self.win_length,
-                       center=True, window=self.window.to(dtype=torch.float))
-
-        # get power spectrum
+            
+        x  = self.stft(x)
+            
+            # get power spectrum
         x = x.pow(2).sum(-1)
 
         # dot with filterbank energies
@@ -288,25 +317,25 @@ class FilterbankFeatures(nn.Module):
             x = splice_frames(x, self.frame_splicing)
 
         # normalize if required
-        if self.normalize:
-            x = normalize_batch(x, seq_len, normalize_type=self.normalize)
+        x = normalize_batch(x, seq_len, normalize_type=self.normalize)
 
         # mask to zero any values beyond seq_len in batch, pad to multiple of `pad_to` (for efficiency)
         max_len = x.size(-1)
-        mask = torch.arange(max_len).to(seq_len.dtype).to(x.device).expand(x.size(0),
-                                                                           max_len) >= seq_len.unsqueeze(1)
+        mask = torch.arange(max_len, dtype=seq_len.dtype).to(x.device).expand(x.size(0),
+                                                                              max_len) >= seq_len.unsqueeze(1)
 
-        x = x.masked_fill(mask.unsqueeze(1).to(device=x.device), 0)
-        del mask
-        pad_to = self.pad_to
-        if pad_to == "max":
+        x = x.masked_fill(mask.unsqueeze(1), 0)
+        # TORCHSCRIPT: Is this del important? It breaks scripting
+        # del mask
+        # TORCHSCRIPT: Cant have mixed types. Using pad_to < 0 for "max"
+        if self.pad_to < 0:
             x = nn.functional.pad(x, (0, self.max_length - x.size(-1)))
-        elif pad_to > 0:
-            pad_amt = x.size(-1) % pad_to
-            if pad_amt != 0:
-                x = nn.functional.pad(x, (0, pad_to - pad_amt))
-
-        return x.to(dtype)
+        elif self.pad_to > 0:
+            pad_amt = x.size(-1) % self.pad_to
+            #            if pad_amt != 0:
+            x = nn.functional.pad(x, (0, self.pad_to - pad_amt))
+        
+        return x # .to(dtype)
 
     @classmethod
     def from_config(cls, cfg, log=False):

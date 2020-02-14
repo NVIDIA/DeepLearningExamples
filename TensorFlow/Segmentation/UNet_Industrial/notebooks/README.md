@@ -40,3 +40,10 @@ Then open the Jupyter GUI interface on your host machine at http://localhost:888
 ### 2. Colab_UNet_Industrial_TF_TFTRT_inference_demo.ipynb: inference from a pretrained UNet model with TensorFlow-TensorRT (TF-TRT).
 
 This notebook is designed to run on Google Colab via this [link](https://colab.research.google.com/github/NVIDIA/DeepLearningExamples/blob/master/TensorFlow/Segmentation/UNet_Industrial/notebooks/Colab_UNet_Industrial_TF_TFTRT_inference_demo.ipynb)
+
+### 3. Colab_UNet_Industrial_TF_TFHub_export.ipynb: Colab notebook demostrating creation of TF-Hub module from NVIDIA NGC UNet model.
+This notebook is designed to run on Google Colab vie this [link](https://colab.research.google.com/github/NVIDIA/DeepLearningExamples/blob/master/TensorFlow/Segmentation/UNet_Industrial/notebooks/Colab_UNet_Industrial_TF_TFHub_export.ipynb)
+
+### 4. Colab_UNet_Industrial_TF_TFHub_inference_demo.ipynb: Colab notebook demostrating inference with TF-Hub UNet module.
+This notebook is designed to run on Google Colab vie this [link](https://colab.research.google.com/github/NVIDIA/DeepLearningExamples/blob/master/TensorFlow/Segmentation/UNet_Industrial/notebooks/Colab_UNet_Industrial_TF_TFHub_inference_demo.ipynb)
+

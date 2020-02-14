@@ -197,8 +197,8 @@ def main():
     if args.ckpt_dir:
         if args.ckpt_step == -1:
             #retrieve latest model
-            model_names = [f for f in os.listdir(args.ckpt_dir) if f.endswith(".model")]
-            args.ckpt_step = max([int(x.split('.model')[0].split('_')[1].strip()) for x in model_names])
+            model_names = [f for f in os.listdir(args.ckpt_dir) if f.endswith(".pt")]
+            args.ckpt_step = max([int(x.split('.pt')[0].split('_')[1].strip()) for x in model_names])
             print("load model saved at iteraton", args.ckpt_step)
         model_file = os.path.join(args.ckpt_dir, "ckpt_" + str(args.ckpt_step) + ".pt")
     else:
@@ -252,7 +252,7 @@ def main():
                     batch = [t.to(device) for t in batch]
                     input_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels = batch#\
                     loss = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask, masked_lm_labels=masked_lm_labels, next_sentence_label=next_sentence_labels)
-                    final_loss += loss
+                    final_loss += loss.item()
 
                     global_step += 1
 
@@ -261,8 +261,9 @@ def main():
                     break
             final_loss /= global_step
             if multi_gpu_training:
-                final_loss /= torch.distributed.get_world_size()
+                final_loss = torch.tensor(final_loss, device=device)
                 dist.all_reduce(final_loss)
+                final_loss /= torch.distributed.get_world_size()
             if (not multi_gpu_training or (multi_gpu_training and torch.distributed.get_rank() == 0)):       
                 logger.info("Finished: Final Loss = {}".format(final_loss))
 

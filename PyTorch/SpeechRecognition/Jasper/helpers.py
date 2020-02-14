@@ -19,20 +19,10 @@ from enum import Enum
 from metrics import word_error_rate
 
 
-class Optimization(Enum):
-    """Various levels of Optimization.
-    WARNING: This might have effect on model accuracy."""
-    nothing = 0
-    mxprO0 = 1
-    mxprO1 = 2
-    mxprO2 = 3
-    mxprO3 = 4
 
 
-AmpOptimizations = {Optimization.mxprO0: "O0",
-                    Optimization.mxprO1: "O1",
-                    Optimization.mxprO2: "O2",
-                    Optimization.mxprO3: "O3"}
+
+AmpOptimizations = ["O0", "O1", "O2", "O3"]
 
 def print_once(msg):
     if (not torch.distributed.is_initialized() or (torch.distributed.is_initialized() and torch.distributed.get_rank() == 0)):

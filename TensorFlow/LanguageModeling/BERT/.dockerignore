@@ -15,6 +15,7 @@
 .git/
 __pycache__/
 results/
+data/binary
 data/download
 data/extracted
 data/formatted_one_article_per_line

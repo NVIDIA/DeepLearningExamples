@@ -766,6 +766,31 @@ def _compute_softmax(scores):
     return probs
 
 
+from apex.multi_tensor_apply import multi_tensor_applier
+class GradientClipper:
+    """
+    Clips gradient norm of an iterable of parameters. 
+    """
+    def __init__(self, max_grad_norm):
+        self.max_norm = max_grad_norm
+        if multi_tensor_applier.available:
+            import amp_C
+            self._overflow_buf = torch.cuda.IntTensor([0])
+            self.multi_tensor_l2norm = amp_C.multi_tensor_l2norm
+            self.multi_tensor_scale = amp_C.multi_tensor_scale
+        else:
+            raise RuntimeError('Gradient clipping requires cuda extensions')
+
+    def step(self, parameters):
+        l = [p.grad for p in parameters if p.grad is not None]
+        total_norm, _ = multi_tensor_applier(self.multi_tensor_l2norm, self._overflow_buf, [l], False)
+        total_norm = total_norm.item()
+        if (total_norm == float('inf')): return
+        clip_coef = self.max_norm / (total_norm + 1e-6)
+        if clip_coef < 1:
+            multi_tensor_applier(self.multi_tensor_scale, self._overflow_buf, [l, l], clip_coef)
+
+
 def main():
     parser = argparse.ArgumentParser()
 
@@ -795,7 +820,6 @@ def main():
                         help="The maximum number of tokens for the question. Questions longer than this will "
                              "be truncated to this length.")
     parser.add_argument("--do_train", action='store_true', help="Whether to run training.")
-    parser.add_argument("--old", action='store_true', help="use old fp16 optimizer")
     parser.add_argument("--do_predict", action='store_true', help="Whether to run eval on the dev set.")
     parser.add_argument("--train_batch_size", default=32, type=int, help="Total batch size for training.")
     parser.add_argument("--predict_batch_size", default=8, type=int, help="Total batch size for predictions.")
@@ -925,14 +949,13 @@ def main():
     # model = BertForQuestionAnswering.from_pretrained(args.bert_model,
                 # cache_dir=os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE), 'distributed_{}'.format(args.local_rank)))
     if is_main_process():
-        print("LOADING CHECKOINT")
+        print("LOADING CHECKPOINT")
     model.load_state_dict(torch.load(args.init_checkpoint, map_location='cpu')["model"], strict=False)
     if is_main_process():
         print("LOADED CHECKPOINT")
     model.to(device)
-    if args.fp16 and args.old:
-        model.half()
-        # Prepare optimizer
+
+    # Prepare optimizer
     param_optimizer = list(model.named_parameters())
 
     # hack to remove pooler, which is not used
@@ -947,30 +970,21 @@ def main():
     if args.do_train:
         if args.fp16:
             try:
-                # from fused_adam_local import FusedAdamBert as FusedAdam
                 from apex.optimizers import FusedAdam
-                from apex.optimizers import FP16_Optimizer
             except ImportError:
                 raise ImportError(
                     "Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
             # import ipdb; ipdb.set_trace()
             optimizer = FusedAdam(optimizer_grouped_parameters,
                                   lr=args.learning_rate,
-                                  bias_correction=False,
-                                  max_grad_norm=1.0)
+                                  bias_correction=False)
 
             if args.loss_scale == 0:
-                if args.old:
-                    optimizer = FP16_Optimizer(optimizer, dynamic_loss_scale=True)
-                else:
-                    model, optimizer = amp.initialize(model, optimizer, opt_level="O2", keep_batchnorm_fp32=False,
+                model, optimizer = amp.initialize(model, optimizer, opt_level="O2", keep_batchnorm_fp32=False,
                                                       loss_scale="dynamic")
             else:
-                if args.old:
-                    optimizer = FP16_Optimizer(optimizer, static_loss_scale=args.loss_scale)
-                else:
-                    model, optimizer = amp.initialize(model, optimizer, opt_level="O2", keep_batchnorm_fp32=False, loss_scale=args.loss_scale)
-            if not args.old and args.do_train:
+                model, optimizer = amp.initialize(model, optimizer, opt_level="O2", keep_batchnorm_fp32=False, loss_scale=args.loss_scale)
+            if args.do_train:
                 scheduler = LinearWarmUpScheduler(optimizer, warmup=args.warmup_proportion, total_steps=num_train_optimization_steps)
 
         else:
@@ -1031,6 +1045,7 @@ def main():
         train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size)
 
         model.train()
+        gradClipper = GradientClipper(max_grad_norm=1.0)
         for _ in trange(int(args.num_train_epochs), desc="Epoch"):
             for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
                 # Terminate early for benchmarking
@@ -1047,27 +1062,22 @@ def main():
                 if args.gradient_accumulation_steps > 1:
                     loss = loss / args.gradient_accumulation_steps
                 if args.fp16:
-                    if args.old:
-                        optimizer.backward(loss)
-                    else:
-                        with amp.scale_loss(loss, optimizer) as scaled_loss:
-                            scaled_loss.backward()
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
                 else:
                     loss.backward()
                 # if args.fp16:
                 #    optimizer.backward(loss)
                 # else:
                 #    loss.backward()
+                
+                # gradient clipping  
+                gradClipper.step(amp.master_params(optimizer))         
+ 
                 if (step + 1) % args.gradient_accumulation_steps == 0:
                     if args.fp16 :
                         # modify learning rate with special warm up for BERT which FusedAdam doesn't do
-                        if not args.old:
-                            scheduler.step()
-                        else:
-                            lr_this_step = args.learning_rate * warmup_linear(global_step/num_train_optimization_steps, args.warmup_proportion)
-                            for param_group in optimizer.param_groups:
-                                param_group['lr'] = lr_this_step
-
+                        scheduler.step()
                     optimizer.step()
                     optimizer.zero_grad()
                     global_step += 1
@@ -1076,11 +1086,11 @@ def main():
                     logger.info(
                         "Step {}: Loss {}, LR {} ".format(global_step, loss.item(), optimizer.param_groups[0]['lr']))
 
-    if args.do_train:
+    if args.do_train and is_main_process():
         # Save a trained model and the associated configuration
         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
         output_model_file = os.path.join(args.output_dir, WEIGHTS_NAME)
-        torch.save(model_to_save.state_dict(), output_model_file)
+        torch.save({"model":model_to_save.state_dict()}, output_model_file)
         output_config_file = os.path.join(args.output_dir, CONFIG_NAME)
         with open(output_config_file, 'w') as f:
             f.write(model_to_save.config.to_json_string())
