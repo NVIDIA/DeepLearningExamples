@@ -105,7 +105,7 @@ def get_onnx(path, acoustic_model,  args):
     '''
     
     dynamic_dim = 0
-    if args.dynamic_shape:
+    if not args.static_shape:
         dynamic_dim = 1 if args.transpose else 2
 
 
