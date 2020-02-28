@@ -75,7 +75,7 @@ class pretraining_dataset(Dataset):
         self.input_file = input_file
         self.max_pred_length = max_pred_length
         f = h5py.File(input_file, "r")
-        keys = ['input_ids', 'input_mask', 'segment_ids', 'masked_lm_positions', 'masked_lm_ids',
+        keys = ['input_ids', 'tag_ids', 'input_mask', 'segment_ids', 'masked_lm_positions', 'masked_lm_ids',
                 'next_sentence_labels']
         self.inputs = [np.asarray(f[key][:]) for key in keys]
         f.close()
@@ -86,7 +86,7 @@ class pretraining_dataset(Dataset):
 
     def __getitem__(self, index):
 
-        [input_ids, input_mask, segment_ids, masked_lm_positions, masked_lm_ids, next_sentence_labels] = [
+        [input_ids, tag_ids, input_mask, segment_ids, masked_lm_positions, masked_lm_ids, next_sentence_labels] = [
             torch.from_numpy(input[index].astype(np.int64)) if indice < 5 else torch.from_numpy(
                 np.asarray(input[index].astype(np.int64))) for indice, input in enumerate(self.inputs)]
 
@@ -98,7 +98,7 @@ class pretraining_dataset(Dataset):
             index = padded_mask_indices[0].item()
         masked_lm_labels[masked_lm_positions[:index]] = masked_lm_ids[:index]
 
-        return [input_ids, segment_ids, input_mask,
+        return [input_ids, tag_ids, segment_ids, input_mask,
                 masked_lm_labels, next_sentence_labels]
 
 def parse_arguments():
@@ -493,8 +493,8 @@ def main():
 
                     training_steps += 1
                     batch = [t.to(device) for t in batch]
-                    input_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels = batch
-                    loss = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask,
+                    input_ids, tag_ids, segment_ids, input_mask, masked_lm_labels, masked_lm_tags, next_sentence_labels = batch
+                    loss = model(input_ids=input_ids, tag_ids=tag_ids, token_type_ids=segment_ids, attention_mask=input_mask,
                                     masked_lm_labels=masked_lm_labels, next_sentence_label=next_sentence_labels,
                                     checkpoint_activations=args.checkpoint_activations)
                     if args.n_gpu > 1:

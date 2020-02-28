@@ -24,6 +24,9 @@ import unicodedata
 import six
 from io import open
 
+from spacy.tokens import Doc
+import spacy
+
 from file_utils import cached_path
 
 logger = logging.getLogger(__name__)
@@ -69,7 +72,7 @@ def convert_to_unicode(text):
 
 
 def load_vocab(vocab_file):
-    """Loads a vocabulary file into a dictionary."""
+    """Loads a text or pos/tags vocabulary file into a dictionary."""
     vocab = collections.OrderedDict()
     index = 0
     with open(vocab_file, "r", encoding="utf-8") as reader:
@@ -102,8 +105,14 @@ class BertTokenizer(object):
                 "Can't find a vocabulary file at path '{}'. To load the vocabulary from a Google pretrained "
                 "model use `tokenizer = BertTokenizer.from_pretrained(PRETRAINED_MODEL_NAME)`".format(vocab_file))
         self.vocab = load_vocab(vocab_file)
+        self.tags_vocab = load_vocab('tags_vocab.txt')
         self.ids_to_tokens = collections.OrderedDict(
             [(ids, tok) for tok, ids in self.vocab.items()])
+        self.ids_to_tags = collections.OrderedDict(
+                [(ids, tok) for tok, ids in self.tags_vocab.items()])
+                
+        self.nlp=spacy.load('en_core_web_lg')
+        self.nlp.tokenizer = self.my_tokenizer
         self.basic_tokenizer = BasicTokenizer(do_lower_case=do_lower_case,
                                               never_split=never_split)
         self.wordpiece_tokenizer = WordpieceTokenizer(vocab=self.vocab)
@@ -111,23 +120,37 @@ class BertTokenizer(object):
 
     def tokenize(self, text):
         split_tokens = []
-        for token in self.basic_tokenizer.tokenize(text):
-            for sub_token in self.wordpiece_tokenizer.tokenize(token):
-                split_tokens.append(sub_token)
+        # basic_tokens=self.basic_tokenizer.tokenize(text)
+                                
+        spacy_doc=self.nlp(text)
+        spacy_tokens=[(t.text,t.tag_) for t in spacy_doc]
+
+        for token_pair in spacy_tokens:
+            for wordpiece_token_pair in self.wordpiece_tokenizer.tokenize(token_pair):
+                split_tokens.append(wordpiece_token_pair)
         return split_tokens
 
     def convert_tokens_to_ids(self, tokens):
         """Converts a sequence of tokens into ids using the vocab."""
-        ids = []
+        word_ids = []
+        tag_ids = []
+
         for token in tokens:
-            ids.append(self.vocab[token])
+            if token in ("[UNK]", "[SEP]", "[PAD]", "[CLS]", "[MASK]"):
+                word_ids.append(self.vocab[token])
+                pos_ids.append(0) # token id for special tokens
+            else:
+                word_ids.append(self.vocab[token[0]])
+                pos_ids.append(self.tags_vocab.get(token[1],0)) # if token cannot be found, treat it as special token like above
+
+            
         if len(ids) > self.max_len:
             raise ValueError(
                 "Token indices sequence length is longer than the specified maximum "
                 " sequence length for this BERT model ({} > {}). Running this"
-                " sequence through BERT will result in indexing errors".format(len(ids), self.max_len)
+                " sequence through BERT will result in indexing errors".format(len(word_ids), self.max_len)
             )
-        return ids
+        return word_ids,pos_ids
 
     def convert_ids_to_tokens(self, ids):
         """Converts a sequence of ids in wordpiece tokens using the vocab."""
@@ -135,6 +158,17 @@ class BertTokenizer(object):
         for i in ids:
             tokens.append(self.ids_to_tokens[i])
         return tokens
+
+    def convert_ids_to_tags(self, ids):
+        """Converts a sequence of pos_tag ids in wordpiece tokens using the tags_vocab."""
+        tags = []
+        for i in ids:
+            tags.append(self.ids_to_tags[i])
+            return tags
+
+    def my_tokenizer(self,text):
+        bert_tokens=self.basic_tokenizer.tokenize(text) 
+        return Doc(self.nlp.vocab,words=bert_tokens)
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, cache_dir=None, *inputs, **kwargs):
@@ -295,12 +329,13 @@ class BasicTokenizer(object):
 class WordpieceTokenizer(object):
     """Runs WordPiece tokenization."""
 
-    def __init__(self, vocab, unk_token="[UNK]", max_input_chars_per_word=100):
+    def __init__(self, vocab, spacy_nlp, unk_token="[UNK]", max_input_chars_per_word=100):
         self.vocab = vocab
+        self.nlp = spacy_nlp
         self.unk_token = unk_token
         self.max_input_chars_per_word = max_input_chars_per_word
 
-    def tokenize(self, text):
+    def tokenize(self, basic_tokens):
         """Tokenizes a piece of text into its word pieces.
 
         This uses a greedy longest-match-first algorithm to perform tokenization
@@ -311,7 +346,7 @@ class WordpieceTokenizer(object):
           output = ["un", "##aff", "##able"]
 
         Args:
-          text: A single token or whitespace separated tokens. This should have
+          basic_tokens: A single token or whitespace separated tokens. This should have
             already been passed through `BasicTokenizer`.
 
         Returns:
@@ -319,7 +354,12 @@ class WordpieceTokenizer(object):
         """
 
         output_tokens = []
-        for token in whitespace_tokenize(text):
+        if isinstance(basic_tokens,tuple):
+            basic_tokens=[basic_tokens]
+
+        for token in basic_tokens:
+            pos=token[1]
+            token=token[0]
             chars = list(token)
             if len(chars) > self.max_input_chars_per_word:
                 output_tokens.append(self.unk_token)
@@ -342,7 +382,7 @@ class WordpieceTokenizer(object):
                 if cur_substr is None:
                     is_bad = True
                     break
-                sub_tokens.append(cur_substr)
+                sub_tokens.append(cur_substr,pos)
                 start = end
 
             if is_bad:

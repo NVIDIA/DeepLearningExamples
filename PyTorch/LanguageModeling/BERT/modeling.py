@@ -197,6 +197,7 @@ class BertConfig(object):
     """
     def __init__(self,
                  vocab_size_or_config_json_file,
+                 tags_vocab_size=53,
                  hidden_size=768,
                  num_hidden_layers=12,
                  num_attention_heads=12,
@@ -211,6 +212,7 @@ class BertConfig(object):
 
         Args:
             vocab_size_or_config_json_file: Vocabulary size of `inputs_ids` in `BertModel`.
+            tags_vocab_size : Size of pos_tags vocabulary
             hidden_size: Size of the encoder layers and the pooler layer.
             num_hidden_layers: Number of hidden layers in the Transformer encoder.
             num_attention_heads: Number of attention heads for each attention layer in
@@ -239,6 +241,7 @@ class BertConfig(object):
                 self.__dict__[key] = value
         elif isinstance(vocab_size_or_config_json_file, int):
             self.vocab_size = vocab_size_or_config_json_file
+            self.tags_vocab_size = tags_vocab_size
             self.hidden_size = hidden_size
             self.num_hidden_layers = num_hidden_layers
             self.num_attention_heads = num_attention_heads
@@ -309,6 +312,7 @@ class BertEmbeddings(nn.Module):
     def __init__(self, config):
         super(BertEmbeddings, self).__init__()
         self.word_embeddings = nn.Embedding(config.vocab_size, config.hidden_size)
+        self.tags_embedding = nn.Embedding(config.tags_vocab_size, config.hidden_size)
         self.position_embeddings = nn.Embedding(config.max_position_embeddings, config.hidden_size)
         self.token_type_embeddings = nn.Embedding(config.type_vocab_size, config.hidden_size)
 
@@ -317,7 +321,7 @@ class BertEmbeddings(nn.Module):
         self.LayerNorm = BertLayerNorm(config.hidden_size, eps=1e-12)
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
-    def forward(self, input_ids, token_type_ids=None):
+    def forward(self, input_ids, tag_ids, token_type_ids=None):
         seq_length = input_ids.size(1)
         position_ids = torch.arange(seq_length, dtype=torch.long, device=input_ids.device)
         position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
@@ -325,10 +329,11 @@ class BertEmbeddings(nn.Module):
             token_type_ids = torch.zeros_like(input_ids)
 
         words_embeddings = self.word_embeddings(input_ids)
+        tags_embeddings = self.tags_embedding(tag_ids)
         position_embeddings = self.position_embeddings(position_ids)
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
 
-        embeddings = words_embeddings + position_embeddings + token_type_embeddings
+        embeddings = words_embeddings + tags_embedding + position_embeddings + token_type_embeddings
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings)
         return embeddings
@@ -797,7 +802,7 @@ class BertModel(BertPreTrainedModel):
         self.pooler = BertPooler(config)
         self.apply(self.init_bert_weights)
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None, output_all_encoded_layers=True, checkpoint_activations=False):
+    def forward(self, input_ids, tag_ids, token_type_ids=None, attention_mask=None, output_all_encoded_layers=True, checkpoint_activations=False):
         if attention_mask is None:
             attention_mask = torch.ones_like(input_ids)
         if token_type_ids is None:
@@ -818,7 +823,7 @@ class BertModel(BertPreTrainedModel):
         extended_attention_mask = extended_attention_mask.to(dtype=next(self.parameters()).dtype) # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
-        embedding_output = self.embeddings(input_ids, token_type_ids)
+        embedding_output = self.embeddings(input_ids, tag_ids, token_type_ids)
         encoded_layers = self.encoder(embedding_output,
                                       extended_attention_mask,
                                       output_all_encoded_layers=output_all_encoded_layers, checkpoint_activations=checkpoint_activations)
@@ -885,8 +890,8 @@ class BertForPreTraining(BertPreTrainedModel):
         self.cls = BertPreTrainingHeads(config, self.bert.embeddings.word_embeddings.weight)
         self.apply(self.init_bert_weights)
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, next_sentence_label=None, checkpoint_activations=False):
-        sequence_output, pooled_output = self.bert(input_ids, token_type_ids, attention_mask,
+    def forward(self, input_ids, tag_ids, token_type_ids=None, attention_mask=None, masked_lm_labels=None, next_sentence_label=None, checkpoint_activations=False):
+        sequence_output, pooled_output = self.bert(input_ids, tag_ids, token_type_ids, attention_mask,
                                                    output_all_encoded_layers=False, checkpoint_activations=checkpoint_activations)
         prediction_scores, seq_relationship_score = self.cls(sequence_output, pooled_output)
 

@@ -72,35 +72,40 @@ def write_instance_to_example_file(instances, tokenizer, max_seq_length,
  
   num_instances = len(instances)
   features["input_ids"] = np.zeros([num_instances, max_seq_length], dtype="int32")
+  features["tag_ids"] = np.zeros([num_instances, max_seq_length], dtype="int32")
   features["input_mask"] = np.zeros([num_instances, max_seq_length], dtype="int32")
   features["segment_ids"] = np.zeros([num_instances, max_seq_length], dtype="int32")
   features["masked_lm_positions"] =  np.zeros([num_instances, max_predictions_per_seq], dtype="int32")
   features["masked_lm_ids"] = np.zeros([num_instances, max_predictions_per_seq], dtype="int32")
+  features["masked_lm_tags"] = np.zeros([num_instances, max_predictions_per_seq], dtype="int32")
   features["next_sentence_labels"] = np.zeros(num_instances, dtype="int32")
 
 
   for inst_index, instance in enumerate(tqdm(instances)):
-    input_ids = tokenizer.convert_tokens_to_ids(instance.tokens)
+    input_ids, tag_ids = tokenizer.convert_tokens_to_ids(instance.tokens)
     input_mask = [1] * len(input_ids)
     segment_ids = list(instance.segment_ids)
     assert len(input_ids) <= max_seq_length
 
     while len(input_ids) < max_seq_length:
       input_ids.append(0)
+      tag_ids.append(0)
       input_mask.append(0)
       segment_ids.append(0)
 
     assert len(input_ids) == max_seq_length
+    assert len(tag_ids) == max_seq_length
     assert len(input_mask) == max_seq_length
     assert len(segment_ids) == max_seq_length
 
     masked_lm_positions = list(instance.masked_lm_positions)
-    masked_lm_ids = tokenizer.convert_tokens_to_ids(instance.masked_lm_labels)
+    masked_lm_ids, masked_lm_tags = tokenizer.convert_tokens_to_ids(instance.masked_lm_labels)
     masked_lm_weights = [1.0] * len(masked_lm_ids)
 
     while len(masked_lm_positions) < max_predictions_per_seq:
       masked_lm_positions.append(0)
       masked_lm_ids.append(0)
+      masked_lm_tags.append(0)
       masked_lm_weights.append(0.0)
 
     next_sentence_label = 1 if instance.is_random_next else 0
@@ -108,10 +113,12 @@ def write_instance_to_example_file(instances, tokenizer, max_seq_length,
     
 
     features["input_ids"][inst_index] = input_ids
+    features["tag_ids"][inst_index] = tag_ids
     features["input_mask"][inst_index] = input_mask
     features["segment_ids"][inst_index] = segment_ids
     features["masked_lm_positions"][inst_index] = masked_lm_positions
     features["masked_lm_ids"][inst_index] = masked_lm_ids
+    features["masked_lm_tags"][inst_index] = masked_lm_tags
     features["next_sentence_labels"][inst_index] = next_sentence_label
 
     total_written += 1
@@ -135,10 +142,12 @@ def write_instance_to_example_file(instances, tokenizer, max_seq_length,
   print("saving data")
   f= h5py.File(output_file, 'w')
   f.create_dataset("input_ids", data=features["input_ids"], dtype='i4', compression='gzip')
+  f.create_dataset("tag_ids", data=features["tag_ids"], dtype='i4', compression='gzip')
   f.create_dataset("input_mask", data=features["input_mask"], dtype='i1', compression='gzip')
   f.create_dataset("segment_ids", data=features["segment_ids"], dtype='i1', compression='gzip')
   f.create_dataset("masked_lm_positions", data=features["masked_lm_positions"], dtype='i4', compression='gzip')
   f.create_dataset("masked_lm_ids", data=features["masked_lm_ids"], dtype='i4', compression='gzip')
+  f.create_dataset("masked_lm_tags", data=features["masked_lm_tags"], dtype='i4', compression='gzip')
   f.create_dataset("next_sentence_labels", data=features["next_sentence_labels"], dtype='i1', compression='gzip')
   f.flush()
   f.close()
@@ -311,6 +320,7 @@ def create_masked_lm_predictions(tokens, masked_lm_prob,
                                  max_predictions_per_seq, vocab_words, rng):
   """Creates the predictions for the masked LM objective."""
 
+  vocab_pos = pickle.load(open('pos_data.pkl','rb'))
   cand_indexes = []
   for (i, token) in enumerate(tokens):
     if token == "[CLS]" or token == "[SEP]":
@@ -343,7 +353,8 @@ def create_masked_lm_predictions(tokens, masked_lm_prob,
         masked_token = tokens[index]
       # 10% of the time, replace with random word
       else:
-        masked_token = vocab_words[rng.randint(0, len(vocab_words) - 1)]
+        masked_token = (vocab_words[rng.randint(0, len(vocab_words) - 1)],
+                        vocab_pos[rng.randint(0,len(vocab_pos)-1)])
 
     output_tokens[index] = masked_token
 
