@@ -62,6 +62,8 @@ elif [ "$mode" = "eval" ] ; then
   CMD+="--do_predict "
   CMD+="--predict_file=$squad_dir/dev-v1.1.json "
   CMD+="--predict_batch_size=$batch_size "
+  CMD+="--eval_script=$squad_dir/evaluate-v1.1.py "
+  CMD+="--do_eval "
 elif [ "$mode" = "prediction" ] ; then
   CMD+="--do_predict "
   CMD+="--predict_file=$squad_dir/dev-v1.1.json "
@@ -73,10 +75,11 @@ else
   CMD+="--do_predict "
   CMD+="--predict_file=$squad_dir/dev-v1.1.json "
   CMD+="--predict_batch_size=$batch_size "
+  CMD+="--eval_script=$squad_dir/evaluate-v1.1.py "
+  CMD+="--do_eval "
 fi
+
 CMD+=" --do_lower_case "
-# CMD+=" --old "
-# CMD+=" --loss_scale=128 "
 CMD+=" --bert_model=bert-large-uncased "
 CMD+=" --learning_rate=$learning_rate "
 CMD+=" --seed=$seed "
@@ -92,21 +95,3 @@ CMD+=" $use_fp16"
 LOGFILE=$OUT_DIR/logfile.txt
 echo "$CMD |& tee $LOGFILE"
 time $CMD |& tee $LOGFILE
-
-#sed -r 's/
-#|([A)/\n/g' $LOGFILE > $LOGFILE.edit
-
-if [ "$mode" != "eval" ]; then
-throughput=`cat $LOGFILE | grep -E 'Iteration.*[0-9.]+(it/s)' | tail -1 | egrep -o '[0-9.]+(s/it|it/s)' | head -1 | egrep -o '[0-9.]+'`
-train_perf=$(awk 'BEGIN {print ('$throughput' * '$num_gpu' * '$batch_size')}')
-echo " training throughput: $train_perf"
-fi
-
-if [ "$mode" != "train" ]; then
-    if [ "$mode" != "prediction" ]; then
-        python $squad_dir/evaluate-v1.1.py $squad_dir/dev-v1.1.json $OUT_DIR/predictions.json |& tee -a $LOGFILE
-        eval_throughput=`cat $LOGFILE | grep Evaluating | tail -1 | awk -F ','  '{print $2}' | egrep -o '[0-9.]+' | head -1 | egrep -o '[0-9.]+'`
-        eval_perf=$(awk 'BEGIN {print ('$eval_throughput' * '$num_gpu' * '$batch_size')}')
-        echo " evaluation throughput: $eval_perf"
-    fi
-fi
