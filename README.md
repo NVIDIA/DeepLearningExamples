@@ -46,6 +46,7 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 - __Kaldi__ [[TRTIS](https://github.com/NVIDIA/DeepLearningExamples/tree/master/Kaldi/SpeechRecognition)]
 
 ## Jupyter Notebooks
+
 |   Models                    <img width=500/>|   TensorFlow  <img width=200/>|   PyTorch     <img width=500/>|  TensorRT     <img width=400/>|     TRTIS     <img width=400/>|  
 | -------------               | ------------- | ------------- | ------------- | ------------- |
 |   SSD                       |   [ Inference](https://github.com/NVIDIA/DeepLearningExamples/blob/master/TensorFlow/Detection/SSD/models/research/object_detection/object_detection_tutorial.ipynb)  |   [ Inference](https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/Detection/SSD/examples/inference.ipynb)     |  -     |     -     |
