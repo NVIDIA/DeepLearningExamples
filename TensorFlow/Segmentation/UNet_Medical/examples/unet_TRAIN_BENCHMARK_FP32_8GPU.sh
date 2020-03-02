@@ -12,17 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script launches U-Net training in FP32 on 8 GPUs
-# Usage ./unet_TRAIN_BENCHMARK_FP32_8GPU.sh <path to this repository> <path to dataset> <path to results directory> <batch size>
+# This script launches U-Net run in FP32 on 8 GPUs for training benchmarking. Usage:
+# bash unet_TRAIN_BENCHMARK_FP32_8GPU.sh <path to dataset> <path to results directory> <batch size>
 
-mpirun \
-    -np 8 \
-    -H localhost:8 \
-    -bind-to none \
-    -map-by slot \
-    -x NCCL_DEBUG=INFO \
-    -x LD_LIBRARY_PATH \
-    -x PATH \
-    -mca pml ob1 -mca btl ^openib \
-    --allow-run-as-root \
-    python $1/main.py --data_dir $2 --model_dir $3 --warmup_steps 200 --log_every 100 --max_steps 300 --batch_size $4 --benchmark --exec_mode train --augment
+horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --batch_size $3 --exec_mode train --augment --benchmark --warmup_steps 200 --max_steps 1000 --use_xla

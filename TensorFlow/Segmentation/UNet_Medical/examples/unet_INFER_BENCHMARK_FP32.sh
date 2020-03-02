@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script launches U-Net training in FP32 on 1 GPUs using 2 batch size
-# Usage ./unet_INFER_BENCHMARK_FP32.sh <path to this repository> <path to dataset> <path to results directory> <batch size>
+# This script launches U-Net run in FP32 on 1 GPU for inference benchmarking. Usage:
+# bash unet_INFER_BENCHMARK_FP32.sh <path to dataset> <path to results directory> <batch size>
 
-python $1/main.py --data_dir $2 --model_dir $3 --batch_size $4 --benchmark --exec_mode predict --augment --warmup_steps 200 --log_every 100 --max_steps 300
+horovodrun -np 1 python main.py --data_dir $1 --model_dir $2 --batch_size $3 --exec_mode predict --benchmark --warmup_steps 200 --max_steps 600 --use_xla
