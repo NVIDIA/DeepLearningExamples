@@ -52,13 +52,15 @@ import amp_C
 import apex_C
 from apex.amp import _amp_state
 
+from torch.utils.tensorboard import SummaryWriter
+
 from concurrent.futures import ProcessPoolExecutor
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
-
+writer = SummaryWriter()
 
 def create_pretraining_dataset(input_file, max_pred_length, shared_list, args):
 
@@ -488,12 +490,12 @@ def main():
 
                 dataset_future = pool.submit(create_pretraining_dataset, data_file, args.max_predictions_per_seq, shared_file_list, args)
 
-                train_iter = tqdm(train_dataloader, desc="Iteration") if is_main_process() else train_dataloader
+                train_iter = tqdm(train_dataloader, desc="Iteration",total=len(train_dataloader)) if is_main_process() else train_dataloader
                 for step, batch in enumerate(train_iter):
 
                     training_steps += 1
                     batch = [t.to(device) for t in batch]
-                    input_ids, tag_ids, segment_ids, input_mask, masked_lm_labels, masked_lm_tags, next_sentence_labels = batch
+                    input_ids, tag_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels = batch
                     loss = model(input_ids=input_ids, tag_ids=tag_ids, token_type_ids=segment_ids, attention_mask=input_mask,
                                     masked_lm_labels=masked_lm_labels, next_sentence_label=next_sentence_labels,
                                     checkpoint_activations=args.checkpoint_activations)
@@ -511,7 +513,13 @@ def main():
                             scaled_loss.backward()
                     else:
                         loss.backward()
+
                     average_loss += loss.item()
+
+                    if is_main_process():
+                        writer.add_scalar('Loss',loss.item() * args.gradient_accumulation_steps / divisor,step)
+                        writer.add_scalar('Avg_Loss',average_loss/(args.log_freq * divisor),step)
+                        writer.add_scalar('Learning_Rate',optimizer.param_groups[0]['lr'],step)
 
                     if training_steps % args.gradient_accumulation_steps == 0:
                         lr_scheduler.step()  # learning rate warmup

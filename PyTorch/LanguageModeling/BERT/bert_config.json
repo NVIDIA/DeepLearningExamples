@@ -9,6 +9,6 @@
   "num_attention_heads": 16,
   "num_hidden_layers": 24,
   "type_vocab_size": 2,
-  "vocab_size": 30522
+  "vocab_size": 30522,
   "tags_vocab_size": 53
 }
