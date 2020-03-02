@@ -12,7 +12,8 @@ __pycache__/
 data/*/*/   
 data/*/*.zip
 checkpoints/
-results/
+results
+results/*
 
 # Distribution / packaging
 .Python

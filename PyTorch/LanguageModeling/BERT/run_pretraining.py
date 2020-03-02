@@ -44,7 +44,7 @@ from apex.optimizers import FusedLAMB
 from schedulers import PolyWarmUpScheduler
 
 from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
-from utils import is_main_process
+from utils import is_main_process, format_step
 from apex.parallel import DistributedDataParallel as DDP
 from schedulers import LinearWarmUpScheduler
 from apex.parallel.distributed import flat_dist_call
@@ -52,13 +52,10 @@ import amp_C
 import apex_C
 from apex.amp import _amp_state
 
+import dllogger
 from concurrent.futures import ProcessPoolExecutor
 
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
-                    datefmt='%m/%d/%Y %H:%M:%S',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
-
+skipped_steps = 0
 
 def create_pretraining_dataset(input_file, max_pred_length, shared_list, args):
 
@@ -203,6 +200,10 @@ def parse_arguments():
                         type=int,
                         default=100,
                         help="Number of update steps until a model checkpoint is saved to disk.")
+    parser.add_argument('--skip_checkpoint',
+                        default=False,
+                        action='store_true',
+                        help="Whether to save checkpoints")
     parser.add_argument('--phase2',
                         default=False,
                         action='store_true',
@@ -223,7 +224,14 @@ def parse_arguments():
                         default=False,
                         action='store_true',
                         help="Whether to run training.")
+    parser.add_argument('--json-summary', type=str, default="dllogger.json",
+                        help='If provided, the json summary will be written to'
+                             'the specified file.')
+    parser.add_argument("--use_env",
+                        action='store_true',
+                        help="Whether to read local rank from ENVVAR")
     args = parser.parse_args()
+    
     return args
 
 def setup_training(args):
@@ -236,11 +244,19 @@ def setup_training(args):
     else:
         torch.cuda.set_device(args.local_rank)
         device = torch.device("cuda", args.local_rank)
-        args.n_gpu = 1
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
+        args.n_gpu = 1
+        
+    if is_main_process():
+        dllogger.init(backends=[dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE,
+                                                           filename=args.json_summary),
+                                dllogger.StdOutBackend(verbosity=dllogger.Verbosity.VERBOSE, step_format=format_step)])
+    else:
+        dllogger.init(backends=[])
 
-    logger.info("device %s n_gpu %d distributed training %r", device, args.n_gpu, bool(args.local_rank != -1))
+    print("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
+        device, args.n_gpu, bool(args.local_rank != -1), args.fp16))
 
     if args.gradient_accumulation_steps < 1:
         raise ValueError("Invalid gradient_accumulation_steps parameter: {}, should be >= 1".format(
@@ -258,7 +274,7 @@ def setup_training(args):
             os.listdir(args.output_dir) and any([i.startswith('ckpt') for i in os.listdir(args.output_dir)])):
         raise ValueError("Output directory ({}) already exists and is not empty.".format(args.output_dir))
 
-    if not args.resume_from_checkpoint:
+    if not args.resume_from_checkpoint or not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir, exist_ok=True)
 
     return device, args
@@ -289,7 +305,8 @@ def prepare_model_and_optimizer(args, device):
             checkpoint = torch.load(args.init_checkpoint, map_location="cpu")
 
         model.load_state_dict(checkpoint['model'], strict=False)
-        if args.phase2:
+        
+        if args.phase2 and not args.init_checkpoint:
             global_step -= args.phase1_end_step
         if is_main_process():
             print("resume step from ", args.resume_step)
@@ -348,6 +365,7 @@ def prepare_model_and_optimizer(args, device):
 
 def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
 
+    global skipped_steps
     if args.allreduce_post_accumulation:
         # manually allreduce gradients after all accumulation steps
         # check for Inf/NaN
@@ -384,11 +402,9 @@ def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
             global_step += 1
         else:
             # Overflow detected, print message and clear gradients
+            skipped_steps += 1
             if is_main_process():
-                print(("Rank {} :: Gradient overflow.  Skipping step, "  +
-                        "reducing loss scale to {}").format(
-                        torch.distributed.get_rank(),
-                        scaler.loss_scale()))
+                dllogger.log(step="PARAMETER", data={"loss_scale": scaler.loss_scale()})
             if _amp_state.opt_properties.master_weights:
                 for param in optimizer._amp_stash.all_fp32_from_fp16_params:
                     param.grad = None
@@ -406,25 +422,29 @@ def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
 def main():
 
     args = parse_arguments()
+
+    if args.use_env and 'LOCAL_RANK' in os.environ:
+        args.local_rank = int(os.environ['LOCAL_RANK'])
+        
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
     device, args = setup_training(args)
+    dllogger.log(step="PARAMETER", data={"Config": [str(args)]})
 
     # Prepare optimizer
     model, optimizer, lr_scheduler, checkpoint, global_step = prepare_model_and_optimizer(args, device)
 
     if is_main_process():
-        print("SEED {}".format(args.seed))
+        dllogger.log(step="PARAMETER", data={"SEED": args.seed})
 
+    raw_train_start = time.time()
     if args.do_train:
         if is_main_process():
-            logger.info("***** Running training *****")
-            # logger.info("  Num examples = %d", len(train_data))
-            logger.info("  Batch size = %d", args.train_batch_size)
-            print("  LR = ", args.learning_rate)
-            print("Training. . .")
+            dllogger.log(step="PARAMETER", data={"train_start": True})
+            dllogger.log(step="PARAMETER", data={"batch_size_per_gpu": args.train_batch_size})
+            dllogger.log(step="PARAMETER", data={"learning_rate": args.learning_rate})
 
         model.train()
         most_recent_ckpts_paths = []
@@ -482,8 +502,6 @@ def main():
                 else:
                     data_file = files[(f_id*torch.distributed.get_world_size()+torch.distributed.get_rank())%num_files]
 
-                logger.info("file no %s file %s" % (f_id, previous_file))
-
                 previous_file = data_file
 
                 dataset_future = pool.submit(create_pretraining_dataset, data_file, args.max_predictions_per_seq, shared_file_list, args)
@@ -518,6 +536,7 @@ def main():
                         global_step = take_optimizer_step(args, optimizer, model, overflow_buf, global_step)
 
                     if global_step >= args.max_steps:
+                        train_time_raw = time.time() - raw_train_start
                         last_num_steps = int(training_steps / args.gradient_accumulation_steps) % args.log_freq
                         last_num_steps = args.log_freq if last_num_steps == 0 else last_num_steps
                         average_loss = torch.tensor(average_loss, dtype=torch.float32).cuda()
@@ -525,22 +544,21 @@ def main():
                         if (torch.distributed.is_initialized()):
                             average_loss /= torch.distributed.get_world_size()
                             torch.distributed.all_reduce(average_loss)
+                        final_loss = average_loss.item()
                         if is_main_process():
-                            logger.info("Total Steps:{} Final Loss = {}".format(training_steps / args.gradient_accumulation_steps, average_loss.item()))
+                            dllogger.log(step=(epoch, training_steps / args.gradient_accumulation_steps, ), data={"final_loss": final_loss})
                     elif training_steps % (args.log_freq * args.gradient_accumulation_steps) == 0:
                         if is_main_process():
-                            print("Step:{} Average Loss = {} Step Loss = {} LR {}".format(global_step, average_loss / (
-                                        args.log_freq * divisor),
-                                                                                            loss.item() * args.gradient_accumulation_steps / divisor,
-                                                                                            optimizer.param_groups[0][
-                                                                                                'lr']))
+                            dllogger.log(step=(epoch, global_step, ), data={"average_loss": average_loss / (args.log_freq * divisor),
+                                                                            "step_loss": loss.item() * args.gradient_accumulation_steps / divisor,
+                                                                            "learning_rate": optimizer.param_groups[0]['lr']})
                         average_loss = 0
 
                     if global_step >= args.max_steps or training_steps % (
                             args.num_steps_per_checkpoint * args.gradient_accumulation_steps) == 0:
-                        if is_main_process():
+                        if is_main_process() and not args.skip_checkpoint:
                             # Save a trained model
-                            logger.info("** ** * Saving fine - tuned model ** ** * ")
+                            dllogger.log(step="PARAMETER", data={"checkpoint_step": global_step})
                             model_to_save = model.module if hasattr(model,
                                                                     'module') else model  # Only save the model it-self
                             if args.resume_step < 0 or not args.phase2:
@@ -561,7 +579,7 @@ def main():
                         if global_step >= args.max_steps:
                             del train_dataloader
                             # thread.join()
-                            return args
+                            return args, final_loss, train_time_raw
 
                 del train_dataloader
                 # thread.join()
@@ -573,7 +591,17 @@ def main():
 
 
 if __name__ == "__main__":
+
     now = time.time()
-    args = main()
+    args, final_loss, train_time_raw = main()
+    gpu_count = args.n_gpu
+    args.max_steps += args.phase1_end_step if args.phase2
+    if torch.distributed.is_initialized():
+        gpu_count = torch.distributed.get_world_size()
     if is_main_process():
-        print("Total time taken {}".format(time.time() - now))
+        e2e_time = time.time() - now
+        training_perf = args.train_batch_size * args.gradient_accumulation_steps * gpu_count\
+                        * (args.max_steps - args.resume_step + skipped_steps) / train_time_raw
+        dllogger.log(step=tuple(), data={"e2e_train_time": e2e_time, "training_sequences_per_second": training_perf,
+                                         "final_loss": final_loss, "raw_train_time": train_time_raw })
+    dllogger.flush()

@@ -4,3 +4,4 @@ inflect
 librosa
 scipy
 Unidecode
+git+git://github.com/NVIDIA/dllogger.git@26a0f8f1958de2c0c460925ff6102a4d2486d6cc#egg=dllogger

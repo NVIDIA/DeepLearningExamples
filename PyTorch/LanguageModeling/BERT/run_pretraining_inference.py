@@ -33,6 +33,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, Dataset
 from torch.utils.data.distributed import DistributedSampler
+from utils import is_main_process, format_step
 import math
 import time
 
@@ -44,11 +45,8 @@ from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 
 from apex.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
+import dllogger
 
-logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
-                    datefmt = '%m/%d/%Y %H:%M:%S',
-                    level = logging.INFO)
-logger = logging.getLogger(__name__)
 
 class pretraining_dataset(Dataset):
 
@@ -88,7 +86,6 @@ class pretraining_dataset(Dataset):
 
 def main():    
 
-    print("IN NEW MAIN XD\n")
     parser = argparse.ArgumentParser()
 
     ## Required parameters
@@ -159,10 +156,15 @@ def main():
                         default=False,
                         action='store_true',
                         help="Whether to use 16-bit float precision instead of 32-bit")
-
-    
+    parser.add_argument("--log_path",
+                        help="Out file for DLLogger",
+                        default="/workspace/dllogger_inference.out",
+                        type=str)
 
     args = parser.parse_args()
+
+    if 'LOCAL_RANK' in os.environ:
+        args.local_rank = int(os.environ['LOCAL_RANK'])
 
     if args.local_rank == -1 or args.no_cuda:
         device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
@@ -172,10 +174,20 @@ def main():
         device = torch.device("cuda", args.local_rank)
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
+
+    if is_main_process():
+        dllogger.init(backends=[dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE,
+                                                           filename=args.log_path),
+                                dllogger.StdOutBackend(verbosity=dllogger.Verbosity.VERBOSE, step_format=format_step)])
+    else:
+        dllogger.init(backends=[])
+
     n_gpu = torch.cuda.device_count()
     if n_gpu > 1:
-        assert(args.local_rank != -1) # only use torch.distributed for multi-gpu 
-    logger.info("device %s n_gpu %d distributed inference %r", device, n_gpu, bool(args.local_rank != -1))
+        assert(args.local_rank != -1) # only use torch.distributed for multi-gpu
+
+    dllogger.log(step="device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
+        device, n_gpu, bool(args.local_rank != -1), args.fp16), data={})
 
 
     random.seed(args.seed)
@@ -199,7 +211,7 @@ def main():
             #retrieve latest model
             model_names = [f for f in os.listdir(args.ckpt_dir) if f.endswith(".pt")]
             args.ckpt_step = max([int(x.split('.pt')[0].split('_')[1].strip()) for x in model_names])
-            print("load model saved at iteraton", args.ckpt_step)
+            dllogger.log(step="load model saved at iteration", data={"number": args.ckpt_step})
         model_file = os.path.join(args.ckpt_dir, "ckpt_" + str(args.ckpt_step) + ".pt")
     else:
         model_file = args.ckpt_path
@@ -217,26 +229,22 @@ def main():
     files = [os.path.join(args.input_dir, f) for f in os.listdir(args.input_dir) if os.path.isfile(os.path.join(args.input_dir, f)) and 'test' in f]
     files.sort()
 
-      
-    
-
-    logger.info("***** Running evaluation *****")
-    logger.info("  Batch size = %d", args.eval_batch_size)
-    
+    dllogger.log(step="***** Running Inference *****", data={})
+    dllogger.log(step="  Inference batch", data={"size":args.eval_batch_size})
 
     model.eval()
-    print("Evaluation. . .")
-    
+
     nb_instances = 0
     max_steps = args.max_steps if args.max_steps > 0  else np.inf
     global_step = 0
+    total_samples = 0
 
-    
+    begin_infer = time.time()
     with torch.no_grad():
         if args.do_eval:
             final_loss = 0.0 # 
             for data_file in files:
-                logger.info("file %s" %( data_file))
+                dllogger.log(step="Opening ", data={"file": data_file})
                 dataset = pretraining_dataset(input_file=data_file, max_pred_length=args.max_predictions_per_seq)
                 if not multi_gpu_training:
                     train_sampler = RandomSampler(dataset)
@@ -247,8 +255,6 @@ def main():
                 for step, batch in enumerate(tqdm(datasetloader, desc="Iteration")):
                     if global_step > max_steps:
                         break
-
-
                     batch = [t.to(device) for t in batch]
                     input_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels = batch#\
                     loss = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask, masked_lm_labels=masked_lm_labels, next_sentence_label=next_sentence_labels)
@@ -256,6 +262,7 @@ def main():
 
                     global_step += 1
 
+                total_samples += len(datasetloader)
                 torch.cuda.empty_cache()
                 if global_step > max_steps:
                     break
@@ -265,7 +272,7 @@ def main():
                 dist.all_reduce(final_loss)
                 final_loss /= torch.distributed.get_world_size()
             if (not multi_gpu_training or (multi_gpu_training and torch.distributed.get_rank() == 0)):       
-                logger.info("Finished: Final Loss = {}".format(final_loss))
+                dllogger.log(step="Inference Loss", data={"final_loss": final_loss.item()})
 
 
         else: # inference
@@ -273,7 +280,7 @@ def main():
             #     torch.distributed.barrier()
             # start_t0 = time.time()
             for data_file in files:
-                logger.info("file %s" %( data_file))
+                dllogger.log(step="Opening ", data={"file": data_file})
                 dataset = pretraining_dataset(input_file=data_file, max_pred_length=args.max_predictions_per_seq)
                 if not multi_gpu_training:
                     train_sampler = RandomSampler(dataset)
@@ -281,10 +288,10 @@ def main():
                 else:
                     train_sampler = DistributedSampler(dataset)
                     datasetloader = DataLoader(dataset, sampler=train_sampler, batch_size=args.eval_batch_size, num_workers=4, pin_memory=True)
+
                 for step, batch in enumerate(tqdm(datasetloader, desc="Iteration")):
                     if global_step > max_steps:
                         break
-
 
                     batch = [t.to(device) for t in batch]
                     input_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels = batch#\
@@ -292,20 +299,22 @@ def main():
                     lm_logits, nsp_logits = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask, masked_lm_labels=None, next_sentence_label=None)
 
                     nb_instances += input_ids.size(0)
-
-
                     global_step += 1
+
+                total_samples += len(datasetloader)
                 torch.cuda.empty_cache()
                 if global_step > max_steps:
                     break
             # if multi_gpu_training:
             #     torch.distributed.barrier()
             if (not multi_gpu_training or (multi_gpu_training and torch.distributed.get_rank() == 0)):       
-                logger.info("Finished")
+                dllogger.log(step="Done Inferring on samples", data={})
 
 
-            
+    end_infer = time.time()
+    dllogger.log(step="Inference perf", data={"inference_sequences_per_second": total_samples * args.eval_batch_size / (end_infer - begin_infer)})
 
 
 if __name__ == "__main__":
     main()
+    dllogger.flush()

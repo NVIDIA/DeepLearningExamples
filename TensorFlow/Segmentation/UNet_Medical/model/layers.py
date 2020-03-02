@@ -91,7 +91,7 @@ def upsample_block(inputs, residual_input, filters, idx):
                                kernel_size=(3, 3),
                                activation=tf.nn.relu)
         return tf.layers.conv2d_transpose(inputs=out,
-                                          filters=int(filters),
+                                          filters=int(filters // 2),
                                           kernel_size=(3, 3),
                                           strides=(2, 2),
                                           padding='same',
@@ -129,7 +129,7 @@ def bottleneck(inputs, filters, mode):
         out = tf.layers.dropout(out, rate=0.5, training=training)
 
         return tf.layers.conv2d_transpose(inputs=out,
-                                          filters=filters,
+                                          filters=filters // 2,
                                           kernel_size=(3, 3),
                                           strides=(2, 2),
                                           padding='same',
