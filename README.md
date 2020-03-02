@@ -47,7 +47,7 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 
 ## Jupyter Notebooks
 
-|   Models                    <img width=500/>|   TensorFlow  <img width=200/>|   PyTorch     <img width=500/>|  TensorRT     <img width=400/>|     TRTIS     <img width=400/>|  
+|  Models | TensorFlow | PyTorch | TensorRT | TRTIS |  
 | -------------               | ------------- | ------------- | ------------- | ------------- |
 |   SSD                       |   [ Inference](https://github.com/NVIDIA/DeepLearningExamples/blob/master/TensorFlow/Detection/SSD/models/research/object_detection/object_detection_tutorial.ipynb)  |   [ Inference](https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/Detection/SSD/examples/inference.ipynb)     |  -     |     -     |
 |   MaskRCNN                  |   -  |   [ Training & Inference](https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/Segmentation/MaskRCNN/pytorch/notebooks/pytorch_MaskRCNN_pyt_train_and_inference.ipynb)     |  -     |     -     |
