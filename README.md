@@ -82,7 +82,7 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 | [Variational Autoencoder Collaborative Filtering](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Recommendation/VAE-CF) |TensorFlow  | N/A  | Yes  | Yes  | -  | -  |   -  | -  | -  |
 | [U-Net Industrial](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Industrial) |TensorFlow  | N/A  | Yes  | Yes  | -  | Yes  |   -  | -  | Yes  |
 | [U-Net Medical](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Medical) | TensorFlow  | N/A  | Yes  | Yes  | -  |  Yes  |-  |   -  | Yes  |
-| [U-Net Medical](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Medical) | TensorFlow2  | N/A  | Yes  | Yes  | -  |  Yes  |-  |   -  | Yes  |
+| [U-Net Medical](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Segmentation/UNet_Medical) | TensorFlow2  | N/A  | Yes  | Yes  | -  |  Yes  |-  |   -  | Yes  |
 | [V-Net Medical](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/VNet) | TensorFlow  | N/A  | Yes  | Yes  | -  |  Yes  | Yes |   -  | Yes  |
 | [GNMT v2](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Translation/GNMT) | TensorFlow  | N/A  | Yes  | Yes  | -  | -  |   -  | -  | -  |
 | [Faster Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/FasterTransformer) | Tensorflow  | N/A  | -  | -  | -  | Yes  |   -  | -  | -  |
