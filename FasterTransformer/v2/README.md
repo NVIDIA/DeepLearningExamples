@@ -157,7 +157,7 @@ git clone https://github.com/NVIDIA/DeepLearningExamples
 cd DeepLearningExamples
 git submodule init
 git submodule update
-cd FasterTransformer
+cd FasterTransformer/v2
 ```
 
 3. Build the project.
