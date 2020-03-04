@@ -292,13 +292,14 @@ def main():
     parser = parse_args(parser)
     args, _ = parser.parse_known_args()
 
+    # initialize CUDA state
+    torch.cuda.init()
+
     TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
     encoder = load_engine(args.encoder, TRT_LOGGER)
     decoder_iter = load_engine(args.decoder, TRT_LOGGER)
     postnet = load_engine(args.postnet, TRT_LOGGER)
     waveglow = load_engine(args.waveglow, TRT_LOGGER)
-
-
 
     if args.waveglow_ckpt != "":
         # setup denoiser using WaveGlow PyTorch checkpoint
@@ -310,9 +311,6 @@ def main():
         del waveglow_ckpt
         torch.cuda.empty_cache()
 
-
-    # initialize CUDA state
-    torch.cuda.init()
     # create TRT contexts for each engine
     encoder_context = encoder.create_execution_context()
     decoder_context = decoder_iter.create_execution_context()
