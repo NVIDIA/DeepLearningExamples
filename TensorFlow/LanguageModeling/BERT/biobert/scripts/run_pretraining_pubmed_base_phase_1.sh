@@ -7,7 +7,7 @@ learning_rate=${2:-"9.625e-5"}
 cased=${3:-false}
 precision=${4:-"fp16"}
 use_xla=${5:-"true"}
-num_gpus=${6:-16}
+num_gpu=${6:-16}
 warmup_steps=${7:-"1953"}
 train_steps=${8:-19531}
 num_accumulation_steps=${9:-32}
@@ -83,5 +83,5 @@ $mpi python3 /workspace/bert/run_pretraining.py \
  --num_accumulation_steps=$num_accumulation_steps \
  --learning_rate=$learning_rate \
  --report_loss \
- --$use_hvd $use_fp16 $use_xla_tag \
+ $use_hvd $use_fp16 $use_xla_tag \
  --init_checkpoint=$INIT_CHECKPOINT |& tee $LOGFILE

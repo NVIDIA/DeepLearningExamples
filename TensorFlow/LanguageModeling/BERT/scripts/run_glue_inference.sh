@@ -45,9 +45,10 @@ else
     use_xla_tag=""
 fi
 
-
+num_gpu=1
+ckpt_str=${init_checkpoint//\//-}
 export GBS=$(expr $batch_size \* $num_gpu)
-printf -v TAG "tf_bert_finetuning_glue_%s_inf_%s_%s_gbs%d_ckpt_%s" "$task_name" "$bert_model" "$precision" $GBS "$init_checkpoint"
+printf -v TAG "tf_bert_finetuning_glue_%s_inf_%s_%s_gbs%d_ckpt_%s" "$task_name" "$bert_model" "$precision" $GBS "$ckpt_str"
 DATESTAMP=`date +'%y%m%d%H%M%S'`
 #Edit to save logs & checkpoints in a different directory
 RESULTS_DIR=/results

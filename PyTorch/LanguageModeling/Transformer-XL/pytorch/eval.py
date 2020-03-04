@@ -20,8 +20,10 @@ import pickle
 import sys
 import time
 
+import dllogger
 import numpy as np
 import torch
+import yaml
 
 import data_utils
 import utils
@@ -30,12 +32,29 @@ from data_utils import tokenize_raw
 from utils.exp_utils import AverageMeter
 from utils.exp_utils import benchmark
 from utils.exp_utils import create_exp_dir
+from utils.exp_utils import log_env_info
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description='PyTorch Transformer Language Model',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parent_parser = argparse.ArgumentParser(
+        description='PyTorch Transformer-XL Language Model',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        add_help=False,
+        )
+
+    parser = argparse.ArgumentParser(parents=[parent_parser], add_help=True)
+    cfg_parser = argparse.ArgumentParser(parents=[parent_parser], add_help=False)
+
+    cfg_parser.add_argument('--config', default='default')
+    cfg_parser.add_argument('--config_file', default='config.yaml')
+
+    config_args, _ = cfg_parser.parse_known_args()
+
+    if config_args.config is not None and config_args.config_file is not None:
+        with open(config_args.config_file) as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)[config_args.config]['eval']
+    else:
+        config = {}
 
     parser.add_argument('--work_dir', default='LM-TFM', type=str,
                         help='experiment directory')
@@ -52,7 +71,7 @@ def parse_args():
                         choices=['all', 'valid', 'test'],
                         help='which split to evaluate')
     parser.add_argument('--type', type=str, default='pytorch',
-                        choices=['pytorch', 'torchscript', 'onnx'],
+                        choices=['pytorch', 'torchscript'],
                         help='type of runtime to use')
     parser.add_argument('--batch_size', type=int, default=16,
                         help='batch size')
@@ -65,7 +84,7 @@ def parse_args():
     parser.add_argument('--clamp_len', type=int, default=-1,
                         help='max positional embedding index')
     parser.add_argument('--cuda', action='store_true',
-                        help='use CUDA')
+                        help='Run evaluation on a GPU using CUDA')
     parser.add_argument('--model', type=str, default='',
                         help='path to the checkpoint')
     parser.add_argument('--fp16', action='store_true',
@@ -74,6 +93,10 @@ def parse_args():
                         help='Enable logging for all distributed ranks')
     parser.add_argument('--same_length', action='store_true',
                         help='set same length attention with masking')
+    parser.add_argument('--no_env', action='store_true',
+                        help='Do not print info on execution env')
+    parser.add_argument('--log_interval', type=int, default=10,
+                        help='Report interval')
     parser.add_argument('--target_perplexity', type=float, default=None,
                         help='target perplexity')
     parser.add_argument('--target_throughput', type=float, default=None,
@@ -90,11 +113,16 @@ def parse_args():
                         help='save torchscript model to a file')
     parser.add_argument('--load_torchscript', default=None, type=str,
                         help='load torchscript model from a file')
-    parser.add_argument('--local_rank', default=0, type=int,
-                        help='Used for multi-process training. ' +
-                        'Can either be manually set ' +
-                        'or automatically set by using \'python -m multiproc\'.')
-    args = parser.parse_args()
+    parser.add_argument('--local_rank',  type=int,
+                        default=os.getenv('LOCAL_RANK', 0),
+                        help='Used for multi-process training.')
+
+    parser.set_defaults(**config)
+    args, _ = parser.parse_known_args()
+
+    if args.manual:
+        args.batch_size = 1
+
     assert args.ext_len >= 0, 'extended context length must be non-negative'
     return args
 
@@ -116,30 +144,75 @@ def format_log(loss, split, args):
     return log_str
 
 
-def evaluate(eval_iter, model, meters, max_size=None, repeat=1):
+def evaluate(eval_iter, model, meters, log_interval, max_size=None, repeat=1):
     total_len, total_loss = 0, 0.
+    eval_step = 0
+
+    log_throughput = 0
+    log_latency = 0
+    log_loss = 0
+
     torch.cuda.synchronize()
     start_time = time.time()
     with torch.no_grad():
         mems = None
         for _ in range(repeat):
-            for idx, (data, target, seq_len) in enumerate(eval_iter):
+            for idx, (data, target, seq_len, warm) in enumerate(eval_iter):
                 if max_size and idx >= max_size:
                     break
+                eval_step += 1
+
                 torch.cuda.synchronize()
                 start_iter = time.time()
-                ret = model(data, target, mems)
+                loss, mems = model(data, target, mems)
                 torch.cuda.synchronize()
                 elapsed = time.time() - start_iter
-                loss, mems = ret[0], ret[1:]
-                loss = loss.mean()
-                total_loss += seq_len * loss.item()
-                total_len += seq_len
+
+                loss = loss.float().mean()
+                log_loss += loss.item()
+                if warm:
+                    # assert all([m.size(0) == model.mem_len for m in mems])
+                    total_loss += seq_len * loss.item()
+                    total_len += seq_len
+
                 meters['eval_latency'].update(elapsed)
+                log_latency += elapsed
+
                 target_tokens = target.numel()
                 throughput = target_tokens / elapsed
                 throughput = utils.distributed.all_reduce_item(throughput, op='sum')
                 meters['eval_throughput'].update(throughput)
+                log_throughput += throughput
+
+                if eval_step % log_interval == 0:
+                    log_throughput /= log_interval
+                    log_latency /= log_interval
+                    log_loss /= log_interval
+                    log_ppl = math.exp(log_loss)
+
+                    log_str = '| step {:>8d} | batches {:>6d} / {:d} ' \
+                        '| ms/batch {:5.2f} | tok/s {:7.0f} | loss {:5.2f} | ppl {:5.2f}'.format(
+                            eval_step,
+                            idx+1,
+                            eval_iter.n_batch,
+                            log_latency * 1000,
+                            log_throughput,
+                            log_loss,
+                            log_ppl,
+                            )
+                    logging.info(log_str)
+
+                    dllogger_data = {
+                        'eval_latency': log_latency * 1000,
+                        'eval_throughput': log_throughput,
+                        'eval_loss': log_loss,
+                        'eval_perplexity': log_ppl,
+                        }
+                    dllogger.log(step=eval_step, data=dllogger_data)
+
+                    log_throughput = 0
+                    log_latency = 0
+                    log_loss = 0
 
     utils.distributed.barrier()
     torch.cuda.synchronize()
@@ -159,8 +232,7 @@ def compile_model(model, device, args):
     with torch.no_grad():
         mems = None
         for _ in range(2):
-            ret = model(inp, tgt, mems)
-            _, mems = ret[0], ret[1:]
+            _, mems = model(inp, tgt, mems)
     torch.cuda.synchronize()
     stop = time.time()
     logging.info(f'Building the model took {stop - start:.2f} seconds')
@@ -172,7 +244,7 @@ def main():
     if args.type == 'pytorch':
         from mem_transformer import MemTransformerLM
     else:
-        from inference.mem_transformer_base_jit import MemTransformerLM
+        from inference.mem_transformer_jit import MemTransformerLM
 
     torch.cuda.set_device(args.local_rank)
     device = torch.device('cuda' if args.cuda else 'cpu')
@@ -184,19 +256,28 @@ def main():
 
     # Setup logging
     if args.log_all_ranks:
-        log_file = f'log_rank_{utils.distributed.get_rank()}.log'
+        log_file = f'eval_log_rank_{utils.distributed.get_rank()}.log'
     else:
-        log_file = f'log.log'
+        log_file = f'eval_log.log'
 
+    dllog_file = f'eval_log.json'
     log_file = os.path.join(args.work_dir, log_file)
+    dllog_file = os.path.join(args.work_dir, dllog_file)
     if args.debug:
         log_file = os.devnull
+        dllog_file = os.devnull
 
     utils.exp_utils.setup_logging(log_all_ranks=args.log_all_ranks,
                                   filename=log_file,
                                   filemode='a',
                                   )
+    utils.exp_utils.setup_dllogger(enabled=True, filename=dllog_file)
+
     logging.info(args)
+    dllogger.log(step='PARAMETER', data=vars(args))
+
+    if not args.no_env:
+        log_env_info()
 
     if args.model:
         model_path = args.model
@@ -208,7 +289,6 @@ def main():
     checkpoint = load_checkpoint(model_path)
 
     if args.manual:
-        args.batch_size = 1
         vocab = checkpoint['vocab']
 
         if hasattr(vocab, 'sym2idx') and not hasattr(vocab, 'unk_idx'):
@@ -221,17 +301,15 @@ def main():
 
         iter = data_utils.LMOrderedIterator(tensor, bsz=args.batch_size,
                                             bptt=args.tgt_len, device=device,
-                                            ext_len=args.ext_len)
+                                            ext_len=args.ext_len, warmup=False)
     else:
         # Load dataset
         corpus = get_lm_corpus(args.data, args.dataset, checkpoint['args'].vocab)
 
-        if args.split == 'valid':
-            iter = corpus.get_iterator('valid', args.batch_size, args.tgt_len,
-                                       device=device, ext_len=args.ext_len)
-        elif args.split == 'test':
-            iter = corpus.get_iterator('test', args.batch_size, args.tgt_len,
-                                       device=device, ext_len=args.ext_len)
+        if args.split == 'valid' or args.split == 'test':
+            iter = corpus.get_iterator(args.split, args.batch_size, args.tgt_len,
+                                       device=device, mem_len=args.mem_len,
+                                       ext_len=args.ext_len)
         else:
             raise RuntimeError('Unknown split')
 
@@ -244,7 +322,6 @@ def main():
 
     if args.load_torchscript:
         model = torch.jit.load(args.load_torchscript)
-
     else:
         checkpoint['model_config']['tgt_len'] = args.tgt_len
         checkpoint['model_config']['ext_len'] = args.ext_len
@@ -254,14 +331,50 @@ def main():
         checkpoint['model_config']['dtype'] = dtype
 
         model = MemTransformerLM(**checkpoint['model_config'])
-        model.load_state_dict(checkpoint['model_state'])
+        if args.type == 'pytorch':
+            model.load_state_dict(checkpoint['model_state'])
+        elif args.type == 'torchscript':
+            model.load_state_dict(checkpoint['model_state'], strict=False)
 
     model = model.eval()
     model = model.to(device)
+    model = model.to(dtype)
 
-    model = model.float()
-    if args.fp16:
-        model = model.half()
+    if args.type == 'torchscript':
+        state = checkpoint['model_state']
+
+        tie_projs = checkpoint['model_config']['tie_projs']
+        tie_weight = checkpoint['model_config']['tie_weight']
+        div_val = checkpoint['model_config']['div_val']
+        d_model = checkpoint['model_config']['d_model']
+        d_embed = checkpoint['model_config']['d_embed']
+
+        if div_val != 1 or d_model != d_embed:
+            for i in range(len(model.word_emb.emb_projs)):
+                model.word_emb.emb_projs[i] = state[f'word_emb.emb_projs.{i}'].to(dtype)
+
+        for i in range(len(model.crit.out_projs)):
+            if div_val == 1:
+                src = 0
+            else:
+                src = i
+            if model.crit.out_projs[i] is not None:
+                if tie_projs[i]:
+                    model.crit.out_projs[i] = state[f'word_emb.emb_projs.{src}'].to(dtype)
+                else:
+                    model.crit.out_projs[i] = state[f'crit.out_projs.{i}'].to(dtype)
+
+        for i in range(len(model.crit.out_layers_biases)):
+            model.crit.out_layers_biases[i] = state[f'crit.out_layers_biases.{i}'].to(dtype)
+
+        if tie_weight:
+            for i in range(len(model.crit.out_layers_weights)):
+                model.crit.out_layers_weights[i] = state[f'word_emb.emb_layers.{i}.weight'].to(dtype)
+        else:
+            for i in range(len(model.crit.out_layers_weights)):
+                model.crit.out_layers_weights[i] = state[f'crit.out_layers_weights.{i}'].to(dtype)
+
+        model = torch.jit.script(model)
 
     if args.type != 'pytorch':
         compile_model(model, device, args)
@@ -275,13 +388,18 @@ def main():
                  f'clamp_len {args.clamp_len}')
 
     meters = {}
-    warmup = args.mem_len // args.tgt_len + 1
+    warmup = args.mem_len // args.tgt_len + 2
     meters['eval_throughput'] = AverageMeter(warmup=warmup, keep=args.save_data)
     meters['eval_latency'] = AverageMeter(warmup=warmup, keep=args.save_data)
 
-    loss = evaluate(iter, model, meters, args.max_size, args.repeat)
+    loss = evaluate(iter, model, meters, args.log_interval, args.max_size, args.repeat)
     perplexity = math.exp(loss)
     log_str = format_log(loss, args.split, args)
+
+    summary = {
+        'eval_loss': loss,
+        'eval_ppl': perplexity,
+        }
 
     logging.info('=' * 100)
     logging.info(log_str)
@@ -306,6 +424,15 @@ def main():
             logging.info(f'Latency {p}%: {1000.0 * np.percentile(latency_data, p):.2f} ms')
 
         logging.info('=' * 100)
+
+        summary.update({
+            'eval_throughput': throughput_data.mean(),
+            'eval_avg_latency': 1000 * latency_data.mean(),
+            })
+        for p in args.percentiles:
+            summary[f'eval_{p}%_latency'] = 1000 * np.percentile(latency_data, p)
+
+    dllogger.log(step=tuple(), data=summary)
 
     passed = benchmark(target_perplexity=args.target_perplexity,
                        test_perplexity=perplexity,

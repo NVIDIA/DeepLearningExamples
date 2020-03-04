@@ -85,9 +85,10 @@ To download and preprocess pre-training data as well as the required vocab files
 bash biobert/scripts/biobert_data_download.sh
 ```
 
-Datasets for finetuning can be obtained from this [repository](https://github.com/ncbi-nlp/BLUE_Benchmark/releases/tag/0.1)
+Datasets for finetuning for NER can be obtained from this (repository)[https://github.com/ncbi-nlp/BLUE_Benchmark/releases/tag/0.1]
+Datasets for finetuning for RE can be obtained from this (repository)[https://github.com/arwhirang/recursive_chemprot/tree/master/Demo/tree_LSTM/data]
 
-Place them in `/workspace/bert/data/biobert/` to be automatically picked up by our scripts.
+Place them both in `/workspace/bert/data/biobert/` to be automatically picked up by our scripts.
 
 4. Start an interactive session in the NGC container to run training/inference.
 
@@ -431,11 +432,15 @@ Our results were obtained by running the `scripts/run_pretraining_lamb.sh` train
 
 | **DGX System** | **Nodes** | **Precision** | **Batch Size/GPU: Phase1, Phase2** | **Accumulation Steps: Phase1, Phase2** | **Time to Train (Hrs)** | **Final Loss** |
 |----------------|-----------|---------------|------------------------------------|----------------------------------------|----------------|-------------------------|
-| DGX2H | 4 | FP16 | 128, 16 | 8, 32 | 19.14 | 0.88 |
-| DGX2H | 16 | FP16 | 128, 16 | 2, 8 | 4.81  | 0.86 |
-| DGX2H | 32 | FP16 | 128, 16 | 1, 4 | 2.65  | 0.87 |
+| DGX2H | 4  | FP16 | 128, 16 | 8, 32 | 19.14  | 0.88 |
+| DGX2H | 16 | FP16 | 128, 16 | 2, 8  | 4.81   | 0.86 |
+| DGX2H | 32 | FP16 | 128, 16 | 1, 4  | 2.65   | 0.87 |
+| DGX1  | 1  | FP16 | 64, 8   |128,512| 174.58 | 0.87 |
+| DGX1  | 4  | FP16 | 64, 8   |32, 128| 57.71  | 0.85 |
+| DGX1  | 16 | FP16 | 64, 8   |8,  32 | 12.62  | 0.87 |
+| DGX1  | 32 | FP16 | 64, 8   |4,  16 | 6.97   | 0.87 |
 
-#### Fine-tuning accuracy
+###### Fine-tuning accuracy
 
 | **Task** | **F1** | **Precision** | **Recall** |
 |:-------:|:----:|:----:|:----:|

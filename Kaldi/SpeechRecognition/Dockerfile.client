@@ -1,0 +1,41 @@
+# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+FROM nvcr.io/nvidia/kaldi:19.12-online-beta-py3 as kb
+FROM nvcr.io/nvidia/tensorrtserver:19.12-py3-clientsdk
+
+# Kaldi dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        automake \
+        autoconf \
+        cmake \
+        flac \
+        gawk \
+        libatlas3-base \
+        libtool \
+        python$PYVER \
+        python$PYVER-dev \
+        sox \
+        subversion \
+        unzip \
+        bc \
+        libatlas-base-dev \
+        zlib1g-dev
+
+# Moving Kaldi to container
+COPY --from=kb /opt/kaldi /opt/kaldi
+ENV LD_LIBRARY_PATH /opt/kaldi/src/lib/:$LD_LIBRARY_PATH
+
+COPY kaldi-asr-client /workspace/src/clients/c++/kaldi-asr-client
+RUN echo "add_subdirectory(kaldi-asr-client)" >> "/workspace/src/clients/c++/CMakeLists.txt"
+RUN cd /workspace/build/ && make -j16 trtis-clients

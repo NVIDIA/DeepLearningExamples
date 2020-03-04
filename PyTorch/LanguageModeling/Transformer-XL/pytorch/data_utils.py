@@ -27,32 +27,41 @@ from utils.vocabulary import Vocab
 
 
 class LMOrderedIterator(object):
-    def __init__(self, data, bsz, bptt, device='cpu', ext_len=None):
+    def __init__(self, data, bsz, bptt, device='cpu', mem_len=None, ext_len=None, warmup=True):
         """
             data -- LongTensor -- the LongTensor is strictly ordered
         """
         self.bsz = bsz
         self.bptt = bptt
         self.ext_len = ext_len if ext_len is not None else 0
+        self.mem_len = mem_len
+        self.warmup = warmup
 
         self.device = device
 
         # Work out how cleanly we can divide the dataset into bsz parts.
-        self.n_step = data.size(0) // bsz
+        n_step = data.size(0) // bsz
 
         # Trim off any extra elements that wouldn't cleanly fit (remainders).
-        data = data.narrow(0, 0, self.n_step * bsz)
+        data = data[:n_step * bsz]
 
         # Evenly divide the data across the bsz batches.
         self.data = data.view(bsz, -1).t().contiguous()
 
+        if mem_len and warmup:
+            self.warmup_batches = (mem_len + bptt - 1) // bptt
+            self.warmup_elems = self.warmup_batches * bptt
+
+            warmup_data = self.data.roll((self.warmup_elems, 1), (0, 1))[:self.warmup_elems]
+            self.data = torch.cat((warmup_data, self.data))
+
         # Partition data for DistributedDataParallel
         world_size = utils.distributed.get_world_size()
         rank = utils.distributed.get_rank()
-        self.data = self.data.chunk(world_size, dim=1)[rank].to(device)
+        self.data = self.data.chunk(world_size, dim=1)[rank]
 
         # Number of mini-batches
-        self.n_batch = (self.n_step + self.bptt - 1) // self.bptt
+        self.n_batch = (self.data.size(0) + self.bptt - 1) // self.bptt
 
     def roll(self):
         for i in range(self.data.size(1)):
@@ -70,10 +79,15 @@ class LMOrderedIterator(object):
         end_idx = i + seq_len
         beg_idx = max(0, i - self.ext_len)
 
-        data = self.data[beg_idx:end_idx]
-        target = self.data[i+1:i+1+seq_len]
+        data = self.data[beg_idx:end_idx].to(self.device)
+        target = self.data[i+1:i+1+seq_len].to(self.device)
 
-        return data, target, seq_len
+        if self.mem_len and self.warmup:
+            warm = i >= self.warmup_elems
+        else:
+            warm = True
+
+        return data, target, seq_len, warm
 
     def get_fixlen_iter(self, start=0):
         for i in range(start, self.data.size(0) - 1, self.bptt):

@@ -36,7 +36,7 @@ class TrainHook(tf.estimator.SessionRunHook):
                   run_context,
                   run_values):
         if self._step % self._log_every == 0:
-            self._logger.log(step=self._step, data={'total_loss': run_values.results[0]})
+            self._logger.log(step=(self._step,), data={'total_loss': str(run_values.results[0])})
         self._step += 1
 
     def end(self, session):

@@ -30,7 +30,7 @@ from horovod.tensorflow.compression import Compression
 def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None, manual_fp16=False, use_fp16=False, num_accumulation_steps=1,
                      optimizer_type="adam", allreduce_post_accumulation=False):
   """Creates an optimizer training op."""
-  global_step = tf.train.get_or_create_global_step()
+  global_step = tf.compat.v1.train.get_or_create_global_step()
   
   # avoid step change in learning rate at end of warmup phase
   if optimizer_type == "adam":
@@ -47,7 +47,7 @@ def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None,
   learning_rate = tf.constant(value=adjusted_init_lr, shape=[], dtype=tf.float32)
 
   # Implements linear decay of the learning rate.
-  learning_rate = tf.train.polynomial_decay(
+  learning_rate = tf.compat.v1.train.polynomial_decay(
       learning_rate,
       global_step,
       num_train_steps,
@@ -177,7 +177,7 @@ def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None,
   return train_op
 
 
-class AdamWeightDecayOptimizer(tf.train.Optimizer):
+class AdamWeightDecayOptimizer(tf.compat.v1.train.Optimizer):
   """A basic Adam optimizer that includes "correct" L2 weight decay."""
 
   def __init__(self,
@@ -281,7 +281,7 @@ class AdamWeightDecayOptimizer(tf.train.Optimizer):
     return param_name
 
 
-class LAMBOptimizer(tf.train.Optimizer):
+class LAMBOptimizer(tf.compat.v1.train.Optimizer):
   """A LAMB optimizer that includes "correct" L2 weight decay."""
 
   def __init__(self,
@@ -301,12 +301,12 @@ class LAMBOptimizer(tf.train.Optimizer):
     self.beta_2 = beta_2
     self.epsilon = epsilon
     self.exclude_from_weight_decay = exclude_from_weight_decay
-    self.steps = 0
 
-  def apply_gradients(self, grads_and_vars, global_step=None, name=None,
+  def apply_gradients(self, grads_and_vars, global_step, name=None,
       manual_fp16=False):
     """See base class."""
     assignments = []
+    steps = tf.cast(global_step, tf.float32)
     for (grad, param) in grads_and_vars:
       if grad is None or param is None:
         continue
@@ -343,9 +343,8 @@ class LAMBOptimizer(tf.train.Optimizer):
           tf.multiply(self.beta_2, v) + tf.multiply(1.0 - self.beta_2,
                                                     tf.square(grad)))
 
-      self.steps += 1
-      beta1_correction = (1 - self.beta_1 ** self.steps)
-      beta2_correction = (1 - self.beta_2 ** self.steps)
+      beta1_correction = (1 - self.beta_1 ** steps)
+      beta2_correction = (1 - self.beta_2 ** steps)
 
       next_m_unbiased = next_m / beta1_correction
       next_v_unbiased = next_v / beta2_correction

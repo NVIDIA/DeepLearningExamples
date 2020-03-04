@@ -40,7 +40,8 @@ from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 from modeling import BertForQuestionAnswering, BertConfig, WEIGHTS_NAME, CONFIG_NAME
 from optimization import BertAdam, warmup_linear
 from tokenization import (BasicTokenizer, BertTokenizer, whitespace_tokenize)
-from utils import is_main_process
+from utils import is_main_process, format_step
+import dllogger, time
 
 if sys.version_info[0] == 2:
     import cPickle as pickle
@@ -766,6 +767,7 @@ def _compute_softmax(scores):
     return probs
 
 
+
 from apex.multi_tensor_apply import multi_tensor_applier
 class GradientClipper:
     """
@@ -883,7 +885,27 @@ def main():
     parser.add_argument('--log_freq',
                         type=int, default=50,
                         help='frequency of logging loss.')
+    parser.add_argument('--json-summary', type=str, default="dllogger.json",
+                        help='If provided, the json summary will be written to'
+                             'the specified file.')
+    parser.add_argument("--eval_script",
+                        help="Script to evaluate squad predictions",
+                        default="evaluate.py",
+                        type=str)
+    parser.add_argument("--do_eval",
+                        action='store_true',
+                        help="Whether to use evaluate accuracy of predictions")
+    parser.add_argument("--use_env",
+                        action='store_true',
+                        help="Whether to read local rank from ENVVAR")
+    parser.add_argument('--skip_checkpoint',
+                        default=False,
+                        action='store_true',
+                        help="Whether to save checkpoints")
     args = parser.parse_args()
+
+    if args.use_env and 'LOCAL_RANK' in os.environ:
+        args.local_rank = int(os.environ['LOCAL_RANK'])
 
     if args.local_rank == -1 or args.no_cuda:
         device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
@@ -891,11 +913,21 @@ def main():
     else:
         torch.cuda.set_device(args.local_rank)
         device = torch.device("cuda", args.local_rank)
-        n_gpu = 1
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
-    logger.info("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
-        device, n_gpu, bool(args.local_rank != -1), args.fp16))
+        n_gpu = 1
+
+    if is_main_process():
+        dllogger.init(backends=[dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE,
+                                                           filename=args.json_summary),
+                                dllogger.StdOutBackend(verbosity=dllogger.Verbosity.VERBOSE, step_format=format_step)])
+    else:
+        dllogger.init(backends=[])
+        
+    print("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
+                                device, n_gpu, bool(args.local_rank != -1), args.fp16))
+
+    dllogger.log(step="PARAMETER", data={"Config": [str(args)]})
 
     if args.gradient_accumulation_steps < 1:
         raise ValueError("Invalid gradient_accumulation_steps parameter: {}, should be >= 1".format(
@@ -906,6 +938,8 @@ def main():
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
+    dllogger.log(step="PARAMETER", data={"SEED": args.seed})
+
     if n_gpu > 0:
         torch.cuda.manual_seed_all(args.seed)
 
@@ -948,11 +982,9 @@ def main():
     model = BertForQuestionAnswering(config)
     # model = BertForQuestionAnswering.from_pretrained(args.bert_model,
                 # cache_dir=os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE), 'distributed_{}'.format(args.local_rank)))
-    if is_main_process():
-        print("LOADING CHECKPOINT")
+    dllogger.log(step="PARAMETER", data={"loading_checkpoint": True})
     model.load_state_dict(torch.load(args.init_checkpoint, map_location='cpu')["model"], strict=False)
-    if is_main_process():
-        print("LOADED CHECKPOINT")
+    dllogger.log(step="PARAMETER", data={"loaded_checkpoint": True})
     model.to(device)
 
     # Prepare optimizer
@@ -974,7 +1006,6 @@ def main():
             except ImportError:
                 raise ImportError(
                     "Please install apex from https://www.github.com/nvidia/apex to use distributed and fp16 training.")
-            # import ipdb; ipdb.set_trace()
             optimizer = FusedAdam(optimizer_grouped_parameters,
                                   lr=args.learning_rate,
                                   bias_correction=False)
@@ -993,7 +1024,6 @@ def main():
                                     warmup=args.warmup_proportion,
                                     t_total=num_train_optimization_steps)
 
-    #print(model)
     if args.local_rank != -1:
         try:
             from apex.parallel import DistributedDataParallel as DDP
@@ -1022,15 +1052,15 @@ def main():
                 doc_stride=args.doc_stride,
                 max_query_length=args.max_query_length,
                 is_training=True)
-            if args.local_rank == -1 or torch.distributed.get_rank() == 0:
-                logger.info("  Saving train features into cached file %s", cached_train_features_file)
+            if args.local_rank == -1 or is_main_process():
+                dllogger.log(step="PARAMETER", data={"Cached_train features_file": cached_train_features_file})
                 with open(cached_train_features_file, "wb") as writer:
                     pickle.dump(train_features, writer)
-        logger.info("***** Running training *****")
-        logger.info("  Num orig examples = %d", len(train_examples))
-        logger.info("  Num split examples = %d", len(train_features))
-        logger.info("  Batch size = %d", args.train_batch_size)
-        logger.info("  Num steps = %d", num_train_optimization_steps)
+        dllogger.log(step="PARAMETER", data={"train_start": True})
+        dllogger.log(step="PARAMETER", data={"training_samples": len(train_examples)})
+        dllogger.log(step="PARAMETER", data={"training_features": len(train_features)})
+        dllogger.log(step="PARAMETER", data={"train_batch_size":args.train_batch_size})
+        dllogger.log(step="PARAMETER", data={"steps":num_train_optimization_steps})
         all_input_ids = torch.tensor([f.input_ids for f in train_features], dtype=torch.long)
         all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
         all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
@@ -1042,12 +1072,15 @@ def main():
             train_sampler = RandomSampler(train_data)
         else:
             train_sampler = DistributedSampler(train_data)
-        train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size)
+        train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size * n_gpu)
 
         model.train()
         gradClipper = GradientClipper(max_grad_norm=1.0)
-        for _ in trange(int(args.num_train_epochs), desc="Epoch"):
-            for step, batch in enumerate(tqdm(train_dataloader, desc="Iteration")):
+        final_loss = None
+        train_start = time.time()
+        for epoch in range(int(args.num_train_epochs)):
+            train_iter = tqdm(train_dataloader, desc="Iteration") if is_main_process() else train_dataloader
+            for step, batch in enumerate(train_iter):
                 # Terminate early for benchmarking
                 
                 if args.max_steps > 0 and global_step > args.max_steps:
@@ -1066,10 +1099,6 @@ def main():
                         scaled_loss.backward()
                 else:
                     loss.backward()
-                # if args.fp16:
-                #    optimizer.backward(loss)
-                # else:
-                #    loss.backward()
                 
                 # gradient clipping  
                 gradClipper.step(amp.master_params(optimizer))         
@@ -1081,12 +1110,15 @@ def main():
                     optimizer.step()
                     optimizer.zero_grad()
                     global_step += 1
-                if step % args.log_freq == 0:
-                    # logger.info("Step {}: Loss {}, LR {} ".format(global_step, loss.item(), lr_this_step))
-                    logger.info(
-                        "Step {}: Loss {}, LR {} ".format(global_step, loss.item(), optimizer.param_groups[0]['lr']))
 
-    if args.do_train and is_main_process():
+                final_loss = loss.item()
+                if step % args.log_freq == 0:
+                    dllogger.log(step=(epoch, global_step,), data={"step_loss": final_loss,
+                                                                   "learning_rate": optimizer.param_groups[0]['lr']})
+
+        time_to_train = time.time() - train_start
+
+    if args.do_train and is_main_process() and not args.skip_checkpoint:
         # Save a trained model and the associated configuration
         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
         output_model_file = os.path.join(args.output_dir, WEIGHTS_NAME)
@@ -1095,15 +1127,7 @@ def main():
         with open(output_config_file, 'w') as f:
             f.write(model_to_save.config.to_json_string())
 
-    #     # Load a trained model and config that you have fine-tuned
-    #     config = BertConfig(output_config_file)
-    #     model = BertForQuestionAnswering(config)
-    #     model.load_state_dict(torch.load(output_model_file))
-    # else:
-    #     model = BertForQuestionAnswering.from_pretrained(args.bert_model)
-
-
-    if args.do_predict and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
+    if args.do_predict and (args.local_rank == -1 or is_main_process()):
 
         if not args.do_train and args.fp16:
             model.half()
@@ -1117,11 +1141,10 @@ def main():
             doc_stride=args.doc_stride,
             max_query_length=args.max_query_length,
             is_training=False)
-
-        logger.info("***** Running predictions *****")
-        logger.info("  Num orig examples = %d", len(eval_examples))
-        logger.info("  Num split examples = %d", len(eval_features))
-        logger.info("  Batch size = %d", args.predict_batch_size)
+        dllogger.log(step="PARAMETER", data={"infer_start": True})
+        dllogger.log(step="PARAMETER", data={"eval_samples": len(eval_examples)})
+        dllogger.log(step="PARAMETER", data={"eval_features": len(eval_features)})
+        dllogger.log(step="PARAMETER", data={"predict_batch_size": args.predict_batch_size})
 
         all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
         all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
@@ -1132,12 +1155,13 @@ def main():
         eval_sampler = SequentialSampler(eval_data)
         eval_dataloader = DataLoader(eval_data, sampler=eval_sampler, batch_size=args.predict_batch_size)
 
+        infer_start = time.time()
         model.eval()
         all_results = []
-        logger.info("Start evaluating")
+        dllogger.log(step="PARAMETER", data={"eval_start": True})
         for input_ids, input_mask, segment_ids, example_indices in tqdm(eval_dataloader, desc="Evaluating"):
             if len(all_results) % 1000 == 0:
-                logger.info("Processing example: %d" % (len(all_results)))
+                dllogger.log(step="PARAMETER", data={"sample_number": len(all_results)})
             input_ids = input_ids.to(device)
             input_mask = input_mask.to(device)
             segment_ids = segment_ids.to(device)
@@ -1151,6 +1175,8 @@ def main():
                 all_results.append(RawResult(unique_id=unique_id,
                                              start_logits=start_logits,
                                              end_logits=end_logits))
+
+        time_to_infer = time.time() - infer_start
         output_prediction_file = os.path.join(args.output_dir, "predictions.json")
         output_nbest_file = os.path.join(args.output_dir, "nbest_predictions.json")
         output_null_log_odds_file = os.path.join(args.output_dir, "null_odds.json")
@@ -1160,6 +1186,35 @@ def main():
                           output_nbest_file, output_null_log_odds_file, args.verbose_logging,
                           args.version_2_with_negative, args.null_score_diff_threshold)
 
+        if args.do_eval and is_main_process():
+            import sys
+            import subprocess
+            eval_out = subprocess.check_output([sys.executable, args.eval_script,
+                                              args.predict_file, args.output_dir + "/predictions.json"])
+            scores = str(eval_out).strip()
+            exact_match = float(scores.split(":")[1].split(",")[0])
+            f1 = float(scores.split(":")[2].split("}")[0])
+
+    if args.do_train:
+        gpu_count = n_gpu
+        if torch.distributed.is_initialized():
+            gpu_count = torch.distributed.get_world_size()
+
+        if args.max_steps == -1:
+            dllogger.log(step=tuple(), data={"e2e_train_time": time_to_train,
+                                             "training_sequences_per_second": len(train_features) * args.num_train_epochs / time_to_train,
+                                             "final_loss": final_loss})
+        else:
+            dllogger.log(step=tuple(), data={"e2e_train_time": time_to_train,
+                                             "training_sequences_per_second": args.train_batch_size * args.gradient_accumulation_steps \
+                                              * args.max_steps * gpu_count / time_to_train,
+                                              "final_loss": final_loss})
+    if args.do_predict and is_main_process():
+        dllogger.log(step=tuple(), data={"e2e_inference_time": time_to_infer,
+                                                 "inference_sequences_per_second": len(eval_features) / time_to_infer})
+    if args.do_eval and is_main_process():
+        dllogger.log(step=tuple(), data={"exact_match": exact_match, "F1": f1})
 
 if __name__ == "__main__":
     main()
+    dllogger.flush()

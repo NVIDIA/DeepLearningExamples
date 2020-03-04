@@ -36,6 +36,6 @@ class ProfilingHook(tf.estimator.SessionRunHook):
 
     def end(self, session):
         deltas = [self._timestamps[i + 1] - self._timestamps[i] for i in range(len(self._timestamps) - 1)]
-        self._logger.log(step=self._step, data={
-            'average_throughput_' + 'train' if self._training else 'test': self._global_batch_size / np.mean(deltas)})
+        self._logger.log(step=(), data={
+            'average_throughput_train' if self._training else 'average_throughput_test': self._global_batch_size / np.mean(deltas)})
         self._logger.flush()

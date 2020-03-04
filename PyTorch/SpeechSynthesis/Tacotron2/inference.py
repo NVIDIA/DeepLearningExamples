@@ -50,6 +50,7 @@ def parse_args(parser):
                         help='full path to the input text (phareses separated by new line)')
     parser.add_argument('-o', '--output', required=True,
                         help='output folder to save audio (file per phrase)')
+    parser.add_argument('--suffix', type=str, default="", help="output filename suffix")
     parser.add_argument('--tacotron2', type=str,
                         help='full path to the Tacotron2 model checkpoint file')
     parser.add_argument('--waveglow', type=str,
@@ -242,7 +243,7 @@ def main():
     for i, audio in enumerate(audios):
         audio = audio[:mel_lengths[i]*args.stft_hop_length]
         audio = audio/torch.max(torch.abs(audio))
-        audio_path = args.output + "audio_"+str(i)+".wav"
+        audio_path = args.output+"audio_"+str(i)+"_"+args.suffix+".wav"
         write(audio_path, args.sampling_rate, audio.cpu().numpy())
 
     DLLogger.flush()

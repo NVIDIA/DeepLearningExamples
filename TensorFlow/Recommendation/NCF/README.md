@@ -217,7 +217,7 @@ To run evaluation on a specific checkpoint, simply run the following command:
 
 ```bash
 checkpoint=/data/checkpoints/model.ckpt
-python ncf.py --data /data/cache/ml-20m --mode test --checkpoint-dir $checkpoint
+python ncf.py --data /data/cache/ml-20m --mode test --load-checkpoint-path $checkpoint
 ```
 
 Note: TensorFlow checkpoints consist of 3 files each with a `*.ckpt` prefix.
@@ -389,11 +389,7 @@ performance in training and inference modes.
 To benchmark the training and inference performance, run: 
 
 ```
-numgpu=4
-datadir=/data/cache/ml-20m
-mpirun -np $numgpu \
-    --allow-run-as-root \
-    python ncf.py --data $datadir
+mpirun -np 1 --allow-run-as-root python ncf.py --data /data/cache/ml-20m
 ```
 
 By default, the `ncf.py` script outputs metrics describing the following:

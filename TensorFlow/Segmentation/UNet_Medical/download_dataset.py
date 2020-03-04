@@ -19,7 +19,7 @@ PARSER = argparse.ArgumentParser(description="U-Net medical")
 
 PARSER.add_argument('--data_dir',
                     type=str,
-                    default=1,
+                    default='./data',
                     help="""Directory where to download the dataset""")
 
 def main():

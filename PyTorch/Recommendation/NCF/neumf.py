@@ -34,13 +34,6 @@ import torch.nn as nn
 
 import sys
 from os.path import abspath, join, dirname
-# enabling modules discovery from the global entrypoint
-sys.path.append(abspath(dirname(__file__) + '/'))
-
-from logger.logger import LOGGER
-from logger import tags
-
-LOGGER.model = 'ncf'
 
 class NeuMF(nn.Module):
     def __init__(self, nb_users, nb_items,
@@ -51,15 +44,12 @@ class NeuMF(nn.Module):
         super(NeuMF, self).__init__()
         nb_mlp_layers = len(mlp_layer_sizes)
 
-        LOGGER.log(key=tags.MODEL_HP_MF_DIM, value=mf_dim)
-
         self.mf_user_embed = nn.Embedding(nb_users, mf_dim)
         self.mf_item_embed = nn.Embedding(nb_items, mf_dim)
         self.mlp_user_embed = nn.Embedding(nb_users, mlp_layer_sizes[0] // 2)
         self.mlp_item_embed = nn.Embedding(nb_items, mlp_layer_sizes[0] // 2)
         self.dropout = dropout
 
-        LOGGER.log(key=tags.MODEL_HP_MLP_LAYER_SIZES, value=mlp_layer_sizes)
         self.mlp = nn.ModuleList()
         for i in range(1, nb_mlp_layers):
             self.mlp.extend([nn.Linear(mlp_layer_sizes[i - 1], mlp_layer_sizes[i])])  # noqa: E501

@@ -142,20 +142,7 @@ fi
 
 set +x
 
-echo "finished pretraining, starting benchmarking"
-
-target_loss=15
-THROUGHPUT=10
-THRESHOLD=0.9
-
-throughput=`cat $LOGFILE | grep Iteration | tail -1 | awk -F'it/s' '{print $1}' | awk -F',' '{print $2}' | egrep -o [0-9.]+`
-loss=`cat $LOGFILE | grep 'Average Loss' | tail -1 | awk -F'Average Loss =' '{print $2}' | awk -F' ' '{print $1}' | egrep -o [0-9.]+`
-final_loss=`cat $LOGFILE | grep 'Total Steps' | tail -1 | awk -F'Final Loss =' '{print $2}' | awk -F' ' '{print $1}' | egrep -o [0-9.]+`
-
-train_perf=$(awk 'BEGIN {print ('$throughput' * '$num_gpus' * '$train_batch_size' / '$gradient_accumulation_steps' )}')
-echo " training throughput phase1: $train_perf sequences/second"
-echo "average loss: $loss"
-echo "final loss: $final_loss"
+echo "finished pretraining"
 
 #Start Phase2
 
@@ -231,11 +218,3 @@ fi
 set +x
 
 echo "finished phase2"
-throughput=`cat $LOGFILE | grep Iteration | tail -1 | awk -F'it/s' '{print $1}' | awk -F',' '{print $2}' | egrep -o [0-9.]+`
-loss=`cat $LOGFILE | grep 'Average Loss' | tail -1 | awk -F'Average Loss =' '{print $2}' | awk -F' ' '{print $1}' | egrep -o [0-9.]+`
-final_loss=`cat $LOGFILE | grep 'Total Steps' | tail -1 | awk -F'Final Loss =' '{print $2}' | awk -F' ' '{print $1}' | egrep -o [0-9.]+`
-
-train_perf=$(awk 'BEGIN {print ('$throughput' * '$num_gpus' * '$train_batch_size_phase2' / '$gradient_accumulation_steps_phase2')}')
-echo " training throughput phase2: $train_perf sequences/second"
-echo "average loss: $loss"
-echo "final loss: $final_loss"

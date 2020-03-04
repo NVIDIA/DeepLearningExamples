@@ -14,10 +14,13 @@
 
 import contextlib
 import os
-from collections import Counter, OrderedDict
-import utils
+from collections import Counter
+from collections import OrderedDict
 
 import torch
+
+import utils
+
 
 class Vocab(object):
     def __init__(self, special=[], min_freq=0, max_size=None, lower_case=True,
@@ -42,7 +45,7 @@ class Vocab(object):
         else:
             symbols = line.split(self.delimiter)
 
-        if add_double_eos: # lm1b
+        if add_double_eos:  # lm1b
             return ['<S>'] + symbols + ['<S>']
         elif add_eos:
             return symbols + ['<eos>']
@@ -50,7 +53,8 @@ class Vocab(object):
             return symbols
 
     def count_file(self, path, verbose=False, add_eos=False):
-        if verbose: print('counting file {} ...'.format(path))
+        if verbose:
+            print('counting file {} ...'.format(path))
         assert os.path.exists(path)
 
         sents = []
@@ -68,7 +72,8 @@ class Vocab(object):
         """
             sents : a list of sentences, each a list of tokenized symbols
         """
-        if verbose: print('counting {} sents ...'.format(len(sents)))
+        if verbose:
+            print('counting {} sents ...'.format(len(sents)))
         for idx, symbols in enumerate(sents):
             if verbose and idx > 0 and idx % 500000 == 0:
                 print('    line {}'.format(idx))
@@ -99,15 +104,17 @@ class Vocab(object):
                 self.add_special(sym)
 
             for sym, cnt in self.counter.most_common(self.max_size):
-                if cnt < self.min_freq: break
+                if cnt < self.min_freq:
+                    break
                 self.add_symbol(sym)
 
             print('final vocab size {} from {} unique tokens'.format(
                 len(self), len(self.counter)))
 
     def encode_file(self, path, ordered=False, verbose=False, add_eos=True,
-            add_double_eos=False):
-        if verbose: print('encoding file {} ...'.format(path))
+                    add_double_eos=False):
+        if verbose:
+            print('encoding file {} ...'.format(path))
         assert os.path.exists(path)
         encoded = []
         with open(path, 'r', encoding='utf-8') as f:
@@ -115,7 +122,7 @@ class Vocab(object):
                 if verbose and idx > 0 and idx % 500000 == 0:
                     print('    line {}'.format(idx))
                 symbols = self.tokenize(line, add_eos=add_eos,
-                    add_double_eos=add_double_eos)
+                                        add_double_eos=add_double_eos)
                 encoded.append(self.convert_to_tensor(symbols))
 
         if ordered:
@@ -124,7 +131,8 @@ class Vocab(object):
         return encoded
 
     def encode_sents(self, sents, ordered=False, verbose=False):
-        if verbose: print('encoding {} sents ...'.format(len(sents)))
+        if verbose:
+            print('encoding {} sents ...'.format(len(sents)))
         encoded = []
         for idx, symbols in enumerate(sents):
             if verbose and idx > 0 and idx % 500000 == 0:

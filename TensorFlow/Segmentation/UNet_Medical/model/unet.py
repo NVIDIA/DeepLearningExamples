@@ -18,10 +18,11 @@ This module provides a convenient way to create different topologies
 based around UNet.
 
 """
+import tensorflow as tf
 from model.layers import output_block, upsample_block, bottleneck, downsample_block, input_block
 
 
-def unet_v1(inputs, mode):
+def unet_v1(features,  mode):
     """ U-Net: Convolutional Networks for Biomedical Image Segmentation
 
     Source:
@@ -31,7 +32,7 @@ def unet_v1(inputs, mode):
 
     skip_connections = []
 
-    out, skip = input_block(inputs, filters=64)
+    out, skip = input_block(features, filters=64)
 
     skip_connections.append(skip)
 
@@ -46,5 +47,4 @@ def unet_v1(inputs, mode):
                              residual_input=skip_connections.pop(),
                              filters=filters,
                              idx=idx)
-
     return output_block(out, residual_input=skip_connections.pop(), filters=64, n_classes=2)

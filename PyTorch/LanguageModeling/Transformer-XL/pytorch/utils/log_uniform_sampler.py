@@ -1,6 +1,7 @@
+import numpy as np
 import torch
 from torch import nn
-import numpy as np
+
 
 class LogUniformSampler(object):
     def __init__(self, range_max, n_sample):
@@ -144,4 +145,3 @@ if __name__ == '__main__':
     print('logits shape', logits.size())
     print('out_labels', out_labels.detach().numpy().tolist())
     print('out_labels shape', out_labels.size())
-

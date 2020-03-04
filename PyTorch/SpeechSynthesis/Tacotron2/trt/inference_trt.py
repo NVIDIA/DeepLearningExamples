@@ -265,9 +265,13 @@ def infer_waveglow_trt(waveglow, waveglow_context, mel, measurements):
     z_size = (mel_size-1)*stride+(kernel_size-1)+1
     z_size = z_size - (kernel_size-stride)
     z_size = z_size//n_group
-    z = torch.randn(batch_size, n_group, z_size, 1).cuda().float()
+    z = torch.randn(batch_size, n_group, z_size, 1).cuda()
+    audios = torch.zeros(batch_size, mel_size*stride).cuda()
 
-    audios = torch.zeros(batch_size, mel_size*256).cuda()
+    if "HALF" in str(waveglow.get_binding_dtype(waveglow.get_binding_index("mel"))):
+        z = z.half()
+        mel = mel.half()
+        audios = audios.half()
 
     waveglow_tensors = {
         # inputs
@@ -288,13 +292,14 @@ def main():
     parser = parse_args(parser)
     args, _ = parser.parse_known_args()
 
+    # initialize CUDA state
+    torch.cuda.init()
+
     TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
     encoder = load_engine(args.encoder, TRT_LOGGER)
     decoder_iter = load_engine(args.decoder, TRT_LOGGER)
     postnet = load_engine(args.postnet, TRT_LOGGER)
     waveglow = load_engine(args.waveglow, TRT_LOGGER)
-
-
 
     if args.waveglow_ckpt != "":
         # setup denoiser using WaveGlow PyTorch checkpoint
@@ -306,9 +311,6 @@ def main():
         del waveglow_ckpt
         torch.cuda.empty_cache()
 
-
-    # initialize CUDA state
-    torch.cuda.init()
     # create TRT contexts for each engine
     encoder_context = encoder.create_execution_context()
     decoder_context = decoder_iter.create_execution_context()
@@ -330,7 +332,6 @@ def main():
     measurements = {}
 
     sequences, sequence_lengths = prepare_input_sequence(texts)
-    print("|||sequence_lengths", sequence_lengths)
     sequences = sequences.to(torch.int32)
     sequence_lengths = sequence_lengths.to(torch.int32)
     with MeasureTime(measurements, "latency"):
@@ -342,7 +343,7 @@ def main():
     with encoder_context, decoder_context,  postnet_context, waveglow_context:
         pass
 
-    audios.float()
+    audios = audios.float()
     if args.waveglow_ckpt != "":
         with MeasureTime(measurements, "denoiser"):
             audios = denoiser(audios, strength=args.denoising_strength).squeeze(1)
