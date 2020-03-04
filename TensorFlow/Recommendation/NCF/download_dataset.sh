@@ -1,3 +1,4 @@
+#!/bin/bash
 DATASET_NAME=$1
 RAW_DATADIR=$2
 
