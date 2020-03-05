@@ -132,7 +132,7 @@ if __name__ == "__main__":
 
     all_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
     decoder_var_start_id = 0
-    while all_vars[decoder_var_start_id].name.find("transformer/decoder") == -1:
+    while all_vars[decoder_var_start_id].name.find("transformer/decoding") == -1:
         decoder_var_start_id += 1
     encoder_variables = all_vars[:decoder_var_start_id]
     decoder_variables = all_vars[decoder_var_start_id:]

@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+from __future__ import print_function
 import numpy as np
 import tensorflow as tf
 import argparse
@@ -58,7 +58,6 @@ if __name__ == "__main__":
     np.random.seed(1)
     tf.set_random_seed(1)
     kernel_initializer_range = 0.02
-    initializer_range = 0.02
     bias_initializer_range = 0.02
 
     batch_size = args.batch_size
@@ -90,8 +89,8 @@ if __name__ == "__main__":
                                      encoder_hidden_dim=memory_hidden_dim,
                                      dtype=tf_datatype)
 
-    embedding_table = np.random.rand(vocab_size, hidden_dim).astype(
-        np_datatype)  # a [vocab_size, hidden_dim] table
+    embedding_table = np.random.randn(vocab_size, hidden_dim).astype(
+                    np_datatype) * 0.01  # a [vocab_size, hidden_dim] table
     embedding_table = tf.convert_to_tensor(embedding_table)
     memory, memory_sequence_length = generate_encoder_result(
         batch_size, max_seq_len, memory_hidden_dim, tf_datatype)

@@ -69,12 +69,11 @@ T blockReduceSum(T val)
   if(lane == 0)
     shared[wid] = val;
   __syncthreads();
-
+  
   val = (threadIdx.x < (blockDim.x >> 5 )) ? shared[lane] : (T)0.0f;
   val = warpReduceSum(val);
   return val;
 }
-
 
 template <typename T>
   __inline__ __device__
@@ -386,12 +385,15 @@ void topK(const float* log_probs, int* ids, const int batch_size, const int beam
 
 template <typename T>
 __global__
-void update_kernel(T* log_probs, T* cum_log_probs, int* ids, bool* finished, int* parent_ids, int* sequence_length,
-  int* word_ids, int* output_ids,
-  const int batch_size, const int beam_width, const int vocab_size)
+void update_kernel(T* log_probs, T* cum_log_probs, 
+                  int* ids, bool* finished, 
+                  int* parent_ids, int* sequence_length, 
+                  int* word_ids, int* output_ids, 
+                  const int batch_size, const int beam_width, 
+                  const int vocab_size, const int end_id, 
+                  int* finished_count)
 {
   int tid = threadIdx.x;
-
   sequence_length[tid] = finished[tid] ? sequence_length[tid] : sequence_length[tid] + 1;
 
   int beam_id = ids[tid];
@@ -401,10 +403,14 @@ void update_kernel(T* log_probs, T* cum_log_probs, int* ids, bool* finished, int
 
   cum_log_probs[tid] = log_probs[ids[tid]];
   sequence_length[tid] = sequence_length[beam_id];
-  finished[tid] = finished[beam_id];
+  finished[tid] = word_id == end_id ? 1 : 0;
   parent_ids[tid] = beam_id;
   word_ids[tid] = word_id;
   output_ids[tid] = word_id;
+
+  // TODO use reduce sum to compute how many sentence are finished
+  // int fi = finished[tid]
+  // int total_finish = reduceSum(fi);
 }
 
 template <typename T>
@@ -415,9 +421,13 @@ __global__ void embedding_lookup_kernel(const T* embedding_table, const int* wor
   from_tensor[write_pos] = embedding_table[word_ids[blockIdx.x] * hidden_units + threadIdx.x];
 }
 
-void update(float* log_probs, float* cum_log_probs, int* ids, bool* finished, int* parent_ids, int* sequence_length,
-  int* word_ids, int* output_ids,
-  const int batch_size, const int beam_width, const int vocab_size, cudaStream_t stream)
+void update(float* log_probs, float* cum_log_probs, 
+            int* ids, bool* finished, 
+            int* parent_ids, int* sequence_length,
+            int* word_ids, int* output_ids, 
+            const int batch_size, const int beam_width, 
+            const int vocab_size, cudaStream_t stream, 
+            const int end_id, int* finished_count)
 { 
   
   dim3 grid(1);
@@ -425,9 +435,11 @@ void update(float* log_probs, float* cum_log_probs, int* ids, bool* finished, in
 
   assert(block.x <= 1024);
 
-  update_kernel<float><<<grid, block, 0, stream>>>(log_probs, cum_log_probs, ids, finished, parent_ids, sequence_length,
-    word_ids, output_ids,
-    batch_size, beam_width, vocab_size);
+  update_kernel<float><<<grid, block, 0, stream>>>(log_probs, cum_log_probs, ids, 
+                                                  finished, parent_ids, sequence_length,
+                                                  word_ids, output_ids, batch_size, 
+                                                  beam_width, vocab_size, end_id, 
+                                                  finished_count);
 }
 
 template <typename T>
@@ -565,14 +577,17 @@ __global__
 void sine_position_encoder_kernel(T* output, int step, int n){
   int tid = threadIdx.x;
   int bid = blockIdx.x;
-  int half_n = n / 2;
+  float half_n = (float)n / 2.;
 
-  float log_timescale_increment = __logf(10000) / (( half_n - 1) * 1.f);
-  float inv_timescales = __expf( (tid % half_n) * -1 * log_timescale_increment );
+  // input = input * hidden_dim**0.5
+  output[bid * n + tid] = output[bid * n + tid] * (T)sqrtf(float(n));
+
+  float log_timescale_increment = __logf(10000) / (half_n - 1.f);
+  float inv_timescales = __expf( (tid % (int)half_n) * -1 * log_timescale_increment );
   float scaled_time = inv_timescales * step;
   
   T encoding_val = (tid < half_n) ? (T) __sinf(scaled_time) : (T) __cosf(scaled_time);
-  output[bid * n + tid] = output[bid * n + tid] + encoding_val;
+  output[bid * n + tid] = output[bid * n + tid]  + encoding_val;
 }
 
 template<typename T>
@@ -584,7 +599,7 @@ void sine_position_encoder(
   dim3 grid(m);
   dim3 block(n);
   assert(n <= 1024);
-  sine_position_encoder_kernel<T><<<grid, block, 0, stream>>>(output, step + 1, n);
+  sine_position_encoder_kernel<T><<<grid, block, 0, stream>>>(output, step, n);
 }
 
 template void add_bias_act_kernelLauncher<float>(

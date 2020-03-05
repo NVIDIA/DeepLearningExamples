@@ -23,6 +23,7 @@ This repository provides a script and recipe to run the highly optimized transfo
   * [Inference process](#inference-process)
     * [Encoder process](#encoder-process)
     * [Decoder and Decoding process](#decoder-and-decoding-process)
+    * [Translation process](#translation-process)
 - [Performance](#performance)
   * [Encoder performance](#encoder-performance)
   * [Decoder performance on T4](#decoder-performance-on-t4)
@@ -51,7 +52,7 @@ FasterTransformer is built on top of CUDA and cuBLAS, providing the C++ API and 
 
 The following configurations are supported in the FasterTransformer encoder. 
 - Batch size (B<sub>1</sub>): smaller or equal to 512
-- Sequence length (S): smaller or equal to 128 
+- Sequence length (S): larger than 3 and smaller or equal to 1024 
 - Head number (H) and size per head (N): 
   - 12 heads * 64 per heads
   - 4 heads * 32 per heads
@@ -60,7 +61,7 @@ The following configurations are supported in the FasterTransformer encoder.
 
 The following configurations are supported in the FasterTransformer decoder and decoding.
 - Batch size (B<sub>1</sub>) * beam width (B<sub>2</sub>): smaller than 1024
-- Sequence length (S): smaller or equal to 128
+- Sequence length (S): smaller than 1024
 - Head number (H): 8 and 12
 - Size per head (N): 64
 - Vocabulary size (V): from 64 to 30000
@@ -154,10 +155,9 @@ nvidia-docker run -ti nvcr.io/nvidia/tensorflow:19.07-py2 bash
 
 ```bash
 git clone https://github.com/NVIDIA/DeepLearningExamples
-cd DeepLearningExamples
+cd DeepLearningExamples/FasterTransformer/v2
 git submodule init
 git submodule update
-cd FasterTransformer/v2
 ```
 
 3. Build the project.
@@ -356,6 +356,7 @@ The `sample/` folder contains useful sample codes for FasterTransformer:
 * `sample/tensorflow/decoding_sample.py` - TensorFlow decoding sample codes 
 * `sample/tensorflow/encoder_decoder_sample.py` - TensorFlow `encoder_decoder` sample codes 
 * `sample/tensorflow/encoder_decoding_sample.py` - TensorFlow `encoder_decoding` sample codes 
+* `sample/tensorflow/translate_sample.py` - TensorFlow translation sample codes
 
 ### Command-line options
 
@@ -367,6 +368,7 @@ python decoder_sample.py --help
 python decoding_sample.py --help
 python encoder_decoder_sample.py --help
 python encoder_decoding_sample.py --help
+python translate_sample.py --help
 ```
 
 ### Inference process
@@ -540,14 +542,16 @@ python decoder_sample.py \
 The outputs should be similar to the following:
 
 ```bash 
-[[INFO][PYTHON] step:][1][max diff: ][9.77516174e-06][True]
-[[INFO][PYTHON] step:][2][max diff: ][1.04904175e-05][True]
+[[INFO][PYTHON] step:][0][max diff: ][5.00679e-06][ op val: ][2.3735888][ tf val: ][2.37359381][True]
+[[INFO][PYTHON] step:][1][max diff: ][4.64916229e-06][ op val: ][-0.588810563][ tf val: ][-0.588815212][True]
+[[INFO][PYTHON] step:][2][max diff: ][5.36441803e-06][ op val: ][-1.46514082][ tf val: ][-1.46514618][True]
 ...
-[[INFO][PYTHON] step:][31][max diff: ][1.21593475e-05][True]
-[[INFO][PYTHON] step:][32][max diff: ][1.04382634e-05][True]
+[[INFO][PYTHON] step:][29][max diff: ][4.529953e-06][ op val: ][2.88768935][ tf val: ][2.88769388][True]
+[[INFO][PYTHON] step:][30][max diff: ][4.17232513e-06][ op val: ][-1.28717053][ tf val: ][-1.2871747][True]
+[[INFO][PYTHON] step:][31][max diff: ][4.05311584e-06][ op val: ][-1.01830876][ tf val: ][-1.01831281][True]
 ```
 
-The results show that the differences between the decoder of TensorFlow and decoder are smaller than threshold.
+The results show that the differences between the decoder of TensorFlow and decoder are smaller than threshold. Note that the differences are absolute differences, so the differences may be large when the op val is large. In this case, the differences are larger than the threshold and the checking will return "False", but it may be not affect the final results.
 
 The option `decoder_type` decides to use the decoder of TensorFlow or decoder of FasterTransformer. `decoder_type 2` uses both decoders and compares their results. 
 
@@ -606,15 +610,13 @@ python decoding_sample.py \
 The outputs should be similar to the following:
 
 ```bash
-[INFO] Before finalize: 
-       result before finalize cross-check: True
+       Output ids cross-check: True
  
        Parent ids cross-check: True
  
-       sequence lengths cross-check: True
+       Sequence lengths cross-check: True
  
-[INFO] After finalize: 
-       result after cross-check: True
+       Finalized output ids cross-check: True
 ```
 
 Note that the results of OP and the results of TensorFlow are often different in the random inputs and weights. 
@@ -633,6 +635,34 @@ python encoder_decoding_sample.py \
         --encoder_num_layer 6 \
         --decoder_num_layer 6 \
         --data_type fp32
+```
+
+#### Translation progress
+
+For translation, we need to use some tools and library of OpenNMT-tf to prepocess the source sentence and build the encoder.
+Because the encoder of FasterTransformer is based on BERT, it cannot be restore the pretrained model. So, it requires to use the encoder of OpenNMT-tf.
+
+1. Prepare the pretrained model and the data for translation.
+
+```bash
+bash utils/translation/download_model_data.sh
+```
+
+`download_model_data.sh` will prepare the `opennmt` folder, which contains the input embedding and the encoder, download the pretrained model, and download the test data into the `translation` folder. This is because the encoder of FasterTransformer is based on BERT, but not OpenNMT-tf, so we cannot restore the pretrained model of OpenNMT-tf for encoder. Therefore, translation requires the encoder of OpenNMT-tf.
+
+Another problem is that the implementation of our tf_decoding and OpenNMT-tf decoding is a little different. For example, OpenNMT-tf uses one gemm to compute query, key and values in one time; but tf_decoding splits them into three gemms. So, the tool `utils/dump_model.py` will convert the pretrained model to fit the model structure of decoder of FasterTransformer.  
+
+```bash
+./bin/decoding_gemm 1 4 8 64 32001 100 512 0
+python translate_sample.py
+```
+
+The outputs should be similar to the following:
+
+```bash
+[INFO] opennmt: ▁28 - jährige r ▁Chef koch ▁to t ▁in ▁San ▁Francisco </s>
+[INFO] tf     : ▁28 - jährige r ▁Chef koch ▁to t ▁in ▁San ▁Francisco </s>
+[INFO] op     : ▁28 - jährige r ▁Chef koch ▁to t ▁in ▁San ▁Francisco </s>
 ```
 
 ## Performance
@@ -752,6 +782,16 @@ bash scripts/profile_decoding_op_performance.sh
 
 ### Changelog
 
+March 2020
+- Add feature in FasterTransformer 2.0
+  - Fix the bug of maximum sequence length of decoder cannot be larger than 128.
+  - Add `translate_sample.py` to demonstrate how to translate a sentence by restoring the pretrained model of OpenNMT-tf.
+  - Fix the bug that decoding does not check finish or not after each step. 
+  - Fix the bug of decoder about max_seq_len.
+  - Modify the decoding model structure to fit the OpenNMT-tf decoding model. 
+    - Add a layer normalization layer after decoder.
+    - Add a normalization for inputs of decoder
+
 Febuary 2020
 - Release the FasterTransformer 2.0
   - Provide a highly optimized OpenNMT-tf based decoder and decoding, including C++ API and TensorFlow op. 
@@ -764,10 +804,8 @@ July 2019
 
 ### Known issues
 
-- sequence length of Decoder and Decoding should be smaller than 128.
-- batch_size should be smaller than 1024 in Decoder.
-- batch_size x beam_width should be smaller than 1024 in Decoding.
-- Results of TensorFlow  and OP would be different in decoding. This problem is caused by the accumulated log probability, and we do not avoid this problem. 
+- batch_size should be smaller or equal to 1024 in Decoder.
+- batch_size x beam_width should be smaller or equal to 1024 in Decoding.
+- Results of TensorFlow and OP would be different in decoding. This problem is caused by the accumulated log probability, and we do not avoid this problem. 
 - Cmake 15 or Cmake 16 fail to build this project. Cmake 14 is no problem. 
-- Max sequence length of encoder and decoder should be the same.  
-
+- Max sequence length of encoder and decoder should be the same. 

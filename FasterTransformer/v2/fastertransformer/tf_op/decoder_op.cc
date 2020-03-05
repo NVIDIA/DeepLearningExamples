@@ -66,14 +66,12 @@ REGISTER_OP("Decoder")
     .Output("new_self_cache: T")
     .Output("new_mem_cache: T")
     .Attr("T: {float, half}")
-    .Attr("max_seq_len: int >= 1")
     .Attr("head_num: int >= 1")
     .Attr("size_per_head: int >= 1")
-    .Attr("memory_hidden_dim: int >= 1")
     .SetShapeFn([](shape_inference::InferenceContext *c) {
       c->set_output(0, c->input(0));
-      c->set_output(1, c->input(1));
-      c->set_output(2, c->input(2));
+      c->set_output(1, c->input(29));
+      c->set_output(2, c->input(30));
       return Status::OK();
     });
 template <typename Device, typename T>
@@ -82,15 +80,18 @@ class DecoderOp : public CommonOp<T>
 public:
   explicit DecoderOp(OpKernelConstruction *context) : CommonOp<T>(context)
   {
-    OP_REQUIRES_OK(context, context->GetAttr("max_seq_len", &max_seq_len_));
     OP_REQUIRES_OK(context, context->GetAttr("head_num", &head_num_));
     OP_REQUIRES_OK(context, context->GetAttr("size_per_head", &size_per_head_));
-    OP_REQUIRES_OK(context, context->GetAttr("memory_hidden_dim", &memory_hidden_dim_));
   }
 
   void Compute(OpKernelContext *context) override
   {
-    batch_size_ = (int)context->input(0).dim_size(0);
+    // input(1): memory_tensor: [batch_size, memory_max_seq_len, memory_hidden_dim]
+    assert((int)(context->input(1).dims()) == 3);
+    const int batch_size_ = (int)context->input(1).dim_size(0);
+    const int max_seq_len_ = (int)context->input(1).dim_size(1);
+    const int memory_hidden_dim_ = (int)context->input(1).dim_size(2);
+
     typedef DecoderTransformerTraits<traits_::OpType> DecoderTraits_;
     OpenDecoder<DecoderTraits_::OpType> *decoder_;
     fastertransformer::Allocator<AllocatorType::TF> allocator_(context);
@@ -168,7 +169,7 @@ public:
     DataType_ *K_mem_cache = memory_cache;
     DataType_ *V_mem_cache = memory_cache + batch_size_ * max_seq_len_ * head_num_ * size_per_head_;
     const int decoder_buffer_size = decoder_->getWorkspaceSize() * sizeof(DataType_);
-    DataType_ *decoder_buffer = (DataType_ *)allocator_.malloc(sizeof(DataType_) * decoder_buffer_size);
+    DataType_ *decoder_buffer = (DataType_ *)allocator_.malloc(decoder_buffer_size);
 
     OP_REQUIRES_OK(
         context,
@@ -187,7 +188,7 @@ public:
   }
 
 private:
-  int batch_size_, max_seq_len_, head_num_, size_per_head_, memory_hidden_dim_;
+  int head_num_, size_per_head_;
   typedef TFTraits<T> traits_;
   typedef typename traits_::DataType DataType_;
 };

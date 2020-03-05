@@ -97,9 +97,9 @@ public:
     PRINT_FUNC_NAME_();
 #endif
     hidden_units_ = head_num_ * size_per_head_;
-    if (max_seq_len_ > 128 || batch_size_ > 1024 || hidden_units_ > 1024)
+    if (batch_size_ > 1024 || hidden_units_ > 1024)
     {
-      printf("[ERROR] Decoder does not support max_seq_len_ > 128 or batch_size_ > 1024 or hidden_units_ > 1024. \n");
+      printf("[ERROR] Decoder does not support batch_size_ > 1024 or hidden_units_ > 1024. \n");
       exit(-1);
     }
 
