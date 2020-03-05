@@ -57,6 +57,7 @@ class pretraining_dataset(Dataset):
         self.max_pred_length = max_pred_length
         f = h5py.File(input_file, "r")
         self.input_ids = np.asarray(f["input_ids"][:]).astype(np.int64)#[num_instances x max_seq_length])
+        self.tag_ids = np.asarray(f["tag_ids"][:]).astype(np.int64)#[num_instances x max_seq_length])
         self.input_masks = np.asarray(f["input_mask"][:]).astype(np.int64) #[num_instances x max_seq_length]
         self.segment_ids = np.asarray(f["segment_ids"][:]).astype(np.int64) #[num_instances x max_seq_length]
         self.masked_lm_positions = np.asarray(f["masked_lm_positions"][:]).astype(np.int64) #[num_instances x max_pred_length]
@@ -71,6 +72,7 @@ class pretraining_dataset(Dataset):
     def __getitem__(self, index):
         
         input_ids= torch.from_numpy(self.input_ids[index]) # [max_seq_length]
+        tag_ids= torch.from_numpy(self.tag_ids[index]) # [max_seq_length]
         input_mask = torch.from_numpy(self.input_masks[index]) #[max_seq_length]
         segment_ids = torch.from_numpy(self.segment_ids[index])# [max_seq_length]
         masked_lm_positions = torch.from_numpy(self.masked_lm_positions[index]) #[max_pred_length]
@@ -84,7 +86,7 @@ class pretraining_dataset(Dataset):
           index = (masked_lm_positions == 0).nonzero()[0].item()
         masked_lm_labels[masked_lm_positions[:index]] = masked_lm_ids[:index]
 
-        return [input_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels]
+        return [input_ids, tag_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels]
 
 def main():    
 
@@ -96,7 +98,7 @@ def main():
                         default=None,
                         type=str,
                         required=True,
-                        help="The input data dir. Should contain .hdf5 files  for the task.")
+                        help="The input data dir. Should contain .hdf5 files for the task.")
     parser.add_argument("--config_file",
                         default="bert_config.json",
                         type=str,
@@ -250,8 +252,8 @@ def main():
 
 
                     batch = [t.to(device) for t in batch]
-                    input_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels = batch#\
-                    loss = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask, masked_lm_labels=masked_lm_labels, next_sentence_label=next_sentence_labels)
+                    input_ids, tag_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels = batch#\
+                    loss = model(input_ids=input_ids, tag_ids=tag_ids,token_type_ids=segment_ids, attention_mask=input_mask, masked_lm_labels=masked_lm_labels, next_sentence_label=next_sentence_labels)
                     final_loss += loss.item()
 
                     global_step += 1
@@ -287,7 +289,7 @@ def main():
 
 
                     batch = [t.to(device) for t in batch]
-                    input_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels = batch#\
+                    input_ids, tag_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels = batch#\
                     
                     lm_logits, nsp_logits = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask, masked_lm_labels=None, next_sentence_label=None)
 

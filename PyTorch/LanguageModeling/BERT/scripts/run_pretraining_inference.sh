@@ -15,12 +15,12 @@
 
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
 
-DATASET=hdf5_lower_case_1_seq_len_128_max_pred_20_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/books_wiki_en_corpus # change this for other datasets
+DATASET=hdf5_lower_case_1_seq_len_128_max_pred_20_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/bookscorpus # change this for other datasets
 DATA_DIR=${22:-$BERT_PREP_WORKING_DIR/${DATASET}/}
 
 BERT_CONFIG=bert_config.json
-RESULTS_DIR=/results
-CHECKPOINTS_DIR=/results/checkpoints
+RESULTS_DIR=/ssdtemp/bert/results
+CHECKPOINTS_DIR=/ssdtemp/bert/results/checkpoints
 
 if [ ! -d "$DATA_DIR" ] ; then
    echo "Warning! $DATA_DIR directory missing. Inference cannot start"
@@ -70,7 +70,7 @@ else
 fi
 
 echo $DATA_DIR
-CMD=" /workspace/bert/run_pretraining_inference.py"
+CMD=" /ssdtemp/bert/run_pretraining_inference.py"
 CMD+=" --input_dir=$DATA_DIR"
 CMD+=" --ckpt_dir=$CHECKPOINTS_DIR"
 CMD+=" --config_file=$BERT_CONFIG"
