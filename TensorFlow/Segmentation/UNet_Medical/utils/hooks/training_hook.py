@@ -13,18 +13,19 @@
 # limitations under the License.
 
 import tensorflow as tf
+import horovod.tensorflow as hvd
 
-from dllogger import LOGGER, tags
 
+class TrainingHook(tf.estimator.SessionRunHook):
 
-class TrainingHook(tf.train.SessionRunHook):
-
-    def __init__(self, log_every=1):
+    def __init__(self, logger, max_steps, log_every=1):
         self._log_every = log_every
         self._iter_idx = 0
+        self.logger = logger
+        self.max_steps = max_steps
 
     def before_run(self, run_context):
-        run_args = tf.train.SessionRunArgs(
+        run_args = tf.estimator.SessionRunArgs(
             fetches=[
                 'cross_loss_ref:0',
                 'dice_loss_ref:0',
@@ -39,8 +40,9 @@ class TrainingHook(tf.train.SessionRunHook):
                   run_values):
         cross_loss, dice_loss, total_loss = run_values.results
 
-        if self._iter_idx % self._log_every == 0:
-            LOGGER.log('cross_loss', cross_loss)
-            LOGGER.log('dice_loss', dice_loss)
-            LOGGER.log('total_loss', total_loss)
+        if (self._iter_idx % self._log_every == 0) and (hvd.rank() == 0):
+            self.logger.log(step=(self._iter_idx, self.max_steps),
+                            data={'train_ce_loss': float(cross_loss),
+                                  'train_dice_loss': float(dice_loss),
+                                  'train_total_loss': float(total_loss)})
         self._iter_idx += 1

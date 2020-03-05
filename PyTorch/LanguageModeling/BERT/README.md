@@ -935,6 +935,9 @@ The inference performance metrics used were items/second.
 
 ### Changelog
 
+February 2020
+- Integrate DLLogger
+
 November 2019
 - Use LAMB from APEX
 - Code cleanup

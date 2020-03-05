@@ -64,20 +64,24 @@ def main():
     config_template = r"""
 name: "{model_name}"
 platform: "tensorrt_plan"
+default_model_filename: "waveglow_fp16.engine"
+
+max_batch_size: 1
+
 input {{
-  name: "0"
+  name: "mel"
   data_type: {fp_type}
-  dims: [1, 80, 620, 1]
+  dims: [80, -1, 1]
 }}
 input {{
-  name: "1"
+  name: "z"
   data_type: {fp_type}
-  dims: [1, 8, 19840, 1]
+  dims: [8, -1, 1]
 }}
 output {{
-  name: "1991"
+  name: "audio"
   data_type: {fp_type}
-  dims: [1, 158720]
+  dims: [-1]
 }}
 """
     
