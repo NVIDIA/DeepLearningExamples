@@ -586,7 +586,7 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 ### Changelog
 
-November 2019
+March 2020
 
 - Initial release
 
