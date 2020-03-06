@@ -15,17 +15,11 @@
 from __future__ import print_function
 import tensorflow as tf
 import numpy as np
-import os
-import math
-import six
 import argparse
-from utils.common import time_test, DecodingArgument, int_result_cross_check, TransformerArgument
+from utils.common import time_test, DecodingArgument
 from utils.decoding import tf_decoding, generate_encoder_result, op_decoding
-from utils.encoder import tf_encoder, op_encoder
-from utils.decoder import build_sequence_mask 
 
 from opennmt.utils import misc
-from opennmt.utils import compat
 from opennmt.encoders.self_attention_encoder import SelfAttentionEncoder
 from opennmt.decoders.self_attention_decoder import SelfAttentionDecoder
 from opennmt.inputters import WordEmbedder
@@ -81,7 +75,6 @@ if __name__ == "__main__":
     np.random.seed(1)
     tf.set_random_seed(1)
     kernel_initializer_range = 0.02
-    initializer_range = 0.02
     bias_initializer_range = 0.02
 
     batch_size = args.batch_size
