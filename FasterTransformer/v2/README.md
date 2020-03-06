@@ -684,7 +684,7 @@ For Encoder, the reported time is the average inference time for 100 iterations 
 
 For Decoder and Decoding, the reported time the is average inference time for 50 iterations with 50 warm-up iterations.
 
-### Encoder  performance
+### Encoder performance
 
 We demonstrate the inference time of FasterTransformer in C++ and compare it to the inference time of TensorFlow in Python. 
 
