@@ -16,9 +16,8 @@ from __future__ import print_function
 import tensorflow as tf
 import numpy as np
 import argparse
-from utils.common import time_test, DecodingArgument
-from utils.decoding import tf_decoding, generate_encoder_result, op_decoding
-
+from utils.common import DecodingArgument
+from utils.decoding import tf_decoding, op_decoding
 from opennmt.utils import misc
 from opennmt.encoders.self_attention_encoder import SelfAttentionEncoder
 from opennmt.decoders.self_attention_decoder import SelfAttentionDecoder

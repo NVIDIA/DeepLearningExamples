@@ -17,7 +17,6 @@ import abc
 import tensorflow as tf
 from reducer import SumReducer
 
-
 class PositionEncoder(tf.keras.layers.Layer):
     """Base class for position encoders."""
 

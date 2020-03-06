@@ -14,12 +14,9 @@
 
 import tensorflow as tf
 import numpy as np
-import os
-import math
-import six
 import argparse
 from utils.common import time_test, DecodingArgument, int_result_cross_check, TransformerArgument
-from utils.decoding import tf_decoding, generate_encoder_result, op_decoding
+from utils.decoding import tf_decoding, op_decoding
 from utils.encoder import tf_encoder, op_encoder
 
 if __name__ == "__main__":
