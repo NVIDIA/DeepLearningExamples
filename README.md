@@ -19,9 +19,9 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 - __ResNext__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets)]
 - __SE-ResNext__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets)]
 - __SSD__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Detection/SSD)] [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Detection/SSD)]
-- __Mask R-CNN__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Segmentation/MaskRCNN)]
+- __Mask R-CNN__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Segmentation/MaskRCNN)] [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Segmentation/MaskRCNN)] [[TensorFlow 2](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Segmentation/MaskRCNN)] 
 - __U-Net(industrial)__ [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Industrial)]
-- __U-Net(medical)__ [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Medical)] [[TensorFlow2](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Segmentation/UNet_Medical)]
+- __U-Net(medical)__ [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Medical)] [[TensorFlow 2](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Segmentation/UNet_Medical)]
 - __VNet__ [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/VNet)]
 
 ### Natural Language Processing
@@ -82,10 +82,12 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 | [Variational Autoencoder Collaborative Filtering](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Recommendation/VAE-CF) |TensorFlow  | N/A  | Yes  | Yes  | -  | -  |   -  | -  | -  |
 | [U-Net Industrial](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Industrial) |TensorFlow  | N/A  | Yes  | Yes  | -  | Yes  |   -  | -  | Yes  |
 | [U-Net Medical](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Medical) | TensorFlow  | N/A  | Yes  | Yes  | -  |  Yes  |-  |   -  | Yes  |
-| [U-Net Medical](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Segmentation/UNet_Medical) | TensorFlow2  | N/A  | Yes  | Yes  | -  |  Yes  |-  |   -  | Yes  |
 | [V-Net Medical](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/VNet) | TensorFlow  | N/A  | Yes  | Yes  | -  |  Yes  | Yes |   -  | Yes  |
+| [Mask R-CNN](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Segmentation/MaskRCNN) |TensorFlow  | N/A  | Yes  | Yes  | -  | -  |   -  | -  | -  |
 | [GNMT v2](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Translation/GNMT) | TensorFlow  | N/A  | Yes  | Yes  | -  | -  |   -  | -  | -  |
 | [Faster Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/FasterTransformer) | Tensorflow  | N/A  | -  | -  | -  | Yes  |   -  | -  | -  |
+| [U-Net Medical](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Segmentation/UNet_Medical) | TensorFlow-2  | N/A  | Yes  | Yes  | -  |  Yes  |-  |   -  | Yes  |
+| [Mask R-CNN](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Segmentation/MaskRCNN) |TensorFlow-2  | N/A  | Yes  | Yes  | -  |  -  |-  |   -  | -  |
 | [ResNet50 v1.5](https://github.com/NVIDIA/DeepLearningExamples/tree/master/MxNet/Classification/RN50v1.5) | MXNet  | Yes  | Yes  | Yes  | -  | -  |   -  | -  | -  |
 | [HMM](https://github.com/NVIDIA/DeepLearningExamples/tree/master/Kaldi/SpeechRecognition) | Kaldi  | N/A  | -  | Yes  | -  | -  |   -  | Yes  | -  |
 

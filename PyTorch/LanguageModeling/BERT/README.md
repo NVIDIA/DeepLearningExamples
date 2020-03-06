@@ -726,7 +726,7 @@ Our results were obtained by running the `scripts/run_squad.sh` and `scripts/run
 
 | DGX System | GPUs | Accumulated Batch size / GPU (Phase 1 and Phase 2) | Accumulation steps (Phase 1 and Phase 2) | Final Loss - FP32 | Final Loss - mixed precision | Time to train(hours) - FP32 | Time to train(hours) - mixed precision | Time to train speedup (FP32 to mixed precision)
 |---|---|---|---|---|---|---|---|---
-| 1 x NVIDIA DGX-1 With 16G|8|8192 and 4196 |512 and 1024|-|1.36|-|153.16|-
+| 1 x NVIDIA DGX-1 With 16G|8|8192 and 4096 |512 and 1024|-|1.36|-|153.16|-
 | 1 x NVIDIA DGX-2H With 32G|16|4096 and 2048 |64 and 256|-|1.35|-|58.4|-
 | 4 x NVIDIA DGX-1 With 16G|8|2048 and 1024 |128 and 256|-|1.34|-|39.27|-
 | 4 x NVIDIA DGX-2H With 32G|16|1024 and 512 |16 and 64|-|1.33|-|15.35|-
