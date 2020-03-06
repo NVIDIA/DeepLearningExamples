@@ -15,12 +15,8 @@
 from __future__ import print_function
 import tensorflow as tf
 import numpy as np
-import os
-import math
-import six
 from datetime import datetime
 import sys
-import time
 import pickle 
 
 if len(sys.argv) != 2:
