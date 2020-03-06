@@ -637,7 +637,7 @@ python encoder_decoding_sample.py \
         --data_type fp32
 ```
 
-#### Translation progress
+#### Translation process
 
 This subsection demonstrates how to use FasterTansformer decoding to translate a sentence. We use the pretrained model and testing data in [OpenNMT-tf](https://opennmt.net/Models-tf/), which translate from English to German. 
 
