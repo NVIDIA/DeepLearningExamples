@@ -221,7 +221,7 @@ python encoder_sample.py \
         --data_type fp16 \
         --test_time 1
 ```
-
+<!--
 3. Run the FasterTransformer in BERT.
 
 The following script demonstrates how to integrate the FasterTransformer into a BERT model. 
@@ -246,7 +246,7 @@ python tensorflow_bert/profile_transformer_inference.py \
         --xla=false \
         --floatx=float32
 ```
-
+-->
 ### Execute the decoding demos
 
 1. Generate the `decoding_gemm_config.in` file. 
@@ -639,18 +639,19 @@ python encoder_decoding_sample.py \
 
 #### Translation progress
 
-For translation, we need to use some tools and library of OpenNMT-tf to prepocess the source sentence and build the encoder.
-Because the encoder of FasterTransformer is based on BERT, it cannot be restore the pretrained model. So, it requires to use the encoder of OpenNMT-tf.
+This subsection demonstrates how to use FasterTansformer decoding to translate a sentence. We use the pretrained model and testing data in [OpenNMT-tf](https://opennmt.net/Models-tf/), which translate from English to German. 
 
-1. Prepare the pretrained model and the data for translation.
+Because the FasterTransformer Encoder is based on BERT, we cannot restore the model of encoder of OpenNMT to FasterTransformer Encoder. Therefore, we use OpenNMT-tf to build the encoder and preprocess the source sentence.
+
+Another problem is that the implementation of FasterTransformer Decoder and decoder of OpenNMT-tf is a little different. For example, the decoder of OpenNMT-tf uses one convolution to compute query, key and value in masked-multihead-attention; but FasterTransformer Decoder splits them into three gemms. The tool `utils/dump_model.py` will convert the pretrained model to fit the model structure of FasterTransformer Decoder.
+
+`download_model_data.sh` will install the OpenNMT-tf v1, downloads the pretrained model into the `translation` folder, and convert the model. 
 
 ```bash
 bash utils/translation/download_model_data.sh
 ```
 
-`download_model_data.sh` will prepare the `opennmt` folder, which contains the input embedding and the encoder, download the pretrained model, and download the test data into the `translation` folder. This is because the encoder of FasterTransformer is based on BERT, but not OpenNMT-tf, so we cannot restore the pretrained model of OpenNMT-tf for encoder. Therefore, translation requires the encoder of OpenNMT-tf.
-
-Another problem is that the implementation of our tf_decoding and OpenNMT-tf decoding is a little different. For example, OpenNMT-tf uses one gemm to compute query, key and values in one time; but tf_decoding splits them into three gemms. So, the tool `utils/dump_model.py` will convert the pretrained model to fit the model structure of decoder of FasterTransformer.  
+Then run the translation sample by the following script:
 
 ```bash
 ./bin/decoding_gemm 1 4 8 64 32001 100 512 0
@@ -784,8 +785,9 @@ bash scripts/profile_decoding_op_performance.sh
 
 March 2020
 - Add feature in FasterTransformer 2.0
-  - Fix the bug of maximum sequence length of decoder cannot be larger than 128.
   - Add `translate_sample.py` to demonstrate how to translate a sentence by restoring the pretrained model of OpenNMT-tf.
+- Fix bugs of Fastertransformer 2.0
+  - Fix the bug of maximum sequence length of decoder cannot be larger than 128.
   - Fix the bug that decoding does not check finish or not after each step. 
   - Fix the bug of decoder about max_seq_len.
   - Modify the decoding model structure to fit the OpenNMT-tf decoding model. 

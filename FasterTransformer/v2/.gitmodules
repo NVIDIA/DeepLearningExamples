@@ -2,6 +2,3 @@
 	path = sample/tensorflow_bert/bert
 	url = https://github.com/google-research/bert.git
 
-[submodule "OpenNMT-tf"]
-	path = OpenNMT-tf
-	url = https://github.com/OpenNMT/OpenNMT-tf
