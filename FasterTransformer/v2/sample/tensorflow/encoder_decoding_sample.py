@@ -14,12 +14,9 @@
 
 import tensorflow as tf
 import numpy as np
-import os
-import math
-import six
 import argparse
 from utils.common import time_test, DecodingArgument, int_result_cross_check, TransformerArgument
-from utils.decoding import tf_decoding, generate_encoder_result, op_decoding
+from utils.decoding import tf_decoding, op_decoding
 from utils.encoder import tf_encoder, op_encoder
 
 if __name__ == "__main__":
@@ -132,7 +129,7 @@ if __name__ == "__main__":
 
     all_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
     decoder_var_start_id = 0
-    while all_vars[decoder_var_start_id].name.find("transformer/decoder") == -1:
+    while all_vars[decoder_var_start_id].name.find("transformer/decoding") == -1:
         decoder_var_start_id += 1
     encoder_variables = all_vars[:decoder_var_start_id]
     decoder_variables = all_vars[decoder_var_start_id:]

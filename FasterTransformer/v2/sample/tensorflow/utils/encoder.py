@@ -18,8 +18,7 @@ import math
 import six
 import os
 from common import create_initializer
-
-
+  
 def gelu(x):
     cdf = 0.5 * (1.0 + tf.tanh(
         (np.sqrt(2 / np.pi) * (x + 0.044715 * tf.pow(x, 3)))))
@@ -156,7 +155,8 @@ def tf_encoder(input_tensor,
                attention_mask=None,
                intermediate_act_fn=gelu,
                initializer_range=0.02):
-
+    
+    
     intermediate_size = encoder_args.hidden_dim * 4
     if encoder_args.hidden_dim % encoder_args.head_num != 0:
         raise ValueError(
@@ -299,7 +299,6 @@ def op_encoder(inputs,
                encoder_args,
                encoder_vars,
                attention_mask):
-
     transformer_op_module = tf.load_op_library(
         os.path.join('./lib/libtf_fastertransformer.so'))
     for layer_idx in range(encoder_args.num_layer):

@@ -15,7 +15,6 @@
 import abc
 import tensorflow as tf
 
-
 def pad_in_time(x, padding_length):
     """Helper function to pad a tensor in the time dimension and retain the static depth dimension."""
     return tf.pad(x, [[0, 0], [0, padding_length], [0, 0]])

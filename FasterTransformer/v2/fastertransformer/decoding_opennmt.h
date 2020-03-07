@@ -41,6 +41,8 @@ public:
   const T *memory_tensor;
   const int *memory_sequence_length;
 
+  LayerNormWeight<T> layernorm;
+
   int *output_ids;
   int *parent_ids;
   int *sequence_length;
@@ -77,6 +79,7 @@ private:
   DataType_ **V_mem_cache_;
   DataType_ *from_tensor_[2];
   DataType_ *decoder_buf_;
+  DataType_ *decoder_normed_result_buf_;
   float *logits_buf_;
   float *cum_log_buf_;
   int *word_ids_buf_;
@@ -85,18 +88,18 @@ private:
   void *buf_;
   int start_id_;
   int end_id_;
-  int memory_hidden_units_;
+  int *finished_count_buf_;
+  bool *h_finished_buf_;
 
 public:
   DecodingOpenNMT(const IAllocator &allocator, const int batch_size,
                   const int beam_width, const int seq_len,
                   const int head_num, const int size_per_head,
                   const int vocab_size, const int decoder_layers,
-                  const int memory_hidden_units,
+                  const int memory_hidden_units, const int memory_max_seq_len,
                   const int start_id, const int end_id) : allocator_(allocator), batch_size_(batch_size), beam_width_(beam_width),
                                                           seq_len_(seq_len), head_num_(head_num), size_per_head_(size_per_head),
                                                           vocab_size_(vocab_size), decoder_layers_(decoder_layers),
-                                                          memory_hidden_units_(memory_hidden_units),
                                                           start_id_(start_id), end_id_(end_id)
   {
 #ifndef NDEBUG
@@ -109,16 +112,19 @@ public:
     V_mem_cache_ = new DataType_ *[decoder_layers_];
 
     hidden_units_ = head_num_ * size_per_head_;
-    decoder_ = new OpenDecoder<OpType_>(allocator, batch_size * beam_width, seq_len, head_num, size_per_head, memory_hidden_units_);
+    decoder_ = new OpenDecoder<OpType_>(allocator, batch_size * beam_width, memory_max_seq_len, 
+                                        head_num, size_per_head, memory_hidden_units);
 
     int from_tensor_size = batch_size_ * beam_width_ * hidden_units_;      // type T
     int decoder_workspace_size = decoder_->getWorkspaceSize();             // type T
+    int decoder_normed_result_buffer_size = batch_size_ * beam_width_ * hidden_units_; // type T
     int cache_size = batch_size_ * beam_width_ * seq_len_ * hidden_units_; // type T
-    int logits_buf_size = batch_size_ * beam_width_ * vocab_size_;         // type T
 
+    int logits_buf_size = batch_size_ * beam_width_ * vocab_size_;         // type float
     int cum_log_buf_size = batch_size_ * beam_width_;  // type float
     int word_ids_buf_size = batch_size_ * beam_width_; //type int
     int finished_buf_size = batch_size_ * beam_width_; //type bool
+    int finished_count_size = (int)(ceil(1 / 4.)) * 4; // type int
 
     //type int
     int topk_ids_buf_size = batch_size_ * beam_width_ * (ceil)((beam_width_ * vocab_size_ * 1.0) / 1024.0);
@@ -127,16 +133,18 @@ public:
     word_ids_buf_size = (int)(ceil(word_ids_buf_size / 4.)) * 4;
     finished_buf_size = (int)(ceil(finished_buf_size / 32.)) * 32;
     topk_ids_buf_size = (int)(ceil(topk_ids_buf_size / 4.)) * 4;
+    
 
     int datatype_buf_size = from_tensor_size * 2 + decoder_workspace_size +
-                            cache_size * 6 * decoder_layers_;
+                            cache_size * 6 * decoder_layers_ + decoder_normed_result_buffer_size;
 
     buf_ = reinterpret_cast<void *>(allocator_.malloc(
         sizeof(DataType_) * datatype_buf_size +
         sizeof(float) * (logits_buf_size + cum_log_buf_size) +
         sizeof(int) * word_ids_buf_size +
         sizeof(bool) * finished_buf_size +
-        sizeof(int) * topk_ids_buf_size));
+        sizeof(int) * topk_ids_buf_size + 
+        sizeof(int) * finished_count_size ));
 
     from_tensor_[0] = (DataType_ *)buf_;
     from_tensor_[1] = (DataType_ *)(from_tensor_[0] + from_tensor_size);
@@ -154,11 +162,15 @@ public:
     V_cache_[1] = V_mem_cache_[decoder_layers - 1] + cache_size + 3 * cache_size * decoder_layers_;
 
     decoder_buf_ = V_cache_[1] + cache_size * decoder_layers_;
-    logits_buf_ = (float *)(decoder_buf_ + decoder_workspace_size);
+    decoder_normed_result_buf_ = (decoder_buf_ + decoder_workspace_size);
+    logits_buf_ = (float *)(decoder_normed_result_buf_ + decoder_normed_result_buffer_size);
     cum_log_buf_ = (float *)(logits_buf_ + logits_buf_size);
     word_ids_buf_ = (int *)(cum_log_buf_ + cum_log_buf_size);
     finished_buf_ = (bool *)(word_ids_buf_ + word_ids_buf_size);
     topk_ids_buf_ = (int *)(finished_buf_ + finished_buf_size);
+    finished_count_buf_ = (int *)(topk_ids_buf_ + topk_ids_buf_size);
+
+    h_finished_buf_ = new bool[finished_buf_size];
 
     FILE *fd = fopen("decoding_gemm_config.in", "r");
     int err = 0;
@@ -304,6 +316,8 @@ public:
         check_cuda_error(cudaGetLastError());
 #endif
       }
+      decoder_->decoder_norm1(from_tensor_[out_id], decoding_params.layernorm.gamma,
+                  decoding_params.layernorm.beta, decoder_normed_result_buf_, m, k);
 
       float alpha = (float)1.0f;
       float beta = (float)0.0f;
@@ -313,7 +327,7 @@ public:
                                     n, m, k,
                                     &alpha,
                                     decoding_params.embedding_kernel, AType_, n,
-                                    from_tensor_[out_id], BType_, k,
+                                    decoder_normed_result_buf_, BType_, k,
                                     &beta,
                                     logits_buf_, CUDA_R_32F, n,
                                     CUDA_R_32F,
@@ -342,17 +356,28 @@ public:
           logits_buf_, cum_log_buf_, finished_buf_,
           K_cache_,
           V_cache_,
-          decoding_params.parent_ids + step * batch_size_ * beam_width_,
+          decoding_params.parent_ids + (step - 1) * batch_size_ * beam_width_,
           decoding_params.sequence_length,
           word_ids_buf_,
           topk_ids_buf_,
-          decoding_params.output_ids + step * batch_size_ * beam_width_,
-          batch_size_, beam_width_, vocab_size_, hidden_units_, step, cache_size, decoder_layers_, decoding_params.stream);
+          decoding_params.output_ids + (step - 1) * batch_size_ * beam_width_,
+          batch_size_, beam_width_, vocab_size_, hidden_units_, step, cache_size, decoder_layers_, decoding_params.stream,
+          end_id_, 
+          finished_count_buf_);
 
 #ifndef NDEBUG
       cudaDeviceSynchronize();
       check_cuda_error(cudaGetLastError());
 #endif
+
+      // TODO 
+      // Find a better method to check the is_finished
+      cudaMemcpy(h_finished_buf_, finished_buf_, sizeof(bool) * batch_size_ * beam_width_, cudaMemcpyDeviceToHost);
+      int sum = 0;
+      for(int i = 0; i < batch_size_ * beam_width_; i++){
+        sum += (int)h_finished_buf_[i];
+      }
+      if(sum == batch_size_ * beam_width_) break;
     }
   }
 

@@ -79,7 +79,8 @@ void topK_kernel_check(const float* log_probs, int* ids, const int batch_size, c
 void update_kernel_check(float* log_probs, float* cum_log_probs, int* ids, bool* finished, int* parent_ids, int* sequence_length, 
   int* word_ids, int* output_ids,
   const int batch_size, const int beam_width,
-  const int vocab_size, cudaStream_t stream);
+  const int vocab_size, cudaStream_t stream,
+  const int end_id, int* finished_count);
 
 template <typename T>
 void update_KV_cache_kernel_check(T** key_cache, T** value_cache, const int* beam_ids, const int batch_size, const int beam_width, const int hidden_dim,

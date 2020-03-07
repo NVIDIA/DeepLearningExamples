@@ -37,6 +37,16 @@ FasterTransformer V1 will be deprecated on July 2020.
 
 ### Changelog
 
+March 2020
+- Add feature in FasterTransformer 2.0
+  - Fix the bug of maximum sequence length of decoder cannot be larger than 128.
+  - Add `translate_sample.py` to demonstrate how to translate a sentence by restoring the pretrained model of OpenNMT-tf.
+  - Fix the bug that decoding does not check finish or not after each step. 
+  - Fix the bug of decoder about max_seq_len.
+  - Modify the decoding model structure to fit the OpenNMT-tf decoding model. 
+    - Add a layer normalization layer after decoder.
+    - Add a normalization for inputs of decoder
+    
 February 2020
  * Release the FasterTransformer 2.0
  * Provide a highly optimized OpenNMT-tf based decoder and decoding, including C++ API and TensorFlow OP.

@@ -14,15 +14,11 @@
 
 import tensorflow as tf
 import numpy as np
-import os
-import math
-import six
 import argparse
 import numpy as np
-from utils.common import time_test, DecodingArgument, int_result_cross_check, TransformerArgument
-from utils.decoding import tf_decoding, generate_encoder_result, op_decoding
+from utils.common import DecodingArgument, TransformerArgument
+from utils.decoding import tf_decoding
 from utils.encoder import tf_encoder, op_encoder
-
 
 if __name__ == "__main__":
 
@@ -49,8 +45,6 @@ if __name__ == "__main__":
                         help='vocabulary size. (default: 30000).')
     parser.add_argument('-d', '--data_type', type=str, default="fp32", metavar='STRING',
                         help='data type (default: fp32)')
-    parser.add_argument('-time', '--test_time', type=int, default=0, metavar='BOOL',
-                        help='test the time or not. (default: False (0)), True is 1.')
     parser.add_argument('-decoder', '--decoder_type', type=int, default=2, metavar='NUMBER',
                         help='Decoder type:'
                         + ' type 0: only run tf decoder;'
