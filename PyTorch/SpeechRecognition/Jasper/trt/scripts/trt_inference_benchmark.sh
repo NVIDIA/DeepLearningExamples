@@ -81,11 +81,11 @@ mkdir -p $LOG_DIR
 
 
 
-if [ "$USE_DYNAMIC_SHAPE" = "yes" ] ; then
-    DYNAMIC_PREFIX=" --dynamic_shape "
-    PREFIX=DYNAMIC
-else
+if [ "$USE_DYNAMIC_SHAPE" = "no" ] ; then
     PREFIX=BS${BATCH_SIZE}_NF${NUM_FRAMES}
+    DYNAMIC_PREFIX=" --static_shape "
+else
+    PREFIX=DYNAMIC
 fi
 
 # Currently, TRT parser for ONNX can't parse mixed-precision weights, so ONNX
