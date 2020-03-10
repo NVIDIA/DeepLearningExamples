@@ -37,7 +37,7 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 
 
 ### Text to Speech
-- __Tacotron & WaveGlow__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2)]
+- __Tacotron2 & WaveGlow__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2)]
 
 ### Speech Recognition
 - __Jasper__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechRecognition/Jasper)]
