@@ -228,13 +228,15 @@ def nvidia_waveglow(pretrained=True, **kwargs):
 def nvidia_ssd_processing_utils():
     import numpy as np
     import skimage
+    from skimage import io, transform
+
     from PyTorch.Detection.SSD.src.utils import dboxes300_coco, Encoder
 
     class Processing:
         @staticmethod
         def load_image(image_path):
             """Code from Loading_Pretrained_Models.ipynb - a Caffe2 tutorial"""
-            img = skimage.img_as_float(skimage.io.imread(image_path))
+            img = skimage.img_as_float(io.imread(image_path))
             if len(img.shape) == 2:
                 img = np.array([img, img, img]).swapaxes(0, 2)
             return img
@@ -246,13 +248,13 @@ def nvidia_ssd_processing_utils():
             if (aspect > 1):
                 # landscape orientation - wide image
                 res = int(aspect * input_height)
-                imgScaled = skimage.transform.resize(img, (input_width, res))
+                imgScaled = transform.resize(img, (input_width, res))
             if (aspect < 1):
                 # portrait orientation - tall image
                 res = int(input_width / aspect)
-                imgScaled = skimage.transform.resize(img, (res, input_height))
+                imgScaled = transform.resize(img, (res, input_height))
             if (aspect == 1):
-                imgScaled = skimage.transform.resize(img, (input_width, input_height))
+                imgScaled = transform.resize(img, (input_width, input_height))
             return imgScaled
 
         @staticmethod
