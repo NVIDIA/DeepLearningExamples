@@ -296,7 +296,6 @@ def model_fn_builder(task_name, bert_config, num_labels, init_checkpoint, learni
                 "eval_loss": loss,
             }
     tf.compat.v1.logging.info("*** Features ***")
-    tf.compat.v1.logging.info("*** Features ***")
     for name in sorted(features.keys()):
       tf.compat.v1.logging.info("  name = %s, shape = %s" % (name, features[name].shape))
 
