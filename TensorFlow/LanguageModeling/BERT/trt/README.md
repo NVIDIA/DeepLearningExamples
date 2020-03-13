@@ -81,7 +81,7 @@ The following section lists the requirements that you need to meet in order to r
 
 ### Requirements
 
-This repository contains a `Dockerfile` which extends the TensorRT 19.12-py3 NGC container and installs some dependencies. Ensure you have the following components:
+This repository contains a `Dockerfile` which extends the TensorRT NGC container and installs some dependencies. Ensure you have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
 * [TensorRT 20.02-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorrt)
