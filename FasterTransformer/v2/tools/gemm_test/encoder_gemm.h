@@ -87,7 +87,7 @@ void generate_encoder_gemm_config(int batch_size,
   cudaDataType_t CType;
   cudaDataType_t computeType;
   int startAlgo, endAlgo;
-  const int ites = 1;
+  const int ites = 100;
   struct timeval start, end;
   
   if(sizeof(T) == sizeof(float)){
