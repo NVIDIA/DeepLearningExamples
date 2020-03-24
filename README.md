@@ -34,6 +34,7 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 ### Recommender Systems
 - __NCF__ [[PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Recommendation/NCF)] [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Recommendation/NCF)]
 - __VAE-CF__ [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Recommendation/VAE-CF)]
+- __WideAndDeep__ [[TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Recommendation/WideAndDeep)]
 
 
 ### Text to Speech
@@ -80,6 +81,7 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 | [BioBert](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/LanguageModeling/BERT/biobert) | TensorFlow  | N/A  | Yes  | Yes  | -  | -  | -  | -  | -  |
 | [Neural Collaborative Filtering](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Recommendation/NCF) |TensorFlow  | N/A  | Yes  | Yes  | -  | -  | -  | -  | -  |
 | [Variational Autoencoder Collaborative Filtering](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Recommendation/VAE-CF) |TensorFlow  | N/A  | Yes  | Yes  | -  | -  |   -  | -  | -  |
+| [WideAndDeep](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Recommendation/WideAndDeep) | TensorFlow  | N/A  | Yes  | Yes  | -  | -  |   -  | -  | -  |
 | [U-Net Industrial](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Industrial) |TensorFlow  | N/A  | Yes  | Yes  | -  | Yes  |   -  | -  | Yes  |
 | [U-Net Medical](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Medical) | TensorFlow  | N/A  | Yes  | Yes  | -  |  Yes  |-  |   -  | Yes  |
 | [V-Net Medical](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/VNet) | TensorFlow  | N/A  | Yes  | Yes  | -  |  Yes  | Yes |   -  | Yes  |
