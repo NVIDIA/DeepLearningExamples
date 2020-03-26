@@ -46,7 +46,7 @@ def list_filenames_in_dataset(data_dir, mode, count=True):
     if mode not in ["train", 'validation']:
         raise ValueError("Unknown mode received: %s" % mode)
 
-    if not os.path.exists(data_dir):
+    if not tf.io.gfile.exists(data_dir):
         raise FileNotFoundError("The data directory: `%s` can't be found" % data_dir)
 
     filename_pattern = os.path.join(data_dir, '%s-*' % mode)

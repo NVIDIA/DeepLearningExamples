@@ -78,7 +78,7 @@ class Runner(object):
         if n_channels not in [1, 3]:
             raise ValueError("Unsupported number of channels: %d (allowed: 1 (grayscale) and 3 (color))" % n_channels)
 
-        if data_dir is not None and not os.path.exists(data_dir):
+        if data_dir is not None and not tf.io.gfile.exists(data_dir):
             raise ValueError("The `data_dir` received does not exists: %s" % data_dir)
 
         hvd.init()
