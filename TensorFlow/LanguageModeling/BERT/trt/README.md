@@ -116,7 +116,7 @@ Required Python packages are listed in `requirements.txt`. These packages are au
 4. Run inference. Two options are provided for running the model.
 
     a. `inference.py` script
-    This script accepts a passage and question and then runs the engine to generate an answer.
+    This script accepts a passage and question and then runs the engine to generate an answer. The vocabulary file used to train the source model is also specified (`-v /workspace/bert/models/fine-tuned/bert_tf_v2_large_fp16_128_v2/vocab.txt`).
     For example:
     ```bash
     python3 inference.py -e /workspace/bert/engines/bert_large_128.engine -p "TensorRT is a high performance deep learning inference platform that delivers low latency and high throughput for apps such as recommenders, speech and image/video on NVIDIA GPUs. It includes parsers to import models, and plugins to support novel ops and layers before applying optimizations for inference. Today NVIDIA is open-sourcing parsers and plugins in TensorRT so that the deep learning community can customize and extend these components to take advantage of powerful TensorRT optimizations for your apps." -q "What is TensorRT?" -v /workspace/bert/models/fine-tuned/bert_tf_v2_large_fp16_128_v2/vocab.txt
@@ -213,7 +213,7 @@ The inference benchmark is performed on a single GPU by the `inference_benchmark
 
 1. Downloads checkpoints and builds a TensorRT engine if it does not already exist.
 
-2. Runs 1 warm-up iteration then runs inference for 100 iterations for each batch size specified in the script, selecting the profile best for each size.
+2. Run the inference benchmark, which performs a sweep across batch sizes (1-128) and sequence lengths (128, 384). In each configuration, 1 warm-up iteration is followed by 200 runs to measure and report the BERT inference latencies.
 
 **Note:** The time measurements do not include the time required to copy inputs to the device and copy outputs to the host.
 

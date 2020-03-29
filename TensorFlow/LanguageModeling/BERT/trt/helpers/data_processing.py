@@ -330,7 +330,7 @@ def _compute_softmax(scores):
     return probs
 
 
-def get_predictions(doc_tokens, features, results, n_best_size, max_answer_length):
+def get_predictions(doc_tokens, features, results, n_best_size, max_answer_length, version_2_with_negative = False):
     _PrelimPrediction = collections.namedtuple(  # pylint: disable=invalid-name
         "PrelimPrediction",
         ["feature_index", "start_index", "end_index", "start_logit", "end_logit"])
@@ -341,10 +341,8 @@ def get_predictions(doc_tokens, features, results, n_best_size, max_answer_lengt
     prelim_predictions = []
     # keep track of the minimum score of null start+end of position 0
     score_null = 1000000  # large and positive
-    min_null_feature_index = 0  # the paragraph slice with min mull score
     null_start_logit = 0  # the start logit at the slice with min null score
     null_end_logit = 0  # the end logit at the slice with min null score
-    version_2_with_negative = False
     
     for result in results:
         start_indexes = _get_best_indexes(result.start_logits, n_best_size)
@@ -356,7 +354,6 @@ def get_predictions(doc_tokens, features, results, n_best_size, max_answer_lengt
             feature_null_score = result.start_logits[0] + result.end_logits[0]
             if feature_null_score < score_null:
                 score_null = feature_null_score
-                min_null_feature_index = 0
                 null_start_logit = result.start_logits[0]
                 null_end_logit = result.end_logits[0]
 

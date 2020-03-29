@@ -17,7 +17,7 @@ import tensorrt as trt
 import os
 
 import pycuda.driver as cuda
-import pycuda.autoinit
+import pycuda.autoinit # lgtm[py/unused-import]
 import numpy as np
 import helpers.tokenization as tokenization
 import helpers.data_processing as dp

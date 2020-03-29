@@ -174,13 +174,6 @@ if __name__ == '__main__':
 
             eval_time_elapsed /= len(features)
 
-            # Total number of n-best predictions to generate in the nbest_predictions.json output file
-            n_best_size = 20
-
-            # The maximum length of an answer that can be generated. This is needed
-            # because the start and end predictions are not conditioned on one another
-            max_answer_length = 30
-
             prediction, nbest_json, scores_diff_json = dp.get_predictions(tokens, features,
                     networkOutputs, args.n_best_size, args.max_answer_length)
 
