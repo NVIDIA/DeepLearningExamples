@@ -98,11 +98,49 @@ class BertConfig:
             self.head_size = self.hidden_size // self.num_attention_heads
 
 
+
 def set_tensor_name(tensor, prefix, name):
     tensor.name = prefix + name
 
 def set_output_name(layer, prefix, name, out_idx = 0):
+    layer.name = prefix + name
     set_tensor_name(layer.get_output(out_idx), prefix, name)
+
+def make_gelu_layer(prefix, config, network, input_tensor):
+    POW = network.add_constant((1, 1, 1, 1, 1), trt.Weights(np.ascontiguousarray([3.0], dtype=np.float32)))
+    MULTIPLY = network.add_constant((1, 1, 1, 1, 1), trt.Weights(np.ascontiguousarray([0.044715], dtype=np.float32)))
+    SQRT = network.add_constant((1, 1, 1, 1, 1), trt.Weights((np.ascontiguousarray([0.79788456080286535587989211986876], dtype=np.float32))))
+    ONE = network.add_constant((1, 1, 1, 1, 1), trt.Weights((np.ascontiguousarray([1.0], dtype=np.float32))))
+    HALF = network.add_constant((1, 1, 1, 1, 1), trt.Weights((np.ascontiguousarray([0.5], dtype=np.float32))))
+    X_pow = network.add_elementwise(input_tensor, POW.get_output(0), trt.ElementWiseOperation.POW)
+    X_pow_t = X_pow.get_output(0)
+    X_mul = network.add_elementwise(X_pow_t, MULTIPLY.get_output(0), trt.ElementWiseOperation.PROD)
+    X_add = network.add_elementwise(mid_dense_out, X_mul.get_output(0), trt.ElementWiseOperation.SUM)
+    X_sqrt = network.add_elementwise(X_add.get_output(0), SQRT.get_output(0), trt.ElementWiseOperation.PROD)
+    X_sqrt_tensor = X_sqrt.get_output(0)
+    X_tanh = network.add_activation(X_sqrt_tensor, trt.ActivationType.TANH)
+    X_tanh_tensor = X_tanh.get_output(0)
+    X_one = network.add_elementwise(X_tanh_tensor, ONE.get_output(0), trt.ElementWiseOperation.SUM)
+    CDF = network.add_elementwise(X_one.get_output(0), HALF.get_output(0), trt.ElementWiseOperation.PROD)
+    gelu_layer = network.add_elementwise(CDF.get_output(0), mid_dense_out, trt.ElementWiseOperation.PROD)
+
+    # enable elementwise fusing for int8 && fp16
+    POW.precision = trt.DataType.FLOAT
+    MULTIPLY.precision = trt.DataType.FLOAT
+    SQRT.precision = trt.DataType.FLOAT
+    ONE.precision = trt.DataType.FLOAT
+    HALF.precision = trt.DataType.FLOAT
+    X_pow.precision = trt.DataType.FLOAT
+    X_mul.precision = trt.DataType.FLOAT
+    X_add.precision = trt.DataType.FLOAT
+    X_sqrt.precision = trt.DataType.FLOAT
+    X_tanh.precision = trt.DataType.FLOAT
+    X_one.precision = trt.DataType.FLOAT
+    CDF.precision = trt.DataType.FLOAT
+    gelu_layer.precision = trt.DataType.FLOAT
+    return gelu_layer
+
+
 
 def attention_layer_opt(prefix, config, init_dict, network, input_tensor, imask):
     """
@@ -214,46 +252,28 @@ def transformer_layer_opt(prefix, config, init_dict, network, input_tensor, imas
     # FC1 + GELU
     B_mid = init_dict[prefix + B_MID]
     W_mid = init_dict[prefix + W_MID]
-    if config.use_int8:
-        mid_dense = network.add_convolution(attention_ln, config.intermediate_size, (1, 1), W_mid, B_mid)
-    else:
+    if False:
         mid_dense = network.add_fully_connected(attention_ln, config.intermediate_size, W_mid, B_mid)
+        mid_dense_out = mid_dense.get_output(0)
+        gelu_layer = make_gelu_layer(prefix, config, network, mid_dense_out)
+        intermediate_act = gelu_layer.get_output(0)
+        set_tensor_name(intermediate_act, prefix, "gelu")
+    else:
+        W_midT = init_dict[prefix + W_MID + '_notrans']
+        mid_dense = my_fc(config, network, attention_ln, config.intermediate_size, W_midT)
+        mid_dense_out = mid_dense.get_output(0)
 
-    mid_dense_out = mid_dense.get_output(0)
-    POW = network.add_constant((1, 1, 1, 1, 1), trt.Weights(np.ascontiguousarray([3.0], dtype=np.float32)))
-    MULTIPLY = network.add_constant((1, 1, 1, 1, 1), trt.Weights(np.ascontiguousarray([0.044715], dtype=np.float32)))
-    SQRT = network.add_constant((1, 1, 1, 1, 1), trt.Weights((np.ascontiguousarray([0.79788456080286535587989211986876], dtype=np.float32))))
-    ONE = network.add_constant((1, 1, 1, 1, 1), trt.Weights((np.ascontiguousarray([1.0], dtype=np.float32))))
-    HALF = network.add_constant((1, 1, 1, 1, 1), trt.Weights((np.ascontiguousarray([0.5], dtype=np.float32))))
-    X_pow = network.add_elementwise(mid_dense_out, POW.get_output(0), trt.ElementWiseOperation.POW)
-    X_pow_t = X_pow.get_output(0)
-    X_mul = network.add_elementwise(X_pow_t, MULTIPLY.get_output(0), trt.ElementWiseOperation.PROD)
-    X_add = network.add_elementwise(mid_dense_out, X_mul.get_output(0), trt.ElementWiseOperation.SUM)
-    X_sqrt = network.add_elementwise(X_add.get_output(0), SQRT.get_output(0), trt.ElementWiseOperation.PROD)
-    X_sqrt_tensor = X_sqrt.get_output(0)
-    X_tanh = network.add_activation(X_sqrt_tensor, trt.ActivationType.TANH)
-    X_tanh_tensor = X_tanh.get_output(0)
-    X_one = network.add_elementwise(X_tanh_tensor, ONE.get_output(0), trt.ElementWiseOperation.SUM)
-    CDF = network.add_elementwise(X_one.get_output(0), HALF.get_output(0), trt.ElementWiseOperation.PROD)
-    gelu_layer = network.add_elementwise(CDF.get_output(0), mid_dense_out, trt.ElementWiseOperation.PROD)
+        pf_type = trt.PluginField("type_id", np.array([1 if config.use_fp16 else 0], np.int32), trt.PluginFieldType.INT32)
+        pf_bias = trt.PluginField("bias", B_mid.numpy(), trt.PluginFieldType.FLOAT32)
+        pfc = trt.PluginFieldCollection([pf_type, pf_bias])
 
-    # enable elementwise fusing for int8 && fp16
-    POW.precision = trt.DataType.FLOAT
-    MULTIPLY.precision = trt.DataType.FLOAT
-    SQRT.precision = trt.DataType.FLOAT
-    ONE.precision = trt.DataType.FLOAT
-    HALF.precision = trt.DataType.FLOAT
-    X_pow.precision = trt.DataType.FLOAT
-    X_mul.precision = trt.DataType.FLOAT
-    X_add.precision = trt.DataType.FLOAT
-    X_sqrt.precision = trt.DataType.FLOAT
-    X_tanh.precision = trt.DataType.FLOAT
-    X_one.precision = trt.DataType.FLOAT
-    CDF.precision = trt.DataType.FLOAT
-    gelu_layer.precision = trt.DataType.FLOAT
+        plug = gelu_plg_creator.create_plugin("gelu", pfc)
 
-    intermediate_act = gelu_layer.get_output(0)
-    set_tensor_name(intermediate_act, prefix, "gelu")
+        gelu_layer = network.add_plugin_v2([mid_dense_out], plug)
+
+        intermediate_act = gelu_layer.get_output(0)
+        set_tensor_name(intermediate_act, prefix, "gelu")
+    
     if config.use_int8 and config.use_strict:
         intermediate_act.set_dynamic_range(-10, 10)
 
