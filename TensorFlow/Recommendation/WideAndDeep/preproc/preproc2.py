@@ -19,17 +19,10 @@ OUTPUT_BUCKET_FOLDER = "/outbrain/preprocessed/"
 DATA_BUCKET_FOLDER = "/outbrain/orig/"
 SPARK_TEMP_FOLDER = "/outbrain/spark-temp/"
 
-from IPython.display import display
-
-from pyspark.sql.types import *
+from pyspark.sql.types import IntegerType, StringType, StructType, StructField, TimestampType, FloatType, ArrayType, MapType
 import pyspark.sql.functions as F
 
-from pyspark.sql import DataFrameWriter
-
-import numpy as np
-
 import math
-import datetime
 import time
 
 import random

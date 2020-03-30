@@ -19,7 +19,7 @@ OUTPUT_BUCKET_FOLDER = "/outbrain/preprocessed/"
 DATA_BUCKET_FOLDER = "/outbrain/orig/"
 SPARK_TEMP_FOLDER = "/outbrain/spark-temp/"
 
-from pyspark.sql.types import *
+from pyspark.sql.types import IntegerType, StringType, StructType, StructField
 import pyspark.sql.functions as F
 
 from pyspark.context import SparkContext, SparkConf

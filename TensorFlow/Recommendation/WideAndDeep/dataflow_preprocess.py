@@ -18,14 +18,9 @@ from __future__ import print_function
 
 import argparse
 import datetime
-import os
-import random
-import subprocess
 import sys
-from joblib import Parallel, delayed
 
 import outbrain_transform
-import path_constants
 
 import tensorflow as tf
 import glob
