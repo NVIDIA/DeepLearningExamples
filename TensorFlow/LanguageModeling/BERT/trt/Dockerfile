@@ -58,8 +58,8 @@ COPY requirements.txt /tmp/requirements.txt
 RUN python3 -m pip install -r /tmp/requirements.txt
 
 # Build with extra flags to enable plugins available on SM 70/75
-RUN git clone https://github.com/rajeevsrao/TensorRT.git
-RUN cd TensorRT && git checkout origin/dev/release/7.0 && git submodule update --init --recursive && mkdir build && cd build && cmake .. -DGPU_ARCHS="70 75" -DBUILD_PARSERS=OFF && make -j nvinfer_plugin
+RUN git clone https://github.com/NVIDIA/TensorRT.git
+RUN cd TensorRT && git checkout 9b2d78a87e3d45eca22b6bfcb6e10777b932ef43 && git submodule update --init --recursive && mkdir build && cd build && cmake .. -DGPU_ARCHS="70 75" -DBUILD_PARSERS=OFF && make -j nvinfer_plugin
 # Replace the default plugin library with the open-source plugins
 RUN cp TensorRT/build/libnvinfer_plugin.so* /usr/lib/x86_64-linux-gnu/
 
