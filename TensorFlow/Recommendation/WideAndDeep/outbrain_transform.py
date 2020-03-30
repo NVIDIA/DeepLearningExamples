@@ -22,9 +22,8 @@ from tensorflow_transform.tf_metadata import dataset_schema
 from tensorflow_transform.tf_metadata import dataset_metadata
 from tensorflow_transform.tf_metadata import metadata_io
 import numpy as np
-import pandas as pd
 
-from trainer.features import LABEL_COLUMN, DISPLAY_ID_COLUMN, AD_ID_COLUMN, IS_LEAK_COLUMN, DISPLAY_ID_AND_IS_LEAK_ENCODED_COLUMN, CATEGORICAL_COLUMNS, DOC_CATEGORICAL_MULTIVALUED_COLUMNS, BOOL_COLUMNS, INT_COLUMNS, FLOAT_COLUMNS, FLOAT_COLUMNS_LOG_BIN_TRANSFORM, FLOAT_COLUMNS_SIMPLE_BIN_TRANSFORM
+from trainer.features import LABEL_COLUMN, DISPLAY_ID_COLUMN, IS_LEAK_COLUMN, DISPLAY_ID_AND_IS_LEAK_ENCODED_COLUMN, CATEGORICAL_COLUMNS, DOC_CATEGORICAL_MULTIVALUED_COLUMNS, BOOL_COLUMNS, INT_COLUMNS, FLOAT_COLUMNS, FLOAT_COLUMNS_LOG_BIN_TRANSFORM, FLOAT_COLUMNS_SIMPLE_BIN_TRANSFORM
 
 RENAME_COLUMNS = False
 
@@ -95,42 +94,6 @@ def make_spec(output_dir, batch_size=None):
 	
   metadata_io.write_metadata(metadata, output_dir)
 
-def make_input_schema(mode=tf.contrib.learn.ModeKeys.TRAIN, batch_size=None):
-  """Input schema definition.
-
-  Args:
-    mode: tf.contrib.learn.ModeKeys specifying if the schema is being used for
-      train/eval or prediction.
-    batch_size: None if not explicitly batched (for FixedLenFeature size of []), 
-      otherwise the number of elements to assume will be grouped (size of [batch_size])
-  Returns:
-    A `Schema` object.
-  """
-  fixed_shape = [batch_size] if batch_size is not None else []
-  result = {}
-  result[LABEL_COLUMN] = tf.FixedLenFeature(shape=fixed_shape, dtype=tf.int64)
-  result[DISPLAY_ID_COLUMN] = tf.FixedLenFeature(shape=fixed_shape, dtype=tf.float32)
-  #result[AD_ID_COLUMN] = tf.VarLenFeature(dtype=tf.float32)
-  result[IS_LEAK_COLUMN] = tf.FixedLenFeature(shape=fixed_shape, dtype=tf.int64)
-  for name in BOOL_COLUMNS:
-    #result[name] = tf.VarLenFeature(dtype=tf.int64)
-    result[name] = tf.FixedLenFeature(shape=fixed_shape, dtype=tf.int64, default_value=0.0)
-  #TODO: Create dummy features that indicates whether any of the numeric features is null 
-  #(currently default 0 value might introduce noise)
-  for name in FLOAT_COLUMNS_LOG_BIN_TRANSFORM+FLOAT_COLUMNS_SIMPLE_BIN_TRANSFORM:
-    result[name] = tf.FixedLenFeature(shape=fixed_shape, dtype=tf.float32, default_value=0.0)  
-  for name in INT_COLUMNS:
-    result[name] = tf.FixedLenFeature(shape=fixed_shape, dtype=tf.float32, default_value=0.0)
-  for name in CATEGORICAL_COLUMNS:
-    result[name] = tf.FixedLenFeature(shape=fixed_shape, dtype=tf.float32, default_value=0.0)
-    #result[name] = tf.VarLenFeature(dtype=tf.float32)
-  for multi_category in DOC_CATEGORICAL_MULTIVALUED_COLUMNS:
-    for category in DOC_CATEGORICAL_MULTIVALUED_COLUMNS[multi_category]:
-      result[category] = tf.FixedLenFeature(shape=fixed_shape, dtype=tf.float32, default_value=0.0)
-      #result[category] = tf.VarLenFeature(dtype=tf.float32)
-
-  return dataset_schema.from_feature_spec(result)
-
 def tf_log2_1p(x):
   return tf.log1p(x) / tf.log(2.0)
 
@@ -163,9 +126,6 @@ def scale_to_0_1(val, minv, maxv):
   return (val - minv) / (maxv - minv)
 
 def create_tf_example(df, min_logs, max_logs):
-  names = CSV_ORDERED_COLUMNS
-  #columns_dict = dict(zip(names, row))
-  
   result = {}
   result[LABEL_COLUMN] = tf.train.Feature(int64_list=tf.train.Int64List(value=df[LABEL_COLUMN].to_list()))
   result[DISPLAY_ID_COLUMN] = tf.train.Feature(int64_list=tf.train.Int64List(value=df[DISPLAY_ID_COLUMN].to_list()))

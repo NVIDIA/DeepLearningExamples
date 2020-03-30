@@ -20,8 +20,6 @@ import numpy as np
 import argparse
 import json
 import os
-import sys
-import pickle
 import tensorflow as tf
 import tensorflow_transform as tft
 

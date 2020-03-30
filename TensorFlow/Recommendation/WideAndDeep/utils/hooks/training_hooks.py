@@ -15,12 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
-import tensorflow as tf
-
-import dllogger
-
-
 class MeanAccumulator:
     def __init__(self):
         self.sum = 0

@@ -25,7 +25,6 @@ This repository provides a script and recipe to train the Wide and Deep Recommen
     * [Getting the data](#getting-the-data)
         * [Dataset guidelines](#dataset-guidelines)
     * [Training process](#training-process)
-    * [Deploying the Wide & Deep model using Triton Inference Server](#deploying-the-wide-deep-model-using-triton-inference-server)
 - [Performance](#performance)
     * [Benchmarking](#benchmarking)
         * [Training performance benchmark](#training-performance-benchmark)
@@ -181,7 +180,7 @@ To train your model using mixed precision with Tensor Cores or using FP32, perfo
 
 ```
 git clone https://github.com/NVIDIA/DeepLearningExamples
-cd DeepLearningExamples/TensorFlow/Recommendation/WideDeep
+cd DeepLearningExamples/TensorFlow/Recommendation/WideAndDeep
 ```
 
 2.  Download the Outbrain dataset.
@@ -325,10 +324,6 @@ The training log will contain information about:
 -  Evaluation metrics after every evaluation cycle at the end of every epoch.
 
 Checkpoints are stored at the end of every `--save_checkpoints_steps` at the `--model_dir` location.
-
-### Deploying the Wide & Deep model using Triton Inference Server
-
-This repository does not contain code for deploying the model using Triton Inference Server. The details of such deployment together with obtained performance numbers was discussed on the [blog post](https://devblogs.nvidia.com/accelerating-wide-deep-recommender-inference-on-gpus/).
 
 ## Performance
 
