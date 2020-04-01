@@ -408,7 +408,7 @@ for training QAT networks is to train a model until convergence and then finetun
         
 For QAT network, we use <a href="https://www.tensorflow.org/versions/r1.15/api_docs/python/tf/quantization/quantize_and_dequantize">tf.quantization.quantize_and_dequantize operation</a>.
 These operations are automatically added at weights and activation layers in the RN50 by using `tf.contrib.quantize.experimental_create_training_graph` utility. Support for using `tf.quantization.quantize_and_dequantize` 
-operations for  `tf.contrib.quantize.experimental_create_training_graph has been added in <a href="https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow">TensorFlow 19.20-py3 NGC container</a> which is required for this task.
+operations for  `tf.contrib.quantize.experimental_create_training_graph has been added in <a href="https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow">TensorFlow 20.01-py3 NGC container</a> which is required for this task.
 
 #### Post process checkpoint
   * `post_process_ckpt.py` is a utility to convert the final classification FC layer into a 1x1 convolution layer using the same weights. This is required to ensure TensorRT can parse QAT models successfully.
@@ -434,7 +434,7 @@ To export frozen graphs (which can be used for inference with <a href="https://d
 Arguments:
 
 * `--checkpoint` : Optional argument to export the model with checkpoint weights.
-* `--quantize` : Flag to export quantized graphs.
+* `--quantize` : Optional flag to export quantized graphs.
 * `--symmetric` : If quantize mode is enabled, this will use symmetric quantization.
 * `--input_format` : Data format of input tensor (NHWC or NCHW)
 * `--compute_format` : Data format of the operations in the network (NHWC or NCHW)
