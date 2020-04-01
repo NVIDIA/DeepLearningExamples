@@ -404,14 +404,14 @@ a <a href="https://www.tensorflow.org/versions/r1.14/api_docs/python/tf/contrib/
 for training QAT networks is to train a model until convergence and then finetune with the quantization layers. It is recommended that QAT is performed on a single GPU.
 
 * For 1 GPU
-    ` sh scripts/RN50_QAT_1GPU.sh <path to pre-trained ckpt dir> <path to dataset directory> <result_directory>`
+    * Command: ` sh scripts/RN50_QAT_1GPU.sh <path to pre-trained ckpt dir> <path to dataset directory> <result_directory>`
         
 For QAT network, we use <a href="https://www.tensorflow.org/versions/r1.15/api_docs/python/tf/quantization/quantize_and_dequantize">tf.quantization.quantize_and_dequantize operation</a>.
 These operations are automatically added at weights and activation layers in the RN50 by using `tf.contrib.quantize.experimental_create_training_graph` utility. Support for using `tf.quantization.quantize_and_dequantize` 
 operations for  `tf.contrib.quantize.experimental_create_training_graph has been added in <a href="https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow">TensorFlow 19.20-py3 NGC container</a> which is required for this task.
 
-* Post process checkpoint
-  `post_process_ckpt.py` is a utility to convert the final classification FC layer into a 1x1 convolution layer using the same weights. This is required to ensure TensorRT can parse QAT models successfully.
+#### Post process checkpoint
+  * `post_process_ckpt.py` is a utility to convert the final classification FC layer into a 1x1 convolution layer using the same weights. This is required to ensure TensorRT can parse QAT models successfully.
   This script should be used after performing QAT to reshape the FC layer weights in the final checkpoint.
   Arguments:
      * `--ckpt` : Path to the trained checkpoint of RN50.
