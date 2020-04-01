@@ -125,6 +125,15 @@ class ResnetModel(object):
             
             if "label_smoothing" not in params.keys():
                 raise RuntimeError("Parameter `label_smoothing` is missing...")
+
+            if "quantize" not in params.keys():
+                 raise RuntimeError("Parameter `quantize` is missing...")
+
+            if "symmetric" not in params.keys():
+                 raise RuntimeError("Parameter `symmetric` is missing...")
+
+            if "use_final_conv" not in params.keys():
+                 raise RuntimeError("Parameter `symmetric` is missing...")
                 
         if mode == tf.estimator.ModeKeys.TRAIN and not self.model_hparams.use_dali:
 
@@ -191,8 +200,12 @@ class ResnetModel(object):
             probs, logits = self.build_model(
                 features,
                 training=mode == tf.estimator.ModeKeys.TRAIN,
-                reuse=False
+                reuse=False,
+                use_final_conv=params['use_final_conv']
             )
+
+            if mode!=tf.estimator.ModeKeys.PREDICT:
+                logits = tf.squeeze(logits)
 
             y_preds = tf.argmax(logits, axis=1, output_type=tf.int32)
 
@@ -205,6 +218,28 @@ class ResnetModel(object):
             tf.identity(probs, name="probs_ref")
             tf.identity(y_preds, name="y_preds_ref")
 
+            if mode == tf.estimator.ModeKeys.TRAIN and params['quantize']:
+                LOGGER.log("QUANTIZATION AWARE TRAINING ENABLED")
+                if params['symmetric']:
+                    LOGGER.log("USING SYMMETRIC MODE")
+                    tf.contrib.quantize.experimental_create_training_graph(tf.get_default_graph(), symmetric=True, use_qdq=params['use_qdq'] ,quant_delay=params['quant_delay'])
+                else:
+                    LOGGER.log("USING ASSYMETRIC MODE")
+                    tf.contrib.quantize.create_training_graph(tf.get_default_graph(), quant_delay=params['quant_delay'], use_qdq=params['use_qdq'])
+
+            if (mode == tf.estimator.ModeKeys.EVAL or mode == tf.estimator.ModeKeys.PREDICT) and params['quantize']:
+                LOGGER.log("QUANTIZATION MODE ENABLED")
+                tf.contrib.quantize.experimental_create_eval_graph(symmetric=params['symmetric'], use_qdq=params['use_qdq'])
+
+            # Fix for restoring variables during fine-tuning of Resnet-50
+            if 'finetune_checkpoint' in params.keys():
+                train_vars = tf.trainable_variables()
+                train_var_dict = {}
+                for var in train_vars:
+                    train_var_dict[var.op.name] = var
+                LOGGER.log("Restoring variables from checkpoint", params['finetune_checkpoint'])
+                tf.train.init_from_checkpoint(params['finetune_checkpoint'], train_var_dict)
+            
             if mode == tf.estimator.ModeKeys.TRAIN:
                 
                 assert (len(tf.trainable_variables()) == 161)
@@ -363,7 +398,7 @@ class ResnetModel(object):
         return put_op, get_tensors
 
 
-    def build_model(self, inputs, training=True, reuse=False):
+    def build_model(self, inputs, training=True, reuse=False, use_final_conv=False):
         
         with var_storage.model_variable_scope(
             self.model_hparams.model_name,
@@ -475,21 +510,38 @@ class ResnetModel(object):
             with tf.variable_scope("output"):
 
                 net = layers.reduce_mean(
-                    net, keepdims=False, data_format=self.model_hparams.compute_format, name='spatial_mean'
+                    net, keepdims=use_final_conv, data_format=self.model_hparams.compute_format, name='spatial_mean'
                 )
-
-                logits = layers.dense(
-                    inputs=net,
-                    units=self.model_hparams.n_classes,
-                    use_bias=True,
-                    trainable=training,
-                    kernel_initializer=self.dense_hparams.kernel_initializer,
-                    bias_initializer=self.dense_hparams.bias_initializer
-                )
+                
+                if use_final_conv:
+                    logits = layers.conv2d(
+                                    net,
+                                    n_channels=self.model_hparams.n_classes,
+                                    kernel_size=(1, 1),
+                                    strides=(1, 1),
+                                    padding='SAME',
+                                    data_format=self.model_hparams.compute_format,
+                                    dilation_rate=(1, 1),
+                                    use_bias=True,
+                                    kernel_initializer=self.dense_hparams.kernel_initializer,
+                                    bias_initializer=self.dense_hparams.bias_initializer,
+                                    trainable=training,
+                                    name='dense'
+                                )
+                else:
+                    logits = layers.dense(
+                             inputs=net,
+                             units=self.model_hparams.n_classes,
+                             use_bias=True,
+                             trainable=training,
+                             kernel_initializer=self.dense_hparams.kernel_initializer,
+                             bias_initializer=self.dense_hparams.bias_initializer
+                             )
 
                 if logits.dtype != tf.float32:
                     logits = tf.cast(logits, tf.float32)
 
-                probs = layers.softmax(logits, name="softmax", axis=1)
+                axis = 3 if self.model_hparams.compute_format=="NHWC" and use_final_conv else 1
+                probs = layers.softmax(logits, name="softmax", axis=axis)
 
             return probs, logits

@@ -45,7 +45,8 @@ if __name__ == "__main__":
         data_dir=FLAGS.data_dir,
         data_idx_dir=FLAGS.data_idx_dir,
         export_dir=FLAGS.export_dir,
-        
+        finetune_checkpoint=FLAGS.finetune_checkpoint,
+
         # ========= Model HParams ========= #
         n_classes=1001,
         input_format='NHWC',
@@ -54,7 +55,8 @@ if __name__ == "__main__":
         height=224,
         width=224,
         n_channels=3,
-        
+        use_final_conv=FLAGS.use_final_conv,
+
         # ======= Training HParams ======== #
         iter_unit=FLAGS.iter_unit,
         num_iter=FLAGS.num_iter,
@@ -71,7 +73,11 @@ if __name__ == "__main__":
         use_cosine_lr=FLAGS.use_cosine_lr,
         use_static_loss_scaling=FLAGS.use_static_loss_scaling,
         distort_colors=False,
-        
+        quantize=FLAGS.quantize,
+        symmetric=FLAGS.symmetric,
+        quant_delay=FLAGS.quant_delay,
+        use_qdq=FLAGS.use_qdq,
+
         # ======= Optimization HParams ======== #
         use_xla=FLAGS.use_xla,
         use_tf_amp=FLAGS.use_tf_amp,
@@ -127,7 +133,12 @@ if __name__ == "__main__":
             use_static_loss_scaling=RUNNING_CONFIG.use_static_loss_scaling,
             use_cosine_lr=RUNNING_CONFIG.use_cosine_lr,
             is_benchmark=RUNNING_CONFIG.mode == 'training_benchmark',
-            
+            use_final_conv=RUNNING_CONFIG.use_final_conv,
+            quantize=RUNNING_CONFIG.quantize,
+            symmetric=RUNNING_CONFIG.symmetric,
+            quant_delay = RUNNING_CONFIG.quant_delay,
+            use_qdq = RUNNING_CONFIG.use_qdq,
+            finetune_checkpoint = RUNNING_CONFIG.finetune_checkpoint            
         )
 
     if RUNNING_CONFIG.mode in ["train_and_evaluate", 'evaluate', 'inference_benchmark']:
@@ -144,7 +155,11 @@ if __name__ == "__main__":
                 batch_size=RUNNING_CONFIG.batch_size,
                 log_every_n_steps=RUNNING_CONFIG.log_every_n_steps,
                 is_benchmark=RUNNING_CONFIG.mode == 'inference_benchmark',
-                export_dir=RUNNING_CONFIG.export_dir
+                export_dir=RUNNING_CONFIG.export_dir,
+                quantize=RUNNING_CONFIG.quantize,
+                symmetric=RUNNING_CONFIG.symmetric,
+                use_final_conv=RUNNING_CONFIG.use_final_conv,
+                use_qdq=RUNNING_CONFIG.use_qdq
             )
             
     if RUNNING_CONFIG.mode == 'predict':
@@ -158,4 +173,4 @@ if __name__ == "__main__":
             raise NotImplementedError("Only single GPU inference is implemented.")
             
         elif not hvd_utils.is_using_hvd() or hvd.rank() == 0:
-              runner.predict(FLAGS.to_predict)
+              runner.predict(FLAGS.to_predict, quantize=RUNNING_CONFIG.quantize, symmetric=RUNNING_CONFIG.symmetric, use_qdq=RUNNING_CONFIG.use_qdq, use_final_conv=RUNNING_CONFIG.use_final_conv)

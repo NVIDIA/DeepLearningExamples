@@ -31,7 +31,8 @@ def conv2d(
     use_bias=True,
     kernel_initializer=tf.variance_scaling_initializer(),
     bias_initializer=tf.zeros_initializer(),
-    trainable=True
+    trainable=True,
+    name=None
 ):
 
     if data_format not in ['NHWC', 'NCHW']:
@@ -52,7 +53,8 @@ def conv2d(
         kernel_initializer=kernel_initializer,
         bias_initializer=bias_initializer,
         trainable=trainable,
-        activation=None
+        activation=None,
+        name=name
     )
     
     return net

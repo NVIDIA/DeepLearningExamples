@@ -134,6 +134,54 @@ def parse_cmdline():
     )
 
     p.add_argument(
+        '--finetune_checkpoint',
+        required=False,
+        default=None,
+        type=str,
+        help="Path to pre-trained checkpoint which will be used for fine-tuning"
+    )
+
+    _add_bool_argument(
+        parser=p,
+        name="use_final_conv",
+        default=False,
+        required=False,
+        help="Use 1x1 conv layer as the final classification layer instead of FC layer"
+    )
+
+    p.add_argument(
+        '--quant_delay',
+        type=int,
+        default=0,
+        required=False,
+        help="""Number of steps to be run before quantization starts to happen"""
+    )
+
+    _add_bool_argument(
+        parser=p,
+        name="quantize",
+        default=False,
+        required=False,
+        help="Quantize weights and activations during training. (Defaults to Assymmetric quantization)"
+    )
+
+    _add_bool_argument(
+        parser=p,
+        name="use_qdq",
+        default=False,
+        required=False,
+        help="Use QDQV3 op instead of FakeQuantWithMinMaxVars op for quantization. QDQv3 does only scaling"
+    )
+
+    _add_bool_argument(
+        parser=p,
+        name="symmetric",
+        default=False,
+        required=False,
+        help="Quantize weights and activations during training using symmetric quantization."
+    )
+
+    p.add_argument(
         '--display_every', 
         default=10,
         type=int, 
