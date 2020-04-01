@@ -21,6 +21,7 @@ This repository provides a script and recipe to train the ResNet-50 v1.5 model t
     * [Getting the data](#getting-the-data)
         * [Data augmentation](#data-augmentation)
     * [Training process](#training-process)
+    * [Quantization Aware training](#quantization-aware-training)
     * [Inference process](#inference-process)
 * [Performance](#performance)
     * [Benchmarking](#benchmarking)
@@ -332,6 +333,18 @@ The script for training end evaluating the ResNet-50 v1.5 model have a variety o
 `--mixup`        
 : value of alpha parameter for mixup (if 0 then mixup is not applied) (default: 0)
 
+`--quantize`        
+: Used to add quantization nodes in the graph (Default: Asymmetric quantization).
+
+`--symmetric`        
+: If `--quantize` mode is used, this option enables symmetric quantization.
+
+`--use_qdq`        
+: Use QDQV3 op instead of FakeQuantWithMinMaxVars op for quantization. QDQv3 does only scaling.
+
+`--finetune_checkpoint`        
+: Path to pre-trained checkpoint which will be used for fine-tuning.
+
 ##### Utility parameters
 `--help`
 : displays a short description of all parameters accepted by the script.
@@ -384,15 +397,47 @@ To run a configuration that is not based on the default parameters, use:
     * FP16
         `mpiexec --allow-run-as-root --bind-to socket -np <num_gpus> python ./main.py --batch_size=256 --use_tf_amp --data_dir=<path to imagenet> --results_dir=<path to results>`
 
+### Quantization Aware Training
+Quantization Aware training (QAT) simulates quantization during training by quantizing weights and activation layers. This will help reduce the loss in accuracy when we convert the network
+trained in FP32 to INT8 for faster inference. QAT introduces additional nodes in the graph which will be used to learn the dynamic ranges of weights and activation layers. Tensorflow provides
+a <a href="https://www.tensorflow.org/versions/r1.14/api_docs/python/tf/contrib/quantize">quantization tool</a> which automatically adds these nodes in-place. Typical workflow
+for training QAT networks is to train a model until convergence and then finetune with the quantization layers. It is recommended that QAT is performed on a single GPU.
+
+* For 1 GPU
+    ` sh scripts/RN50_QAT_1GPU.sh <path to pre-trained ckpt dir> <path to dataset directory> <result_directory>`
+        
+For QAT network, we use <a href="https://www.tensorflow.org/versions/r1.15/api_docs/python/tf/quantization/quantize_and_dequantize">tf.quantization.quantize_and_dequantize operation</a>.
+These operations are automatically added at weights and activation layers in the RN50 by using `tf.contrib.quantize.experimental_create_training_graph` utility. Support for using `tf.quantization.quantize_and_dequantize` 
+operations for  `tf.contrib.quantize.experimental_create_training_graph has been added in <a href="https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow">TensorFlow 19.20-py3 NGC container</a> which is required for this task.
+
+* Post process checkpoint
+  `post_process_ckpt.py` is a utility to convert the final classification FC layer into a 1x1 convolution layer using the same weights. This is required to ensure TensorRT can parse QAT models successfully.
+  This script should be used after performing QAT to reshape the FC layer weights in the final checkpoint.
+  Arguments:
+     * `--ckpt` : Path to the trained checkpoint of RN50.
+     * `--out` : Name of the new checkpoint file which has the FC layer weights reshaped into 1x1 conv layer weights.
+
 ### Inference process
 To run inference on single examples on checkpoint with model script, use: 
 
 `python main.py --mode predict --model_dir <path to model> --to_predict <path to image> --results_dir <path to results>`
 
-
 To run inference on a SavedModel with dedicated script, use:
 
 `python scripts/inference/predict.py -m <path to model>  -f <path to image>`
+
+### Exporting Frozen graphs
+To export frozen graphs (which can be used for inference with <a href="https://developer.nvidia.com/tensorrt">TensorRT</a>), use:
+
+`python export_frozen_graph.py --checkpoint <path_to_checkpoint> --quantize --symmetric --input_format NHWC --compute_format NHWC --output_file=<output_file_name>`
+
+Arguments:
+
+* `--checkpoint` : Optional argument to export the model with checkpoint weights.
+* `--quantize` : Flag to export quantized graphs.
+* `--symmetric` : If quantize mode is enabled, this will use symmetric quantization.
+* `--input_format` : Data format of input tensor (NHWC or NCHW)
+* `--compute_format` : Data format of the operations in the network (NHWC or NCHW)
 
 
 ## Performance
