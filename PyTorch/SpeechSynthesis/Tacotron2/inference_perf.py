@@ -95,7 +95,7 @@ def main():
                                         dtype=torch.long).cuda()
             input_lengths = torch.IntTensor([text_padded.size(1)]*args.batch_size).cuda().long()
             with torch.no_grad(), MeasureTime(measurements, "inference_time"):
-                mels, _ = model(text_padded, input_lengths)
+                mels, _, _ = model(text_padded, input_lengths)
             num_items = mels.size(0)*mels.size(2)
 
         if args.model_name == 'WaveGlow':
