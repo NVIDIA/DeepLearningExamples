@@ -1,2 +1,2 @@
 #!/bin/bash
-docker build . --rm -t bert
+docker build --network=host . --rm --pull --no-cache -t bert

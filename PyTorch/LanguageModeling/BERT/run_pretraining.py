@@ -24,7 +24,6 @@ from __future__ import print_function
 import csv
 import os
 import time
-import logging
 import argparse
 import random
 import h5py
@@ -39,7 +38,7 @@ from apex import amp
 import multiprocessing
 
 from tokenization import BertTokenizer
-from modeling import BertForPreTraining, BertConfig
+import modeling
 from apex.optimizers import FusedLAMB
 from schedulers import PolyWarmUpScheduler
 
@@ -55,14 +54,25 @@ from apex.amp import _amp_state
 import dllogger
 from concurrent.futures import ProcessPoolExecutor
 
+torch._C._jit_set_profiling_mode(False)
+torch._C._jit_set_profiling_executor(False)
+
 skipped_steps = 0
 
-def create_pretraining_dataset(input_file, max_pred_length, shared_list, args):
+#Workaround because python functions are not picklable
+class WorkerInitObj(object):
+    def __init__(self, seed):
+        self.seed = seed
+    def __call__(self, id):
+        np.random.seed(seed=self.seed + id)
+        random.seed(self.seed + id)
 
+def create_pretraining_dataset(input_file, max_pred_length, shared_list, args, worker_init):
     train_data = pretraining_dataset(input_file=input_file, max_pred_length=max_pred_length)
     train_sampler = RandomSampler(train_data)
     train_dataloader = DataLoader(train_data, sampler=train_sampler,
-                                  batch_size=args.train_batch_size * args.n_gpu, num_workers=4,
+                                  batch_size=args.train_batch_size * args.n_gpu, 
+                                  num_workers=4, worker_init_fn=worker_init,
                                   pin_memory=True)
     return train_dataloader, input_file
 
@@ -97,6 +107,17 @@ class pretraining_dataset(Dataset):
 
         return [input_ids, segment_ids, input_mask,
                 masked_lm_labels, next_sentence_labels]
+class BertPretrainingCriterion(torch.nn.Module):
+    def __init__(self, vocab_size):
+        super(BertPretrainingCriterion, self).__init__()
+        self.loss_fn = torch.nn.CrossEntropyLoss(ignore_index=-1)
+        self.vocab_size = vocab_size
+    def forward(self, prediction_scores, seq_relationship_score, masked_lm_labels, next_sentence_labels):
+        masked_lm_loss = self.loss_fn(prediction_scores.view(-1, self.vocab_size), masked_lm_labels.view(-1))
+        next_sentence_loss = self.loss_fn(seq_relationship_score.view(-1, 2), next_sentence_labels.view(-1))
+        total_loss = masked_lm_loss + next_sentence_loss
+        return total_loss
+
 
 def parse_arguments():
 
@@ -224,12 +245,16 @@ def parse_arguments():
                         default=False,
                         action='store_true',
                         help="Whether to run training.")
-    parser.add_argument('--json-summary', type=str, default="dllogger.json",
+    parser.add_argument('--json-summary', type=str, default="results/dllogger.json",
                         help='If provided, the json summary will be written to'
                              'the specified file.')
     parser.add_argument("--use_env",
                         action='store_true',
                         help="Whether to read local rank from ENVVAR")
+    parser.add_argument('--disable_progress_bar',
+                        default=False,
+                        action='store_true',
+                        help='Disable tqdm progress bar')
     args = parser.parse_args()
     
     return args
@@ -274,7 +299,7 @@ def setup_training(args):
             os.listdir(args.output_dir) and any([i.startswith('ckpt') for i in os.listdir(args.output_dir)])):
         raise ValueError("Output directory ({}) already exists and is not empty.".format(args.output_dir))
 
-    if not args.resume_from_checkpoint or not os.path.exists(args.output_dir):
+    if (not args.resume_from_checkpoint or not os.path.exists(args.output_dir)) and is_main_process():
         os.makedirs(args.output_dir, exist_ok=True)
 
     return device, args
@@ -282,12 +307,14 @@ def setup_training(args):
 def prepare_model_and_optimizer(args, device):
 
     # Prepare model
-    config = BertConfig.from_json_file(args.config_file)
+    config = modeling.BertConfig.from_json_file(args.config_file)
 
     # Padding for divisibility by 8
     if config.vocab_size % 8 != 0:
         config.vocab_size += 8 - (config.vocab_size % 8)
-    model = BertForPreTraining(config)
+
+    modeling.ACT2FN["bias_gelu"] = torch.jit.script(modeling.ACT2FN["bias_gelu"])
+    model = modeling.BertForPreTraining(config)
 
     checkpoint = None
     if not args.resume_from_checkpoint:
@@ -327,10 +354,12 @@ def prepare_model_and_optimizer(args, device):
     if args.fp16:
 
         if args.loss_scale == 0:
-            model, optimizer = amp.initialize(model, optimizer, opt_level="O2", loss_scale="dynamic")
+            model, optimizer = amp.initialize(model, optimizer, opt_level="O2", loss_scale="dynamic", cast_model_outputs=torch.float16)
         else:
-            model, optimizer = amp.initialize(model, optimizer, opt_level="O2", loss_scale=args.loss_scale)
+            model, optimizer = amp.initialize(model, optimizer, opt_level="O2", loss_scale=args.loss_scale, cast_model_outputs=torch.float16)
         amp._amp_state.loss_scalers[0]._loss_scale = 2**20
+
+    model.checkpoint_activations(args.checkpoint_activations)
 
     if args.resume_from_checkpoint:
         if args.phase2 or args.init_checkpoint:
@@ -361,7 +390,10 @@ def prepare_model_and_optimizer(args, device):
     elif args.n_gpu > 1:
         model = torch.nn.DataParallel(model)
 
-    return model, optimizer, lr_scheduler, checkpoint, global_step
+    criterion = BertPretrainingCriterion(config.vocab_size)
+
+    return model, optimizer, lr_scheduler, checkpoint, global_step, criterion
+
 def take_optimizer_step(args, optimizer, model, overflow_buf, global_step):
 
     global skipped_steps
@@ -429,15 +461,17 @@ def main():
     if args.use_env and 'LOCAL_RANK' in os.environ:
         args.local_rank = int(os.environ['LOCAL_RANK'])
         
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
+    random.seed(args.seed + args.local_rank)
+    np.random.seed(args.seed + args.local_rank)
+    torch.manual_seed(args.seed + args.local_rank)
+    torch.cuda.manual_seed(args.seed + args.local_rank)
+    worker_init = WorkerInitObj(args.seed + args.local_rank)
 
     device, args = setup_training(args)
     dllogger.log(step="PARAMETER", data={"Config": [str(args)]})
 
     # Prepare optimizer
-    model, optimizer, lr_scheduler, checkpoint, global_step = prepare_model_and_optimizer(args, device)
+    model, optimizer, lr_scheduler, checkpoint, global_step, criterion = prepare_model_and_optimizer(args, device)
 
     if is_main_process():
         dllogger.log(step="PARAMETER", data={"SEED": args.seed})
@@ -487,7 +521,8 @@ def main():
             train_data = pretraining_dataset(data_file, args.max_predictions_per_seq)
             train_sampler = RandomSampler(train_data)
             train_dataloader = DataLoader(train_data, sampler=train_sampler,
-                                          batch_size=args.train_batch_size * args.n_gpu, num_workers=4,
+                                          batch_size=args.train_batch_size * args.n_gpu,
+                                          num_workers=4, worker_init_fn=worker_init,
                                           pin_memory=True)
             # shared_file_list["0"] = (train_dataloader, data_file)
 
@@ -507,17 +542,16 @@ def main():
 
                 previous_file = data_file
 
-                dataset_future = pool.submit(create_pretraining_dataset, data_file, args.max_predictions_per_seq, shared_file_list, args)
+                dataset_future = pool.submit(create_pretraining_dataset, data_file, args.max_predictions_per_seq, shared_file_list, args, worker_init)
 
-                train_iter = tqdm(train_dataloader, desc="Iteration") if is_main_process() else train_dataloader
+                train_iter = tqdm(train_dataloader, desc="Iteration", disable=args.disable_progress_bar) if is_main_process() else train_dataloader
                 for step, batch in enumerate(train_iter):
 
                     training_steps += 1
                     batch = [t.to(device) for t in batch]
                     input_ids, segment_ids, input_mask, masked_lm_labels, next_sentence_labels = batch
-                    loss = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask,
-                                    masked_lm_labels=masked_lm_labels, next_sentence_label=next_sentence_labels,
-                                    checkpoint_activations=args.checkpoint_activations)
+                    prediction_scores, seq_relationship_score = model(input_ids=input_ids, token_type_ids=segment_ids, attention_mask=input_mask)
+                    loss = criterion(prediction_scores, seq_relationship_score, masked_lm_labels, next_sentence_labels)
                     if args.n_gpu > 1:
                         loss = loss.mean()  # mean() to average on multi-gpu.
 
@@ -549,7 +583,7 @@ def main():
                             torch.distributed.all_reduce(average_loss)
                         final_loss = average_loss.item()
                         if is_main_process():
-                            dllogger.log(step=(epoch, training_steps / args.gradient_accumulation_steps, ), data={"final_loss": final_loss})
+                            dllogger.log(step=(epoch, global_step, ), data={"final_loss": final_loss})
                     elif training_steps % (args.log_freq * args.gradient_accumulation_steps) == 0:
                         if is_main_process():
                             dllogger.log(step=(epoch, global_step, ), data={"average_loss": average_loss / (args.log_freq * divisor),
