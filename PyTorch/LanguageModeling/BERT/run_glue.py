@@ -41,6 +41,9 @@ from apex import amp
 from sklearn.metrics import matthews_corrcoef, f1_score
 from utils import is_main_process
 
+torch._C._jit_set_profiling_mode(False)
+torch._C._jit_set_profiling_executor(False)
+
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
                     level = logging.INFO)

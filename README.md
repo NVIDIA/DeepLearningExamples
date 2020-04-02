@@ -67,7 +67,7 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 | [ResNeXt101-32x4d](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets/resnext101-32x4d)  |PyTorch  | Yes  | Yes  | Yes  | -  | -  |   -  | -  | -  |
 | [SE-ResNeXt101-32x4d](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets/se-resnext101-32x4d)  |PyTorch  | Yes  | Yes  | Yes  | -  | -  | -  | -  | -  |
 | [SSD300 v1.1](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Detection/SSD) |PyTorch  | Yes  | Yes  | Yes  | -  | -  |   -  | -  | -  |
-| [BERT](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/LanguageModeling/BERT) |PyTorch  | N/A  | Yes  | Yes  | Yes  | -  |   -  | -  | -  |
+| [BERT](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/LanguageModeling/BERT) |PyTorch  | N/A  | Yes  | Yes  | Yes  | -  |   -  | Yes  | -  |
 | [Transformer-XL](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/LanguageModeling/Transformer-XL) |PyTorch  | N/A  | Yes  | Yes  | Yes  | -  |   -  | -  | -  |
 | [Neural Collaborative Filtering](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Recommendation/NCF) |PyTorch  | N/A  | Yes  | Yes  | -  |  -  |-  | -  | -  |
 | [Mask R-CNN](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Segmentation/MaskRCNN) |PyTorch  | N/A  | Yes  | Yes  | -  | -  |   -  | -  | -  |
