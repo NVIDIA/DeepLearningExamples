@@ -94,6 +94,11 @@ output [
     data_type: TYPE_INT32
     dims: [1]
     reshape: {{ shape: [ ] }}
+  }},
+  {{
+    name: "alignments__2"
+    data_type: {fp_type}
+    dims: [-1,-1]
   }}
 ]
 """

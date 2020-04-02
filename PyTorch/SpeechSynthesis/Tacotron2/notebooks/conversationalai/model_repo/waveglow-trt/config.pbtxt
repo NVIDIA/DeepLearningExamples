@@ -1,0 +1,21 @@
+name: "waveglow-trt"
+platform: "tensorrt_plan"
+default_model_filename: "waveglow_fp16.engine"
+
+max_batch_size: 1
+
+input {
+  name: "mel"
+  data_type: TYPE_FP16
+  dims: [80, -1, 1]
+}
+input {
+  name: "z"
+  data_type: TYPE_FP16
+  dims: [8, -1, 1]
+}
+output {
+  name: "audio"
+  data_type: TYPE_FP16
+  dims: [-1]
+}

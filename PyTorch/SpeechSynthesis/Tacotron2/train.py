@@ -81,8 +81,6 @@ def parse_args(parser):
                           help='Number of epochs per checkpoint')
     training.add_argument('--checkpoint-path', type=str, default='',
                           help='Checkpoint path to resume training')
-    training.add_argument('--seed', type=int, default=1234,
-                          help='Seed for PyTorch random number generators')
     training.add_argument('--dynamic-loss-scaling', type=bool, default=True,
                           help='Enable dynamic loss scaling')
     training.add_argument('--amp-run', action='store_true',
@@ -196,12 +194,13 @@ def save_checkpoint(model, optimizer, epoch, config, amp_run, filepath):
     torch.save(checkpoint, filepath)
 
 
-def load_checkpoint(model, optimizer, epoch, config, amp_run, filepath):
+def load_checkpoint(model, optimizer, epoch, config, amp_run, filepath, rank):
 
     checkpoint = torch.load(filepath, map_location='cpu')
 
     epoch[0] = checkpoint['epoch']+1
-    torch.cuda.set_rng_state_all(checkpoint['cuda_rng_state_all'])
+    device_id = rank % torch.cuda.device_count()
+    torch.cuda.set_rng_state(checkpoint['cuda_rng_state_all'][device_id])
     torch.random.set_rng_state(checkpoint['random_rng_state'])
     config = checkpoint['config']
     model.load_state_dict(checkpoint['state_dict'])
@@ -355,7 +354,7 @@ def main():
 
     if args.checkpoint_path is not "":
         load_checkpoint(model, optimizer, start_epoch, model_config,
-                        args.amp_run, args.checkpoint_path)
+                        args.amp_run, args.checkpoint_path, local_rank)
 
     start_epoch = start_epoch[0]
 
@@ -475,7 +474,7 @@ def main():
         DLLogger.log(step=(epoch,), data={'train_loss': (train_epoch_avg_loss/num_iters if num_iters > 0 else 0.0)})
         DLLogger.log(step=(epoch,), data={'train_epoch_time': epoch_time})
 
-        val_loss = validate(model, criterion, valset, epoch, i,
+        val_loss = validate(model, criterion, valset, epoch, iteration,
                             args.batch_size, world_size, collate_fn,
                             distributed_run, local_rank, batch_to_gpu)
 

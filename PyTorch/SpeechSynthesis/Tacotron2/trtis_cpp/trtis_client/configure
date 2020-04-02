@@ -1,0 +1,59 @@
+#!/bin/bash
+
+BUILD_DIR="build/"
+MAKEFILE="./Makefile"
+
+OPTIONS="-DCMAKE_VERBOSE_MAKEFILE=1"
+
+while [[ $# -gt 0 ]]; do
+  flag="${1}"
+  case "${flag}" in
+    --cc=*)
+      OPTIONS="${OPTIONS} -DCMAKE_C_COMPILER=${flag#*=}"
+      ;;
+    --cxx=*)
+      OPTIONS="${OPTIONS} -DCMAKE_CXX_COMPILER=${flag#*=}"
+      ;;
+    --devel)
+      OPTIONS="${OPTIONS} -DDEVEL=1"
+      ;;
+    --debug)
+      OPTIONS="${OPTIONS} -DCMAKE_BUILD_TYPE=Debug"
+      ;;
+    --notorch)
+      OPTIONS="${OPTIONS} -DNO_TORCH=1"
+      ;;
+    --trtis)
+      OPTIONS="${OPTIONS} -DBUILD_TRTIS=1"
+      ;;
+    --trtis_client)
+      OPTIONS="${OPTIONS} -DBUILD_TRTIS_CLIENT=1"
+      ;;
+    *)
+      echo "Unknown argument '${flag}'."
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [[ -d "${BUILD_DIR}" ]]; then
+  rm -rf "${BUILD_DIR}"
+fi
+
+mkdir -p "${BUILD_DIR}"
+
+pushd "${BUILD_DIR}"
+cmake --version
+echo "cmake .. ${OPTIONS}"
+cmake .. ${OPTIONS}
+popd
+
+echo "# Auto generated makefile" > "${MAKEFILE}"
+echo "" >> "${MAKEFILE}"
+echo "all test:" >> "${MAKEFILE}"
+echo "	make -C \"${BUILD_DIR}\" \$@" >> "${MAKEFILE}"
+echo "" >> "${MAKEFILE}"
+echo ".PHONY: all" >> "${MAKEFILE}"
+echo "" >> "${MAKEFILE}"
+

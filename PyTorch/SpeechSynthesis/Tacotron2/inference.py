@@ -31,6 +31,8 @@ import torch
 import argparse
 import numpy as np
 from scipy.io.wavfile import write
+import matplotlib
+import matplotlib.pyplot as plt
 
 import sys
 
@@ -208,14 +210,14 @@ def main():
     except:
         print("Could not read file")
         sys.exit(1)
-    
+
     if args.include_warmup:
         sequence = torch.randint(low=0, high=148, size=(1,50),
                                  dtype=torch.long).cuda()
         input_lengths = torch.IntTensor([sequence.size(1)]).cuda().long()
         for i in range(3):
             with torch.no_grad():
-                mel, mel_lengths = jitted_tacotron2(sequence, input_lengths)
+                mel, mel_lengths, _ = jitted_tacotron2(sequence, input_lengths)
                 _ = waveglow(mel)
 
     measurements = {}
@@ -223,7 +225,7 @@ def main():
     sequences_padded, input_lengths = prepare_input_sequence(texts)
 
     with torch.no_grad(), MeasureTime(measurements, "tacotron2_time"):
-        mel, mel_lengths = jitted_tacotron2(sequences_padded, input_lengths)
+        mel, mel_lengths, alignments = jitted_tacotron2(sequences_padded, input_lengths)
 
     with torch.no_grad(), MeasureTime(measurements, "waveglow_time"):
         audios = waveglow(mel, sigma=args.sigma_infer)
@@ -240,7 +242,14 @@ def main():
     DLLogger.log(step=0, data={"waveglow_latency": measurements['waveglow_time']})
     DLLogger.log(step=0, data={"latency": (measurements['tacotron2_time']+measurements['waveglow_time'])})
 
+    alignments = alignments.unfold(1, audios.size(0), audios.size(0)).transpose(0,2)
+
     for i, audio in enumerate(audios):
+
+        plt.imshow(alignments[i].float().data.cpu().numpy().T, aspect="auto", origin="lower")
+        figure_path = args.output+"alignment_"+str(i)+"_"+args.suffix+".png"
+        plt.savefig(figure_path)
+
         audio = audio[:mel_lengths[i]*args.stft_hop_length]
         audio = audio/torch.max(torch.abs(audio))
         audio_path = args.output+"audio_"+str(i)+"_"+args.suffix+".wav"

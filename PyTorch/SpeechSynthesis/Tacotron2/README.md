@@ -710,6 +710,12 @@ December 2019
 January 2020
 * Updated batch sizes and performance results for Tacotron 2.
 
+March 2020
+* Added Tacotron 2 and WaveGlow inference using TensorRT Inference Server with custom TensorRT backend in `trtis_cpp`
+* Added Conversational AI demo script in `notebooks/conversationalai`
+* Fixed loading CUDA RNG state in `load_checkpoint()` function in `train.py`
+* Fixed FP16 export to TensorRT in `trt/README.md`
+
 ### Known issues
 
 There are no known issues in this release.

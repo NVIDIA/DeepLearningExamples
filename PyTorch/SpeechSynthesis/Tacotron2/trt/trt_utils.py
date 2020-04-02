@@ -68,8 +68,9 @@ def engine_info(engine_filepath):
   dims: {dims}
 }}"""
     type_mapping = {"DataType.HALF": "TYPE_FP16",
-    "DataType.FLOAT": "TYPE_FP32",
-    "DataType.INT32": "TYPE_INT32"}
+                    "DataType.FLOAT": "TYPE_FP32",
+                    "DataType.INT32": "TYPE_INT32",
+                    "DataType.BOOL" : "TYPE_BOOL"}
 
     print("engine name", engine.name)
     print("has_implicit_batch_dimension", engine.has_implicit_batch_dimension)

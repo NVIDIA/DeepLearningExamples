@@ -1,0 +1,31 @@
+name: "tacotron2"
+platform: "pytorch_libtorch"
+default_model_filename: "tacotron2_fp16.pt"
+
+max_batch_size: 8
+input [
+  {
+    name: "sequence__0"
+    data_type: TYPE_INT64
+    dims: [-1]
+  },
+  {
+    name: "input_lengths__1"
+    data_type: TYPE_INT64
+    dims: [1]
+    reshape: { shape: [ ] }
+  }
+]
+output [
+  {
+    name: "mel_outputs_postnet__0"
+    data_type: TYPE_FP16
+    dims: [80,-1]
+  },
+  {
+    name: "mel_lengths__1"
+    data_type: TYPE_INT32
+    dims: [1]
+    reshape: { shape: [ ] }
+  }
+]
