@@ -45,6 +45,8 @@ def parse_args(parser):
                         help='full path to the Tacotron2 model checkpoint file')
     parser.add_argument('-o', '--output', type=str, required=True,
                         help='Directory for the exported Tacotron 2 ONNX model')
+    parser.add_argument('--fp16', action='store_true',
+                        help='Export with half precision to ONNX')
 
     return parser
 
@@ -105,7 +107,7 @@ def prenet_infer(self, x):
     for linear in self.layers:
         x1 = F.relu(linear(x1))
         x0 = x1[0].unsqueeze(0)
-        mask = torch.le(torch.rand(256, device='cuda').to(torch.float32), 0.5).to(torch.float32)
+        mask = torch.le(torch.rand(256, device='cuda').to(x.dtype), 0.5).to(x.dtype)
         mask = mask.expand(x1.size(0), x1.size(1))
         x1 = x1*mask*2.0
 
@@ -216,7 +218,6 @@ class DecoderIter(torch.nn.Module):
         return outputs
 
 
-
 def test_inference(encoder, decoder_iter, postnet):
 
     encoder.eval()
@@ -295,7 +296,8 @@ def main():
     parser = parse_args(parser)
     args, _ = parser.parse_known_args()
 
-    tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2, False)
+    tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2,
+                                     amp_run=args.fp16)
 
     opset_version = 10
 
@@ -323,6 +325,8 @@ def main():
 
     decoder_iter = DecoderIter(tacotron2)
     memory = torch.randn((1,sequence_lengths[0],512)).cuda() #encoder_outputs
+    if args.fp16:
+        memory = memory.half()
     memory_lengths = sequence_lengths
     # initialize decoder states for dummy_input
     decoder_input = tacotron2.decoder.get_go_frame(memory)
@@ -399,6 +403,8 @@ def main():
 
     postnet = Postnet(tacotron2)
     dummy_input = torch.randn((1,80,620)).cuda()
+    if args.fp16:
+        dummy_input = dummy_input.half()
     torch.onnx.export(postnet, dummy_input, args.output+"/"+"postnet.onnx",
                       opset_version=opset_version,
                       do_constant_folding=True,

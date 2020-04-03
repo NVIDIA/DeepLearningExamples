@@ -1,2 +1,2 @@
 #!/bin/bash
-docker build . --rm -t bert_pyt
+docker build --network=host . --rm --pull --no-cache -t bert

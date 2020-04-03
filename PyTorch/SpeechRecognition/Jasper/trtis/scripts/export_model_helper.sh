@@ -76,7 +76,7 @@ python  ${JASPER_REPO}/trt/perf.py \
 	--ckpt_path ${CHECKPOINT_DIR}/${CHECKPOINT} \
 	--wav=${JASPER_REPO}/notebooks/example1.wav \
 	--model_toml=${JASPER_REPO}/configs/${MODEL_CONFIG} \
-	--make_onnx --onnx_path jasper-tmp.onnx --engine_path ${MODEL_REPO}/jasper-trt/1/jasper_${ARCH}.plan --seq_len=256 --max_seq_len ${MAX_SEQUENCE_LENGTH_FOR_ENGINE} --verbose --dynamic_shape ${PREC_FLAGS} || exit 1
+	--make_onnx --onnx_path jasper-tmp.onnx --engine_path ${MODEL_REPO}/jasper-trt/1/jasper_${ARCH}.plan --seq_len=256 --max_seq_len ${MAX_SEQUENCE_LENGTH_FOR_ENGINE} --verbose ${PREC_FLAGS} || exit 1
 rm -fr jasper-tmp.onnx
 
 
@@ -89,7 +89,7 @@ python  ${JASPER_REPO}/trt/perf.py \
 	--ckpt_path ${CHECKPOINT_DIR}/${CHECKPOINT} \
 	--wav=${JASPER_REPO}/notebooks/example1.wav \
 	--model_toml=${JASPER_REPO}/configs/${MODEL_CONFIG} \
-	--make_onnx --onnx_path ${MODEL_REPO}/jasper-onnx/1/jasper.onnx --seq_len=256 --max_seq_len ${MAX_SEQUENCE_LENGTH_FOR_ENGINE} --verbose ${PREC_FLAGS} --dynamic_shape ${ADDITIONAL_TRT_ARGS} || exit 1
+	--make_onnx --onnx_path ${MODEL_REPO}/jasper-onnx/1/jasper.onnx --seq_len=256 --max_seq_len ${MAX_SEQUENCE_LENGTH_FOR_ENGINE} --verbose ${PREC_FLAGS} ${ADDITIONAL_TRT_ARGS} || exit 1
 
 mkdir -p ${MODEL_REPO}/jasper-onnx-cpu/1
 cp -f ${MODEL_REPO}/jasper-onnx/1/jasper.onnx ${MODEL_REPO}/jasper-onnx-cpu/1/jasper.onnx 

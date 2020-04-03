@@ -282,6 +282,10 @@ def create_instances_from_document(
                         if random_document_index != document_index:
                             break
 
+                    #If picked random document is the same as the current document
+                    if random_document_index == document_index:
+                        is_random_next = False
+                            
                     random_document = all_documents[random_document_index]
                     random_start = rng.randint(0, len(random_document) - 1)
                     for j in range(random_start, len(random_document)):

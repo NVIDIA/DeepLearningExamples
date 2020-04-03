@@ -107,7 +107,3 @@ else
    ) |& tee $LOGFILE
 fi
 set +x
-
-throughput=`cat $LOGFILE | grep Iteration | tail -1 | awk -F'it/s' '{print $1}' | awk -F',' '{print $2}' | egrep -o [0-9.]+`
-inference_perf=$(awk 'BEGIN {print ('$throughput' * '$num_gpus' * '$eval_batch_size')}')
-echo " inference throughput : $inference_perf sequences/second"

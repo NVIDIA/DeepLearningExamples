@@ -24,8 +24,6 @@ Example:
 """
 
 import os
-import pickle
-import time
 
 import horovod.tensorflow as hvd
 import math
@@ -33,13 +31,12 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image
 
-from dllogger import tags
-from dllogger.logger import LOGGER
 from utils.cmd_util import PARSER, _cmd_params
 from utils.data_loader import Dataset
 from utils.hooks.profiling_hook import ProfilingHook
 from utils.hooks.training_hook import TrainingHook
 from utils.model_fn import unet_fn
+from dllogger.logger import Logger, StdOutBackend, JSONStreamBackend, Verbosity
 
 
 def main(_):
@@ -48,10 +45,15 @@ def main(_):
     """
 
     flags = PARSER.parse_args()
-
     params = _cmd_params(flags)
+    np.random.seed(params.seed)
+    tf.compat.v1.random.set_random_seed(params.seed)
+    tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
-    tf.logging.set_verbosity(tf.logging.ERROR)
+    backends = [StdOutBackend(Verbosity.VERBOSE)]
+    if params.log_dir is not None:
+        backends.append(JSONStreamBackend(Verbosity.VERBOSE, params.log_dir))
+    logger = Logger(backends)
 
     # Optimization flags
     os.environ['CUDA_CACHE_DISABLE'] = '0'
@@ -71,95 +73,103 @@ def main(_):
     os.environ['TF_SYNC_ON_FINISH'] = '0'
     os.environ['TF_AUTOTUNE_THRESHOLD'] = '2'
 
-    if params['use_amp']:
-        os.environ['TF_ENABLE_AUTO_MIXED_PRECISION']='1'
-
+    if params.use_amp:
+        os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
+    else:
+        os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '0'
     hvd.init()
 
     # Build run config
-    gpu_options = tf.GPUOptions()
-    config = tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)
+    gpu_options = tf.compat.v1.GPUOptions()
+    config = tf.compat.v1.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)
+
+    if params.use_xla:
+        config.graph_options.optimizer_options.global_jit_level = tf.compat.v1.OptimizerOptions.ON_1
+
     config.gpu_options.allow_growth = True
     config.gpu_options.visible_device_list = str(hvd.local_rank())
-    config.gpu_options.force_gpu_compatible = True
-    config.intra_op_parallelism_threads = 1
-    config.inter_op_parallelism_threads = max(2, 40 // hvd.size() - 2)
 
     run_config = tf.estimator.RunConfig(
         save_summary_steps=1,
         tf_random_seed=None,
         session_config=config,
-        save_checkpoints_steps=params['max_steps'],
+        save_checkpoints_steps=params.max_steps // hvd.size(),
         keep_checkpoint_max=1)
 
     # Build the estimator model
     estimator = tf.estimator.Estimator(
         model_fn=unet_fn,
-        model_dir=params['model_dir'],
+        model_dir=params.model_dir,
         config=run_config,
         params=params)
 
-    dataset = Dataset(data_dir=params['data_dir'],
-                      batch_size=params['batch_size'],
-                      augment=params['augment'],
+    dataset = Dataset(data_dir=params.data_dir,
+                      batch_size=params.batch_size,
+                      fold=params.crossvalidation_idx,
+                      augment=params.augment,
                       gpu_id=hvd.rank(),
                       num_gpus=hvd.size(),
-                      seed=params['seed'])
+                      seed=params.seed)
 
-    if 'train' in params['exec_mode']:
+    if 'train' in params.exec_mode:
+        max_steps = params.max_steps // (1 if params.benchmark else hvd.size())
         hooks = [hvd.BroadcastGlobalVariablesHook(0),
-                 TrainingHook(params['log_every'])]
+                 TrainingHook(logger,
+                              max_steps=max_steps,
+                              log_every=params.log_every)]
 
-        if params['benchmark']:
-            hooks.append(ProfilingHook(params['batch_size'],
-                                       params['log_every'],
-                                       params['warmup_steps']))
+        if params.benchmark and hvd.rank() == 0:
+            hooks.append(ProfilingHook(logger,
+                                       batch_size=params.batch_size,
+                                       log_every=params.log_every,
+                                       warmup_steps=params.warmup_steps,
+                                       mode='train'))
 
-        LOGGER.log('Begin Training...')
-
-        LOGGER.log(tags.RUN_START)
         estimator.train(
             input_fn=dataset.train_fn,
-            steps=params['max_steps'],
+            steps=max_steps,
             hooks=hooks)
-        LOGGER.log(tags.RUN_STOP)
 
-    if 'predict' in params['exec_mode']:
+    if 'evaluate' in params.exec_mode:
+        if hvd.rank() == 0:
+            results = estimator.evaluate(input_fn=dataset.eval_fn, steps=dataset.eval_size)
+            logger.log(step=(),
+                       data={"eval_ce_loss": float(results["eval_ce_loss"]),
+                             "eval_dice_loss": float(results["eval_dice_loss"]),
+                             "eval_total_loss": float(results["eval_total_loss"]),
+                             "eval_dice_score": float(results["eval_dice_score"])})
+
+    if 'predict' in params.exec_mode:
         if hvd.rank() == 0:
             predict_steps = dataset.test_size
             hooks = None
-            if params['benchmark']:
-                hooks = [ProfilingHook(params['batch_size'],
-                                       params['log_every'],
-                                       params['warmup_steps'])]
-                predict_steps = params['warmup_steps'] * 2 * params['batch_size']
-
-            LOGGER.log('Begin Predict...')
-            LOGGER.log(tags.RUN_START)
+            if params.benchmark:
+                hooks = [ProfilingHook(logger,
+                                       batch_size=params.batch_size,
+                                       log_every=params.log_every,
+                                       warmup_steps=params.warmup_steps,
+                                       mode="test")]
+                predict_steps = params.warmup_steps * 2 * params.batch_size
 
             predictions = estimator.predict(
-                input_fn=lambda: dataset.test_fn(count=math.ceil(predict_steps/dataset.test_size)),
+                input_fn=lambda: dataset.test_fn(count=math.ceil(predict_steps / dataset.test_size)),
                 hooks=hooks)
-
             binary_masks = [np.argmax(p['logits'], axis=-1).astype(np.uint8) * 255 for p in predictions]
-            LOGGER.log(tags.RUN_STOP)
 
-            multipage_tif = [Image.fromarray(mask).resize(size=(512, 512), resample=Image.BILINEAR)
-                             for mask in binary_masks]
+            if not params.benchmark:
+                multipage_tif = [Image.fromarray(mask).resize(size=(512, 512), resample=Image.BILINEAR)
+                                 for mask in binary_masks]
 
-            output_dir = os.path.join(params['model_dir'], 'pred')
+                output_dir = os.path.join(params.model_dir, 'pred')
 
-            if not os.path.exists(output_dir):
-                os.makedirs(output_dir)
+                if not os.path.exists(output_dir):
+                    os.makedirs(output_dir)
 
-            multipage_tif[0].save(os.path.join(output_dir, 'test-masks.tif'),
-                                  compression="tiff_deflate",
-                                  save_all=True,
-                                  append_images=multipage_tif[1:])
-
-            LOGGER.log("Predict finished")
-            LOGGER.log("Results available in: {}".format(output_dir))
+                multipage_tif[0].save(os.path.join(output_dir, 'test-masks.tif'),
+                                      compression="tiff_deflate",
+                                      save_all=True,
+                                      append_images=multipage_tif[1:])
 
 
 if __name__ == '__main__':
-    tf.app.run()
+    tf.compat.v1.app.run()

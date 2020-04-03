@@ -229,7 +229,7 @@ NUM_STEPS: Number of inference steps. If -1 runs inference on entire dataset (de
 BATCH_SIZE: data batch size (default: 64)
 NUM_FRAMES: cuts/pads all pre-processed feature tensors to this length. 100 frames ~ 1 second of audio (default: 512)
 FORCE_ENGINE_REBUILD: boolean that indicates whether an already-built TensorRT engine of equivalent precision, batch-size, and number of frames should not be used. Engines are specific to the GPU, library versions, TensorRT versions, and CUDA versions they were built in and cannot be used in a different environment. (default: "true")
-USE_DYNAMIC_SHAPE: if 'yes' uses dynamic shapes (default: ‘yes’)
+USE_DYNAMIC_SHAPE: if 'yes' uses dynamic shapes (default: ‘yes’). Dynamic shape is always preferred since it allows to reuse engines.
 ```
 
 The complete list of parameters available for `trt/scripts/trt_inference.sh` is the same as `trt/scripts/trt_inference_benchmark.sh` only with different default input arguments. In the following, only the parameters with different default values are listed:

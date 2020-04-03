@@ -29,11 +29,9 @@ This repository provides a script and recipe to train the Transformer model to a
         * [Inference performance benchmark](#inference-performance-benchmark)
     * [Results](#results)
         * [Training accuracy results](#training-accuracy-results)
-            * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-(8x-v100-16G))
-            * [Training stability test](#training-stability-test)
         * [Training performance results](#training-performance-results)
-            * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-(8x-v100-16G))
-            * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-(16x-v100-32G))
+            * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
+            * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-16x-v100-32g))
         * [Inference performance results](#inference-performance-results)
 - [Release notes](#release-notes)
     * [Changelog](#changelog)
@@ -355,6 +353,8 @@ Running this code with the provided hyperparameters will allow you to achieve th
  4 | 28.35 | 28.31 | 834 min | 3733 min
 
 In some cases we can train further with the same setup to achieve slightly better results. 
+
+#### Training performance results
 
 ##### NVIDIA DGX-1 (8x V100 16G)
 

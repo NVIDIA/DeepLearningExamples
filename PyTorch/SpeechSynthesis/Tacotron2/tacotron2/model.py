@@ -685,4 +685,4 @@ class Tacotron2(nn.Module):
         mel_outputs_postnet = self.postnet(mel_outputs)
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet
 
-        return mel_outputs_postnet, mel_lengths
+        return mel_outputs_postnet, mel_lengths, alignments

@@ -187,7 +187,7 @@ def main():
         with torch.no_grad():
             with MeasureTime(measurements, "latency"):
                 with MeasureTime(measurements, "tacotron2_latency"):
-                    mel, mel_lengths = tacotron2.infer(sequences_padded, input_lengths)
+                    mel, mel_lengths, _ = tacotron2.infer(sequences_padded, input_lengths)
 
                 with MeasureTime(measurements, "waveglow_latency"):
                     audios = waveglow.infer(mel, sigma=args.sigma_infer)

@@ -35,6 +35,9 @@ from modeling import BertForMultipleChoice, BertConfig, WEIGHTS_NAME, CONFIG_NAM
 from optimization import BertAdam, warmup_linear
 from tokenization import BertTokenizer
 
+torch._C._jit_set_profiling_mode(False)
+torch._C._jit_set_profiling_executor(False)
+
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
                     level = logging.INFO)
