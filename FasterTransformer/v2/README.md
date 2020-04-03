@@ -4,34 +4,34 @@ This repository provides a script and recipe to run the highly optimized transfo
 
 ## Table Of Contents
 
-- [Model overview](#model-overview)
-  * [Configuration support matrix](#configuration-support-matrix)
-  * [Model architecture](#model-architecture)
-    * [Encoder](#encoder)
-    * [Decoder](#decoder)
-    * [Decoding](#decoding)
-    * [Decoder and Decoding](#decoder-and-decoding)
-- [Setup](#setup)
-  * [Requirements](#requirements)
-- [Quick Start Guide](#quick-start-guide)
-  * [Build the FasterTransformer](#build-the-fastertransformer)
-  * [Execute the encoder demos](#execute-the-encoder-demos)
-  * [Execute the decoding demos](#execute-the-decoding-demos)
-- [Advanced](#advanced)
-  * [Scripts and sample codes](#scripts-and-sample-codes)
-  * [Command-line options](#command-line-options)
-  * [Inference process](#inference-process)
-    * [Encoder process](#encoder-process)
-    * [Decoder and Decoding process](#decoder-and-decoding-process)
-    * [Translation process](#translation-process)
-- [Performance](#performance)
-  * [Encoder performance](#encoder-performance)
-  * [Decoder performance on T4](#decoder-performance-on-t4)
-  * [Decoding performance on T4](#decoding-performance-on-t4)
-  * [Decoding performance on V100](#decoding-performance-on-v100)
-- [Release notes](#release-notes)
-  * [Changelog](#changelog)
-  * [Known issues](#known-issues)
+  - [Model overview](#model-overview)
+    - [Configuration support matrix](#configuration-support-matrix)
+    - [Model architecture](#model-architecture)
+      - [Encoder](#encoder)
+      - [Decoder](#decoder)
+      - [Decoding](#decoding)
+      - [Decoder and Decoding](#decoder-and-decoding)
+  - [Setup](#setup)
+    - [Requirements](#requirements)
+  - [Quick Start Guide](#quick-start-guide)
+    - [Build the FasterTransformer](#build-the-fastertransformer)
+    - [Execute the encoder demos](#execute-the-encoder-demos)
+    - [Execute the decoding demos](#execute-the-decoding-demos)
+  - [Advanced](#advanced)
+    - [Scripts and sample codes](#scripts-and-sample-codes)
+    - [Command-line options](#command-line-options)
+    - [Inference process](#inference-process)
+      - [Encoder process](#encoder-process)
+      - [Decoder and decoding process](#decoder-and-decoding-process)
+      - [Translation process](#translation-process)
+  - [Performance](#performance)
+    - [Encoder performance](#encoder-performance)
+    - [Decoder performance on T4](#decoder-performance-on-t4)
+    - [Decoding performance on T4](#decoding-performance-on-t4)
+    - [Decoding performance on V100](#decoding-performance-on-v100)
+  - [Release notes](#release-notes)
+    - [Changelog](#changelog)
+    - [Known issues](#known-issues)
 
 ## Model overview
 
@@ -221,32 +221,102 @@ python encoder_sample.py \
         --data_type fp16 \
         --test_time 1
 ```
-<!--
 3. Run the FasterTransformer in BERT.
 
-The following script demonstrates how to integrate the FasterTransformer into a BERT model. 
+The following script demonstrates how to integrate the FasterTransformer into a BERT model. This requires the repo of [BERT](https://github.com/google-research/bert).
 
-a.	Download the BERT model.
+a.	Prepare the BERT codes, Download the BERT pretrained model.
 
 ```bash
+cd tensorflow_bert
+git clone https://github.com/google-research/bert.git
 wget https://storage.googleapis.com/bert_models/2018_10_18/uncased_L-12_H-768_A-12.zip
 unzip uncased_L-12_H-768_A-12.zip
 ```
 
-b.	Run the FasterTransformer on BERT. 
+b. Download the GLUE MRPC dataset. Note that the file `download_glue_data.py` can only executed under python3. 
 
 ```bash
-export BERT_BASE_DIR=./uncased_L-12_H-768_A-12
-./bin/encoder_gemm 8 128 12 64 0
-python tensorflow_bert/profile_transformer_inference.py \
-        --init_checkpoint=$BERT_BASE_DIR/bert_model.ckpt \
-        --tf_profile=false \
-        --output_dir=mrpc_output \
-        --profiling_output_file=time_elapsed \
-        --xla=false \
-        --floatx=float32
+wget https://gist.githubusercontent.com/W4ngatang/60c2bdb54d156a41194446737ce03e2e/raw/17b8dd0d724281ed7c3b2aeeda662b92809aadd5/download_glue_data.py
+python download_glue_data.py --tasks MRPC
 ```
--->
+
+c. Finetune the pretrained model on MRPC datasets. This takes some minutes. The accuracy would be better or worse because the MRPC dataset is very small. 
+
+```bash
+export BERT_BASE_DIR=${PWD}/uncased_L-12_H-768_A-12
+export GLUE_DIR=${PWD}/glue_data/
+
+python bert/run_classifier.py \
+  --task_name=MRPC \
+  --do_train=true \
+  --do_eval=true \
+  --data_dir=$GLUE_DIR/MRPC \
+  --vocab_file=$BERT_BASE_DIR/vocab.txt \
+  --bert_config_file=$BERT_BASE_DIR/bert_config.json \
+  --init_checkpoint=$BERT_BASE_DIR/bert_model.ckpt \
+  --max_seq_length=128 \
+  --train_batch_size=32 \
+  --learning_rate=2e-5 \
+  --num_train_epochs=3.0 \
+  --output_dir=mrpc_output/
+```
+
+The results would be like: 
+```bash
+I0403 08:52:49.721482 140547349206848 estimator.py:2039] Saving dict for global step 343: eval_accuracy = 0.87009805, eval_loss = 0.44462326, global_step = 343, loss = 0.44462326
+I0403 08:52:50.128525 140547349206848 estimator.py:2099] Saving 'checkpoint_path' summary for global step 343: mrpc_output/model.ckpt-343
+I0403 08:52:50.129132 140547349206848 error_handling.py:96] evaluation_loop marked as finished
+I0403 08:52:50.129281 140547349206848 run_classifier.py:923] ***** Eval results *****
+I0403 08:52:50.129338 140547349206848 run_classifier.py:925]   eval_accuracy = 0.87009805
+I0403 08:52:50.129695 140547349206848 run_classifier.py:925]   eval_loss = 0.44462326
+I0403 08:52:50.129786 140547349206848 run_classifier.py:925]   global_step = 343
+I0403 08:52:50.129833 140547349206848 run_classifier.py:925]   loss = 0.44462326
+```
+
+d. Conver the finetuned checkpoint to FP16, check the accuracy of Fastertransformer under FP16. 
+
+```bash
+python ckpt_type_convert.py --init_checkpoint=mrpc_output/model.ckpt-343 --fp16_checkpoint=mrpc_output/fp16_model.ckpt
+python run_classifier_wrap.py   --floatx=float16   --task_name=MRPC   --do_eval=true   --data_dir=$GLUE_DIR/MRPC   --vocab_file=$BERT_BASE_DIR/vocab.txt   --bert_config_file=$BERT_BASE_DIR/bert_config.json   --init_checkpoint=mrpc_output/fp16_model.ckpt   --max_seq_length=128   --eval_batch_size=8   --output_dir=mrpc_output
+```
+
+Because we do not generate the `gemm_config.ini` file, you can see many warning messages like:
+
+```bash
+gemm_config.in is not found
+loading GEMM algorithms error, using default GEMM algorithms
+gemm_config.in is not found
+loading GEMM algorithms error, using default GEMM algorithms!
+I0403 08:55:07.053885 140260684429120 evaluation.py:275] Finished evaluation at 2020-04-03-08:55:07
+I0403 08:55:07.054126 140260684429120 estimator.py:2039] Saving dict for global step 343: eval_accuracy = 0.86764705, eval_loss = 0.45615184, global_step = 343, loss = 0.4561844
+I0403 08:55:07.422543 140260684429120 estimator.py:2099] Saving 'checkpoint_path' summary for global step 343: mrpc_output/fp16_model.ckpt
+I0403 08:55:07.423089 140260684429120 error_handling.py:96] evaluation_loop marked as finished
+I0403 08:55:07.423257 140260684429120 run_classifier.py:923] ***** Eval results *****
+I0403 08:55:07.423315 140260684429120 run_classifier.py:925]   eval_accuracy = 0.86764705
+I0403 08:55:07.423553 140260684429120 run_classifier.py:925]   eval_loss = 0.45615184
+I0403 08:55:07.423635 140260684429120 run_classifier.py:925]   global_step = 343
+I0403 08:55:07.423686 140260684429120 run_classifier.py:925]   loss = 0.4561844
+```
+
+This shows that we use the FasterTransformer to run the inference successfully. In this case, using FP16 to do inference will reduce the accuracy with about 0.3%.
+
+e. Compare the speed of BERT of TensorFlow and FasterTransformer under both FP32 and FP16.
+
+```bash
+../bin/encoder_gemm 1 32 12 64 0
+python profile_transformer_inference.py --init_checkpoint=mrpc_output/model.ckpt-343 --tf_profile=false --output_dir=mrpc_output --profiling_output_file=time_elapsed --xla=false --floatx=float32
+../bin/encoder_gemm 1 32 12 64 1
+python profile_transformer_inference.py --init_checkpoint=mrpc_output/fp16_model.ckpt --tf_profile=false --output_dir=mrpc_output --profiling_output_file=time_elapsed --xla=false --floatx=float16
+```
+
+The results of FP16 under V100 would be like:
+
+```bash
+average time (seconds) elasped original tensorflow: 0.011663460731506347
+average time (seconds) elasped fast transformer: 0.007064676284790039
+```
+
 ### Execute the decoding demos
 
 1. Generate the `decoding_gemm_config.in` file. 
