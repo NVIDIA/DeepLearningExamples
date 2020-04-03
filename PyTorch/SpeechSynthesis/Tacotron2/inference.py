@@ -31,7 +31,6 @@ import torch
 import argparse
 import numpy as np
 from scipy.io.wavfile import write
-import matplotlib
 import matplotlib.pyplot as plt
 
 import sys

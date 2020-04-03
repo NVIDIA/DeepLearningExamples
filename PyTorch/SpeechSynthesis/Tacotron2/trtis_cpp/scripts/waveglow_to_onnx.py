@@ -27,11 +27,7 @@
 
 
 
-import json
 import sys
-import onnx
-import numpy as np
-from scipy.io.wavfile import write
 import argparse
 import torch
 
@@ -212,7 +208,7 @@ def main(waveglow_path, output_path, batch_size, length_mels):
 
     # Run inference because it forces inverses to be calculated
     with torch.no_grad():
-        test_out1 = model.infer(spect)
+        _ = model.infer(spect)
     assert(length_samples % model.n_group == 0)
 
     model.length_spect_group = int(length_samples / model.n_group)
@@ -250,7 +246,7 @@ def main(waveglow_path, output_path, batch_size, length_mels):
 
     # Get output for comparison with Caffe2
     with torch.no_grad():
-        test_out2 = model(spect, z)
+        _ = model(spect, z)
 
     # Export model
     torch.onnx.export(model, (spect, z), 

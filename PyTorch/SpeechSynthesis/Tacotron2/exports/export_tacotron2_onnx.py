@@ -237,7 +237,6 @@ def test_inference(encoder, decoder_iter, postnet):
 
     print("Running Tacotron2 Decoder")
     device = memory.device
-    dtype = memory.dtype
     mel_lengths = torch.zeros([memory.size(0)], dtype=torch.int32, device = device)
     not_finished = torch.ones([memory.size(0)], dtype=torch.int32, device = device)
     mel_outputs, gate_outputs, alignments = (torch.zeros(1), torch.zeros(1), torch.zeros(1))
