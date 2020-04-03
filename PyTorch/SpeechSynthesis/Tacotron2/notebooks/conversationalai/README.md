@@ -1,3 +1,4 @@
+This Readme accompanies the GTC 2020 talk: "PyTorch from Research to Production" available [here](https://developer.nvidia.com/gtc/2020/video/s21928).
 
 ## Model Preparation
 
