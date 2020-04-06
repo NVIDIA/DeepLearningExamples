@@ -290,12 +290,12 @@ bash scripts/run_squad.sh <batch_size_per_gpu> <learning_rate_per_gpu> <precisio
 
 For SQuAD 1.1 FP16 training with XLA using a DGX-1 V100 32G, run:
 ```bash
-bash scripts/run_squad.sh 10 5e-6 fp16 true 8 384 128 large 1.1 data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/bert_model.ckpt 1.1
+bash scripts/run_squad.sh 10 5e-6 fp16 true 8 384 128 large 1.1 data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/bert_model.ckpt 2.0
 ```
 
 For SQuAD 2.0 FP32 training without XLA using a DGX-1 V100 32G, run:
 ```bash
-bash scripts/run_squad.sh 5 5e-6 fp32 false 8 384 128 large 1.1 data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/bert_model.ckpt 2.0
+bash scripts/run_squad.sh 5 5e-6 fp32 false 8 384 128 large 2.0 data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/bert_model.ckpt 2.0
 ```
 
 Alternatively, to run fine tuning on GLUE benchmark, run:
@@ -524,7 +524,7 @@ Where:
 The following sample code trains BERT-large from scratch on a single DGX-2 using FP16 arithmetic. This will take around 4.5 days.
 
 ```bash
-bert_tf/scripts/run_pretraining_lamb.sh 32 8 8 3.75e-4 2.5e-4 fp16 true 16 2000 200 7820 100 128 512 256 large
+bert_tf/scripts/run_pretraining_lamb.sh 32 8 8 3.75e-4 2.5e-4 fp16 true 16 2000 200 7820 100 128 256 large
 ```
 
 #### Fine tuning
@@ -1115,6 +1115,7 @@ BERT BASE FP16
 | 384 | 2 | 118.30 | 3.18 | 16.91 | 16.91 | 17.08 | 19.38 |
 | 384 | 4 | 140.11 | 3.80 | 28.55 | 28.89 | 29.23 | 30.84 |
 | 384 | 8 | 150.84 | 4.18 | 53.04 | 54.58 | 55.19 | 56.31 |
+
 
 BERT BASE FP32
 
