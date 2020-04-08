@@ -15,11 +15,11 @@
 # limitations under the License.
 
 # This script launches UNet training in FP32-AMP on 4 GPUs using 16 batch size (4 per GPU)
-# Usage ./UNet_FP32AMP_4GPU.sh <path to result repository> <path to dataset> <dagm classID (1-10)>
+# Usage ./UNet_AMP_4GPU.sh <path to result repository> <path to dataset> <dagm classID (1-10)>
 
 BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-pip install ${BASEDIR}/../dllogger/
+export TF_CPP_MIN_LOG_LEVEL=3
 
 mpirun \
     -np 4 \
@@ -31,7 +31,7 @@ mpirun \
     -x PATH \
     -mca pml ob1 -mca btl ^openib \
     --allow-run-as-root \
-    python ${BASEDIR}/../main.py \
+    python "${BASEDIR}/../main.py" \
         --unet_variant='tinyUNet' \
         --activation_fn='relu' \
         --exec_mode='train_and_evaluate' \

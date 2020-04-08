@@ -1,3 +1,6 @@
+# !/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 # ==============================================================================
 #
 # Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
@@ -16,15 +19,32 @@
 #
 # ==============================================================================
 
-FROM nvcr.io/nvidia/tensorflow:20.01-tf1-py3
+import dllogger as Logger
 
-LABEL version="1.0" maintainer="Jonathan DEKHTIAR <jonathan.dekhtiar@nvidia.com>"
 
-WORKDIR /opt
-COPY requirements.txt /opt/requirements_unet_tf_industrial.txt
+def format_step(step):
+    if isinstance(step, str):
+        return step
 
-RUN python -m pip --no-cache-dir --no-cache install --upgrade pip && \
-    pip --no-cache-dir --no-cache install -r /opt/requirements_unet_tf_industrial.txt
+    if isinstance(step, int):
+        return "Iteration: {} ".format(step)
 
-ADD . /workspace/unet_industrial
-WORKDIR /workspace/unet_industrial
+    s = ""
+
+    if len(step) > 0:
+        s += "Epoch: {} ".format(step[0])
+
+    if len(step) > 1:
+        s += "Iteration: {} ".format(step[1])
+
+    if len(step) > 2:
+        s += "Validation Iteration: {} ".format(step[2])
+
+    return s
+
+
+def init_dllogger(log_dir):
+    Logger.init([
+        Logger.StdOutBackend(Logger.Verbosity.DEFAULT, step_format=format_step),
+        Logger.JSONStreamBackend(Logger.Verbosity.VERBOSE, log_dir)
+    ])

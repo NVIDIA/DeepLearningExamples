@@ -14,32 +14,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script launches UNet training benchmark in FP32-AMP on 1 GPU using 16 batch size (16 per GPU)
-# Usage ./DGX1v_trainbench_AMP_1GPU.sh <path to dataset> <dagm classID (1-10)>
+# This script launches UNet evaluation in FP32 on 1 GPUs using 16 batch size
+# Usage ./UNet_FP32_EVAL_XLA.sh <path to result repository> <path to dataset> <dagm classID (1-10)>
 
 BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 export TF_CPP_MIN_LOG_LEVEL=3
 
-# Cleaning up for benchmark
-RESULT_DIR="/tmp"
-rm -rf "${RESULT_DIR}"
-
-python "${BASEDIR}/../../main.py" \
+python "${BASEDIR}/../main.py" \
     --unet_variant='tinyUNet' \
     --activation_fn='relu' \
-    --exec_mode='training_benchmark' \
-    --iter_unit='batch' \
-    --num_iter=1500 \
+    --exec_mode='evaluate' \
+    --iter_unit='epoch' \
+    --num_iter=1 \
     --batch_size=16 \
-    --warmup_step=500 \
-    --results_dir="${RESULT_DIR}" \
-    --data_dir="${1}" \
+    --warmup_step=10 \
+    --results_dir="${1}" \
+    --data_dir="${2}" \
     --dataset_name='DAGM2007' \
-    --dataset_classID="${2}" \
+    --dataset_classID="${3}" \
     --data_format='NCHW' \
     --use_auto_loss_scaling \
-    --use_tf_amp \
+    --nouse_tf_amp \
     --use_xla \
     --learning_rate=1e-4 \
     --learning_rate_decay_factor=0.8 \
@@ -50,5 +46,5 @@ python "${BASEDIR}/../../main.py" \
     --weight_decay=1e-5 \
     --weight_init_method='he_uniform' \
     --augment_data \
-    --display_every=250 \
+    --display_every=50 \
     --debug_verbosity=0

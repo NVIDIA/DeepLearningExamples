@@ -95,6 +95,14 @@ def parse_cmdline():
         help="""Directory in which to write training logs, summaries and checkpoints."""
     )
 
+    p.add_argument(
+        '--log_dir',
+        type=str,
+        required=False,
+        default="dlloger_out.json",
+        help="""Directory in which to write logs."""
+    )
+
     _add_bool_argument(
         parser=p,
         name="save_eval_results_to_json",
@@ -151,11 +159,11 @@ def parse_cmdline():
         help="""Which initialisation method is used to randomly intialize the model during training"""
     )
 
-    p.add_argument('--learning_rate', default=1e-5, type=float, required=False, help="""Learning rate value.""")
+    p.add_argument('--learning_rate', default=1e-4, type=float, required=False, help="""Learning rate value.""")
 
     p.add_argument(
         '--learning_rate_decay_factor',
-        default=0.75,
+        default=0.8,
         type=float,
         required=False,
         help="""Decay factor to decrease the learning rate."""
@@ -173,7 +181,7 @@ def parse_cmdline():
 
     p.add_argument('--rmsprop_momentum', default=0.8, type=float, required=False, help="""RMSProp - Momentum value.""")
 
-    p.add_argument('--weight_decay', default=1e-4, type=float, required=False, help="""Weight Decay scale factor""")
+    p.add_argument('--weight_decay', default=1e-5, type=float, required=False, help="""Weight Decay scale factor""")
 
     _add_bool_argument(
         parser=p, name="use_auto_loss_scaling", default=False, required=False, help="Use AutoLossScaling with TF-AMP"
