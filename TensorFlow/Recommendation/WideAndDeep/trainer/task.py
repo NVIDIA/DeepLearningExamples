@@ -94,8 +94,8 @@ def create_parser():
     default=4096,
     type=int)
   parser.add_argument(
-    '--batch_size',
-    help='Training batch size',
+    '--global_batch_size',
+    help='Total training batch size',
     default=131072,
     type=int)
   parser.add_argument(
@@ -116,7 +116,7 @@ def create_parser():
   parser.add_argument(
     '--num_epochs',
      help='Number of epochs',
-     default=100,
+     default=120,
      type=int)
   parser.add_argument(
     '--save_checkpoints_secs',
@@ -334,7 +334,7 @@ def get_feature_columns(use_all_columns=False, force_subset=None):
 def separate_input_fn(
     tf_transform_output,
     transformed_examples,
-    batch_size,
+    create_batches,
     mode,
     reader_num_threads=1,
     parser_num_threads=2,
@@ -357,7 +357,7 @@ def separate_input_fn(
                   if (mode==tf.estimator.ModeKeys.TRAIN and shuffle_buffer_size > 1) \
                   else raw_dataset
   raw_dataset = raw_dataset.repeat()
-  raw_dataset = raw_dataset.batch(batch_size)
+  raw_dataset = raw_dataset.batch(create_batches)
   
   # this function appears to require each element to be a vector
   # batching should mean that this is always true
@@ -509,8 +509,7 @@ def custom_estimator_model_fn(features, labels, mode, params, config):
   with tf.compat.v1.variable_scope('deep', values=features) as scope:
     deep_absolute_scope = scope.name
     if params['model_type'] in [DEEP, WIDE_N_DEEP]:
-      deep_features = features.copy()
-      deep_current = tf.compat.v1.feature_column.input_layer(deep_features, params['deep_columns'])
+      deep_current = tf.compat.v1.feature_column.input_layer(features, params['deep_columns'])
 
     if params['model_type'] in [DEEP, WIDE_N_DEEP]:
       for layer_ind in range(len(params['layers'])):
@@ -640,7 +639,8 @@ def main(FLAGS):
 
   dllogger.log(data=vars(FLAGS), step='PARAMETER')
   
-  create_batches = FLAGS.batch_size // FLAGS.prebatch_size
+  local_batch_size = FLAGS.global_batch_size // num_gpus
+  create_batches = local_batch_size // FLAGS.prebatch_size
 
   wide_columns, deep_columns = get_feature_columns(use_all_columns=FLAGS.use_all_columns)
   tf_transform_output = tft.TFTransformOutput(FLAGS.transformed_metadata_path)
@@ -727,7 +727,7 @@ def main(FLAGS):
   estimator = tf.estimator.add_metrics(estimator, map_custom_metric)
   estimator = tf.estimator.add_metrics(estimator, map_custom_metric_with_leak)
 
-  steps_per_epoch = FLAGS.training_set_size / FLAGS.batch_size
+  steps_per_epoch = FLAGS.training_set_size / FLAGS.global_batch_size
 
   print('Steps per epoch: {}'.format(steps_per_epoch))
   max_steps = int(FLAGS.num_epochs * steps_per_epoch)
@@ -738,7 +738,7 @@ def main(FLAGS):
 
   if FLAGS.predict or FLAGS.evaluate: # inference
     if FLAGS.benchmark:
-      benchmark_hook = BenchmarkLoggingHook(global_batch_size=num_gpus * FLAGS.eval_batch_size, warmup_steps=FLAGS.benchmark_warmup_steps)
+      benchmark_hook = BenchmarkLoggingHook(global_batch_size=FLAGS.eval_batch_size, warmup_steps=FLAGS.benchmark_warmup_steps)
       hooks.append(benchmark_hook)
       eval_steps = FLAGS.benchmark_steps
     else:
@@ -775,7 +775,7 @@ def main(FLAGS):
   else: # training
 
     if FLAGS.benchmark:
-      benchmark_hook = BenchmarkLoggingHook(global_batch_size=num_gpus * FLAGS.batch_size, 
+      benchmark_hook = BenchmarkLoggingHook(global_batch_size=FLAGS.global_batch_size, 
         warmup_steps=FLAGS.benchmark_warmup_steps)
       hooks.append(benchmark_hook)
       estimator.train(train_input_fn, hooks=hooks, steps=FLAGS.benchmark_steps)
@@ -787,7 +787,7 @@ def main(FLAGS):
                                       throttle_secs=FLAGS.eval_throttle_secs, steps=FLAGS.eval_steps)  
       result = tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
 
-      if result:
+      if result != (None, None):
         dllogger.log(step=(), data={'map': float(result[0]['map']), 
         'map_with_leak': float(result[0]['map_with_leak'])})
     
