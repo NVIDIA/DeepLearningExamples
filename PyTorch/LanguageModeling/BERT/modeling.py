@@ -106,7 +106,7 @@ def load_tf_weights_in_bert(model, tf_checkpoint_path):
         if m_name[-11:] == '_embeddings':
             pointer = getattr(pointer, 'weight')
         elif m_name == 'kernel':
-            array = np.transpose(array)
+            array = np.ascontiguousarray(np.transpose(array))
         try:
             assert pointer.shape == array.shape
         except AssertionError as e:
