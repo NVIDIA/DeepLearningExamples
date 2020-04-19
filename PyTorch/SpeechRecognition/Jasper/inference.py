@@ -141,7 +141,7 @@ def run_once(audio_processor, encoderdecoder, greedy_decoder, audio, audio_len, 
             features = audio_processor(audio, audio_len)
             torch.cuda.synchronize()
             t0 = time.perf_counter()
-            t_log_probs_e = encoderdecoder(features[0])
+            t_log_probs_e = encoderdecoder(features)[0]
             torch.cuda.synchronize()
             t1 = time.perf_counter()
             t_predictions_e = greedy_decoder(log_probs=t_log_probs_e)
