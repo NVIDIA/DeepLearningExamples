@@ -218,22 +218,23 @@ def infer_tacotron2_trt(encoder, decoder_iter, postnet,
     decoder_outputs = init_decoder_outputs(memory, sequence_lengths)
 
     print("Running Tacotron2 Decoder")
+    measurements_decoder = {}
     while True:
         decoder_tensors = init_decoder_tensors(decoder_inputs, decoder_outputs)
-        with MeasureTime(measurements, "step"):
+        with MeasureTime(measurements_decoder, "step"):
             run_trt_engine(decoder_context, decoder_iter, decoder_tensors)
 
         if first_iter:
             mel_outputs = torch.unsqueeze(decoder_outputs[7], 2)
             gate_outputs = torch.unsqueeze(decoder_outputs[8], 2)
             alignments = torch.unsqueeze(decoder_outputs[4], 2)
-            measurements['tacotron2_decoder_time'] = measurements['step']
+            measurements['tacotron2_decoder_time'] = measurements_decoder['step']
             first_iter = False
         else:
             mel_outputs = torch.cat((mel_outputs, torch.unsqueeze(decoder_outputs[7], 2)), 2)
             gate_outputs = torch.cat((gate_outputs, torch.unsqueeze(decoder_outputs[8], 2)), 2)
             alignments = torch.cat((alignments, torch.unsqueeze(decoder_outputs[4], 2)), 2)
-            measurements['tacotron2_decoder_time'] += measurements['step']
+            measurements['tacotron2_decoder_time'] += measurements_decoder['step']
 
         dec = torch.le(torch.sigmoid(decoder_outputs[8]), gate_threshold).to(torch.int32).squeeze(1)
         not_finished = not_finished*dec
@@ -271,10 +272,8 @@ def infer_waveglow_trt(waveglow, waveglow_context, mel, measurements, fp16):
     mel_size = mel.size(2)
     batch_size = mel.size(0)
     stride = 256
-    kernel_size = 1024
     n_group = 8
-    z_size = (mel_size-1)*stride+(kernel_size-1)+1
-    z_size = z_size - (kernel_size-stride)
+    z_size = mel_size*stride
     z_size = z_size//n_group
     z = torch.randn(batch_size, n_group, z_size, 1).cuda()
     audios = torch.zeros(batch_size, mel_size*stride).cuda()
