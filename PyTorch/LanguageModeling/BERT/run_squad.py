@@ -472,6 +472,11 @@ def get_answers(examples, features, results, args):
                 preds,
                 key=lambda x: (x.start_logit + x.end_logit),
                 reverse=True)[:args.n_best_size]
+        
+        # In very rare edge cases we could only have single null prediction.
+	      # So we just create a nonce prediction in this case to avoid failure.
+        if not nbest:                                                    
+	          nbest.append(Prediction(text="empty", start_logit=0.0, end_logit=0.0))
 
         total_scores = []
         best_non_null_entry = None
