@@ -19,4 +19,4 @@ SCRIPT_DIR=$(dirname ${SCRIPT})
 
 # Build the docker image using the provided Docker file
 DOCKERFILE_DIR=${SCRIPT_DIR}/../
-docker build --build-arg myuid=$(id -u) --build-arg mygid=$(id -g) --rm -t bert-tensorrt $DOCKERFILE_DIR
+docker build --build-arg uid=$(id -u) --build-arg gid=$(id -g) --rm -t bert-tensorrt $DOCKERFILE_DIR
