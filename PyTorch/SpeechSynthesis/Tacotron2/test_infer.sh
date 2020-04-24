@@ -66,6 +66,9 @@ done
 if [ "$PRECISION" = "amp" ]
 then
     AMP_RUN="--amp-run"
+elif  [ "$PRECISION" = "fp16" ]
+then
+    AMP_RUN="--fp16"
 fi
 
 LOG_SUFFIX=bs${BATCH_SIZE}_il${INPUT_LENGTH}_${PRECISION}
@@ -76,14 +79,14 @@ LOGFILE=log_${LOG_SUFFIX}.log
 
 if [ "$TEST_PROGRAM" = "trt/test_infer_trt.py" ]
 then
-    MODELS="--encoder $ENCODER_CKPT --decoder $DECODER_CKPT --postnet $POSTNET_CKPT"
+    TACOTRON2_PARAMS="--encoder $ENCODER_CKPT --decoder $DECODER_CKPT --postnet $POSTNET_CKPT"
 else
-    MODELS="--tacotron2 $TACOTRON2_CKPT"
+    TACOTRON2_PARAMS="--tacotron2 $TACOTRON2_CKPT"
 fi
 
 set -x
 python $TEST_PROGRAM \
-       $MODELS \
+       $TACOTRON2_PARAMS \
        --waveglow $WAVEGLOW_CKPT \
        --batch-size $BATCH_SIZE \
        --input-length $INPUT_LENGTH $AMP_RUN \

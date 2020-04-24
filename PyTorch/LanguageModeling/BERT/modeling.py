@@ -117,11 +117,11 @@ def load_tf_weights_in_bert(model, tf_checkpoint_path):
     return model
 
 def gelu(x):
-    return  x * 0.5 * (1.0 + torch.erf(x / 1.41421))
+    return x * 0.5 * (1.0 + torch.erf(x / 1.41421))
 
 def bias_gelu(bias, y):
     x = bias + y
-    return torch.nn.functional.gelu(x)# x * 0.5 * (1.0 + torch.erf(x / 1.41421))
+    return x * 0.5 * (1.0 + torch.erf(x / 1.41421))
 
 def bias_tanh(bias, y):
     x = bias + y
@@ -130,7 +130,7 @@ def bias_tanh(bias, y):
 def swish(x):
     return x * torch.sigmoid(x)
 
-ACT2FN = {"gelu": torch.nn.functional.gelu, "bias_gelu": bias_gelu, "bias_tanh": bias_tanh, "relu": torch.nn.functional.relu, "swish": swish}
+ACT2FN = {"gelu": gelu, "bias_gelu": bias_gelu, "bias_tanh": bias_tanh, "relu": torch.nn.functional.relu, "swish": swish}
 
 class LinearActivation(Module):
     r"""Fused Linear and activation Module.
