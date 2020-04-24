@@ -38,34 +38,34 @@ This repository provides a script and recipe to train the BERT model for TensorF
     * [Training accuracy results](#training-accuracy-results)
       * [Pre-training accuracy: single-node](#pre-training-accuracy-single-node)
       * [Pre-training accuracy: multi-node](#pre-training-accuracy-multi-node)
-      * [Fine-tuning accuracy for SQuAD: NVIDIA DGX-2 (16x V100 32G)](#fine-tuning-accuracy-for-squad-nvidia-dgx-2-16x-v100-32g)
+      * [Fine-tuning accuracy for SQuAD v1.1: NVIDIA DGX-2 (16x V100 32G)](#fine-tuning-accuracy-for-squad-v1.1-nvidia-dgx-2-16x-v100-32g)
       * [Training stability test](#training-stability-test)
-        * [Pre-training SQuAD stability test: NVIDIA DGX-2 (512x V100 32G)](#fine-tuning-squad-stability-test-nvidia-dgx-2-512x-v100-32g)
-        * [Fine-tuning SQuAD stability test: NVIDIA DGX-2 (16x V100 32G)](#fine-tuning-squad-stability-test-nvidia-dgx-2-16x-v100-32g)
+        * [Pre-training SQuAD v1.1 stability test: NVIDIA DGX-2 (512x V100 32G)](#pre-training-squad-v1.1-stability-test-nvidia-dgx-2-512x-v100-32g)
+        * [Fine-tuning SQuAD v1.1 stability test: NVIDIA DGX-2 (16x V100 32G)](#fine-tuning-squad-v1.1-stability-test-nvidia-dgx-2-16x-v100-32g)
     * [Training performance results](#training-performance-results)
       * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16g)
         * [Pre-training training performance: single-node on 16G](#pre-training-training-performance-single-node-on-16g)
         * [Pre-training training performance: multi-node on 16G](#pre-training-training-performance-multi-node-on-16g)
-        * [Fine-tuning training performance for SQuAD on 16G](#fine-tuning-training-performance-for-squad-on-16g)
+        * [Fine-tuning training performance for SQuAD v1.1 on 16G](#fine-tuning-training-performance-for-squad-v1.1-on-16g)
       * [Training performance: NVIDIA DGX-1 (8x V100 32G)](#training-performance-nvidia-dgx-1-8x-v100-32g)
         * [Pre-training training performance: single-node on 32G](#pre-training-training-performance-single-node-on-32g)
-        * [Fine-tuning training performance for SQuAD on 32G](#fine-tuning-training-performance-for-squad-on-32g)
+        * [Fine-tuning training performance for SQuAD v1.1 on 32G](#fine-tuning-training-performance-for-squad-v1.1-on-32g)
       * [Training performance: NVIDIA DGX-2 (16x V100 32G)](#training-performance-nvidia-dgx-2-16x-v100-32g)
         * [Pre-training training performance: single-node on DGX-2 32G](#pre-training-training-performance-single-node-on-dgx-2-32g)
         * [Pre-training training performance: multi-node on DGX-2 32G](#pre-training-training-performance-multi-node-on-dgx-2-32g)
-        * [Fine-tuning training performance for SQuAD on DGX-2 32G](#fine-tuning-training-performance-for-squad-on-dgx-2-32g)
+        * [Fine-tuning training performance for SQuAD v1.1 on DGX-2 32G](#fine-tuning-training-performance-for-squad-v1.1-on-dgx-2-32g)
     * [Inference performance results](#inference-performance-results)
       * [Inference performance: NVIDIA DGX-1 (1x V100 16G)](#inference-performance-nvidia-dgx-1-1x-v100-16g)
         * [Pre-training inference performance on 16G](#pre-training-inference-performance-on-16g)
-        * [Fine-tuning inference performance for SQuAD on 16G](#fine-tuning-inference-performance-for-squad-on-16g)
+        * [Fine-tuning inference performance for SQuAD v1.1 on 16G](#fine-tuning-inference-performance-for-squad-v1.1-on-16g)
       * [Inference performance: NVIDIA DGX-1 (1x V100 32G)](#inference-performance-nvidia-dgx-1-1x-v100-32g)
         * [Pre-training inference performance on 32G](#pre-training-inference-performance-on-32g)
-        * [Fine-tuning inference performance for SQuAD on 32G](#fine-tuning-inference-performance-for-squad-on-32g)
+        * [Fine-tuning inference performance for SQuAD v1.1 on 32G](#fine-tuning-inference-performance-for-squad-v1.1-on-32g)
       * [Inference performance: NVIDIA DGX-2 (1x V100 32G)](#inference-performance-nvidia-dgx-2-1x-v100-32g)
         * [Pre-training inference performance on DGX-2 32G](#pre-training-inference-performance-on-dgx-2-32g)
-        * [Fine-tuning inference performance for SQuAD on DGX-2  32G](#fine-tuning-inference-performance-for-squad-on-dgx-2-32g)
+        * [Fine-tuning inference performance for SQuAD v1.1 on DGX-2  32G](#fine-tuning-inference-performance-for-squad-v1.1-on-dgx-2-32g)
       * [Inference performance: NVIDIA Tesla T4 (1x T4 16G)](#inference-performance-nvidia-tesla-t4-1x-t4-16g)
-        * [Fine-tuning inference performance for SQuAD on Tesla T4 16G](#fine-tuning-inference-performance-for-squad-on-tesla-t4-16g)
+        * [Fine-tuning inference performance for SQuAD v1.1 on Tesla T4 16G](#fine-tuning-inference-performance-for-squad-v1.1-on-tesla-t4-16g)
 - [Release notes](#release-notes)
   * [Changelog](#changelog)
   * [Known issues](#known-issues)
@@ -692,7 +692,7 @@ Our results were obtained by running the `scripts/run_pretraining_lamb.sh` train
 
 Note: Time to train includes upto 16 minutes of start up time for every restart. Experiments were run on clusters with a maximum wall clock time of 8 hours.
 
-###### Fine-tuning accuracy for SQuAD: NVIDIA DGX-2 (16x V100 32G)
+###### Fine-tuning accuracy for SQuAD v1.1: NVIDIA DGX-2 (16x V100 32G)
 
 Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs.
 
@@ -704,7 +704,7 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 
 ##### Training stability test
 
-###### Pre-training stability test: NVIDIA DGX-2 (512x V100 32G)
+###### Pre-training SQuAD v1.1 stability test: NVIDIA DGX-2 (512x V100 32G)
 
 The following tables compare `Final Loss` scores across 5 different training runs with different seeds, for both FP16.  The runs showcase consistent convergence on all 5 seeds with very little deviation.
 
@@ -712,7 +712,7 @@ The following tables compare `Final Loss` scores across 5 different training run
 |:-----------:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|
 |Final Loss         |1.57  |1.598 |1.614 |1.583 |1.584 |1.5898|0.017 |
 
-###### Fine-tuning SQuAD stability test: NVIDIA DGX-2 (16x V100 32G)
+###### Fine-tuning SQuAD v1.1 stability test: NVIDIA DGX-2 (16x V100 32G)
 
 The following tables compare `F1` scores across 5 different training runs with different seeds, for both FP16 and FP32 respectively.  The runs showcase consistent convergence on all 5 seeds with very little deviation.
 
@@ -764,7 +764,7 @@ Our results were obtained by running the `run.sub` training script in the Tensor
 
 Note: The respective values for FP32 runs that use a batch size of 16, 2 in sequence lengths 128 and 512 respectively are not available due to out of memory errors that arise.
 
-###### Fine-tuning training performance for SQuAD on 16G
+###### Fine-tuning training performance for SQuAD v1.1 on 16G
 
 Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
 
@@ -795,7 +795,7 @@ Our results were obtained by running the `scripts/run_pretraining_lamb.sh` train
 
 Note: The respective values for FP32 runs that use a batch size of 48, 8 in sequence lengths 128 and 512 respectively are not available due to out of memory errors that arise.
 
-###### Fine-tuning training performance for SQuAD on 32G
+###### Fine-tuning training performance for SQuAD v1.1 on 32G
 
 Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 8x V100 32G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
 
@@ -848,7 +848,7 @@ Our results were obtained by running the `run.sub` training script in the Tensor
 | 64 | 512 | 8,4   | 19766.57 | 6029.48  | 3.28 | 51.56 | 54.83 |
 
 
-###### Fine-tuning training performance for SQuAD on DGX-2 32G
+###### Fine-tuning training performance for SQuAD v1.1 on DGX-2 32G
 
 Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
 
@@ -876,7 +876,7 @@ Our results were obtained by running the `scripts/run_pretraining_lamb.sh` scrip
 |:-----:|:-------:|:-------:|:-------:|:-------------:|
 |128    |8, 8     |349.51   | 104.31  | 3.35          |
 
-###### Fine-tuning inference performance for SQuAD on 16G
+###### Fine-tuning inference performance for SQuAD v1.1 on 16G
 
 Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 1x V100 16G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 
@@ -945,7 +945,7 @@ Our results were obtained by running the `scripts/run_pretraining_lamb.sh` scrip
 |:-----:|:-------:|:-------:|:-------:|:-------------:|
 |128    |8, 8     |345.50   | 101.84  | 3.39          |
 
-###### Fine-tuning inference performance for SQuAD on 32G
+###### Fine-tuning inference performance for SQuAD v1.1 on 32G
 
 Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-1 with 1x V100 32G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 
@@ -1014,7 +1014,7 @@ Our results were obtained by running the `scripts/run_pretraining_lamb.sh` scrip
 |:-----:|:-------:|:-------:|:-------:|:-------------:|
 |128    |8, 8     |366.24   | 107.88  | 3.39          |
 
-###### Fine-tuning inference performance for SQuAD on DGX-2  32G
+###### Fine-tuning inference performance for SQuAD v1.1 on DGX-2  32G
 
 Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA DGX-2 with 1x V100 32G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 
@@ -1073,7 +1073,7 @@ BERT BASE FP32
 
 ##### Inference performance: NVIDIA Tesla T4 (1x T4 16G)
 
-###### Fine-tuning inference performance for SQuAD on Tesla T4 16G
+###### Fine-tuning inference performance for SQuAD v1.1 on Tesla T4 16G
 
 Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 19.08-py3 NGC container on NVIDIA Tesla T4 with 1x T4 16G GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 

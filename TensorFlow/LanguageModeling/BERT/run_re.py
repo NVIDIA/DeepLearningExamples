@@ -36,6 +36,8 @@ import tokenization
 import time
 import horovod.tensorflow as hvd
 from utils.utils import LogEvalRunHook, LogTrainRunHook
+import utils.dllogger_class
+from dllogger import Verbosity
 
 flags = tf.flags
 
@@ -62,6 +64,9 @@ flags.DEFINE_string(
     "The output directory where the model checkpoints will be written.")
 
 ## Other parameters
+flags.DEFINE_string(
+    "dllog_path", "bert_dllog.json",
+    "filename where dllogger writes to")
 
 flags.DEFINE_string(
     "init_checkpoint", None,
@@ -715,6 +720,7 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
 
 def main(_):
     tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
+    dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)
 
     if FLAGS.horovod:
       hvd.init()
@@ -859,6 +865,7 @@ def main(_):
                         (num_train_steps - training_hooks[-1].skipped) * global_batch_size)
           tf.compat.v1.logging.info("Throughput Average (sentences/sec) with overhead = %0.2f", avg_sentences_per_second)
           tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+          dllogging.logger.log(step=(), data={"throughput_train": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
           tf.compat.v1.logging.info("-----------------------------")
 
 
@@ -969,6 +976,7 @@ def main(_):
         tf.compat.v1.logging.info("Latency Confidence Level 100 (ms) = %0.2f", cf_100 * 1000)
         tf.compat.v1.logging.info("Latency Average (ms) = %0.2f", avg * 1000)
         tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+        dllogging.logger.log(step=(), data={"throughput_val": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
         tf.compat.v1.logging.info("-----------------------------")
 
 if __name__ == "__main__":

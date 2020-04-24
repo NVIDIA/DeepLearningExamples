@@ -37,6 +37,8 @@ import optimization
 import tokenization
 from utils.create_squad_data import *
 from utils.utils import LogEvalRunHook, LogTrainRunHook
+import utils.dllogger_class
+from dllogger import Verbosity
 
 flags = tf.flags
 
@@ -56,12 +58,20 @@ flags.DEFINE_string(
     "The output directory where the model checkpoints will be written.")
 
 ## Other parameters
+
+flags.DEFINE_string(
+    "dllog_path", "bert_dllog.json",
+    "filename where dllogger writes to")
+
 flags.DEFINE_string("train_file", None,
                     "SQuAD json for training. E.g., train-v1.1.json")
 
 flags.DEFINE_string(
     "predict_file", None,
     "SQuAD json for predictions. E.g., dev-v1.1.json or test-v1.1.json")
+flags.DEFINE_string(
+    "eval_script", None,
+    "SQuAD evaluate.py file to compute f1 and exact_match E.g., evaluate-v1.1.py")
 
 flags.DEFINE_string(
     "init_checkpoint", None,
@@ -902,6 +912,7 @@ dynamic_batching {{
 
 def main(_):
   tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
+  dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)
 
   if FLAGS.horovod:
     hvd.init()
@@ -1046,6 +1057,7 @@ def main(_):
                         (num_train_steps - training_hooks[-1].skipped) * global_batch_size)
         tf.compat.v1.logging.info("Throughput Average (sentences/sec) with overhead = %0.2f", avg_sentences_per_second)
         tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+        dllogging.logger.log(step=(), data={"throughput_train": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
         tf.compat.v1.logging.info("-----------------------------")
 
 
@@ -1140,6 +1152,7 @@ def main(_):
     tf.compat.v1.logging.info("Latency Confidence Level 100 (ms) = %0.2f", cf_100 * 1000)
     tf.compat.v1.logging.info("Latency Average (ms) = %0.2f", avg * 1000)
     tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+    dllogging.logger.log(step=(), data={"throughput_val": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
     tf.compat.v1.logging.info("-----------------------------")
 
     output_prediction_file = os.path.join(FLAGS.output_dir, "predictions.json")
@@ -1150,6 +1163,17 @@ def main(_):
                       FLAGS.n_best_size, FLAGS.max_answer_length,
                       FLAGS.do_lower_case, output_prediction_file,
                       output_nbest_file, output_null_log_odds_file)
+
+    import sys
+    import subprocess
+    eval_out = subprocess.check_output([sys.executable, FLAGS.eval_script,
+                                      FLAGS.predict_file, output_prediction_file])
+    scores = str(eval_out).strip()
+    exact_match = float(scores.split(":")[1].split(",")[0])
+    f1 = float(scores.split(":")[2].split("}")[0])
+    dllogging.logger.log(step=(), data={"f1": f1}, verbosity=Verbosity.DEFAULT)
+    dllogging.logger.log(step=(), data={"exact_match": exact_match}, verbosity=Verbosity.DEFAULT)
+    print(str(eval_out))
 
 
 if __name__ == "__main__":
