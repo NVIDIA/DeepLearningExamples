@@ -27,6 +27,7 @@
 
 import tensorrt as trt
 
+
 def is_dimension_dynamic(dim):
     return dim is None or dim <= 0
 
@@ -38,14 +39,17 @@ def is_shape_dynamic(shape):
 def run_trt_engine(context, engine, tensors):
 
     bindings = [None]*engine.num_bindings
-    for name in tensors.keys():
+    for name,tensor in tensors['inputs'].items():
         idx = engine.get_binding_index(name)
-        tensor = tensors.get(name)
         bindings[idx] = tensor.data_ptr()
         if engine.is_shape_binding(idx) and is_shape_dynamic(context.get_shape(idx)):
             context.set_shape_input(idx, tensor)
-        elif is_shape_dynamic(context.get_binding_shape(idx)):
+        elif is_shape_dynamic(engine.get_binding_shape(idx)):
             context.set_binding_shape(idx, tensor.shape)
+
+    for name,tensor in tensors['outputs'].items():
+        idx = engine.get_binding_index(name)
+        bindings[idx] = tensor.data_ptr()
 
     context.execute_v2(bindings=bindings)
 

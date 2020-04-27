@@ -37,7 +37,7 @@ from scipy.io.wavfile import write
 from inference import checkpoint_from_distributed, unwrap_distributed, MeasureTime, prepare_input_sequence
 from inference_trt import infer_tacotron2_trt, infer_waveglow_trt
 
-from trt.trt_utils import load_engine, run_trt_engine
+from trt.trt_utils import load_engine
 import tensorrt as trt
 
 import time
