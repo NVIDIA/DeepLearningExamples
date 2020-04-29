@@ -1122,11 +1122,12 @@ def main(_):
               end_logits=end_logits))
 
     eval_time_elapsed = time.time() - eval_start_time
-    eval_time_wo_overhead = eval_hooks[-1].total_time
 
     time_list = eval_hooks[-1].time_list
     time_list.sort()
-    num_sentences = (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.predict_batch_size
+    # Removing outliers (init/warmup) in throughput computation.
+    eval_time_wo_overhead = sum(time_list[:int(len(time_list) * 0.99)])
+    num_sentences = (int(len(time_list) * 0.99)) * FLAGS.predict_batch_size
 
     avg = np.mean(time_list)
     cf_50 = max(time_list[:int(len(time_list) * 0.50)])
@@ -1140,7 +1141,7 @@ def main(_):
     tf.compat.v1.logging.info("Total Inference Time = %0.2f for Sentences = %d", eval_time_elapsed,
                     eval_hooks[-1].count * FLAGS.predict_batch_size)
     tf.compat.v1.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", eval_time_wo_overhead,
-                    (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.predict_batch_size)
+                    num_sentences)
     tf.compat.v1.logging.info("Summary Inference Statistics")
     tf.compat.v1.logging.info("Batch size = %d", FLAGS.predict_batch_size)
     tf.compat.v1.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
@@ -1164,16 +1165,17 @@ def main(_):
                       FLAGS.do_lower_case, output_prediction_file,
                       output_nbest_file, output_null_log_odds_file)
 
-    import sys
-    import subprocess
-    eval_out = subprocess.check_output([sys.executable, FLAGS.eval_script,
-                                      FLAGS.predict_file, output_prediction_file])
-    scores = str(eval_out).strip()
-    exact_match = float(scores.split(":")[1].split(",")[0])
-    f1 = float(scores.split(":")[2].split("}")[0])
-    dllogging.logger.log(step=(), data={"f1": f1}, verbosity=Verbosity.DEFAULT)
-    dllogging.logger.log(step=(), data={"exact_match": exact_match}, verbosity=Verbosity.DEFAULT)
-    print(str(eval_out))
+    if FLAGS.eval_script:
+        import sys
+        import subprocess
+        eval_out = subprocess.check_output([sys.executable, FLAGS.eval_script,
+                                          FLAGS.predict_file, output_prediction_file])
+        scores = str(eval_out).strip()
+        exact_match = float(scores.split(":")[1].split(",")[0])
+        f1 = float(scores.split(":")[2].split("}")[0])
+        dllogging.logger.log(step=(), data={"f1": f1}, verbosity=Verbosity.DEFAULT)
+        dllogging.logger.log(step=(), data={"exact_match": exact_match}, verbosity=Verbosity.DEFAULT)
+        print(str(eval_out))
 
 
 if __name__ == "__main__":

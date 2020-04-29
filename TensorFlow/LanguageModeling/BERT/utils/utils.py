@@ -19,9 +19,7 @@ class LogEvalRunHook(tf.estimator.SessionRunHook):
   def __init__(self, global_batch_size, hvd_rank=-1):
     self.global_batch_size = global_batch_size
     self.hvd_rank = hvd_rank
-    self.total_time = 0.0
     self.count = 0
-    self.skipped = 0
     self.time_list = []
 
   def before_run(self, run_context):
@@ -30,14 +28,7 @@ class LogEvalRunHook(tf.estimator.SessionRunHook):
   def after_run(self, run_context, run_values):
     elapsed_secs = time.time() - self.t0
     self.count += 1
-
-    # Removing first 2 (arbitrary) number of startup iterations from perf evaluations
-    if self.count <= 2:
-      print("Skipping time record for ", self.count, " due to overhead")
-      self.skipped += 1
-    else:
-      self.time_list.append(elapsed_secs)
-      self.total_time += elapsed_secs
+    self.time_list.append(elapsed_secs)
 
 # report throughput during training
 class LogTrainRunHook(tf.estimator.SessionRunHook):
