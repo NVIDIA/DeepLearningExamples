@@ -177,6 +177,7 @@ make
 ```
 
 Note: `xx` is the compute capability of your GPU. For example, 60 (P40) or 61 (P4) or 70 (V100) or 75(T4).
+
 Note: If you use the image we recommand, then the tensorrt related libraries are in the `/usr/include/x86_64-linux-gnu`. 
 
 ### Execute the encoder demos
