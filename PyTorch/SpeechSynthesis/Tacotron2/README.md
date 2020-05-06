@@ -323,6 +323,7 @@ inference using the respective checkpoints that are passed as `--tacotron2`
 and `--waveglow` arguments. Tacotron2 and WaveGlow checkpoints can also be downloaded from NGC:
 
    https://ngc.nvidia.com/catalog/models/nvidia:tacotron2pyt_fp16/files?version=3
+   
    https://ngc.nvidia.com/catalog/models/nvidia:waveglow256pyt_fp16/files?version=2
 
    To run inference issue:
@@ -338,7 +339,7 @@ and `--waveglow` arguments. Tacotron2 and WaveGlow checkpoints can also be downl
 
    You can also run inference on CPU with TorchScript by adding flag --cpu-run:
 
-   ```
+   ```bash
       export CUDA_VISIBLE_DEVICES=
    ```
    ```bash
