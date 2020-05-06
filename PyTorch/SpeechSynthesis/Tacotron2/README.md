@@ -340,10 +340,10 @@ and `--waveglow` arguments. Tacotron2 and WaveGlow checkpoints can also be downl
    You can also run inference on CPU with TorchScript by adding flag --cpu-run:
 
    ```bash
-      export CUDA_VISIBLE_DEVICES=
+   export CUDA_VISIBLE_DEVICES=
    ```
    ```bash
-    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> --wn-channels 256 --cpu-run -o output/ -i phrases/phrase.txt
+   python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> --wn-channels 256 --cpu-run -o output/ -i phrases/phrase.txt
    ```    
 
 ## Advanced
@@ -385,7 +385,7 @@ WaveGlow models.
 * `--learning-rate` - learning rate (Tacotron 2: 1e-3, WaveGlow: 1e-4)
 * `--batch-size` - batch size (Tacotron 2 FP16/FP32: 104/48, WaveGlow FP16/FP32: 10/4)
 * `--amp-run` - use mixed precision training
-* `--cpu-run` - use CPU with TorchScript inference
+* `--cpu-run` - use CPU with TorchScript for inference
 
 #### Shared audio/STFT parameters
 
@@ -493,13 +493,6 @@ and [audio_fp32](./audio/audio_fp32.wav) were generated using checkpoints from
 mixed precision and FP32 training, respectively.
 
 You can find all the available options by calling `python inference.py --help`.
-
-You can also run inference on CPU with TorchScript by adding flag --cpu-run:
-
-   ```export CUDA_VISIBLE_DEVICES=
-   ```
-   ```bash
-    python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> --wn-channels 256 --cpu-run -o output/ -i phrases/phrase.txt
 
 ## Performance
 
