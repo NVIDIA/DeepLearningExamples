@@ -316,11 +316,9 @@ def main():
                       do_constant_folding=True,
                       input_names=["sequences", "sequence_lengths"],
                       output_names=["memory", "processed_memory", "lens"],
-                      dynamic_axes={"sequences": {0: "batch_size", 1: "text_seq"},
-                                    "sequence_lengths": {0: "batch_size"},
-                                    "memory": {0: "batch_size", 1: "mem_seq"},
-                                    "processed_memory": {0: "batch_size", 1: "mem_seq"},
-                                    "lens": {0: "batch_size"},
+                      dynamic_axes={"sequences": {1: "text_seq"},
+                                    "memory": {1: "mem_seq"},
+                                    "processed_memory": {1: "mem_seq"}
                       })
 
     decoder_iter = DecoderIter(tacotron2)
@@ -379,26 +377,13 @@ def main():
                                     "out_attention_weights",
                                     "out_attention_weights_cum",
                                     "out_attention_context"],
-                      dynamic_axes={"decoder_input" : {0: "batch_size"},
-                                    "attention_hidden" : {0: "batch_size"},
-                                    "attention_cell" : {0: "batch_size"},
-                                    "decoder_hidden" : {0: "batch_size"},
-                                    "decoder_cell" : {0: "batch_size"},
-                                    "attention_weights" : {0: "batch_size", 1: "seq_len"},
-                                    "attention_weights_cum" : {0: "batch_size", 1: "seq_len"},
-                                    "attention_context" : {0: "batch_size"},
-                                    "memory" : {0: "batch_size", 1: "seq_len"},
-                                    "processed_memory" : {0: "batch_size", 1: "seq_len"},
-                                    "mask" : {0: "batch_size", 1: "seq_len"},
-                                    "decoder_output" : {0: "batch_size"},
-                                    "gate_prediction" : {0: "batch_size"},
-                                    "out_attention_hidden" : {0: "batch_size"},
-                                    "out_attention_cell" : {0: "batch_size"},
-                                    "out_decoder_hidden" : {0: "batch_size"},
-                                    "out_decoder_cell" : {0: "batch_size"},
-                                    "out_attention_weights" : {0: "batch_size", 1: "seq_len"},
-                                    "out_attention_weights_cum" : {0: "batch_size", 1: "seq_len"},
-                                    "out_attention_context" : {0: "batch_size"}
+                      dynamic_axes={"attention_weights" : {1: "seq_len"},
+                                    "attention_weights_cum" : {1: "seq_len"},
+                                    "memory" : {1: "seq_len"},
+                                    "processed_memory" : {1: "seq_len"},
+                                    "mask" : {1: "seq_len"},
+                                    "out_attention_weights" : {1: "seq_len"},
+                                    "out_attention_weights_cum" : {1: "seq_len"}
                       })
 
     postnet = Postnet(tacotron2)
@@ -410,8 +395,8 @@ def main():
                       do_constant_folding=True,
                       input_names=["mel_outputs"],
                       output_names=["mel_outputs_postnet"],
-                      dynamic_axes={"mel_outputs": {0: "batch_size", 2: "mel_seq"},
-                                    "mel_outputs_postnet": {0: "batch_size", 2: "mel_seq"}})
+                      dynamic_axes={"mel_outputs": {2: "mel_seq"},
+                                    "mel_outputs_postnet": {2: "mel_seq"}})
 
     mel = test_inference(encoder, decoder_iter, postnet)
     torch.save(mel, "mel.pt")

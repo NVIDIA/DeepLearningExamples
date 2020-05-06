@@ -85,5 +85,5 @@ Our results were obtained by running the `./trt/run_latency_tests_trt.sh` script
 
 |Framework|Batch size|Input length|Precision|Avg latency (s)|Latency std (s)|Latency confidence interval 90% (s)|Latency confidence interval 95% (s)|Latency confidence interval 99% (s)|Throughput (samples/sec)|Speed-up PyT+TRT/TRT|Avg mels generated (81 mels=1 sec of speech)|Avg audio length (s)|Avg RTF|
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-|PyT+TRT|1| 128| FP16| 1.13| 0.01| 1.15| 1.15| 1.16| 137,738| 1.45| 608| 7.06| 6.24|
+|PyT+TRT|1| 128| FP16| 1.02| 0.05| 1.09| 1.10| 1.14| 150,439| 1.59| 602| 6.99| 6.86|
 |PyT    |1| 128| FP16| 1.63| 0.07| 1.71| 1.73| 1.81|  94,758| 1.00| 601| 6.98| 4.30|
