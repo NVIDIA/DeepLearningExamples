@@ -322,9 +322,8 @@ After you have trained the Tacotron 2 and WaveGlow models, you can perform
 inference using the respective checkpoints that are passed as `--tacotron2`
 and `--waveglow` arguments. Tacotron2 and WaveGlow checkpoints can also be downloaded from NGC:
 
-https://ngc.nvidia.com/catalog/models/nvidia:tacotron2pyt_fp16/files?version=3
-
-https://ngc.nvidia.com/catalog/models/nvidia:waveglow256pyt_fp16/files?version=2
+   https://ngc.nvidia.com/catalog/models/nvidia:tacotron2pyt_fp16/files?version=3
+   https://ngc.nvidia.com/catalog/models/nvidia:waveglow256pyt_fp16/files?version=2
 
    To run inference issue:
 
@@ -339,10 +338,12 @@ https://ngc.nvidia.com/catalog/models/nvidia:waveglow256pyt_fp16/files?version=2
 
    You can also run inference on CPU with TorchScript by adding flag --cpu-run:
 
-   ```export CUDA_VISIBLE_DEVICES=
+   ```
+      export CUDA_VISIBLE_DEVICES=
    ```
    ```bash
     python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> --wn-channels 256 --cpu-run -o output/ -i phrases/phrase.txt
+   ```    
 
 ## Advanced
 
