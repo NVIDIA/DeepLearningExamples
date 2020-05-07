@@ -695,7 +695,7 @@ you need to provide pretrained checkpoints for Tacotron 2 and WaveGlow. Please
 edit the script to provide your checkpoint filenames.
 
 
-To compare with inference performance on CPU with TorchScript, benchmark inference on CPU using `./run_latency_tests_cpu.sh` script and get the performance numbers for batch size 1 and 4.
+To compare with inference performance on CPU with TorchScript, benchmark inference on CPU using `./run_latency_tests_cpu.sh` script and get the performance numbers for batch size 1 and 4. Intel's optimization for PyTorch on CPU are added, you need to set "export OMP_NUM_THREADS=num physical cores" based on your CPU's core number, for your reference: https://software.intel.com/content/www/us/en/develop/articles/maximize-tensorflow-performance-on-cpu-considerations-and-recommendations-for-inference.html
 
 
 ## Release notes
