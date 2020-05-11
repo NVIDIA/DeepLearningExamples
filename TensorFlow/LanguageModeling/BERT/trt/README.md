@@ -12,22 +12,21 @@ This subfolder of the BERT TensorFlow repository, tested and maintained by NVIDI
 - [Setup](#setup)
    * [Requirements](#requirements)
 - [Quick Start Guide](#quick-start-guide)
-   * [(Optional) Trying a different configuration](#optional-trying-a-different-configuration)
+  * [(Optional) Trying a different configuration](#optional-trying-a-different-configuration)
 - [Advanced](#advanced)
    * [Scripts and sample code](#scripts-and-sample-code)
    * [Command-line options](#command-line-options)
    * [TensorRT inference process](#tensorrt-inference-process)
 - [Performance](#performance)
-   * [Benchmarking](#benchmarking)
-      * [TensorRT inference benchmark](#tensorrt-inference-benchmark)
+  * [Benchmarking](#benchmarking)
+       * [TensorRT inference benchmark](#tensorrt-inference-benchmark)
    * [Results](#results)
-      * [Inference performance: NVIDIA T4](#inference-performance-nvidia-t4)
-      * [BERT Base](#bert-base)
-      * [BERT Large](#bert-large)
-   * [Inference performance: NVIDIA V100 (32GB)](#inference-performance-nvidia-v100-(32gc))
-      * [BERT Base](#bert-base)
-      * [BERT Large](#bert-large)
-
+      * [Inference performance: NVIDIA T4 (16GB)](#inference-performance-nvidia-t4-16gb)
+        * [BERT Base](#bert-base)
+        * [BERT Large](#bert-large)
+     * [Inference performance: NVIDIA V100 (32GB)](#inference-performance-nvidia-v100-32gb)
+       * [BERT Base](#bert-base)
+       * [BERT Large](#bert-large)
 
 
 ## Model overview
@@ -72,7 +71,7 @@ The following software version configuration has been tested:
 |--------|-------|
 |Python|3.6.9|
 |TensorFlow|1.13.1|
-|TensorRT|6.0.1.8|
+|TensorRT|7.0.0.1|
 |CUDA|10.2.89|
 
 
@@ -82,11 +81,11 @@ The following section lists the requirements that you need to meet in order to r
 
 ### Requirements
 
-This repository contains a `Dockerfile` which extends the TensorRT 19.12-py3 NGC container and installs some dependencies. Ensure you have the following components:
+This repository contains a `Dockerfile` which extends the TensorRT NGC container and installs some dependencies. Ensure you have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [TensorRT 19.10-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorrt)
-* [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU with NVIDIA Driver 440.33 or later
+* [TensorRT 20.02-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorrt)
+* [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU with NVIDIA Driver 440.33.01 or later.
 
 Required Python packages are listed in `requirements.txt`. These packages are automatically installed inside the container.
 
@@ -103,13 +102,13 @@ Required Python packages are listed in `requirements.txt`. These packages are au
     ```bash
     bash scripts/download_model.sh
     ```
-    This script downloads checkpoints for a BERT Large FP16 model with a sequence length of 128 by default.
+    This will download checkpoints for a BERT Large FP16 SQuAD v2 model with a sequence length of 128 by default.
 
-**Note:** Since the checkpoints are stored in the directory mounted from the host, they do *not* need to be downloaded each time the container is launched.  
+**Note:** Since the checkpoints are stored in the directory mounted from the host, they do *not* need to be downloaded each time the container is launched. 
 
 3. Build a TensorRT engine. To build an engine, run the `builder.py` script. For example:
     ```bash
-    mkdir -p /workspace/bert/engines && python builder.py -m /workspace/bert/models/fine-tuned/bert_tf_v2_large_fp16_128_v2/model.ckpt-8144 -o /workspace/bert/engines/bert_large_128.engine -b 1 -s 128 --fp16 -c /workspace/bert/models/fine-tuned/bert_tf_v2_large_fp16_128_v2
+    mkdir -p /workspace/bert/engines && python3 builder.py -m /workspace/bert/models/fine-tuned/bert_tf_v2_large_fp16_128_v2/model.ckpt-8144 -o /workspace/bert/engines/bert_large_128.engine -b 1 -s 128 --fp16 -c /workspace/bert/models/fine-tuned/bert_tf_v2_large_fp16_128_v2
     ```
 
     This will build an engine with a maximum batch size of 1 (`-b 1`), and sequence length of 128 (`-s 128`) using mixed precision (`--fp16`) using the BERT Large V2 FP16 Sequence Length 128 checkpoint (`-c /workspace/bert/models/fine-tuned/bert_tf_v2_large_fp16_128_v2`).
@@ -117,10 +116,10 @@ Required Python packages are listed in `requirements.txt`. These packages are au
 4. Run inference. Two options are provided for running the model.
 
     a. `inference.py` script
-    This script accepts a passage and question and then runs the engine to generate an answer.
+    This script accepts a passage and question and then runs the engine to generate an answer. The vocabulary file used to train the source model is also specified (`-v /workspace/bert/models/fine-tuned/bert_tf_v2_large_fp16_128_v2/vocab.txt`).
     For example:
     ```bash
-    python inference.py -e /workspace/bert/engines/bert_large_128.engine -p "TensorRT is a high performance deep learning inference platform that delivers low latency and high throughput for apps such as recommenders, speech and image/video on NVIDIA GPUs. It includes parsers to import models, and plugins to support novel ops and layers before applying optimizations for inference. Today NVIDIA is open-sourcing parsers and plugins in TensorRT so that the deep learning community can customize and extend these components to take advantage of powerful TensorRT optimizations for your apps." -q "What is TensorRT?" -v /workspace/bert/models/fine-tuned/bert_tf_v2_large_fp16_128_v2/vocab.txt
+    python3 inference.py -e /workspace/bert/engines/bert_large_128.engine -p "TensorRT is a high performance deep learning inference platform that delivers low latency and high throughput for apps such as recommenders, speech and image/video on NVIDIA GPUs. It includes parsers to import models, and plugins to support novel ops and layers before applying optimizations for inference. Today NVIDIA is open-sourcing parsers and plugins in TensorRT so that the deep learning community can customize and extend these components to take advantage of powerful TensorRT optimizations for your apps." -q "What is TensorRT?" -v /workspace/bert/models/fine-tuned/bert_tf_v2_large_fp16_128_v2/vocab.txt
     ```
 
     b. `inference.ipynb` Jupyter Notebook
@@ -138,8 +137,8 @@ If you would like to run another configuration, you can manually download checkp
 ```bash
 bash scripts/download_model.sh base
 ```
+to download a BERT Base model instead of the default BERT Large model.
 
-This will download a BERT Base model instead of the default BERT Large model.
 To view all available model options, run:
 ```bash
 bash scripts/download_model.sh -h
@@ -177,9 +176,30 @@ To view the available parameters for each script, you can use the help flag (`-h
 ### TensorRT inference process
 
 As mentioned in the [Quick Start Guide](#quick-start-guide), two options are provided for running inference:
-1. The `inference.py` script which accepts a passage and a question and then runs the engine to generate an answer.
+1. The `inference.py` script which accepts a passage and a question and then runs the engine to generate an answer. Alternatively, this script can be used to run inference on the Squad dataset.
 2. The `inference.ipynb` Jupyter Notebook which includes a passage and various example questions and allows you to interactively make modifications and see the outcome.
 
+## Accuracy
+
+### Evaluating Int8 Accuracy Using The SQuAD Dataset
+1.  Download checkpoints for a BERT Large FP32 SQuAD v1.1 model with a sequence length of 128 and 384:
+    ```bash
+    bash scripts/download_model.sh large fp32 128 v1_1
+    bash scripts/download_model.sh large fp32 384 v1_1
+    ```
+
+2. Build an engine:
+    ```bash
+    mkdir -p /workspace/bert/engines && python3 builder.py -m /workspace/bert/models/fine-tuned/bert_tf_v1_1_large_fp32_384_v2/model.ckpt-5474 -o /workspace/bert/engines/bert_large_384_int8mix.engine -b 1 -s 384 --int8 --fp16 --strict -c /workspace/bert/models/fine-tuned/bert_tf_v2_large_fp16_128_v2 --squad-json ./squad/dev-v1.1.json -v /workspace/bert/models/fine-tuned/bert_tf_v1_1_large_fp32_384_v2/vocab.txt --calib-num 100
+    ```
+
+    This will build and engine with a maximum batch size of 1 (`-b 1`), calibration dataset squad (`--squad-json ./squad/dev-v1.1.json`), calibration sentences number 100 (`--calib-num 100`), and sequence length of 128 (`-s 128`) using INT8 mixed precision computation where possible (`--int8 --fp16 --strict`).
+
+3. Run inference using the squad dataset, and evaluate the F1 score and exact match score:
+    ```bash
+    python3 inference.py -e /workspace/bert/engines/bert_large_384_int8mix.engine -s 384 -sq ./squad/dev-v1.1.json -v /workspace/bert/models/fine-tuned/bert_tf_v1_1_large_fp32_384_v2/vocab.txt -o ./predictions.json
+    python3 squad/evaluate-v1.1.py  squad/dev-v1.1.json  ./predictions.json 90
+    ```
 
 ## Performance
 
@@ -193,7 +213,7 @@ The inference benchmark is performed on a single GPU by the `inference_benchmark
 
 1. Downloads checkpoints and builds a TensorRT engine if it does not already exist.
 
-2. Runs 1 warm-up iteration then runs inference for 100 iterations for each batch size specified in the script, selecting the profile best for each size.
+2. Run the inference benchmark, which performs a sweep across batch sizes (1-128) and sequence lengths (128, 384). In each configuration, 1 warm-up iteration is followed by 200 runs to measure and report the BERT inference latencies.
 
 **Note:** The time measurements do not include the time required to copy inputs to the device and copy outputs to the host.
 
@@ -220,26 +240,27 @@ Our results were obtained by running the `scripts/inference_benchmark.sh` traini
 | Sequence Length | Batch Size | TRT Mixed Precision Latency (ms) ||         | TRT FP32 Latency (ms) |           |         |
 |-----------------|------------|-----------------|-----------------|---------|-----------------|-----------------|---------|
 |                 |            | 95th Percentile | 99th Percentile | Average | 95th Percentile | 99th Percentile | Average |
-| 128 | 1 | 3.88 | 3.89 | 2.34 | 11.18 | 11.19 | 6.48 |
-| 128 | 2 | 5.46 | 5.46 | 3.38 | 11.60 | 19.95 | 11.29 |
-| 128 | 4 | 8.87 | 8.88 | 5.20 | 22.20 | 22.87 | 21.73 |
-| 128 | 8 | 10.35 | 10.47 | 9.75 | 43.59 | 46.57 | 41.98 |
-| 128 | 12 | 14.79 | 15.00 | 14.42 | 68.66 | 71.90 | 66.10 |
-| 128 | 16 | 21.70 | 24.09 | 19.94 | 87.53 | 88.73 | 86.62 |
-| 128 | 24 | 31.80 | 34.47 | 29.42 | 133.56 | 136.35 | 130.90 |
-| 128 | 32 | 42.64 | 46.04 | 40.36 | 177.37 | 180.55 | 175.32 |
-| 128 | 64 | 82.14 | 87.86 | 78.34 | 346.39 | 347.56 | 343.62 |
-| 128 | 128 | 158.23 | 162.59 | 155.07 | 686.51 | 687.55 | 683.74 |
-| 384 | 1 | 5.21 | 9.33 | 5.13 | 18.79 | 19.24 | 18.42 |
-| 384 | 2 | 9.92 | 16.64 | 9.54 | 37.45 | 41.24 | 36.25 |
-| 384 | 4 | 19.46 | 21.00 | 18.74 | 74.32 | 74.79 | 73.72 |
-| 384 | 8 | 37.44 | 38.38 | 36.39 | 148.10 | 148.59 | 146.12 |
-| 384 | 12 | 55.99 | 61.07 | 54.49 | 222.44 | 226.04 | 219.89 |
-| 384 | 16 | 74.84 | 75.38 | 73.98 | 292.29 | 292.93 | 289.43 |
-| 384 | 24 | 115.54 | 120.15 | 111.98 | 437.29 | 438.23 | 433.30 |
-| 384 | 32 | 148.99 | 149.40 | 146.76 | 583.23 | 584.24 | 578.89 |
-| 384 | 64 | 298.82 | 299.71 | 295.27 | 1178.03 | 1178.89 | 1171.15 |
-| 384 | 128 | 595.50 | 597.08 | 591.78 | 2337.13 | 2337.88 | 2329.52 |
+| 128 | 1 | 1.97 | 1.97 | 1.93 | 6.47 | 6.51 | 6.12 |
+| 128 | 2 | 2.94 | 2.99 | 2.86 | 11.55 | 11.84 | 11.25 |
+| 128 | 4 | 5.00 | 8.44 | 4.88 | 22.08 | 22.63 | 21.90 |
+| 128 | 8 | 10.57 | 11.55 | 9.78 | 43.74 | 43.97 | 42.83 |
+| 128 | 12 | 15.01 | 15.27 | 14.56 | 68.42 | 69.71 | 67.47 |
+| 128 | 16 | 21.64 | 22.92 | 19.12 | 90.90 | 97.17 | 88.47 |
+| 128 | 24 | 31 | 31.65 | 29.71 | 131.11 | 133.5 | 129.43 |
+| 128 | 32 | 41.27 | 43.65 | 38.54 | 178.45 | 182.65 | 176.77 |
+| 128 | 64 | 76.73 | 81.31 | 73.89 | 364.31 | 364.68 | 362.05 |
+| 128 | 128 | 151.95 | 152.35 | 150.54 | 672.25 | 673.02 | 669.60 |
+| 384 | 1 | 5.18 | 5.19 | 4.97 | 19.11 | 19.13 | 18.44 |
+| 384 | 2 | 9.82 | 9.92 | 9.51 | 37.5 | 38.31 | 36.93 |
+| 384 | 4 | 18.08 | 19.46 | 17.56 | 77.01 | 81.02 | 74.98 |
+| 384 | 8 | 37.32 | 37.94 | 36.77 | 147.05 | 148.85 | 145.27 |
+| 384 | 12 | 56.91 | 57.52 | 55.43 | 218.76 | 219.32 | 217.04 |
+| 384 | 16 | 73.35 | 76.45 | 71.76 | 302.05 | 303.38 | 299.29 |
+| 384 | 24 | 110.14 | 110.78 | 109.03 | 430.22 | 430.91 | 428.49 |
+| 384 | 32 | 140.05 | 140.92 | 138.61 | 618.31 | 619.78 | 613.26 |
+| 384 | 64 | 284.99 | 285.86 | 282.54 | 1218.55 | 1227.73 | 1215.81 |
+| 384 | 128 | 579.86 | 580.91 | 577.25 | 2325.91 | 2327.81 | 2319.26 |
+
 
 
 ##### BERT Large
@@ -247,26 +268,26 @@ Our results were obtained by running the `scripts/inference_benchmark.sh` traini
 | Sequence Length | Batch Size | TRT Mixed Precision Latency (ms) ||         | TRT FP32 Latency (ms) |           |         |
 |-----------------|------------|-----------------|-----------------|---------|-----------------|-----------------|---------|
 |                 |            | 95th Percentile | 99th Percentile | Average | 95th Percentile | 99th Percentile | Average |
-| 128 | 1 | 9.87 | 9.88 | 5.61 | 20.82 | 21.40 | 20.58 |
-| 128 | 2 | 9.02 | 15.91 | 8.89 | 39.83 | 40.03 | 38.69 |
-| 128 | 4 | 16.41 | 17.85 | 15.87 | 76.83 | 76.89 | 75.98 |
-| 128 | 8 | 35.97 | 40.19 | 33.43 | 146.27 | 147.10 | 144.46 |
-| 128 | 12 | 48.21 | 51.45 | 46.57 | 221.23 | 221.55 | 219.72 |
-| 128 | 16 | 65.57 | 69.09 | 63.35 | 283.81 | 285.88 | 280.20 |
-| 128 | 24 | 93.58 | 101.40 | 90.73 | 442.93 | 444.13 | 437.57 |
-| 128 | 32 | 125.16 | 129.91 | 122.96 | 577.84 | 578.97 | 572.42 |
-| 128 | 64 | 247.99 | 249.92 | 242.97 | 1173.16 | 1174.65 | 1164.48 |
-| 128 | 128 | 484.90 | 485.28 | 483.70 | 2323.21 | 2323.93 | 2315.76 |
-| 384 | 1 | 15.81 | 15.99 | 15.51 | 63.05 | 63.37 | 61.68 |
-| 384 | 2 | 30.01 | 31.54 | 29.13 | 121.94 | 122.36 | 120.50 |
-| 384 | 4 | 58.08 | 60.09 | 57.09 | 242.38 | 243.52 | 237.58 |
-| 384 | 8 | 113.03 | 113.76 | 111.87 | 485.08 | 487.53 | 483.27 |
-| 384 | 12 | 167.74 | 168.14 | 165.37 | 722.36 | 723.69 | 715.54 |
-| 384 | 16 | 222.91 | 225.62 | 219.78 | 971.95 | 974.37 | 966.16 |
-| 384 | 24 | 336.69 | 337.63 | 333.05 | 1457.11 | 1457.96 | 1437.43 |
-| 384 | 32 | 452.62 | 455.51 | 444.70 | 1936.90 | 1939.63 | 1923.82 |
-| 384 | 64 | 903.01 | 904.37 | 894.41 | 3898.04 | 3900.07 | 3891.59 |
-| 384 | 128 | 1804.65 | 1806.82 | 1798.03 | Not measured | Not measured | Not measured |
+| 128 | 1 | 5.63 | 5.66 | 5.39 | 21.53 | 22.16 | 20.74 |
+| 128 | 2 | 9.11 | 9.83 | 8.89 | 40.31 | 40.45 | 39.24 |
+| 128 | 4 | 16.03 | 17.45 | 15.34 | 81.66 | 85.56 | 78.35 |
+| 128 | 8 | 33.2 | 33.98 | 32.59 | 145.86 | 146.2 | 144.46 |
+| 128 | 12 | 48.87 | 49.58 | 48.16 | 223.69 | 225.05 | 222.22 |
+| 128 | 16 | 64.48 | 68.01 | 62.60 | 289.42 | 292.36 | 286.33 |
+| 128 | 24 | 92.63 | 94.4 | 90.90 | 434.81 | 435.49 | 433.37 |
+| 128 | 32 | 121.63 | 125.25 | 118.14 | 611.33 | 612.58 | 604.69 |
+| 128 | 64 | 237.01 | 239.95 | 233.15 | 1231.35 | 1232.71 | 1220.68 |
+| 128 | 128 | 484.48 | 485.39 | 483.37 | 2338.03 | 2341.99 | 2316.32 |
+| 384 | 1 | 15.89 | 16.01 | 15.49 | 63.13 | 63.54 | 61.96 |
+| 384 | 2 | 30.1 | 30.2 | 29.56 | 121.37 | 122 | 120.19 |
+| 384 | 4 | 56.64 | 60.46 | 55.17 | 247.53 | 248.09 | 243.16 |
+| 384 | 8 | 114.53 | 115.74 | 112.91 | 485.92 | 486.85 | 484.55 |
+| 384 | 12 | 168.8 | 170.65 | 164.88 | 709.33 | 709.88 | 707.13 |
+| 384 | 16 | 217.53 | 218.89 | 214.36 | 1005.50 | 1007.29 | 992.56 |
+| 384 | 24 | 330.84 | 332.89 | 327.96 | 1489.48 | 1490.96 | 1480.36 |
+| 384 | 32 | 454.32 | 461.05 | 443.58 | 1986.66 | 1988.94 | 1976.53 |
+| 384 | 64 | 865.36 | 866.96 | 860.22 | 4029.11 | 4031.18 | 4015.06 |
+| 384 | 128 | 1762.72 | 1764.65 | 1756.79 | 7736.41 | 7739.45 | 7718.88 |
 
 
 
@@ -280,27 +301,26 @@ Our results were obtained by running the `scripts/inference_benchmark.sh` traini
 | Sequence Length | Batch Size | TRT Mixed Precision Latency (ms) ||         | TRT FP32 Latency (ms) |           |         |
 |-----------------|------------|-----------------|-----------------|---------|-----------------|-----------------|---------|
 |                 |            | 95th Percentile | 99th Percentile | Average | 95th Percentile | 99th Percentile | Average |
-| 128 | 1 | 1.58 | 1.59 | 1.53 | 3.39 | 3.41 | 3.02 |
-| 128 | 2 | 1.86 | 1.86 | 1.74 | 5.25 | 5.26 | 4.68 |
-| 128 | 4 | 2.63 | 2.64 | 2.37 | 8.58 | 9.35 | 8.11 |
-| 128 | 8 | 4.03 | 4.06 | 3.59 | 15.73 | 17.25 | 15.13 |
-| 128 | 12 | 5.59 | 5.61 | 5.08 | 22.82 | 22.95 | 22.59 |
-| 128 | 16 | 6.81 | 7.33 | 6.53 | 29.11 | 29.15 | 28.96 |
-| 128 | 24 | 9.25 | 10.00 | 8.96 | 43.37 | 43.49 | 43.10 |
-| 128 | 32 | 12.68 | 13.54 | 12.32 | 56.16 | 56.48 | 55.83 |
-| 128 | 64 | 23.55 | 23.85 | 23.45 | 111.32 | 111.56 | 110.58 |
-| 128 | 128 | 45.33 | 45.42 | 45.08 | 221.67 | 221.98 | 220.29 |
-| 384 | 1 | 2.46 | 2.47 | 2.24 | 7.76 | 7.78 | 6.82 |
-| 384 | 2 | 3.84 | 3.85 | 3.49 | 13.33 | 14.60 | 12.76 |
-| 384 | 4 | 6.64 | 6.66 | 6.01 | 24.95 | 25.13 | 24.72 |
-| 384 | 8 | 10.95 | 10.97 | 10.78 | 47.67 | 47.99 | 47.41 |
-| 384 | 12 | 17.02 | 17.25 | 16.73 | 70.72 | 70.85 | 70.27 |
-| 384 | 16 | 21.47 | 21.56 | 21.36 | 93.56 | 93.72 | 93.32 |
-| 384 | 24 | 31.61 | 31.72 | 31.45 | 137.73 | 138.19 | 137.12 |
-| 384 | 32 | 41.77 | 41.83 | 41.57 | 184.57 | 184.79 | 184.13 |
-| 384 | 64 | 84.13 | 84.18 | 83.51 | 369.91 | 370.36 | 368.25 |
-| 384 | 128 | 166.11 | 166.77 | 165.32 | 745.16 | 745.91 | 742.54 |
-
+| 128 | 1 | 1.39 | 1.45 | 1.37 | 2.93 | 2.95 | 2.91 |
+| 128 | 2 | 1.63 | 1.63 | 1.62 | 4.65 | 4.68 | 4.62 |
+| 128 | 4 | 2.75 | 2.76 | 2.56 | 8.68 | 9.50 | 8.27 |
+| 128 | 8 | 3.58 | 3.59 | 3.55 | 15.56 | 15.63 | 15.42 |
+| 128 | 12 | 4.94 | 4.96 | 4.90 | 23.48 | 23.52 | 23.23 |
+| 128 | 16 | 7.86 | 7.90 | 7.01 | 30.23 | 30.29 | 29.87 |
+| 128 | 24 | 8.94 | 8.94 | 8.89 | 43.52 | 43.59 | 43.24 |
+| 128 | 32 | 13.25 | 13.59 | 13.11 | 56.45 | 56.79 | 56.10 |
+| 128 | 64 | 25.05 | 25.38 | 24.90 | 111.98 | 112.19 | 111.42 |
+| 128 | 128 | 46.31 | 46.38 | 46.01 | 219.6 | 220.3 | 219.22 |
+| 384 | 1 | 2.17 | 2.21 | 2.16 | 6.77 | 6.79 | 6.73 |
+| 384 | 2 | 3.39 | 3.46 | 3.38 | 13.12 | 13.16 | 13.04 |
+| 384 | 4 | 6.79 | 7.09 | 6.29 | 25.33 | 25.45 | 25.16 |
+| 384 | 8 | 10.84 | 10.86 | 10.78 | 47.94 | 48.16 | 47.65 |
+| 384 | 12 | 16.75 | 16.78 | 16.68 | 72.34 | 72.44 | 72.10 |
+| 384 | 16 | 22.66 | 23.28 | 22.56 | 94.65 | 94.93 | 94.08 |
+| 384 | 24 | 32.41 | 32.44 | 32.23 | 137.46 | 137.59 | 137.11 |
+| 384 | 32 | 44.29 | 44.34 | 44.02 | 186.96 | 187.06 | 185.85 |
+| 384 | 64 | 88.56 | 88.72 | 88.15 | 373.48 | 374.26 | 372.37 |
+| 384 | 128 | 165.93 | 166.14 | 165.34 | 739.52 | 740.65 | 737.33 |
 
 
 
@@ -309,23 +329,24 @@ Our results were obtained by running the `scripts/inference_benchmark.sh` traini
 | Sequence Length | Batch Size | TRT Mixed Precision Latency (ms) ||         | TRT FP32 Latency (ms) |           |         |
 |-----------------|------------|-----------------|-----------------|---------|-----------------|-----------------|---------|
 |                 |            | 95th Percentile | 99th Percentile | Average | 95th Percentile | 99th Percentile | Average |
-| 128 | 1 | 3.91 | 3.92 | 3.50 | 9.18 | 9.22 | 8.75 |
-| 128 | 2 | 4.83 | 4.83 | 4.29 | 15.34 | 16.73 | 14.61 |
-| 128 | 4 | 7.11 | 7.14 | 6.24 | 27.08 | 28.13 | 26.90 | 
-| 128 | 8 | 11.38 | 11.49 | 10.97 | 51.95 | 52.08 | 51.60 |
-| 128 | 12 | 15.48 | 16.00 | 15.40 | 75.34 | 75.45 | 74.88 |
-| 128 | 16 | 20.53 | 21.08 | 20.37 | 99.40 | 99.86 | 98.80 |
-| 128 | 24 | 29.37 | 29.41 | 29.18 | 149.51 | 149.86 | 148.57 |
-| 128 | 32 | 38.19 | 38.38 | 37.98 | 196.67 | 196.73 | 195.70 |
-| 128 | 64 | 74.23 | 74.52 | 73.84 | 386.47 | 386.93 | 383.98 |
-| 128 | 128 | 147.13 | 147.85 | 146.24 | 777.01 | 777.75 | 772.92 |
-| 384 | 1 | 6.95 | 6.98 | 6.20 | 21.96 | 23.31 | 21.91 |
-| 384 | 2 | 10.29 | 10.37 | 9.89 | 42.35 | 42.52 | 42.07 |
-| 384 | 4 | 18.00 | 18.53 | 17.86 | 81.00 | 81.06 | 80.41 |
-| 384 | 8 | 34.16 | 34.21 | 33.94 | 160.45 | 160.57 | 159.61 |
-| 384 | 12 | 50.02 | 50.10 | 49.71 | 238.80 | 239.11 | 237.67 |
-| 384 | 16 | 66.45 | 66.58 | 66.07 | 320.78 | 322.03 | 318.12 |
-| 384 | 24 | 97.96 | 98.16 | 97.34 | 471.71 | 472.00 | 468.58 |
-| 384 | 32 | 128.80 | 129.15 | 128.12 | 635.27 | 635.83 | 631.92 |
-| 384 | 64 | 258.09 | 258.34 | 256.21 | 1256.38 | 1257.17 | 1252.49 |
-| 384 | 128 | 516.19 | 516.82 | 514.23 | 2525.86 | 2528.41 | 2520.71 |
+| 128 | 1 | 3.4 | 3.46 | 3.38 | 8.83 | 8.85 | 8.76 |
+| 128 | 2 | 4.15 | 4.17 | 4.13 | 14.53 | 14.58 | 14.42 |
+| 128 | 4 | 6.76 | 7.41 | 6.45 | 27.40 | 27.52 | 27.22 |
+| 128 | 8 | 11.34 | 11.35 | 11.25 | 53.22 | 53.35 | 53.11 |
+| 128 | 12 | 15.8 | 15.84 | 15.73 | 75.1 | 75.42 | 74.81 |
+| 128 | 16 | 21.64 | 22.27 | 21.50 | 102.64 | 102.71 | 101.92 |
+| 128 | 24 | 30.11 | 30.16 | 29.88 | 148.52 | 148.76 | 147.72 |
+| 128 | 32 | 40.42 | 40.54 | 40.05 | 203.56 | 203.65 | 202.22 |
+| 128 | 64 | 78.77 | 79.01 | 78.04 | 392.26 | 393.11 | 389.84 |
+| 128 | 128 | 149.32 | 149.69 | 148.55 | 793.46 | 795.62 | 789.83 |
+| 384 | 1 | 6.1 | 6.12 | 6.06 | 21.92 | 21.98 | 21.88 |
+| 384 | 2 | 10.16 | 10.18 | 10.08 | 42.47 | 42.52 | 42.35 |
+| 384 | 4 | 18.91 | 19.54 | 18.76 | 82.64 | 83.03 | 82.25 |
+| 384 | 8 | 35.15 | 35.18 | 34.97 | 164.88 | 164.98 | 164.07 |
+| 384 | 12 | 50.31 | 50.36 | 50.04 | 245.53 | 245.85 | 244.50 |
+| 384 | 16 | 69.46 | 69.89 | 69.04 | 321.36 | 321.71 | 318.98 |
+| 384 | 24 | 97.63 | 97.91 | 97.26 | 485.11 | 485.37 | 482.41 |
+| 384 | 32 | 135.16 | 135.70 | 134.39 | 636.32 | 637.40 | 632.66 |
+| 384 | 64 | 269.98 | 271.40 | 268.63 | 1264.41 | 1265.69 | 1261.08 |
+| 384 | 128 | 513.71 | 514.38 | 511.80 | 2503.02 | 2505.81 | 2499.51 |
+

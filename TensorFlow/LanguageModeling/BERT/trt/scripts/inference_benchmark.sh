@@ -17,11 +17,11 @@ if [ ! -f ${ENGINE_NAME} ]; then
         scripts/download_model.sh "${MODEL_VARIANT}" "${PRECISION}" "${SEQUENCE_LENGTH}"
     fi;
 
-    echo "Building engine: python builder.py -m ${CHECKPOINTS_DIR}/model.ckpt-8144 -o ${ENGINE_NAME} ${BATCH_SIZES} -s ${SEQUENCE_LENGTH} --${PRECISION} -c ${CHECKPOINTS_DIR}"
-    python builder.py -m ${CHECKPOINTS_DIR}/model.ckpt-8144 -o ${ENGINE_NAME} ${BATCH_SIZES} -s ${SEQUENCE_LENGTH} --${PRECISION} -c ${CHECKPOINTS_DIR}
+    echo "Building engine: python3 builder.py -m ${CHECKPOINTS_DIR}/model.ckpt-8144 -o ${ENGINE_NAME} ${BATCH_SIZES} -s ${SEQUENCE_LENGTH} --${PRECISION} -c ${CHECKPOINTS_DIR}"
+    python3 builder.py -m ${CHECKPOINTS_DIR}/model.ckpt-8144 -o ${ENGINE_NAME} ${BATCH_SIZES} -s ${SEQUENCE_LENGTH} --${PRECISION} -c ${CHECKPOINTS_DIR}
 fi;
 
-python perf.py ${BATCH_SIZES} -s ${SEQUENCE_LENGTH} -e ${ENGINE_NAME}
+python3 perf.py ${BATCH_SIZES} -s ${SEQUENCE_LENGTH} -e ${ENGINE_NAME}
 echo
 }
 
