@@ -20,15 +20,15 @@ use_xla=${4:-"true"}
 seq_length=${5:-"384"}
 doc_stride=${6:-"128"}
 BERT_DIR=${7:-"data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16"}
-trtis_model_version=${8:-1}
-trtis_model_name=${9:-"bert"}
-trtis_dyn_batching_delay=${10:-0}
-trtis_engine_count=${11:-1}
-trtis_model_overwrite=${12:-"False"}
+triton_model_version=${8:-1}
+triton_model_name=${9:-"bert"}
+triton_dyn_batching_delay=${10:-0}
+triton_engine_count=${11:-1}
+triton_model_overwrite=${12:-"False"}
 
-additional_args="--trtis_model_version=$trtis_model_version --trtis_model_name=$trtis_model_name --trtis_max_batch_size=$batch_size \
-                 --trtis_model_overwrite=$trtis_model_overwrite --trtis_dyn_batching_delay=$trtis_dyn_batching_delay \
-                 --trtis_engine_count=$trtis_engine_count"
+additional_args="--triton_model_version=$triton_model_version --triton_model_name=$triton_model_name --triton_max_batch_size=$batch_size \
+                 --triton_model_overwrite=$triton_model_overwrite --triton_dyn_batching_delay=$triton_dyn_batching_delay \
+                 --triton_engine_count=$triton_engine_count"
 
 if [ "$precision" = "fp16" ] ; then
    echo "fp16 activated!"
@@ -51,7 +51,7 @@ bash scripts/docker/launch.sh \
        --doc_stride=${doc_stride} \
        --predict_batch_size=${batch_size} \
        --output_dir=/results \
-       --export_trtis=True \
+       --export_triton=True \
        ${additional_args}
 
 

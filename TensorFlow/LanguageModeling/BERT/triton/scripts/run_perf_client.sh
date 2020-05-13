@@ -23,21 +23,21 @@ MAX_CONCURRENCY=${7:-50}
 SERVER_HOSTNAME=${8:-"localhost"}
 
 if [[ $SERVER_HOSTNAME == *":"* ]]; then
-  echo "ERROR! Do not include the port when passing the Server Hostname. These scripts require that the TRTIS HTTP endpoint is on Port 8000 and the gRPC endpoint is on Port 8001. Exiting..."
+  echo "ERROR! Do not include the port when passing the Server Hostname. These scripts require that the TRITON HTTP endpoint is on Port 8000 and the gRPC endpoint is on Port 8001. Exiting..."
   exit 1
 fi
 
 if [ "$SERVER_HOSTNAME" = "localhost" ]
 then
-    if [ ! "$(docker inspect -f "{{.State.Running}}" trt_server_cont)" = "true" ] ; then
+    if [ ! "$(docker inspect -f "{{.State.Running}}" triton_server_cont)" = "true" ] ; then
 
-        echo "Launching TRTIS server"
-        bash trtis/scripts/launch_server.sh $precision
+        echo "Launching TRITON server"
+        bash triton/scripts/launch_server.sh $precision
         SERVER_LAUNCHED=true
 
         function cleanup_server {
-            echo "Killing TRTIS server"
-            docker kill trt_server_cont
+            echo "Killing TRITON server"
+            docker kill triton_server_cont
         }
 
         # Ensure we cleanup the server on exit
@@ -47,7 +47,7 @@ then
 fi
 
 # Wait until server is up. curl on the health of the server and sleep until its ready
-bash trtis/scripts/wait_for_trtis_server.sh $SERVER_HOSTNAME
+bash triton/scripts/wait_for_triton_server.sh $SERVER_HOSTNAME
 
 TIMESTAMP=$(date "+%y%m%d_%H%M")
 
