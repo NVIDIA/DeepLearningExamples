@@ -49,7 +49,7 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 
 ## Jupyter Notebooks
 
-|  Models | TensorFlow | PyTorch | TensorRT | TRTIS |  
+|  Models | TensorFlow | PyTorch | TensorRT | Triton |  
 | -------------               | ------------- | ------------- | ------------- | ------------- |
 |   SSD                       |   [ Inference](https://github.com/NVIDIA/DeepLearningExamples/blob/master/TensorFlow/Detection/SSD/models/research/object_detection/object_detection_tutorial.ipynb)  |   [ Inference](https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/Detection/SSD/examples/inference.ipynb)     |  -     |     -     |
 |   MaskRCNN                  |   -  |   [ Training & Inference](https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/Segmentation/MaskRCNN/pytorch/notebooks/pytorch_MaskRCNN_pyt_train_and_inference.ipynb)     |  -     |     -     |
@@ -62,7 +62,7 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 
 
 ## Feature Matrix
-| Models  | Framework | DALI | AMP | Multi-GPU | Multi-Node  | TensorRT  | ONNX  | TRTIS | TF-TRT |
+| Models  | Framework | DALI | AMP | Multi-GPU | Multi-Node  | TensorRT  | ONNX  | Triton | TF-TRT |
 | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- |------------- |------------- |------------- |------------- |
 | [ResNet50 v1.5](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets/resnet50v1.5)  |PyTorch  | Yes  | Yes  | Yes  | -  | -  | -  | -  | -  |
 | [ResNeXt101-32x4d](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets/resnext101-32x4d)  |PyTorch  | Yes  | Yes  | Yes  | -  | -  |   -  | -  | -  |

@@ -66,8 +66,8 @@ def main():
     engine_prec = "_fp16" if args.fp16 else "_fp32"
 
     # Encoder
-    shapes=[{"name": "sequences",        "min": (1,4), "opt": (1,128), "max": (4,256)},
-            {"name": "sequence_lengths", "min": (1,),  "opt": (1,),    "max": (4,)}]
+    shapes=[{"name": "sequences",        "min": (1,4), "opt": (1,128), "max": (1,256)},
+            {"name": "sequence_lengths", "min": (1,),  "opt": (1,),    "max": (1,)}]
     if args.encoder != "":
         print("Building Encoder ...")
         encoder_engine = build_engine(args.encoder, shapes=shapes, fp16=args.fp16)
@@ -79,17 +79,17 @@ def main():
             sys.exit()
 
     # DecoderIter
-    shapes=[{"name": "decoder_input",         "min": (1,80),    "opt": (1,80),      "max": (4,80)},
-            {"name": "attention_hidden",      "min": (1,1024),  "opt": (1,1024),    "max": (4,1024)},
-            {"name": "attention_cell",        "min": (1,1024),  "opt": (1,1024),    "max": (4,1024)},
-            {"name": "decoder_hidden",        "min": (1,1024),  "opt": (1,1024),    "max": (4,1024)},
-            {"name": "decoder_cell",          "min": (1,1024),  "opt": (1,1024),    "max": (4,1024)},
-            {"name": "attention_weights",     "min": (1,4),     "opt": (1,128),     "max": (4,256)},
-            {"name": "attention_weights_cum", "min": (1,4),     "opt": (1,128),     "max": (4,256)},
-            {"name": "attention_context",     "min": (1,512),   "opt": (1,512),     "max": (4,512)},
-            {"name": "memory",                "min": (1,4,512), "opt": (1,128,512), "max": (4,256,512)},
-            {"name": "processed_memory",      "min": (1,4,128), "opt": (1,128,128), "max": (4,256,128)},
-            {"name": "mask",                  "min": (1,4),     "opt": (1,128),     "max": (4,256)}]
+    shapes=[{"name": "decoder_input",         "min": (1,80),    "opt": (1,80),      "max": (1,80)},
+            {"name": "attention_hidden",      "min": (1,1024),  "opt": (1,1024),    "max": (1,1024)},
+            {"name": "attention_cell",        "min": (1,1024),  "opt": (1,1024),    "max": (1,1024)},
+            {"name": "decoder_hidden",        "min": (1,1024),  "opt": (1,1024),    "max": (1,1024)},
+            {"name": "decoder_cell",          "min": (1,1024),  "opt": (1,1024),    "max": (1,1024)},
+            {"name": "attention_weights",     "min": (1,4),     "opt": (1,128),     "max": (1,256)},
+            {"name": "attention_weights_cum", "min": (1,4),     "opt": (1,128),     "max": (1,256)},
+            {"name": "attention_context",     "min": (1,512),   "opt": (1,512),     "max": (1,512)},
+            {"name": "memory",                "min": (1,4,512), "opt": (1,128,512), "max": (1,256,512)},
+            {"name": "processed_memory",      "min": (1,4,128), "opt": (1,128,128), "max": (1,256,128)},
+            {"name": "mask",                  "min": (1,4),     "opt": (1,128),     "max": (1,256)}]
     if args.decoder != "":
         print("Building Decoder ...")
         decoder_iter_engine = build_engine(args.decoder, shapes=shapes, fp16=args.fp16)
@@ -101,7 +101,7 @@ def main():
             sys.exit()
 
     # Postnet
-    shapes=[{"name": "mel_outputs", "min": (1,80,32), "opt": (1,80,768), "max": (4,80,1664)}]
+    shapes=[{"name": "mel_outputs", "min": (1,80,32), "opt": (1,80,768), "max": (1,80,1664)}]
     if args.postnet != "":
         print("Building Postnet ...")
         postnet_engine = build_engine(args.postnet, shapes=shapes, fp16=args.fp16)

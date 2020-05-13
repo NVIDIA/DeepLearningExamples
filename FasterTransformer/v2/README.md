@@ -125,7 +125,9 @@ The following section lists the requirements in order to use FasterTransformer.
 - CUDA 10.1
 - Python 2.7
 - Tensorflow 1.14
-These components are readily available within the NGC TensorFlow Docker image below.
+- TensorRT 5.1.5.0
+
+These components are readily available within the NGC TensorFlow Docker image below, except TensorRT.
 
 Ensure you have the following components:
 - [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
@@ -169,17 +171,21 @@ cd build
 cmake -DSM=xx -DCMAKE_BUILD_TYPE=Release .. # C++ only
 cmake -DSM=xx -DCMAKE_BUILD_TYPE=Debug .. # C++ debug only
 cmake -DSM=xx -DCMAKE_BUILD_TYPE=Release -DBUILD_TF=ON -DTF_PATH=/usr/local/lib/python2.7/dist-packages/tensorflow .. # Tensorflow mode
+cmake -DSM=xx -DCMAKE_BUILD_TYPE=Release -DBUILD_TRT=ON -DTRT_PATH=/usr/include/x86_64-linux-gnu .. # TensorRT mode
+cmake -DSM=xx -DCMAKE_BUILD_TYPE=Release -DBUILD_TRT=ON -DTRT_PATH=<TensorRT_dir> .. # TensorRT mode if you put TensorRT in <TensorRT_dir>
 make
 ```
 
 Note: `xx` is the compute capability of your GPU. For example, 60 (P40) or 61 (P4) or 70 (V100) or 75(T4).
+
+Note: If you use the image we recommand, then the tensorrt related libraries are in the `/usr/include/x86_64-linux-gnu`. 
 
 ### Execute the encoder demos
 
 1. Generate the `gemm_config.in` file. 
 
 ```bash
- ./bin/encoder_gemm <batch_size> <sequence_length> <head_number> <size_per_head> <is_use_fp16>
+./bin/encoder_gemm <batch_size> <sequence_length> <head_number> <size_per_head> <is_use_fp16>
 ./bin/encoder_gemm 1 32 12 64 0
 ``` 
 
@@ -221,6 +227,15 @@ python encoder_sample.py \
         --data_type fp16 \
         --test_time 1
 ```
+
+d. Run the encoder in TensorRT by tensorrt sample.
+
+```bash
+./bin/encoder_gemm 1 32 12 64 0
+./bin/transformer_trt <batch_size> <num_layerse> <seq_len> <head_num> <size_per_head> fp16(fp32)
+./bin/transformer_trt 1 12 32 12 64 fp32
+```
+
 3. Run the FasterTransformer in BERT.
 
 The following script demonstrates how to integrate the FasterTransformer into a BERT model. This requires the repo of [BERT](https://github.com/google-research/bert).
@@ -427,6 +442,7 @@ The `sample/` folder contains useful sample codes for FasterTransformer:
 * `sample/tensorflow/encoder_decoder_sample.py` - TensorFlow `encoder_decoder` sample codes 
 * `sample/tensorflow/encoder_decoding_sample.py` - TensorFlow `encoder_decoding` sample codes 
 * `sample/tensorflow/translate_sample.py` - TensorFlow translation sample codes
+* `sample/tensorRT/transformer_trt.cc` - Transformer layer tensorRT sample codes
 
 ### Command-line options
 
@@ -852,6 +868,9 @@ bash scripts/profile_decoding_op_performance.sh
 ## Release notes
 
 ### Changelog
+
+April 2020
+- Fix the bug of encoder tensorrt plugin.
 
 March 2020
 - Add feature in FasterTransformer 2.0

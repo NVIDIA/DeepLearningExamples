@@ -20,6 +20,7 @@ import collections
 import numpy as np
 import six
 import math
+import json
 
 
 def convert_doc_tokens(paragraph_text):
@@ -82,7 +83,7 @@ def _check_is_max_context(doc_spans, cur_span_index, position):
     return cur_span_index == best_span_index
 
 
-def convert_examples_to_features(doc_tokens, question_text, tokenizer, max_seq_length,
+def convert_example_to_features(doc_tokens, question_text, tokenizer, max_seq_length,
                                  doc_stride, max_query_length):
     """Loads a data file into a list of `InputBatch`s."""
 
@@ -120,6 +121,12 @@ def convert_examples_to_features(doc_tokens, question_text, tokenizer, max_seq_l
             break
         start_offset += min(length, doc_stride)
 
+    _Feature = collections.namedtuple(  # pylint: disable=invalid-name
+            "Feature",
+            ["input_ids", "input_mask", "segment_ids", "tokens", "token_to_orig_map", "token_is_max_context"])
+
+        
+    features = []
     for (doc_span_index, doc_span) in enumerate(doc_spans):
         tokens = []
         token_to_orig_map = {}
@@ -144,34 +151,61 @@ def convert_examples_to_features(doc_tokens, question_text, tokenizer, max_seq_l
         tokens.append("[SEP]")
         segment_ids.append(1)
 
-    input_ids = tokenizer.convert_tokens_to_ids(tokens)
+        input_ids = tokenizer.convert_tokens_to_ids(tokens)
 
-    # The mask has 1 for real tokens and 0 for padding tokens. Only real
-    # tokens are attended to.
-    input_mask = [1] * len(input_ids)
+        # The mask has 1 for real tokens and 0 for padding tokens. Only real
+        # tokens are attended to.
+        input_mask = [1] * len(input_ids)
 
-    # Zero-pad up to the sequence length.
-    while len(input_ids) < max_seq_length:
-        input_ids.append(0)
-        input_mask.append(0)
-        segment_ids.append(0)
+        # Zero-pad up to the sequence length.
+        while len(input_ids) < max_seq_length:
+            input_ids.append(0)
+            input_mask.append(0)
+            segment_ids.append(0)
 
-    assert len(input_ids) == max_seq_length
-    assert len(input_mask) == max_seq_length
-    assert len(segment_ids) == max_seq_length
+        assert len(input_ids) == max_seq_length
+        assert len(input_mask) == max_seq_length
+        assert len(segment_ids) == max_seq_length
 
-    def create_int_feature(values):
-        feature = np.asarray(values, dtype=np.int32, order=None)
-        return feature
+        def create_int_feature(values):
+            feature = np.asarray(values, dtype=np.int32, order=None)
+            return feature
 
-    features = collections.OrderedDict()
-    features["input_ids"] = create_int_feature(input_ids)
-    features["input_mask"] = create_int_feature(input_mask)
-    features["segment_ids"] = create_int_feature(segment_ids)
-    features["tokens"] = tokens
-    features["token_to_orig_map"] = token_to_orig_map
-    features["token_is_max_context"] = token_is_max_context
+
+        features.append(_Feature(
+            input_ids = create_int_feature(input_ids),
+            input_mask = create_int_feature(input_mask),
+            segment_ids = create_int_feature(segment_ids),
+            tokens = tokens,
+            token_to_orig_map = token_to_orig_map,
+            token_is_max_context = token_is_max_context
+            ))
     return features
+
+
+def read_squad_json(input_file):
+    """read from squad json into a list of examples"""
+    with open(input_file, "r", encoding='utf-8') as reader:
+        input_data = json.load(reader)["data"]
+
+    _Example = collections.namedtuple(  # pylint: disable=invalid-name
+            "Example",
+            ["id", "question_text", "doc_tokens"])
+
+    examples = []
+    for entry in input_data:
+        for paragraph in entry["paragraphs"]:
+            paragraph_text = paragraph["context"]
+            doc_tokens = convert_doc_tokens(paragraph_text)
+
+            for qa in paragraph["qas"]:
+                examples.append(_Example(
+                    id = qa["id"],
+                    question_text = qa["question"],
+                    doc_tokens = doc_tokens
+                    ))
+
+    return examples
 
 
 def _get_best_indexes(logits, n_best_size):
@@ -296,7 +330,7 @@ def _compute_softmax(scores):
     return probs
 
 
-def get_predictions(doc_tokens, features, start_logits, end_logits, n_best_size, max_answer_length):
+def get_predictions(doc_tokens, features, results, n_best_size, max_answer_length, version_2_with_negative = False):
     _PrelimPrediction = collections.namedtuple(  # pylint: disable=invalid-name
         "PrelimPrediction",
         ["feature_index", "start_index", "end_index", "start_logit", "end_logit"])
@@ -307,55 +341,54 @@ def get_predictions(doc_tokens, features, start_logits, end_logits, n_best_size,
     prelim_predictions = []
     # keep track of the minimum score of null start+end of position 0
     score_null = 1000000  # large and positive
-    min_null_feature_index = 0  # the paragraph slice with min mull score
     null_start_logit = 0  # the start logit at the slice with min null score
     null_end_logit = 0  # the end logit at the slice with min null score
+    
+    for result in results:
+        start_indexes = _get_best_indexes(result.start_logits, n_best_size)
+        end_indexes = _get_best_indexes(result.end_logits, n_best_size)
+        feature = features[result.feature_index]
 
-    start_indexes = _get_best_indexes(start_logits, n_best_size)
-    end_indexes = _get_best_indexes(end_logits, n_best_size)
+        # if we could have irrelevant answers, get the min score of irrelevant
+        if version_2_with_negative:
+            feature_null_score = result.start_logits[0] + result.end_logits[0]
+            if feature_null_score < score_null:
+                score_null = feature_null_score
+                null_start_logit = result.start_logits[0]
+                null_end_logit = result.end_logits[0]
 
-    # if we could have irrelevant answers, get the min score of irrelevant
-    version_2_with_negative = True
-    if version_2_with_negative:
-        feature_null_score = start_logits[0] + end_logits[0]
-        if feature_null_score < score_null:
-            score_null = feature_null_score
-            min_null_feature_index = 0
-            null_start_logit = start_logits[0]
-            null_end_logit = end_logits[0]
-
-    for start_index in start_indexes:
-        for end_index in end_indexes:
-            # We could hypothetically create invalid predictions, e.g., predict
-            # that the start of the span is in the question. We throw out all
-            # invalid predictions.
-            if start_index >= len(features['tokens']):
-                continue
-            if end_index >= len(features['tokens']):
-                continue
-            if start_index not in features['token_to_orig_map']:
-                continue
-            if end_index not in features['token_to_orig_map']:
-                continue
-            if not features['token_is_max_context'].get(start_index, False):
-                continue
-            if end_index < start_index:
-                continue
-            length = end_index - start_index + 1
-            if length > max_answer_length:
-                continue
-            prelim_predictions.append(
-                _PrelimPrediction(
-                    feature_index=0,
-                    start_index=start_index,
-                    end_index=end_index,
-                    start_logit=start_logits[start_index],
-                    end_logit=end_logits[end_index]))
+        for start_index in start_indexes:
+            for end_index in end_indexes:
+                # We could hypothetically create invalid predictions, e.g., predict
+                # that the start of the span is in the question. We throw out all
+                # invalid predictions.
+                if start_index >= len(feature.tokens):
+                    continue
+                if end_index >= len(feature.tokens):
+                    continue
+                if start_index not in feature.token_to_orig_map:
+                    continue
+                if end_index not in feature.token_to_orig_map:
+                    continue
+                if not feature.token_is_max_context.get(start_index, False):
+                    continue
+                if end_index < start_index:
+                    continue
+                length = end_index - start_index + 1
+                if length > max_answer_length:
+                    continue
+                prelim_predictions.append(
+                    _PrelimPrediction(
+                        feature_index=result.feature_index,
+                        start_index=start_index,
+                        end_index=end_index,
+                        start_logit=result.start_logits[start_index],
+                        end_logit=result.end_logits[end_index]))
 
     if version_2_with_negative:
         prelim_predictions.append(
             _PrelimPrediction(
-                feature_index=min_null_feature_index,
+                feature_index=result.feature_index,
                 start_index=0,
                 end_index=0,
                 start_logit=null_start_logit,
@@ -376,9 +409,10 @@ def get_predictions(doc_tokens, features, start_logits, end_logits, n_best_size,
             break
 
         if pred.start_index > 0:  # this is a non-null prediction
-            tok_tokens = features['tokens'][pred.start_index:(pred.end_index + 1)]
-            orig_doc_start = features['token_to_orig_map'][pred.start_index]
-            orig_doc_end = features['token_to_orig_map'][pred.end_index]
+            feature = features[pred.feature_index]
+            tok_tokens = feature.tokens[pred.start_index:(pred.end_index + 1)]
+            orig_doc_start = feature.token_to_orig_map[pred.start_index]
+            orig_doc_end = feature.token_to_orig_map[pred.end_index]
             orig_tokens = doc_tokens[orig_doc_start:(orig_doc_end + 1)]
             tok_text = " ".join(tok_tokens)
 
@@ -400,11 +434,12 @@ def get_predictions(doc_tokens, features, start_logits, end_logits, n_best_size,
             final_text = ""
             seen_predictions[final_text] = True
 
-        nbest.append(
-            _NbestPrediction(
-                text=final_text,
-                start_logit=pred.start_logit,
-                end_logit=pred.end_logit))
+        if len(final_text):
+            nbest.append(
+                _NbestPrediction(
+                    text=final_text,
+                    start_logit=pred.start_logit,
+                    end_logit=pred.end_logit))
 
     # if we didn't inlude the empty option in the n-best, inlcude it
     if version_2_with_negative:

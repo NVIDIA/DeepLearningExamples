@@ -32,8 +32,8 @@ def partial_losses(predict, target):
     flat_labels = tf.reshape(target,
                              [tf.shape(input=predict)[0], -1, n_classes])
 
-    crossentropy_loss = tf.reduce_mean(input_tensor=tf.nn.softmax_cross_entropy_with_logits(logits=flat_logits,
-                                                                                            labels=flat_labels),
+    crossentropy_loss = tf.reduce_mean(input_tensor=tf.keras.backend.binary_crossentropy(output=flat_logits,
+                                                                                         target=flat_labels),
                                        name='cross_loss_ref')
     dice_loss = tf.reduce_mean(input_tensor=1 - dice_coef(flat_logits, flat_labels), name='dice_loss_ref')
     return crossentropy_loss, dice_loss

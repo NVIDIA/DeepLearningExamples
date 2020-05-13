@@ -14,8 +14,10 @@
 # limitations under the License.
 
 import time
+import json
 import ctypes
 import argparse
+import collections
 import numpy as np
 import tensorrt as trt
 import pycuda.driver as cuda
@@ -45,6 +47,12 @@ def parse_args():
     parser.add_argument('-qf', '--question-file',
             help='File containiner input question',
             default='')
+    parser.add_argument('-sq', '--squad-json',
+            help='SQuAD json file',
+            default='')
+    parser.add_argument('-o', '--output-prediction-file',
+            help='Output prediction file for SQuAD evaluation',
+            default='./predictions.json')
     parser.add_argument('-v', '--vocab-file',
             help='Path to file containing entire understandable vocab')
     parser.add_argument('-s', '--sequence-length',
@@ -65,11 +73,18 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
 
+    paragraph_text = None
+    squad_examples = None
+    output_prediction_file = None
+
     if not args.passage == '':
         paragraph_text = ' '.join(args.passage)
     elif not args.passage_file == '':
         f = open(args.passage_file, 'r')
         paragraph_text = f.read()
+    elif not args.squad_json == '':
+        squad_examples = dp.read_squad_json(args.squad_json)
+        output_prediction_file = args.output_prediction_file
     else:
         paragraph_text = input("Paragraph: ")
 
@@ -80,20 +95,16 @@ if __name__ == '__main__':
         f = open(args.question_file, 'r')
         question_text = f.read()
 
-    print("\nPassage: {}".format(paragraph_text))
-
     tokenizer = tokenization.FullTokenizer(vocab_file=args.vocab_file, do_lower_case=True)
     # When splitting up a long document into chunks, how much stride to take between chunks.
     doc_stride = 128
     # The maximum total input sequence length after WordPiece tokenization.
     # Sequences longer than this will be truncated, and sequences shorter
     max_seq_length = args.sequence_length
-    # Extract tokecs from the paragraph
-    doc_tokens = dp.convert_doc_tokens(paragraph_text)
 
-    def question_features(question):
+    def question_features(tokens, question):
         # Extract features from the paragraph and question
-        return dp.convert_examples_to_features(doc_tokens, question, tokenizer, max_seq_length, doc_stride, args.max_query_length)
+        return dp.convert_example_to_features(tokens, question, tokenizer, max_seq_length, doc_stride, args.max_query_length)
 
     # Import necessary plugins for BERT TensorRT
     ctypes.CDLL("libnvinfer_plugin.so", mode=ctypes.RTLD_GLOBAL)
@@ -107,65 +118,105 @@ if __name__ == '__main__':
         input_shape = (max_seq_length, 1)
         input_nbytes = trt.volume(input_shape) * trt.int32.itemsize
 
-        # Allocate device memory for inputs.
-        d_inputs = [cuda.mem_alloc(input_nbytes) for binding in range(3)]
-        # Create a stream in which to copy inputs/outputs and run inference.
-        stream = cuda.Stream()
-
         # Specify input shapes. These must be within the min/max bounds of the active profile (0th profile in this case)
         # Note that input shapes can be specified on a per-inference basis, but in this case, we only have a single shape.
         for binding in range(3):
             context.set_binding_shape(binding, input_shape)
         assert context.all_binding_shapes_specified
 
+        # Create a stream in which to copy inputs/outputs and run inference.
+        stream = cuda.Stream()
+
+        # Allocate device memory for inputs.
+        d_inputs = [cuda.mem_alloc(input_nbytes) for binding in range(3)]
+
         # Allocate output buffer by querying the size from the context. This may be different for different input shapes.
         h_output = cuda.pagelocked_empty(tuple(context.get_binding_shape(3)), dtype=np.float32)
         d_output = cuda.mem_alloc(h_output.nbytes)
 
-        def inference(features):
+        def inference(features, tokens):
             global h_output
-            print("\nRunning Inference...")
-            eval_start_time = time.time()
 
-            # Copy inputs
-            cuda.memcpy_htod_async(d_inputs[0], features["input_ids"], stream)
-            cuda.memcpy_htod_async(d_inputs[1], features["segment_ids"], stream)
-            cuda.memcpy_htod_async(d_inputs[2], features["input_mask"], stream)
-            # Run inference
-            context.execute_async_v2(bindings=[int(d_inp) for d_inp in d_inputs] + [int(d_output)], stream_handle=stream.handle)
-            # Transfer predictions back from GPU
-            cuda.memcpy_dtoh_async(h_output, d_output, stream)
-            # Synchronize the stream
-            stream.synchronize()
+            _NetworkOutput = collections.namedtuple(  # pylint: disable=invalid-name
+                    "NetworkOutput",
+                    ["start_logits", "end_logits", "feature_index"])
+            networkOutputs = []
 
-            h_output = h_output.transpose((1,0,2,3,4))
-            eval_time_elapsed = time.time() - eval_start_time
+            eval_time_elapsed = 0
+            for feature_index, feature in enumerate(features):
+                # Copy inputs
+                input_ids = cuda.register_host_memory(np.ascontiguousarray(feature.input_ids.ravel()))
+                segment_ids = cuda.register_host_memory(np.ascontiguousarray(feature.segment_ids.ravel()))
+                input_mask = cuda.register_host_memory(np.ascontiguousarray(feature.input_mask.ravel()))
 
+                eval_start_time = time.time()
+                cuda.memcpy_htod_async(d_inputs[0], input_ids, stream)
+                cuda.memcpy_htod_async(d_inputs[1], segment_ids, stream)
+                cuda.memcpy_htod_async(d_inputs[2], input_mask, stream)
+
+                # Run inference
+                context.execute_async_v2(bindings=[int(d_inp) for d_inp in d_inputs] + [int(d_output)], stream_handle=stream.handle)
+                # Synchronize the stream
+                stream.synchronize()
+                eval_time_elapsed += (time.time() - eval_start_time)
+
+                # Transfer predictions back from GPU
+                cuda.memcpy_dtoh_async(h_output, d_output, stream)
+                stream.synchronize()
+
+                for index, batch in enumerate(h_output):
+                    # Data Post-processing
+                    networkOutputs.append(_NetworkOutput(
+                        start_logits = np.array(batch.squeeze()[:, 0]),
+                        end_logits = np.array(batch.squeeze()[:, 1]),
+                        feature_index = feature_index
+                        ))
+
+            eval_time_elapsed /= len(features)
+
+            prediction, nbest_json, scores_diff_json = dp.get_predictions(tokens, features,
+                    networkOutputs, args.n_best_size, args.max_answer_length)
+
+            return eval_time_elapsed, prediction, nbest_json
+
+        def print_single_query(eval_time_elapsed, prediction, nbest_json):
             print("------------------------")
             print("Running inference in {:.3f} Sentences/Sec".format(1.0/eval_time_elapsed))
             print("------------------------")
 
-            for index, batch in enumerate(h_output):
-                # Data Post-processing
-                start_logits = batch[:, 0]
-                end_logits = batch[:, 1]
+            print("Answer: '{}'".format(prediction))
+            print("With probability: {:.3f}".format(nbest_json[0]['probability'] * 100.0))
 
-                prediction, nbest_json, scores_diff_json = dp.get_predictions(doc_tokens, features,
-                        start_logits, end_logits, args.n_best_size, args.max_answer_length)
+        if squad_examples:
+            all_predictions = collections.OrderedDict()
 
-                print("Processing output {:} in batch".format(index))
-                print("Answer: '{}'".format(prediction))
-                print("With probability: {:.3f}%".format(nbest_json[0]['probability'] * 100.0))
+            for example in squad_examples:
+                features = question_features(example.doc_tokens, example.question_text)
+                eval_time_elapsed, prediction, nbest_json = inference(features, example.doc_tokens)
+                all_predictions[example.id] = prediction
 
-        if question_text:
-            print("\nQuestion: {}".format(question_text))
-            features = question_features(question_text)
-            inference(features)
+            with open(output_prediction_file, "w") as f:
+                f.write(json.dumps(all_predictions, indent=4))
+                print("\nOutput dump to {}".format(output_prediction_file))
         else:
-            # If no question text is provided, loop until the question is 'exit'
-            EXIT_CMDS = ["exit", "quit"]
-            question_text = input("Question (to exit, type one of {:}): ".format(EXIT_CMDS))
-            while question_text.strip() not in EXIT_CMDS:
-                features = question_features(question_text)
-                inference(features)
+            # Extract tokecs from the paragraph
+            doc_tokens = dp.convert_doc_tokens(paragraph_text)
+
+            if question_text:
+                print("\nPassage: {}".format(paragraph_text))
+                print("\nQuestion: {}".format(question_text))
+
+                features = question_features(doc_tokens, question_text)
+                eval_time_elapsed, prediction, nbest_json = inference(features, doc_tokens)
+                print_single_query(eval_time_elapsed, prediction, nbest_json)
+
+            else:
+                # If no question text is provided, loop until the question is 'exit'
+                EXIT_CMDS = ["exit", "quit"]
                 question_text = input("Question (to exit, type one of {:}): ".format(EXIT_CMDS))
+
+                while question_text.strip() not in EXIT_CMDS:
+                    features = question_features(doc_tokens, question_text)
+                    eval_time_elapsed, prediction, nbest_json = inference(features, doc_tokens)
+                    print_single_query(eval_time_elapsed, prediction, nbest_json)
+                    question_text = input("Question (to exit, type one of {:}): ".format(EXIT_CMDS))

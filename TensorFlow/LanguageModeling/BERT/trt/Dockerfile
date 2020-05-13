@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvcr.io/nvidia/tensorrt:19.12-py3
+FROM nvcr.io/nvidia/tensorrt:20.02-py3
 
 LABEL maintainer="NVIDIA CORPORATION"
 
@@ -40,7 +40,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sudo \
     pbzip2 \
     pv \
-    bzip2
+    bzip2 \
+    unzip
 
 # Install Cmake
 RUN cd /tmp && \
@@ -54,11 +55,11 @@ RUN cd /usr/local/bin && wget https://ngc.nvidia.com/downloads/ngccli_bat_linux.
 
 # Install required Python packages
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install -r /tmp/requirements.txt
+RUN python3 -m pip install -r /tmp/requirements.txt
 
 # Build with extra flags to enable plugins available on SM 70/75
-RUN git clone https://github.com/NVIDIA/TensorRT.git --recursive && cd TensorRT
-RUN cd TensorRT && git checkout 77af534c21b7e1bfa322ccbab028477be4c56eb3 && git submodule update --init --recursive && mkdir build && cd build && cmake .. -DCMAKE_CUDA_FLAGS="--expt-relaxed-constexpr --expt-extended-lambda -gencode arch=compute_70,code=sm_70 -gencode arch=compute_75,code=sm_75" && make -j nvinfer_plugin
+RUN git clone https://github.com/NVIDIA/TensorRT.git
+RUN cd TensorRT && git checkout 9b2d78a87e3d45eca22b6bfcb6e10777b932ef43 && git submodule update --init --recursive && mkdir build && cd build && cmake .. -DGPU_ARCHS="70 75" -DBUILD_PARSERS=OFF && make -j nvinfer_plugin
 # Replace the default plugin library with the open-source plugins
 RUN cp TensorRT/build/libnvinfer_plugin.so* /usr/lib/x86_64-linux-gnu/
 

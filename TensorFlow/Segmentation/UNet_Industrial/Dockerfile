@@ -16,11 +16,15 @@
 #
 # ==============================================================================
 
-FROM nvcr.io/nvidia/tensorflow:19.05-py3
+FROM nvcr.io/nvidia/tensorflow:20.01-tf1-py3
 
 LABEL version="1.0" maintainer="Jonathan DEKHTIAR <jonathan.dekhtiar@nvidia.com>"
 
+WORKDIR /opt
+COPY requirements.txt /opt/requirements_unet_tf_industrial.txt
+
+RUN python -m pip --no-cache-dir --no-cache install --upgrade pip && \
+    pip --no-cache-dir --no-cache install -r /opt/requirements_unet_tf_industrial.txt
+
 ADD . /workspace/unet_industrial
 WORKDIR /workspace/unet_industrial
-
-RUN pip install dllogger/

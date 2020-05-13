@@ -16,6 +16,7 @@
 
 
 # Setup default parameters (if no command-line parameters given)
+VERSION='v2'
 MODEL='large'
 FT_PRECISION='fp16'
 SEQ_LEN='128'
@@ -27,7 +28,7 @@ TENSORRT_DIR=${SCRIPT_DIR}/../../../
 while test $# -gt 0
 do
     case "$1" in
-        -h) echo "Usage: sh download_model.sh [base|large] [fp16|fp32] [128|384]"
+        -h) echo "Usage: sh download_model.sh [base|large] [fp16|fp32] [128|384] [v2|v1_1]"
             exit 0
             ;;
         base) MODEL='base'
@@ -42,6 +43,10 @@ do
             ;;
         384) SEQ_LEN='384'
             ;;
+        v2) VERSION='v2'
+            ;;
+        v1_1) VERSION='v1_1'
+            ;;
         *) echo "Invalid argument $1...exiting"
             exit 0
             ;;
@@ -53,4 +58,4 @@ done
 echo "Downloading BERT-${MODEL} with fine-tuned precision ${FT_PRECISION} and sequence length ${SEQ_LEN} from NGC"
 mkdir -p /workspace/bert/models/fine-tuned
 cd /workspace/bert/models/fine-tuned
-ngc registry model download-version nvidia/bert_tf_v2_${MODEL}_${FT_PRECISION}_${SEQ_LEN}:2
+ngc registry model download-version nvidia/bert_tf_${VERSION}_${MODEL}_${FT_PRECISION}_${SEQ_LEN}:2

@@ -231,7 +231,7 @@ and encapsulates some dependencies. Aside from these dependencies, ensure you
 have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 20.01-py3+ NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
+* [PyTorch 20.03-py3+ NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
 or newer
 * [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
 
@@ -320,18 +320,30 @@ Ensure your loss values are comparable to those listed in the table in the
 7. Start inference.
 After you have trained the Tacotron 2 and WaveGlow models, you can perform
 inference using the respective checkpoints that are passed as `--tacotron2`
-and `--waveglow` arguments.
+and `--waveglow` arguments. Tacotron2 and WaveGlow checkpoints can also be downloaded from NGC:
+
+   https://ngc.nvidia.com/catalog/models/nvidia:tacotron2pyt_fp16/files?version=3
+   
+   https://ngc.nvidia.com/catalog/models/nvidia:waveglow256pyt_fp16/files?version=2
 
    To run inference issue:
 
    ```bash
-   python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ -i phrases/phrase.txt --amp-run
+   python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> --wn-channels 256 -o output/ -i phrases/phrase.txt --amp-run
    ```
 
    The speech is generated from lines of text in the file that is passed with
    `-i` argument. The number of lines determines inference batch size. To run
    inference in mixed precision, use the `--amp-run` flag. The output audio will
    be stored in the path specified by the `-o` argument.
+
+   You can also run inference on CPU with TorchScript by adding flag --cpu-run:
+   ```bash
+   export CUDA_VISIBLE_DEVICES=
+   ```
+   ```bash
+   python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> --wn-channels 256 --cpu-run -o output/ -i phrases/phrase.txt
+   ```    
 
 ## Advanced
 
@@ -372,6 +384,7 @@ WaveGlow models.
 * `--learning-rate` - learning rate (Tacotron 2: 1e-3, WaveGlow: 1e-4)
 * `--batch-size` - batch size (Tacotron 2 FP16/FP32: 104/48, WaveGlow FP16/FP32: 10/4)
 * `--amp-run` - use mixed precision training
+* `--cpu-run` - use CPU with TorchScript for inference
 
 #### Shared audio/STFT parameters
 
@@ -469,7 +482,7 @@ models and input text as a text file, with one phrase per line.
 
 To run inference, issue:
 ```bash
-python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --include-warmup -i phrases/phrase.txt --amp-run
+python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> --wn-channels 256 -o output/ --include-warmup -i phrases/phrase.txt --amp-run
 ```
 Here, `Tacotron2_checkpoint` and `WaveGlow_checkpoint` are pre-trained
 checkpoints for the respective models, and `phrases/phrase.txt` contains input 
@@ -479,6 +492,14 @@ and [audio_fp32](./audio/audio_fp32.wav) were generated using checkpoints from
 mixed precision and FP32 training, respectively.
 
 You can find all the available options by calling `python inference.py --help`.
+
+You can also run inference on CPU with TorchScript by adding flag --cpu-run:
+```bash
+export CUDA_VISIBLE_DEVICES=
+```
+```bash
+python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> --wn-channels 256 --cpu-run -o output/ -i phrases/phrase.txt
+```    
 
 ## Performance
 
@@ -556,6 +577,7 @@ The output log files will contain performance numbers for Tacotron 2 model
 (number of output mel-spectrograms per second, reported as `tacotron2_items_per_sec`)
 and for WaveGlow (number of output samples per second, reported as `waveglow_items_per_sec`).
 The `inference.py` script will run a few warmup iterations before running the benchmark.
+
 
 ### Results
 
@@ -671,6 +693,10 @@ Our results were obtained by running the `./run_latency_tests.sh` script in
 the PyTorch-19.09-py3 NGC container. Please note that to reproduce the results,
 you need to provide pretrained checkpoints for Tacotron 2 and WaveGlow. Please
 edit the script to provide your checkpoint filenames.
+
+
+To compare with inference performance on CPU with TorchScript, benchmark inference on CPU using `./run_latency_tests_cpu.sh` script and get the performance numbers for batch size 1 and 4. Intel's optimization for PyTorch on CPU are added, you need to set "export OMP_NUM_THREADS=num physical cores" based on your CPU's core number, for your reference: https://software.intel.com/content/www/us/en/develop/articles/maximize-tensorflow-performance-on-cpu-considerations-and-recommendations-for-inference.html
+
 
 ## Release notes
 

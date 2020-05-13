@@ -130,28 +130,30 @@ def init_decoder_outputs(memory, memory_lengths):
 def init_decoder_tensors(decoder_inputs, decoder_outputs):
 
     decoder_tensors = {
-        # inputs
-        'decoder_input': decoder_inputs[0],
-        'attention_hidden': decoder_inputs[1],
-        'attention_cell': decoder_inputs[2],
-        'decoder_hidden': decoder_inputs[3],
-        'decoder_cell': decoder_inputs[4],
-        'attention_weights': decoder_inputs[5],
-        'attention_weights_cum': decoder_inputs[6],
-        'attention_context': decoder_inputs[7],
-        'memory': decoder_inputs[8],
-        'processed_memory': decoder_inputs[9],
-        'mask': decoder_inputs[10],
-        # outputs
-        'out_attention_hidden': decoder_outputs[0],
-        'out_attention_cell': decoder_outputs[1],
-        'out_decoder_hidden': decoder_outputs[2],
-        'out_decoder_cell': decoder_outputs[3],
-        'out_attention_weights': decoder_outputs[4],
-        'out_attention_weights_cum': decoder_outputs[5],
-        'out_attention_context': decoder_outputs[6],
-        'decoder_output': decoder_outputs[7],
-        'gate_prediction': decoder_outputs[8],
+        "inputs" : {
+            'decoder_input': decoder_inputs[0],
+            'attention_hidden': decoder_inputs[1],
+            'attention_cell': decoder_inputs[2],
+            'decoder_hidden': decoder_inputs[3],
+            'decoder_cell': decoder_inputs[4],
+            'attention_weights': decoder_inputs[5],
+            'attention_weights_cum': decoder_inputs[6],
+            'attention_context': decoder_inputs[7],
+            'memory': decoder_inputs[8],
+            'processed_memory': decoder_inputs[9],
+            'mask': decoder_inputs[10]
+        },
+        "outputs" : {
+            'out_attention_hidden': decoder_outputs[0],
+            'out_attention_cell': decoder_outputs[1],
+            'out_decoder_hidden': decoder_outputs[2],
+            'out_decoder_cell': decoder_outputs[3],
+            'out_attention_weights': decoder_outputs[4],
+            'out_attention_weights_cum': decoder_outputs[5],
+            'out_attention_context': decoder_outputs[6],
+            'decoder_output': decoder_outputs[7],
+            'gate_prediction': decoder_outputs[8]
+        }
     }
     return decoder_tensors
 
@@ -196,10 +198,10 @@ def infer_tacotron2_trt(encoder, decoder_iter, postnet,
     lens = torch.zeros_like(sequence_lengths)
 
     encoder_tensors = {
-        # inputs
-        'sequences': sequences, 'sequence_lengths': sequence_lengths,
-        # outputs
-        'memory': memory, 'lens': lens, 'processed_memory': processed_memory
+        "inputs" :
+        {'sequences': sequences, 'sequence_lengths': sequence_lengths},
+        "outputs" :
+        {'memory': memory, 'lens': lens, 'processed_memory': processed_memory}
     }
 
     print("Running Tacotron2 Encoder")
@@ -252,10 +254,10 @@ def infer_tacotron2_trt(encoder, decoder_iter, postnet,
     mel_outputs_postnet = torch.zeros_like(mel_outputs, device=device, dtype=dtype)
 
     postnet_tensors = {
-        # inputs
-        'mel_outputs': mel_outputs,
-        # outputs
-        'mel_outputs_postnet': mel_outputs_postnet
+        "inputs" :
+        {'mel_outputs': mel_outputs},
+        "outputs" :
+        {'mel_outputs_postnet': mel_outputs_postnet}
     }
     print("Running Tacotron2 Postnet")
     with MeasureTime(measurements, "tacotron2_postnet_time"):
@@ -284,10 +286,10 @@ def infer_waveglow_trt(waveglow, waveglow_context, mel, measurements, fp16):
         audios = audios.half()
 
     waveglow_tensors = {
-        # inputs
-        'mel': mel, 'z': z,
-        # outputs
-        'audio': audios
+        "inputs" :
+        {'mel': mel, 'z': z},
+        "outputs" :
+        {'audio': audios}
     }
     print("Running WaveGlow")
     with MeasureTime(measurements, "waveglow_time"):
