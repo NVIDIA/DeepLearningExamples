@@ -130,7 +130,6 @@ void run_bert_transformer(int batch_size, int seq_len, int layers, int head_num,
 
   TRT_Transformer<T>* trt_transformer = new TRT_Transformer<T>(batch_size, seq_len, head_num, hidden_dim, layers);
   trt_transformer->build_engine(params);
-
   trt_transformer->do_inference(batch_size, h_from_tensor, h_attr_mask, h_transformer_out, stream);
 
   delete trt_transformer;
