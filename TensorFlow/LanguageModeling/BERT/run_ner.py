@@ -618,8 +618,6 @@ def main(_):
 
     if FLAGS.horovod:
       hvd.init()
-    if FLAGS.use_fp16:
-        os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
 
     processors = {
         "bc5cdr": BC5CDRProcessor,
@@ -828,11 +826,12 @@ def main(_):
                 i = i + 1
 
         eval_time_elapsed = time.time() - eval_start_time
-        eval_time_wo_overhead = eval_hooks[-1].total_time
 
         time_list = eval_hooks[-1].time_list
         time_list.sort()
-        num_sentences = (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.predict_batch_size
+        # Removing outliers (init/warmup) in throughput computation.
+        eval_time_wo_overhead = sum(time_list[:int(len(time_list) * 0.99)])
+        num_sentences = (int(len(time_list) * 0.99)) * FLAGS.predict_batch_size
 
         avg = np.mean(time_list)
         cf_50 = max(time_list[:int(len(time_list) * 0.50)])
@@ -846,7 +845,7 @@ def main(_):
         tf.compat.v1.logging.info("Total Inference Time = %0.2f for Sentences = %d", eval_time_elapsed,
                         eval_hooks[-1].count * FLAGS.predict_batch_size)
         tf.compat.v1.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", eval_time_wo_overhead,
-                        (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.predict_batch_size)
+                        num_sentences)
         tf.compat.v1.logging.info("Summary Inference Statistics")
         tf.compat.v1.logging.info("Batch size = %d", FLAGS.predict_batch_size)
         tf.compat.v1.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
