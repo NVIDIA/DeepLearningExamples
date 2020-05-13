@@ -24,5 +24,6 @@ from utils import hooks
 from utils import cmdline_helper
 from utils import hvd_utils
 from utils import image_processing
+from utils import logging
 from utils import losses
 from utils import metrics

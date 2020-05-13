@@ -22,6 +22,7 @@
 import os
 
 import warnings
+
 warnings.simplefilter("ignore")
 
 import tensorflow as tf
@@ -32,12 +33,13 @@ from utils import hvd_utils
 from runtime import Runner
 
 from utils.cmdline_helper import parse_cmdline
+from utils.logging import init_dllogger
 
 if __name__ == "__main__":
 
     tf.logging.set_verbosity(tf.logging.ERROR)
-
     FLAGS = parse_cmdline()
+    init_dllogger(FLAGS.log_dir)
 
     RUNNING_CONFIG = tf.contrib.training.HParams(
         exec_mode=FLAGS.exec_mode,
@@ -130,7 +132,6 @@ if __name__ == "__main__":
     )
 
     if RUNNING_CONFIG.exec_mode in ["train", "train_and_evaluate", "training_benchmark"]:
-
         runner.train(
             iter_unit=RUNNING_CONFIG.iter_unit,
             num_iter=RUNNING_CONFIG.num_iter,
@@ -147,18 +148,12 @@ if __name__ == "__main__":
             is_benchmark=RUNNING_CONFIG.exec_mode == 'training_benchmark'
         )
 
-    if RUNNING_CONFIG.exec_mode in ["train_and_evaluate", 'evaluate', 'inference_benchmark']:
-
-        if RUNNING_CONFIG.exec_mode == 'inference_benchmark' and hvd_utils.is_using_hvd():
-            raise NotImplementedError("Only single GPU inference is implemented.")
-
-        elif not hvd_utils.is_using_hvd() or hvd.rank() == 0:
-
-            runner.evaluate(
-                iter_unit=RUNNING_CONFIG.iter_unit if RUNNING_CONFIG.exec_mode != "train_and_evaluate" else "epoch",
-                num_iter=RUNNING_CONFIG.num_iter if RUNNING_CONFIG.exec_mode != "train_and_evaluate" else 1,
-                warmup_steps=RUNNING_CONFIG.warmup_steps,
-                batch_size=RUNNING_CONFIG.batch_size,
-                is_benchmark=RUNNING_CONFIG.exec_mode == 'inference_benchmark',
-                save_eval_results_to_json=RUNNING_CONFIG.save_eval_results_to_json
-            )
+    if RUNNING_CONFIG.exec_mode in ["train_and_evaluate", 'evaluate', 'inference_benchmark'] and hvd.rank() == 0:
+        runner.evaluate(
+            iter_unit=RUNNING_CONFIG.iter_unit if RUNNING_CONFIG.exec_mode != "train_and_evaluate" else "epoch",
+            num_iter=RUNNING_CONFIG.num_iter if RUNNING_CONFIG.exec_mode != "train_and_evaluate" else 1,
+            warmup_steps=RUNNING_CONFIG.warmup_steps,
+            batch_size=RUNNING_CONFIG.batch_size,
+            is_benchmark=RUNNING_CONFIG.exec_mode == 'inference_benchmark',
+            save_eval_results_to_json=RUNNING_CONFIG.save_eval_results_to_json
+        )
