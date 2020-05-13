@@ -331,7 +331,7 @@ def main():
 
     model_config = models.get_model_config(model_name, args)
     model = models.get_model(model_name, model_config,
-                             to_cuda=True,
+                             cpu_run=False,
                              uniform_initialize_bn_weight=not args.disable_uniform_initialize_bn_weight)
 
     if not args.amp_run and distributed_run:
