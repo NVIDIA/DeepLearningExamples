@@ -61,8 +61,10 @@ if [ "$use_xla" = "true" ] ; then
 fi
 
 mpi=""
+horovod_str=""
 if [ $num_gpus -gt 1 ] ; then
    mpi="mpiexec --allow-run-as-root -np $num_gpus --bind-to socket"
+   horovod_str="--horovod"
 fi
 
 #PHASE 1 Config
@@ -110,6 +112,6 @@ $mpi python /workspace/bert/run_pretraining.py \
     --num_warmup_steps=$warmup_steps_phase2 \
     --save_checkpoints_steps=$save_checkpoints_steps \
     --learning_rate=$learning_rate_phase2 \
-    --horovod $PREC \
+    $horovod_str $PREC \
     --allreduce_post_accumulation=True
 

@@ -61,7 +61,7 @@ flags.DEFINE_string(
 
 ## Other parameters
 flags.DEFINE_string(
-    "dllog_path", "bert_dllog.json",
+    "dllog_path", "/results/bert_dllog.json",
     "filename where dllogger writes to")
 
 flags.DEFINE_string(
@@ -300,6 +300,7 @@ def model_fn_builder(task_name, bert_config, num_labels, init_checkpoint, learni
                 "eval_accuracy": accuracy,
                 "eval_loss": loss,
             }
+    tf.compat.v1.logging.info("*** Features ***")
     tf.compat.v1.logging.info("*** Features ***")
     for name in sorted(features.keys()):
       tf.compat.v1.logging.info("  name = %s, shape = %s" % (name, features[name].shape))

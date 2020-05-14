@@ -57,7 +57,7 @@ flags.DEFINE_string(
     "The vocabulary file that the BERT model was trained on.")
 
 flags.DEFINE_string(
-    "dllog_path", "bert_dllog.json",
+    "dllog_path", "/results/bert_dllog.json",
     "filename where dllogger writes to")
 
 flags.DEFINE_string(
