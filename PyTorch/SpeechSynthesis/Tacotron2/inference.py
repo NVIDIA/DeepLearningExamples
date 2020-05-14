@@ -257,8 +257,6 @@ def main():
     DLLogger.log(step=0, data={"waveglow_latency": measurements['waveglow_time']})
     DLLogger.log(step=0, data={"latency": (measurements['tacotron2_time']+measurements['waveglow_time'])})
 
-    alignments = alignments.unfold(1, audios.size(0), audios.size(0)).transpose(0,2)
-
     for i, audio in enumerate(audios):
 
         plt.imshow(alignments[i].float().data.cpu().numpy().T, aspect="auto", origin="lower")

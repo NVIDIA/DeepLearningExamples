@@ -199,9 +199,9 @@ def export_onnx(parser, args):
                           do_constant_folding=True,
                           input_names=["mel", "z"],
                           output_names=["audio"],
-                          dynamic_axes={"mel":   {2: "mel_seq"},
-                                        "z":     {2: "z_seq"},
-                                        "audio": {1: "audio_seq"}})
+                          dynamic_axes={"mel":   {0: "batch_size", 2: "mel_seq"},
+                                        "z":     {0: "batch_size", 2: "z_seq"},
+                                        "audio": {0: "batch_size", 1: "audio_seq"}})
 
 
 def main():
