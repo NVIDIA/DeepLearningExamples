@@ -40,8 +40,8 @@ def parse_args(parser):
 
     parser.add_argument('-o', '--output', type=str, default="trtis_repo/tacotron/1/model.pt",
                         help='filename for the Tacotron 2 TorchScript model')
-    parser.add_argument('--amp-run', action='store_true',
-                        help='inference with AMP')
+    parser.add_argument('--fp16', action='store_true',
+                        help='inference with mixed precision')
 
     return parser
 
@@ -54,7 +54,8 @@ def main():
     args = parser.parse_args()
 
     tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2,
-                                     args.amp_run, forward_is_infer=True)
+                                     amp_run=args.fp16, cpu_run=False,
+                                     forward_is_infer=True)
     
     jitted_tacotron2 = torch.jit.script(tacotron2)
 
