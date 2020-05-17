@@ -291,6 +291,10 @@ def setup_training(args):
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
         args.n_gpu = 1
+
+    if args.gradient_accumulation_steps == 1:
+        args.allreduce_post_accumulation = False
+        args.allreduce_post_accumulation_fp16 = False
         
     if is_main_process():
         dllogger.init(backends=[dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE,
