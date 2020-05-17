@@ -28,7 +28,7 @@ from pyspark.ml.linalg import SparseVector, VectorUDT
 from pyspark.context import SparkContext, SparkConf
 from pyspark.sql.session import SparkSession
 
-conf = SparkConf().setMaster('local[*]').set('spark.executor.memory', '256g').set('spark.driver.memory', '126g').set("spark.local.dir", SPARK_TEMP_FOLDER)
+conf = SparkConf().setMaster('local[*]').set('spark.executor.memory', '40g').set('spark.driver.memory', '200g').set("spark.local.dir", SPARK_TEMP_FOLDER)
 
 sc = SparkContext(conf=conf)
 spark = SparkSession(sc)
@@ -58,7 +58,6 @@ parser.add_argument(
 args = parser.parse_args()
 
 evaluation = not args.submission
-
 
 # ## UDFs
 def date_time_to_unix_epoch(date_time):
@@ -97,7 +96,6 @@ list_len_udf = F.udf(lambda x: len(x) if x != None else 0, IntegerType())
 def convert_odd_timestamp(timestamp_ms_relative):
     TIMESTAMP_DELTA=1465876799998
     return datetime.datetime.fromtimestamp((int(timestamp_ms_relative)+TIMESTAMP_DELTA)//1000)
-
 
 # # Loading Files
 
@@ -870,9 +868,9 @@ len(entities_docs_counts)
 documents_total = documents_meta_df.count()
 documents_total
 
-
 # ## Exploring Publish Time
 publish_times_df = train_set_df.filter('publish_time is not null').select('document_id_promo','publish_time').distinct().select(F.col('publish_time').cast(IntegerType()))
+
 publish_time_percentiles = get_percentiles(publish_times_df, 'publish_time', quantiles_levels=[0.5], max_error_rate=0.001)
 publish_time_percentiles
 
@@ -1962,42 +1960,6 @@ else:
 
 train_set_feature_vectors_df.write.parquet(OUTPUT_BUCKET_FOLDER+train_feature_vector_gcs_folder_name, mode='overwrite')
 
-
-# ## Exporting integral feature vectors to CSV
-train_feature_vectors_exported_df = spark.read.parquet(OUTPUT_BUCKET_FOLDER+train_feature_vector_gcs_folder_name)
-train_feature_vectors_exported_df.take(3)
-
-if evaluation:
-  train_feature_vector_integral_csv_folder_name = 'train_feature_vectors_integral_eval.csv'
-else:
-  train_feature_vector_integral_csv_folder_name = 'train_feature_vectors_integral.csv'
-
-integral_headers = ['label', 'display_id', 'ad_id', 'doc_id', 'doc_event_id', 'is_leak'] + feature_vector_labels_integral
-  
-with open(OUTPUT_BUCKET_FOLDER+train_feature_vector_integral_csv_folder_name+".header", 'w') as output:
-  output.writelines('\n'.join(integral_headers))
-
-def sparse_vector_to_csv_with_nulls_row(additional_column_values, vec, num_columns):  
-  def format_number(x):
-      if int(x) == x:
-          return str(int(x))
-      else:
-          return '{:.3}'.format(x)
-      
-  return ','.join([str(value) for value in additional_column_values] + 
-                   list([ format_number(vec[x]) if x in vec.indices else '' for x in range(vec.size) ])[:num_columns]) \
-          .replace('.0,',',')
-
-train_feature_vectors_integral_csv_rdd = train_feature_vectors_exported_df.select(
-    'label', 'display_id', 'ad_id', 'document_id', 'document_id_event', 'feature_vector') \
-  .withColumn('is_leak', F.lit(-1)) \
-  .rdd.map(lambda x: sparse_vector_to_csv_with_nulls_row([x['label'], x['display_id'], 
-      x['ad_id'], x['document_id'], x['document_id_event'], x['is_leak']], 
-      x['feature_vector'], len(integral_headers)))
-
-train_feature_vectors_integral_csv_rdd.saveAsTextFile(OUTPUT_BUCKET_FOLDER+train_feature_vector_integral_csv_folder_name)
-
-
 # # Export Validation/Test set feature vectors
 def is_leak(max_timestamp_pv_leak, timestamp_event):
   return max_timestamp_pv_leak >= 0 and max_timestamp_pv_leak >= timestamp_event
@@ -2008,7 +1970,6 @@ if evaluation:
   data_df = validation_set_df
 else:
   data_df = test_set_df
-
 
 test_validation_set_enriched_df = data_df.select(
     'display_id','uuid_event','event_country','event_country_state','platform_event',
@@ -2098,36 +2059,6 @@ else:
   test_validation_feature_vector_gcs_folder_name = 'test_feature_vectors_integral'
 
 test_validation_set_feature_vectors_df.write.parquet(OUTPUT_BUCKET_FOLDER+test_validation_feature_vector_gcs_folder_name, mode='overwrite')
-
-
-# ## Exporting integral feature vectors to CSV
-test_validation_feature_vectors_exported_df = spark.read.parquet(OUTPUT_BUCKET_FOLDER+test_validation_feature_vector_gcs_folder_name)
-test_validation_feature_vectors_exported_df.take(3)
-
-if evaluation:
-  test_validation_feature_vector_integral_csv_folder_name = \
-    'validation_feature_vectors_integral.csv'
-else:
-  test_validation_feature_vector_integral_csv_folder_name = \
-    'test_feature_vectors_integral.csv'
-
-integral_headers = ['label', 'display_id', 'ad_id', 'doc_id', 'doc_event_id', 'is_leak'] \
-  + feature_vector_labels_integral
-  
-with open(OUTPUT_BUCKET_FOLDER + test_validation_feature_vector_integral_csv_folder_name \
-    +".header", 'w') as output:
-  output.writelines('\n'.join(integral_headers))
-
-test_validation_feature_vectors_integral_csv_rdd = \
-  test_validation_feature_vectors_exported_df.select(
-    'label', 'display_id', 'ad_id', 'document_id', 'document_id_event', 
-    'is_leak', 'feature_vector') \
-  .rdd.map(lambda x: sparse_vector_to_csv_with_nulls_row([x['label'], 
-    x['display_id'], x['ad_id'], x['document_id'], x['document_id_event'], x['is_leak']], 
-    x['feature_vector'], len(integral_headers)))
-
-test_validation_feature_vectors_integral_csv_rdd.saveAsTextFile(
-  OUTPUT_BUCKET_FOLDER+test_validation_feature_vector_integral_csv_folder_name)
 
 spark.stop()
 
