@@ -17,4 +17,4 @@
 set -x
 set -e
 
-python -m trainer.task --model_dir . --transformed_metadata_path "/outbrain/tfrecords" --eval_data_pattern "/outbrain/tfrecords/eval_*" --train_data_pattern "/outbrain/tfrecords/train_*" --save_checkpoints_secs 600 --linear_l1_regularization 0.0 --linear_l2_regularization 0.0 --linear_learning_rate 0.2 --deep_l1_regularization 0.0 --deep_l2_regularization 0.0 --deep_learning_rate 1.0 --deep_dropout 0.0 --deep_hidden_units 1024 1024 1024 1024 1024 --prebatch_size 4096 --global_batch_size 131072 --eval_batch_size 32768 --eval_steps 8 --model_type wide_n_deep --gpu --benchmark
+python -m trainer.task --model_dir . --benchmark_warmup_steps 50 --benchmark_steps 200 --gpu --benchmark
