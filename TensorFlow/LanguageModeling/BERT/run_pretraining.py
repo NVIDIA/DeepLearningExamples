@@ -186,7 +186,7 @@ class _LogSessionRunHook(tf.estimator.SessionRunHook):
               results
 
     # Removing first two steps after every checkpoint save from timing
-    if (self.global_step - self.init_global_step) % self.save_ckpt_steps <= 1:
+    if (self.global_step - self.init_global_step) % self.save_ckpt_steps <= 5:
       print("Skipping time record for ", self.global_step, " due to checkpoint-saving/warmup overhead")
     else:
       self.total_time += run_time
@@ -237,8 +237,8 @@ class _LogSessionRunHook(tf.estimator.SessionRunHook):
             self.all_count = 0
   def end(self, session):
     num_global_steps = self.global_step - self.init_global_step
-    self.skipped = (num_global_steps // self.save_ckpt_steps) * 2 + \
-                   min(2, num_global_steps % self.save_ckpt_steps)
+    self.skipped = (num_global_steps // self.save_ckpt_steps) * 5 + \
+                   min(5, num_global_steps % self.save_ckpt_steps)
 
 
 def model_fn_builder(bert_config, init_checkpoint, learning_rate,
@@ -539,6 +539,8 @@ def _decode_record(record, name_to_features):
 
 
 def main(_):
+  os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false" #causes memory fragmentation for bert leading to OOM
+
   tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
   dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)
 
@@ -581,6 +583,7 @@ def main(_):
       model_dir=FLAGS.output_dir,
       session_config=config,
       save_checkpoints_steps=FLAGS.save_checkpoints_steps if not FLAGS.horovod or hvd.rank() == 0 else None,
+      save_summary_steps=FLAGS.save_checkpoints_steps if not FLAGS.horovod or hvd.rank() == 0 else None,
       # This variable controls how often estimator reports examples/sec.
       # Default value is every 100 steps.
       # When --report_loss is True, we set to very large value to prevent

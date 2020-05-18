@@ -719,6 +719,8 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
 
 
 def main(_):
+    os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false" #causes memory fragmentation for bert leading to OOM
+
     tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
     dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)
 

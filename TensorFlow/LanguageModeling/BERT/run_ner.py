@@ -174,7 +174,7 @@ class DataProcessor(object):
     @classmethod
     def _read_data(cls, input_file):
         """Reads a BIO data."""
-        with tf.io.gfile.Open(input_file, "r") as f:
+        with open(input_file, "r") as f:
             lines = []
             words = []
             labels = []
@@ -321,8 +321,8 @@ def convert_single_example(ex_index, example, label_list, max_seq_length, tokeni
     for (i, label) in enumerate(label_list, 1):
         label_map[label] = i
     label2id_file = os.path.join(FLAGS.output_dir, 'label2id.pkl')
-    if not tf.io.gfile.Exists(label2id_file):
-        with tf.io.gfile.Open(label2id_file, 'wb') as w:
+    if not os.path.exists(label2id_file):
+        with open(label2id_file, 'wb') as w:
             pickle.dump(label_map, w)
     textlist = example.text.split(' ')
     labellist = example.label.split(' ')
@@ -613,6 +613,8 @@ def result_to_pair(predict_line, pred_ids, id2label, writer, err_writer):
 
 
 def main(_):
+    os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false" #causes memory fragmentation for bert leading to OOM
+
     tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
     dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)
 
