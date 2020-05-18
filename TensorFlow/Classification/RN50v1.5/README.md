@@ -4,42 +4,42 @@ This repository provides a script and recipe to train the ResNet-50 v1.5 model t
 
 ## Table Of Contents
 * [Model overview](#model-overview)
-    * [Default configuration](#default-configuration)
-    * [Data augmentation](#data-augmentation)
-    * [Other training recipes](#other-training-recipes)
-    * [Feature support matrix](#feature-support-matrix)
+    * [Default Configuration](#default-configuration)
+    * [Data Augmentation](#data-augmentation)
+    * [Other Training Recipes](#other-training-recipes)
+    * [Feature Support Matrix](#feature-support-matrix)
         * [Features](#features)
-    * [Mixed precision training](#mixed-precision-training)
-        * [Enabling mixed precision](#enabling-mixed-precision)
+    * [Mixed Precision Training](#mixed-precision-training)
+        * [Enabling Mixed Precision](#enabling-mixed-precision)
 * [Setup](#setup)
     * [Requirements](#requirements)
 * [Quick Start Guide](#quick-start-guide)
 * [Advanced](#advanced)
-    * [Scripts and sample code](#scripts-and-sample-code)
+    * [Scripts and Sample Code](#scripts-and-sample-code)
     * [Parameters](#parameters)
-    * [Command line options](#command-line-options)
-    * [Getting the data](#getting-the-data)
-        * [Data augmentation](#data-augmentation)
-    * [Training process](#training-process)
-    * [Inference process](#inference-process)
+    * [Command Line Options](#command-line-options)
+    * [Getting The Data](#getting-the-data)
+        * [Data Augmentation](#data-augmentation)
+    * [Training Process](#training-process)
+    * [Inference Process](#inference-process)
 * [Performance](#performance)
     * [Benchmarking](#benchmarking)
-        * [Training performance benchmark](#training-performance-benchmark)
-        * [Inference performance benchmark](#inference-performance-benchmark)
+        * [Training Performance Benchmark](#training-performance-benchmark)
+        * [Inference Performance Benchmark](#inference-performance-benchmark)
     * [Results](#results)
-        * [Training accuracy results](#training-accuracy-results)
+        * [Training Accuracy Results](#training-accuracy-results)
             * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
             * [NVIDIA DGX-1 (8x V100 32G)](#nvidia-dgx-1-8x-v100-32g)
-        * [Training performance results](#training-performance-results)
+        * [Training Performance Results](#training-performance-results)
             * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
             * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-16x-v100-32g)
-        * [Inference performance results](#inference-performance-results)
+        * [Inference Performance Results](#inference-performance-results)
             * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
             * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-16x-v100-32g)
             * [NVIDIA T4 (1x T4)](#nvidia-t4-1x-t4-16g)
-* [Release notes](#release-notes)
+* [Release Notes](#release-notes)
     * [Changelog](#changelog)
-    * [Known issues](#known-issues)
+    * [Known Issues](#known-issues)
 
 ## Model overview
 The ResNet50 v1.5 model is a modified version of the [original ResNet50 v1 model](https://arxiv.org/abs/1512.03385).
@@ -60,7 +60,7 @@ The following performance optimizations were implemented in this model:
 
 This model trains for 90 epochs, with default ResNet50 v1.5 setup:
 
-* SGD with momentum (0.875)
+* SGD with Momentum (0.875)
 
 * Learning rate = 0.256 for 256 batch size, for other batch sizes we lineary
 scale the learning rate.
@@ -88,14 +88,14 @@ during first 5 epochs according to [Training ImageNet in 1 hour](https://arxiv.o
 
 This model uses the following data augmentation:
 
-* For training:
+* For Training:
   * Normalization
   * Random resized crop to 224x224
     * Scale from 8% to 100%
     * Aspect ratio from 3/4 to 4/3
   * Random horizontal flip
 
-* For inference:
+* For Inference:
   * Normalization
   * Scale to 256x256
   * Center crop to 224x224
