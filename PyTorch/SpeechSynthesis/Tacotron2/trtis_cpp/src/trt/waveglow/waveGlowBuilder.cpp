@@ -123,25 +123,8 @@ TRTPtr<ICudaEngine> WaveGlowBuilder::build(
     network->getInput(1)->setName(Z_INPUT_NAME);
 
     // add transpose to mel spectrogram
-    ITensor* const originalInput = network->getInput(0);
-    originalInput->setName("toBeRemoved");
-    const Dims originalDims = originalInput->getDimensions();
-    if (originalDims.nbDims != 4)
-    {
-        throw std::runtime_error("Invalid WaveGlow input of " + TRTUtils::dimsToString(originalDims));
-    }
-
-    ITensor* const spectInput = network->addInput(MEL_INPUT_NAME, DataType::kFLOAT,
-        Dims4(originalDims.d[0], originalDims.d[3], originalDims.d[2], originalDims.d[1]));
-
-    ILayer* const firstLayer = network->getLayer(0);
-
-    IShuffleLayer* const transLayer = network->addShuffle(*spectInput);
-    transLayer->setFirstTranspose({0, 3, 2, 1});
-
-    firstLayer->setInput(0, *transLayer->getOutput(0));
-
-    network->removeTensor(*originalInput);
+    ITensor* const spectInput = network->getInput(0);
+    spectInput->setName(MEL_INPUT_NAME);
 
     TRTPtr<IBuilderConfig> config(builder.createBuilderConfig());
     config->setMaxWorkspaceSize(1ULL << 29);
@@ -155,24 +138,14 @@ TRTPtr<ICudaEngine> WaveGlowBuilder::build(
     Dims maxSpectDims = minSpectDims;
     maxSpectDims.d[0] = maxBatchSize;
 
-    Dims minZDims = TRTUtils::getInputByName(*network, Z_INPUT_NAME)->getDimensions();
-    minZDims.d[0] = 1;
-    Dims maxZDims = minZDims;
-    maxZDims.d[0] = maxBatchSize;
 
     TRTUtils::printDimensions("spect", minSpectDims);
-    TRTUtils::printDimensions("z", minZDims);
     TRTUtils::printDimensions("spect", maxSpectDims);
-    TRTUtils::printDimensions("z", maxZDims);
 
     IOptimizationProfile* const optProfile = builder.createOptimizationProfile();
     optProfile->setDimensions(MEL_INPUT_NAME, OptProfileSelector::kMIN, minSpectDims);
     optProfile->setDimensions(MEL_INPUT_NAME, OptProfileSelector::kMAX, maxSpectDims);
     optProfile->setDimensions(MEL_INPUT_NAME, OptProfileSelector::kOPT, minSpectDims);
-
-    optProfile->setDimensions(Z_INPUT_NAME, OptProfileSelector::kMIN, minZDims);
-    optProfile->setDimensions(Z_INPUT_NAME, OptProfileSelector::kMAX, maxZDims);
-    optProfile->setDimensions(Z_INPUT_NAME, OptProfileSelector::kOPT, minZDims);
 
     config->addOptimizationProfile(optProfile);
 

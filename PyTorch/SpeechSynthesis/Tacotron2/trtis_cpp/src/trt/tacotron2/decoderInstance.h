@@ -114,8 +114,10 @@ public:
 
     /**
      * @brief Reset the decoder for new input.
+     *
+     * @param stream The stream to run on.
      */
-    virtual void reset();
+    virtual void reset(cudaStream_t stream);
 
     /**
      * @brief Set the number of decoder loops to execute for subsequent calls to

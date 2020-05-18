@@ -74,7 +74,7 @@ DecoderInstance::DecoderInstance(
         * TRTUtils::getBindingSize(getEngine(), OUTPUT_CHANNELS_NAME)),
     mOutputGateHost(mMaxChunkSize * getMaxBatchSize())
 {
-    reset();
+  reset(0);
 }
 
 /******************************************************************************
@@ -177,16 +177,17 @@ bool DecoderInstance::isAllDone() const
         mDone.cbegin(), mDone.cbegin() + mBatchSize, true, [](const bool a, const bool b) { return a && b; });
 }
 
-void DecoderInstance::reset()
+void DecoderInstance::reset(cudaStream_t stream)
 {
     mNextChunkSize = mMaxChunkSize;
 
-    std::fill(mDone.begin(), mDone.end(), false);
-
-    mDropout.reset(mSeed);
+    mDropout.reset(mSeed, stream);
 
     // relies on zeros
-    CudaUtils::zero(mDecoderInputDevice.data(), mDecoderInputDevice.size());
+    CudaUtils::zeroAsync(
+        mDecoderInputDevice.data(), mDecoderInputDevice.size(), stream);
+
+    std::fill(mDone.begin(), mDone.end(), false);
 }
 
 void DecoderInstance::setNextChunkSize(const int chunkSize)

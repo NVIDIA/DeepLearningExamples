@@ -37,8 +37,6 @@
 #include <stdexcept>
 #include <string>
 
-using namespace nvinfer1;
-
 namespace nvinfer1
 {
 namespace plugin
@@ -371,7 +369,13 @@ size_t Taco2AttentionLayerPlugin::getWorkspaceSize(
     // space for queryOutput (num attention dimensions),
     // convOutput (input length*num filters), elemSum (input length), and
     // energyScratch (inputLength).
-    return sizeof(value_type) * batchSize * (mNumAttentionDimension + (inputLength * mNumFilters) + 2 * inputLength);
+    const size_t numWorkspaceElements
+        = mNumAttentionDimension +                 // query output
+          (inputLength * mNumFilters) +            // conv output
+          (mNumAttentionDimension * inputLength) + // elem sum
+          inputLength;                             // enery scratch
+
+    return numWorkspaceElements * sizeof(value_type) * batchSize;
 }
 
 int Taco2AttentionLayerPlugin::enqueue(const PluginTensorDesc* const inputDesc,

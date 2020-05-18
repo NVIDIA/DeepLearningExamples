@@ -30,6 +30,7 @@
 #include "dataShuffler.h"
 #include "engineCache.h"
 #include "normalDistribution.h"
+#include "utils.h"
 
 #include "NvOnnxParser.h"
 #include "cuda_runtime.h"
@@ -115,7 +116,10 @@ void WaveGlowInstance::infer(const int batchSize, const float* const melsDevice,
         }
     }
 
-    const int numChunks = ((maxNumMels - 1) / mIndependentChunkSize) + 1;
+    // make sure the number of chunks will not exceed any of our buffers
+    const int numChunks = std::min(
+        Utils::roundUpDiv(maxNumMels, mIndependentChunkSize),
+        numMaxSamples / mIndependentChunkSampleSize);
     const int totalChunkSize = mStreamingInstance.getMelSpacing() * mStreamingInstance.getNumMelChannels();
 
     for (int i = 0; i < batchSize; ++i)

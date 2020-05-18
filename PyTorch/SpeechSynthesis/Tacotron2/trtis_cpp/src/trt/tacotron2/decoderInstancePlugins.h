@@ -57,10 +57,12 @@ public:
 
     /**
      * @brief Reset the decoder for new input.
+     *
+     * @param stream The stream to run on.
      */
-    void reset() override;
+    void reset(cudaStream_t stream) override;
 
-protected:
+  protected:
     /**
      * @brief Decode a single frame of output.
      *

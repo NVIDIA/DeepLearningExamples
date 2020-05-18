@@ -41,9 +41,9 @@ PostNetInstance::PostNetInstance(TRTPtr<ICudaEngine> engine) :
     TimedObject("PostNetInstance::infer()"),
     EngineDriver(std::move(engine)),
     mBinding(),
-    mContext(nullptr)
+    mContext(getEngine().createExecutionContext())
 {
-    mContext.reset(getEngine().createExecutionContext());
+  // do nothing
 }
 
 /******************************************************************************
@@ -61,7 +61,7 @@ void PostNetInstance::infer(
 
     if (!mContext->enqueue(batchSize, mBinding.getBindings(), stream, nullptr))
     {
-        throw std::runtime_error("Failed to run encoding.");
+        throw std::runtime_error("Failed to run post net.");
     }
     CudaUtils::sync(stream);
     stopTiming();

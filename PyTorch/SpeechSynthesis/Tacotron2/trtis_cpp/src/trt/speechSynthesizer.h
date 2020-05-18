@@ -129,7 +129,7 @@ public:
 
 private:
     int mMaxBatchSize;
-    int mNumMaxFrames;
+    int mNumMaxMels;
     std::vector<int> mNumSymbols;
     std::vector<int> mNumFrames;
     std::vector<int> mNumSamples;

@@ -25,6 +25,7 @@
  */
 
 #include "speechSynthesizer.h"
+#include "utils.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -39,7 +40,7 @@ namespace tts
 namespace
 {
 
-constexpr int MAX_NUM_FRAMES_PER_CHAR = 10;
+constexpr int MAX_NUM_MELS_PER_CHAR = 10;
 }
 
 /******************************************************************************
@@ -49,9 +50,9 @@ constexpr int MAX_NUM_FRAMES_PER_CHAR = 10;
 namespace
 {
 
-int maxFramesFromMels(const int numMels)
+int maxMelsFromChars(const int numChars)
 {
-    return numMels * MAX_NUM_FRAMES_PER_CHAR + 100;
+  return numChars * MAX_NUM_MELS_PER_CHAR + 100;
 }
 
 } // namespace
@@ -60,19 +61,25 @@ int maxFramesFromMels(const int numMels)
  * CONSTRUCTORS / DESTRUCTOR **************************************************
  *****************************************************************************/
 
-SpeechSynthesizer::SpeechSynthesizer(std::shared_ptr<Tacotron2Instance> tacotron,
-    std::shared_ptr<WaveGlowInstance> waveglow, std::shared_ptr<DenoiserInstance> denoiser)
-    : TimedObject("SpeechSynthsizer::infer()")
-    , mMaxBatchSize(std::min(tacotron->getMaxBatchSize(), waveglow->getMaxBatchSize()))
-    , mNumMaxFrames(maxFramesFromMels(tacotron->getMaximumInputLength()))
-    , mNumSymbols(mMaxBatchSize)
-    , mNumFrames(mMaxBatchSize)
-    , mNumSamples(mMaxBatchSize)
-    , mTacotron(tacotron)
-    , mWaveglow(waveglow)
-    , mDenoiser(denoiser)
-    , mBuffer(mTacotron->getMaximumInputLength(), getMelSpacing() * mTacotron->getNumMelChannels(), getMaxOutputSize(),
-          mMaxBatchSize)
+SpeechSynthesizer::SpeechSynthesizer(
+    std::shared_ptr<Tacotron2Instance> tacotron,
+    std::shared_ptr<WaveGlowInstance> waveglow,
+    std::shared_ptr<DenoiserInstance> denoiser) :
+    TimedObject("SpeechSynthsizer::infer()"),
+    mMaxBatchSize(
+        std::min(tacotron->getMaxBatchSize(), waveglow->getMaxBatchSize())),
+    mNumMaxMels(maxMelsFromChars(tacotron->getMaximumInputLength())),
+    mNumSymbols(mMaxBatchSize),
+    mNumFrames(mMaxBatchSize),
+    mNumSamples(mMaxBatchSize),
+    mTacotron(tacotron),
+    mWaveglow(waveglow),
+    mDenoiser(denoiser),
+    mBuffer(
+        mTacotron->getMaximumInputLength(),
+        getMelSpacing() * mTacotron->getNumMelChannels(),
+        getMaxOutputSize(),
+        mMaxBatchSize)
 {
     addChild(mTacotron.get());
     addChild(mWaveglow.get());
@@ -126,10 +133,23 @@ void SpeechSynthesizer::infer(const int batchSize, const int* const inputDevice,
     {
         melLengths = mNumFrames.data();
     }
-    mTacotron->infer(batchSize, inputDevice, inputSpacing, inputLength, mNumMaxFrames, melFramesDevice, melLengths);
+    mTacotron->infer(
+        batchSize,
+        inputDevice,
+        inputSpacing,
+        inputLength,
+        mNumMaxMels,
+        melFramesDevice,
+        melLengths);
 
     mWaveglow->infer(
-        batchSize, melFramesDevice, mNumMaxFrames, melLengths, getMaxOutputSize(), samplesDevice, numSamples);
+        batchSize,
+        melFramesDevice,
+        mNumMaxMels,
+        melLengths,
+        getMaxOutputSize(),
+        samplesDevice,
+        numSamples);
 
     if (mDenoiser)
     {
@@ -207,12 +227,12 @@ int SpeechSynthesizer::getMaxInputSize() const
 
 int SpeechSynthesizer::getMelSpacing() const
 {
-    return mNumMaxFrames;
+  return mNumMaxMels;
 }
 
 int SpeechSynthesizer::getMaxOutputSize() const
 {
-    return mNumMaxFrames * mWaveglow->getNumberOfSamplesPerFrame();
+  return mNumMaxMels * mWaveglow->getNumberOfSamplesPerFrame();
 }
 
 } // namespace tts
