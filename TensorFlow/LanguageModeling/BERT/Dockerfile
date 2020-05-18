@@ -1,4 +1,4 @@
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:19.10-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.03-tf1-py3
 
 FROM ${FROM_IMAGE_NAME}
 
@@ -13,10 +13,11 @@ RUN git clone https://github.com/attardi/wikiextractor.git
 RUN git clone https://github.com/soskek/bookcorpus.git
 RUN git clone https://github.com/titipata/pubmed_parser
 
+
 RUN pip3 install /workspace/pubmed_parser
 
 #Copy the perf_client over
-ARG TRTIS_CLIENTS_URL=https://github.com/NVIDIA/tensorrt-inference-server/releases/download/v1.5.0/v1.5.0_ubuntu1804.clients.tar.gz
+ARG TRTIS_CLIENTS_URL=https://github.com/NVIDIA/triton-inference-server/releases/download/v1.12.0/v1.12.0_ubuntu1804.clients.tar.gz
 RUN mkdir -p /workspace/install \
     && curl -L ${TRTIS_CLIENTS_URL} | tar xvz -C /workspace/install
 

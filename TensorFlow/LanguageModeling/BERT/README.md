@@ -28,7 +28,7 @@ This repository provides a script and recipe to train the BERT model for TensorF
     * [Multi-node](#multi-node)
   * [Inference process](#inference-process)
   * [Inference Process With TensorRT](#inference-process-with-tensorrt)
-  * [Deploying the BERT model using TensorRT Inference Server](#deploying-the-bert-model-using-tensorrt-inference-server)
+  * [Deploying the BERT model using Triton Inference Server](#deploying-the-bert-model-using-triton-inference-server)
   * [BioBERT](#biobert)
 - [Performance](#performance)
   * [Benchmarking](#benchmarking)
@@ -619,9 +619,9 @@ I0312 23:14:00.550973 140287431493376 run_squad.py:1397] 0 Inference Performance
 ### Inference Process With TensorRT
 NVIDIA TensorRT is a platform for high-performance deep learning inference. It includes a deep learning inference optimizer and runtime that delivers low latency and high-throughput for deep learning inference applications. More information on how to perform inference using TensorRT can be found in the subfolder [./trt/README.md](trt/README.md)
 
-### Deploying the BERT model using TensorRT Inference Server
+### Deploying the BERT model using Triton Inference Server
 
-The [NVIDIA TensorRT Inference Server](https://github.com/NVIDIA/tensorrt-inference-server) provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server. More information on how to perform inference using `TensorRT Inference Server` can be found in the subfolder `./trtis/README.md`.
+The [NVIDIA Triton Inference Server](https://github.com/NVIDIA/triton-inference-server) provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server. More information on how to perform inference using `Triton Inference Server` can be found in the subfolder `./triton/README.md`.
 
 ### BioBERT
 
@@ -1153,7 +1153,7 @@ September 2019
 
 July 2019
 - Results obtained using 19.06
-- Inference Studies using TensorRT Inference Server
+- Inference Studies using Triton Inference Server
 
 March 2019
 - Initial release

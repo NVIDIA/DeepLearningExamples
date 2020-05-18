@@ -149,10 +149,11 @@ class InputFeatures(object):
     self.end_position = end_position
     self.is_impossible = is_impossible
 
-def read_squad_examples(input_file, is_training, version_2_with_negative=False):
-  """Read a SQuAD json file into a list of SquadExample."""
-  with tf.gfile.Open(input_file, "r") as reader:
-    input_data = json.load(reader)["data"]
+def read_squad_examples(input_file, is_training, version_2_with_negative=False, input_data=None):
+  """Return list of SquadExample from input_data or input_file (SQuAD json file)"""
+  if input_data is None:
+    with tf.gfile.Open(input_file, "r") as reader:
+      input_data = json.load(reader)["data"]
 
   def is_whitespace(c):
     if c == " " or c == "\t" or c == "\r" or c == "\n" or ord(c) == 0x202F:

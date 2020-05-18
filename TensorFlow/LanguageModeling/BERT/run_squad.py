@@ -41,134 +41,139 @@ import utils.dllogger_class
 from dllogger import Verbosity
 
 flags = tf.flags
+FLAGS = None
 
-FLAGS = flags.FLAGS
+def extract_run_squad_flags():
 
-## Required parameters
-flags.DEFINE_string(
-    "bert_config_file", None,
-    "The config json file corresponding to the pre-trained BERT model. "
-    "This specifies the model architecture.")
+  ## Required parameters
+  flags.DEFINE_string(
+      "bert_config_file", None,
+      "The config json file corresponding to the pre-trained BERT model. "
+      "This specifies the model architecture.")
 
-flags.DEFINE_string("vocab_file", None,
-                    "The vocabulary file that the BERT model was trained on.")
+  flags.DEFINE_string("vocab_file", None,
+                      "The vocabulary file that the BERT model was trained on.")
 
-flags.DEFINE_string(
-    "output_dir", None,
-    "The output directory where the model checkpoints will be written.")
+  flags.DEFINE_string(
+      "output_dir", None,
+      "The output directory where the model checkpoints will be written.")
 
-## Other parameters
+  ## Other parameters
 
-flags.DEFINE_string(
-    "dllog_path", "bert_dllog.json",
-    "filename where dllogger writes to")
+  flags.DEFINE_string(
+      "dllog_path", "/results/bert_dllog.json",
+      "filename where dllogger writes to")
 
-flags.DEFINE_string("train_file", None,
-                    "SQuAD json for training. E.g., train-v1.1.json")
+  flags.DEFINE_string("train_file", None,
+                      "SQuAD json for training. E.g., train-v1.1.json")
 
-flags.DEFINE_string(
-    "predict_file", None,
-    "SQuAD json for predictions. E.g., dev-v1.1.json or test-v1.1.json")
-flags.DEFINE_string(
-    "eval_script", None,
-    "SQuAD evaluate.py file to compute f1 and exact_match E.g., evaluate-v1.1.py")
+  flags.DEFINE_string(
+      "predict_file", None,
+      "SQuAD json for predictions. E.g., dev-v1.1.json or test-v1.1.json")
+  flags.DEFINE_string(
+      "eval_script", None,
+      "SQuAD evaluate.py file to compute f1 and exact_match E.g., evaluate-v1.1.py")
 
-flags.DEFINE_string(
-    "init_checkpoint", None,
-    "Initial checkpoint (usually from a pre-trained BERT model).")
+  flags.DEFINE_string(
+      "init_checkpoint", None,
+      "Initial checkpoint (usually from a pre-trained BERT model).")
 
-flags.DEFINE_bool(
-    "do_lower_case", True,
-    "Whether to lower case the input text. Should be True for uncased "
-    "models and False for cased models.")
+  flags.DEFINE_bool(
+      "do_lower_case", True,
+      "Whether to lower case the input text. Should be True for uncased "
+      "models and False for cased models.")
 
-flags.DEFINE_integer(
-    "max_seq_length", 384,
-    "The maximum total input sequence length after WordPiece tokenization. "
-    "Sequences longer than this will be truncated, and sequences shorter "
-    "than this will be padded.")
+  flags.DEFINE_integer(
+      "max_seq_length", 384,
+      "The maximum total input sequence length after WordPiece tokenization. "
+      "Sequences longer than this will be truncated, and sequences shorter "
+      "than this will be padded.")
 
-flags.DEFINE_integer(
-    "doc_stride", 128,
-    "When splitting up a long document into chunks, how much stride to "
-    "take between chunks.")
+  flags.DEFINE_integer(
+      "doc_stride", 128,
+      "When splitting up a long document into chunks, how much stride to "
+      "take between chunks.")
 
-flags.DEFINE_integer(
-    "max_query_length", 64,
-    "The maximum number of tokens for the question. Questions longer than "
-    "this will be truncated to this length.")
+  flags.DEFINE_integer(
+      "max_query_length", 64,
+      "The maximum number of tokens for the question. Questions longer than "
+      "this will be truncated to this length.")
 
-flags.DEFINE_bool("do_train", False, "Whether to run training.")
+  flags.DEFINE_bool("do_train", False, "Whether to run training.")
 
-flags.DEFINE_bool("do_predict", False, "Whether to run eval on the dev set.")
+  flags.DEFINE_bool("do_predict", False, "Whether to run eval on the dev set.")
 
-flags.DEFINE_integer("train_batch_size", 8, "Total batch size for training.")
+  flags.DEFINE_integer("train_batch_size", 8, "Total batch size for training.")
 
-flags.DEFINE_integer("predict_batch_size", 8,
-                     "Total batch size for predictions.")
+  flags.DEFINE_integer("predict_batch_size", 8,
+                       "Total batch size for predictions.")
 
-flags.DEFINE_float("learning_rate", 5e-6, "The initial learning rate for Adam.")
+  flags.DEFINE_float("learning_rate", 5e-6, "The initial learning rate for Adam.")
 
-flags.DEFINE_bool("use_trt", False, "Whether to use TF-TRT")
+  flags.DEFINE_bool("use_trt", False, "Whether to use TF-TRT")
 
-flags.DEFINE_bool("horovod", False, "Whether to use Horovod for multi-gpu runs")
-flags.DEFINE_float("num_train_epochs", 3.0,
-                   "Total number of training epochs to perform.")
+  flags.DEFINE_bool("horovod", False, "Whether to use Horovod for multi-gpu runs")
+  flags.DEFINE_float("num_train_epochs", 3.0,
+                     "Total number of training epochs to perform.")
 
-flags.DEFINE_float(
-    "warmup_proportion", 0.1,
-    "Proportion of training to perform linear learning rate warmup for. "
-    "E.g., 0.1 = 10% of training.")
+  flags.DEFINE_float(
+      "warmup_proportion", 0.1,
+      "Proportion of training to perform linear learning rate warmup for. "
+      "E.g., 0.1 = 10% of training.")
 
-flags.DEFINE_integer("save_checkpoints_steps", 1000,
-                     "How often to save the model checkpoint.")
+  flags.DEFINE_integer("save_checkpoints_steps", 1000,
+                       "How often to save the model checkpoint.")
 
-flags.DEFINE_integer("iterations_per_loop", 1000,
-                     "How many steps to make in each estimator call.")
+  flags.DEFINE_integer("iterations_per_loop", 1000,
+                       "How many steps to make in each estimator call.")
 
-flags.DEFINE_integer("num_accumulation_steps", 1,
-                     "Number of accumulation steps before gradient update" 
-                      "Global batch size = num_accumulation_steps * train_batch_size")
+  flags.DEFINE_integer("num_accumulation_steps", 1,
+                       "Number of accumulation steps before gradient update" 
+                        "Global batch size = num_accumulation_steps * train_batch_size")
 
-flags.DEFINE_integer(
-    "n_best_size", 20,
-    "The total number of n-best predictions to generate in the "
-    "nbest_predictions.json output file.")
+  flags.DEFINE_integer(
+      "n_best_size", 20,
+      "The total number of n-best predictions to generate in the "
+      "nbest_predictions.json output file.")
 
-flags.DEFINE_integer(
-    "max_answer_length", 30,
-    "The maximum length of an answer that can be generated. This is needed "
-    "because the start and end predictions are not conditioned on one another.")
+  flags.DEFINE_integer(
+      "max_answer_length", 30,
+      "The maximum length of an answer that can be generated. This is needed "
+      "because the start and end predictions are not conditioned on one another.")
 
 
-flags.DEFINE_bool(
-    "verbose_logging", False,
-    "If true, all of the warnings related to data processing will be printed. "
-    "A number of warnings are expected for a normal SQuAD evaluation.")
+  flags.DEFINE_bool(
+      "verbose_logging", False,
+      "If true, all of the warnings related to data processing will be printed. "
+      "A number of warnings are expected for a normal SQuAD evaluation.")
 
-flags.DEFINE_bool(
-    "version_2_with_negative", False,
-    "If true, the SQuAD examples contain some that do not have an answer.")
+  flags.DEFINE_bool(
+      "version_2_with_negative", False,
+      "If true, the SQuAD examples contain some that do not have an answer.")
 
-flags.DEFINE_float(
-    "null_score_diff_threshold", 0.0,
-    "If null_score - best_non_null is greater than the threshold predict null.")
+  flags.DEFINE_float(
+      "null_score_diff_threshold", 0.0,
+      "If null_score - best_non_null is greater than the threshold predict null.")
 
-flags.DEFINE_bool("use_fp16", False, "Whether to use fp32 or fp16 arithmetic on GPU.")
-flags.DEFINE_bool("use_xla", False, "Whether to enable XLA JIT compilation.")
-flags.DEFINE_integer("num_eval_iterations", None,
-                     "How many eval iterations to run - performs inference on subset")
+  flags.DEFINE_bool("use_fp16", False, "Whether to use fp32 or fp16 arithmetic on GPU.")
+  flags.DEFINE_bool("use_xla", False, "Whether to enable XLA JIT compilation.")
+  flags.DEFINE_integer("num_eval_iterations", None,
+                       "How many eval iterations to run - performs inference on subset")
 
-# TRTIS Specific flags
-flags.DEFINE_bool("export_trtis", False, "Whether to export saved model or run inference with TRTIS")
-flags.DEFINE_string("trtis_model_name", "bert", "exports to appropriate directory for TRTIS")
-flags.DEFINE_integer("trtis_model_version", 1, "exports to appropriate directory for TRTIS")
-flags.DEFINE_string("trtis_server_url", "localhost:8001", "exports to appropriate directory for TRTIS")
-flags.DEFINE_bool("trtis_model_overwrite", False, "If True, will overwrite an existing directory with the specified 'model_name' and 'version_name'")
-flags.DEFINE_integer("trtis_max_batch_size", 8, "Specifies the 'max_batch_size' in the TRTIS model config. See the TRTIS documentation for more info.")
-flags.DEFINE_float("trtis_dyn_batching_delay", 0, "Determines the dynamic_batching queue delay in milliseconds(ms) for the TRTIS model config. Use '0' or '-1' to specify static batching. See the TRTIS documentation for more info.")
-flags.DEFINE_integer("trtis_engine_count", 1, "Specifies the 'instance_group' count value in the TRTIS model config. See the TRTIS documentation for more info.")
+  # Triton Specific flags
+  flags.DEFINE_bool("export_triton", False, "Whether to export saved model or run inference with Triton")
+  flags.DEFINE_string("triton_model_name", "bert", "exports to appropriate directory for Triton")
+  flags.DEFINE_integer("triton_model_version", 1, "exports to appropriate directory for Triton")
+  flags.DEFINE_string("triton_server_url", "localhost:8001", "exports to appropriate directory for Triton")
+  flags.DEFINE_bool("triton_model_overwrite", False, "If True, will overwrite an existing directory with the specified 'model_name' and 'version_name'")
+  flags.DEFINE_integer("triton_max_batch_size", 8, "Specifies the 'max_batch_size' in the Triton model config. See the Triton documentation for more info.")
+  flags.DEFINE_float("triton_dyn_batching_delay", 0, "Determines the dynamic_batching queue delay in milliseconds(ms) for the Triton model config. Use '0' or '-1' to specify static batching. See the Triton documentation for more info.")
+  flags.DEFINE_integer("triton_engine_count", 1, "Specifies the 'instance_group' count value in the Triton model config. See the Triton documentation for more info.")
+  flags.mark_flag_as_required("vocab_file")
+  flags.mark_flag_as_required("bert_config_file")
+  flags.mark_flag_as_required("output_dir")
 
+  return flags.FLAGS
 
 def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
                  use_one_hot_embeddings):
@@ -434,12 +439,9 @@ RawResult = collections.namedtuple("RawResult",
                                    ["unique_id", "start_logits", "end_logits"])
 
 
-def write_predictions(all_examples, all_features, all_results, n_best_size,
-                      max_answer_length, do_lower_case, output_prediction_file,
-                      output_nbest_file, output_null_log_odds_file):
-  """Write final predictions to the json file and log-odds of null if needed."""
-  tf.compat.v1.logging.info("Writing predictions to: %s" % (output_prediction_file))
-  tf.compat.v1.logging.info("Writing nbest to: %s" % (output_nbest_file))
+def get_predictions(all_examples, all_features, all_results, n_best_size, max_answer_length, 
+  do_lower_case, version_2_with_negative, verbose_logging):
+  """Get final predictions"""
 
   example_index_to_features = collections.defaultdict(list)
   for feature in all_features:
@@ -471,7 +473,7 @@ def write_predictions(all_examples, all_features, all_results, n_best_size,
       start_indexes = _get_best_indexes(result.start_logits, n_best_size)
       end_indexes = _get_best_indexes(result.end_logits, n_best_size)
       # if we could have irrelevant answers, get the min score of irrelevant
-      if FLAGS.version_2_with_negative:
+      if version_2_with_negative:
         feature_null_score = result.start_logits[0] + result.end_logits[0]
         if feature_null_score < score_null:
           score_null = feature_null_score
@@ -506,7 +508,7 @@ def write_predictions(all_examples, all_features, all_results, n_best_size,
                   start_logit=result.start_logits[start_index],
                   end_logit=result.end_logits[end_index]))
 
-    if FLAGS.version_2_with_negative:
+    if version_2_with_negative:
       prelim_predictions.append(
           _PrelimPrediction(
               feature_index=min_null_feature_index,
@@ -544,7 +546,7 @@ def write_predictions(all_examples, all_features, all_results, n_best_size,
         tok_text = " ".join(tok_text.split())
         orig_text = " ".join(orig_tokens)
 
-        final_text = get_final_text(tok_text, orig_text, do_lower_case)
+        final_text = get_final_text(tok_text, orig_text, do_lower_case, verbose_logging)
         if final_text in seen_predictions:
           continue
 
@@ -560,7 +562,7 @@ def write_predictions(all_examples, all_features, all_results, n_best_size,
               end_logit=pred.end_logit))
 
     # if we didn't inlude the empty option in the n-best, inlcude it
-    if FLAGS.version_2_with_negative:
+    if version_2_with_negative:
       if "" not in seen_predictions:
         nbest.append(
             _NbestPrediction(
@@ -595,7 +597,7 @@ def write_predictions(all_examples, all_features, all_results, n_best_size,
 
     assert len(nbest_json) >= 1
 
-    if not FLAGS.version_2_with_negative:
+    if not version_2_with_negative:
       all_predictions[example.qas_id] = nbest_json[0]["text"]
     else:
       # predict "" iff the null score - the score of best non-null > threshold
@@ -608,6 +610,19 @@ def write_predictions(all_examples, all_features, all_results, n_best_size,
         all_predictions[example.qas_id] = best_non_null_entry.text
 
     all_nbest_json[example.qas_id] = nbest_json
+  return all_predictions, all_nbest_json, scores_diff_json
+
+def write_predictions(all_examples, all_features, all_results, n_best_size,
+                      max_answer_length, do_lower_case, output_prediction_file,
+                      output_nbest_file, output_null_log_odds_file,
+                      version_2_with_negative, verbose_logging):
+  """Write final predictions to the json file and log-odds of null if needed."""
+
+  tf.compat.v1.logging.info("Writing predictions to: %s" % (output_prediction_file))
+  tf.compat.v1.logging.info("Writing nbest to: %s" % (output_nbest_file))
+
+  all_predictions, all_nbest_json, scores_diff_json = get_predictions(all_examples, all_features, 
+    all_results, n_best_size, max_answer_length, do_lower_case, version_2_with_negative, verbose_logging)
 
   with tf.io.gfile.GFile(output_prediction_file, "w") as writer:
     writer.write(json.dumps(all_predictions, indent=4) + "\n")
@@ -615,12 +630,12 @@ def write_predictions(all_examples, all_features, all_results, n_best_size,
   with tf.io.gfile.GFile(output_nbest_file, "w") as writer:
     writer.write(json.dumps(all_nbest_json, indent=4) + "\n")
 
-  if FLAGS.version_2_with_negative:
+  if version_2_with_negative:
     with tf.io.gfile.GFile(output_null_log_odds_file, "w") as writer:
       writer.write(json.dumps(scores_diff_json, indent=4) + "\n")
 
 
-def get_final_text(pred_text, orig_text, do_lower_case):
+def get_final_text(pred_text, orig_text, do_lower_case, verbose_logging):
   """Project the tokenized prediction back to the original text."""
 
   # When we created the data, we kept track of the alignment between original
@@ -669,7 +684,7 @@ def get_final_text(pred_text, orig_text, do_lower_case):
 
   start_position = tok_text.find(pred_text)
   if start_position == -1:
-    if FLAGS.verbose_logging:
+    if verbose_logging:
       tf.compat.v1.logging.info(
           "Unable to find text: '%s' in '%s'" % (pred_text, orig_text))
     return orig_text
@@ -679,7 +694,7 @@ def get_final_text(pred_text, orig_text, do_lower_case):
   (tok_ns_text, tok_ns_to_s_map) = _strip_spaces(tok_text)
 
   if len(orig_ns_text) != len(tok_ns_text):
-    if FLAGS.verbose_logging:
+    if verbose_logging:
       tf.compat.v1.logging.info("Length not equal after stripping spaces: '%s' vs '%s'",
                       orig_ns_text, tok_ns_text)
     return orig_text
@@ -697,7 +712,7 @@ def get_final_text(pred_text, orig_text, do_lower_case):
       orig_start_position = orig_ns_to_s_map[ns_start_position]
 
   if orig_start_position is None:
-    if FLAGS.verbose_logging:
+    if verbose_logging:
       tf.compat.v1.logging.info("Couldn't map start position")
     return orig_text
 
@@ -708,7 +723,7 @@ def get_final_text(pred_text, orig_text, do_lower_case):
       orig_end_position = orig_ns_to_s_map[ns_end_position]
 
   if orig_end_position is None:
-    if FLAGS.verbose_logging:
+    if verbose_logging:
       tf.compat.v1.logging.info("Couldn't map end position")
     return orig_text
 
@@ -757,7 +772,7 @@ def validate_flags_or_throw(bert_config):
   tokenization.validate_case_matches_checkpoint(FLAGS.do_lower_case,
                                                 FLAGS.init_checkpoint)
 
-  if not FLAGS.do_train and not FLAGS.do_predict and not FLAGS.export_trtis:
+  if not FLAGS.do_train and not FLAGS.do_predict and not FLAGS.export_triton:
     raise ValueError("At least one of `do_train` or `do_predict` or `export_SavedModel` must be True.")
 
   if FLAGS.do_train:
@@ -782,7 +797,7 @@ def validate_flags_or_throw(bert_config):
 
 
 def export_model(estimator, export_dir, init_checkpoint):
-    """Exports a checkpoint in SavedModel format in a directory structure compatible with TRTIS."""
+    """Exports a checkpoint in SavedModel format in a directory structure compatible with Triton."""
 
 
     def serving_input_fn():
@@ -806,10 +821,10 @@ def export_model(estimator, export_dir, init_checkpoint):
         checkpoint_path=init_checkpoint,
         strip_default_attrs=False)
 
-    model_name = FLAGS.trtis_model_name
+    model_name = FLAGS.triton_model_name
 
-    model_folder = export_dir + "/trtis_models/" + model_name
-    version_folder = model_folder + "/" + str(FLAGS.trtis_model_version)
+    model_folder = export_dir + "/triton_models/" + model_name
+    version_folder = model_folder + "/" + str(FLAGS.triton_model_version)
     final_model_folder = version_folder + "/model.savedmodel"
 
     if not os.path.exists(version_folder):
@@ -819,19 +834,19 @@ def export_model(estimator, export_dir, init_checkpoint):
         os.rename(saved_dir, final_model_folder)
         print("Model saved to dir", final_model_folder)
     else:
-        if (FLAGS.trtis_model_overwrite):
+        if (FLAGS.triton_model_overwrite):
             shutil.rmtree(final_model_folder)
             os.rename(saved_dir, final_model_folder)
             print("WARNING: Existing model was overwritten. Model dir: {}".format(final_model_folder))
         else:
-            print("ERROR: Could not save TRTIS model. Folder already exists. Use '--trtis_model_overwrite=True' if you would like to overwrite an existing model. Model dir: {}".format(final_model_folder))
+            print("ERROR: Could not save Triton model. Folder already exists. Use '--triton_model_overwrite=True' if you would like to overwrite an existing model. Model dir: {}".format(final_model_folder))
             return
 
-    # Now build the config for TRTIS. Check to make sure we can overwrite it, if it exists
+    # Now build the config for Triton. Check to make sure we can overwrite it, if it exists
     config_filename = os.path.join(model_folder, "config.pbtxt")
 
-    if (os.path.exists(config_filename) and not FLAGS.trtis_model_overwrite):
-        print("ERROR: Could not save TRTIS model config. Config file already exists. Use '--trtis_model_overwrite=True' if you would like to overwrite an existing model config. Model config: {}".format(config_filename))
+    if (os.path.exists(config_filename) and not FLAGS.triton_model_overwrite):
+        print("ERROR: Could not save Triton model config. Config file already exists. Use '--triton_model_overwrite=True' if you would like to overwrite an existing model config. Model config: {}".format(config_filename))
         return
     
     config_template = r"""
@@ -883,9 +898,9 @@ instance_group [
 ]"""
 
     batching_str = ""
-    max_batch_size = FLAGS.trtis_max_batch_size
+    max_batch_size = FLAGS.triton_max_batch_size
 
-    if (FLAGS.trtis_dyn_batching_delay > 0):
+    if (FLAGS.triton_dyn_batching_delay > 0):
 
         # Use only full and half full batches
         pref_batch_size = [int(max_batch_size / 2.0), max_batch_size]
@@ -894,7 +909,7 @@ instance_group [
 dynamic_batching {{
     preferred_batch_size: [{0}]
     max_queue_delay_microseconds: {1}
-}}""".format(", ".join([str(x) for x in pref_batch_size]), int(FLAGS.trtis_dyn_batching_delay * 1000.0))
+}}""".format(", ".join([str(x) for x in pref_batch_size]), int(FLAGS.triton_dyn_batching_delay * 1000.0))
 
     config_values = {
         "model_name": model_name,
@@ -902,7 +917,7 @@ dynamic_batching {{
         "seq_length": FLAGS.max_seq_length,
         "dynamic_batching": batching_str,
         "gpu_list": ", ".join([x.name.split(":")[-1] for x in device_lib.list_local_devices() if x.device_type == "GPU"]),
-        "engine_count": FLAGS.trtis_engine_count
+        "engine_count": FLAGS.triton_engine_count
     }
 
     with open(model_folder + "/config.pbtxt", "w") as file:
@@ -911,13 +926,13 @@ dynamic_batching {{
         file.write(final_config_str)
 
 def main(_):
+  os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false" #causes memory fragmentation for bert leading to OOM
+
   tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
   dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)
 
   if FLAGS.horovod:
     hvd.init()
-  if FLAGS.use_fp16:
-    os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
 
   bert_config = modeling.BertConfig.from_json_file(FLAGS.bert_config_file)
 
@@ -1061,7 +1076,7 @@ def main(_):
         tf.compat.v1.logging.info("-----------------------------")
 
 
-  if FLAGS.export_trtis and master_process:
+  if FLAGS.export_triton and master_process:
     export_model(estimator, FLAGS.output_dir, FLAGS.init_checkpoint)
 
   if FLAGS.do_predict and master_process:
@@ -1163,7 +1178,8 @@ def main(_):
     write_predictions(eval_examples, eval_features, all_results,
                       FLAGS.n_best_size, FLAGS.max_answer_length,
                       FLAGS.do_lower_case, output_prediction_file,
-                      output_nbest_file, output_null_log_odds_file)
+                      output_nbest_file, output_null_log_odds_file,
+                      FLAGS.version_2_with_negative, FLAGS.verbose_logging)
 
     if FLAGS.eval_script:
         import sys
@@ -1179,7 +1195,5 @@ def main(_):
 
 
 if __name__ == "__main__":
-  flags.mark_flag_as_required("vocab_file")
-  flags.mark_flag_as_required("bert_config_file")
-  flags.mark_flag_as_required("output_dir")
-  tf.compat.v1.app.run()
+  FLAGS = extract_run_squad_flags()
+  tf.app.run()

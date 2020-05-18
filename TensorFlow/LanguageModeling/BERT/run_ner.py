@@ -57,7 +57,7 @@ flags.DEFINE_string(
     "The vocabulary file that the BERT model was trained on.")
 
 flags.DEFINE_string(
-    "dllog_path", "bert_dllog.json",
+    "dllog_path", "/results/bert_dllog.json",
     "filename where dllogger writes to")
 
 flags.DEFINE_string(
@@ -174,7 +174,7 @@ class DataProcessor(object):
     @classmethod
     def _read_data(cls, input_file):
         """Reads a BIO data."""
-        with tf.io.gfile.Open(input_file, "r") as f:
+        with open(input_file, "r") as f:
             lines = []
             words = []
             labels = []
@@ -321,8 +321,8 @@ def convert_single_example(ex_index, example, label_list, max_seq_length, tokeni
     for (i, label) in enumerate(label_list, 1):
         label_map[label] = i
     label2id_file = os.path.join(FLAGS.output_dir, 'label2id.pkl')
-    if not tf.io.gfile.Exists(label2id_file):
-        with tf.io.gfile.Open(label2id_file, 'wb') as w:
+    if not os.path.exists(label2id_file):
+        with open(label2id_file, 'wb') as w:
             pickle.dump(label_map, w)
     textlist = example.text.split(' ')
     labellist = example.label.split(' ')
@@ -613,13 +613,13 @@ def result_to_pair(predict_line, pred_ids, id2label, writer, err_writer):
 
 
 def main(_):
+    os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false" #causes memory fragmentation for bert leading to OOM
+
     tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
     dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)
 
     if FLAGS.horovod:
       hvd.init()
-    if FLAGS.use_fp16:
-        os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
 
     processors = {
         "bc5cdr": BC5CDRProcessor,
@@ -828,11 +828,12 @@ def main(_):
                 i = i + 1
 
         eval_time_elapsed = time.time() - eval_start_time
-        eval_time_wo_overhead = eval_hooks[-1].total_time
 
         time_list = eval_hooks[-1].time_list
         time_list.sort()
-        num_sentences = (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.predict_batch_size
+        # Removing outliers (init/warmup) in throughput computation.
+        eval_time_wo_overhead = sum(time_list[:int(len(time_list) * 0.99)])
+        num_sentences = (int(len(time_list) * 0.99)) * FLAGS.predict_batch_size
 
         avg = np.mean(time_list)
         cf_50 = max(time_list[:int(len(time_list) * 0.50)])
@@ -846,7 +847,7 @@ def main(_):
         tf.compat.v1.logging.info("Total Inference Time = %0.2f for Sentences = %d", eval_time_elapsed,
                         eval_hooks[-1].count * FLAGS.predict_batch_size)
         tf.compat.v1.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", eval_time_wo_overhead,
-                        (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.predict_batch_size)
+                        num_sentences)
         tf.compat.v1.logging.info("Summary Inference Statistics")
         tf.compat.v1.logging.info("Batch size = %d", FLAGS.predict_batch_size)
         tf.compat.v1.logging.info("Sequence Length = %d", FLAGS.max_seq_length)

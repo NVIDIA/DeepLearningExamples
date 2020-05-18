@@ -9,16 +9,16 @@ else
    export TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE=0
 fi
 
-# Start TRTIS server in detached state
-nvidia-docker run -d --rm \
+# Start TRITON server in detached state
+docker run --gpus all -d --rm \
    --shm-size=1g \
    --ulimit memlock=-1 \
    --ulimit stack=67108864 \
    -p8000:8000 \
    -p8001:8001 \
    -p8002:8002 \
-   --name trt_server_cont \
+   --name triton_server_cont \
    -e NVIDIA_VISIBLE_DEVICES=$NV_VISIBLE_DEVICES \
    -e TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE \
-   -v $PWD/results/trtis_models:/models \
-   nvcr.io/nvidia/tensorrtserver:20.02-py3 trtserver --model-store=/models --strict-model-config=false
+   -v $PWD/results/triton_models:/models \
+   nvcr.io/nvidia/tritonserver:20.03-py3 trtserver --model-store=/models --strict-model-config=false

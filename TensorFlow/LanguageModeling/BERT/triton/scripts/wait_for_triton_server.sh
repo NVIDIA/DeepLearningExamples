@@ -15,7 +15,7 @@
 
 SERVER_URI=${1:-"localhost"}
 
-echo "Waiting for TRTIS Server to be ready at http://$SERVER_URI:8000..."
+echo "Waiting for TRITON Server to be ready at http://$SERVER_URI:8000..."
 
 live_command="curl -m 1 -L -s -o /dev/null -w %{http_code} http://$SERVER_URI:8000/api/health/live"
 ready_command="curl -m 1 -L -s -o /dev/null -w %{http_code} http://$SERVER_URI:8000/api/health/ready"
@@ -30,4 +30,4 @@ while [[ ${current_status} != "200" ]] || [[ $($ready_command) != "200" ]]; do
    current_status=$($live_command)
 done
 
-echo "TRTIS Server is ready!"
+echo "TRITON Server is ready!"
