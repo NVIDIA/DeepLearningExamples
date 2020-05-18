@@ -208,7 +208,7 @@ def main():
     if args.cpu_run:
         denoiser = Denoiser(waveglow, args.cpu_run)
     else:
-         denoiser = Denoiser(waveglow, args.cpu_run).cuda()
+        denoiser = Denoiser(waveglow, args.cpu_run).cuda()
 
     jitted_tacotron2 = torch.jit.script(tacotron2)
 
