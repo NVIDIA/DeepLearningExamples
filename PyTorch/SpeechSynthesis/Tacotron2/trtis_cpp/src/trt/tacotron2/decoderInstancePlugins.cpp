@@ -126,19 +126,19 @@ DecoderInstancePlugins::DecoderInstancePlugins(
  * PUBLIC METHODS *************************************************************
  *****************************************************************************/
 
-void DecoderInstancePlugins::reset()
+void DecoderInstancePlugins::reset(cudaStream_t stream)
 {
-    DecoderInstance::reset();
+  DecoderInstance::reset(stream);
 
-    mInputWeightsDevice.zero();
-    mInAttentionHiddenStatesDevice.zero();
-    mInAttentionCellStatesDevice.zero();
-    mInputAttentionContextDevice.zero();
-    mOutputAttentionContextDevice.zero();
-    mInDecoderHiddenStatesDevice.zero();
-    mInDecoderCellStatesDevice.zero();
+  mInputWeightsDevice.zeroAsync(stream);
+  mInAttentionHiddenStatesDevice.zeroAsync(stream);
+  mInAttentionCellStatesDevice.zeroAsync(stream);
+  mInputAttentionContextDevice.zeroAsync(stream);
+  mOutputAttentionContextDevice.zeroAsync(stream);
+  mInDecoderHiddenStatesDevice.zeroAsync(stream);
+  mInDecoderCellStatesDevice.zeroAsync(stream);
 
-    mDimsSet = false;
+  mDimsSet = false;
 }
 
 /******************************************************************************

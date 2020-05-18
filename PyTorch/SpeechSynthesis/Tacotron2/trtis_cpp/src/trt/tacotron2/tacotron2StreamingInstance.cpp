@@ -47,6 +47,7 @@ using namespace nvinfer1;
 
 namespace tts
 {
+
 /******************************************************************************
  * CONSTRUCTORS / DESTRUCTOR **************************************************
  *****************************************************************************/
@@ -117,7 +118,11 @@ Tacotron2StreamingInstance::Tacotron2StreamingInstance(
  *****************************************************************************/
 
 void Tacotron2StreamingInstance::startInference(
-    const int batchSize, const int* const inputDevice, const int inputSpacing, const int* const inputLength)
+    const int batchSize,
+    const int* const inputDevice,
+    const int inputSpacing,
+    const int* const inputLength,
+    cudaStream_t stream)
 {
     startTiming();
 
@@ -136,12 +141,6 @@ void Tacotron2StreamingInstance::startInference(
             throw std::runtime_error("Model not configured for lengths greater than " + std::to_string(mMaxInputLength)
                 + ". Given " + std::to_string(mInputLengthHost[i]) + " for sequence " + std::to_string(i) + ".");
         }
-    }
-
-    cudaStream_t stream;
-    if (cudaStreamCreate(&stream) != cudaSuccess)
-    {
-        throw std::runtime_error("Failed to create cuda stream.");
     }
 
     // copy input to padded location and set zeros
@@ -202,15 +201,13 @@ void Tacotron2StreamingInstance::startInference(
 
         mInUseDecoder = mDecoderPlain.get();
     }
-    mInUseDecoder->reset();
-
-    cudaStreamSynchronize(stream);
-    cudaStreamDestroy(stream);
+    mInUseDecoder->reset(stream);
 
     stopTiming();
 }
 
-bool Tacotron2StreamingInstance::inferNext(float* const outputDevice, int* const outputLength)
+bool Tacotron2StreamingInstance::inferNext(
+    float* const outputDevice, int* const outputLength, cudaStream_t stream)
 {
     startTiming();
     if (!mInUseDecoder)
@@ -234,12 +231,6 @@ bool Tacotron2StreamingInstance::inferNext(float* const outputDevice, int* const
         throw std::runtime_error("mInputLengthHost not set.");
     }
 
-    cudaStream_t stream;
-    if (cudaStreamCreate(&stream) != cudaSuccess)
-    {
-        throw std::runtime_error("Failed to create cuda stream.");
-    }
-
     // do decoding
     mInUseDecoder->infer(
         stream,
@@ -254,13 +245,12 @@ bool Tacotron2StreamingInstance::inferNext(float* const outputDevice, int* const
     // call postnet
     mPostnet->infer(stream, mBatchSize, mMelChunkDevice.data(), outputDevice);
 
+    cudaStreamSynchronize(stream);
+
     for (int batchIndex = 0; batchIndex < mBatchSize; ++batchIndex)
     {
         outputLength[batchIndex] = mInUseDecoder->lastChunkSize()[batchIndex];
     }
-
-    cudaStreamSynchronize(stream);
-    cudaStreamDestroy(stream);
 
     stopTiming();
 

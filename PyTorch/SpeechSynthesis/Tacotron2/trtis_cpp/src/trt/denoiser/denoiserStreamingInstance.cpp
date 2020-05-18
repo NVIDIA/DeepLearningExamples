@@ -69,7 +69,7 @@ void DenoiserStreamingInstance::inferNext(
 
     if (!mContext->enqueue(batchSize, mBinding.getBindings(), stream, nullptr))
     {
-        throw std::runtime_error("Failed to run encoding.");
+        throw std::runtime_error("Failed to run denoiser.");
     }
 
     stopTiming();

@@ -114,7 +114,7 @@ public:
     int getMaxBatchSize() const;
 
     /**
-     * @brief Get the size of the `outputDevice` vector required for the giving
+     * @brief Get the size of the `outputDevice` vector required for the given
      * input parameters.
      *
      * @param batchSize The size of the batch.

@@ -53,8 +53,9 @@ public:
      * @brief Reset the random number generator.
      *
      * @param seed The seed to use.
+     * @param stream The stream to use.
      */
-    void reset(unsigned int seed = 0);
+    void reset(unsigned int seed, cudaStream_t stream);
 
     /**
      * @brief Generate a new set of dropout values.
