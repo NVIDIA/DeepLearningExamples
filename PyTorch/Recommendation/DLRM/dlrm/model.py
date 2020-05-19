@@ -124,7 +124,7 @@ class Dlrm(nn.Module):
             interaction = torch.bmm(concat, torch.transpose(concat, 1, 2))
             interaction_flat = interaction[:, self.tril_indices[0], self.tril_indices[1]]
             # concatenate dense features and interactions
-            interaction_padding = self._interaction_padding.expand(batch_size, 1).to(dtype=bottom_mlp_output.dtype)
+            interaction_padding = self._interaction_padding.expand(batch_size, 1).to(dtype=bottom_mlp_output.dtype).cuda()
             interaction_output = torch.cat(
                 (bottom_mlp_output, interaction_flat, interaction_padding), dim=1)
         elif self._interaction_op == "cat":
