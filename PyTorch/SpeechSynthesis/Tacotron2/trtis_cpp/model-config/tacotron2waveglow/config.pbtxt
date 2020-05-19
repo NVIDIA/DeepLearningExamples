@@ -32,6 +32,6 @@ parameters [
   },
   {
     key: "use_denoiser"
-    value: { string_value: "yes" }
+    value: { string_value: "no" }
   }
 ]

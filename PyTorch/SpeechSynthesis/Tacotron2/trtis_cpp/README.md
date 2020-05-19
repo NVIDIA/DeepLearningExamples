@@ -90,7 +90,7 @@ Next you will need to export the PyTorch checkpoints so that they can be used to
 
 ```bash
 mkdir models
-./export_weights.sh checkpoints/nvidia_tacotron2pyt_fp16_20190427 checkpoints/nvidia_waveglow256pyt_fp16 models/
+./export_weights.sh checkpoints/tacotron2_1032590_6000_amp checkpoints/waveglow_1076430_14000_amp models/
 ```
 
 ### Setup the Triton server
