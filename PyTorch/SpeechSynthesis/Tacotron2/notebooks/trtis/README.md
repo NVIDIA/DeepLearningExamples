@@ -48,7 +48,7 @@ Follow the Tacotron 2 Quick Start Guide (points 1-4) to start the container.
 Inside the container, type:
 ```bash
 cd /workspace/tacotron2/
-python exports/export_tacotron2_ts_config.py --amp-run
+python exports/export_tacotron2_ts_config.py --fp16
 ```
 
 This will export the folder structure of the TRTIS repository and the config file of Tacotron 2. 
@@ -67,7 +67,7 @@ Move the downloaded model to `trtis_repo/tacotron2/1/model.pt`
 
 To export the Tacotron 2 model using TorchScript, type:
 ```bash
-python exports/export_tacotron2_ts.py --tacotron2 <tacotron2_checkpoint> -o trtis_repo/tacotron2/1/model.pt --amp-run
+python exports/export_tacotron2_ts.py --tacotron2 <tacotron2_checkpoint> -o trtis_repo/tacotron2/1/model.pt --fp16
 ```
 
 This will save the model as ``trtis_repo/tacotron2/1/model.pt``.
@@ -78,7 +78,7 @@ For WaveGlow, we also need to create the folder structure that will be used by t
 Inside the container, type:
 ```bash
 cd /workspace/tacotron2/
-python exports/export_waveglow_trt_config.py --amp-run
+python exports/export_waveglow_trt_config.py --fp16
 ```
 
 This will export the folder structure of the TRTIS repository and the config file of Waveglow. 
@@ -106,7 +106,7 @@ cd /workspace/onnx-tensorrt/build && cmake .. -DCMAKE_CXX_FLAGS=-isystem\ /usr/l
 In order to export the model into the ONNX intermediate representation, type:
 
 ```bash
-python exports/export_waveglow_onnx.py --waveglow <waveglow_checkpoint> --wn-channels 256 --amp-run
+python exports/export_waveglow_onnx.py --waveglow <waveglow_checkpoint> --wn-channels 256 --fp16 --output ./output
 ```
 
 This will save the model as `waveglow.onnx` (you can change its name with the flag `--output <filename>`).
@@ -114,15 +114,15 @@ This will save the model as `waveglow.onnx` (you can change its name with the fl
 With the model exported to ONNX, type the following to obtain a TRT engine and save it as `trtis_repo/waveglow/1/model.plan`:
 
 ```bash
-onnx2trt <exported_waveglow_onnx> -o trtis_repo/waveglow/1/model.plan -b 1 -w 8589934592
+python trt/export_onnx2trt.py --waveglow  <exported_waveglow_onnx> -o trtis_repo/waveglow/1/ --fp16
 ```
 
 ### Setup the TRTIS server.
 
 Download the TRTIS container by typing:
 ```bash
-docker pull nvcr.io/nvidia/tensorrtserver:19.10-py3
-docker tag nvcr.io/nvidia/tensorrtserver:19.10-py3 tensorrtserver:19.10
+docker pull nvcr.io/nvidia/tensorrtserver:20.01-py3
+docker tag nvcr.io/nvidia/tensorrtserver:20.01-py3 tensorrtserver:20.01
 ```
 
 ### Setup the TRTIS notebook client.
@@ -130,14 +130,14 @@ docker tag nvcr.io/nvidia/tensorrtserver:19.10-py3 tensorrtserver:19.10
 Now go to the root directory of the Tacotron 2 repo, and type: 
 
 ```bash
-docker build -f Dockerfile_trtis_client --network=host -t speech_ai__tts_only:demo .
+docker build -f Dockerfile_trtis_client --network=host -t speech_ai_tts_only:demo .
 ```
 
 ### Run the TRTIS server.
 
 To run the server, type in the root directory of the Tacotron 2 repo:
 ```bash
-NV_GPU=1 nvidia-docker run -ti --ipc=host --network=host --rm -p8000:8000 -p8001:8001 -v $PWD/trtis_repo/:/models tensorrtserver:19.10 trtserver --model-store=/models --log-verbose 1
+NV_GPU=1 nvidia-docker run -ti --ipc=host --network=host --rm -p8000:8000 -p8001:8001 -v $PWD/trtis_repo/:/models tensorrtserver:20.01 trtserver --model-store=/models --log-verbose 1
 ```
 
 The flag `NV_GPU` selects the GPU the server is going to see. If we want it to see all the available GPUs, then run the above command without this flag.
@@ -147,7 +147,7 @@ By default, the model repository will be in `trtis_repo/`.
 
 Leave the server running. In another terminal, type:
 ```bash
-docker run -it --rm --network=host --device /dev/snd:/dev/snd --device /dev/usb:/dev/usb speech_ai__tts_only:demo bash ./run_this.sh
+docker run -it --rm --network=host --device /dev/snd:/dev/snd --device /dev/usb:/dev/usb speech_ai_tts_only:demo bash ./run_this.sh
 ```
 
 Open the URL in a browser, open `notebook.ipynb`, click play, and enjoy.

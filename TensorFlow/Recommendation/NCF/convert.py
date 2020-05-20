@@ -32,16 +32,12 @@ from argparse import ArgumentParser
 import pandas as pd
 from load import implicit_load
 
-from logger.logger import LOGGER
-from logger import tags
-
 import tensorflow as tf
 
 MIN_RATINGS = 20
 USER_COLUMN = 'user_id'
 ITEM_COLUMN = 'item_id'
 
-LOGGER.model = 'ncf'
 
 def parse_args():
     parser = ArgumentParser()
@@ -59,7 +55,6 @@ def main():
 
     print("Filtering out users with less than {} ratings".format(MIN_RATINGS))
     grouped = df.groupby(USER_COLUMN)
-    LOGGER.log(key=tags.PREPROC_HP_MIN_RATINGS, value=MIN_RATINGS)
     df = grouped.filter(lambda x: len(x) >= MIN_RATINGS)
 
     print("Mapping original user and item IDs to new sequential IDs")

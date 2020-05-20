@@ -34,9 +34,7 @@ def main():
     # Import necessary plugins for BERT TensorRT
     ctypes.CDLL("libnvinfer_plugin.so", mode=ctypes.RTLD_GLOBAL)
 
-    # The very first context created will use profile 0 by default. We must use this context for profile 0.
-    with open(args.engine, 'rb') as f, trt.Runtime(TRT_LOGGER) as runtime, runtime.deserialize_cuda_engine(f.read()) as engine, engine.create_execution_context() as default_context:
-
+    with open(args.engine, 'rb') as f, trt.Runtime(TRT_LOGGER) as runtime, runtime.deserialize_cuda_engine(f.read()) as engine, engine.create_execution_context() as context:
         # Allocate buffers large enough to store the largest batch size
         max_input_shape = (args.sequence_length, max(args.batch_size))
         max_output_shape = (args.sequence_length, max(args.batch_size), 2, 1, 1)
@@ -65,7 +63,6 @@ def main():
         bench_times = {}
 
         for idx, batch_size in enumerate(sorted(args.batch_size)):
-            context = engine.create_execution_context() if idx else default_context
             context.active_optimization_profile = idx
 
             # Each profile has unique bindings
@@ -104,10 +101,6 @@ def main():
 
             # Compute average time, 95th percentile time and 99th percentile time.
             bench_times[batch_size] = times
-
-            # Clean up each context besides the default context
-            if idx:
-                context.__del__()
 
         [b.free() for b in buffers]
 

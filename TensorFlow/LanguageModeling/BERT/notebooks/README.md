@@ -41,24 +41,10 @@ Here is a short description of each relevant file:
 ### 2.a Build the BERT TensorFlow NGC container:
 To run the notebook you first need to build the Bert TensorFlow container using the following command from the main directory of this repository:
 
-``` bash
+```bash
 docker build . --rm -t bert
 ```
-### 2.b Dataset
-
-We need to download the vocabulary and the bert_config files:
-
-``` python3
-python3 /workspace/bert/data/bertPrep.py --action download --dataset google_pretrained_weights  # Includes vocab
-```
-
-This is only needed during fine-tuning in order to download the Squad dataset:
-
-``` python3
-python3 /workspace/bert/data/bertPrep.py --action download --dataset squad
-```
-
-### 2.c Start of the NGC container to run inference:
+### 2.b Start of the NGC container to run inference:
 Once the image is built, you need to run the container with the `--publish
 0.0.0.0:8888:8888` option to publish Jupyter's port `8888` to the host machine
 at port `8888` over all network interfaces (`0.0.0.0`):
@@ -74,7 +60,23 @@ nvidia-docker run \
   -it bert:latest bash
 ```
 
-Then you can use the following command within the BERT Tensorflow container under
+### 2.c Dataset
+
+We need to download the vocabulary and the bert_config files:
+
+```python3
+python3 /workspace/bert/data/bertPrep.py --action download --dataset google_pretrained_weights  # Includes vocab
+```
+
+This is only needed during fine-tuning in order to download the Squad dataset:
+
+```python3
+python3 /workspace/bert/data/bertPrep.py --action download --dataset squad
+```
+
+### 2.d Starting Jupyter Notebook
+
+Now you can use the following command within the BERT Tensorflow container under
 `/workspace/bert`:
 
 ```bash
@@ -123,7 +125,7 @@ Here is a short description of the relevant file:
 ### 2.a Build the BERT TensorFlow NGC container:
 To run the notebook you first need to build the Bert TensorFlow container using the following command from the main directory of this repository:
 
-``` bash
+```bash
 docker build . --rm -t bert
 ```
 ### 2.b Start of the NGC container to run inference:

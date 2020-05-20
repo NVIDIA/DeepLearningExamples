@@ -95,8 +95,15 @@ def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None,
 
   if hvd is not None and (num_accumulation_steps == 1 or (not allreduce_post_accumulation)):
     optimizer = hvd.DistributedOptimizer(optimizer, sparse_as_dense=True, compression=Compression.fp16 if use_fp16 or manual_fp16 else Compression.none)
-  if manual_fp16 or use_fp16:
-    loss_scale_manager = tf.contrib.mixed_precision.ExponentialUpdateLossScaleManager(init_loss_scale=2**32, incr_every_n_steps=1000, decr_every_n_nan_or_inf=2, decr_ratio=0.5)
+  if use_fp16:
+    loss_scaler = tf.train.experimental.DynamicLossScale(initial_loss_scale=2**32, increment_period=1000, multiplier=2.0)
+    optimizer = tf.train.experimental.enable_mixed_precision_graph_rewrite(optimizer, loss_scaler)
+    loss_scale_value = tf.identity(loss_scaler(), name="loss_scale")
+  if manual_fp16:
+    loss_scale_manager = tf.contrib.mixed_precision.ExponentialUpdateLossScaleManager(init_loss_scale=2 ** 32,
+                                                                                    incr_every_n_steps=1000,
+                                                                                    decr_every_n_nan_or_inf=2,
+                                                                                    decr_ratio=0.5)
     optimizer = tf.contrib.mixed_precision.LossScaleOptimizer(optimizer, loss_scale_manager)
 
   tvars = tf.trainable_variables()
@@ -149,7 +156,10 @@ def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None,
       update_op = tf.cond(update_step,
                           lambda: update(accum_vars), lambda: tf.no_op())
 
-      new_global_step = tf.cond(tf.math.logical_and(update_step, tf.cast(hvd.allreduce(tf.cast(batch_finite, tf.int32)), tf.bool)), lambda: global_step+1, lambda: global_step)
+      new_global_step = tf.cond(tf.math.logical_and(update_step, 
+                                                    tf.cast(hvd.allreduce(tf.cast(batch_finite, tf.int32)), tf.bool)) if hvd is not None else batch_finite, 
+                                lambda: global_step+1,
+                                lambda: global_step)
       new_global_step = tf.identity(new_global_step, name='step_update')
       train_op = tf.group(update_op, [global_step.assign(new_global_step)])
   else:

@@ -26,6 +26,8 @@ import tf_metrics
 import time
 import horovod.tensorflow as hvd
 from utils.utils import LogEvalRunHook, LogTrainRunHook
+import utils.dllogger_class
+from dllogger import Verbosity
 
 flags = tf.flags
 
@@ -53,6 +55,10 @@ flags.DEFINE_string(
 flags.DEFINE_string(
     "vocab_file", None,
     "The vocabulary file that the BERT model was trained on.")
+
+flags.DEFINE_string(
+    "dllog_path", "/results/bert_dllog.json",
+    "filename where dllogger writes to")
 
 flags.DEFINE_string(
     "init_checkpoint", None,
@@ -168,7 +174,7 @@ class DataProcessor(object):
     @classmethod
     def _read_data(cls, input_file):
         """Reads a BIO data."""
-        with tf.io.gfile.Open(input_file, "r") as f:
+        with open(input_file, "r") as f:
             lines = []
             words = []
             labels = []
@@ -315,8 +321,8 @@ def convert_single_example(ex_index, example, label_list, max_seq_length, tokeni
     for (i, label) in enumerate(label_list, 1):
         label_map[label] = i
     label2id_file = os.path.join(FLAGS.output_dir, 'label2id.pkl')
-    if not tf.io.gfile.Exists(label2id_file):
-        with tf.io.gfile.Open(label2id_file, 'wb') as w:
+    if not os.path.exists(label2id_file):
+        with open(label2id_file, 'wb') as w:
             pickle.dump(label_map, w)
     textlist = example.text.split(' ')
     labellist = example.label.split(' ')
@@ -545,10 +551,9 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint=None, learning_rat
                 f = tf_metrics.f1(label_ids, predictions, num_labels, [1, 2], average="macro")
                 #
                 return {
-                    "eval_precision": precision,
-                    "eval_recall": recall,
-                    "eval_f": f,
-                    # "eval_loss": loss,
+                    "precision": precision,
+                    "recall": recall,
+                    "f1": f,
                 }
 
             eval_metric_ops = metric_fn(per_example_loss, label_ids, logits)
@@ -608,12 +613,13 @@ def result_to_pair(predict_line, pred_ids, id2label, writer, err_writer):
 
 
 def main(_):
+    os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false" #causes memory fragmentation for bert leading to OOM
+
     tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
+    dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)
 
     if FLAGS.horovod:
       hvd.init()
-    if FLAGS.use_fp16:
-        os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
 
     processors = {
         "bc5cdr": BC5CDRProcessor,
@@ -749,6 +755,7 @@ def main(_):
                         (num_train_steps - training_hooks[-1].skipped) * global_batch_size)
           tf.compat.v1.logging.info("Throughput Average (sentences/sec) with overhead = %0.2f", avg_sentences_per_second)
           tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+          dllogging.logger.log(step=(), data={"throughput_train": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
           tf.compat.v1.logging.info("-----------------------------")
 
     if FLAGS.do_eval and master_process:
@@ -774,6 +781,7 @@ def main(_):
             tf.compat.v1.logging.info("***** Eval results *****")
             for key in sorted(result.keys()):
                 tf.compat.v1.logging.info("  %s = %s", key, str(result[key]))
+                dllogging.logger.log(step=(), data={key: float(strresult[key])}, verbosity=Verbosity.DEFAULT)
                 writer.write("%s = %s\n" % (key, str(result[key])))
     if FLAGS.do_predict and master_process:
         predict_examples = processor.get_test_examples(FLAGS.data_dir)
@@ -820,11 +828,12 @@ def main(_):
                 i = i + 1
 
         eval_time_elapsed = time.time() - eval_start_time
-        eval_time_wo_overhead = eval_hooks[-1].total_time
 
         time_list = eval_hooks[-1].time_list
         time_list.sort()
-        num_sentences = (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.predict_batch_size
+        # Removing outliers (init/warmup) in throughput computation.
+        eval_time_wo_overhead = sum(time_list[:int(len(time_list) * 0.99)])
+        num_sentences = (int(len(time_list) * 0.99)) * FLAGS.predict_batch_size
 
         avg = np.mean(time_list)
         cf_50 = max(time_list[:int(len(time_list) * 0.50)])
@@ -838,7 +847,7 @@ def main(_):
         tf.compat.v1.logging.info("Total Inference Time = %0.2f for Sentences = %d", eval_time_elapsed,
                         eval_hooks[-1].count * FLAGS.predict_batch_size)
         tf.compat.v1.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", eval_time_wo_overhead,
-                        (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.predict_batch_size)
+                        num_sentences)
         tf.compat.v1.logging.info("Summary Inference Statistics")
         tf.compat.v1.logging.info("Batch size = %d", FLAGS.predict_batch_size)
         tf.compat.v1.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
@@ -850,6 +859,7 @@ def main(_):
         tf.compat.v1.logging.info("Latency Confidence Level 100 (ms) = %0.2f", cf_100 * 1000)
         tf.compat.v1.logging.info("Latency Average (ms) = %0.2f", avg * 1000)
         tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+        dllogging.logger.log(step=(), data={"throughput_val": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
         tf.compat.v1.logging.info("-----------------------------")
 
         tf.compat.v1.logging.info('Reading: %s', test_labels_file)

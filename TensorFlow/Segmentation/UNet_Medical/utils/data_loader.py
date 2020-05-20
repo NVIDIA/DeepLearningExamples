@@ -13,31 +13,38 @@
 # limitations under the License.
 
 """ Dataset class encapsulates the data loading"""
-import math
-import os
 import multiprocessing
+import os
+from collections import deque
 
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 from PIL import Image, ImageSequence
 
 
 class Dataset():
     """Load, separate and prepare the data for training and prediction"""
 
-    def __init__(self, data_dir, batch_size, augment=False, gpu_id=0, num_gpus=1, seed=0):
+    def __init__(self, data_dir, batch_size, fold=1, augment=False, gpu_id=0, num_gpus=1, seed=0):
+        if not os.path.exists(data_dir):
+            raise FileNotFoundError('Cannot find data dir: {}'.format(data_dir))
+
         self._data_dir = data_dir
         self._batch_size = batch_size
         self._augment = augment
 
         self._seed = seed
 
-        self._train_images = \
-            self._load_multipage_tiff(os.path.join(self._data_dir, 'train-volume.tif'))
-        self._train_masks = \
-            self._load_multipage_tiff(os.path.join(self._data_dir, 'train-labels.tif'))
+        images = self._load_multipage_tiff(os.path.join(self._data_dir, 'train-volume.tif'))
+        masks = self._load_multipage_tiff(os.path.join(self._data_dir, 'train-labels.tif'))
         self._test_images = \
             self._load_multipage_tiff(os.path.join(self._data_dir, 'test-volume.tif'))
+
+        train_indices, val_indices = self._get_val_train_indices(len(images), fold)
+        self._train_images = images[train_indices]
+        self._train_masks = masks[train_indices]
+        self._val_images = images[val_indices]
+        self._val_masks = masks[val_indices]
 
         self._num_gpus = num_gpus
         self._gpu_id = gpu_id
@@ -47,12 +54,32 @@ class Dataset():
         return len(self._train_images)
 
     @property
+    def eval_size(self):
+        return len(self._val_images)
+
+    @property
     def test_size(self):
         return len(self._test_images)
 
     def _load_multipage_tiff(self, path):
         """Load tiff images containing many images in the channel dimension"""
         return np.array([np.array(p) for p in ImageSequence.Iterator(Image.open(path))])
+
+    def _get_val_train_indices(self, length, fold, ratio=0.8):
+        assert 0 < ratio <= 1, "Train/total data ratio must be in range (0.0, 1.0]"
+        np.random.seed(self._seed)
+        indices = np.arange(0, length, 1, dtype=np.int)
+        np.random.shuffle(indices)
+        if fold is not None:
+            indices = deque(indices)
+            indices.rotate(fold * int((1.0 - ratio) * length))
+            indices = np.array(indices)
+            train_indices = indices[:int(ratio * len(indices))]
+            val_indices = indices[int(ratio * len(indices)):]
+        else:
+            train_indices = indices
+            val_indices = []
+        return train_indices, val_indices
 
     def _normalize_inputs(self, inputs):
         """Normalize inputs"""
@@ -61,7 +88,7 @@ class Dataset():
         # Center around zero
         inputs = tf.divide(inputs, 127.5) - 1
 
-        inputs = tf.image.resize_images(inputs, (392, 392))
+        inputs = tf.image.resize_images(inputs, (388, 388))
 
         return tf.image.resize_image_with_crop_or_pad(inputs, 572, 572)
 
@@ -98,30 +125,6 @@ class Dataset():
             inputs = tf.expand_dims(inputs, 0)
             labels = tf.expand_dims(labels, 0)
 
-            # Elastic deformation
-
-            alpha = tf.random.uniform([], minval=0, maxval=34)
-
-            # Create random vector flows
-            delta_x = tf.random.uniform([1, 4, 4, 1], minval=-1, maxval=1)
-            delta_y = tf.random.uniform([1, 4, 4, 1], minval=-1, maxval=1)
-
-            # Build 2D flow and apply
-            flow = tf.concat([delta_x, delta_y], axis=-1) * alpha
-            inputs = tf.contrib.image.dense_image_warp(inputs,
-                                                       tf.image.resize_images(flow, (572, 572)))
-            labels = tf.contrib.image.dense_image_warp(labels,
-                                                       tf.image.resize_images(flow, (572, 572)))
-
-            # Rotation invariance
-
-            # Rotate by random angle\
-            radian = tf.random_uniform([], maxval=360) * math.pi / 180
-            inputs = tf.contrib.image.rotate(inputs, radian)
-            labels = tf.contrib.image.rotate(labels, radian)
-
-            # Shift invariance
-
             # Random crop and resize
             left = tf.random_uniform([]) * 0.3
             right = 1 - tf.random_uniform([]) * 0.3
@@ -147,17 +150,27 @@ class Dataset():
 
         return (inputs, labels)
 
-    def train_fn(self):
+    def train_fn(self, drop_remainder=False):
         """Input function for training"""
         dataset = tf.data.Dataset.from_tensor_slices(
             (self._train_images, self._train_masks))
-        dataset = dataset.shuffle(self._batch_size * 3)
-        dataset = dataset.repeat()
         dataset = dataset.shard(self._num_gpus, self._gpu_id)
-        dataset = dataset.apply(
-            tf.data.experimental.map_and_batch(map_func=self._preproc_samples,
-                                               batch_size=self._batch_size,
-                                               num_parallel_calls=multiprocessing.cpu_count()))
+        dataset = dataset.repeat()
+        dataset = dataset.shuffle(self._batch_size * 3)
+        dataset = dataset.map(self._preproc_samples,
+                              num_parallel_calls=multiprocessing.cpu_count() // self._num_gpus)
+        dataset = dataset.batch(self._batch_size, drop_remainder=drop_remainder)
+        dataset = dataset.prefetch(self._batch_size)
+
+        return dataset
+
+    def eval_fn(self, count=1):
+        """Input function for validation"""
+        dataset = tf.data.Dataset.from_tensor_slices(
+            (self._val_images, self._val_masks))
+        dataset = dataset.repeat(count=count)
+        dataset = dataset.map(self._preproc_samples)
+        dataset = dataset.batch(self._batch_size)
         dataset = dataset.prefetch(self._batch_size)
 
         return dataset

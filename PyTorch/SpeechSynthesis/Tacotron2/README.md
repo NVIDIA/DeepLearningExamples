@@ -231,7 +231,7 @@ and encapsulates some dependencies. Aside from these dependencies, ensure you
 have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 19.06-py3+ NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
+* [PyTorch 20.03-py3+ NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
 or newer
 * [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
 
@@ -320,18 +320,30 @@ Ensure your loss values are comparable to those listed in the table in the
 7. Start inference.
 After you have trained the Tacotron 2 and WaveGlow models, you can perform
 inference using the respective checkpoints that are passed as `--tacotron2`
-and `--waveglow` arguments.
+and `--waveglow` arguments. Tacotron2 and WaveGlow checkpoints can also be downloaded from NGC:
+
+   https://ngc.nvidia.com/catalog/models/nvidia:tacotron2pyt_fp16/files?version=3
+   
+   https://ngc.nvidia.com/catalog/models/nvidia:waveglow256pyt_fp16/files?version=2
 
    To run inference issue:
 
    ```bash
-   python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ -i phrases/phrase.txt --amp-run
+   python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> --wn-channels 256 -o output/ -i phrases/phrase.txt --amp-run
    ```
 
    The speech is generated from lines of text in the file that is passed with
    `-i` argument. The number of lines determines inference batch size. To run
    inference in mixed precision, use the `--amp-run` flag. The output audio will
    be stored in the path specified by the `-o` argument.
+
+   You can also run inference on CPU with TorchScript by adding flag --cpu-run:
+   ```bash
+   export CUDA_VISIBLE_DEVICES=
+   ```
+   ```bash
+   python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> --wn-channels 256 --cpu-run -o output/ -i phrases/phrase.txt
+   ```    
 
 ## Advanced
 
@@ -370,8 +382,9 @@ WaveGlow models.
 
 * `--epochs` - number of epochs (Tacotron 2: 1501, WaveGlow: 1001)
 * `--learning-rate` - learning rate (Tacotron 2: 1e-3, WaveGlow: 1e-4)
-* `--batch-size` - batch size (Tacotron 2 FP16/FP32: 128/64, WaveGlow FP16/FP32: 10/4)
+* `--batch-size` - batch size (Tacotron 2 FP16/FP32: 104/48, WaveGlow FP16/FP32: 10/4)
 * `--amp-run` - use mixed precision training
+* `--cpu-run` - use CPU with TorchScript for inference
 
 #### Shared audio/STFT parameters
 
@@ -469,7 +482,7 @@ models and input text as a text file, with one phrase per line.
 
 To run inference, issue:
 ```bash
-python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> -o output/ --include-warmup -i phrases/phrase.txt --amp-run
+python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> --wn-channels 256 -o output/ --include-warmup -i phrases/phrase.txt --amp-run
 ```
 Here, `Tacotron2_checkpoint` and `WaveGlow_checkpoint` are pre-trained
 checkpoints for the respective models, and `phrases/phrase.txt` contains input 
@@ -479,6 +492,14 @@ and [audio_fp32](./audio/audio_fp32.wav) were generated using checkpoints from
 mixed precision and FP32 training, respectively.
 
 You can find all the available options by calling `python inference.py --help`.
+
+You can also run inference on CPU with TorchScript by adding flag --cpu-run:
+```bash
+export CUDA_VISIBLE_DEVICES=
+```
+```bash
+python inference.py --tacotron2 <Tacotron2_checkpoint> --waveglow <WaveGlow_checkpoint> --wn-channels 256 --cpu-run -o output/ -i phrases/phrase.txt
+```    
 
 ## Performance
 
@@ -496,21 +517,21 @@ To benchmark the training performance on a specific batch size, run:
 * For 1 GPU
 	* FP16
         ```bash
-        python train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-enabled --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_2500_filelist.txt --dataset-path <dataset-path> --amp-run
+        python train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-enabled --log-file nvlog.json --load-mel-from-disk --training-files=filelists/ljs_mel_text_train_subset_2500_filelist.txt --validation-files=filelists/ljs_mel_text_val_filelist.txt --dataset-path <dataset-path> --amp-run
         ```
 	* FP32
         ```bash
-        python train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-enabled --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_2500_filelist.txt --dataset-path <dataset-path>
+        python train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-enabled --log-file nvlog.json --load-mel-from-disk --training-files=filelists/ljs_mel_text_train_subset_2500_filelist.txt --validation-files=filelists/ljs_mel_text_val_filelist.txt --dataset-path <dataset-path>
         ```
 
 * For multiple GPUs
 	* FP16
         ```bash
-        python -m multiproc train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-enabled --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_2500_filelist.txt --dataset-path <dataset-path> --amp-run
+        python -m multiproc train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-enabled --log-file nvlog.json --load-mel-from-disk --training-files=filelists/ljs_mel_text_train_subset_2500_filelist.txt --validation-files=filelists/ljs_mel_text_val_filelist.txt --dataset-path <dataset-path> --amp-run
         ```
 	* FP32
         ```bash
-        python -m multiproc train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-enabled --log-file nvlog.json --training-files filelists/ljs_audio_text_train_subset_2500_filelist.txt --dataset-path <dataset-path>
+        python -m multiproc train.py -m Tacotron2 -o <output_dir> -lr 1e-3 --epochs 10 -bs <batch_size> --weight-decay 1e-6 --grad-clip-thresh 1.0 --cudnn-enabled --log-file nvlog.json --load-mel-from-disk --training-files=filelists/ljs_mel_text_train_subset_2500_filelist.txt --validation-files=filelists/ljs_mel_text_val_filelist.txt --dataset-path <dataset-path>
         ```
 
 **WaveGlow**
@@ -557,6 +578,7 @@ The output log files will contain performance numbers for Tacotron 2 model
 and for WaveGlow (number of output samples per second, reported as `waveglow_items_per_sec`).
 The `inference.py` script will run a few warmup iterations before running the benchmark.
 
+
 ### Results
 
 The following sections provide details on how we achieved our performance
@@ -579,10 +601,10 @@ All of the results were produced using the `train.py` script as described in the
 | WaveGlow FP16  | -2.2054 | -5.7602 |  -5.901 | -5.9706 | -6.0258 |
 | WaveGlow FP32  | -3.0327 |  -5.858 | -6.0056 | -6.0613 | -6.1087 |
 
-Tacotron 2 FP16 loss - batch size 128 (mean and std over 16 runs)
+Tacotron 2 FP16 loss - batch size 104 (mean and std over 16 runs)
 ![](./img/tacotron2_amp_loss.png "Tacotron 2 FP16 loss")
 
-Tacotron 2 FP32 loss - batch size 64 (mean and std over 16 runs)
+Tacotron 2 FP32 loss - batch size 48 (mean and std over 16 runs)
 ![](./img/tacotron2_fp32_loss.png "Tacotron 2 FP16 loss")
 
 WaveGlow FP16 loss - batch size 10 (mean and std over 16 runs)
@@ -597,7 +619,7 @@ WaveGlow FP32 loss - batch size 4 (mean and std over 16 runs)
 ##### Training performance: NVIDIA DGX-1 (8x V100 16G)
 
 Our results were obtained by running the `./platform/train_{tacotron2,waveglow}_{AMP,FP32}_DGX1_16GB_8GPU.sh`
-training script in the PyTorch-19.06-py3 NGC container on NVIDIA DGX-1 with
+training script in the PyTorch-19.12-py3 NGC container on NVIDIA DGX-1 with
 8x V100 16G GPUs. Performance numbers (in output mel-spectrograms per second for
 Tacotron 2 and output samples per second for WaveGlow) were averaged over
 an entire training epoch.
@@ -606,9 +628,9 @@ This table shows the results for Tacotron 2:
 
 |Number of GPUs|Batch size per GPU|Number of mels used with mixed precision|Number of mels used with FP32|Speed-up with mixed precision|Multi-GPU weak scaling with mixed precision|Multi-GPU weak scaling with FP32|
 |---:|---:|---:|---:|---:|---:|---:|
-|1|128@FP16, 64@FP32 | 20,992  | 12,933 | 1.62 | 1.00 | 1.00 |
-|4|128@FP16, 64@FP32 | 74,989  | 46,115 | 1.63 | 3.57 | 3.57 |
-|8|128@FP16, 64@FP32 | 140,060 | 88,719 | 1.58 | 6.67 | 6.86 |
+|1|104@FP16, 48@FP32 | 15,313 | 9,674 | 1.58 | 1.00 | 1.00 |
+|4|104@FP16, 48@FP32 | 53,661 | 32,778 | 1.64 | 3.50 | 3.39 |
+|8|104@FP16, 48@FP32 | 100,422 | 59,549 | 1.69 | 6.56 | 6.16 |
 
 The following table shows the results for WaveGlow:
 
@@ -626,9 +648,9 @@ The following table shows the expected training time for convergence for Tacotro
 
 |Number of GPUs|Batch size per GPU|Time to train with mixed precision (Hrs)|Time to train with FP32 (Hrs)|Speed-up with mixed precision|
 |---:|---:|---:|---:|---:|
-|1| 128@FP16, 64@FP32 | 153 | 234 | 1.53 |
-|4| 128@FP16, 64@FP32 | 42 | 64 | 1.54 |
-|8| 128@FP16, 64@FP32 | 22 | 33 | 1.52 |
+|1| 104@FP16, 48@FP32 | 193 | 312 | 1.62 |
+|4| 104@FP16, 48@FP32 | 53 | 85 | 1.58 |
+|8| 104@FP16, 48@FP32 | 31 | 45 | 1.47 |
 
 The following table shows the expected training time for convergence for WaveGlow (1001 epochs):
 
@@ -672,6 +694,10 @@ the PyTorch-19.09-py3 NGC container. Please note that to reproduce the results,
 you need to provide pretrained checkpoints for Tacotron 2 and WaveGlow. Please
 edit the script to provide your checkpoint filenames.
 
+
+To compare with inference performance on CPU with TorchScript, benchmark inference on CPU using `./run_latency_tests_cpu.sh` script and get the performance numbers for batch size 1 and 4. Intel's optimization for PyTorch on CPU are added, you need to set "export OMP_NUM_THREADS=num physical cores" based on your CPU's core number, for your reference: https://software.intel.com/content/www/us/en/develop/articles/maximize-tensorflow-performance-on-cpu-considerations-and-recommendations-for-inference.html
+
+
 ## Release notes
 
 ### Changelog
@@ -704,8 +730,17 @@ November 2019
 * Implemented training resume from checkpoint
 * Added notebook for running Tacotron 2 and WaveGlow in TRTIS.
 
-December  2019
-* Added `trt` subfolder for running Tacotron 2 and WaveGlow in TensorRT.
+December 2019
+* Added export and inference scripts for TensorRT. See [Tacotron2 TensorRT README](trt/README.md).
+
+January 2020
+* Updated batch sizes and performance results for Tacotron 2.
+
+March 2020
+* Added Tacotron 2 and WaveGlow inference using TensorRT Inference Server with custom TensorRT backend in `trtis_cpp`
+* Added Conversational AI demo script in `notebooks/conversationalai`
+* Fixed loading CUDA RNG state in `load_checkpoint()` function in `train.py`
+* Fixed FP16 export to TensorRT in `trt/README.md`
 
 ### Known issues
 

@@ -30,6 +30,8 @@ import tensorflow as tf
 import horovod.tensorflow as hvd
 import time
 from utils.utils import LogEvalRunHook, LogTrainRunHook
+import utils.dllogger_class
+from dllogger import Verbosity
 from utils.create_glue_data import *
 import numpy as np
 
@@ -58,6 +60,9 @@ flags.DEFINE_string(
     "The output directory where the model checkpoints will be written.")
 
 ## Other parameters
+flags.DEFINE_string(
+    "dllog_path", "/results/bert_dllog.json",
+    "filename where dllogger writes to")
 
 flags.DEFINE_string(
     "init_checkpoint", None,
@@ -424,12 +429,14 @@ def input_fn_builder(features, batch_size, seq_length, is_training, drop_remaind
 
 
 def main(_):
+  os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false" #causes memory fragmentation for bert leading to OOM
+
   tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
+  dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)
 
   if FLAGS.horovod:
     hvd.init()
-  if FLAGS.use_fp16:
-    os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
+
   processors = {
       "cola": ColaProcessor,
       "mnli": MnliProcessor,
@@ -592,11 +599,12 @@ def main(_):
     result = estimator.evaluate(input_fn=eval_input_fn, hooks=eval_hooks)
 
     eval_time_elapsed = time.time() - eval_start_time
-    eval_time_wo_overhead = eval_hooks[-1].total_time
 
     time_list = eval_hooks[-1].time_list
     time_list.sort()
-    num_sentences = (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.eval_batch_size
+    # Removing outliers (init/warmup) in throughput computation.
+    eval_time_wo_overhead = sum(time_list[:int(len(time_list) * 0.99)])
+    num_sentences = (int(len(time_list) * 0.99)) * FLAGS.predict_batch_size
 
     avg = np.mean(time_list)
     cf_50 = max(time_list[:int(len(time_list) * 0.50)])
@@ -610,7 +618,7 @@ def main(_):
     tf.compat.v1.logging.info("Total Inference Time = %0.2f for Sentences = %d", eval_time_elapsed,
                     eval_hooks[-1].count * FLAGS.eval_batch_size)
     tf.compat.v1.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", eval_time_wo_overhead,
-                    (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.eval_batch_size)
+                    num_sentences)
     tf.compat.v1.logging.info("Summary Inference Statistics on EVAL set")
     tf.compat.v1.logging.info("Batch size = %d", FLAGS.eval_batch_size)
     tf.compat.v1.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
@@ -622,6 +630,7 @@ def main(_):
     tf.compat.v1.logging.info("Latency Confidence Level 100 (ms) = %0.2f", cf_100 * 1000)
     tf.compat.v1.logging.info("Latency Average (ms) = %0.2f", avg * 1000)
     tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+    dllogging.logger.log(step=(), data={"throughput_train": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
     tf.compat.v1.logging.info("-----------------------------")
 
 
@@ -629,6 +638,7 @@ def main(_):
     with tf.io.gfile.GFile(output_eval_file, "w") as writer:
       tf.compat.v1.logging.info("***** Eval results *****")
       for key in sorted(result.keys()):
+        dllogging.logger.log(step=(), data={key: float(result[key])}, verbosity=Verbosity.DEFAULT)
         tf.compat.v1.logging.info("  %s = %s", key, str(result[key]))
         writer.write("%s = %s\n" % (key, str(result[key])))
 
@@ -684,7 +694,6 @@ def main(_):
                     predict_hooks[-1].count * FLAGS.predict_batch_size)
     tf.compat.v1.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", predict_time_wo_overhead,
                     (predict_hooks[-1].count - predict_hooks[-1].skipped) * FLAGS.predict_batch_size)
-
     tf.compat.v1.logging.info("Summary Inference Statistics on TEST SET")
     tf.compat.v1.logging.info("Batch size = %d", FLAGS.predict_batch_size)
     tf.compat.v1.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
@@ -696,6 +705,7 @@ def main(_):
     tf.compat.v1.logging.info("Latency Confidence Level 100 (ms) = %0.2f", cf_100 * 1000)
     tf.compat.v1.logging.info("Latency Average (ms) = %0.2f", avg * 1000)
     tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+    dllogging.logger.log(step=(), data={"throughput_val": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
     tf.compat.v1.logging.info("-----------------------------")
 
 

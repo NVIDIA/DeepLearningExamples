@@ -122,7 +122,7 @@ def parse_args():
     parser.add_argument("--wav", type=str, help='absolute path to .wav file (16KHz)')
     parser.add_argument("--max_workspace_size", default=0, type=int, help="Maximum GPU memory workspace size for constructed engine; needed when building")
     parser.add_argument("--transpose", action="store_true", default=False, help="If set, will transpose input")
-    parser.add_argument("--dynamic_shape", action="store_true", default=False, help="If set, use dynamic shape")
+    parser.add_argument("--static_shape", action="store_true", default=False, help="If set, use static shape otherwise dynamic shape. Dynamic shape is always preferred.")
 
     return parser.parse_args()
 

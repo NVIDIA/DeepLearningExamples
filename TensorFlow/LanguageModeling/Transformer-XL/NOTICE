@@ -1,0 +1,9 @@
+Transformer-XL for Tensorflow
+
+This repository includes software from https://github.com/kimiyoung/transformer-xl licensed under the Apache License 2.0.
+
+This repository includes software from https://github.com/salesforce/awd-lstm-lm licensed under the BSD-3-Clause license.
+
+This repository includes software from https://github.com/cybertronai/transformer-xl licensed under the Apache License 2.0.
+
+This repository includes software from https://github.com/cybertronai/pytorch-lamb licensed under the MIT license.

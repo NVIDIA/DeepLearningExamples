@@ -41,12 +41,20 @@ def main(_):
     hvd.init()
 
     FLAGS = PARSER.parse_args()
-    backends = [StdOutBackend(Verbosity.DEFAULT)]
 
-    if FLAGS.log_dir:
-        backends += [JSONStreamBackend(Verbosity.DEFAULT, FLAGS.log_dir)]
+    backends = []
+
+    if hvd.rank() == 0:
+        backends += [StdOutBackend(Verbosity.DEFAULT)]
+
+        if FLAGS.log_dir:
+            backends += [JSONStreamBackend(Verbosity.DEFAULT, FLAGS.log_dir)]
 
     DLLogger.init(backends=backends)
+
+    for key in vars(FLAGS):
+        DLLogger.log(step="PARAMETER", data={str(key): vars(FLAGS)[key]})
+
     os.environ['CUDA_CACHE_DISABLE'] = '0'
 
     os.environ['HOROVOD_GPU_ALLREDUCE'] = 'NCCL'
@@ -65,9 +73,6 @@ def main(_):
     os.environ['TF_AUTOTUNE_THRESHOLD'] = '2'
     os.environ['TF_DISABLE_NVTX_RANGES'] = '1'
 
-    if hvd.rank() == 0:
-        DLLogger.log(step=tuple(), data={"mixed_precision": "ENABLED" if FLAGS.use_amp else "DISABLED"})
-
     dataset = MSDDataset(json_path=os.path.join(FLAGS.data_dir, 'dataset.json'),
                          dst_size=FLAGS.input_shape,
                          seed=FLAGS.seed,
@@ -85,9 +90,12 @@ def main(_):
     config.gpu_options.allow_growth = True
     config.gpu_options.visible_device_list = str(hvd.local_rank())
 
+    if FLAGS.use_amp:
+        config.graph_options.rewrite_options.auto_mixed_precision = 1
+
     run_config = tf.estimator.RunConfig(
         save_summary_steps=None,
-        save_checkpoints_steps=None if FLAGS.benchmark else dataset.train_steps * FLAGS.train_epoch,
+        save_checkpoints_steps=None if FLAGS.benchmark else dataset.train_steps * FLAGS.train_epochs,
         save_checkpoints_secs=None,
         tf_random_seed=None,
         session_config=config,
@@ -112,28 +120,20 @@ def main(_):
             if hvd.rank() == 0:
                 train_hooks += [TrainHook(FLAGS.log_every, DLLogger)]
 
-        DLLogger.log(step=tuple(), data={"training": "START"})
-
         estimator.train(
             input_fn=lambda: dataset.train_fn(FLAGS.augment),
             steps=steps,
             hooks=train_hooks)
-
-        DLLogger.log(step=tuple(), data={"training": "FINISHED"})
 
     if 'evaluate' in FLAGS.exec_mode:
         if hvd.rank() == 0:
             if FLAGS.train_split >= 1.0:
                 raise ValueError("Missing argument: --train_split < 1.0")
 
-            DLLogger.log(step=tuple(), data={"evaluating": "START"})
-
             result = estimator.evaluate(
                 input_fn=dataset.eval_fn,
                 steps=dataset.eval_steps,
                 hooks=[])
-
-            DLLogger.log(step=tuple(), data={"evaluating": "FINISH"})
 
             DLLogger.log(step=tuple(), data={'background_dice': str(result['background dice'])})
             DLLogger.log(step=tuple(), data={'anterior_dice': str(result['Anterior dice'])})
@@ -163,3 +163,4 @@ def main(_):
 
 if __name__ == '__main__':
     tf.compat.v1.app.run()
+

@@ -85,8 +85,8 @@ To download and preprocess pre-training data as well as the required vocab files
 bash biobert/scripts/biobert_data_download.sh
 ```
 
-Datasets for finetuning for NER can be obtained from this (repository)[https://github.com/ncbi-nlp/BLUE_Benchmark/releases/tag/0.1]
-Datasets for finetuning for RE can be obtained from this (repository)[https://github.com/arwhirang/recursive_chemprot/tree/master/Demo/tree_LSTM/data]
+Datasets for finetuning for NER can be obtained from this [repository](https://github.com/ncbi-nlp/BLUE_Benchmark/releases/tag/0.1)
+Datasets for finetuning for RE can be obtained from this [repository](https://github.com/arwhirang/recursive_chemprot/tree/master/Demo/tree_LSTM/data)
 
 Place them both in `/workspace/bert/data/biobert/` to be automatically picked up by our scripts.
 
@@ -440,7 +440,7 @@ Our results were obtained by running the `scripts/run_pretraining_lamb.sh` train
 | DGX1  | 16 | FP16 | 64, 8   |8,  32 | 12.62  | 0.87 |
 | DGX1  | 32 | FP16 | 64, 8   |4,  16 | 6.97   | 0.87 |
 
-###### Fine-tuning accuracy
+#### Fine-tuning accuracy
 
 | **Task** | **F1** | **Precision** | **Recall** |
 |:-------:|:----:|:----:|:----:|

@@ -27,18 +27,6 @@
 
 import tensorrt as trt
 
-def binding_info(engine, context):
-    for i in range(engine.num_bindings):
-        print("|||| binding", i)
-        print("|||| binding_is_input", engine.binding_is_input(i))
-        print("|||| get_binding_dtype", engine.get_binding_dtype(i))
-        print("|||| get_binding_name", engine.get_binding_name(i))
-        print("|||| get_binding_shape", engine.get_binding_shape(i))
-        print("|||| get_binding_vectorized_dim", engine.get_binding_vectorized_dim(i))
-
-    print("|||| all_binding_shapes_specified", context.all_binding_shapes_specified)
-    print("|||| all_shape_inputs_specified", context.all_shape_inputs_specified)
-
 
 def is_dimension_dynamic(dim):
     return dim is None or dim <= 0
@@ -51,16 +39,18 @@ def is_shape_dynamic(shape):
 def run_trt_engine(context, engine, tensors):
 
     bindings = [None]*engine.num_bindings
-    for name in tensors.keys():
+    for name,tensor in tensors['inputs'].items():
         idx = engine.get_binding_index(name)
-        tensor = tensors.get(name)
         bindings[idx] = tensor.data_ptr()
         if engine.is_shape_binding(idx) and is_shape_dynamic(context.get_shape(idx)):
             context.set_shape_input(idx, tensor)
-        elif is_shape_dynamic(context.get_binding_shape(idx)):
+        elif is_shape_dynamic(engine.get_binding_shape(idx)):
             context.set_binding_shape(idx, tensor.shape)
 
-    # binding_info(engine, context)
+    for name,tensor in tensors['outputs'].items():
+        idx = engine.get_binding_index(name)
+        bindings[idx] = tensor.data_ptr()
+
     context.execute_v2(bindings=bindings)
 
 
@@ -68,6 +58,46 @@ def load_engine(engine_filepath, trt_logger):
     with open(engine_filepath, "rb") as f, trt.Runtime(trt_logger) as runtime:
         engine = runtime.deserialize_cuda_engine(f.read())
     return engine
+
+
+def engine_info(engine_filepath):
+
+    TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+    engine = load_engine(engine_filepath, TRT_LOGGER)
+
+    binding_template = r"""
+{btype} {{
+  name: "{bname}"
+  data_type: {dtype}
+  dims: {dims}
+}}"""
+    type_mapping = {"DataType.HALF": "TYPE_FP16",
+                    "DataType.FLOAT": "TYPE_FP32",
+                    "DataType.INT32": "TYPE_INT32",
+                    "DataType.BOOL" : "TYPE_BOOL"}
+
+    print("engine name", engine.name)
+    print("has_implicit_batch_dimension", engine.has_implicit_batch_dimension)
+    start_dim = 0 if engine.has_implicit_batch_dimension else 1
+    print("num_optimization_profiles", engine.num_optimization_profiles)
+    print("max_batch_size:", engine.max_batch_size)
+    print("device_memory_size:", engine.device_memory_size)
+    print("max_workspace_size:", engine.max_workspace_size)
+    print("num_layers:", engine.num_layers)
+
+    for i in range(engine.num_bindings):
+        btype = "input" if engine.binding_is_input(i) else "output"
+        bname = engine.get_binding_name(i)
+        dtype = engine.get_binding_dtype(i)
+        bdims = engine.get_binding_shape(i)
+        config_values = {
+            "btype": btype,
+            "bname": bname,
+            "dtype": type_mapping[str(dtype)],
+            "dims": list(bdims[start_dim:])
+        }
+        final_binding_str = binding_template.format_map(config_values)
+        print(final_binding_str)
 
 
 def build_engine(model_file, shapes, max_ws=512*1024*1024, fp16=False):
@@ -90,9 +120,7 @@ def build_engine(model_file, shapes, max_ws=512*1024*1024, fp16=False):
         with open(model_file, 'rb') as model:
             parsed = parser.parse(model.read())
             for i in range(parser.num_errors):
-                e = parser.get_error(i)
+                print("TensorRT ONNX parser error:", parser.get_error(i))
             engine = builder.build_engine(network, config=config)
 
             return engine
-
-

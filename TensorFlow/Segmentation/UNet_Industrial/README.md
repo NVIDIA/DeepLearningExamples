@@ -138,7 +138,7 @@ Aside from these dependencies, ensure you have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
 
-* [TensorFlow 19.03-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)
+* [TensorFlow 19.12-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)
 * (optional) NVIDIA Volta GPU (see section below) - for best training performance using mixed precision
 
 For more information about how to get started with NGC containers, see the
@@ -218,11 +218,6 @@ For example:
 cd scripts/
 ./UNet_FP32_EVAL.sh <path to result repository> <path to dataset> <DAGM2007 classID (1-10)>
 ```
-
-If you wish to evaluate external checkpoint, make sure to put the TF ckpt files inside a folder named "checkpoints"
-and provide its parent path as `<path to result repository>` in the example above. 
-Be aware that the script will not fail if it does not find the checkpoint. 
-It will randomly initialize the weights and run performance tests.
 
 ## Advanced
 
@@ -374,7 +369,7 @@ The following sections provide details on the achieved results in training accur
 #### Training accuracy results
 
 Our results were obtained by running the `./scripts/UNet_{FP32, AMP}_{1, 4, 8}GPU.sh` training
-script in the Tensorflow:19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
+script in the Tensorflow:19.12-tf1-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
 
 ##### Threshold = 0.75
 
@@ -481,30 +476,29 @@ script in the Tensorflow:19.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 16
 <!-- Spreedsheet to Markdown: https://thisdavej.com/copy-table-in-excel-and-paste-as-a-markdown-table/ -->
 
 Our results were obtained by running the scripts
-`./scripts/benchmarking/DGX1v_trainbench_{FP16, FP32, FP32AMP, FP32FM}_{1, 4, 8}GPU.sh` training script in the
-TensorFlow 19.03-py3 NGC container on an NVIDIA DGX-1 with 8 V100 16G GPUs.
+`./scripts/benchmarking/DGX1v_trainbench_{FP32, AMP}_{1, 4, 8}GPU.sh` training script in the
+TensorFlow `19.12-tf1-py3` NGC container on an NVIDIA DGX-1 with 8 V100 16G GPUs.
 
-
-| # GPUs | Precision                       | Throughput (Imgs/sec) | Training Time | Speedup |
-|--------|---------------------------------|-----------------------|---------------|---------|
-| 1      | FP32                            | 89                    | 7m44          | 1.00    |
-| 1      | Automatic Mixed Precision (AMP) | 104                   | 6m40          | 1.17    |
-| 4      | FP32                            | 261                   | 2m48          | 1.00    |
-| 4      | Automatic Mixed Precision (AMP) | 302                   | 2m27          | 1.16    |
-| 8      | FP32                            | 445                   | 1m44          | 1.00    |
-| 8      | Automatic Mixed Precision (AMP) | 491                   | 1m36          | 1.10    |
+| # GPUs | Precision                       | Throughput (Imgs/sec) | AMP Speedup | Scaling efficiency |
+|--------|---------------------------------|-----------------------|-------------|--------------------|
+| 1      | FP32                            | 92                    | 1.00        | 1.00               |
+| 1      | Automatic Mixed Precision (AMP) | 167                   | 1.82        | 1.00               |
+| 4      | FP32                            | 299                   | 1.00        | 3.25               |
+| 4      | Automatic Mixed Precision (AMP) | 458                   | 1.53        | 2.74               |
+| 8      | FP32                            | 507                   | 1.00        | 5.51               |
+| 8      | Automatic Mixed Precision (AMP) | 561                   | 1.11        | 3.36               |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 #### Inference performance results
 
-Our results were obtained by running the aforementioned scripts in the TensorFlow 
-19.03-py3 NGC container on an NVIDIA DGX-1 server with 8 V100 16G GPUs.
+Our results were obtained by running the scripts `./scripts/benchmarking/DGX1v_evalbench_{FP32, AMP}.sh`
+evaluation script in the `19.12-tf1-py3` NGC container on an NVIDIA DGX-1 server with 8 V100 16G GPUs.
 
 | # GPUs | Precision                       | Throughput (Imgs/sec) | Speedup |
 |--------|---------------------------------|-----------------------|---------|
-| 1      | FP32                            | 228                   | 1.00    |
-| 1      | Automatic Mixed Precision (AMP) | 301                   | 1.32    |
+| 1      | FP32                            | 306                   | 1.00    |
+| 1      | Automatic Mixed Precision (AMP) | 550                   | 1.80    |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 

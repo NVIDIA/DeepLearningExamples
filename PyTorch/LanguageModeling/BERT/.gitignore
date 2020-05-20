@@ -12,7 +12,12 @@ __pycache__/
 data/*/*/   
 data/*/*.zip
 checkpoints/
-results/
+results
+results/*
+
+#Editor
+.idea
+.idea/*
 
 # Distribution / packaging
 .Python
