@@ -193,7 +193,7 @@ def main():
         measurements = {}
 
         with MeasureTime(measurements, "pre_processing", args.cpu_run):
-            sequences_padded, input_lengths = prepare_input_sequence(texts)
+            sequences_padded, input_lengths = prepare_input_sequence(texts, args.cpu_run)
 
         with torch.no_grad():
             with MeasureTime(measurements, "latency", args.cpu_run):
