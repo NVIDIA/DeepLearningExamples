@@ -122,6 +122,7 @@ flags.DEFINE_bool("manual_fp16", False, "Whether to use fp32 or fp16 arithmetic 
 flags.DEFINE_bool("use_xla", False, "Whether to enable XLA JIT compilation.")
 
 flags.DEFINE_bool("use_fp16", False, "Whether to enable AMP ops.")
+flags.DEFINE_integer("init_loss_scale", 2**32, "Initial value of loss scale if mixed precision training")
 
 # report samples/sec, total loss and learning rate during training
 class _LogSessionRunHook(tf.estimator.SessionRunHook):
@@ -142,7 +143,9 @@ class _LogSessionRunHook(tf.estimator.SessionRunHook):
     self.loss = 0.0 # accumulation of loss in each step between every print
 
     self.total_time = 0.0 # total time taken to train (excluding warmup + ckpt saving steps)
+    self.step_time = 0.0 # time taken per step
     self.init_global_step = session.run(tf.train.get_global_step()) # training starts at init_global_step
+    self.skipped = 0
 
   def before_run(self, run_context):
     self.t0 = time.time()
@@ -185,18 +188,25 @@ class _LogSessionRunHook(tf.estimator.SessionRunHook):
           self.global_step, update_step, total_loss, lr, nsp_loss, mlm_loss = run_values.\
               results
 
-    # Removing first two steps after every checkpoint save from timing
-    if (self.global_step - self.init_global_step) % self.save_ckpt_steps <= 5:
-      print("Skipping time record for ", self.global_step, " due to checkpoint-saving/warmup overhead")
-    else:
-      self.total_time += run_time
     self.elapsed_secs += run_time
+    self.step_time += run_time
 
     print_step = self.global_step + 1 # One-based index for printing.
     self.loss += total_loss
     self.all_count += 1
     if update_step:
+
         self.count += 1
+
+        # Removing first six steps after every checkpoint save from timing
+        if (self.global_step - self.init_global_step) % self.save_ckpt_steps < 6:
+          print("Skipping time record for ", self.global_step, " due to checkpoint-saving/warmup overhead")
+          self.skipped += 1
+        else:
+          self.total_time += self.step_time
+
+        self.step_time = 0.0 #Reset Step Time
+
         if (print_step == 1 or print_step % self.display_every == 0):
             dt = self.elapsed_secs / self.count
             sent_per_sec = self.global_batch_size / dt
@@ -231,15 +241,11 @@ class _LogSessionRunHook(tf.estimator.SessionRunHook):
                                            "total_loss":float(total_loss), "avg_loss_step":float(avg_loss_step),
                                            "learning_rate": str(lr)},
                                      verbosity=Verbosity.DEFAULT)
+
             self.elapsed_secs = 0.0
             self.count = 0
             self.loss = 0.0
             self.all_count = 0
-  def end(self, session):
-    num_global_steps = self.global_step - self.init_global_step
-    self.skipped = (num_global_steps // self.save_ckpt_steps) * 5 + \
-                   min(5, num_global_steps % self.save_ckpt_steps)
-
 
 def model_fn_builder(bert_config, init_checkpoint, learning_rate,
                      num_train_steps, num_warmup_steps,
@@ -310,7 +316,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
     if mode == tf.estimator.ModeKeys.TRAIN:
       train_op = optimization.create_optimizer(
           total_loss, learning_rate, num_train_steps, num_warmup_steps,
-          hvd, FLAGS.manual_fp16, FLAGS.use_fp16, FLAGS.num_accumulation_steps, FLAGS.optimizer_type, FLAGS.allreduce_post_accumulation)
+          hvd, FLAGS.manual_fp16, FLAGS.use_fp16, FLAGS.num_accumulation_steps, FLAGS.optimizer_type, FLAGS.allreduce_post_accumulation, FLAGS.init_loss_scale)
 
       output_spec = tf.estimator.EstimatorSpec(
           mode=mode,

@@ -121,8 +121,10 @@ def extract_run_squad_flags():
       "Proportion of training to perform linear learning rate warmup for. "
       "E.g., 0.1 = 10% of training.")
 
-  flags.DEFINE_integer("save_checkpoints_steps", 1000,
+  flags.DEFINE_integer("save_checkpoints_steps", 5000,
                        "How often to save the model checkpoint.")
+  flags.DEFINE_integer("display_loss_steps", 10,
+                       "How often to print loss from estimator")
 
   flags.DEFINE_integer("iterations_per_loop", 1000,
                        "How many steps to make in each estimator call.")
@@ -967,6 +969,8 @@ def main(_):
       model_dir=FLAGS.output_dir if master_process else None,
       session_config=config,
       save_checkpoints_steps=FLAGS.save_checkpoints_steps if master_process else None,
+      save_summary_steps=FLAGS.save_checkpoints_steps if master_process else None,
+      log_step_count_steps=FLAGS.display_loss_steps,
       keep_checkpoint_max=1)
 
   if master_process:
