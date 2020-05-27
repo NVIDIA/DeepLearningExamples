@@ -28,7 +28,7 @@ from tensorflow.python.ops import math_ops
 from horovod.tensorflow.compression import Compression
 
 def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None, manual_fp16=False, use_fp16=False, num_accumulation_steps=1,
-                     optimizer_type="adam", allreduce_post_accumulation=False):
+                     optimizer_type="adam", allreduce_post_accumulation=False, init_loss_scale=2**32):
   """Creates an optimizer training op."""
   global_step = tf.compat.v1.train.get_or_create_global_step()
   
@@ -96,11 +96,11 @@ def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None,
   if hvd is not None and (num_accumulation_steps == 1 or (not allreduce_post_accumulation)):
     optimizer = hvd.DistributedOptimizer(optimizer, sparse_as_dense=True, compression=Compression.fp16 if use_fp16 or manual_fp16 else Compression.none)
   if use_fp16:
-    loss_scaler = tf.train.experimental.DynamicLossScale(initial_loss_scale=2**32, increment_period=1000, multiplier=2.0)
+    loss_scaler = tf.train.experimental.DynamicLossScale(initial_loss_scale=init_loss_scale, increment_period=1000, multiplier=2.0)
     optimizer = tf.train.experimental.enable_mixed_precision_graph_rewrite(optimizer, loss_scaler)
     loss_scale_value = tf.identity(loss_scaler(), name="loss_scale")
   if manual_fp16:
-    loss_scale_manager = tf.contrib.mixed_precision.ExponentialUpdateLossScaleManager(init_loss_scale=2 ** 32,
+    loss_scale_manager = tf.contrib.mixed_precision.ExponentialUpdateLossScaleManager(init_loss_scale=init_loss_scale,
                                                                                     incr_every_n_steps=1000,
                                                                                     decr_every_n_nan_or_inf=2,
                                                                                     decr_ratio=0.5)
@@ -157,7 +157,7 @@ def create_optimizer(loss, init_lr, num_train_steps, num_warmup_steps, hvd=None,
                           lambda: update(accum_vars), lambda: tf.no_op())
 
       new_global_step = tf.cond(tf.math.logical_and(update_step, 
-                                                    tf.cast(hvd.allreduce(tf.cast(batch_finite, tf.int32)), tf.bool)) if hvd is not None else batch_finite, 
+                                                    tf.cast(hvd.allreduce(tf.cast(batch_finite, tf.int32)), tf.bool) if hvd is not None else batch_finite),
                                 lambda: global_step+1,
                                 lambda: global_step)
       new_global_step = tf.identity(new_global_step, name='step_update')
