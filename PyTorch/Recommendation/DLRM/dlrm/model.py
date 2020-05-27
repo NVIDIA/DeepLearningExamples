@@ -95,7 +95,7 @@ class Dlrm(nn.Module):
         self.top_mlp = nn.Sequential(*top_mlp_layers)
 
         self._initialize_mlp_weights()
-        self._interaction_padding = torch.zeros(1, 1, dtype=torch.float32)
+        self._interaction_padding = torch.zeros(1, 1, dtype=torch.float32, device=base_device)
         self.tril_indices = torch.tensor([[i for i in range(len(self.embeddings) + 1) 
                                              for j in range(i + int(self_interaction))],
                                           [j for i in range(len(self.embeddings) + 1) 
@@ -124,7 +124,7 @@ class Dlrm(nn.Module):
             interaction = torch.bmm(concat, torch.transpose(concat, 1, 2))
             interaction_flat = interaction[:, self.tril_indices[0], self.tril_indices[1]]
             # concatenate dense features and interactions
-            interaction_padding = self._interaction_padding.expand(batch_size, 1).to(dtype=bottom_mlp_output.dtype).cuda()
+            interaction_padding = self._interaction_padding.expand(batch_size, 1).to(dtype=bottom_mlp_output.dtype)
             interaction_output = torch.cat(
                 (bottom_mlp_output, interaction_flat, interaction_padding), dim=1)
         elif self._interaction_op == "cat":
