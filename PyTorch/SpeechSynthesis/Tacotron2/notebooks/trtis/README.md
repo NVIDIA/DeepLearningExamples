@@ -121,8 +121,8 @@ python trt/export_onnx2trt.py --waveglow  <exported_waveglow_onnx> -o trtis_repo
 
 Download the TRTIS container by typing:
 ```bash
-docker pull nvcr.io/nvidia/tensorrtserver:20.01-py3
-docker tag nvcr.io/nvidia/tensorrtserver:20.01-py3 tensorrtserver:20.01
+docker pull nvcr.io/nvidia/tritonserver:20.03-py3
+docker tag nvcr.io/nvidia/tritonserver:20.03-py3 tritonserver:20.03
 ```
 
 ### Setup the TRTIS notebook client.
@@ -137,7 +137,7 @@ docker build -f Dockerfile_trtis_client --network=host -t speech_ai_tts_only:dem
 
 To run the server, type in the root directory of the Tacotron 2 repo:
 ```bash
-NV_GPU=1 nvidia-docker run -ti --ipc=host --network=host --rm -p8000:8000 -p8001:8001 -v $PWD/trtis_repo/:/models tensorrtserver:20.01 trtserver --model-store=/models --log-verbose 1
+NV_GPU=1 nvidia-docker run -ti --ipc=host --network=host --rm -p8000:8000 -p8001:8001 -v $PWD/trtis_repo/:/models tritonserver:20.03 trtserver --model-store=/models --log-verbose 1
 ```
 
 The flag `NV_GPU` selects the GPU the server is going to see. If we want it to see all the available GPUs, then run the above command without this flag.
