@@ -15,41 +15,39 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-import torch
+
 import ctypes
 import logging
 
 import numpy as np
-
-# DALI imports
-from nvidia.dali.pipeline import Pipeline
 import nvidia.dali.ops as ops
 import nvidia.dali.types as types
-
-import time
+import torch
+# DALI imports
+from nvidia.dali.pipeline import Pipeline
 
 
 class COCOPipeline(Pipeline):
     def __init__(self, batch_size, device_id, file_root, annotations_file, num_gpus,
-            output_fp16=False, output_nhwc=False, pad_output=False, num_threads=1, seed=15):
+                 output_fp16=False, output_nhwc=False, pad_output=False, num_threads=1, seed=15):
         super(COCOPipeline, self).__init__(batch_size=batch_size, device_id=device_id,
-                                           num_threads=num_threads, seed = seed)
+                                           num_threads=num_threads, seed=seed)
 
         if torch.distributed.is_initialized():
             shard_id = torch.distributed.get_rank()
         else:
             shard_id = 0
 
-        self.input = ops.COCOReader(file_root = file_root, annotations_file = annotations_file,
-                            shard_id = shard_id, num_shards = num_gpus, ratio=True, ltrb=True, random_shuffle=True,
+        self.input = ops.COCOReader(file_root=file_root, annotations_file=annotations_file,
+                                    shard_id=shard_id, num_shards=num_gpus, ratio=True, ltrb=True, random_shuffle=True,
                                     skip_empty=True)
-        self.decode = ops.ImageDecoder(device = "cpu", output_type = types.RGB)
+        self.decode = ops.ImageDecoder(device="cpu", output_type=types.RGB)
 
         # Augumentation techniques
         self.crop = ops.SSDRandomCrop(device="cpu", num_attempts=1)
         self.twist = ops.ColorTwist(device="gpu")
 
-        self.resize = ops.Resize(device = "gpu", resize_x = 300, resize_y = 300)
+        self.resize = ops.Resize(device="gpu", resize_x=300, resize_y=300)
 
         output_dtype = types.FLOAT16 if output_fp16 else types.FLOAT
         output_layout = types.NHWC if output_nhwc else types.NCHW
@@ -84,16 +82,18 @@ class COCOPipeline(Pipeline):
         # bboxes and images and labels on GPU
         return (images, bboxes.gpu(), labels.gpu())
 
+
 to_torch_type = {
-    np.dtype(np.float32) : torch.float32,
-    np.dtype(np.float64) : torch.float64,
-    np.dtype(np.float16) : torch.float16,
-    np.dtype(np.uint8)   : torch.uint8,
-    np.dtype(np.int8)    : torch.int8,
-    np.dtype(np.int16)   : torch.int16,
-    np.dtype(np.int32)   : torch.int32,
-    np.dtype(np.int64)   : torch.int64
+    np.dtype(np.float32): torch.float32,
+    np.dtype(np.float64): torch.float64,
+    np.dtype(np.float16): torch.float16,
+    np.dtype(np.uint8): torch.uint8,
+    np.dtype(np.int8): torch.int8,
+    np.dtype(np.int16): torch.int16,
+    np.dtype(np.int32): torch.int32,
+    np.dtype(np.int64): torch.int64
 }
+
 
 def feed_ndarray(dali_tensor, arr):
     """
@@ -107,12 +107,13 @@ def feed_ndarray(dali_tensor, arr):
             Destination of the copy
     """
     assert dali_tensor.shape() == list(arr.size()), \
-            ("Shapes do not match: DALI tensor has size {0}"
-            ", but PyTorch Tensor has size {1}".format(dali_tensor.shape(), list(arr.size())))
-    #turn raw int to a c void pointer
+        ("Shapes do not match: DALI tensor has size {0}"
+         ", but PyTorch Tensor has size {1}".format(dali_tensor.shape(), list(arr.size())))
+    # turn raw int to a c void pointer
     c_type_pointer = ctypes.c_void_p(arr.data_ptr())
     dali_tensor.copy_to_external(c_type_pointer)
     return arr
+
 
 class DALICOCOIterator(object):
     """
@@ -125,6 +126,7 @@ class DALICOCOIterator(object):
     size : int
            Epoch size.
     """
+
     def __init__(self, pipelines, size):
         if not isinstance(pipelines, list):
             pipelines = [pipelines]
@@ -187,7 +189,7 @@ class DALICOCOIterator(object):
             for j in range(len(bboxes)):
                 bboxes_shape.append([])
                 for k in range(len(bboxes[j])):
-                    bboxes_shape[j].append(bboxes[j].at(k).shape())
+                    bboxes_shape[j].append(bboxes[j].__getitem__(k).shape())
 
             # Prepare labels shapes and offsets
             labels_shape = []
@@ -198,22 +200,27 @@ class DALICOCOIterator(object):
                 labels_shape.append([])
                 bbox_offsets.append([0])
                 for k in range(len(labels[j])):
-                    lshape = labels[j].at(k).shape()
+                    # lshape = labels[j].at(k).shape()
+                    lshape = labels[j].__getitem__(k).shape()
                     bbox_offsets[j].append(bbox_offsets[j][k] + lshape[0])
                     labels_shape[j].append(lshape)
 
             # We always need to alocate new memory as bboxes and labels varies in shape
             images_torch_type = to_torch_type[np.dtype(images[0].dtype())]
-            bboxes_torch_type = to_torch_type[np.dtype(bboxes[0].at(0).dtype())]
-            labels_torch_type = to_torch_type[np.dtype(labels[0].at(0).dtype())]
+            bboxes_torch_type = to_torch_type[np.dtype(bboxes[0].__getitem__(0).dtype())]
+            labels_torch_type = to_torch_type[np.dtype(labels[0].__getitem__(0).dtype())]
 
             torch_gpu_device = torch.device('cuda', dev_id)
             torch_cpu_device = torch.device('cpu')
 
-            pyt_images = [torch.zeros(shape, dtype=images_torch_type, device=torch_gpu_device) for shape in images_shape]
-            pyt_bboxes = [[torch.zeros(shape, dtype=bboxes_torch_type, device=torch_gpu_device) for shape in shape_list] for shape_list in bboxes_shape]
-            pyt_labels = [[torch.zeros(shape, dtype=labels_torch_type, device=torch_gpu_device) for shape in shape_list] for shape_list in labels_shape]
-            pyt_offsets = [torch.zeros(len(offset), dtype=torch.int32, device=torch_cpu_device) for offset in bbox_offsets]
+            pyt_images = [torch.zeros(shape, dtype=images_torch_type, device=torch_gpu_device) for shape in
+                          images_shape]
+            pyt_bboxes = [[torch.zeros(shape, dtype=bboxes_torch_type, device=torch_gpu_device) for shape in shape_list]
+                          for shape_list in bboxes_shape]
+            pyt_labels = [[torch.zeros(shape, dtype=labels_torch_type, device=torch_gpu_device) for shape in shape_list]
+                          for shape_list in labels_shape]
+            pyt_offsets = [torch.zeros(len(offset), dtype=torch.int32, device=torch_cpu_device) for offset in
+                           bbox_offsets]
 
             self._data_batches[i][self._current_data_batch] = (pyt_images, pyt_bboxes, pyt_labels, pyt_offsets)
 
@@ -224,13 +231,13 @@ class DALICOCOIterator(object):
             for j, b_list in enumerate(bboxes):
                 for k in range(len(b_list)):
                     if (pyt_bboxes[j][k].shape[0] != 0):
-                        feed_ndarray(b_list.at(k), pyt_bboxes[j][k])
+                        feed_ndarray(b_list.__getitem__(k), pyt_bboxes[j][k])
                 pyt_bboxes[j] = torch.cat(pyt_bboxes[j])
 
             for j, l_list in enumerate(labels):
                 for k in range(len(l_list)):
                     if (pyt_labels[j][k].shape[0] != 0):
-                        feed_ndarray(l_list.at(k), pyt_labels[j][k])
+                        feed_ndarray(l_list.__getitem__(k), pyt_labels[j][k])
                 pyt_labels[j] = torch.cat(pyt_labels[j]).squeeze(dim=1)
 
             for j in range(len(pyt_offsets)):
