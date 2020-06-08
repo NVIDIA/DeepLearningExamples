@@ -21,6 +21,7 @@ for PRECISION in fp16 fp32; do
                         --include-warmup \
                         --batch-size ${BSZ} \
                         --repeats 1000 \
+                        --torchscript \
                         -i phrases/benchmark_8_128.tsv
   done
 done

@@ -101,8 +101,7 @@ def get_model(model_name, model_config, device,
                 class FastPitch__forward_is_infer(_FastPitchJIT):
                     def forward(self, inputs, input_lengths, pace: float = 1.0,
                                 dur_tgt: Optional[torch.Tensor] = None,
-                                pitch_tgt: Optional[torch.Tensor] = None,
-                                pitch_transform: Optional[bool] = None):
+                                pitch_tgt: Optional[torch.Tensor] = None):
                         return self.infer(inputs, input_lengths, pace=pace,
                                           dur_tgt=dur_tgt, pitch_tgt=pitch_tgt)
             else:
