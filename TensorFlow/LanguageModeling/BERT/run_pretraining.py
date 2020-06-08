@@ -27,6 +27,9 @@ import optimization
 import tensorflow as tf
 import glob
 from utils.utils import LogEvalRunHook
+import utils.dllogger_class
+from dllogger import Verbosity
+
 from tensorflow.core.protobuf import rewriter_config_pb2
 
 flags = tf.flags
@@ -52,6 +55,10 @@ flags.DEFINE_string(
     "The output directory where the model checkpoints will be written.")
 
 ## Other parameters
+flags.DEFINE_string(
+    "dllog_path", "/results/bert_dllog.json",
+    "filename where dllogger writes to")
+
 flags.DEFINE_string(
     "init_checkpoint", None,
     "Initial checkpoint (usually from a pre-trained BERT model).")
@@ -115,19 +122,30 @@ flags.DEFINE_bool("manual_fp16", False, "Whether to use fp32 or fp16 arithmetic 
 flags.DEFINE_bool("use_xla", False, "Whether to enable XLA JIT compilation.")
 
 flags.DEFINE_bool("use_fp16", False, "Whether to enable AMP ops.")
+flags.DEFINE_integer("init_loss_scale", 2**32, "Initial value of loss scale if mixed precision training")
 
 # report samples/sec, total loss and learning rate during training
 class _LogSessionRunHook(tf.estimator.SessionRunHook):
-  def __init__(self, global_batch_size, num_accumulation_steps, display_every=10, hvd_rank=-1):
+  def __init__(self, global_batch_size, num_accumulation_steps, dllogging, display_every=10,
+               save_ckpt_steps=1000, report_loss=True, hvd_rank=-1):
     self.global_batch_size = global_batch_size
     self.display_every = display_every
+    self.save_ckpt_steps = save_ckpt_steps
     self.hvd_rank = hvd_rank
     self.num_accumulation_steps = num_accumulation_steps
+    self.dllogging = dllogging
+    self.report_loss = report_loss
+
   def after_create_session(self, session, coord):
-    self.elapsed_secs = 0.
-    self.count = 0
-    self.all_count = 0
-    self.avg_loss = 0.0
+    self.elapsed_secs = 0.0 #elapsed seconds between every print
+    self.count = 0 # number of global steps between every print
+    self.all_count = 0 #number of steps (including accumulation) between every print
+    self.loss = 0.0 # accumulation of loss in each step between every print
+
+    self.total_time = 0.0 # total time taken to train (excluding warmup + ckpt saving steps)
+    self.step_time = 0.0 # time taken per step
+    self.init_global_step = session.run(tf.train.get_global_step()) # training starts at init_global_step
+    self.skipped = 0
 
   def before_run(self, run_context):
     self.t0 = time.time()
@@ -144,56 +162,89 @@ class _LogSessionRunHook(tf.estimator.SessionRunHook):
                          'mlm_loss:0'])
     else:
         if FLAGS.manual_fp16 or FLAGS.use_fp16:
-          return tf.estimator.SessionRunArgs(
-              fetches=['step_update:0', 'update_step:0', 'total_loss:0',
-                       'learning_rate:0', 'nsp_loss:0',
-                       'mlm_loss:0', 'loss_scale:0'])
+            return tf.estimator.SessionRunArgs(
+                fetches=['step_update:0', 'update_step:0', 'total_loss:0',
+                         'learning_rate:0', 'nsp_loss:0',
+                         'mlm_loss:0', 'loss_scale:0'])
         else:
           return tf.estimator.SessionRunArgs(
               fetches=['step_update:0', 'update_step:0', 'total_loss:0',
                        'learning_rate:0', 'nsp_loss:0',
                        'mlm_loss:0'])
   def after_run(self, run_context, run_values):
-    self.elapsed_secs += time.time() - self.t0
+    run_time = time.time() - self.t0
+
     if self.num_accumulation_steps <=1:
         if FLAGS.manual_fp16 or FLAGS.use_fp16:
-            global_step, total_loss, lr, nsp_loss, mlm_loss, loss_scaler = run_values.results
+            self.global_step, total_loss, lr, nsp_loss, mlm_loss, loss_scaler = run_values.results
         else:
-            global_step, total_loss, lr, nsp_loss, mlm_loss = run_values. \
+            self.global_step, total_loss, lr, nsp_loss, mlm_loss = run_values. \
                 results
         update_step = True
     else:
         if FLAGS.manual_fp16 or FLAGS.use_fp16:
-          global_step, update_step, total_loss, lr, nsp_loss, mlm_loss, loss_scaler = run_values.results
+          self.global_step, update_step, total_loss, lr, nsp_loss, mlm_loss, loss_scaler = run_values.results
         else:
-          global_step, update_step, total_loss, lr, nsp_loss, mlm_loss = run_values.\
+          self.global_step, update_step, total_loss, lr, nsp_loss, mlm_loss = run_values.\
               results
-    print_step = global_step + 1 # One-based index for printing.
-    self.avg_loss += total_loss
+
+    self.elapsed_secs += run_time
+    self.step_time += run_time
+
+    print_step = self.global_step + 1 # One-based index for printing.
+    self.loss += total_loss
     self.all_count += 1
     if update_step:
+
         self.count += 1
+
+        # Removing first six steps after every checkpoint save from timing
+        if (self.global_step - self.init_global_step) % self.save_ckpt_steps < 6:
+          print("Skipping time record for ", self.global_step, " due to checkpoint-saving/warmup overhead")
+          self.skipped += 1
+        else:
+          self.total_time += self.step_time
+
+        self.step_time = 0.0 #Reset Step Time
+
         if (print_step == 1 or print_step % self.display_every == 0):
             dt = self.elapsed_secs / self.count
             sent_per_sec = self.global_batch_size / dt
-            avg_loss_step = self.avg_loss / self.all_count
-            if self.hvd_rank >= 0:
+            avg_loss_step = self.loss / self.all_count
+            if self.hvd_rank >= 0 and FLAGS.report_loss:
               if FLAGS.manual_fp16 or FLAGS.use_fp16:
-                print('Rank = %2d :: Step = %6i Throughput = %11.1f MLM Loss = %10.4e NSP Loss = %10.4e Loss = %6.3f Average Loss = %6.3f LR = %6.4e Loss scale = %6.4e' %
-                      (self.hvd_rank, print_step, sent_per_sec, mlm_loss, nsp_loss, total_loss, avg_loss_step, lr, loss_scaler))
+                self.dllogging.logger.log(step=(print_step),
+                                     data={"Rank": int(rank), "throughput_train": float(sent_per_sec),
+                                           "mlm_loss":float(mlm_loss), "nsp_loss":float(nsp_loss),
+                                           "total_loss":float(total_loss), "avg_loss_step":float(avg_loss_step),
+                                           "learning_rate": str(lr), "loss_scaler":int(loss_scaler)},
+                                     verbosity=Verbosity.DEFAULT)
               else:
-                print('Rank = %2d :: Step = %6i Throughput = %11.1f MLM Loss = %10.4e NSP Loss = %10.4e Loss = %6.3f Average Loss = %6.3f LR = %6.4e' %
-                      (self.hvd_rank, print_step, sent_per_sec, mlm_loss, nsp_loss, total_loss, avg_loss_step, lr))
+                self.dllogging.logger.log(step=int(print_step),
+                                     data={"Rank": int(rank), "throughput_train": float(sent_per_sec),
+                                           "mlm_loss":float(mlm_loss), "nsp_loss":float(nsp_loss),
+                                           "total_loss":float(total_loss), "avg_loss_step":float(avg_loss_step),
+                                           "learning_rate": str(lr)},
+                                     verbosity=Verbosity.DEFAULT)
             else:
               if FLAGS.manual_fp16 or FLAGS.use_fp16:
-                print('Step = %6i Throughput = %11.1f MLM Loss = %10.4e NSP Loss = %10.4e Loss = %6.3f Average Loss = %6.3f LR = %6.4e Loss scale = %6.4e' %
-                      (print_step, sent_per_sec, mlm_loss, nsp_loss, total_loss, avg_loss_step, lr, loss_scaler))
+                self.dllogging.logger.log(step=int(print_step),
+                                     data={"throughput_train": float(sent_per_sec),
+                                           "mlm_loss":float(mlm_loss), "nsp_loss":float(nsp_loss),
+                                           "total_loss":float(total_loss), "avg_loss_step":float(avg_loss_step),
+                                           "learning_rate": str(lr), "loss_scaler":int(loss_scaler)},
+                                     verbosity=Verbosity.DEFAULT)
               else:
-                print('Step = %6i Throughput = %11.1f MLM Loss = %10.4e NSP Loss = %10.4e Loss = %6.3f Average Loss = %6.3f LR = %6.4e' %
-                      (print_step, sent_per_sec, mlm_loss, nsp_loss, total_loss, avg_loss_step, lr))
-            self.elapsed_secs = 0.
+                self.dllogging.logger.log(step=int(print_step),
+                                     data={"throughput_train": float(sent_per_sec),
+                                           "mlm_loss":float(mlm_loss), "nsp_loss":float(nsp_loss),
+                                           "total_loss":float(total_loss), "avg_loss_step":float(avg_loss_step),
+                                           "learning_rate": str(lr)},
+                                     verbosity=Verbosity.DEFAULT)
+
+            self.elapsed_secs = 0.0
             self.count = 0
-            self.avg_loss = 0.0
+            self.loss = 0.0
             self.all_count = 0
 
 def model_fn_builder(bert_config, init_checkpoint, learning_rate,
@@ -265,7 +316,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
     if mode == tf.estimator.ModeKeys.TRAIN:
       train_op = optimization.create_optimizer(
           total_loss, learning_rate, num_train_steps, num_warmup_steps,
-          hvd, FLAGS.manual_fp16, FLAGS.use_fp16, FLAGS.num_accumulation_steps, FLAGS.optimizer_type, FLAGS.allreduce_post_accumulation)
+          hvd, FLAGS.manual_fp16, FLAGS.use_fp16, FLAGS.num_accumulation_steps, FLAGS.optimizer_type, FLAGS.allreduce_post_accumulation, FLAGS.init_loss_scale)
 
       output_spec = tf.estimator.EstimatorSpec(
           mode=mode,
@@ -494,13 +545,13 @@ def _decode_record(record, name_to_features):
 
 
 def main(_):
+  os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false" #causes memory fragmentation for bert leading to OOM
+
   tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
+  dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)
 
   if not FLAGS.do_train and not FLAGS.do_eval:
     raise ValueError("At least one of `do_train` or `do_eval` must be True.")
-
-  if FLAGS.use_fp16:
-    os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
 
   if FLAGS.horovod:
     import horovod.tensorflow as hvd
@@ -538,6 +589,7 @@ def main(_):
       model_dir=FLAGS.output_dir,
       session_config=config,
       save_checkpoints_steps=FLAGS.save_checkpoints_steps if not FLAGS.horovod or hvd.rank() == 0 else None,
+      save_summary_steps=FLAGS.save_checkpoints_steps if not FLAGS.horovod or hvd.rank() == 0 else None,
       # This variable controls how often estimator reports examples/sec.
       # Default value is every 100 steps.
       # When --report_loss is True, we set to very large value to prevent
@@ -554,18 +606,19 @@ def main(_):
       use_one_hot_embeddings=False,
       hvd=None if not FLAGS.horovod else hvd)
 
-  training_hooks = []
-  if FLAGS.report_loss and (not FLAGS.horovod or hvd.rank() == 0):
-    global_batch_size = FLAGS.train_batch_size * FLAGS.num_accumulation_steps if not FLAGS.horovod else FLAGS.train_batch_size * FLAGS.num_accumulation_steps * hvd.size()
-    training_hooks.append(_LogSessionRunHook(global_batch_size, FLAGS.num_accumulation_steps, FLAGS.display_loss_steps))
-  if FLAGS.horovod and hvd.size() > 1:
-    training_hooks.append(hvd.BroadcastGlobalVariablesHook(0))
-
   estimator = tf.estimator.Estimator(
       model_fn=model_fn,
       config=run_config)
 
   if FLAGS.do_train:
+
+    training_hooks = []
+    if FLAGS.horovod and hvd.size() > 1:
+      training_hooks.append(hvd.BroadcastGlobalVariablesHook(0))
+    if (not FLAGS.horovod or hvd.rank() == 0):
+      global_batch_size = FLAGS.train_batch_size * FLAGS.num_accumulation_steps if not FLAGS.horovod else FLAGS.train_batch_size * FLAGS.num_accumulation_steps * hvd.size()
+      training_hooks.append(_LogSessionRunHook(global_batch_size, FLAGS.num_accumulation_steps, dllogging, FLAGS.display_loss_steps, FLAGS.save_checkpoints_steps, FLAGS.report_loss))
+
     tf.compat.v1.logging.info("***** Running training *****")
     tf.compat.v1.logging.info("  Batch size = %d", FLAGS.train_batch_size)
     train_input_fn = input_fn_builder(
@@ -576,7 +629,24 @@ def main(_):
         is_training=True,
         hvd=None if not FLAGS.horovod else hvd)
 
+    train_start_time = time.time()
     estimator.train(input_fn=train_input_fn, hooks=training_hooks, max_steps=FLAGS.num_train_steps)
+    train_time_elapsed = time.time() - train_start_time
+
+    if (not FLAGS.horovod or hvd.rank() == 0):
+        train_time_wo_overhead = training_hooks[-1].total_time
+        avg_sentences_per_second = FLAGS.num_train_steps * global_batch_size * 1.0 / train_time_elapsed
+        ss_sentences_per_second = (FLAGS.num_train_steps - training_hooks[-1].skipped) * global_batch_size * 1.0 / train_time_wo_overhead
+
+        tf.compat.v1.logging.info("-----------------------------")
+        tf.compat.v1.logging.info("Total Training Time = %0.2f for Sentences = %d", train_time_elapsed,
+                        FLAGS.num_train_steps * global_batch_size)
+        tf.compat.v1.logging.info("Total Training Time W/O Overhead = %0.2f for Sentences = %d", train_time_wo_overhead,
+                        (FLAGS.num_train_steps - training_hooks[-1].skipped) * global_batch_size)
+        tf.compat.v1.logging.info("Throughput Average (sentences/sec) with overhead = %0.2f", avg_sentences_per_second)
+        tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+        dllogging.logger.log(step=(), data={"throughput_train": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
+        tf.compat.v1.logging.info("-----------------------------")
 
   if FLAGS.do_eval and (not FLAGS.horovod or hvd.rank() == 0):
     tf.compat.v1.logging.info("***** Running evaluation *****")
@@ -600,9 +670,11 @@ def main(_):
         input_fn=eval_input_fn, steps=FLAGS.max_eval_steps, hooks=eval_hooks)
 
     eval_time_elapsed = time.time() - eval_start_time
-    eval_time_wo_overhead = eval_hooks[-1].total_time
-
-    num_sentences = (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.eval_batch_size
+    time_list = eval_hooks[-1].time_list
+    time_list.sort()
+    # Removing outliers (init/warmup) in throughput computation.
+    eval_time_wo_overhead = sum(time_list[:int(len(time_list) * 0.99)])
+    num_sentences = (int(len(time_list) * 0.99)) * FLAGS.eval_batch_size
 
     ss_sentences_per_second = num_sentences * 1.0 / eval_time_wo_overhead
 
@@ -610,12 +682,13 @@ def main(_):
     tf.compat.v1.logging.info("Total Inference Time = %0.2f for Sentences = %d", eval_time_elapsed,
                     eval_hooks[-1].count * FLAGS.eval_batch_size)
     tf.compat.v1.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", eval_time_wo_overhead,
-                    (eval_hooks[-1].count - eval_hooks[-1].skipped) * FLAGS.eval_batch_size)
+                    num_sentences)
     tf.compat.v1.logging.info("Summary Inference Statistics on EVAL set")
     tf.compat.v1.logging.info("Batch size = %d", FLAGS.eval_batch_size)
     tf.compat.v1.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
     tf.compat.v1.logging.info("Precision = %s", "fp16" if FLAGS.use_fp16 else "fp32")
     tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+    dllogging.logger.log(step=(), data={"throughput_val": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
     tf.compat.v1.logging.info("-----------------------------")
 
     output_eval_file = os.path.join(FLAGS.output_dir, "eval_results.txt")

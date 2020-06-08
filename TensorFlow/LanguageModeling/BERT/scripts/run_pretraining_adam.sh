@@ -68,7 +68,14 @@ printf "Logs written to %s\n" "$LOGFILE"
 INPUT_FILES="$DATA_DIR/training"
 EVAL_FILES="$DATA_DIR/test"
 
-CMD="python3 /workspace/bert/run_pretraining.py"
+horovod_str=""
+mpi=""
+if [ $num_gpus -gt 1 ] ; then
+   mpi="mpiexec --allow-run-as-root -np $num_gpus --bind-to socket"
+   horovod_str="--horovod"
+fi
+
+CMD="$mpi python3 /workspace/bert/run_pretraining.py"
 CMD+=" --input_files_dir=$INPUT_FILES"
 CMD+=" --eval_files_dir=$EVAL_FILES"
 CMD+=" --output_dir=$RESULTS_DIR"
@@ -85,7 +92,7 @@ CMD+=" --num_accumulation_steps=$num_accumulation_steps"
 CMD+=" --save_checkpoints_steps=$save_checkpoints_steps"
 CMD+=" --learning_rate=$learning_rate"
 CMD+=" --optimizer_type=adam"
-CMD+=" --horovod $PREC"
+CMD+=" $horovod_str $PREC"
 CMD+=" --allreduce_post_accumulation=True"
 
 #Check if all necessary files are available before training
@@ -95,10 +102,6 @@ for DIR_or_file in $DATA_DIR $BERT_CONFIG $RESULTS_DIR; do
      exit -1
   fi
 done
-
-if [ $num_gpus -gt 1 ] ; then
-   CMD="mpiexec --allow-run-as-root -np $num_gpus --bind-to socket $CMD"
-fi
 
 set -x
 if [ -z "$LOGFILE" ] ; then

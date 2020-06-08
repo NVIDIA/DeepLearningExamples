@@ -19,8 +19,6 @@
 #
 # ==============================================================================
 
-from __future__ import print_function
-
 import os
 import json
 import multiprocessing
@@ -40,8 +38,7 @@ from utils import hvd_utils
 
 from utils.hooks import ProfilerHook
 
-from dllogger.logger import LOGGER
-import dllogger.logger as dllg
+import dllogger as Logger
 
 __all__ = [
     'Runner',
@@ -101,26 +98,11 @@ class Runner(object):
         if data_dir is not None and not os.path.exists(data_dir):
             raise ValueError("The `data_dir` received does not exists: %s" % data_dir)
 
-        LOGGER.set_model_name('UNet_TF')
-
-        LOGGER.set_backends(
-            [
-                dllg.JsonBackend(
-                    log_file=os.path.join(model_dir, 'dlloger_out.json'),
-                    logging_scope=dllg.Scope.TRAIN_ITER,
-                    iteration_interval=log_every_n_steps
-                ),
-                dllg.StdOutBackend(
-                    log_file=None, logging_scope=dllg.Scope.TRAIN_ITER, iteration_interval=log_every_n_steps
-                )
-            ]
-        )
-
         if hvd_utils.is_using_hvd():
             hvd.init()
 
-            if hvd.local_rank() == 0:
-                LOGGER.log("Horovod successfully initialized ...")
+            if hvd.rank() == 0:
+                print("Horovod successfully initialized ...")
 
             tf_seed = 2 * (seed + hvd.rank()) if seed is not None else None
 
@@ -135,10 +117,9 @@ class Runner(object):
 
         os.environ['HOROVOD_GPU_ALLREDUCE'] = 'NCCL'
 
-        # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
         os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
         os.environ['TF_GPU_THREAD_COUNT'] = '1' if not hvd_utils.is_using_hvd() else str(hvd.size())
+        print("WORLD_SIZE", hvd.size())
 
         os.environ['TF_USE_CUDNN_BATCHNORM_SPATIAL_PERSISTENT'] = '1'
 
@@ -148,7 +129,6 @@ class Runner(object):
 
         os.environ['TF_SYNC_ON_FINISH'] = '0'
         os.environ['TF_AUTOTUNE_THRESHOLD'] = '2'
-        # os.environ['TF_DISABLE_NVTX_RANGES'] = '1' 
 
         # =================================================
 
@@ -156,8 +136,8 @@ class Runner(object):
 
         if use_tf_amp:
 
-            if not hvd_utils.is_using_hvd() or hvd.local_rank() == 0:
-                LOGGER.log("TF AMP is activated - Experimental Feature")
+            if not hvd_utils.is_using_hvd() or hvd.rank() == 0:
+                print("TF AMP is activated - Experimental Feature")
 
             os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
 
@@ -205,8 +185,8 @@ class Runner(object):
 
         self.run_hparams = Runner._build_hparams(model_hparams, run_config_additional)
 
-        if not hvd_utils.is_using_hvd() or hvd.local_rank() == 0:
-            LOGGER.log('Defining Model Estimator ...\n')
+        if not hvd_utils.is_using_hvd() or hvd.rank() == 0:
+            print('Defining Model Estimator ...\n')
 
         self._model = UNet_v1(
             model_name="UNet_v1",
@@ -220,8 +200,8 @@ class Runner(object):
 
         if self.run_hparams.seed is not None:
 
-            if not hvd_utils.is_using_hvd() or hvd.local_rank() == 0:
-                LOGGER.log("Deterministic Run - Seed: %d\n" % seed)
+            if not hvd_utils.is_using_hvd() or hvd.rank() == 0:
+                print("Deterministic Run - Seed: %d\n" % seed)
 
             tf.set_random_seed(self.run_hparams.seed)
             np.random.seed(self.run_hparams.seed)
@@ -250,7 +230,7 @@ class Runner(object):
                     hparams.add_hparam(name=key, value=val)
 
                 except ValueError:
-                    LOGGER.log(
+                    print(
                         "the parameter `{}` already exists - existing value: {} and duplicated value: {}".format(
                             key, hparams.get(key), val
                         )
@@ -278,13 +258,13 @@ class Runner(object):
         config.log_device_placement = False
 
         config.gpu_options.allow_growth = True
-        # config.gpu_options.per_process_gpu_memory_fraction=0.7
 
         if hvd_utils.is_using_hvd():
-            config.gpu_options.visible_device_list = str(hvd.local_rank())
+            config.gpu_options.visible_device_list = str(hvd.rank())
 
-        if use_xla:  # Only working on single GPU
-            LOGGER.log("XLA is activated - Experimental Feature")
+        if use_xla:
+            if not hvd_utils.is_using_hvd() or hvd.rank() == 0:
+                print("XLA is activated - Experimental Feature")
             config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
 
         config.gpu_options.force_gpu_compatible = True  # Force pinned memory
@@ -382,8 +362,8 @@ class Runner(object):
         if self.run_hparams.use_tf_amp:
             if use_auto_loss_scaling:
 
-                if not hvd_utils.is_using_hvd() or hvd.local_rank() == 0:
-                    LOGGER.log("TF Loss Auto Scaling is activated - Experimental Feature")
+                if not hvd_utils.is_using_hvd() or hvd.rank() == 0:
+                    print("TF Loss Auto Scaling is activated - Experimental Feature")
 
                 os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_LOSS_SCALING"] = "1"
                 apply_manual_loss_scaling = False
@@ -393,9 +373,6 @@ class Runner(object):
                 apply_manual_loss_scaling = True
         else:
             apply_manual_loss_scaling = False
-
-        if not hvd_utils.is_using_hvd() or hvd.local_rank() == 0:
-            LOGGER.log('Defining Model Estimator ...\n')
 
         global_batch_size = batch_size * self.num_gpus
 
@@ -416,7 +393,7 @@ class Runner(object):
         if hvd_utils.is_using_hvd():
             training_hooks.append(hvd.BroadcastGlobalVariablesHook(0))
 
-        if not hvd_utils.is_using_hvd() or hvd.local_rank() == 0:
+        if not hvd_utils.is_using_hvd() or hvd.rank() == 0:
             training_hooks.append(
                 ProfilerHook(
                     global_batch_size=global_batch_size,
@@ -427,26 +404,28 @@ class Runner(object):
                 )
             )
 
-            LOGGER.log('Starting Model Training ...\n')
+            print("Starting Model Training ...")
 
-            LOGGER.log("=> Epochs: %d" % num_epochs)
-            LOGGER.log("=> Total Steps: %d" % num_steps)
-            LOGGER.log("=> Steps per Epoch: %d" % steps_per_epoch)
-            LOGGER.log("=> Weight Decay Factor: %.1e" % weight_decay)
-            LOGGER.log("=> Learning Rate: %.1e" % learning_rate)
-            LOGGER.log("=> Learning Rate Decay Factor: %.2f" % learning_rate_decay_factor)
-            LOGGER.log("=> Learning Rate Decay Steps: %d" % learning_rate_decay_steps)
-            LOGGER.log("=> RMSProp - Decay: %.1f" % rmsprop_decay)
-            LOGGER.log("=> RMSProp - Momentum: %.1f" % rmsprop_momentum)
-            LOGGER.log("=> Loss Function Name: %s" % self.run_hparams.loss_fn_name)
+            Logger.log(step=(), data={"Epochs": num_epochs}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=(), data={"Total Steps": num_steps}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=(), data={"Steps per Epoch": steps_per_epoch}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=(), data={"Weight Decay Factor": weight_decay}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=(), data={"Learning Rate": learning_rate}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=(), data={"Learning Rate Decay Factor": learning_rate_decay_factor}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=(), data={"Learning Rate Decay Steps": learning_rate_decay_steps}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=(), data={"RMSProp - Decay": rmsprop_decay}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=(), data={"RMSProp - Momentum": rmsprop_momentum}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=(), data={"Loss Function Name": self.run_hparams.loss_fn_name}, verbosity=Logger.Verbosity.DEFAULT)
 
             if self.run_hparams.use_tf_amp:
-                LOGGER.log("=> Use Auto Loss Scaling: %s" % use_auto_loss_scaling)
+                Logger.log(step=(), data={"Use Auto Loss Scaling": use_auto_loss_scaling}, verbosity=Logger.Verbosity.DEFAULT)
 
-            LOGGER.log("=> # GPUs: %d" % self.num_gpus)
-            LOGGER.log("=> GPU Batch Size: %d" % batch_size)
-            LOGGER.log("=> Global Batch Size: %d" % global_batch_size)
-            LOGGER.log("=> Total Files to Processed: %d\n" % (num_steps * global_batch_size))
+            Logger.log(step=(), data={"# GPUs": self.num_gpus}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=(), data={"GPU Batch Size": batch_size}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=(), data={"Global Batch Size": global_batch_size}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=(), data={"Total Files to be Processed": num_steps * global_batch_size}, verbosity=Logger.Verbosity.DEFAULT)
+
+            print()  # visual spacing
 
         estimator_params = {
             'batch_size': batch_size,
@@ -480,8 +459,8 @@ class Runner(object):
                 )
 
             else:
-                if not hvd_utils.is_using_hvd() or hvd.local_rank() == 0:
-                    LOGGER.log("Using Synthetic Data ...")
+                if not hvd_utils.is_using_hvd() or hvd.rank() == 0:
+                    print("Using Synthetic Data ...")
 
                 return self.dataset.synth_dataset_fn(
                     batch_size=batch_size,
@@ -507,8 +486,8 @@ class Runner(object):
         except KeyboardInterrupt:
             print("Keyboard interrupt")
 
-        if not hvd_utils.is_using_hvd() or hvd.local_rank() == 0:
-            LOGGER.log('Ending Model Training ...')
+        if not hvd_utils.is_using_hvd() or hvd.rank() == 0:
+            print('Ending Model Training ...')
 
     def evaluate(self, iter_unit, num_iter, batch_size, warmup_steps=50, is_benchmark=False, save_eval_results_to_json=False):
 
@@ -518,10 +497,10 @@ class Runner(object):
         if self.run_hparams.data_dir is None and not is_benchmark:
             raise ValueError('`data_dir` must be specified for evaluation!')
 
-        if hvd_utils.is_using_hvd() and hvd.rank() != 0:
-            raise RuntimeError('Multi-GPU inference is not supported')
+        # if hvd_utils.is_using_hvd() and hvd.rank() != 0:
+        #     raise RuntimeError('Multi-GPU inference is not supported')
 
-        LOGGER.log('Defining Model Estimator ...\n')
+        print('Defining Model Estimator ...\n')
 
         if self.run_hparams.data_dir is not None:
             filenames, num_samples, num_steps, num_epochs = self.dataset.get_dataset_runtime_specs(
@@ -545,13 +524,15 @@ class Runner(object):
             )
         ]
 
-        LOGGER.log('Starting Model Evaluation ...\n')
+        print('Starting Model Evaluation ...\n')
 
-        LOGGER.log("=> Epochs: %d" % num_epochs)
-        LOGGER.log("=> Total Steps: %d" % num_steps)
-        LOGGER.log("=> Steps per Epoch: %d" % steps_per_epoch)
-        LOGGER.log("=> GPU Batch Size: %d" % batch_size)
-        LOGGER.log("=> Total Files to Processed: %d\n" % (num_steps * batch_size))
+        Logger.log(step=(), data={"Epochs": num_epochs}, verbosity=Logger.Verbosity.DEFAULT)
+        Logger.log(step=(), data={"Total Steps": num_steps}, verbosity=Logger.Verbosity.DEFAULT)
+        Logger.log(step=(), data={"Steps per Epoch": steps_per_epoch}, verbosity=Logger.Verbosity.DEFAULT)
+        Logger.log(step=(), data={"GPU Batch Size": batch_size}, verbosity=Logger.Verbosity.DEFAULT)
+        Logger.log(step=(), data={"Total Files to Processed": num_steps * batch_size}, verbosity=Logger.Verbosity.DEFAULT)
+
+        print()  # visual spacing
 
         estimator_params = {
             'batch_size': batch_size,
@@ -578,7 +559,7 @@ class Runner(object):
                 )
 
             else:
-                LOGGER.log("Using Synthetic Data ...")
+                print("Using Synthetic Data ...")
 
                 return self.dataset.synth_dataset_fn(
                     batch_size=batch_size,
@@ -602,16 +583,20 @@ class Runner(object):
                 hooks=evaluation_hooks,
             )
 
-            LOGGER.log('Ending Model Evaluation ...')
+            print('Ending Model Evaluation ...')
 
-            LOGGER.log('###################################\n\nEvaluation Results:\n')
+            print('###################################\n\nEvaluation Results:\n')
 
             for key, val in sorted(eval_results.items(), key=operator.itemgetter(0)):
 
                 if any(val in key for val in ["loss", "global_step", "Confusion_Matrix"]):
                     continue
 
-                LOGGER.log('%s: %.3f' % (key, float(val)))
+                Logger.log(
+                    step=(),
+                    data={"{prefix}.{key}".format(prefix=Logger._stage, key=key): float(val)},
+                    verbosity=Logger.Verbosity.DEFAULT
+                )
 
             fns = eval_results["Confusion_Matrix_FN"]
             fps = eval_results["Confusion_Matrix_FP"]
@@ -624,12 +609,41 @@ class Runner(object):
             tpr = np.divide(tps, positives)
             tnr = np.divide(tns, negatives)
 
-            LOGGER.log('TP', tps)
-            LOGGER.log('FN', fns)
-            LOGGER.log('TN', tns)
-            LOGGER.log('FP', fps)
-            LOGGER.log('TPR', tpr)
-            LOGGER.log('TNR', tnr)
+            Logger.log(
+                step=(num_steps,),
+                data={"{prefix}.true_positives".format(prefix=Logger._stage): str(tps)},
+                verbosity=Logger.Verbosity.DEFAULT
+            )
+
+            Logger.log(
+                step=(num_steps,),
+                data={"{prefix}.true_negatives".format(prefix=Logger._stage): str(tns)},
+                verbosity=Logger.Verbosity.DEFAULT
+            )
+
+            Logger.log(
+                step=(num_steps,),
+                data={"{prefix}.false_positives".format(prefix=Logger._stage): str(fps)},
+                verbosity=Logger.Verbosity.DEFAULT
+            )
+
+            Logger.log(
+                step=(num_steps,),
+                data={"{prefix}.false_negatives".format(prefix=Logger._stage): str(fns)},
+                verbosity=Logger.Verbosity.DEFAULT
+            )
+
+            Logger.log(
+                step=(num_steps,),
+                data={"{prefix}.true_positive_rate".format(prefix=Logger._stage): str(["%.3f" % x for x in tpr])},
+                verbosity=Logger.Verbosity.DEFAULT
+            )
+
+            Logger.log(
+                step=(num_steps,),
+                data={"{prefix}.true_negative_rate".format(prefix=Logger._stage): str(["%.3f" % x for x in tnr])},
+                verbosity=Logger.Verbosity.DEFAULT
+            )
 
             if save_eval_results_to_json:
 

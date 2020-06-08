@@ -42,7 +42,7 @@ def parse_args(parser):
                         help='full path to the WaveGlow model checkpoint file')
     parser.add_argument('-o', '--output', type=str, required=True,
                         help='Directory for the exported WaveGlow ONNX model')
-    parser.add_argument('--amp-run', action='store_true',
+    parser.add_argument('--fp16', action='store_true',
                         help='inference with AMP')
     parser.add_argument('-s', '--sigma-infer', default=0.6, type=float)
 
@@ -165,20 +165,17 @@ def infer_onnx(self, spect, z, sigma=0.9):
 def export_onnx(parser, args):
 
     waveglow = load_and_setup_model('WaveGlow', parser, args.waveglow,
-                                    args.amp_run, forward_is_infer=False)
+                                    amp_run=args.fp16, cpu_run=False,
+                                    forward_is_infer=False)
 
     # 80 mel channels, 620 mel spectrograms ~ 7 seconds of speech
     mel = torch.randn(1, 80, 620).cuda()
     stride = 256 # value from waveglow upsample
-    kernel_size = 1024 # value from waveglow upsample
     n_group = 8
-    z_size2 = (mel.size(2)-1)*stride+(kernel_size-1)+1
-    # corresponds to cutoff in infer_onnx
-    z_size2 = z_size2 - (kernel_size-stride)
-    z_size2 = z_size2//n_group
+    z_size2 = (mel.size(2)*stride)//n_group
     z = torch.randn(1, n_group, z_size2, 1).cuda()
 
-    if args.amp_run:
+    if args.fp16:
         mel = mel.half()
         z = z.half()
     with torch.no_grad():
@@ -187,12 +184,12 @@ def export_onnx(parser, args):
 
         # export to ONNX
         convert_1d_to_2d_(waveglow)
+        if args.fp16:
+            waveglow = waveglow.half()
 
         fType = types.MethodType
         waveglow.forward = fType(infer_onnx, waveglow)
 
-        if args.amp_run:
-            waveglow.half()
         mel = mel.unsqueeze(3)
 
         opset_version = 10

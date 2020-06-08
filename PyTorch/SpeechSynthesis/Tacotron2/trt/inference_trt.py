@@ -71,12 +71,16 @@ def parse_args(parser):
                         help='Sampling rate')
     parser.add_argument('--stft-hop-length', type=int, default=256,
                         help='STFT hop length for estimating audio length from mel size')
+    parser.add_argument('--fp16', action='store_true',
+                        help='inference with FP16')
 
     return parser
 
 
 def init_decoder_inputs(memory, processed_memory, memory_lengths):
 
+    device = memory.device
+    dtype = memory.dtype
     bs = memory.size(0)
     seq_len = memory.size(1)
     attention_rnn_dim = 1024
@@ -84,15 +88,15 @@ def init_decoder_inputs(memory, processed_memory, memory_lengths):
     encoder_embedding_dim = 512
     n_mel_channels = 80
 
-    attention_hidden = torch.zeros(bs, attention_rnn_dim).cuda().float()
-    attention_cell = torch.zeros(bs, attention_rnn_dim).cuda().float()
-    decoder_hidden = torch.zeros(bs, decoder_rnn_dim).cuda().float()
-    decoder_cell = torch.zeros(bs, decoder_rnn_dim).cuda().float()
-    attention_weights = torch.zeros(bs, seq_len).cuda().float()
-    attention_weights_cum = torch.zeros(bs, seq_len).cuda().float()
-    attention_context = torch.zeros(bs, encoder_embedding_dim).cuda().float()
-    mask = get_mask_from_lengths(memory_lengths).cuda()
-    decoder_input = torch.zeros(bs, n_mel_channels).cuda().float()
+    attention_hidden = torch.zeros(bs, attention_rnn_dim, device=device, dtype=dtype)
+    attention_cell = torch.zeros(bs, attention_rnn_dim, device=device, dtype=dtype)
+    decoder_hidden = torch.zeros(bs, decoder_rnn_dim, device=device, dtype=dtype)
+    decoder_cell = torch.zeros(bs, decoder_rnn_dim, device=device, dtype=dtype)
+    attention_weights = torch.zeros(bs, seq_len, device=device, dtype=dtype)
+    attention_weights_cum = torch.zeros(bs, seq_len, device=device, dtype=dtype)
+    attention_context = torch.zeros(bs, encoder_embedding_dim, device=device, dtype=dtype)
+    mask = get_mask_from_lengths(memory_lengths).to(device)
+    decoder_input = torch.zeros(bs, n_mel_channels, device=device, dtype=dtype)
 
     return (decoder_input, attention_hidden, attention_cell, decoder_hidden,
             decoder_cell, attention_weights, attention_weights_cum,
@@ -100,6 +104,8 @@ def init_decoder_inputs(memory, processed_memory, memory_lengths):
 
 def init_decoder_outputs(memory, memory_lengths):
 
+    device = memory.device
+    dtype = memory.dtype
     bs = memory.size(0)
     seq_len = memory.size(1)
     attention_rnn_dim = 1024
@@ -107,15 +113,15 @@ def init_decoder_outputs(memory, memory_lengths):
     encoder_embedding_dim = 512
     n_mel_channels = 80
 
-    attention_hidden = torch.zeros(bs, attention_rnn_dim).cuda().float()
-    attention_cell = torch.zeros(bs, attention_rnn_dim).cuda().float()
-    decoder_hidden = torch.zeros(bs, decoder_rnn_dim).cuda().float()
-    decoder_cell = torch.zeros(bs, decoder_rnn_dim).cuda().float()
-    attention_weights = torch.zeros(bs, seq_len).cuda().float()
-    attention_weights_cum = torch.zeros(bs, seq_len).cuda().float()
-    attention_context = torch.zeros(bs, encoder_embedding_dim).cuda().float()
-    decoder_output = torch.zeros(bs, n_mel_channels).cuda().float()
-    gate_prediction = torch.zeros(bs, 1).cuda().float()
+    attention_hidden = torch.zeros(bs, attention_rnn_dim, device=device, dtype=dtype)
+    attention_cell = torch.zeros(bs, attention_rnn_dim, device=device, dtype=dtype)
+    decoder_hidden = torch.zeros(bs, decoder_rnn_dim, device=device, dtype=dtype)
+    decoder_cell = torch.zeros(bs, decoder_rnn_dim, device=device, dtype=dtype)
+    attention_weights = torch.zeros(bs, seq_len, device=device, dtype=dtype)
+    attention_weights_cum = torch.zeros(bs, seq_len, device=device, dtype=dtype)
+    attention_context = torch.zeros(bs, encoder_embedding_dim, device=device, dtype=dtype)
+    decoder_output = torch.zeros(bs, n_mel_channels, device=device, dtype=dtype)
+    gate_prediction = torch.zeros(bs, 1, device=device, dtype=dtype)
 
     return (attention_hidden, attention_cell, decoder_hidden,
             decoder_cell, attention_weights, attention_weights_cum,
@@ -124,28 +130,30 @@ def init_decoder_outputs(memory, memory_lengths):
 def init_decoder_tensors(decoder_inputs, decoder_outputs):
 
     decoder_tensors = {
-        # inputs
-        'decoder_input': decoder_inputs[0],
-        'attention_hidden': decoder_inputs[1],
-        'attention_cell': decoder_inputs[2],
-        'decoder_hidden': decoder_inputs[3],
-        'decoder_cell': decoder_inputs[4],
-        'attention_weights': decoder_inputs[5],
-        'attention_weights_cum': decoder_inputs[6],
-        'attention_context': decoder_inputs[7],
-        'memory': decoder_inputs[8],
-        'processed_memory': decoder_inputs[9],
-        'mask': decoder_inputs[10],
-        # outputs
-        'out_attention_hidden': decoder_outputs[0],
-        'out_attention_cell': decoder_outputs[1],
-        'out_decoder_hidden': decoder_outputs[2],
-        'out_decoder_cell': decoder_outputs[3],
-        'out_attention_weights': decoder_outputs[4],
-        'out_attention_weights_cum': decoder_outputs[5],
-        'out_attention_context': decoder_outputs[6],
-        'decoder_output': decoder_outputs[7],
-        'gate_prediction': decoder_outputs[8],
+        "inputs" : {
+            'decoder_input': decoder_inputs[0],
+            'attention_hidden': decoder_inputs[1],
+            'attention_cell': decoder_inputs[2],
+            'decoder_hidden': decoder_inputs[3],
+            'decoder_cell': decoder_inputs[4],
+            'attention_weights': decoder_inputs[5],
+            'attention_weights_cum': decoder_inputs[6],
+            'attention_context': decoder_inputs[7],
+            'memory': decoder_inputs[8],
+            'processed_memory': decoder_inputs[9],
+            'mask': decoder_inputs[10]
+        },
+        "outputs" : {
+            'out_attention_hidden': decoder_outputs[0],
+            'out_attention_cell': decoder_outputs[1],
+            'out_decoder_hidden': decoder_outputs[2],
+            'out_decoder_cell': decoder_outputs[3],
+            'out_attention_weights': decoder_outputs[4],
+            'out_attention_weights_cum': decoder_outputs[5],
+            'out_attention_context': decoder_outputs[6],
+            'decoder_output': decoder_outputs[7],
+            'gate_prediction': decoder_outputs[8]
+        }
     }
     return decoder_tensors
 
@@ -178,17 +186,22 @@ def swap_inputs_outputs(decoder_inputs, decoder_outputs):
 
 def infer_tacotron2_trt(encoder, decoder_iter, postnet,
                         encoder_context, decoder_context, postnet_context,
-                        sequences, sequence_lengths, measurements):
+                        sequences, sequence_lengths, measurements, fp16):
 
-    memory = torch.zeros((len(sequence_lengths),sequence_lengths[0],512)).cuda().float()
-    processed_memory = torch.zeros((len(sequence_lengths),sequence_lengths[0],128)).cuda().float()
+    memory = torch.zeros((len(sequence_lengths), sequence_lengths[0], 512)).cuda()
+    if fp16:
+        memory = memory.half()
+    device = memory.device
+    dtype = memory.dtype
+
+    processed_memory = torch.zeros((len(sequence_lengths),sequence_lengths[0],128), device=device, dtype=dtype)
     lens = torch.zeros_like(sequence_lengths)
 
     encoder_tensors = {
-        # inputs
-        'sequences': sequences, 'sequence_lengths': sequence_lengths,
-        # outputs
-        'memory': memory, 'lens': lens, 'processed_memory': processed_memory
+        "inputs" :
+        {'sequences': sequences, 'sequence_lengths': sequence_lengths},
+        "outputs" :
+        {'memory': memory, 'lens': lens, 'processed_memory': processed_memory}
     }
 
     print("Running Tacotron2 Encoder")
@@ -207,22 +220,23 @@ def infer_tacotron2_trt(encoder, decoder_iter, postnet,
     decoder_outputs = init_decoder_outputs(memory, sequence_lengths)
 
     print("Running Tacotron2 Decoder")
+    measurements_decoder = {}
     while True:
         decoder_tensors = init_decoder_tensors(decoder_inputs, decoder_outputs)
-        with MeasureTime(measurements, "step"):
+        with MeasureTime(measurements_decoder, "step"):
             run_trt_engine(decoder_context, decoder_iter, decoder_tensors)
 
         if first_iter:
             mel_outputs = torch.unsqueeze(decoder_outputs[7], 2)
             gate_outputs = torch.unsqueeze(decoder_outputs[8], 2)
             alignments = torch.unsqueeze(decoder_outputs[4], 2)
-            measurements['tacotron2_decoder_time'] = measurements['step']
+            measurements['tacotron2_decoder_time'] = measurements_decoder['step']
             first_iter = False
         else:
             mel_outputs = torch.cat((mel_outputs, torch.unsqueeze(decoder_outputs[7], 2)), 2)
             gate_outputs = torch.cat((gate_outputs, torch.unsqueeze(decoder_outputs[8], 2)), 2)
             alignments = torch.cat((alignments, torch.unsqueeze(decoder_outputs[4], 2)), 2)
-            measurements['tacotron2_decoder_time'] += measurements['step']
+            measurements['tacotron2_decoder_time'] += measurements_decoder['step']
 
         dec = torch.le(torch.sigmoid(decoder_outputs[8]), gate_threshold).to(torch.int32).squeeze(1)
         not_finished = not_finished*dec
@@ -237,13 +251,13 @@ def infer_tacotron2_trt(encoder, decoder_iter, postnet,
 
         decoder_inputs, decoder_outputs = swap_inputs_outputs(decoder_inputs, decoder_outputs)
 
-    mel_outputs_postnet = torch.zeros_like(mel_outputs).cuda().float()
+    mel_outputs_postnet = torch.zeros_like(mel_outputs, device=device, dtype=dtype)
 
     postnet_tensors = {
-        # inputs
-        'mel_outputs': mel_outputs,
-        # outputs
-        'mel_outputs_postnet': mel_outputs_postnet
+        "inputs" :
+        {'mel_outputs': mel_outputs},
+        "outputs" :
+        {'mel_outputs_postnet': mel_outputs_postnet}
     }
     print("Running Tacotron2 Postnet")
     with MeasureTime(measurements, "tacotron2_postnet_time"):
@@ -254,30 +268,28 @@ def infer_tacotron2_trt(encoder, decoder_iter, postnet,
     return mel_outputs_postnet, mel_lengths
 
 
-def infer_waveglow_trt(waveglow, waveglow_context, mel, measurements):
+def infer_waveglow_trt(waveglow, waveglow_context, mel, measurements, fp16):
 
     mel = mel.unsqueeze(3)
     mel_size = mel.size(2)
     batch_size = mel.size(0)
     stride = 256
-    kernel_size = 1024
     n_group = 8
-    z_size = (mel_size-1)*stride+(kernel_size-1)+1
-    z_size = z_size - (kernel_size-stride)
+    z_size = mel_size*stride
     z_size = z_size//n_group
     z = torch.randn(batch_size, n_group, z_size, 1).cuda()
     audios = torch.zeros(batch_size, mel_size*stride).cuda()
 
-    if "HALF" in str(waveglow.get_binding_dtype(waveglow.get_binding_index("mel"))):
+    if fp16:
         z = z.half()
         mel = mel.half()
         audios = audios.half()
 
     waveglow_tensors = {
-        # inputs
-        'mel': mel, 'z': z,
-        # outputs
-        'audio': audios
+        "inputs" :
+        {'mel': mel, 'z': z},
+        "outputs" :
+        {'audio': audios}
     }
     print("Running WaveGlow")
     with MeasureTime(measurements, "waveglow_time"):
@@ -337,8 +349,8 @@ def main():
     with MeasureTime(measurements, "latency"):
         mel, mel_lengths = infer_tacotron2_trt(encoder, decoder_iter, postnet,
                                                encoder_context, decoder_context, postnet_context,
-                                               sequences, sequence_lengths, measurements)
-        audios = infer_waveglow_trt(waveglow, waveglow_context, mel, measurements)
+                                               sequences, sequence_lengths, measurements, args.fp16)
+        audios = infer_waveglow_trt(waveglow, waveglow_context, mel, measurements, args.fp16)
 
     with encoder_context, decoder_context,  postnet_context, waveglow_context:
         pass
@@ -365,7 +377,7 @@ def main():
         DLLogger.log(step=0, data={"denoiser": measurements['denoiser']})
     DLLogger.flush()
 
-    prec = "fp16" if "fp16" in args.encoder else "fp32"
+    prec = "fp16" if args.fp16 else "fp32"
     latency = measurements['latency']
     throughput = audios.size(1)/latency
     log_data = "1,"+str(sequence_lengths[0].item())+","+prec+","+str(latency)+","+str(throughput)+","+str(mel_lengths[0].item())+"\n"

@@ -1,0 +1,37 @@
+name: "tacotron2waveglow"
+platform: "custom"
+default_model_filename: "libtt2i_trtis.so"
+max_batch_size: 32
+input [
+  {
+    name: "INPUT"
+    data_type: TYPE_STRING
+    dims: [ -1 ]
+  }
+]
+output [
+  {
+    name: "OUTPUT"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  },
+  {
+    name: "OUTPUT_LENGTH"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
+  }
+]
+parameters [
+  {
+    key: "engine_path"
+    value: { string_value: "/engines" }
+  },
+  {
+    key: "mapping_path"
+    value: { string_value: "/models/tacotron2waveglow/mapping.txt" }
+  },
+  {
+    key: "use_denoiser"
+    value: { string_value: "no" }
+  }
+]

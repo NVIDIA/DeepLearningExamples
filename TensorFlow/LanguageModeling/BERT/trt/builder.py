@@ -18,9 +18,12 @@ import ctypes
 import argparse
 import numpy as np
 import json
+import time
 import sys
 import re
 import os
+import os.path
+from helpers.calibrator import BertCalibrator as BertCalibrator
 
 try:
     from tensorflow.python import pywrap_tensorflow as pyTF
@@ -81,7 +84,7 @@ SQD_W = "squad_output_weights"
 SQD_B = "squad_output_bias"
 
 class BertConfig:
-    def __init__(self, bert_config_path, use_fp16):
+    def __init__(self, bert_config_path, use_fp16, use_int8, use_strict, use_fc2_gemm):
         with open(bert_config_path, 'r') as f:
             data = json.load(f)
             self.num_attention_heads = data['num_attention_heads']
@@ -89,14 +92,55 @@ class BertConfig:
             self.intermediate_size = data['intermediate_size']
             self.num_hidden_layers = data['num_hidden_layers']
             self.use_fp16 = use_fp16
+            self.use_int8 = use_int8
+            self.use_fc2_gemm = use_fc2_gemm
+            self.use_strict = use_strict
             self.head_size = self.hidden_size // self.num_attention_heads
+
 
 
 def set_tensor_name(tensor, prefix, name):
     tensor.name = prefix + name
 
-def set_layer_name(layer, prefix, name, out_idx = 0):
+def set_output_name(layer, prefix, name, out_idx = 0):
+    layer.name = prefix + name
     set_tensor_name(layer.get_output(out_idx), prefix, name)
+
+def make_gelu_layer(prefix, config, network, input_tensor):
+    POW = network.add_constant((1, 1, 1, 1, 1), trt.Weights(np.ascontiguousarray([3.0], dtype=np.float32)))
+    MULTIPLY = network.add_constant((1, 1, 1, 1, 1), trt.Weights(np.ascontiguousarray([0.044715], dtype=np.float32)))
+    SQRT = network.add_constant((1, 1, 1, 1, 1), trt.Weights((np.ascontiguousarray([0.79788456080286535587989211986876], dtype=np.float32))))
+    ONE = network.add_constant((1, 1, 1, 1, 1), trt.Weights((np.ascontiguousarray([1.0], dtype=np.float32))))
+    HALF = network.add_constant((1, 1, 1, 1, 1), trt.Weights((np.ascontiguousarray([0.5], dtype=np.float32))))
+    X_pow = network.add_elementwise(input_tensor, POW.get_output(0), trt.ElementWiseOperation.POW)
+    X_pow_t = X_pow.get_output(0)
+    X_mul = network.add_elementwise(X_pow_t, MULTIPLY.get_output(0), trt.ElementWiseOperation.PROD)
+    X_add = network.add_elementwise(mid_dense_out, X_mul.get_output(0), trt.ElementWiseOperation.SUM)
+    X_sqrt = network.add_elementwise(X_add.get_output(0), SQRT.get_output(0), trt.ElementWiseOperation.PROD)
+    X_sqrt_tensor = X_sqrt.get_output(0)
+    X_tanh = network.add_activation(X_sqrt_tensor, trt.ActivationType.TANH)
+    X_tanh_tensor = X_tanh.get_output(0)
+    X_one = network.add_elementwise(X_tanh_tensor, ONE.get_output(0), trt.ElementWiseOperation.SUM)
+    CDF = network.add_elementwise(X_one.get_output(0), HALF.get_output(0), trt.ElementWiseOperation.PROD)
+    gelu_layer = network.add_elementwise(CDF.get_output(0), mid_dense_out, trt.ElementWiseOperation.PROD)
+
+    # enable elementwise fusing for int8 && fp16
+    POW.precision = trt.DataType.FLOAT
+    MULTIPLY.precision = trt.DataType.FLOAT
+    SQRT.precision = trt.DataType.FLOAT
+    ONE.precision = trt.DataType.FLOAT
+    HALF.precision = trt.DataType.FLOAT
+    X_pow.precision = trt.DataType.FLOAT
+    X_mul.precision = trt.DataType.FLOAT
+    X_add.precision = trt.DataType.FLOAT
+    X_sqrt.precision = trt.DataType.FLOAT
+    X_tanh.precision = trt.DataType.FLOAT
+    X_one.precision = trt.DataType.FLOAT
+    CDF.precision = trt.DataType.FLOAT
+    gelu_layer.precision = trt.DataType.FLOAT
+    return gelu_layer
+
+
 
 def attention_layer_opt(prefix, config, init_dict, network, input_tensor, imask):
     """
@@ -110,9 +154,13 @@ def attention_layer_opt(prefix, config, init_dict, network, input_tensor, imask)
     Wall = init_dict[prefix + WQKV]
     Ball = init_dict[prefix + BQKV]
 
-    mult_all = network.add_fully_connected(input_tensor, 3 * hidden_size, Wall, Ball)
+    # FC_attention
+    if config.use_int8:
+        mult_all = network.add_convolution(input_tensor, 3 * hidden_size, (1, 1), Wall, Ball)
+    else:
+        mult_all = network.add_fully_connected(input_tensor, 3 * hidden_size, Wall, Ball)
 
-    set_layer_name(mult_all, prefix, "qkv_mult")
+    set_output_name(mult_all, prefix, "qkv_mult")
 
     has_mask = imask is not None
 
@@ -128,7 +176,7 @@ def attention_layer_opt(prefix, config, init_dict, network, input_tensor, imask)
     if has_mask:
         qkv_in.append(imask)
     qkv2ctx = network.add_plugin_v2(qkv_in, qkv2ctx_plug)
-    set_layer_name(qkv2ctx, prefix, "context_layer")
+    set_output_name(qkv2ctx, prefix, "context_layer")
     return qkv2ctx
 
 
@@ -140,14 +188,14 @@ def skipln(prefix, config, init_dict, network, input_tensor, skip, bias=None):
     assert len(idims) == 5
     hidden_size = idims[2]
 
-    pf_type = trt.PluginField("type_id", np.array([1 if config.use_fp16 else 0], np.int32), trt.PluginFieldType.INT32)
     pf_ld = trt.PluginField("ld", np.array([hidden_size], np.int32), trt.PluginFieldType.INT32)
     wbeta = init_dict[prefix + "beta"]
     pf_beta = trt.PluginField("beta", wbeta.numpy(), trt.PluginFieldType.FLOAT32)
     wgamma = init_dict[prefix + "gamma"]
     pf_gamma = trt.PluginField("gamma", wgamma.numpy(), trt.PluginFieldType.FLOAT32)
+    pf_type = trt.PluginField("type_id", np.array([1 if config.use_fp16 else 0], np.int32), trt.PluginFieldType.INT32)
 
-    fields = [pf_ld, pf_beta, pf_gamma, pf_type]
+    fields = [pf_ld, pf_beta, pf_gamma, pf_type ]
 
     if bias:
         pf_bias = trt.PluginField("bias", bias.numpy(), trt.PluginFieldType.FLOAT32)
@@ -162,8 +210,8 @@ def skipln(prefix, config, init_dict, network, input_tensor, skip, bias=None):
 
 def my_fc(config, network, input_tensor,out_dims, W):
     pf_out_dims = trt.PluginField('out_dims', np.array([out_dims], dtype=np.int32), trt.PluginFieldType.INT32)
-    pf_type = trt.PluginField("type_id", np.array([1 if config.use_fp16 else 0], np.int32), trt.PluginFieldType.INT32)
     pf_W = trt.PluginField('W', W.numpy(), trt.PluginFieldType.FLOAT32)
+    pf_type = trt.PluginField("type_id", np.array([1 if config.use_fp16 else 0], np.int32), trt.PluginFieldType.INT32)
     pfc = trt.PluginFieldCollection([pf_out_dims, pf_W, pf_type])
     fc_plugin = fc_plg_creator.create_plugin('fcplugin', pfc)
     plug_inputs = [input_tensor]
@@ -184,17 +232,27 @@ def transformer_layer_opt(prefix, config, init_dict, network, input_tensor, imas
     context_transposed = attention_layer_opt(prefix + "attention_self_", config, init_dict, network, input_tensor, imask)
     attention_heads = context_transposed.get_output(0)
 
+    # FC0
     B_aout = init_dict[prefix + B_AOUT]
-    W_aoutT = init_dict[prefix + W_AOUT + '_notrans']
-    attention_out_fc = my_fc(config, network, attention_heads, hidden_size, W_aoutT)
+    if config.use_int8:
+        W_aout = init_dict[prefix + W_AOUT]
+        attention_out_fc = network.add_convolution(attention_heads, hidden_size, (1, 1), W_aout, B_aout)
+        B_aout = None
+
+        if config.use_fp16:
+            attention_out_fc.precision = trt.DataType.INT8
+            attention_out_fc.set_output_type(0, trt.DataType.HALF)
+    else:
+        W_aoutT = init_dict[prefix + W_AOUT + '_notrans']
+        attention_out_fc = my_fc(config, network, attention_heads, hidden_size, W_aoutT)
 
     skiplayer = skipln(prefix + "attention_output_layernorm_",config, init_dict, network, attention_out_fc.get_output(0), input_tensor, B_aout)
     attention_ln = skiplayer.get_output(0)
 
+    # FC1 + GELU
     B_mid = init_dict[prefix + B_MID]
     W_midT = init_dict[prefix + W_MID + '_notrans']
     mid_dense = my_fc(config, network, attention_ln, config.intermediate_size, W_midT)
-
     mid_dense_out = mid_dense.get_output(0)
 
     pf_type = trt.PluginField("type_id", np.array([1 if config.use_fp16 else 0], np.int32), trt.PluginFieldType.INT32)
@@ -207,13 +265,22 @@ def transformer_layer_opt(prefix, config, init_dict, network, input_tensor, imas
 
     intermediate_act = gelu_layer.get_output(0)
     set_tensor_name(intermediate_act, prefix, "gelu")
+    
+    if config.use_int8 and config.use_strict:
+        intermediate_act.set_dynamic_range(-10, 10)
 
+    # FC2
     # Dense to hidden size
     B_lout = init_dict[prefix + B_LOUT]
-    W_loutT = init_dict[prefix + W_LOUT + '_notrans']
-    out_dense = my_fc(config, network, intermediate_act, hidden_size, W_loutT)
+    if config.use_int8 and config.use_strict and not config.use_fc2_gemm:
+        W_lout = init_dict[prefix + W_LOUT]
+        out_dense = network.add_convolution(intermediate_act, hidden_size, (1, 1), W_lout, B_lout)
+        B_lout = None
+    else:
+        W_loutT = init_dict[prefix + W_LOUT + '_notrans']
+        out_dense = my_fc(config, network, intermediate_act, hidden_size, W_loutT)
 
-    set_layer_name(out_dense, prefix + "output_", "dense")
+    set_output_name(out_dense, prefix + "output_", "dense")
     out_layer = skipln(prefix + "output_layernorm_", config, init_dict, network, out_dense.get_output(0), attention_ln, B_lout)
     out_ln = out_layer.get_output(0)
 
@@ -247,8 +314,11 @@ def squad_output(prefix, config, init_dict, network, input_tensor):
 
     W = network.add_constant((1, hidden_size, 2), W_out)
     dense = network.add_fully_connected(input_tensor, 2, W_out, B_out)
-    set_layer_name(dense, prefix, "squad_logits")
-    return dense
+
+    OUT = network.add_shuffle(dense.get_output(0))
+    OUT.second_transpose = (1, 0, 2, 3, 4)
+    set_output_name(OUT, prefix, "squad_logits")
+    return OUT
 
 
 def load_weights(inputbase, config):
@@ -335,41 +405,11 @@ def load_weights(inputbase, config):
     return weights_dict
 
 
-def build_engine(batch_sizes, sequence_length, config, weights_dict):
-    wbeta = trt.PluginField("bert_embeddings_layernorm_beta", weights_dict["bert_embeddings_layernorm_beta"].numpy(), trt.PluginFieldType.FLOAT32)
-    wgamma = trt.PluginField("bert_embeddings_layernorm_gamma", weights_dict["bert_embeddings_layernorm_gamma"].numpy(), trt.PluginFieldType.FLOAT32)
-    wwordemb = trt.PluginField("bert_embeddings_word_embeddings", weights_dict["bert_embeddings_word_embeddings"].numpy(), trt.PluginFieldType.FLOAT32)
-    wtokemb = trt.PluginField("bert_embeddings_token_type_embeddings", weights_dict["bert_embeddings_token_type_embeddings"].numpy(), trt.PluginFieldType.FLOAT32)
-    wposemb = trt.PluginField("bert_embeddings_position_embeddings", weights_dict["bert_embeddings_position_embeddings"].numpy(), trt.PluginFieldType.FLOAT32)
-
-    output_fp16 = trt.PluginField("output_fp16", np.array([1 if config.use_fp16 else 0]).astype(np.int32), trt.PluginFieldType.INT32)
-
-    pfc = trt.PluginFieldCollection([wbeta, wgamma, wwordemb, wtokemb, wposemb, output_fp16])
-    fn = emln_plg_creator.create_plugin("embeddings", pfc)
-
-    explicit_batch_flag = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
-    with trt.Builder(TRT_LOGGER) as builder, builder.create_network(explicit_batch_flag) as network, builder.create_builder_config() as builder_config:
-        builder_config.max_workspace_size = 5000 * (1024 * 1024) # 5000 MiB
-        if config.use_fp16:
-            builder_config.set_flag(trt.BuilderFlag.FP16)
-
-        input_ids = network.add_input(name="input_ids", dtype=trt.int32, shape=(-1, -1))
-        segment_ids = network.add_input(name="segment_ids", dtype=trt.int32, shape=(-1, -1))
-        input_mask = network.add_input(name="input_mask", dtype=trt.int32, shape=(-1, -1))
-
-        # Create the network
-        inputs = [input_ids, segment_ids, input_mask]
-        emb_layer = network.add_plugin_v2(inputs, fn)
-
-        embeddings = emb_layer.get_output(0)
-        mask_idx = emb_layer.get_output(1)
-
-        bert_out = bert_model(config, weights_dict, network, embeddings, mask_idx)
-
-        squad_logits = squad_output("cls_", config, weights_dict, network, bert_out)
-        squad_logits_out = squad_logits.get_output(0)
-
-        network.mark_output(squad_logits_out)
+def emb_layernorm(builder, network, config, weights_dict, builder_config, sequence_length, batch_sizes):
+    if len(batch_sizes) > 1:
+        input_ids = network.add_input(name="input_ids", dtype=trt.int32, shape=(sequence_length, -1))
+        segment_ids = network.add_input(name="segment_ids", dtype=trt.int32, shape=(sequence_length, -1))
+        input_mask = network.add_input(name="input_mask", dtype=trt.int32, shape=(sequence_length, -1))
 
         # Specify profiles for the batch sizes we're interested in.
         # Make sure the profile also works for all sizes not covered by the previous profile.
@@ -383,9 +423,77 @@ def build_engine(batch_sizes, sequence_length, config, weights_dict):
             profile.set_shape("input_mask", min=min_shape, opt=shape, max=shape)
             builder_config.add_optimization_profile(profile)
             prev_size = batch_size
+    else:
+        input_ids = network.add_input(name="input_ids", dtype=trt.int32, shape=(sequence_length, batch_sizes[0]))
+        segment_ids = network.add_input(name="segment_ids", dtype=trt.int32, shape=(sequence_length, batch_sizes[0]))
+        input_mask = network.add_input(name="input_mask", dtype=trt.int32, shape=(sequence_length, batch_sizes[0]))
 
-        return builder.build_engine(network, builder_config)
+    wbeta = trt.PluginField("bert_embeddings_layernorm_beta", weights_dict["bert_embeddings_layernorm_beta"].numpy(), trt.PluginFieldType.FLOAT32)
+    wgamma = trt.PluginField("bert_embeddings_layernorm_gamma", weights_dict["bert_embeddings_layernorm_gamma"].numpy(), trt.PluginFieldType.FLOAT32)
+    wwordemb = trt.PluginField("bert_embeddings_word_embeddings", weights_dict["bert_embeddings_word_embeddings"].numpy(), trt.PluginFieldType.FLOAT32)
+    wtokemb = trt.PluginField("bert_embeddings_token_type_embeddings", weights_dict["bert_embeddings_token_type_embeddings"].numpy(), trt.PluginFieldType.FLOAT32)
+    wposemb = trt.PluginField("bert_embeddings_position_embeddings", weights_dict["bert_embeddings_position_embeddings"].numpy(), trt.PluginFieldType.FLOAT32)
 
+    output_fp16 = trt.PluginField("output_fp16", np.array([1 if config.use_fp16 else 0]).astype(np.int32), trt.PluginFieldType.INT32)
+
+    pfc = trt.PluginFieldCollection([wbeta, wgamma, wwordemb, wtokemb, wposemb, output_fp16])
+    fn = emln_plg_creator.create_plugin("embeddings", pfc)
+
+    inputs = [input_ids, segment_ids, input_mask]
+    emb_layer = network.add_plugin_v2(inputs, fn)
+    set_output_name(emb_layer, "embeddings_", "output")
+    return emb_layer
+
+
+def build_engine(batch_sizes, sequence_length, config, weights_dict, squad_json, vocab_file, calibrationCacheFile, calib_num):
+    explicit_batch_flag = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+
+    with trt.Builder(TRT_LOGGER) as builder, builder.create_network(explicit_batch_flag) as network, builder.create_builder_config() as builder_config:
+        builder_config.max_workspace_size = 5000 * (1024 * 1024) # 5000 MiB
+        if config.use_fp16:
+            builder_config.set_flag(trt.BuilderFlag.FP16)
+        if config.use_int8:
+            calibrator = BertCalibrator(squad_json, vocab_file, calibrationCacheFile, 1, sequence_length, calib_num)
+            builder_config.set_flag(trt.BuilderFlag.INT8)
+            builder_config.int8_calibrator = calibrator
+        if config.use_strict:
+            builder_config.set_flag(trt.BuilderFlag.STRICT_TYPES)
+
+        # Create the network
+        emb_layer = emb_layernorm(builder, network, config, weights_dict, builder_config, sequence_length, batch_sizes)
+        embeddings = emb_layer.get_output(0)
+        mask_idx = emb_layer.get_output(1)
+
+        bert_out = bert_model(config, weights_dict, network, embeddings, mask_idx)
+
+        squad_logits = squad_output("cls_", config, weights_dict, network, bert_out)
+        squad_logits_out = squad_logits.get_output(0)
+
+        network.mark_output(squad_logits_out)
+
+        build_start_time = time.time()
+        engine = builder.build_engine(network, builder_config)
+        build_time_elapsed = (time.time() - build_start_time)
+        TRT_LOGGER.log(TRT_LOGGER.INFO, "build engine in {:.3f} Sec".format(build_time_elapsed))
+        if config.use_int8:
+            calibrator.free()
+        return engine
+
+def generate_calibration_cache(sequence_length, config, weights_dict, squad_json, vocab_file, calib_num):
+    # dynamic shape not working with calibration, so we need generate a calibration cache first using fulldims network
+    calibrationCacheFile = "bertSquadCalibCache"
+    if not config.use_int8 or os.path.exists(calibrationCacheFile):
+        return calibrationCacheFile
+
+    # generate calibration cache
+    saved_use_fp16 = config.use_fp16
+    config.use_fp16 = False
+
+    with build_engine([1], sequence_length, config, weights_dict, squad_json, vocab_file, calibrationCacheFile, calib_num) as engine:
+        TRT_LOGGER.log(TRT_LOGGER.INFO, "calibration cache generated in {:}".format(calibrationCacheFile))
+
+    config.use_fp16 = saved_use_fp16
+    return calibrationCacheFile
 
 def main():
     parser = argparse.ArgumentParser(description='TensorRT BERT Sample', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -397,17 +505,24 @@ def main():
     parser.add_argument('-c', '--config-dir', required=True,
                         help='The folder containing the bert_config.json, which can be downloaded e.g. from https://github.com/google-research/bert#pre-trained-models or by running download_models.py in dle/TensorFlow/LanguageModeling/BERT/data/pretrained_models_google')
     parser.add_argument('-f', '--fp16', action='store_true', help='Indicates that inference should be run in FP16 precision', required=False)
+    parser.add_argument('-i', '--int8', action='store_true', help='Indicates that inference should be run in INT8 precision', required=False)
+    parser.add_argument('-t', '--strict', action='store_true', help='Indicates that inference should be run in strict precision mode', required=False)
+    parser.add_argument('-j', '--squad-json', default='squad/dev-v1.1.json', help='squad json dataset used for int8 calibration', required=False)
+    parser.add_argument('-v', '--vocab-file', default='./pre-trained_model/uncased_L-24_H-1024_A-16/vocab.txt', help='Path to file containing entire understandable vocab', required=False)
+    parser.add_argument('-n', '--calib-num', default=100, help='calibration batch numbers', type=int)
+    parser.add_argument('-g', '--force-fc2-gemm', action='store_true', help='Force use gemm to implement FC2 layer', required=False)
 
     args, _ = parser.parse_known_args()
     args.batch_size = args.batch_size or [1]
 
     bert_config_path = os.path.join(args.config_dir, 'bert_config.json')
     TRT_LOGGER.log(TRT_LOGGER.INFO, "Using configuration file: {:}".format(bert_config_path))
-    config = BertConfig(bert_config_path, args.fp16)
+    config = BertConfig(bert_config_path, args.fp16, args.int8, args.strict, args.force_fc2_gemm)
 
     weights_dict = load_weights(args.ckpt, config)
+    calib_cache = generate_calibration_cache(args.sequence_length, config, weights_dict, args.squad_json, args.vocab_file, args.calib_num)
 
-    with build_engine(args.batch_size, args.sequence_length, config, weights_dict) as engine:
+    with build_engine(args.batch_size, args.sequence_length, config, weights_dict, args.squad_json, args.vocab_file, calib_cache, args.calib_num) as engine:
         TRT_LOGGER.log(TRT_LOGGER.VERBOSE, "Serializing Engine...")
         serialized_engine = engine.serialize()
         TRT_LOGGER.log(TRT_LOGGER.INFO, "Saving Engine to {:}".format(args.output))

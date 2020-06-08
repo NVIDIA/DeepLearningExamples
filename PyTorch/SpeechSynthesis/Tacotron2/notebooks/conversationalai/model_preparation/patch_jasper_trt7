@@ -1,0 +1,68 @@
+diff --git a/PyTorch/SpeechRecognition/Jasper/trt/Dockerfile b/PyTorch/SpeechRecognition/Jasper/trt/Dockerfile
+index e598a67..562be83 100644
+--- a/PyTorch/SpeechRecognition/Jasper/trt/Dockerfile
++++ b/PyTorch/SpeechRecognition/Jasper/trt/Dockerfile
+@@ -1,4 +1,4 @@
+-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:19.10-py3 
++ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.01-py3
+ FROM ${FROM_IMAGE_NAME}
+ 
+ RUN apt-get update && apt-get install -y python3
+@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y python3
+ WORKDIR /tmp/onnx-trt
+ COPY trt/onnx-trt.patch .
+ RUN git clone https://github.com/onnx/onnx-tensorrt.git && cd onnx-tensorrt && git submodule update --init --recursive && \
+-    patch -f < ../onnx-trt.patch && mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DGPU_ARCHS="60 70 75" && make -j16 && make install && mv -f /usr/lib/libnvonnx* /usr/lib/x86_64-linux-gnu/ && ldconfig
++    mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DGPU_ARCHS="60 70 75" && make -j16 && make install && mv -f /usr/lib/libnvonnx* /usr/lib/x86_64-linux-gnu/ && ldconfig
+ 
+ 
+ # Here's a good place to install pip reqs from JoC repo.
+diff --git a/PyTorch/SpeechRecognition/Jasper/trt/perf.py b/PyTorch/SpeechRecognition/Jasper/trt/perf.py
+index 426ee66..5917a1f 100755
+--- a/PyTorch/SpeechRecognition/Jasper/trt/perf.py
++++ b/PyTorch/SpeechRecognition/Jasper/trt/perf.py
+@@ -64,6 +64,9 @@ def main(args):
+             print("TRANSCRIPT: ", hypotheses)
+             return
+ 
++    if pyt_components['data_layer'] is None:
++        return
++    
+     wer, preds, times = perfprocedures.compare_times_trt_pyt_exhaustive(engine,
+                                                                         pyt_components,
+                                                                         args)
+diff --git a/PyTorch/SpeechRecognition/Jasper/trt/scripts/docker/build.sh b/PyTorch/SpeechRecognition/Jasper/trt/scripts/docker/build.sh
+index 0e44c7f..62e7446 100755
+--- a/PyTorch/SpeechRecognition/Jasper/trt/scripts/docker/build.sh
++++ b/PyTorch/SpeechRecognition/Jasper/trt/scripts/docker/build.sh
+@@ -1,5 +1,5 @@
+ #!/bin/bash
+ 
+ # Constructs a docker image containing dependencies for execution of JASPER through TRT
+-echo "docker build . -f ./trt/Dockerfile -t jasper:trt6"
+-docker build . -f ./trt/Dockerfile -t jasper:trt6
++echo "docker build . -f ./trt/Dockerfile -t jasper:trt7"
++docker build . -f ./trt/Dockerfile -t jasper:trt7
+diff --git a/PyTorch/SpeechRecognition/Jasper/trt/scripts/docker/launch.sh b/PyTorch/SpeechRecognition/Jasper/trt/scripts/docker/launch.sh
+index 9959062..ed5e711 100755
+--- a/PyTorch/SpeechRecognition/Jasper/trt/scripts/docker/launch.sh
++++ b/PyTorch/SpeechRecognition/Jasper/trt/scripts/docker/launch.sh
+@@ -40,4 +40,4 @@ nvidia-docker run -it --rm \
+   -v $RESULT_DIR:/results/ \
+   -v ${JASPER_REPO}:/jasper \
+   ${EXTRA_JASPER_ENV} \
+-  jasper:trt6 bash $PROGRAM_PATH
++  jasper:trt7 bash $PROGRAM_PATH
+diff --git a/PyTorch/SpeechRecognition/Jasper/trt/trtutils.py b/PyTorch/SpeechRecognition/Jasper/trt/trtutils.py
+index 92460b2..01c8b6a 100644
+--- a/PyTorch/SpeechRecognition/Jasper/trt/trtutils.py
++++ b/PyTorch/SpeechRecognition/Jasper/trt/trtutils.py
+@@ -40,7 +40,7 @@ def build_engine_from_parser(args):
+     '''
+     TRT_LOGGER = trt.Logger(trt.Logger.VERBOSE) if args.verbose else trt.Logger(trt.Logger.WARNING)
+     builder = trt.Builder(TRT_LOGGER)
+-    builder.max_batch_size = 64
++    builder.max_batch_size = 16
+ 
+     if args.trt_fp16:
+         builder.fp16_mode = True

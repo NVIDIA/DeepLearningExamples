@@ -13,13 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#OUT_DIR=/results/SQuAD
-
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
 
 init_checkpoint=${1:-"/workspace/bert/checkpoints/bert_uncased.pt"}
 epochs=${2:-"2.0"}
-batch_size=${3:-"3"}
+batch_size=${3:-"4"}
 learning_rate=${4:-"3e-5"}
 precision=${5:-"fp16"}
 num_gpu=${6:-"8"}

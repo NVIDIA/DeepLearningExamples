@@ -24,6 +24,7 @@ This repository provides a script and recipe to train the Wide and Deep Recommen
     * [Command-line options](#command-line-options)
     * [Getting the data](#getting-the-data)
         * [Dataset guidelines](#dataset-guidelines)
+        * [Spark preprocessing](#spark-preprocessing)
     * [Training process](#training-process)
 - [Performance](#performance)
     * [Benchmarking](#benchmarking)
@@ -48,7 +49,7 @@ The differences between this Wide & Deep Recommender Model and the model from th
 
 The model enables you to train a recommender model that combines the memorization of the Wide part and generalization of the Deep part of the network.
 
-This model is trained with mixed precision using Tensor Cores on NVIDIA Volta and Turing GPUs. Therefore, researchers can get results 1.32 times faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
+This model is trained with mixed precision using Tensor Cores on NVIDIA Volta and Turing GPUs. Therefore, researchers can get results 1.44 times faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
 
 ### Model architecture
 
@@ -61,12 +62,6 @@ Figure 1. The architecture of the Wide & Deep model.</a>
 </p>
 
 ### Applications and dataset
-
-The basis of our API lies in the observation that in recommendation problems there are hierarchies of features: those which describe the person or object _to which_ we wish to make recommendations (*request* level features), and those which describe those objects which we are considering recommending (*item* level features). Additionally, these features often need to undergo some transformation from their raw representation in data stores to a representation digestible by neural networks. These transformations, defined by [TensorFlow `tf.feature_column`](https://www.tensorflow.org/api_docs/python/tf/feature_column), include nontrivial operations such as hashing, binning, vocabulary lookups, and embedding (indicator columns can be thought of as embeddings with the identity matrix as the embedding table).
-
-In most APIs, including those implemented in standard TensorFlow, these transformations need to be computed for request level features repeatedly for _every_ item on which we want to compute a recommendation score. Moreover, if the model is being hosted on a dedicated remote inference server, this requires us to send copies of the request level data for every item as well.
-
-To address this, we built a custom GPU op which computes _all_ these transformations in parallel, and only reads and computes request level features once before fanning them out to the rest of the batch. Besides saving on redundant compute and network I/O, this implementation leverages the exceptional parallel computing power of NVIDIA GPUs to provide massive inference time accelerations compared to native CPU based implementations.
 
 As a reference dataset, we used a subset of [the features engineered](https://github.com/gabrielspmoreira/kaggle_outbrain_click_prediction_google_cloud_ml_engine) by the 19th place finisher in the [Kaggle Outbrain Click Prediction Challenge](https://www.kaggle.com/c/outbrain-click-prediction/). This competition challenged competitors to predict the likelihood with which a particular ad on a website's display would be clicked on. Competitors were given information about the user, display, document, and ad in order to train their models. More information can be found [here](https://www.kaggle.com/c/outbrain-click-prediction/data).
 
@@ -201,7 +196,7 @@ docker build . -t wide_deep
 4.  Start an interactive session in the NGC container to run preprocessing/training/inference.
 
 ```bash
-docker run --runtime=nvidia --rm -ti -v ${HOST_OUTBRAIN_PATH}:/outbrain wide_deep /bin/bash
+docker run --runtime=nvidia --privileged --rm -ti -v ${HOST_OUTBRAIN_PATH}:/outbrain wide_deep /bin/bash
 ```
 5. Start preprocessing.
 
@@ -215,11 +210,11 @@ size (4096 is the default).
 
 Single GPU:
 ```bash
-python -m trainer.task --gpu --amp --batch_size 131072 --num_epochs 100
+python -m trainer.task --gpu --amp --global_batch_size 131072 --num_epochs 120
 ```
 8 GPU:
 ```bash
-mpiexec --allow-run-as-root --bind-to socket -np 8 python -m trainer.task --gpu --amp --hvd --batch_size 16384 --num_epochs 20
+mpiexec --allow-run-as-root --bind-to socket -np 8 python -m trainer.task --gpu --amp --hvd --global_batch_size 131072 --num_epochs 120
 ```
 
 If you want to run validation or inference, you can either use the checkpoint obtained from the training 
@@ -300,17 +295,54 @@ The Outbrain dataset can be downloaded from [Kaggle](https://www.kaggle.com/c/ou
 
 #### Dataset guidelines
 
-The dataset contains a sample of users’ page views and clicks, as observed on multiple publisher sites. Viewed pages and clicked recommendations have further semantic attributes of the documents.
+The dataset contains a sample of users’ page views and clicks, as observed on multiple publisher sites. Viewed pages and clicked recommendations have additional semantic attributes of the documents.
+The dataset contains sets of content recommendations served to a specific user in a specific context. Each context (i.e. a set of recommended ads) is given a `display_id`. In each such recommendation set, the user has clicked on exactly one of the ads.
 
-The dataset contains sets of content recommendations served to a specific user in a specific context. Each context (i.e. a set of recommendations) is given a display_id. In each such set, the user has clicked on at least one recommendation. The page view logs originally has more than 2 billion rows (around 100 GB uncompressed). 
+The original data is stored in several separate files:
+- `page_views.csv` - log of users visiting documents (2B rows, ~100GB uncompressed)
+- `clicks_train.csv` - data showing which ad was clicked in each recommendation set (87M rows)
+- `clicks_test.csv` - used only for the submission in the original Kaggle contest
+- `events.csv` - metadata about the context of each recommendation set (23M rows)
+- `promoted_content.csv` - metadata about the ads
+- `document_meta.csv`, `document_topics.csv`, `document_entities.csv`, `document_categories.csv` - metadata about the documents
+ 
+During the preprocessing stage the data is transformed into 55M rows tabular data of 54 features and eventually saved in pre-batched TFRecord format.
 
-The data within the preprocessing stage are transferred into tabular data of 54 features, for training having 55 million rows.
+
+#### Spark preprocessing
+
+The original dataset is preprocessed using Spark scripts from the `preproc` directory. The preprocessing consists of the following operations:
+- separating out the validation set for cross-validation
+- filling missing data with the most frequent value
+- generating the user profiles from the page views data
+- joining the tables for the ad clicks data
+- computing click-through rates (CTR) for ads grouped by different contexts
+- computing cosine similarity between the features of the clicked ads and the viewed ads
+- math transformations of the numeric features (taking logarithm, scaling, binning)
+- storing the resulting set of features in TFRecord format
+
+The `preproc1-4.py` preprocessing scripts use PySpark. 
+In the Docker image, we have installed Spark 2.3.1 as a standalone cluster of Spark. 
+The `preproc1.py` script splits the data into a training set and a validation set. 
+The `preproc2.py` script generates the user profiles from the page views data. 
+The `preproc3.py` computes the click-through rates (CTR) and cosine similarities between the features. 
+The `preproc4.py` script performs the math transformations and generates the final TFRecord files. 
+The data in the output files is pre-batched (with the default batch size of 4096) to avoid the overhead 
+of the TFRecord format, which otherwise is not suitable for the tabular data - 
+it stores a separate dictionary with each feature name in plain text for every data entry.
+
+The preprocessing includes some very resource-exhausting operations, like joining 2B+ rows tables. 
+Such operations may not fit into the RAM memory, therefore we decided to use Spark which is a suitable tool 
+for handling tabular operations on large data. 
+Note that the Spark job requires about 1 TB disk space and 500 GB RAM to perform the preprocessing.
+For more information about Spark, please refer to the
+[Spark documentation](https://spark.apache.org/docs/2.3.1/).
 
 
 ### Training process
 
 The training can be started by running the `trainer/task.py` script. By default the script is in train mode. Other training related 
-configs are also present in the `trainer/task.py` and can be seen using the command `python -m trainer.task --help`. Training happens for `--num_epochs` epochs with custom estimator for the model. The model has a wide linear part and a deep feed forward network, and the networks are built according to the default configuration.
+configs are also present in the `trainer/task.py` and can be seen using the command `python -m trainer.task --help`. Training happens for `--num_epochs` epochs with a custom estimator for the model. The model has a wide linear part and a deep feed forward network, and the networks are built according to the default configuration.
 
 Two separate optimizers are used to optimize the wide and the deep part of the network:
     
@@ -356,9 +388,9 @@ Our results were obtained by running the benchmark scripts from the `scripts` di
 
 |**GPUs**|**Batch Size / GPU**|**Accuracy - FP32 (MAP@12)**|**Accuracy - Mixed precision (MAP@12)**|**Time to Train - FP32 (minutes)**|**Time to Train - Mixed precision (minutes)**|**Time to Train Speedup (FP32 to Mixed precision)**|
 |-------:|-------------------:|----------------------------:|---------------------------------------:|-----------------------------------------------:|----------------------:|---------------------------------:|
-| 1 | 131,072 |  0.67689 | 0.67542  | 546 | 414 | 1.32 |
-| 4 | 32,768 | 0.67677 | 0.67647  | 78 | 66 | 1.18 |
-| 8 | 16,384 | 0.67669 | 0.67594  | 30 | 24 | 1.25 |
+| 1 | 131,072 |  0.67647 | 0.67634  | 654 | 454 | 1.44 |
+| 4 | 32,768 | 0.67599 | 0.67652  | 226 | 183 | 1.23 |
+| 8 | 16,384 | 0.67688 | 0.67690  | 167 | 153 | 1.09 |
 
 To achieve the same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -368,15 +400,15 @@ To achieve the same results, follow the steps in the [Quick Start Guide](#quick-
 
 ##### Training stability test
 
-The Wide and Deep model was trained for 72,951 training steps, starting
-from 20 different initial random seeds. The training was performed in the 20.02-tf1-py3-stage NGC container on
+The Wide and Deep model was trained for 54,713 training steps, starting
+from 50 different initial random seeds. The training was performed in the 20.02-tf1-py3-stage NGC container on
 NVIDIA DGX-1 with 8x V100 16G GPUs with mixed precision enabled.
 After training, the models were evaluated on the test dataset. The following
 table summarizes the final MAP@12 score on the test set.
 
 |**Average MAP@12**|**Standard deviation**|**Minimum**|**Maximum**|
 |---------------------:|---------------------:|----------:|----------:|
-| 0.67594 | 0.00204 | 0.66906 | 0.67785 | 
+| 0.67690 | 0.00081 | 0.67432 | 0.67821 | 
 
 
 #### Training performance results
@@ -390,9 +422,9 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 |**GPUs**|**Batch Size / GPU**|**Throughput - FP32 (samples/s)**|**Throughput - Mixed precision (samples/s)**|**Throughput speedup (FP32 to Mixed precision)**|**Weak Scaling - FP32**|**Weak Scaling - Mixed precision**|
 |-------:|-------------------:|----------------------------:|---------------------------------------:|-----------------------------------------------:|----------------------:|---------------------------------:|
-| 1 | 131,072 | 167,875 | 221,550 | 1.320 | 1.000 | 1.000 |
-| 4 | 131,072 | 485,242 | 547,683 | 1.129 | 2.472 | 2.890 |
-| 8 | 131,072 | 655,665 | 688,481 | 1.050 | 3.108 | 3.906 |
+| 1 | 131,072 | 168,181 | 242,332 | 1.44 | 1.00 | 1.00 |
+| 4 | 131,072 | 487,719 | 602,027 | 1.23 | 2.47 | 2.89 |
+| 8 | 131,072 | 659,533 | 718,820 | 1.09 | 3.11 | 3.91 |
 
 
 
@@ -405,6 +437,8 @@ This section needs to include the date of the release and the most important cha
 March 2020
 - Initial release
 
+May 2020
+- Improved Spark preprocessing scripts performance
 ### Known issues
 
 - Limited tf.feature_column support

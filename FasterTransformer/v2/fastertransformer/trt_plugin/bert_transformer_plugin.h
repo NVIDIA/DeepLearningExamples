@@ -49,7 +49,7 @@ class TransformerTrtTraits<half>
 {
   public:
     static const OperationType OpType = OperationType::FP16;
-    static const nvinfer1::DataType DataType = nvinfer1::DataType::kFP16;
+    static const nvinfer1::DataType DataType = nvinfer1::DataType::kHALF;
 };
 
 class Logger : public nvinfer1::ILogger
@@ -127,25 +127,25 @@ class TransformerPlugin: public IPluginV2
           BertEncoderTransformer<EncoderTraits_>(*allocator_, max_batch_size, seq_len, seq_len, head_num, hidden_dim / head_num);
 
         EncoderInitParam<T> encoder_param; //init param here
-   
-        encoder_param.attr_kernel_Q = d_attr_kernel_Q_;
-        encoder_param.attr_kernel_K = d_attr_kernel_K_;
-        encoder_param.attr_kernel_V = d_attr_kernel_V_;
-        encoder_param.attr_bias_Q = d_attr_bias_Q_;
-        encoder_param.attr_bias_K = d_attr_bias_K_;
-        encoder_param.attr_bias_V = d_attr_bias_V_;
-        encoder_param.attr_output_kernel = d_attr_output_kernel_;
-        encoder_param.attr_output_bias = d_attr_output_bias_;
-        encoder_param.attr_output_layernorm_beta = d_attr_output_layernorm_beta_;
-        encoder_param.attr_output_layernorm_gamma = d_attr_output_layernorm_gamma_;
-        encoder_param.inter_kernel = d_inter_kernel_;
-        encoder_param.inter_bias = d_inter_bias_;
-        encoder_param.output_kernel = d_output_kernel_;
-        encoder_param.output_bias = d_output_bias_;
-        encoder_param.output_layernorm_beta = d_output_layernorm_beta_;
-        encoder_param.output_layernorm_gamma = d_output_layernorm_gamma_;
-        encoder_param.cublas_handle = cublas_handle_;
 
+        encoder_param.self_attention.query_weight.kernel = d_attr_kernel_Q_;
+        encoder_param.self_attention.key_weight.kernel = d_attr_kernel_K_;
+        encoder_param.self_attention.value_weight.kernel = d_attr_kernel_V_;
+        encoder_param.self_attention.query_weight.bias = d_attr_bias_Q_;
+        encoder_param.self_attention.key_weight.bias = d_attr_bias_K_;
+        encoder_param.self_attention.value_weight.bias = d_attr_bias_V_;
+        encoder_param.self_attention.attention_output_weight.kernel = d_attr_output_kernel_;
+        encoder_param.self_attention.attention_output_weight.bias = d_attr_output_bias_;
+        encoder_param.self_layernorm.beta = d_attr_output_layernorm_beta_;
+        encoder_param.self_layernorm.gamma = d_attr_output_layernorm_gamma_;
+        encoder_param.ffn.intermediate_weight.kernel = d_inter_kernel_;
+        encoder_param.ffn.intermediate_weight.bias = d_inter_bias_;
+        encoder_param.ffn.output_weight.kernel = d_output_kernel_;
+        encoder_param.ffn.output_weight.bias = d_output_bias_;
+        encoder_param.ffn_layernorm.beta = d_output_layernorm_beta_;
+        encoder_param.ffn_layernorm.gamma = d_output_layernorm_gamma_;
+        encoder_param.cublas_handle = cublas_handle_;
+        
         encoder_transformer_->initialize(encoder_param);
       }
       catch(std::runtime_error& error)
@@ -201,23 +201,23 @@ class TransformerPlugin: public IPluginV2
           BertEncoderTransformer<EncoderTraits_>(*allocator_, max_batch_size, seq_len, seq_len, head_num, hidden_dim / head_num);
 
         EncoderInitParam<T> encoder_param; //init param here
-   
-        encoder_param.attr_kernel_Q = d_attr_kernel_Q_;
-        encoder_param.attr_kernel_K = d_attr_kernel_K_;
-        encoder_param.attr_kernel_V = d_attr_kernel_V_;
-        encoder_param.attr_bias_Q = d_attr_bias_Q_;
-        encoder_param.attr_bias_K = d_attr_bias_K_;
-        encoder_param.attr_bias_V = d_attr_bias_V_;
-        encoder_param.attr_output_kernel = d_attr_output_kernel_;
-        encoder_param.attr_output_bias = d_attr_output_bias_;
-        encoder_param.attr_output_layernorm_beta = d_attr_output_layernorm_beta_;
-        encoder_param.attr_output_layernorm_gamma = d_attr_output_layernorm_gamma_;
-        encoder_param.inter_kernel = d_inter_kernel_;
-        encoder_param.inter_bias = d_inter_bias_;
-        encoder_param.output_kernel = d_output_kernel_;
-        encoder_param.output_bias = d_output_bias_;
-        encoder_param.output_layernorm_beta = d_output_layernorm_beta_;
-        encoder_param.output_layernorm_gamma = d_output_layernorm_gamma_;
+
+        encoder_param.self_attention.query_weight.kernel = d_attr_kernel_Q_;
+        encoder_param.self_attention.key_weight.kernel = d_attr_kernel_K_;
+        encoder_param.self_attention.value_weight.kernel = d_attr_kernel_V_;
+        encoder_param.self_attention.query_weight.bias = d_attr_bias_Q_;
+        encoder_param.self_attention.key_weight.bias = d_attr_bias_K_;
+        encoder_param.self_attention.value_weight.bias = d_attr_bias_V_;
+        encoder_param.self_attention.attention_output_weight.kernel = d_attr_output_kernel_;
+        encoder_param.self_attention.attention_output_weight.bias = d_attr_output_bias_;
+        encoder_param.self_layernorm.beta = d_attr_output_layernorm_beta_;
+        encoder_param.self_layernorm.gamma = d_attr_output_layernorm_gamma_;
+        encoder_param.ffn.intermediate_weight.kernel = d_inter_kernel_;
+        encoder_param.ffn.intermediate_weight.bias = d_inter_bias_;
+        encoder_param.ffn.output_weight.kernel = d_output_kernel_;
+        encoder_param.ffn.output_weight.bias = d_output_bias_;
+        encoder_param.ffn_layernorm.beta = d_output_layernorm_beta_;
+        encoder_param.ffn_layernorm.gamma = d_output_layernorm_gamma_;
         encoder_param.cublas_handle = cublas_handle_;
 
         encoder_transformer_->initialize(encoder_param);

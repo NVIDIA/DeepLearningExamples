@@ -62,7 +62,7 @@ def init_bn(module):
         init_bn(child)
 
 
-def get_model(model_name, model_config, to_cuda,
+def get_model(model_name, model_config, cpu_run,
               uniform_initialize_bn_weight=False, forward_is_infer=False):
     """ Code chooses a model based on name"""
     model = None
@@ -88,7 +88,7 @@ def get_model(model_name, model_config, to_cuda,
     if uniform_initialize_bn_weight:
         init_bn(model)
 
-    if to_cuda:
+    if cpu_run==False:
         model = model.cuda()
     return model
 

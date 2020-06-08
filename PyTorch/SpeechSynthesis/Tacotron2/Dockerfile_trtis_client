@@ -11,11 +11,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvcr.io/nvidia/tensorrtserver:20.01-py3-clientsdk AS trt
+FROM nvcr.io/nvidia/tritonserver:20.03-py3-clientsdk AS trt
 FROM continuumio/miniconda3
 RUN apt-get update && apt-get install -y pbzip2 pv bzip2 cabextract mc iputils-ping wget
 
-WORKDIR /workspace/speech_ai_demo__TTS/
+WORKDIR /workspace/speech_ai_demo_TTS/
 
 # Copy the perf_client over
 COPY --from=trt /workspace/install/ /workspace/install/
@@ -23,19 +23,21 @@ ENV LD_LIBRARY_PATH /workspace/install/lib:${LD_LIBRARY_PATH}
 
 # set up env variables
 ENV PATH="$PATH:/opt/conda/bin"
-RUN cd /workspace/speech_ai_demo__TTS/
+RUN cd /workspace/speech_ai_demo_TTS/
 
 # jupyter lab extensions
-RUN conda install -c conda-forge jupyterlab=1.0 ipywidgets=7.5 nodejs python-sounddevice librosa unidecode inflect
-RUN jupyter labextension install @jupyter-widgets/jupyterlab-manager
+RUN conda install -c conda-forge jupyterlab ipywidgets nodejs python-sounddevice librosa unidecode inflect
 RUN pip install /workspace/install/python/tensorrtserver*.whl
 
 # Copy the python wheel and install with pip
 COPY --from=trt /workspace/install/python/tensorrtserver*.whl /tmp/
 RUN pip install /tmp/tensorrtserver*.whl && rm /tmp/tensorrtserver*.whl
 
-RUN cd /workspace/speech_ai_demo__TTS/
+RUN cd /workspace/speech_ai_demo_TTS/
 COPY ./notebooks/trtis/ .
-RUN mkdir /workspace/speech_ai_demo__TTS/tacotron2/
-COPY ./tacotron2/text /workspace/speech_ai_demo__TTS/tacotron2/text
-RUN chmod a+x /workspace/speech_ai_demo__TTS/run_this.sh
+RUN mkdir /workspace/speech_ai_demo_TTS/tacotron2/
+COPY ./tacotron2/text /workspace/speech_ai_demo_TTS/tacotron2/text
+RUN chmod a+x /workspace/speech_ai_demo_TTS/run_this.sh
+
+RUN conda install nodejs
+RUN jupyter labextension install @jupyter-widgets/jupyterlab-manager

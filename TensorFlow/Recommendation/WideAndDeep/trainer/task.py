@@ -24,6 +24,7 @@ import tensorflow as tf
 import tensorflow_transform as tft
 
 from trainer import features
+from trainer import dataset_utils
 from utils.hooks.benchmark_hooks import BenchmarkLoggingHook
 
 import horovod.tensorflow as hvd
@@ -59,7 +60,7 @@ def create_parser():
     help='Pattern of training file names. For example if training files are train_000.tfrecord, \
     train_001.tfrecord then --train_data_pattern is train_*',
     type=str,
-    default='/outbrain/tfrecords/train_*',
+    default='/outbrain/tfrecords/train/part*',
     nargs='+'
   )
   parser.add_argument(
@@ -67,7 +68,7 @@ def create_parser():
     help='Pattern of eval file names. For example if eval files are eval_000.tfrecord, \
     eval_001.tfrecord then --eval_data_pattern is eval_*',
     type=str,
-    default='/outbrain/tfrecords/eval_*',
+    default='/outbrain/tfrecords/eval/part*',
     nargs='+'
   )
   parser.add_argument(
@@ -94,8 +95,8 @@ def create_parser():
     default=4096,
     type=int)
   parser.add_argument(
-    '--batch_size',
-    help='Training batch size',
+    '--global_batch_size',
+    help='Total training batch size',
     default=131072,
     type=int)
   parser.add_argument(
@@ -116,7 +117,7 @@ def create_parser():
   parser.add_argument(
     '--num_epochs',
      help='Number of epochs',
-     default=100,
+     default=120,
      type=int)
   parser.add_argument(
     '--save_checkpoints_secs',
@@ -331,70 +332,6 @@ def get_feature_columns(use_all_columns=False, force_subset=None):
   tf.compat.v1.logging.warn('wide&deep intersection: {}'.format(len(set(wide_columns).intersection(set(deep_columns)))))
   return wide_columns, deep_columns
 
-def separate_input_fn(
-    tf_transform_output,
-    transformed_examples,
-    batch_size,
-    mode,
-    reader_num_threads=1,
-    parser_num_threads=2,
-    shuffle_buffer_size=10,
-    prefetch_buffer_size=1,
-    print_display_ids=False):
-  """
-  A version of the training + eval input function that uses dataset operations.
-  (For more straightforward tweaking.)
-  """
-  
-  tf.compat.v1.logging.warn('Shuffle buffer size: {}'.format(shuffle_buffer_size))
-
-  filenames_dataset = tf.data.Dataset.list_files(transformed_examples, shuffle=False)
-  
-  raw_dataset = tf.data.TFRecordDataset(filenames_dataset, 
-            num_parallel_reads=reader_num_threads)
-  
-  raw_dataset = raw_dataset.shuffle(shuffle_buffer_size) \
-                  if (mode==tf.estimator.ModeKeys.TRAIN and shuffle_buffer_size > 1) \
-                  else raw_dataset
-  raw_dataset = raw_dataset.repeat()
-  raw_dataset = raw_dataset.batch(batch_size)
-  
-  # this function appears to require each element to be a vector
-  # batching should mean that this is always true
-  # one possible alternative for any problematic case is tf.io.parse_single_example
-  parsed_dataset = raw_dataset.apply(tf.data.experimental.parse_example_dataset(
-            tf_transform_output.transformed_feature_spec(), 
-            num_parallel_calls=parser_num_threads))
-  
-  # a function mapped over each dataset element
-  # will separate label, ensure that elements are two-dimensional (batch size, elements per record)
-  # adds print_display_ids injection
-  def consolidate_batch(elem):
-    label = elem.pop('label')
-    reshaped_label = tf.reshape(label, [-1, label.shape[-1]])
-    reshaped_elem = {key: tf.reshape(elem[key], [-1, elem[key].shape[-1]]) for key in elem}
-    if print_display_ids:
-      elem['ad_id'] = tf.Print(input_=elem['ad_id'], 
-        data=[tf.reshape(elem['display_id'], [-1])], 
-        message='display_id', name='print_display_ids', summarize=FLAGS.eval_batch_size)
-      elem['ad_id'] = tf.Print(input_=elem['ad_id'], 
-        data=[tf.reshape(elem['ad_id'], [-1])],
-        message='ad_id', name='print_ad_ids', summarize=FLAGS.eval_batch_size)
-      elem['ad_id'] = tf.Print(input_=elem['ad_id'], 
-        data=[tf.reshape(elem['is_leak'], [-1])],
-        message='is_leak', name='print_is_leak', summarize=FLAGS.eval_batch_size)
-
-    return reshaped_elem, reshaped_label
-  
-  if mode == tf.estimator.ModeKeys.EVAL:
-    parsed_dataset = parsed_dataset.map(consolidate_batch, num_parallel_calls=None)
-  else:
-    parsed_dataset = parsed_dataset.map(consolidate_batch, 
-      num_parallel_calls=parser_num_threads)
-    parsed_dataset = parsed_dataset.prefetch(prefetch_buffer_size)
-
-  return parsed_dataset
-
 # rough approximation for MAP metric for measuring ad quality
 # roughness comes from batch sizes falling between groups of
 # display ids
@@ -509,8 +446,7 @@ def custom_estimator_model_fn(features, labels, mode, params, config):
   with tf.compat.v1.variable_scope('deep', values=features) as scope:
     deep_absolute_scope = scope.name
     if params['model_type'] in [DEEP, WIDE_N_DEEP]:
-      deep_features = features.copy()
-      deep_current = tf.compat.v1.feature_column.input_layer(deep_features, params['deep_columns'])
+      deep_current = tf.compat.v1.feature_column.input_layer(features, params['deep_columns'])
 
     if params['model_type'] in [DEEP, WIDE_N_DEEP]:
       for layer_ind in range(len(params['layers'])):
@@ -640,7 +576,8 @@ def main(FLAGS):
 
   dllogger.log(data=vars(FLAGS), step='PARAMETER')
   
-  create_batches = FLAGS.batch_size // FLAGS.prebatch_size
+  local_batch_size = FLAGS.global_batch_size // num_gpus
+  create_batches = local_batch_size // FLAGS.prebatch_size
 
   wide_columns, deep_columns = get_feature_columns(use_all_columns=FLAGS.use_all_columns)
   tf_transform_output = tft.TFTransformOutput(FLAGS.transformed_metadata_path)
@@ -694,11 +631,8 @@ def main(FLAGS):
     wide_optimizer = hvd.DistributedOptimizer(wide_optimizer)
     deep_optimizer = hvd.DistributedOptimizer(deep_optimizer)
 
-  stats_filename = os.path.join(FLAGS.transformed_metadata_path, 'stats.json')
-  embed_columns = None
-  
   # input functions to read data from disk
-  train_input_fn = lambda : separate_input_fn(
+  train_input_fn = lambda : dataset_utils.separate_input_fn(
     tf_transform_output,
     FLAGS.train_data_pattern,
     create_batches,
@@ -708,7 +642,7 @@ def main(FLAGS):
     shuffle_buffer_size=int(FLAGS.shuffle_percentage*create_batches),
     prefetch_buffer_size=FLAGS.prefetch_buffer_size,
     print_display_ids=FLAGS.print_display_ids)
-  eval_input_fn = lambda : separate_input_fn(
+  eval_input_fn = lambda : dataset_utils.separate_input_fn(
     tf_transform_output,
     FLAGS.eval_data_pattern,
     (FLAGS.eval_batch_size // FLAGS.prebatch_size),
@@ -727,7 +661,7 @@ def main(FLAGS):
   estimator = tf.estimator.add_metrics(estimator, map_custom_metric)
   estimator = tf.estimator.add_metrics(estimator, map_custom_metric_with_leak)
 
-  steps_per_epoch = FLAGS.training_set_size / FLAGS.batch_size
+  steps_per_epoch = FLAGS.training_set_size / FLAGS.global_batch_size
 
   print('Steps per epoch: {}'.format(steps_per_epoch))
   max_steps = int(FLAGS.num_epochs * steps_per_epoch)
@@ -738,7 +672,7 @@ def main(FLAGS):
 
   if FLAGS.predict or FLAGS.evaluate: # inference
     if FLAGS.benchmark:
-      benchmark_hook = BenchmarkLoggingHook(global_batch_size=num_gpus * FLAGS.eval_batch_size, warmup_steps=FLAGS.benchmark_warmup_steps)
+      benchmark_hook = BenchmarkLoggingHook(global_batch_size=FLAGS.eval_batch_size, warmup_steps=FLAGS.benchmark_warmup_steps)
       hooks.append(benchmark_hook)
       eval_steps = FLAGS.benchmark_steps
     else:
@@ -775,7 +709,7 @@ def main(FLAGS):
   else: # training
 
     if FLAGS.benchmark:
-      benchmark_hook = BenchmarkLoggingHook(global_batch_size=num_gpus * FLAGS.batch_size, 
+      benchmark_hook = BenchmarkLoggingHook(global_batch_size=FLAGS.global_batch_size, 
         warmup_steps=FLAGS.benchmark_warmup_steps)
       hooks.append(benchmark_hook)
       estimator.train(train_input_fn, hooks=hooks, steps=FLAGS.benchmark_steps)
@@ -787,7 +721,7 @@ def main(FLAGS):
                                       throttle_secs=FLAGS.eval_throttle_secs, steps=FLAGS.eval_steps)  
       result = tf.estimator.train_and_evaluate(estimator, train_spec, eval_spec)
 
-      if result:
+      if result != (None, None):
         dllogger.log(step=(), data={'map': float(result[0]['map']), 
         'map_with_leak': float(result[0]['map_with_leak'])})
     

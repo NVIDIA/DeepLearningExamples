@@ -4,11 +4,12 @@ BATCH_SIZE=1
 INPUT_LENGTH=128
 PRECISION="fp32"
 NUM_ITERS=1003 # extra 3 iterations for warmup
-TACOTRON2_CKPT="checkpoint_Tacotron2_1500_fp32"
-WAVEGLOW_CKPT="checkpoint_WaveGlow_1000_fp32"
+TACOTRON2_CKPT="tacotron2_1032590_6000_amp"
+WAVEGLOW_CKPT="waveglow_1076430_14000_amp"
 AMP_RUN=""
 TEST_PROGRAM="test_infer.py"
-WN_CHANNELS=512
+WN_CHANNELS=256
+CPU_RUN=""
 
 while [ -n "$1" ]
 do
@@ -57,6 +58,10 @@ do
 	    WN_CHANNELS="$2"
 	    shift
 	    ;;
+	--cpu-run)
+	    CPU_RUN="--cpu-run"
+	    shift
+	    ;;
 	*)
 	    echo "Option $1 not recognized"
     esac
@@ -66,6 +71,9 @@ done
 if [ "$PRECISION" = "amp" ]
 then
     AMP_RUN="--amp-run"
+elif  [ "$PRECISION" = "fp16" ]
+then
+    AMP_RUN="--fp16"
 fi
 
 LOG_SUFFIX=bs${BATCH_SIZE}_il${INPUT_LENGTH}_${PRECISION}
@@ -76,20 +84,21 @@ LOGFILE=log_${LOG_SUFFIX}.log
 
 if [ "$TEST_PROGRAM" = "trt/test_infer_trt.py" ]
 then
-    MODELS="--encoder $ENCODER_CKPT --decoder $DECODER_CKPT --postnet $POSTNET_CKPT"
+    TACOTRON2_PARAMS="--encoder $ENCODER_CKPT --decoder $DECODER_CKPT --postnet $POSTNET_CKPT"
 else
-    MODELS="--tacotron2 $TACOTRON2_CKPT"
+    TACOTRON2_PARAMS="--tacotron2 $TACOTRON2_CKPT"
 fi
 
 set -x
 python $TEST_PROGRAM \
-       $MODELS \
+       $TACOTRON2_PARAMS \
        --waveglow $WAVEGLOW_CKPT \
        --batch-size $BATCH_SIZE \
        --input-length $INPUT_LENGTH $AMP_RUN \
        --log-file $NVLOG_FILE \
        --num-iters $NUM_ITERS \
        --wn-channels $WN_CHANNELS \
+       $CPU_RUN \
        |& tee $TMP_LOGFILE
 set +x
 

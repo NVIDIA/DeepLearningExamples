@@ -19,9 +19,9 @@
 
 BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-pip install ${BASEDIR}/../dllogger/
+export TF_CPP_MIN_LOG_LEVEL=3
 
-python ${BASEDIR}/../main.py \
+python "${BASEDIR}/../main.py" \
     --unet_variant='tinyUNet' \
     --activation_fn='relu' \
     --exec_mode='train_and_evaluate' \

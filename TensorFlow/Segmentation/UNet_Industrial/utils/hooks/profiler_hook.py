@@ -27,7 +27,7 @@ import operator
 import numpy as np
 import tensorflow as tf
 
-from dllogger.logger import LOGGER
+import dllogger as Logger
 
 __all__ = ["ProfilerHook"]
 
@@ -60,15 +60,79 @@ class ProfilerHook(tf.train.SessionRunHook):
         ret[n:] = ret[n:] - ret[:-n]
         return ret[n - 1:] / n
 
-    def begin(self):
-        LOGGER.log_hardware()
-
     def after_create_session(self, session, coord):
 
         params_count = tf.get_default_graph().get_tensor_by_name("trainable_parameters_count_ref:0")
         _params_count = session.run(params_count)
 
-        LOGGER.log("# Total Trainable Parameters:", int(_params_count))
+        Logger._stage = "train" if self._is_training else "eval"
+
+        Logger.log(
+            step=(),
+            data={"# Total Trainable Parameters": int(_params_count)}, verbosity=Logger.Verbosity.DEFAULT
+        )
+
+        Logger.metadata(
+            metric="{prefix}.avg_ips".format(prefix=Logger._stage),
+            metadata={"unit": "imgs/s", "format": ":.3f", "GOAL": "MAXIMIZE", "STAGE": Logger._stage.upper()}
+        )
+
+        for ths in [0.05, 0.125, 0.25, 0.5, 0.75, 0.85, 0.95, 0.99]:
+            Logger.metadata(
+                metric="{prefix}.IoU_THS_{ths}".format(prefix=Logger._stage, ths=ths),
+                metadata={"format": ":.3f", "GOAL": "MAXIMIZE", "STAGE": Logger._stage.upper()}
+            )
+
+        if self._is_training:
+            Logger.metadata(
+                metric="{prefix}.learning_rate".format(prefix=Logger._stage),
+                metadata={"format": ":.3e", "GOAL": "NONE", "STAGE": Logger._stage.upper()}
+            )
+
+            Logger.metadata(
+                metric="{prefix}.weight_decay".format(prefix=Logger._stage),
+                metadata={"format": ":.3f", "GOAL": "MAXIMIZE", "STAGE": Logger._stage.upper()}
+            )
+
+            Logger.metadata(
+                metric="{prefix}.reconstruction_loss".format(prefix=Logger._stage),
+                metadata={"format": ":.3f", "GOAL": "MINIMIZE", "STAGE": Logger._stage.upper()}
+            )
+
+            Logger.metadata(
+                metric="{prefix}.total_loss".format(prefix=Logger._stage),
+                metadata={"format": ":.3f", "GOAL": "MINIMIZE", "STAGE": Logger._stage.upper()}
+            )
+
+        Logger.metadata(
+            metric="{prefix}.true_positives".format(prefix=Logger._stage),
+            metadata={"STAGE": Logger._stage.upper()}
+        )
+
+        Logger.metadata(
+            metric="{prefix}.true_negatives".format(prefix=Logger._stage),
+            metadata={"STAGE": Logger._stage.upper()}
+        )
+
+        Logger.metadata(
+            metric="{prefix}.false_positives".format(prefix=Logger._stage),
+            metadata={"STAGE": Logger._stage.upper()}
+        )
+
+        Logger.metadata(
+            metric="{prefix}.false_negatives".format(prefix=Logger._stage),
+            metadata={"STAGE": Logger._stage.upper()}
+        )
+
+        Logger.metadata(
+            metric="{prefix}.true_positive_rate".format(prefix=Logger._stage),
+            metadata={"STAGE": Logger._stage.upper()}
+        )
+
+        Logger.metadata(
+            metric="{prefix}.true_negative_rate".format(prefix=Logger._stage),
+            metadata={"STAGE": Logger._stage.upper()}
+        )
 
         self._start_training_time = time.time()
 
@@ -154,22 +218,64 @@ class ProfilerHook(tf.train.SessionRunHook):
             if self._current_step > self._warmup_steps:
                 imgs_per_sec = float(ProfilerHook.moving_average(self._processing_speed_arr, n=30)[-1])
 
-            LOGGER.log("iteration", int(self._current_step))
-            LOGGER.log("total_ips", float(imgs_per_sec))
+            Logger.log(
+                step=(self._current_step,),
+                data={"{prefix}.avg_ips".format(prefix=Logger._stage): float(imgs_per_sec)},
+                verbosity=Logger.Verbosity.DEFAULT
+            )
 
             if self._is_training:
-                LOGGER.log("weight_decay", float(run_values.results["weight_decay"]))
-                LOGGER.log("reconstruction_loss", float(run_values.results["reconstruction_loss"]))
-                LOGGER.log("total_loss", float(run_values.results["total_loss"]))
-                LOGGER.log("learning_rate", float(run_values.results["learning_rate"]))
+                Logger.log(
+                    step=(self._current_step,),
+                    data={"{prefix}.weight_decay".format(prefix=Logger._stage): float(run_values.results["weight_decay"])},
+                    verbosity=Logger.Verbosity.DEFAULT
+                )
+                Logger.log(
+                    step=(self._current_step,),
+                    data={"{prefix}.reconstruction_loss".format(prefix=Logger._stage): float(run_values.results["reconstruction_loss"])},
+                    verbosity=Logger.Verbosity.DEFAULT
+                )
+                Logger.log(
+                    step=(self._current_step,),
+                    data={"{prefix}.total_loss".format(prefix=Logger._stage): float(run_values.results["total_loss"])},
+                    verbosity=Logger.Verbosity.DEFAULT
+                )
+                Logger.log(
+                    step=(self._current_step,),
+                    data={"{prefix}.learning_rate".format(prefix=Logger._stage): float(run_values.results["learning_rate"])},
+                    verbosity=Logger.Verbosity.DEFAULT
+                )
 
             for key, val in sorted(run_values.results["iou_scores"].items(), key=operator.itemgetter(0)):
-                LOGGER.log("iou_score - THS %s" % key, float(val))
+                Logger.log(
+                    step=(self._current_step,),
+                    data={"{prefix}.IoU_THS_{ths}".format(prefix=Logger._stage, ths=key): float(val)},
+                    verbosity=Logger.Verbosity.DEFAULT
+                )
 
-            LOGGER.log("True Positives:", run_values.results["confusion_matrix"]["tp"])
-            LOGGER.log("True Negatives:", run_values.results["confusion_matrix"]["tn"])
-            LOGGER.log("False Positives:", run_values.results["confusion_matrix"]["fp"])
-            LOGGER.log("False Negatives:", run_values.results["confusion_matrix"]["fn"])
+            Logger.log(
+                step=(self._current_step,),
+                data={"{prefix}.true_positives".format(prefix=Logger._stage): str(run_values.results["confusion_matrix"]["tp"])},
+                verbosity=Logger.Verbosity.DEFAULT
+            )
+
+            Logger.log(
+                step=(self._current_step,),
+                data={"{prefix}.true_negatives".format(prefix=Logger._stage): str(run_values.results["confusion_matrix"]["tn"])},
+                verbosity=Logger.Verbosity.DEFAULT
+            )
+
+            Logger.log(
+                step=(self._current_step,),
+                data={"{prefix}.false_positives".format(prefix=Logger._stage): str(run_values.results["confusion_matrix"]["fp"])},
+                verbosity=Logger.Verbosity.DEFAULT
+            )
+
+            Logger.log(
+                step=(self._current_step,),
+                data={"{prefix}.false_negatives".format(prefix=Logger._stage): str(run_values.results["confusion_matrix"]["fn"])},
+                verbosity=Logger.Verbosity.DEFAULT
+            )
 
             if self._sample_dir is not None and self._is_training:
 
@@ -203,11 +309,20 @@ class ProfilerHook(tf.train.SessionRunHook):
         total_processing_hours, rem = divmod(total_processing_time, 3600)
         total_processing_minutes, total_processing_seconds = divmod(rem, 60)
 
-        LOGGER.log(
-            "Final Summary:\n"
-            "\t[*] Average Imgs/sec: %d\n"
-            "\t[*] Total Processing Time: %dh %02dm %02ds\n" %
-            (avg_processing_speed, total_processing_hours, total_processing_minutes, total_processing_seconds)
+        print("\n============== Final Summary ==============")
+        Logger.log(
+            step=(),
+            data={"{prefix}.avg_ips".format(prefix=Logger._stage): avg_processing_speed},
+            verbosity=Logger.Verbosity.DEFAULT
+        )
+        Logger.log(
+            step=(),
+            data={"{prefix} - Total Processing Time".format(prefix=Logger._stage.capitalize()): "%dh %02dm %02ds" % (
+                total_processing_hours,
+                total_processing_minutes,
+                total_processing_seconds
+            )},
+            verbosity=Logger.Verbosity.DEFAULT
         )
 
         perf_dict = {'throughput': str(avg_processing_speed), 'processing_time': str(total_processing_time)}

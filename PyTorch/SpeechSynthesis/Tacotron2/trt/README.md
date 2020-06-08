@@ -52,13 +52,13 @@ NVIDIA TensorRT is a platform for high-performance deep learning inference. It i
 
 	```bash
    mkdir -p output
-	python exports/export_tacotron2_onnx.py --tacotron2 ./checkpoints/nvidia_tacotron2pyt_fp16_20190427 -o output/
+	python exports/export_tacotron2_onnx.py --tacotron2 ./checkpoints/nvidia_tacotron2pyt_fp16_20190427 -o output/ --fp16
 	```
 
     Export WaveGlow to ONNX IR:
 
 	```bash
-	python exports/export_waveglow_onnx.py --waveglow ./checkpoints/nvidia_waveglow256pyt_fp16 --wn-channels 256 -o output/
+	python exports/export_waveglow_onnx.py --waveglow ./checkpoints/nvidia_waveglow256pyt_fp16 --wn-channels 256 -o output/ --fp16
 	```
 
 	After running the above commands, there should be four new ONNX files in `./output/` directory:
@@ -76,7 +76,7 @@ NVIDIA TensorRT is a platform for high-performance deep learning inference. It i
 8. Run TTS inference pipeline with fp16:
 
 	```bash
-	python trt/inference_trt.py -i phrases/phrase.txt --encoder output/encoder_fp16.engine --decoder output/decoder_iter_fp16.engine --postnet output/postnet_fp16.engine --waveglow output/waveglow_fp16.engine -o output/
+	python trt/inference_trt.py -i phrases/phrase.txt --encoder output/encoder_fp16.engine --decoder output/decoder_iter_fp16.engine --postnet output/postnet_fp16.engine --waveglow output/waveglow_fp16.engine -o output/ --fp16
 	```
 
 ## Inference performance: NVIDIA T4
@@ -85,5 +85,5 @@ Our results were obtained by running the `./trt/run_latency_tests_trt.sh` script
 
 |Framework|Batch size|Input length|Precision|Avg latency (s)|Latency std (s)|Latency confidence interval 90% (s)|Latency confidence interval 95% (s)|Latency confidence interval 99% (s)|Throughput (samples/sec)|Speed-up PyT+TRT/TRT|Avg mels generated (81 mels=1 sec of speech)|Avg audio length (s)|Avg RTF|
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-|PyT+TRT|1| 128| FP16| 1.14| 0.02| 1.16| 1.16| 1.21| 137,050| 1.45| 611| 7.09| 6.20|
+|PyT+TRT|1| 128| FP16| 1.02| 0.05| 1.09| 1.10| 1.14| 150,439| 1.59| 602| 6.99| 6.86|
 |PyT    |1| 128| FP16| 1.63| 0.07| 1.71| 1.73| 1.81|  94,758| 1.00| 601| 6.98| 4.30|
