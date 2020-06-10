@@ -668,6 +668,7 @@ def main(_):
 
     if FLAGS.use_xla:
         config.graph_options.optimizer_options.global_jit_level = tf.compat.v1.OptimizerOptions.ON_1
+        tf.enable_resource_variables()
     run_config = tf.estimator.RunConfig(
       model_dir=FLAGS.output_dir if master_process else None,
       session_config=config,
