@@ -52,6 +52,23 @@ constexpr const char* const OUTPUT_NAME = "audio";
 } // namespace
 
 /******************************************************************************
+ * HELPER FUNCTIONS ***********************************************************
+ *****************************************************************************/
+
+namespace
+{
+
+void setBatchDimensions(IExecutionContext* const context, const int batchSize)
+{
+  const ICudaEngine& engine = context->getEngine();
+
+  Dims melDims = engine.getBindingDimensions(0);
+  melDims.d[0] = batchSize;
+  context->setBindingDimensions(0, melDims);
+}
+} // namespace
+
+/******************************************************************************
  * CONSTRUCTORS / DESTRUCTOR **************************************************
  *****************************************************************************/
 
@@ -67,7 +84,7 @@ WaveGlowStreamingInstance::WaveGlowStreamingInstance(
     mInputChannels(
         TRTUtils::getBindingDimension(getEngine(), MEL_INPUT_NAME, 3)),
     mZChannels(TRTUtils::getBindingDimension(getEngine(), Z_INPUT_NAME, 1)),
-    mBatchSize(0),
+    mBatchSize(1),
     mBinding(),
     mContext(getEngine().createExecutionContext()),
     mRand(mChunkSampleSize, 0),
@@ -83,6 +100,9 @@ WaveGlowStreamingInstance::WaveGlowStreamingInstance(
 
     // generate z vector
     mRand.setSeed(0, 0);
+
+    // set batch size to 1 by default
+    setBatchDimensions(mContext.get(), mBatchSize);
 }
 
 /******************************************************************************
@@ -91,20 +111,18 @@ WaveGlowStreamingInstance::WaveGlowStreamingInstance(
 
 void WaveGlowStreamingInstance::startInference(const int batchSize, cudaStream_t stream)
 {
-    mBatchSize = batchSize;
+  bool newBatchSize = mBatchSize != batchSize;
+  mBatchSize = batchSize;
 
-    Dims melDims = getEngine().getBindingDimensions(0);
-    melDims.d[0] = mBatchSize;
-    mContext->setBindingDimensions(0, melDims);
+  mRand.generate(mZ.data(), mZ.size(), stream);
 
-    Dims zDims = getEngine().getBindingDimensions(1);
-    zDims.d[0] = mBatchSize;
-    mContext->setBindingDimensions(1, zDims);
+  if (newBatchSize) {
+    // only set batch dimensions if they have changed
+    setBatchDimensions(mContext.get(), mBatchSize);
+  }
 
-    mRand.generate(mZ.data(), mZ.size(), stream);
-
-    const ICudaEngine& engine = mContext->getEngine();
-    mBinding.setBinding(engine, Z_INPUT_NAME, mZ.data());
+  const ICudaEngine& engine = mContext->getEngine();
+  mBinding.setBinding(engine, Z_INPUT_NAME, mZ.data());
 }
 
 void WaveGlowStreamingInstance::inferNext(cudaStream_t stream, const float* const melsDevice, const int* const numMels,

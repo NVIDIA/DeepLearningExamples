@@ -584,6 +584,7 @@ def main(_):
   if FLAGS.use_xla: 
       config.graph_options.optimizer_options.global_jit_level = tf.compat.v1.OptimizerOptions.ON_1
       config.graph_options.rewrite_options.memory_optimization = rewriter_config_pb2.RewriterConfig.NO_MEM_OPT
+      tf.enable_resource_variables()
 
   run_config = tf.estimator.RunConfig(
       model_dir=FLAGS.output_dir,

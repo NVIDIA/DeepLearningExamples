@@ -537,7 +537,7 @@ class Decoder(nn.Module):
          processed_memory) = self.initialize_decoder_states(memory)
         mel_lengths = torch.zeros([memory.size(0)], dtype=torch.int32, device=memory.device)
         not_finished = torch.ones([memory.size(0)], dtype=torch.int32, device=memory.device)
-        
+
         mel_outputs, gate_outputs, alignments = (
             torch.zeros(1), torch.zeros(1), torch.zeros(1))
         first_iter = True
@@ -683,5 +683,8 @@ class Tacotron2(nn.Module):
 
         mel_outputs_postnet = self.postnet(mel_outputs)
         mel_outputs_postnet = mel_outputs + mel_outputs_postnet
+
+        BS = mel_outputs_postnet.size(0)
+        alignments = alignments.unfold(1, BS, BS).transpose(0,2)
 
         return mel_outputs_postnet, mel_lengths, alignments

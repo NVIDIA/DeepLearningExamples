@@ -24,6 +24,7 @@ This repository provides a script and recipe to train the Wide and Deep Recommen
     * [Command-line options](#command-line-options)
     * [Getting the data](#getting-the-data)
         * [Dataset guidelines](#dataset-guidelines)
+        * [Spark preprocessing](#spark-preprocessing)
     * [Training process](#training-process)
 - [Performance](#performance)
     * [Benchmarking](#benchmarking)
@@ -195,7 +196,7 @@ docker build . -t wide_deep
 4.  Start an interactive session in the NGC container to run preprocessing/training/inference.
 
 ```bash
-docker run --runtime=nvidia --rm -ti -v ${HOST_OUTBRAIN_PATH}:/outbrain wide_deep /bin/bash
+docker run --runtime=nvidia --privileged --rm -ti -v ${HOST_OUTBRAIN_PATH}:/outbrain wide_deep /bin/bash
 ```
 5. Start preprocessing.
 
@@ -294,17 +295,54 @@ The Outbrain dataset can be downloaded from [Kaggle](https://www.kaggle.com/c/ou
 
 #### Dataset guidelines
 
-The dataset contains a sample of users’ page views and clicks, as observed on multiple publisher sites. Viewed pages and clicked recommendations have further semantic attributes of the documents.
+The dataset contains a sample of users’ page views and clicks, as observed on multiple publisher sites. Viewed pages and clicked recommendations have additional semantic attributes of the documents.
+The dataset contains sets of content recommendations served to a specific user in a specific context. Each context (i.e. a set of recommended ads) is given a `display_id`. In each such recommendation set, the user has clicked on exactly one of the ads.
 
-The dataset contains sets of content recommendations served to a specific user in a specific context. Each context (i.e. a set of recommendations) is given a display_id. In each such set, the user has clicked on at least one recommendation. The page view logs originally has more than 2 billion rows (around 100 GB uncompressed). 
+The original data is stored in several separate files:
+- `page_views.csv` - log of users visiting documents (2B rows, ~100GB uncompressed)
+- `clicks_train.csv` - data showing which ad was clicked in each recommendation set (87M rows)
+- `clicks_test.csv` - used only for the submission in the original Kaggle contest
+- `events.csv` - metadata about the context of each recommendation set (23M rows)
+- `promoted_content.csv` - metadata about the ads
+- `document_meta.csv`, `document_topics.csv`, `document_entities.csv`, `document_categories.csv` - metadata about the documents
+ 
+During the preprocessing stage the data is transformed into 55M rows tabular data of 54 features and eventually saved in pre-batched TFRecord format.
 
-The data within the preprocessing stage are transferred into tabular data of 54 features, for training having 55 million rows.
+
+#### Spark preprocessing
+
+The original dataset is preprocessed using Spark scripts from the `preproc` directory. The preprocessing consists of the following operations:
+- separating out the validation set for cross-validation
+- filling missing data with the most frequent value
+- generating the user profiles from the page views data
+- joining the tables for the ad clicks data
+- computing click-through rates (CTR) for ads grouped by different contexts
+- computing cosine similarity between the features of the clicked ads and the viewed ads
+- math transformations of the numeric features (taking logarithm, scaling, binning)
+- storing the resulting set of features in TFRecord format
+
+The `preproc1-4.py` preprocessing scripts use PySpark. 
+In the Docker image, we have installed Spark 2.3.1 as a standalone cluster of Spark. 
+The `preproc1.py` script splits the data into a training set and a validation set. 
+The `preproc2.py` script generates the user profiles from the page views data. 
+The `preproc3.py` computes the click-through rates (CTR) and cosine similarities between the features. 
+The `preproc4.py` script performs the math transformations and generates the final TFRecord files. 
+The data in the output files is pre-batched (with the default batch size of 4096) to avoid the overhead 
+of the TFRecord format, which otherwise is not suitable for the tabular data - 
+it stores a separate dictionary with each feature name in plain text for every data entry.
+
+The preprocessing includes some very resource-exhausting operations, like joining 2B+ rows tables. 
+Such operations may not fit into the RAM memory, therefore we decided to use Spark which is a suitable tool 
+for handling tabular operations on large data. 
+Note that the Spark job requires about 1 TB disk space and 500 GB RAM to perform the preprocessing.
+For more information about Spark, please refer to the
+[Spark documentation](https://spark.apache.org/docs/2.3.1/).
 
 
 ### Training process
 
 The training can be started by running the `trainer/task.py` script. By default the script is in train mode. Other training related 
-configs are also present in the `trainer/task.py` and can be seen using the command `python -m trainer.task --help`. Training happens for `--num_epochs` epochs with custom estimator for the model. The model has a wide linear part and a deep feed forward network, and the networks are built according to the default configuration.
+configs are also present in the `trainer/task.py` and can be seen using the command `python -m trainer.task --help`. Training happens for `--num_epochs` epochs with a custom estimator for the model. The model has a wide linear part and a deep feed forward network, and the networks are built according to the default configuration.
 
 Two separate optimizers are used to optimize the wide and the deep part of the network:
     
@@ -399,6 +437,8 @@ This section needs to include the date of the release and the most important cha
 March 2020
 - Initial release
 
+May 2020
+- Improved Spark preprocessing scripts performance
 ### Known issues
 
 - Limited tf.feature_column support

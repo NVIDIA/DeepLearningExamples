@@ -165,8 +165,6 @@ void DataShuffler::parseDecoderOutput(const float* const in, float* const out, f
     const dim3 block(TRANSPOSE_BLOCK_SIZE, TRANSPOSE_BLOCK_SIZE);
 
     parseDecoderOutputKernel<<<grid, block, 0, stream>>>(in, out, gateOut, batchSize, chunkSize, numChannels);
-    cudaError_t err = cudaStreamSynchronize(stream);
-    assert(err == cudaSuccess);
 }
 
 void DataShuffler::transposeMatrix(
@@ -176,8 +174,6 @@ void DataShuffler::transposeMatrix(
     const dim3 block(TRANSPOSE_BLOCK_SIZE, TRANSPOSE_BLOCK_SIZE);
 
     transposeMatrixKernel<<<grid, block, 0, stream>>>(in, out, nRows, nCols);
-    cudaError_t err = cudaStreamSynchronize(stream);
-    assert(err == cudaSuccess);
 }
 
 void DataShuffler::shuffleMels(const float* const in, float* const out, const int batchSize, const int numChannels,
@@ -187,8 +183,6 @@ void DataShuffler::shuffleMels(const float* const in, float* const out, const in
     const dim3 block(TRANSPOSE_BLOCK_SIZE, TRANSPOSE_BLOCK_SIZE);
 
     shuffleMelsKernel<<<grid, block, 0, stream>>>(in, out, batchSize, numChannels, chunkSize, compactLength);
-    cudaError_t err = cudaStreamSynchronize(stream);
-    assert(err == cudaSuccess);
 }
 
 void DataShuffler::frameTransfer(const float* const in, float* const out, const int inputSequenceSpacing,

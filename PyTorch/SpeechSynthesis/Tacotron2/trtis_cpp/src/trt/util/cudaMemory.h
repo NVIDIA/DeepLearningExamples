@@ -123,6 +123,11 @@ public:
     CudaUtils::zero(data(), size());
   }
 
+  void zeroAsync(cudaStream_t stream)
+  {
+    CudaUtils::zeroAsync(data(), size(), stream);
+  }
+
   void clear()
   {
     if (m_ptr) {

@@ -25,9 +25,11 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # 
 
-
-
+import json
 import sys
+import onnx
+import numpy as np
+from scipy.io.wavfile import write
 import argparse
 import torch
 
@@ -77,8 +79,8 @@ def convert_convinv_1d_to_2d(convinv):
 
 def convert_1d_to_2d_(glow):
     """
-    Caffe2 and TensorRT don't seem to support 1-d convolutions or properly 
-    convert ONNX exports with 1d convolutions to 2d convolutions yet, so we 
+    Caffe2 and TensorRT don't seem to support 1-d convolutions or properly
+    convert ONNX exports with 1d convolutions to 2d convolutions yet, so we
     do the conversion to 2-d convolutions before ONNX export
     """
     # Convert upsample to 2d
@@ -146,21 +148,20 @@ def infer_o(self, spect, z):
     pre-calculated so ONNX doesn't export "Dynamic" outputs which are not yet
     suported by TensorRT
     """
+    batch_size = spect.size(0)
+    spect = spect.permute(0, 3, 2, 1).contiguous()
 
     spect = self.upsample(spect)
     spect = torch.squeeze(spect, 3)
-    spect = spect.view(self.view_size_1)
+    spect = spect.view(batch_size, self.upsample_weight_size,  self.length_spect_group, self.n_group)
     spect = spect.permute(0, 2, 1, 3)
     spect = spect.contiguous()
-    spect = spect.view(self.view_size_2)
+    spect = spect.view(batch_size, self.length_spect_group, self.upsample_weight_size*self.n_group)
     spect = spect.permute(0, 2, 1)
-    spect = spect.reshape([
-        self.batch_size,
-        self.upsample_weight_size*self.n_group,
-        self.length_spect_group,
-        1])
+    spect = torch.unsqueeze(spect, 3)
+    spect = spect.contiguous()
 
-    audio = z[:, 0:self.n_remaining_channels, :, :]
+    audio = z[:, :self.n_remaining_channels, :, :]
     z = z[:, self.n_remaining_channels:self.n_group, :, :]
 
     for k in reversed(range(self.n_flows)):
@@ -172,18 +173,22 @@ def infer_o(self, spect, z):
         s = output[:, n_half:2*n_half, :, :]
         b = output[:, 0:n_half, :, :]
         audio_1 = (audio_1 - b)/torch.exp(s)
+        audio_0 = audio_0.expand(audio_1.size(0), audio_0.size(1),
+                                 audio_0.size(2), audio_0.size(3))
         audio = torch.cat([audio_0, audio_1], 1)
 
         audio = self.convinv[k](audio)
 
         if k % self.n_early_every == 0 and k > 0:
-            audio = torch.cat((z[:, 0:self.n_early_size, :, :], audio), 1)
+            zb = z[:, 0:self.n_early_size, :, :].expand(audio.size(0),
+                    self.n_early_size, z.size(2), z.size(3))
+            audio = torch.cat((zb, audio), 1)
             z = z[:, self.n_early_size:self.n_group -
                   self.n_remaining_channels, :, :]
 
     audio = torch.squeeze(audio, 3)
     audio = audio.permute(0, 2, 1).contiguous().view(
-        1, (self.length_spect_group * self.n_group))
+        audio.size(0), (self.length_spect_group * self.n_group))
     return audio
 
 
@@ -195,7 +200,6 @@ def main(waveglow_path, output_path, batch_size, length_mels):
     torch.manual_seed(0)
 
     model = load_waveglow(waveglow_path, waveglow_config)
-    model.batch_size = batch_size
 
     length_spect = length_mels
     length_samples = 768 + 256*length_spect
@@ -208,7 +212,7 @@ def main(waveglow_path, output_path, batch_size, length_mels):
 
     # Run inference because it forces inverses to be calculated
     with torch.no_grad():
-        _ = model.infer(spect)
+        test_out1 = model.infer(spect)
     assert(length_samples % model.n_group == 0)
 
     model.length_spect_group = int(length_samples / model.n_group)
@@ -224,34 +228,30 @@ def main(waveglow_path, output_path, batch_size, length_mels):
     n_halves.reverse()
     model.n_halves = n_halves
 
-    model.view_size_1 = torch.Size(
-        [model.batch_size, model.upsample_weight_size,  model.length_spect_group, model.n_group])
-    model.view_size_2 = torch.Size(
-        [model.batch_size, model.length_spect_group, model.upsample_weight_size*model.n_group])
-
-    # Replace old forward with inference
-    glow.WaveGlow.forward = infer_o
-    glow.WN.forward = WN_forward
-
-    # Convert whole model to 2d convolutions
-    convert_1d_to_2d_(model)
-    model.cuda()
-
     spect = torch.cuda.FloatTensor(
-        batch_size, model.upsample.weight.size(0), length_spect, 1).normal_()
+        batch_size, 1, length_spect, model.upsample.weight.size(0)).normal_()
     z = torch.cuda.FloatTensor(
         1, model.n_group, model.length_spect_group, 1).normal_()
     spect = torch.autograd.Variable(spect.cuda(), requires_grad=False)
     z = torch.autograd.Variable(z, requires_grad=False)
 
+    # Replace old forward with inference
+    glow.WaveGlow.forward = infer_o
+    #glow.WN.forward = WN_forward
+
+    # Convert whole model to 2d convolutions
+    convert_1d_to_2d_(model)
+    model.cuda()
+
     # Get output for comparison with Caffe2
     with torch.no_grad():
-        _ = model(spect, z)
+        test_out2 = model(spect, z)
 
     # Export model
-    torch.onnx.export(model, (spect, z), 
+    torch.onnx.export(model, (spect, z),
             output_path,
-            dynamic_axes={'spect': [0], 'z': [0]},
+            dynamic_axes={'spect': {0: 'batch_size'},
+                          'audio': {0: 'batch_size'}},
             input_names=['spect', 'z'],
             output_names=['audio'],
             opset_version=10,

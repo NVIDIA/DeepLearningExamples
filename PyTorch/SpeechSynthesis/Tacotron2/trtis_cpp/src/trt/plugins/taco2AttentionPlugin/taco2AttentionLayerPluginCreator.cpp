@@ -44,7 +44,6 @@ namespace plugin
 namespace
 {
 
-constexpr const char* const INPUT_LENGTH_STR = "InputLength";
 constexpr const char* const ENCODING_DIMENSION_STR = "EncodingDimension";
 constexpr const char* const QUERY_DIMENSION_STR = "QueryDimension";
 constexpr const char* const NUM_FILTERS_STR = "NumFilters";
@@ -64,7 +63,7 @@ constexpr const char* const ENERGY_WEIGHTS_STR = "EnergyWeight";
 PluginFieldCollection* Taco2AttentionLayerPluginCreator::getFields()
 {
     static PluginFieldCollection* pluginPtr = nullptr;
-    static const std::vector<PluginField> fields{{INPUT_LENGTH_STR, nullptr, PluginFieldType::kINT32, 0},
+    static const std::vector<PluginField> fields{
         {ENCODING_DIMENSION_STR, nullptr, PluginFieldType::kINT32, 0},
         {QUERY_DIMENSION_STR, nullptr, PluginFieldType::kINT32, 0},
         {NUM_FILTERS_STR, nullptr, PluginFieldType::kINT32, 0},

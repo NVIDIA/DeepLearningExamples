@@ -34,7 +34,7 @@ from common.layers import STFT
 class Denoiser(torch.nn.Module):
     """ Removes model bias from audio produced with waveglow """
 
-    def __init__(self, waveglow, cpu_run, filter_length=1024, n_overlap=4,
+    def __init__(self, waveglow, cpu_run=False, filter_length=1024, n_overlap=4,
                  win_length=1024, mode='zeros'):
         super(Denoiser, self).__init__()
         if cpu_run:

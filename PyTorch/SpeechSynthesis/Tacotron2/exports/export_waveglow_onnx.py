@@ -165,7 +165,8 @@ def infer_onnx(self, spect, z, sigma=0.9):
 def export_onnx(parser, args):
 
     waveglow = load_and_setup_model('WaveGlow', parser, args.waveglow,
-                                    args.fp16, forward_is_infer=False)
+                                    amp_run=args.fp16, cpu_run=False,
+                                    forward_is_infer=False)
 
     # 80 mel channels, 620 mel spectrograms ~ 7 seconds of speech
     mel = torch.randn(1, 80, 620).cuda()
@@ -198,9 +199,9 @@ def export_onnx(parser, args):
                           do_constant_folding=True,
                           input_names=["mel", "z"],
                           output_names=["audio"],
-                          dynamic_axes={"mel":   {2: "mel_seq"},
-                                        "z":     {2: "z_seq"},
-                                        "audio": {1: "audio_seq"}})
+                          dynamic_axes={"mel":   {0: "batch_size", 2: "mel_seq"},
+                                        "z":     {0: "batch_size", 2: "z_seq"},
+                                        "audio": {0: "batch_size", 1: "audio_seq"}})
 
 
 def main():

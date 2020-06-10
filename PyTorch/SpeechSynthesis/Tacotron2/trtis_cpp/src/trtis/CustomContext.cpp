@@ -144,6 +144,13 @@ CustomContext::CustomContext(const CustomInitializeData* const data) :
     std::cerr << "Using default mapping." << std::endl;
   }
 
+  // set cuda device
+  cudaError_t err = cudaSetDevice(data->gpu_device_id);
+  if (err != cudaSuccess) {
+    throw std::runtime_error("Failed to set device to: " +
+        std::to_string(data->gpu_device_id));
+  }
+
   TRTPtr<IBuilder> builder;
   {
     std::lock_guard<std::mutex> lock(m_mutex);
