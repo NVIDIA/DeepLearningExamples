@@ -643,10 +643,8 @@ To benchmark the inference performance on a specific batch size, run:
     ```
 
 The output log files will contain performance numbers for the FastPitch model
-(number of output mel-spectrogram frames per second, reported as `generator_frames/s w
-`)
-and for WaveGlow (number of output samples per second, reported as ` waveglow_samples/s 
-`).
+(number of output mel-spectrogram frames per second, reported as `generator_frames/s`)
+and for WaveGlow (number of output samples per second, reported as ` waveglow_samples/s`).
 The `inference.py` script will run a few warm-up iterations before running the benchmark. Inference will be averaged over 100 runs, as set by the `--repeats` flag.
 
 ### Results
@@ -669,10 +667,10 @@ All of the results were produced using the `train.py` script as described in the
 | FastPitch FP32       | 35.108 | 0.254 | 0.216 | 0.200 |  0.194 |  0.188 |  0.184 |
 
 
-<div style="text-align:center" align="center">
+<p align="center">
   <img src="./img/loss_fp16.png" alt="AMP loss curve" />
   <img src="./img/loss_fp32.png" alt="FP32 loss curve" />
-</div>
+</p>
 
 #### Training performance results
 

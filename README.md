@@ -81,7 +81,7 @@ The examples are organized first by framework, such as TensorFlow, PyTorch, etc.
 | [Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Translation/Transformer) |PyTorch  | N/A  | Yes  | Yes  | -  | -  |   -  | -  | -  |
 | [ResNet-50 v1.5](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Classification/RN50v1.5) |TensorFlow  | Yes  | Yes  | Yes  | -  | -  | -  | -  | -  |
 | [SSD320 v1.2](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Detection/SSD) | TensorFlow  | N/A  | Yes  | Yes  | -  | -  | -  | -  | -  |
-| [BERT](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/LanguageModeling/BERT) |TensorFlow  | N/A  | Yes  | Yes  | Yes  | Yes  | -  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/LanguageModeling/BERT/trtis)  | Yes  |
+| [BERT](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/LanguageModeling/BERT) |TensorFlow  | N/A  | Yes  | Yes  | Yes  | Yes  | -  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/LanguageModeling/BERT/triton)  | Yes  |
 | [BioBert](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/LanguageModeling/BERT/biobert) | TensorFlow  | N/A  | Yes  | Yes  | -  | -  | -  | -  | -  |
 | [Transformer-XL](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/LanguageModeling/Transformer-XL) |TensorFlow  | N/A  | Yes  | Yes  | -  | -  |   -  | -  | -  |
 | [Neural Collaborative Filtering](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Recommendation/NCF) |TensorFlow  | N/A  | Yes  | Yes  | -  | -  | -  | -  | -  |
