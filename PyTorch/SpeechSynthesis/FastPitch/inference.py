@@ -296,6 +296,9 @@ def main():
               'pitch_tgt': None,
               'pitch_transform': build_pitch_transformation(args)}
 
+    if args.torchscript:
+        gen_kw.pop('pitch_transform')
+
     all_utterances = 0
     all_samples = 0
     all_letters = 0
