@@ -63,5 +63,6 @@ three classification models side-by-side.
 ## Release notes
 
 ### Changelog
-April 2020
-  - Initial release
+June 2020
+  - ConvNets repo restructurization
+  - Initial release of ResNext and SE-Resnext

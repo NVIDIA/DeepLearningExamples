@@ -713,7 +713,7 @@ The used WaveGlow model is a 256-channel model [published on NGC](https://ngc.nv
 
 Our results were obtained by running the `./scripts/inference_benchmark.sh` script in
 the PyTorch 20.03-py3 NGC container. Note that to reproduce the results,
-you need to provide pre-trained checkpoins for FastPitch and WaveGlow. Edit the script to provide your checkpoint filenames.
+you need to provide pre-trained checkpoints for FastPitch and WaveGlow. Edit the script to provide your checkpoint filenames.
 
 Note that performance numbers are related to the length of input. The numbers reported below were taken with a moderate length of 128 characters. For longer utterances even better numbers are expected, as the generator is fully parallel.
 

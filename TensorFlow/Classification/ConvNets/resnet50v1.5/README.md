@@ -657,6 +657,7 @@ on NVIDIA T4 with (1x T4 16G) GPU.
 5. March, 2020
   * Code cleanup and refactor
   * Improved training process
-
+6. June, 2020
+  * Added ResNext and SE-ResNext architectures
 ### Known issues
 There are no known issues with this model.

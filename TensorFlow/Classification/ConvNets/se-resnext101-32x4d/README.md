@@ -640,7 +640,7 @@ on NVIDIA T4 with (1x T4 16G) GPU.
 
 ### Changelog
 
-April 2020
+June 2020
    - Initial release
 
 ### Known issues
