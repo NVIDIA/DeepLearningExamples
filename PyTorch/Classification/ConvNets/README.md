@@ -36,7 +36,7 @@ The following table shows the validation accuracy results of the
 three classification models side-by-side.
 
 
-| **arch** | **AMP Top1** | **AMP Top5** | **FP32 Top1** | **FP32 Top1** |
+| **arch** | **AMP Top1** | **AMP Top5** | **FP32 Top1** | **FP32 Top5** |
 |:-:|:-:|:-:|:-:|:-:|
 | resnet50 | 78.46 | 94.15 | 78.50 | 94.11 |
 | resnext101-32x4d | 80.08 | 94.89 | 80.14 | 95.02 |
