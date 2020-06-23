@@ -337,7 +337,7 @@ average time (seconds) elasped fast transformer: 0.007064676284790039
 1. Generate the `decoding_gemm_config.in` file. 
 
 ```bash
-./bin/decoding_gemm <batch_size> <beam_width> <head_number> <size_per_head> <sequence_length> <encoder_hidden_dim> <is_use_fp16>
+./bin/decoding_gemm <batch_size> <beam_width> <head_number> <size_per_head> <vocab_size> <sequence_length> <encoder_hidden_dim> <is_use_fp16>
 ./bin/decoding_gemm 32 4 8 64 30000 32 768 0
 ```
 
@@ -346,7 +346,7 @@ average time (seconds) elasped fast transformer: 0.007064676284790039
 a.	Run the decoding in C++ by running the following script: 
 
 ```bash
-./bin/decoding_sample <batch_size> <beam_width> <head_number> <size_per_head> <sequence_length> <num_layers> <encoder_hidden_dim> <is_use_fp16>
+./bin/decoding_sample <batch_size> <beam_width> <head_number> <size_per_head> <vocab_size> <sequence_length> <num_layers> <encoder_hidden_dim> <is_use_fp16>
 ./bin/decoding_sample 32 4 8 64 30000 32 6 768 0
 ```
 
@@ -833,7 +833,7 @@ bash scripts/profile_decoding_op_performance.sh
 
 * We set beam_width = 4
 
-| <batch_size, seq_len> | TensorFlow FP32 (in ms) | Decoder FP32 (in ms) | FP32 Speedup | TensorFlow FP16 (in ms) | Decoder FP16 (in ms) | FP16 Speedup |
+| <batch_size, seq_len> | TensorFlow FP32 (in ms) | Decoding FP32 (in ms) | FP32 Speedup | TensorFlow FP16 (in ms) | Decoding FP16 (in ms) | FP16 Speedup |
 |:------------:|:-------:|:-------:|:----:|:-------:|:------:|:-----:|
 | (1, 32)   | 430.39  | 64.16   | 6.70 | 537.95  | 49.07  | 10.96 |
 | (1, 64)   | 876.24  | 135.42  | 6.47 | 1056.78 | 97.45  | 10.84 |
@@ -855,7 +855,7 @@ bash scripts/profile_decoding_op_performance.sh
 
 * We set beam_width = 4
 
-| <batch_size, seq_len> | TensorFlow FP32 (in ms) | Decoder FP32 (in ms) | FP32 Speedup | TensorFlow FP16 (in ms) | Decoder FP16 (in ms) | FP16 Speedup |
+| <batch_size, seq_len> | TensorFlow FP32 (in ms) | Decoding FP32 (in ms) | FP32 Speedup | TensorFlow FP16 (in ms) | Decoding FP16 (in ms) | FP16 Speedup |
 |:------------:|:-------:|:------:|:----:|:-------:|:------:|:-----:|
 | (1, 32)   | 440.46  | 58.70  | 7.50 | 531.70  | 46.18  | 11.51 |
 | (1, 64)   | 888.19  | 122.50 | 7.25 | 1065.76 | 93.84  | 11.35 |
