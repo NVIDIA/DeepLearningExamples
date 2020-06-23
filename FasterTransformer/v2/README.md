@@ -564,7 +564,7 @@ python encoder_sample.py \
 `./bin/decoding_gemm` can generate the best GEMM configuration. The arguments of `decoding_gemm` are:
 
 ```bash
-./bin/decoding_gemm <batch_size> <beam_width> <head_number> <size_per_head> <sequence_length> <encoder_hidden_dim> <is_use_fp16>
+./bin/decoding_gemm <batch_size> <beam_width> <head_number> <size_per_head> <vocab_size> <sequence_length> <encoder_hidden_dim> <is_use_fp16>
 ```
 
 Assume the settings of decoding are as follows.
@@ -593,7 +593,7 @@ a.	Run the decoding in C++ by running the following script:
 `./bin/decoding_sample` runs the decoding in the `cpp`. The arguments of `encoder_sample` is:
 
 ```bash
-./bin/decoding_sample <batch_size> <beam_width> <head_number> <size_per_head> <sequence_length> <num_layers> <encoder_hidden_dim> <is_use_fp16>
+./bin/decoding_sample <batch_size> <beam_width> <head_number> <size_per_head> <vocab_size> <sequence_length> <num_layers> <encoder_hidden_dim> <is_use_fp16>
 ```
 
 Then the following scripts can run the decoding under the above settings. 
