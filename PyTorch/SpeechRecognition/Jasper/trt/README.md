@@ -281,7 +281,7 @@ The results are obtained by running inference on LibriSpeech dev-clean dataset o
 
 #### Inference performance: NVIDIA T4
 
-| Sequence Length (in seconds) | Batch size | PyTorch FP16 Throughput (#sequences/second) Percentiles |     	|     	|     	| TensorRT FP16 Throughput (#sequences/second) Percentiles |     	|     	|     	| PyT/TRT Speedup |
+| Sequence Length (in seconds) | Batch size | TensorRT FP16 Throughput (#sequences/second) Percentiles |     	|     	|     	| PyTorch FP16 Throughput (#sequences/second) Percentiles |     	|     	|     	| TRT/PyT Speedup |
 |---------------|------------|---------------------|---------|---------|---------|-----------------|---------|---------|---------|-----------------|
 |           	|        	| 90%             	| 95% 	| 99% 	| Avg 	| 90%         	| 95% 	| 99% 	| Avg 	|             	|
 |2|1|71.002|70.897|70.535|71.987|42.974|42.932|42.861|43.166|1.668|
