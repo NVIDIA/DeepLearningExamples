@@ -33,7 +33,7 @@ if __name__ == "__main__":
     checkpoint = torch.load(args.checkpoint_path)
 
     model_state_dict = {
-        k[len("module.1.") :] if "module.1." in k else k: v
+        k[len("module.") :] if "module." in k else k: v
         for k, v in checkpoint["state_dict"].items()
     }
 
