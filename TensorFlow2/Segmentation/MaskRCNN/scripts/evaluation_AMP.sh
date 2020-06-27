@@ -29,6 +29,6 @@ python ${BASEDIR}/../mask_rcnn_main.py \
     --validation_file_pattern="/data/val*.tfrecord" \
     --val_json_file="/data/annotations/instances_val2017.json" \
     --use_batched_nms \
-    --use_amp \
-    --nouse_xla \
+    --amp \
+    --noxla \
     --nouse_custom_box_proposals_op

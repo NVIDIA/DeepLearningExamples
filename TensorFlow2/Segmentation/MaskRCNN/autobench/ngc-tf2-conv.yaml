@@ -1,0 +1,24 @@
+# TF2 8GPU AMP vs NO AMP
+
+jobs:
+  # AMP - gpu=8 bs=4 amp xla
+  - horovodrun -np 8 python mask_rcnn_main.py --mode train_and_eval --log_path /results/dllogger.json --checkpoint /weights/resnet/resnet-nhwc-2018-10-14/model.ckpt-112602 --eval_samples 5000 --num_steps_per_eval 44352 --total_steps 44352 --train_batch_size 4 --eval_batch_size 8 --training_file_pattern '/data/train*.tfrecord' --validation_file_pattern '/data/val*.tfrecord' --val_json_file /data/annotations/instances_val2017.json --use_batched_nms --nouse_custom_box_proposals_op --model_dir /tmp --xla --init_learning_rate 0.04 --learning_rate_steps 30000,40000 --amp
+  # NO AMP - gpu=8 bs=4 xla
+  - horovodrun -np 8 python mask_rcnn_main.py --mode train_and_eval --log_path /results/dllogger.json --checkpoint /weights/resnet/resnet-nhwc-2018-10-14/model.ckpt-112602 --eval_samples 5000 --num_steps_per_eval 44352 --total_steps 44352 --train_batch_size 4 --eval_batch_size 8 --training_file_pattern '/data/train*.tfrecord' --validation_file_pattern '/data/val*.tfrecord' --val_json_file /data/annotations/instances_val2017.json --use_batched_nms --nouse_custom_box_proposals_op --model_dir /tmp --xla --init_learning_rate 0.04 --learning_rate_steps 30000,40000
+
+backend:
+  hostname: ngc
+  instance: dgx1v.16g.8.norm
+
+  container: nvcr.io/nvidian/swdl/mrcnn_tf2:20.06
+  result_dir: /results
+  datasets:
+    /data: 40037
+    /weights: 62010
+
+  download_dir: /tmp
+
+reports:
+  filename: mrcnn-tf2-conv
+  types:
+    - xls

@@ -289,6 +289,7 @@ class Mask_Head_Model(tf.keras.Model):
                     ) * self._num_classes + tf.expand_dims(self._class_indices, axis=-1),
                     [batch_size, -1]
                 )
+                indices = tf.cast(indices, tf.int32)
 
                 mask_outputs = tf.gather(
                     tf.reshape(mask_outputs, [batch_size, -1, self._mrcnn_resolution, self._mrcnn_resolution]),

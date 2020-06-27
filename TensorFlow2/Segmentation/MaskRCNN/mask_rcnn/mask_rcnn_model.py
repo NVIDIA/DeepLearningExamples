@@ -70,9 +70,9 @@ def create_optimizer(learning_rate, params):
             sparse_as_dense=False
         )
 
-    if params["use_amp"]:
+    if params["amp"]:
         loss_scale = tf.train.experimental.DynamicLossScale(
-            initial_loss_scale=(2 ** 15),
+            initial_loss_scale=(2 ** 12),
             increment_period=2000,
             multiplier=2.0
         )

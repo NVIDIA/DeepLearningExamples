@@ -27,7 +27,7 @@ RUN pip install --upgrade --no-cache-dir pip \
 WORKDIR /workspace/object_detection
 RUN mkdir -p /datasets/data
 RUN mkdir /results
-COPY . .
+COPY pytorch/. .
 RUN pip install -e .
 
 RUN /opt/conda/bin/conda install -y numpy==1.17.4
