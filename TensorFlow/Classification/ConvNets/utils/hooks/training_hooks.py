@@ -19,8 +19,9 @@ import time
 import tensorflow as tf
 
 import dllogger
+import signal
 
-__all__ = ['TrainingLoggingHook']
+__all__ = ['TrainingLoggingHook', 'TrainingPartitionHook']
 
 
 class MeanAccumulator:
@@ -34,7 +35,10 @@ class MeanAccumulator:
         self.count += 1
 
     def value(self):
-        return self.sum / self.count
+        if self.count:
+            return self.sum / self.count
+        else:
+            return 0
 
 
 class TrainingLoggingHook(tf.train.SessionRunHook):
@@ -54,8 +58,8 @@ class TrainingLoggingHook(tf.train.SessionRunHook):
         self.mean_throughput = MeanAccumulator()
 
     # Determines if its the last step of the epoch
-    def _last_step_of_epoch(self):
-        return self.global_batch_size * (self.current_step + 1) > (self.current_epoch + 1) * self.num_samples
+    def _last_step_of_epoch(self, global_step):
+        return (global_step + 1) // self.steps_per_epoch > (global_step // self.steps_per_epoch)
 
     def before_run(self, run_context):
         run_args = tf.train.SessionRunArgs(
@@ -64,6 +68,7 @@ class TrainingLoggingHook(tf.train.SessionRunHook):
                 'learning_rate_ref:0'
             ]
         )
+
         self.t0 = time.time()
 
         return run_args
@@ -89,7 +94,7 @@ class TrainingLoggingHook(tf.train.SessionRunHook):
 
         self.current_step += 1
 
-        if self._last_step_of_epoch():
+        if self._last_step_of_epoch(global_step):
             metrics = {
                 "cross_entropy": cross_entropy,
                 "l2_loss": l2_loss,
@@ -99,3 +104,21 @@ class TrainingLoggingHook(tf.train.SessionRunHook):
             metrics = {k: float(v) for k, v in metrics.items()}
             dllogger.log(data=metrics, step=(int(global_step // self.steps_per_epoch), ))
             self.current_epoch += 1
+
+
+class TrainingPartitionHook(tf.train.SessionRunHook):
+
+    def __init__(self):
+        super().__init__()
+        self.should_exit = False
+
+        signal.signal(signal.SIGUSR1, self._signal_handler)
+        signal.signal(signal.SIGTERM, self._signal_handler)
+
+    def after_run(self, run_context, run_values):
+        if self.should_exit:
+            run_context.request_stop()
+
+    def _signal_handler(self, signum, frame):
+        print("Stop signal received")
+        self.should_exit = True

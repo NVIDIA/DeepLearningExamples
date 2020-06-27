@@ -4,6 +4,8 @@ SRC_DIR=${1}
 DST_DIR=${2}
 
 echo "Creating training file indexes"
+mkdir -p ${DST_DIR}
+
 for file in ${SRC_DIR}/train-*; do
     BASENAME=$(basename $file)
     DST_NAME=$DST_DIR/$BASENAME
