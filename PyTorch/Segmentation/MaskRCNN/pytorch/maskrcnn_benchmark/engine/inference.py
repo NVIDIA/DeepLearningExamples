@@ -64,6 +64,7 @@ def inference(
         expected_results_sigma_tol=4,
         output_folder=None,
         skip_eval=False,
+        dllogger=None
 ):
     # convert to a torch.device for efficiency
     device = torch.device(device)
@@ -72,20 +73,22 @@ def inference(
         if torch.distributed.is_initialized()
         else 1
     )
-    logger = logging.getLogger("maskrcnn_benchmark.inference")
     dataset = data_loader.dataset
-    logger.info("Start evaluation on {} dataset({} images).".format(dataset_name, len(dataset)))
+    dllogger.log(step="PARAMETER", data={"eval_dataset_name": dataset_name, "eval_num_samples":len(dataset)})
     start_time = time.time()
     predictions = compute_on_dataset(model, data_loader, device)
     # wait for all processes to complete before measuring the time
     synchronize()
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=total_time))
+    dllogger.log(step=tuple(), data={"e2e_infer_time": total_time, "inference_perf_fps": len(dataset) / total_time})
+    logger = logging.getLogger("maskrcnn_benchmark.inference")
     logger.info(
-        "Total inference time: {} ({} s / img per device, on {} devices)".format(
-            total_time_str, total_time * num_devices / len(dataset), num_devices
+    "Total inference time: {} ({} s / img per device, on {} devices)".format(
+        total_time_str, total_time * num_devices / len(dataset), num_devices
         )
     )
+
 
     predictions = _accumulate_predictions_from_multiple_gpus(predictions)
     if not is_main_process():
@@ -95,7 +98,7 @@ def inference(
         torch.save(predictions, os.path.join(output_folder, "predictions.pth"))
 
     if skip_eval:
-        logger.info("Skipping evaluation. Stored predictions to {}".format(os.path.join(output_folder, "predictions.pth")))
+        dllogger.log(step="PARAMETER", data={"skip_eval":True, "predictions_saved_path":os.path.join(output_folder, "predictions.pth")})
         return
         
     extra_args = dict(

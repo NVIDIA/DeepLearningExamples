@@ -390,29 +390,29 @@ at::Tensor generate_mask_targets_cuda(at::Tensor dense_vector, const std::vector
     assert (M < 32); 
     //if M >=32, shared memory buffer size may not be
     //sufficient. Need to fix this by blocking    
-    float *d_anchor_data = anchors.data<float>();
+    float *d_anchor_data = anchors.data_ptr<float>();
     int num_of_anchors = anchors.size(0);  
     auto per_anchor_poly_idx = at::empty({num_of_anchors + 1}, at::CPU(at::kInt));
     int num_of_poly = 0;
     for (int i = 0; i < num_of_anchors; i++){
-  	    *(per_anchor_poly_idx.data<int>() + i) = num_of_poly;
+  	    *(per_anchor_poly_idx.data_ptr<int>() + i) = num_of_poly;
   	    num_of_poly += polygons[i].size();
     }
-    *(per_anchor_poly_idx.data<int>() + num_of_anchors) = num_of_poly;
+    *(per_anchor_poly_idx.data_ptr<int>() + num_of_anchors) = num_of_poly;
   
     auto poly_rel_idx = at::empty({num_of_poly + 1}, at::CPU(at::kInt));
-    double *dense_poly_data = dense_vector.data<double>();
+    double *dense_poly_data = dense_vector.data_ptr<double>();
     int start_idx = 0;
     int poly_count = 0;
   
     for(int i = 0; i < polygons.size(); i++){
   	    for(int j=0; j < polygons[i].size(); j++) {
-  		    *(poly_rel_idx.data<int>() + poly_count) = start_idx;
+  		    *(poly_rel_idx.data_ptr<int>() + poly_count) = start_idx;
   		    start_idx += polygons[i][j].size(0);
   		    poly_count++;
   	    }
     }    
-    *(poly_rel_idx.data<int>() + poly_count) = start_idx;
+    *(poly_rel_idx.data_ptr<int>() + poly_count) = start_idx;
 
     at::Tensor d_x_t = torch::empty({BUFFER_SIZE * num_of_poly}, torch::CUDA(at::kInt));
     at::Tensor d_y_t = torch::empty({BUFFER_SIZE * num_of_poly}, torch::CUDA(at::kInt));
@@ -429,9 +429,9 @@ at::Tensor generate_mask_targets_cuda(at::Tensor dense_vector, const std::vector
     auto d_poly_rel_idx = poly_rel_idx.cuda();
     auto stream = at::cuda::getCurrentCUDAStream();  
     
-    crop_and_scale_cuda_kernel<<<num_of_poly, 256, 0, stream.stream()>>>(d_dense_vector.data<double>(), 
-                                                                      d_per_anchor_poly_idx.data<int>(), 
-                                                                      d_poly_rel_idx.data<int>(), 
+    crop_and_scale_cuda_kernel<<<num_of_poly, 256, 0, stream.stream()>>>(d_dense_vector.data_ptr<double>(), 
+                                                                      d_per_anchor_poly_idx.data_ptr<int>(), 
+                                                                      d_poly_rel_idx.data_ptr<int>(), 
                                                                       poly_count, 
                                                                       num_of_anchors, 
                                                                       (float4*) d_anchor_data, 
@@ -439,25 +439,25 @@ at::Tensor generate_mask_targets_cuda(at::Tensor dense_vector, const std::vector
                                                                       
     //TODO: larger threads-per-block might be better here, because each CTA uses 32 KB of shmem,
     //and occupancy is likely shmem capacity bound                                                                                
-    rle_fr_poly_cuda_kernel<<<num_of_poly, 1024, 0, stream.stream()>>>(d_dense_vector.data<double>(), 
-                                                                   d_poly_rel_idx.data<int>(), 
+    rle_fr_poly_cuda_kernel<<<num_of_poly, 1024, 0, stream.stream()>>>(d_dense_vector.data_ptr<double>(), 
+                                                                   d_poly_rel_idx.data_ptr<int>(), 
                                                                    M, M, 
-                                                                   (uint*) d_cnts_t.data<int>(), 
-                                                                   d_x_t.data<int>(), 
-                                                                   d_y_t.data<int>(), 
-                                                                   d_u_t.data<int>(), 
-                                                                   d_v_t.data<int>(), 
-                                                                   (uint*) d_a_t.data<int>(), 
-                                                                   (uint*) d_b_t.data<int>(), 
-                                                                   d_num_of_counts_t.data<int>());
+                                                                   (uint*) d_cnts_t.data_ptr<int>(), 
+                                                                   d_x_t.data_ptr<int>(), 
+                                                                   d_y_t.data_ptr<int>(), 
+                                                                   d_u_t.data_ptr<int>(), 
+                                                                   d_v_t.data_ptr<int>(), 
+                                                                   (uint*) d_a_t.data_ptr<int>(), 
+                                                                   (uint*) d_b_t.data_ptr<int>(), 
+                                                                   d_num_of_counts_t.data_ptr<int>());
                                                                  
-    decode_rle_cuda_kernel<<<num_of_poly, 256, 0, stream.stream()>>>(d_num_of_counts_t.data<int>(), 
-                                                                 (uint*) d_cnts_t.data<int>(), 
+    decode_rle_cuda_kernel<<<num_of_poly, 256, 0, stream.stream()>>>(d_num_of_counts_t.data_ptr<int>(), 
+                                                                 (uint*) d_cnts_t.data_ptr<int>(), 
                                                                  M, M, 
-                                                                 d_mask_t.data<byte>());
+                                                                 d_mask_t.data_ptr<byte>());
                                                                  
-    merge_masks_cuda_kernel<<<num_of_anchors, 256, 0, stream.stream()>>>(d_mask_t.data<byte>(), result.data<float>(), 
-                                                                      M, d_per_anchor_poly_idx.data<int>(), 
+    merge_masks_cuda_kernel<<<num_of_anchors, 256, 0, stream.stream()>>>(d_mask_t.data_ptr<byte>(), result.data_ptr<float>(), 
+                                                                      M, d_per_anchor_poly_idx.data_ptr<int>(), 
                                                                       num_of_anchors); 
     return result;
 }

@@ -14,17 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-DISTRIBUTED="-m torch.distributed.launch --nnodes ${WORLD_SIZE} --node_rank ${SLURM_NODEID}  \
-    --master_addr ${MASTER_ADDR} --master_port ${MASTER_PORT} --nproc_per_node=${DGXNGPU}"
-
-echo "MASTER_ADDR ${MASTER_ADDR}"
-echo "MASTER_PORT ${MASTER_PORT}"
-echo "WORLD_SIZE ${WORLD_SIZE}"
-echo "SLURM_NODEID ${SLURM_NODEID}"
-
 if [[ $1 == 'train' ]] || [[ $1 == 'all' ]]; then
     echo 'Run training...'
-    python ${DISTRIBUTED} train.py \
+    python train.py \
         --config_file wt103_large.yaml \
         --config 8dgx2_16gpu_fp16 \
         ${@:2}
@@ -32,7 +24,7 @@ fi
 
 if [[ $1 == 'eval' ]] || [[ $1 == 'all' ]]; then
     echo 'Run evaluation...'
-    python ${DISTRIBUTED} eval.py \
+    python eval.py \
         --config_file wt103_large.yaml \
         --config 8dgx2_16gpu_fp16 \
         ${@:2}

@@ -22,6 +22,7 @@ function test_configuration() {
 }
 
 test_configuration "FP32 nodali noxla"
+test_configuration "FP32 nodali xla" "--use_xla"
 test_configuration "FP16 nodali noxla" "--use_tf_amp"
 test_configuration "FP16 nodali xla" "--use_tf_amp --use_xla"
 

@@ -507,8 +507,8 @@ class EstimatorExecuter(BaseExecuter):
         log_step_count_steps=None,  # disabled
         session_config=self._get_session_config(
             mode=mode,
-            use_xla=self._runtime_config.use_xla,
-            use_amp=self._runtime_config.use_amp,
+            use_xla=self._runtime_config.xla,
+            use_amp=self._runtime_config.amp,
             use_tf_distributed=False,
             allow_xla_at_inference=self._runtime_config.allow_xla_at_inference  # TODO: Remove when XLA at inference fixed
         ),
@@ -548,8 +548,8 @@ class TFDistributedExecuter(BaseExecuter):
         log_step_count_steps=None,  # disabled
         session_config=self._get_session_config(
             mode=mode,
-            use_xla=self._runtime_config.use_xla,
-            use_amp=self._runtime_config.use_amp,
+            use_xla=self._runtime_config.xla,
+            use_amp=self._runtime_config.amp,
             use_tf_distributed=True,
             # TODO: Remove when XLA at inference fixed
             allow_xla_at_inference=self._runtime_config.allow_xla_at_inference

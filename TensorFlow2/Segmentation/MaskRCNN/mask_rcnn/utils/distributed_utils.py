@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,6 +29,9 @@ def MPI_is_distributed():
     if all([var in os.environ for var in ["OMPI_COMM_WORLD_RANK", "OMPI_COMM_WORLD_SIZE"]]):
         return True
 
+    elif all([var in os.environ for var in ["SLURM_PROCID", "SLURM_NTASKS"]]):
+        return True
+
     else:
         return False
 
@@ -37,6 +40,9 @@ def MPI_local_rank():
 
     if "OMPI_COMM_WORLD_LOCAL_RANK" in os.environ:
         return int(os.environ.get("OMPI_COMM_WORLD_LOCAL_RANK"))
+
+    elif "SLURM_LOCALID" in os.environ:
+        return int(os.environ.get("SLURM_LOCALID"))
 
     else:
         return 0
@@ -81,8 +87,8 @@ def mpi_env_MPI_rank_and_size():
 
     Source: https://github.com/horovod/horovod/blob/c3626e/test/common.py#L25
     """
-    rank_env = 'PMI_RANK OMPI_COMM_WORLD_RANK'.split()
-    size_env = 'PMI_SIZE OMPI_COMM_WORLD_SIZE'.split()
+    rank_env = 'PMI_RANK SLURM_PROCID OMPI_COMM_WORLD_RANK'.split()
+    size_env = 'PMI_SIZE SLURM_NTASKS OMPI_COMM_WORLD_SIZE'.split()
 
     for rank_var, size_var in zip(rank_env, size_env):
         rank = os.environ.get(rank_var)

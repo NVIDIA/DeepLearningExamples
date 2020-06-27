@@ -15,7 +15,7 @@
 # limitations under the License.
 
 CONTAINER_TF2x_BASE="nvcr.io/nvidia/tensorflow"
-CONTAINER_TF2x_TAG="19.11-tf2-py3"
+CONTAINER_TF2x_TAG="20.06-tf2-py3"
 
 # ======================== Refresh base image ======================== #
 docker pull "${CONTAINER_TF2x_BASE}:${CONTAINER_TF2x_TAG}"
@@ -29,5 +29,4 @@ sleep 1
 docker build -t joc_tensorflow_maskrcnn:tf2.1-py3 \
     --build-arg BASE_CONTAINER="${CONTAINER_TF2x_BASE}" \
     --build-arg IMG_TAG="${CONTAINER_TF2x_TAG}" \
-    --build-arg FROM_IMAGE_NAME="nvcr.io/nvidia/tensorflow:20.02-tf2-py3" \
-    .
+    --build-arg FROM_IMAGE_NAME="nvcr.io/nvidia/tensorflow:20.06-tf2-py3" .

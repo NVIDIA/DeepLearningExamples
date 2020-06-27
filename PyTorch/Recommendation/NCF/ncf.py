@@ -70,7 +70,7 @@ def parse_args():
                         help='Learning rate for optimizer')
     parser.add_argument('-k', '--topk', type=int, default=10,
                         help='Rank for test examples to be considered a hit')
-    parser.add_argument('--seed', '-s', type=int, default=1,
+    parser.add_argument('--seed', '-s', type=int, default=None,
                         help='Manually set random seed for torch')
     parser.add_argument('--threshold', '-t', type=float, default=1.0,
                         help='Stop training early at threshold')
@@ -82,17 +82,15 @@ def parse_args():
                         help='Epsilon for Adam')
     parser.add_argument('--dropout', type=float, default=0.5,
                         help='Dropout probability, if equal to 0 will not use dropout at all')
-    parser.add_argument('--checkpoint_dir', default='/data/checkpoints/', type=str,
-                        help='Path to the directory storing the checkpoint file')
+    parser.add_argument('--checkpoint_dir', default='', type=str,
+                        help='Path to the directory storing the checkpoint file, passing an empty path disables checkpoint saving')
     parser.add_argument('--load_checkpoint_path', default=None, type=str,
                         help='Path to the checkpoint file to be loaded before training/evaluation')
     parser.add_argument('--mode', choices=['train', 'test'], default='train', type=str,
                         help='Passing "test" will only run a single evaluation, otherwise full training will be performed')
     parser.add_argument('--grads_accumulated', default=1, type=int,
                         help='Number of gradients to accumulate before performing an optimization step')
-    parser.add_argument('--opt_level', default='O2', type=str,
-                        help='Optimization level for Automatic Mixed Precision',
-                        choices=['O0', 'O2'])
+    parser.add_argument('--amp', action='store_true', help='Enable mixed precision training')
     parser.add_argument('--log_path', default='log.json', type=str,
                         help='Path for the JSON training log')
     return parser.parse_args()
@@ -167,8 +165,8 @@ def main():
     if args.seed is not None:
         torch.manual_seed(args.seed)
 
-    print("Saving results to {}".format(args.checkpoint_dir))
-    if not os.path.exists(args.checkpoint_dir) and args.checkpoint_dir != '':
+    if not os.path.exists(args.checkpoint_dir) and args.checkpoint_dir:
+        print("Saving results to {}".format(args.checkpoint_dir))
         os.makedirs(args.checkpoint_dir, exist_ok=True)
 
     # sync workers before timing
@@ -209,8 +207,8 @@ def main():
     model = model.cuda()
     criterion = criterion.cuda()
 
-    if args.opt_level == "O2":
-        model, optimizer = amp.initialize(model, optimizer, opt_level=args.opt_level,
+    if args.amp:
+        model, optimizer = amp.initialize(model, optimizer, opt_level="O2",
                                           keep_batchnorm_fp32=False, loss_scale='dynamic')
 
     if args.distributed:
@@ -262,7 +260,7 @@ def main():
                 loss = traced_criterion(outputs, label).float()
                 loss = torch.mean(loss.view(-1), 0)
 
-                if args.opt_level == "O2":
+                if args.amp:
                     with amp.scale_loss(loss, optimizer) as scaled_loss:
                         scaled_loss.backward()
                 else:
@@ -301,9 +299,11 @@ def main():
         if hr > max_hr and args.local_rank == 0:
             max_hr = hr
             best_epoch = epoch
-            save_checkpoint_path = os.path.join(args.checkpoint_dir, 'model.pth')
-            print("New best hr! Saving the model to: ", save_checkpoint_path)
-            torch.save(model.state_dict(), save_checkpoint_path)
+            print("New best hr!")
+            if args.checkpoint_dir:
+                save_checkpoint_path = os.path.join(args.checkpoint_dir, 'model.pth')
+                print("Saving the model to: ", save_checkpoint_path)
+                torch.save(model.state_dict(), save_checkpoint_path)
             best_model_timestamp = time.time()
 
         if args.threshold is not None:

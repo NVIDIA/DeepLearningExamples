@@ -21,7 +21,6 @@ fi
 
 nvidia-docker run -it --rm \
     --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 \
-    -v $(pwd)/:/workspace/ \
     -v $(pwd)/weights/:/model/ \
     -v "${1}":/data/ \
     joc_tensorflow_maskrcnn:tf2.1-py3

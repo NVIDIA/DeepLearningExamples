@@ -59,7 +59,7 @@ def add_parser_arguments(parser):
 
 def main(args):
     imgnet_classes = np.array(json.load(open("./LOC_synset_mapping.json", "r")))
-    model = models.build_resnet(args.arch, args.model_config, verbose=False)
+    model = models.build_resnet(args.arch, args.model_config, 1000, verbose=False)
 
     if args.weights is not None:
         weights = torch.load(args.weights)
@@ -67,13 +67,16 @@ def main(args):
 
     model = model.cuda()
 
-    if args.precision == "FP16":
+    if args.precision in ["AMP", "FP16"]:
         model = network_to_half(model)
+
 
     model.eval()
 
     with torch.no_grad():
-        input = load_jpeg_from_file(args.image, cuda=True, fp16=args.precision!='FP32')
+        input = load_jpeg_from_file(
+            args.image, cuda=True, fp16=args.precision != "FP32"
+        )
 
         output = torch.nn.functional.softmax(model(input), dim=1).cpu().view(-1).numpy()
         top5 = np.argsort(output)[-5:][::-1]

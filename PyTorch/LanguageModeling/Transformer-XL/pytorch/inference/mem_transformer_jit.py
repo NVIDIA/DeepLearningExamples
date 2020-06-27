@@ -21,7 +21,6 @@ import torch.nn.functional as F
 
 from inference.proj_adaptive_softmax_jit import ProjectedAdaptiveLogSoftmax
 from utils.log_uniform_sampler import LogUniformSampler
-from utils.log_uniform_sampler import sample_logits
 
 
 class PositionalEmbedding(nn.Module):
@@ -212,7 +211,7 @@ class RelMultiHeadAttn(nn.Module):
 
         x_padded = x_padded.view(x.size(0), x.size(1), x.size(3) + 1, x.size(2))
 
-        x = x_padded[:, :, 1:].view_as(x)
+        x = x_padded.narrow(2, 1, x_padded.size(2) - 1).view_as(x)
 
         if zero_triu:
             ones = torch.ones((x.size(2), x.size(3)))
@@ -485,13 +484,29 @@ class AdaptiveEmbedding(nn.Module):
             self.emb_layers.append(
                 nn.Embedding(n_token, d_embed, sparse=(sample_softmax > 0))
             )
-            self.emb_projs.append(nn.Parameter(torch.Tensor(d_proj, d_embed)))
+            self.emb_projs.append(
+                nn.Parameter(
+                    torch.zeros(
+                        (d_proj, d_embed),
+                        dtype=dtype,
+                        device=torch.device('cuda'),
+                        )
+                    )
+                )
         else:
             for i in range(len(self.cutoffs)):
                 l_idx, r_idx = self.cutoff_ends[i], self.cutoff_ends[i+1]
                 d_emb_i = d_embed // (div_val ** i)
                 self.emb_layers.append(nn.Embedding(r_idx-l_idx, d_emb_i))
-                self.emb_projs.append(nn.Parameter(torch.Tensor(d_proj, d_emb_i)))
+                self.emb_projs.append(
+                    nn.Parameter(
+                        torch.zeros(
+                            (d_proj, d_emb_i),
+                            dtype=dtype,
+                            device=torch.device('cuda'),
+                            )
+                        )
+                    )
 
     def forward(self, inp):
         if self.div_val == 1:
@@ -595,6 +610,7 @@ class MemTransformerLM(nn.Module):
 
             self.crit = ProjectedAdaptiveLogSoftmax(n_token, d_embed, d_model,
                                                     cutoffs, div_val=div_val,
+                                                    dtype=dtype,
                                                     tie_projs=tie_projs,
                                                     out_projs=emb_projs,
                                                     out_layers_weights=emb_layers)
