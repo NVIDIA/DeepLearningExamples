@@ -20,10 +20,10 @@ __pycache__
 core
 core/
 weights/mask-rcnn/
-weights/resnet/
 profiling/
 venv/
 nsys/
+results/
 
 # Git Directories
 tf-models/

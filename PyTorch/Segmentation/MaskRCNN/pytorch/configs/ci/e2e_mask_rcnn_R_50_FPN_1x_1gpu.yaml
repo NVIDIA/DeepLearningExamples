@@ -1,6 +1,6 @@
 MODEL:
   META_ARCHITECTURE: "GeneralizedRCNN"
-  WEIGHT: "catalog://ImageNetPretrained/MSRA/R-50"
+  WEIGHT: "/data3/joc_checkpoints/pytorch/maskrcnn/R-50.pkl"
   BACKBONE:
     CONV_BODY: "R-50-FPN"
     OUT_CHANNELS: 256
@@ -35,10 +35,15 @@ DATASETS:
 DATALOADER:
   SIZE_DIVISIBILITY: 32
 SOLVER:
-  BASE_LR: 0.04
+  BASE_LR: 0.005
   WEIGHT_DECAY: 0.0001
   STEPS: (33000, 44000)
-  MAX_ITER: 45000
-  IMS_PER_BATCH: 32
+  MAX_ITER: 1000
+  IMS_PER_BATCH: 4
+  WARMUP_ITERS: 625
+  WARMUP_FACTOR: 0.000064
+  WARMUP_METHOD: "mlperf_linear"
 TEST:
-  IMS_PER_BATCH: 8
+  IMS_PER_BATCH: 1
+PATHS_CATALOG: "maskrcnn_benchmark/config/paths_catalog_ci.py"
+OUTPUT_DIR: "."

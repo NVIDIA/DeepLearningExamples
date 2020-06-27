@@ -14,27 +14,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-rm -rf /results
+rm -rf /result_tmp/
 
 BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 export CUDA_VISIBLE_DEVICES=0
 
 python ${BASEDIR}/../mask_rcnn_main.py \
-    --mode="train_and_eval" \
-    --checkpoint="/model/resnet/resnet-nhwc-2018-10-14/model.ckpt-112602" \
-    --eval_samples=5000 \
-    --init_learning_rate=0.005 \
-    --learning_rate_steps="240000,320000" \
-    --model_dir="/results/" \
-    --num_steps_per_eval=29568 \
-    --total_steps=360000 \
-    --train_batch_size=4 \
+    --mode="eval" \
     --eval_batch_size=8 \
-    --training_file_pattern="/data/train*.tfrecord" \
+    --eval_samples=5000 \
+    --learning_rate_steps="480000,640000" \
+    --model_dir="/result_tmp/" \
     --validation_file_pattern="/data/val*.tfrecord" \
     --val_json_file="/data/annotations/instances_val2017.json" \
-    --nouse_amp \
     --use_batched_nms \
-    --nouse_xla \
+    --noamp \
+    --noxla \
     --nouse_custom_box_proposals_op

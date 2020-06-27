@@ -127,7 +127,7 @@ def define_hparams_flags():
     )
     flags.DEFINE_integer('warmup_steps', default=1000, help='The number of steps to use warmup learning rate for')
 
-    flags.DEFINE_bool('use_amp', default=False, help='Enable automatic mixed precision')
+    flags.DEFINE_bool('amp', default=False, help='Enable automatic mixed precision')
 
     flags.DEFINE_bool(
         'use_batched_nms',
@@ -149,7 +149,7 @@ def define_hparams_flags():
         help='Use tensorflow distributed API'
     )
 
-    flags.DEFINE_bool('use_xla', default=False, help='Enable XLA JIT Compiler.')
+    flags.DEFINE_bool('xla', default=False, help='Enable XLA JIT Compiler.')
 
     flags.DEFINE_string('training_file_pattern', default="", help='TFRecords file pattern for the training files')
 

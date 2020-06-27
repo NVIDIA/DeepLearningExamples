@@ -42,7 +42,7 @@ mpirun \
         --training_file_pattern="/data/train*.tfrecord" \
         --validation_file_pattern="/data/val*.tfrecord" \
         --val_json_file="/data/annotations/instances_val2017.json" \
-        --use_amp \
+        --noamp \
         --use_batched_nms \
-        --use_xla \
+        --xla \
         --nouse_custom_box_proposals_op

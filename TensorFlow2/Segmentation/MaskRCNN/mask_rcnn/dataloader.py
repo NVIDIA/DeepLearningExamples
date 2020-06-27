@@ -40,6 +40,7 @@ from mask_rcnn.dataloader_utils import dataset_parser
 
 from distutils.version import LooseVersion
 
+
 class InputReader(object):
     """Input reader for dataset."""
 
@@ -145,7 +146,7 @@ class InputReader(object):
         # Parse the fetched records to input tensors for model function.
         dataset = dataset.map(
             map_func=self._create_dataset_parser_fn(params),
-            num_parallel_calls=16,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE,
         )
 
         dataset = dataset.batch(
@@ -167,13 +168,14 @@ class InputReader(object):
             buffer_size=tf.data.experimental.AUTOTUNE,
         )
 
-        if not tf.distribute.has_strategy():
-            dataset = dataset.apply(
-                tf.data.experimental.prefetch_to_device(
-                    '/gpu:0',  # With Horovod the local GPU is always 0
-                    buffer_size=1,
+        if self._mode == tf.estimator.ModeKeys.PREDICT or n_gpus > 1:
+            if not tf.distribute.has_strategy():
+                dataset = dataset.apply(
+                    tf.data.experimental.prefetch_to_device(
+                        '/gpu:0',  # With Horovod the local GPU is always 0
+                        buffer_size=1,
+                    )
                 )
-            )
 
         data_options = tf.data.Options()
 

@@ -81,9 +81,9 @@ at::Tensor box_iou_cuda(at::Tensor box1, at::Tensor box2){
     dim3 blockDim(blockSize);
     int idxJump = minGridSize * blockSize;
     auto stream = at::cuda::getCurrentCUDAStream();
-    box_iou_cuda_kernel<<<gridDim, blockDim, 0, stream.stream()>>>(box_iou.data<float>(), 
-                                                                  (float4*) box1.data<float>(), 
-                                                                  (float4*) box2.data<float>(), 
+    box_iou_cuda_kernel<<<gridDim, blockDim, 0, stream.stream()>>>(box_iou.data_ptr<float>(), 
+                                                                  (float4*) box1.data_ptr<float>(), 
+                                                                  (float4*) box2.data_ptr<float>(), 
                                                                   M, N, 
                                                                   idxJump);
     return box_iou;

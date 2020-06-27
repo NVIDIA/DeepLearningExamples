@@ -6,7 +6,7 @@ import os
 
 
 class DatasetCatalog(object):
-    DATA_DIR = "/data2/coco/coco-2014"
+    DATA_DIR = "/data/coco/coco-2014"
     DATASETS = {
         "coco_2014_train": {
             "img_dir": "coco_train2014",
@@ -108,3 +108,4 @@ class ModelCatalog(object):
         unique_name = ".".join([model_name, signature])
         url = "/".join([prefix, model_id, "12_2017_baselines", unique_name, suffix])
         return url
+
