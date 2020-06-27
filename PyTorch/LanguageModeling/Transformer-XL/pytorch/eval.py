@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import argparse
+import json
 import logging
 import math
 import os
@@ -32,6 +33,7 @@ from data_utils import tokenize_raw
 from utils.exp_utils import AverageMeter
 from utils.exp_utils import benchmark
 from utils.exp_utils import create_exp_dir
+from utils.exp_utils import l2_promote
 from utils.exp_utils import log_env_info
 
 
@@ -46,7 +48,7 @@ def parse_args():
     cfg_parser = argparse.ArgumentParser(parents=[parent_parser], add_help=False)
 
     cfg_parser.add_argument('--config', default='default')
-    cfg_parser.add_argument('--config_file', default='config.yaml')
+    cfg_parser.add_argument('--config_file', default=None)
 
     config_args, _ = cfg_parser.parse_known_args()
 
@@ -81,16 +83,25 @@ def parse_args():
                         help='length of the extended context')
     parser.add_argument('--mem_len', type=int, default=640,
                         help='length of the retained previous heads')
+    parser.add_argument('--seed', type=int, default=1111,
+                        help='Random seed')
     parser.add_argument('--clamp_len', type=int, default=-1,
                         help='max positional embedding index')
     parser.add_argument('--cuda', action='store_true',
                         help='Run evaluation on a GPU using CUDA')
     parser.add_argument('--model', type=str, default='',
                         help='path to the checkpoint')
+    parser.add_argument('--manual_config', type=json.loads, default=None,
+                        help='Manually specify config for the model')
+    parser.add_argument('--manual_vocab', type=str, default='word',
+                        choices=['word', 'bpe'],
+                        help='Manually specify type of vocabulary')
     parser.add_argument('--fp16', action='store_true',
                         help='Run training in fp16/mixed precision')
     parser.add_argument('--log_all_ranks', action='store_true',
                         help='Enable logging for all distributed ranks')
+    parser.add_argument('--dllog_file', type=str, default='eval_log.json',
+                        help='Name of the DLLogger output file')
     parser.add_argument('--same_length', action='store_true',
                         help='set same length attention with masking')
     parser.add_argument('--no_env', action='store_true',
@@ -208,7 +219,7 @@ def evaluate(eval_iter, model, meters, log_interval, max_size=None, repeat=1):
                         'eval_loss': log_loss,
                         'eval_perplexity': log_ppl,
                         }
-                    dllogger.log(step=eval_step, data=dllogger_data)
+                    dllogger.log(step=tuple([eval_step]), data=dllogger_data)
 
                     log_throughput = 0
                     log_latency = 0
@@ -240,6 +251,7 @@ def compile_model(model, device, args):
 
 def main():
     args = parse_args()
+    utils.gpu_affinity.set_affinity(args.local_rank)
 
     if args.type == 'pytorch':
         from mem_transformer import MemTransformerLM
@@ -247,6 +259,7 @@ def main():
         from inference.mem_transformer_jit import MemTransformerLM
 
     torch.cuda.set_device(args.local_rank)
+    l2_promote()
     device = torch.device('cuda' if args.cuda else 'cpu')
     utils.distributed.init_distributed(args.cuda)
 
@@ -260,7 +273,7 @@ def main():
     else:
         log_file = f'eval_log.log'
 
-    dllog_file = f'eval_log.json'
+    dllog_file = args.dllog_file
     log_file = os.path.join(args.work_dir, log_file)
     dllog_file = os.path.join(args.work_dir, dllog_file)
     if args.debug:
@@ -279,6 +292,10 @@ def main():
     if not args.no_env:
         log_env_info()
 
+    # Set the random seed manually for reproducibility.
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+
     if args.model:
         model_path = args.model
     elif args.work_dir:
@@ -286,7 +303,12 @@ def main():
     else:
         raise RuntimeError('Specify path to checkpoint using --model or --work_dir')
 
-    checkpoint = load_checkpoint(model_path)
+    if not args.manual_config:
+        checkpoint = load_checkpoint(model_path)
+        vocab_type = checkpoint['args'].vocab
+    else:
+        checkpoint = None
+        vocab_type = args.manual_vocab
 
     if args.manual:
         vocab = checkpoint['vocab']
@@ -304,7 +326,7 @@ def main():
                                             ext_len=args.ext_len, warmup=False)
     else:
         # Load dataset
-        corpus = get_lm_corpus(args.data, args.dataset, checkpoint['args'].vocab)
+        corpus = get_lm_corpus(args.data, args.dataset, vocab_type)
 
         if args.split == 'valid' or args.split == 'test':
             iter = corpus.get_iterator(args.split, args.batch_size, args.tgt_len,
@@ -322,7 +344,7 @@ def main():
 
     if args.load_torchscript:
         model = torch.jit.load(args.load_torchscript)
-    else:
+    elif not args.manual_config:
         checkpoint['model_config']['tgt_len'] = args.tgt_len
         checkpoint['model_config']['ext_len'] = args.ext_len
         checkpoint['model_config']['mem_len'] = args.mem_len
@@ -335,12 +357,21 @@ def main():
             model.load_state_dict(checkpoint['model_state'])
         elif args.type == 'torchscript':
             model.load_state_dict(checkpoint['model_state'], strict=False)
+    elif args.manual_config:
+        args.manual_config['tgt_len'] = args.tgt_len
+        args.manual_config['ext_len'] = args.ext_len
+        args.manual_config['mem_len'] = args.mem_len
+        args.manual_config['clamp_len'] = args.clamp_len
+        args.manual_config['same_length'] = args.same_length
+        args.manual_config['dtype'] = dtype
+
+        model = MemTransformerLM(**args.manual_config)
 
     model = model.eval()
     model = model.to(device)
     model = model.to(dtype)
 
-    if args.type == 'torchscript':
+    if args.type == 'torchscript' and not args.manual_config:
         state = checkpoint['model_state']
 
         tie_projs = checkpoint['model_config']['tie_projs']
@@ -444,4 +475,11 @@ def main():
 
 
 if __name__ == "__main__":
+    # Disable profiling executor
+    try:
+        torch._C._jit_set_profiling_executor(False)
+        torch._C._jit_set_profiling_mode(False)
+    except AttributeError:
+        pass
+
     main()

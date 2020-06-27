@@ -2,6 +2,7 @@
 #SBATCH -N 8                       # number of nodes
 #SBATCH -t 4:00:00                 # wall time
 #SBATCH -J "transformer-xl_pyt"    # job name
+#SBATCH --ntasks-per-node=16       # tasks per node
 #SBATCH --exclusive                # exclusive node access
 #SBATCH --mem=0                    # all mem avail
 #SBATCH --mail-type=FAIL           # only send email on failure
@@ -20,11 +21,6 @@ MOUNTS="${WORK_DIR}/data:${CONT_WORK_DIR}/data,${WORK_DIR}/results:${CONT_WORK_D
 
 # Create directory for the results
 srun --ntasks="${SLURM_JOB_NUM_NODES}" --ntasks-per-node=1 mkdir -p "${WORK_DIR}/results"
-
-# Configure DGX-2H parameters
-export DGXNSOCKET=2
-export DGXSOCKETCORES=24
-export DGXNGPU=16
 
 # Overwrite default parameters in the script
 EXTRA_TRAIN_PARAMS=""
@@ -47,6 +43,9 @@ if [ -n "$BATCH_CHUNK" ]; then
 fi
 if [ -n "$EVAL_INTERVAL" ]; then
    EXTRA_TRAIN_PARAMS+="--eval_interval ${EVAL_INTERVAL} "
+fi
+if [ -n "$LOG_INTERVAL" ]; then
+   EXTRA_TRAIN_PARAMS+="--log_interval ${LOG_INTERVAL} "
 fi
 if [ -n "$EVAL_BATCH_SIZE" ]; then
    EXTRA_TRAIN_PARAMS+="--eval_batch_size ${EVAL_BATCH_SIZE} "

@@ -12,15 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:19.11-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.06-py3
 FROM ${FROM_IMAGE_NAME}
 
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
-WORKDIR /tmp/unique_for_apex
-RUN git clone https://github.com/NVIDIA/apex.git && cd apex && git reset --hard 3ae89c754d945e407a6674aa2006d5a0e35d540e
-RUN cd apex && pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" .
+RUN pip install --global-option="--cpp_ext" --global-option="--cuda_ext" git+git://github.com/NVIDIA/apex.git#egg=apex
 
 WORKDIR /workspace/transformer-xl/pytorch
 
@@ -28,4 +26,4 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir git+https://github.com/NVIDIA/dllogger.git#egg=dllogger
 
-ADD . /workspace/transformer-xl/pytorch
+ADD pytorch/ /workspace/transformer-xl/pytorch/

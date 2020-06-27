@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import ctypes
 import datetime
 import logging
 import os
 import shutil
+import signal
 import sys
 import time
 
@@ -52,6 +54,41 @@ class AverageMeter:
             self.avg = self.sum / self.count
             if self.keep:
                 self.vals.append(val)
+
+
+class TimeoutHandler:
+    def __init__(self, sig=signal.SIGTERM):
+        self.sig = sig
+
+    def __enter__(self):
+        self.interrupted = False
+        self.released = False
+        self.original_handler = signal.getsignal(self.sig)
+
+        def handler(signum, frame):
+            self.release()
+            self.interrupted = True
+            logging.info(f'Received SIGTERM')
+
+        signal.signal(self.sig, handler)
+        return self
+
+    def __exit__(self, type, value, tb):
+        self.release()
+
+    def release(self):
+        if self.released:
+            return False
+
+        signal.signal(self.sig, self.original_handler)
+        self.released = True
+        return True
+
+
+def register_ignoring_timeout_handler(sig=signal.SIGTERM):
+    def handler(signum, frame):
+        logging.info('Received SIGTERM, ignoring')
+    signal.signal(sig, handler)
 
 
 def log_env_info():
@@ -175,3 +212,13 @@ def build_work_dir_name(work_dir, dataset, append_dataset, append_time):
 
         work_dir = os.path.join(work_dir, now_str)
     return work_dir
+
+
+def l2_promote():
+    _libcudart = ctypes.CDLL('libcudart.so')
+    # Set device limit on the current device
+    # cudaLimitMaxL2FetchGranularity = 0x05
+    pValue = ctypes.cast((ctypes.c_int*1)(), ctypes.POINTER(ctypes.c_int))
+    _libcudart.cudaDeviceSetLimit(ctypes.c_int(0x05), ctypes.c_int(128))
+    _libcudart.cudaDeviceGetLimit(pValue, ctypes.c_int(0x05))
+    assert pValue.contents.value == 128
