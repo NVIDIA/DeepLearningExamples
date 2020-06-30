@@ -90,17 +90,17 @@ DecoderInstancePlain::DecoderInstancePlain(
  * PUBLIC METHODS *************************************************************
  *****************************************************************************/
 
-void DecoderInstancePlain::reset()
+void DecoderInstancePlain::reset(cudaStream_t stream)
 {
-    DecoderInstance::reset();
+  DecoderInstance::reset(stream);
 
-    mInputWeightsDevice.zero();
-    mInAttentionHiddenStatesDevice.zero();
-    mInAttentionCellStatesDevice.zero();
-    mInputAttentionContextDevice.zero();
-    mOutputAttentionContextDevice.zero();
-    mInDecoderHiddenStatesDevice.zero();
-    mInDecoderCellStatesDevice.zero();
+  mInputWeightsDevice.zeroAsync(stream);
+  mInAttentionHiddenStatesDevice.zeroAsync(stream);
+  mInAttentionCellStatesDevice.zeroAsync(stream);
+  mInputAttentionContextDevice.zeroAsync(stream);
+  mOutputAttentionContextDevice.zeroAsync(stream);
+  mInDecoderHiddenStatesDevice.zeroAsync(stream);
+  mInDecoderCellStatesDevice.zeroAsync(stream);
 }
 
 /******************************************************************************

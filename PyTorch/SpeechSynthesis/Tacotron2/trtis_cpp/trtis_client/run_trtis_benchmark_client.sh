@@ -2,7 +2,7 @@
 
 IS=128
 
-TEXT="$(echo "The forms of printed letters should be beautiful, and  \
+TEXT="$(echo "The forms of printed letters should be beautiful, and \
 that their arrangement \
 on the page should be reasonable and a help to the \
 shapeliness of the letters \

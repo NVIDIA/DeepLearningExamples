@@ -92,9 +92,9 @@ DropoutGenerator::DropoutGenerator(
  * PUBLIC METHODS *************************************************************
  *****************************************************************************/
 
-void DropoutGenerator::reset(unsigned int seed)
+void DropoutGenerator::reset(unsigned int seed, cudaStream_t stream)
 {
-    mRand.setSeed(seed);
+  mRand.setSeed(seed, stream);
 }
 
 void DropoutGenerator::generate(const int batchSize, const int numChunks, cudaStream_t stream)

@@ -20,6 +20,7 @@
 
 #include <THC/THC.h>
 
+namespace rpn {
 namespace {
 
 #define CUDA_1D_KERNEL_LOOP(i, n)                                 \
@@ -204,27 +205,27 @@ std::vector<at::Tensor> GeneratePreNMSUprightBoxes(
       (GetBlocks(pre_nms_nboxes), num_images),
       CUDA_NUM_THREADS, // blockDim.y == 1
       0, stream>>>(
-          sorted_indices.data<long>(),
+          sorted_indices.data_ptr<long>(),
           pre_nms_nboxes,
-          bbox_deltas.data<float>(),
-          reinterpret_cast<float4*>(anchors.data<float>()),
+          bbox_deltas.data_ptr<float>(),
+          reinterpret_cast<float4*>(anchors.data_ptr<float>()),
           H,
           W,
           K,
           A,
           K * A,
           rpn_min_size,
-          image_shapes.data<float>(), // image size vec
+          image_shapes.data_ptr<float>(), // image size vec
           num_images,
           bbox_xform_clip_default, // utils::BBOX_XFORM_CLIP_DEFAULT
           correct_transform_coords,
-          reinterpret_cast<float4*>(boxes.data<float>()),
+          reinterpret_cast<float4*>(boxes.data_ptr<float>()),
           pre_nms_nboxes,
-          sorted_scores.data<float>(),
-          boxes_keep_flags.data<uint8_t>());
+          sorted_scores.data_ptr<float>(),
+          boxes_keep_flags.data_ptr<uint8_t>());
   THCudaCheck(cudaGetLastError());
 
   return std::vector<at::Tensor>{boxes, sorted_scores, boxes_keep_flags};
 }
 
-
+} // namespace rpn

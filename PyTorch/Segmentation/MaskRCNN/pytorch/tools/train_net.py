@@ -27,6 +27,11 @@ from maskrcnn_benchmark.utils.imports import import_file
 from maskrcnn_benchmark.utils.logger import setup_logger
 from maskrcnn_benchmark.utils.miscellaneous import mkdir
 from maskrcnn_benchmark.engine.tester import test
+from maskrcnn_benchmark.utils.logger import format_step
+#from dllogger import Logger, StdOutBackend, JSONStreamBackend, Verbosity
+#import dllogger as DLLogger
+import dllogger
+from maskrcnn_benchmark.utils.logger import format_step
 
 # See if we can use apex.DistributedDataParallel instead of the torch default,
 # and enable mixed-precision via apex.amp
@@ -69,24 +74,23 @@ def mlperf_test_early_exit(iteration, iters_per_epoch, tester, model, distribute
     if iteration > 0 and iteration % iters_per_epoch == 0:
         epoch = iteration // iters_per_epoch
 
-        logger = logging.getLogger('maskrcnn_benchmark.trainer')
-        logger.info("Starting evaluation...")
+        dllogger.log(step="PARAMETER", data={"eval_start": True})
 
         bbox_map, segm_map = test_and_exchange_map(tester, model, distributed)
 
         # necessary for correctness
         model.train()
-        logger.info('bbox mAP: {}, segm mAP: {}'.format(bbox_map, segm_map))
+        dllogger.log(step=(iteration, epoch, ), data={"BBOX_mAP": bbox_map, "MASK_mAP": segm_map})
 
         # terminating condition
         if bbox_map >= min_bbox_map and segm_map >= min_segm_map:
-            logger.info("Target mAP reached, exiting...")
+            dllogger.log(step="PARAMETER", data={"target_accuracy_reached": True})
             return True
 
     return False
 
 
-def train(cfg, local_rank, distributed):
+def train(cfg, local_rank, distributed, fp16, dllogger):
     model = build_detection_model(cfg)
     device = torch.device(cfg.MODEL.DEVICE)
     model.to(device)
@@ -96,7 +100,10 @@ def train(cfg, local_rank, distributed):
 
     if use_amp:
         # Initialize mixed-precision training
-        use_mixed_precision = cfg.DTYPE == "float16"
+        if fp16:
+            use_mixed_precision = True
+        else:
+            use_mixed_precision = cfg.DTYPE == "float16"
 
         amp_opt_level = 'O1' if use_mixed_precision else 'O0'
         model, optimizer = amp.initialize(model, optimizer, opt_level=amp_opt_level)
@@ -138,7 +145,7 @@ def train(cfg, local_rank, distributed):
         per_iter_callback_fn = functools.partial(
                 mlperf_test_early_exit,
                 iters_per_epoch=iters_per_epoch,
-                tester=functools.partial(test, cfg=cfg),
+                tester=functools.partial(test, cfg=cfg, dllogger=dllogger),
                 model=model,
                 distributed=distributed,
                 min_bbox_map=cfg.MIN_BBOX_MAP,
@@ -157,13 +164,13 @@ def train(cfg, local_rank, distributed):
         arguments,
         use_amp,
         cfg,
+        dllogger,
         per_iter_end_callback_fn=per_iter_callback_fn,
     )
 
-    return model
+    return model, iters_per_epoch
 
-
-def test_model(cfg, model, distributed):
+def test_model(cfg, model, distributed, iters_per_epoch, dllogger):
     if distributed:
         model = model.module
     torch.cuda.empty_cache()  # TODO check if it helps
@@ -178,8 +185,9 @@ def test_model(cfg, model, distributed):
             mkdir(output_folder)
             output_folders[idx] = output_folder
     data_loaders_val = make_data_loader(cfg, is_train=False, is_distributed=distributed)
+    results = []
     for output_folder, dataset_name, data_loader_val in zip(output_folders, dataset_names, data_loaders_val):
-        inference(
+        result = inference(
             model,
             data_loader_val,
             dataset_name=dataset_name,
@@ -189,11 +197,20 @@ def test_model(cfg, model, distributed):
             expected_results=cfg.TEST.EXPECTED_RESULTS,
             expected_results_sigma_tol=cfg.TEST.EXPECTED_RESULTS_SIGMA_TOL,
             output_folder=output_folder,
+            dllogger=dllogger,
         )
         synchronize()
-
+        results.append(result)
+    if is_main_process(): 
+        map_results, raw_results = results[0]
+        bbox_map = map_results.results["bbox"]['AP']
+        segm_map = map_results.results["segm"]['AP']
+        dllogger.log(step=(cfg.SOLVER.MAX_ITER, cfg.SOLVER.MAX_ITER / iters_per_epoch,), data={"BBOX_mAP": bbox_map, "MASK_mAP": segm_map})
+        dllogger.log(step=tuple(), data={"BBOX_mAP": bbox_map, "MASK_mAP": segm_map})
 
 def main():
+
+
     parser = argparse.ArgumentParser(description="PyTorch Object Detection Training")
     parser.add_argument(
         "--config-file",
@@ -202,22 +219,25 @@ def main():
         help="path to config file",
         type=str,
     )
-    parser.add_argument("--local_rank", type=int, default=0)
-    parser.add_argument(
-        "--skip-test",
-        dest="skip_test",
-        help="Do not test the final model",
-        action="store_true",
-    )
+    parser.add_argument("--local_rank", type=int, default=os.getenv('LOCAL_RANK', 0))
+    parser.add_argument("--max_steps", type=int, default=0, help="Override number of training steps in the config")
+    parser.add_argument("--skip-test", dest="skip_test", help="Do not test the final model",
+                        action="store_true",)
+    parser.add_argument("--fp16", help="Mixed precision training", action="store_true")
+    parser.add_argument("--amp", help="Mixed precision training", action="store_true")
+    parser.add_argument('--skip_checkpoint', default=False, action='store_true', help="Whether to save checkpoints")
+    parser.add_argument("--json-summary", help="Out file for DLLogger", default="dllogger.out",
+                        type=str,
+                        )
     parser.add_argument(
         "opts",
         help="Modify config options using the command-line",
         default=None,
         nargs=argparse.REMAINDER,
     )
-
     args = parser.parse_args()
-
+    args.fp16 = args.fp16 or args.amp
+    
     num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
     args.distributed = num_gpus > 1
 
@@ -230,6 +250,14 @@ def main():
 
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
+
+    # Redundant option - Override config parameter with command line input
+    if args.max_steps > 0:
+        cfg.SOLVER.MAX_ITER = args.max_steps
+
+    if args.skip_checkpoint:
+        cfg.SAVE_CHECKPOINT = False
+        
     cfg.freeze()
 
     output_dir = cfg.OUTPUT_DIR
@@ -237,24 +265,35 @@ def main():
         mkdir(output_dir)
 
     logger = setup_logger("maskrcnn_benchmark", output_dir, get_rank())
-    logger.info("Using {} GPUs".format(num_gpus))
-    logger.info(args)
+    if is_main_process():
+        dllogger.init(backends=[dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE,
+                                filename=args.json_summary),
+                                dllogger.StdOutBackend(verbosity=dllogger.Verbosity.VERBOSE, step_format=format_step)])
+    else:
+        dllogger.init(backends=[])
 
-    logger.info("Collecting env info (might take some time)")
-    logger.info("\n" + collect_env_info())
+    dllogger.log(step="PARAMETER", data={"gpu_count":num_gpus})
+    # dllogger.log(step="PARAMETER", data={"environment_info": collect_env_info()})
+    dllogger.log(step="PARAMETER", data={"config_file": args.config_file})
 
-    logger.info("Loaded configuration file {}".format(args.config_file))
     with open(args.config_file, "r") as cf:
         config_str = "\n" + cf.read()
-        logger.info(config_str)
-    logger.info("Running with config:\n{}".format(cfg))
 
-    model = train(cfg, args.local_rank, args.distributed)
+    dllogger.log(step="PARAMETER", data={"config":cfg})
+    
+    if args.fp16:
+        fp16 = True
+    else:
+        fp16 = False
+
+    model, iters_per_epoch = train(cfg, args.local_rank, args.distributed, fp16, dllogger)
 
     if not args.skip_test:
         if not cfg.PER_EPOCH_EVAL:
-            test_model(cfg, model, args.distributed)
+            test_model(cfg, model, args.distributed, iters_per_epoch, dllogger)
 
 
 if __name__ == "__main__":
     main()
+    dllogger.log(step=tuple(), data={})
+    dllogger.flush()

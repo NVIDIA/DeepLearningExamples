@@ -44,11 +44,11 @@ def parse_args(parser):
                         help="exports to appropriate directory for TRTIS")
     parser.add_argument("--trtis_max_batch_size",
                         type=int,
-                        default=8,
+                        default=1,
                         help="Specifies the 'max_batch_size' in the TRTIS model config.\
                               See the TRTIS documentation for more info.")
-    parser.add_argument('--amp-run', action='store_true',
-                        help='inference with AMP')
+    parser.add_argument('--fp16', action='store_true',
+                        help='inference with mixed precision')
     return parser
 
 
@@ -106,7 +106,7 @@ output [
     config_values = {
         "model_name": args.trtis_model_name,
         "max_batch_size": args.trtis_max_batch_size,
-        "fp_type": "TYPE_FP16" if args.amp_run else "TYPE_FP32"
+        "fp_type": "TYPE_FP16" if args.fp16 else "TYPE_FP32"
     }
     
     with open(model_folder + "/config.pbtxt", "w") as file:

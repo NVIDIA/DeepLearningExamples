@@ -19,20 +19,19 @@ OUTPUT_BUCKET_FOLDER = "/outbrain/preprocessed/"
 DATA_BUCKET_FOLDER = "/outbrain/orig/"
 SPARK_TEMP_FOLDER = "/outbrain/spark-temp/"
 
-from pyspark.sql.types import IntegerType, StringType, StructType, StructField
+from pyspark.sql.types import IntegerType, StringType, StructType, StructField 
 import pyspark.sql.functions as F
 
 from pyspark.context import SparkContext, SparkConf
 from pyspark.sql.session import SparkSession
+from pyspark.sql.functions import col
 
-conf = SparkConf().setMaster('local[*]').set('spark.executor.memory', '256g').set('spark.driver.memory', '126g').set("spark.local.dir", SPARK_TEMP_FOLDER)
+conf = SparkConf().setMaster('local[*]').set('spark.executor.memory', '40g').set('spark.driver.memory', '200g').set("spark.local.dir", SPARK_TEMP_FOLDER)
 
 sc = SparkContext(conf=conf)
 spark = SparkSession(sc)
 
 print('Loading data...')
-
-truncate_day_from_timestamp_udf = F.udf(lambda ts: int(ts / 1000 / 60 / 60 / 24), IntegerType())
 
 events_schema = StructType(
                     [StructField("display_id", IntegerType(), True),
@@ -46,7 +45,7 @@ events_schema = StructType(
 events_df = spark.read.schema(events_schema) \
   .options(header='true', inferschema='false', nullValue='\\N') \
   .csv(DATA_BUCKET_FOLDER + "events.csv") \
-  .withColumn('day_event', truncate_day_from_timestamp_udf('timestamp_event')) \
+  .withColumn('day_event', (col('timestamp_event') / 1000 / 60 / 60 / 24).cast("int")) \
   .alias('events')   
 
 events_df.count()

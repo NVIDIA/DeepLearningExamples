@@ -95,7 +95,7 @@ class Dlrm(nn.Module):
         self.top_mlp = nn.Sequential(*top_mlp_layers)
 
         self._initialize_mlp_weights()
-        self._interaction_padding = torch.zeros(1, 1, dtype=torch.float32)
+        self._interaction_padding = torch.zeros(1, 1, dtype=torch.float32, device=base_device)
         self.tril_indices = torch.tensor([[i for i in range(len(self.embeddings) + 1) 
                                              for j in range(i + int(self_interaction))],
                                           [j for i in range(len(self.embeddings) + 1) 

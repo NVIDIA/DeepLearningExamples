@@ -25,9 +25,6 @@ import pyspark.sql.functions as F
 import math
 import time
 
-import random
-random.seed(42)
-
 from pyspark.context import SparkContext, SparkConf
 from pyspark.sql.session import SparkSession
 
@@ -43,7 +40,7 @@ args = parser.parse_args()
 
 evaluation = not args.submission
 
-conf = SparkConf().setMaster('local[*]').set('spark.executor.memory', '256g').set('spark.driver.memory', '126g').set("spark.local.dir", SPARK_TEMP_FOLDER)
+conf = SparkConf().setMaster('local[*]').set('spark.executor.memory', '40g').set('spark.driver.memory', '200g').set("spark.local.dir", SPARK_TEMP_FOLDER)
 
 sc = SparkContext(conf=conf)
 spark = SparkSession(sc)

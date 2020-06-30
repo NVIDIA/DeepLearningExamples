@@ -148,7 +148,7 @@ def pad_sequences(batch):
     return text_padded, input_lengths
 
 
-def prepare_input_sequence(texts):
+def prepare_input_sequence(texts, cpu_run=False):
 
     d = []
     for i,text in enumerate(texts):
@@ -156,7 +156,7 @@ def prepare_input_sequence(texts):
             text_to_sequence(text, ['english_cleaners'])[:]))
 
     text_padded, input_lengths = pad_sequences(d)
-    if torch.cuda.is_available():
+    if torch.cuda.is_available() and not cpu_run:
         text_padded = torch.autograd.Variable(text_padded).cuda().long()
         input_lengths = torch.autograd.Variable(input_lengths).cuda().long()
     else:
@@ -208,7 +208,7 @@ def main():
     if args.cpu_run:
         denoiser = Denoiser(waveglow, args.cpu_run)
     else:
-         denoiser = Denoiser(waveglow, args.cpu_run).cuda()
+        denoiser = Denoiser(waveglow, args.cpu_run).cuda()
 
     jitted_tacotron2 = torch.jit.script(tacotron2)
 
@@ -236,7 +236,7 @@ def main():
 
     measurements = {}
 
-    sequences_padded, input_lengths = prepare_input_sequence(texts)
+    sequences_padded, input_lengths = prepare_input_sequence(texts, args.cpu_run)
 
     with torch.no_grad(), MeasureTime(measurements, "tacotron2_time", args.cpu_run):
         mel, mel_lengths, alignments = jitted_tacotron2(sequences_padded, input_lengths)
@@ -256,8 +256,6 @@ def main():
     DLLogger.log(step=0, data={"waveglow_items_per_sec": waveglow_infer_perf})
     DLLogger.log(step=0, data={"waveglow_latency": measurements['waveglow_time']})
     DLLogger.log(step=0, data={"latency": (measurements['tacotron2_time']+measurements['waveglow_time'])})
-
-    alignments = alignments.unfold(1, audios.size(0), audios.size(0)).transpose(0,2)
 
     for i, audio in enumerate(audios):
 

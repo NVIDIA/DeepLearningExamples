@@ -77,12 +77,14 @@ public:
    * @param inputSpacing The spacing between the start of each item in the
    * batch.
    * @param inputLength The length of each input.
+   * @param stream The stream to operate on.
    */
   void startInference(
       int batchSize,
       const int* inputDevice,
       int inputSpacing,
-      const int* inputLength);
+      const int* inputLength,
+      cudaStream_t stream);
 
   /**
    * @brief Generate the next chunk of output.
@@ -90,10 +92,11 @@ public:
    * @param outputDevice The location to write the output tensor in batch,
    * frame, channel order.
    * @param outputLength The length of each output sequence.
+   * @param stream The stream to operate on.
    *
    * @return True if not all sequences have finished.
    */
-  bool inferNext(float* outputDevice, int* outputLength);
+  bool inferNext(float* outputDevice, int* outputLength, cudaStream_t stream);
 
   /**
    * @brief The random seed to use for dropouts. This resets the
@@ -156,6 +159,7 @@ public:
    * @param chunkSize The number of frames to generate.
    */
   void setNextChunkSize(int chunkSize);
+
 
 private:
     // TRT network components

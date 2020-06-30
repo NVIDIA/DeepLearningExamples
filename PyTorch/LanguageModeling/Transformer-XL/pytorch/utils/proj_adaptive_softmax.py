@@ -17,6 +17,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+class OptionalParameterList(nn.ParameterList):
+    def extra_repr(self):
+        child_lines = []
+        for k, p in self._parameters.items():
+            if p is not None:
+                size_str = 'x'.join(str(size) for size in p.size())
+                device_str = '' if not p.is_cuda else ' (GPU {})'.format(p.get_device())
+                parastr = 'Parameter containing: [{} of size {}{}]'.format(
+                    torch.typename(p), size_str, device_str)
+                child_lines.append('  (' + str(k) + '): ' + parastr)
+        tmpstr = '\n'.join(child_lines)
+        return tmpstr
+
+
 class ProjectedAdaptiveLogSoftmax(nn.Module):
     def __init__(self, n_token, d_embed, d_proj, cutoffs, div_val=1,
                  tie_projs=None, out_layers_weights=None, out_projs=None,
@@ -49,7 +63,7 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
         self.out_layers_biases = nn.ParameterList()
 
         self.shared_out_projs = out_projs
-        self.out_projs = nn.ParameterList()
+        self.out_projs = OptionalParameterList()
 
         if div_val == 1:
             if d_proj != d_embed:

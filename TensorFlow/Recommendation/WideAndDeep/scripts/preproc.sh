@@ -21,34 +21,15 @@ else
   PREBATCH_SIZE=4096
 fi
 
-python preproc/preproc1.py
-python preproc/preproc2.py
-python preproc/preproc3.py
-
-export CUDA_VISIBLE_DEVICES=
-LOCAL_DATA_DIR=/outbrain/preprocessed
-LOCAL_DATA_TFRECORDS_DIR=/outbrain/tfrecords
-
-TRAIN_DIR=train_feature_vectors_integral_eval.csv
-VALID_DIR=validation_feature_vectors_integral.csv
-TRAIN_IMPUTED_DIR=train_feature_vectors_integral_eval_imputed.csv
-VALID_IMPUTED_DIR=validation_feature_vectors_integral_imputed.csv
-HEADER_PATH=train_feature_vectors_integral_eval.csv.header
-
-cd ${LOCAL_DATA_DIR}
-python /wd/preproc/csv_data_imputation.py --num_workers 40 \
-  --train_files_pattern 'train_feature_vectors_integral_eval.csv/part-*' \
-  --valid_files_pattern 'validation_feature_vectors_integral.csv/part-*' \
-  --train_dst_dir ${TRAIN_IMPUTED_DIR} \
-  --valid_dst_dir ${VALID_IMPUTED_DIR} \
-  --header_path ${HEADER_PATH}
-cd -
-
-time preproc/sort_csv.sh ${LOCAL_DATA_DIR}/${VALID_IMPUTED_DIR} ${LOCAL_DATA_DIR}/${VALID_IMPUTED_DIR}_sorted
-
-python dataflow_preprocess.py \
-  --eval_data "${LOCAL_DATA_DIR}/${VALID_IMPUTED_DIR}_sorted/part-*" \
-  --training_data "${LOCAL_DATA_DIR}/${TRAIN_IMPUTED_DIR}/part-*" \
-  --output_dir ${LOCAL_DATA_TFRECORDS_DIR} \
-  --batch_size ${PREBATCH_SIZE}
-
+echo "Starting preprocessing 1/4..."
+time python -m preproc.preproc1
+echo "Preprocessing 1/4 done.\n"
+echo "Starting preprocessing 2/4..."
+time python -m preproc.preproc2
+echo "Preprocessing 2/4 done.\n"
+echo "Starting preprocessing 3/4..."
+time python -m preproc.preproc3
+echo "Preprocessing 3/4 done.\n"
+echo "Starting preprocessing 4/4..."
+time python -m preproc.preproc4 --prebatch_size ${PREBATCH_SIZE}
+echo "Preprocessing 4/4 done.\n"

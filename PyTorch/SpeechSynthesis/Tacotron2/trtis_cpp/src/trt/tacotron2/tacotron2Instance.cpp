@@ -75,7 +75,11 @@ void Tacotron2Instance::infer(const int batchSize, const int* const inputDevice,
 {
     startTiming();
 
-    mStreamingInstance.startInference(batchSize, inputDevice, inputSpacing, inputLength);
+    cudaStream_t stream;
+    cudaStreamCreate(&stream);
+
+    mStreamingInstance.startInference(
+        batchSize, inputDevice, inputSpacing, inputLength, stream);
 
     // do decoding
     float* intermediateOutput;
@@ -107,7 +111,8 @@ void Tacotron2Instance::infer(const int batchSize, const int* const inputDevice,
             mStreamingInstance.setNextChunkSize(maxOutputLength - numFramesTotal);
         }
 
-        moreToDo = mStreamingInstance.inferNext(intermediateOutput + offset, mChunkSize.data());
+        moreToDo = mStreamingInstance.inferNext(
+            intermediateOutput + offset, mChunkSize.data(), stream);
 
         for (int batchIndex = 0; batchIndex < batchSize; ++batchIndex)
         {
@@ -144,8 +149,11 @@ void Tacotron2Instance::infer(const int batchSize, const int* const inputDevice,
             mStreamingInstance.getChunkSize(),
             numBlocks,
             maxOutputLength,
-            0);
+            stream);
     }
+
+    CudaUtils::sync(stream);
+    cudaStreamDestroy(stream);
 
     stopTiming();
 }

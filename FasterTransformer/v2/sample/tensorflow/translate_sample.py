@@ -24,7 +24,7 @@ from opennmt.decoders.self_attention_decoder import SelfAttentionDecoder
 from opennmt.inputters import WordEmbedder
 from opennmt.inputters import ExampleInputter
 
-def resotre_model_by_pkl(sess, variables):
+def restore_model_by_pkl(sess, variables):
     import pickle as pkl
     with open("model.pkl", 'rb') as model_file:
         model_dict = pkl.load(model_file)
@@ -226,7 +226,7 @@ if __name__ == "__main__":
         saver.restore(sess, "translation/ckpt/model.ckpt-500000")
         sess.run(tf.tables_initializer())
         sess.run(iterator.initializer)
-        resotre_model_by_pkl(sess, decoder_variables)
+        restore_model_by_pkl(sess, decoder_variables)
         
         iteration = 0
         while iteration < 3:

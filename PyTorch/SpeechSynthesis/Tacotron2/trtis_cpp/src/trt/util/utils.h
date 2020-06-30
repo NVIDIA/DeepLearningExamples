@@ -111,6 +111,37 @@ public:
     {
         return 1.0f / (1.0f + std::exp(-x));
     }
+
+    /**
+     * @brief Perform division of value by block, but round up to the nearest
+     * integral.
+     *
+     * @tparam T The value type.
+     * @param value The numerator.
+     * @param block The denominator.
+     *
+     * @return The divided value rounded up.
+     */
+    template <typename T>
+    static T roundUpDiv(const T value, const T block)
+    {
+      return (value / block) + (value % block > 0);
+    }
+
+    /**
+     * @brief Round the value up to the nearest multiple of block.
+     *
+     * @tparam T The value type.
+     * @param value The value to round up.
+     * @param block The block size.
+     *
+     * @return The value rounded up to the nearest multiple of block.
+     */
+    template <typename T>
+    static T roundUpTo(const T value, const T block)
+    {
+      return block * roundUpDiv(value, block);
+    }
 };
 
 } // namespace tts

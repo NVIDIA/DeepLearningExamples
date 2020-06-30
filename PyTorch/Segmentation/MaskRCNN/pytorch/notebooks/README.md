@@ -26,7 +26,7 @@ PATH_TO_COCO='/path/to/coco-2014'
 MOUNT_LOCATION='/datasets/data'
 NAME='nvidia_maskrcnn'
 
-docker run --it --runtime=nvidia -p 8888:8888 -v $PATH_TO_COCO:/$MOUNT_LOCATION --rm --name=$NAME --shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 --ipc=host nvidia_joc_maskrcnn_pt
+docker run -it --runtime=nvidia -p 8888:8888 -v $PATH_TO_COCO:/$MOUNT_LOCATION --rm --name=$NAME --shm-size=10g --ulimit memlock=-1 --ulimit stack=67108864 --ipc=host nvidia_joc_maskrcnn_pt
 ```
 where `/path/to/coco-2014` is the path on the host machine where the data was/is to be downloaded.
 

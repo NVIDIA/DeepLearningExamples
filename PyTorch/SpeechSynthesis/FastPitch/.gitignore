@@ -1,0 +1,9 @@
+*.swp
+*.swo
+*.pyc
+__pycache__
+scripts_joc/
+runs*/
+notebooks/
+LJSpeech-1.1/
+output*
