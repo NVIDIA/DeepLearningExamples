@@ -7,7 +7,7 @@ GPU=1
 
 # uncomment below to use default 
 # CONFIG='configs/e2e_mask_rcnn_R_50_FPN_1x.yaml'
-CONFIG='$1' 
+CONFIG="$1" 
 
 #This folder should a file called 'last_checkpoint' which contains the path to the actual checkpoint
 FOLDER='/results'
@@ -27,8 +27,6 @@ FOLDER='/results'
 #|                           |
 #|                           |
 #-----------------------------
-
-
 
 LOGFILE="$FOLDER/joblog.log"
 

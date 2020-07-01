@@ -34,7 +34,7 @@ python ${BASEDIR}/../mask_rcnn_main.py \
     --training_file_pattern="/data/train*.tfrecord" \
     --validation_file_pattern="/data/val*.tfrecord" \
     --val_json_file="/data/annotations/instances_val2017.json" \
-    --use_amp \
+    --amp \
     --use_batched_nms \
-    --nouse_xla \
+    --xla \
     --nouse_custom_box_proposals_op

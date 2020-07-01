@@ -13,7 +13,7 @@ std::tuple<at::Tensor, at::Tensor> ROIPool_forward(const at::Tensor& input,
                                 const float spatial_scale,
                                 const int pooled_height,
                                 const int pooled_width) {
-  if (input.type().is_cuda()) {
+  if (input.is_cuda()) {
 #ifdef WITH_CUDA
     return ROIPool_forward_cuda(input, rois, spatial_scale, pooled_height, pooled_width);
 #else
@@ -34,7 +34,7 @@ at::Tensor ROIPool_backward(const at::Tensor& grad,
                                  const int channels,
                                  const int height,
                                  const int width) {
-  if (grad.type().is_cuda()) {
+  if (grad.is_cuda()) {
 #ifdef WITH_CUDA
     return ROIPool_backward_cuda(grad, input, rois, argmax, spatial_scale, pooled_height, pooled_width, batch_size, channels, height, width);
 #else

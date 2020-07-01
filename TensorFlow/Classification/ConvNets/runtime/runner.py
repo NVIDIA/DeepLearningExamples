@@ -240,7 +240,7 @@ class Runner(object):
 
         config.gpu_options.force_gpu_compatible = True  # Force pinned memory
 
-        # Bug 2939231 - disable bn+relu fusion
+        # Bug - disable bn+relu fusion
         from tensorflow.core.protobuf import rewriter_config_pb2
         config.graph_options.rewrite_options.remapping = (rewriter_config_pb2.RewriterConfig.OFF)
 
@@ -386,7 +386,7 @@ class Runner(object):
         else:
             run_iter = steps_per_epoch * run_iter if iter_unit == "epoch" else run_iter
 
-        if self.run_hparams.data_idx_dir is not None:
+        if self.run_hparams.use_dali and self.run_hparams.data_idx_dir is not None:
             idx_filenames = runner_utils.parse_dali_idx_dataset(
                 data_idx_dir=self.run_hparams.data_idx_dir, mode="train"
             )
@@ -424,6 +424,7 @@ class Runner(object):
             training_hooks.append(bcast_hook)
 
         training_hooks.append(hooks.PrefillStagingAreasHook())
+        training_hooks.append(hooks.TrainingPartitionHook())
 
         estimator_params = {
             'batch_size': batch_size,
@@ -503,18 +504,30 @@ class Runner(object):
                 )
 
         try:
-            image_classifier.train(
-                input_fn=training_data_fn,
-                steps=run_iter,
-                hooks=training_hooks,
-            )
-        except KeyboardInterrupt:
-            print("Keyboard interrupt")
+            current_step = image_classifier.get_variable_value("global_step")
+        except ValueError:
+            current_step = 0
+
+        run_iter = max(0, min(run_iter, num_steps - current_step))
+        print("Current step:", current_step)
+
+        if run_iter > 0:
+            try:
+                image_classifier.train(
+                    input_fn=training_data_fn,
+                    steps=run_iter,
+                    hooks=training_hooks,
+                )
+            except KeyboardInterrupt:
+                print("Keyboard interrupt")
 
         if hvd.rank() == 0:
-            print('Ending Model Training ...')
-            train_throughput = self.training_logging_hook.mean_throughput.value()
-            dllogger.log(data={'train_throughput': train_throughput}, step=tuple())
+            if run_iter > 0:
+                print('Ending Model Training ...')
+                train_throughput = self.training_logging_hook.mean_throughput.value()
+                dllogger.log(data={'train_throughput': train_throughput}, step=tuple())
+            else:
+                print('Model already trained required number of steps. Skipped')
 
     def evaluate(
         self,
@@ -568,7 +581,7 @@ class Runner(object):
             num_decay_steps = -1
             num_steps = num_iter
 
-        if self.run_hparams.data_idx_dir is not None:
+        if self.run_hparams.use_dali and self.run_hparams.data_idx_dir is not None:
             idx_filenames = runner_utils.parse_dali_idx_dataset(
                 data_idx_dir=self.run_hparams.data_idx_dir, mode="validation"
             )

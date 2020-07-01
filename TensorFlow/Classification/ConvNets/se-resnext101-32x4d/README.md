@@ -12,6 +12,7 @@ This repository provides a script and recipe to train the SE-ResNext101-32x4d mo
         * [Features](#features)
     * [Mixed precision training](#mixed-precision-training)
         * [Enabling mixed precision](#enabling-mixed-precision)
+        * [Enabling TF32](#enabling-tf32)
 * [Setup](#setup)
     * [Requirements](#requirements)
 * [Quick Start Guide](#quick-start-guide)
@@ -26,14 +27,18 @@ This repository provides a script and recipe to train the SE-ResNext101-32x4d mo
         * [Inference performance benchmark](#inference-performance-benchmark)
     * [Results](#results)
         * [Training accuracy results](#training-accuracy-results)
+            * [Training accuracy: NVIDIA DGX A100 (8x A100 40GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-40gb)
             * [Training accuracy: NVIDIA DGX-1 (8x V100 16G)](#training-accuracy-nvidia-dgx-1-8x-v100-16g)
         * [Training performance results](#training-performance-results)
+            * [Training performance: NVIDIA DGX A100 (8x A100 40GB)](#training-performance-nvidia-dgx-a100-8x-a100-40gb) 
             * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16g)
             * [Training performance: NVIDIA DGX-2 (16x V100 32G)](#training-performance-nvidia-dgx-2-16x-v100-32g)
         * [Training time for 90 Epochs](#training-time-for-90-epochs)
+            * [Training time: NVIDIA DGX A100 (8x A100 40G)](#training-time-nvidia-dgx-a100-8x-a100-40gb)
             * [Training time: NVIDIA DGX-1 (8x V100 16G)](#training-time-nvidia-dgx-1-8x-v100-16g)
             * [Training time: NVIDIA DGX-2 (16x V100 32G)](#training-time-nvidia-dgx-2-16x-v100-32g)
         * [Inference performance results](#inference-performance-results)
+            * [Inference performance: NVIDIA DGX A100 (1x A100 40GB)](#inference-performance-nvidia-dgx-a100-1x-a100-40gb)
             * [Inference performance: NVIDIA DGX-1 (1x V100 16G)](#inference-performance-nvidia-dgx-1-1x-v100-16g)
             * [Inference performance: NVIDIA DGX-2 (1x V100 32G)](#inference-performance-nvidia-dgx-2-1x-v100-32g)
             * [Inference performance: NVIDIA T4 (1x T4 16G)](#inference-performance-nvidia-t4-1x-t4-16g)
@@ -50,7 +55,7 @@ The following performance optimizations were implemented in this model:
 * Multi-GPU training with [Horovod](https://github.com/horovod/horovod)
 * Automated mixed precision [AMP](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html)
 
-This model is trained with mixed precision using Tensor Cores on NVIDIA Volta and Turing GPUs. Therefore, researchers can get results 2x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
+This model is trained with mixed precision using Tensor Cores on Volta, Turing, and the NVIDIA Ampere GPU architectures. Therefore, researchers can get results 3x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
 
 ### Model architecture
 Here is a diagram of the Squeeze and Excitation module architecture for ResNet-type models:
@@ -79,7 +84,7 @@ during the first 5 epochs according to [Training ImageNet in 1 hour](https://arx
 * We do not apply Weight decay on batch norm trainable parameters (gamma/bias).
 * Label Smoothing: 0.1.
 * We train for:
-    * 90 Epochs -> 90 epochs is a standard for ImageNet networks.
+    * 90 Epochs -> 90 epochs is a standard for ResNet family networks.
     * 250 Epochs -> best possible accuracy. 
 * For 250 epoch training we also use [MixUp regularization](https://arxiv.org/pdf/1710.09412.pdf).
 
@@ -93,7 +98,6 @@ This model uses the following data augmentation:
     * Scale from 8% to 100%.
     * Aspect ratio from 3/4 to 4/3.
   * Random horizontal flip.
-
 * For inference:
   * Normalization.
   * Scale to 256x256.
@@ -122,23 +126,24 @@ Automatic mixed precision (AMP) - Computation graph can be modified by TensorFlo
 Detailed explanation of mixed precision can be found in the next section.
 
 ### Mixed precision training
-Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format, while storing minimal information in single-precision to retain as much information as possible in critical parts of the network.  Since the introduction of [Tensor Cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing architectures, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures.  Using [mixed precision training](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) previously required two steps:
+Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [Tensor Cores](https://developer.nvidia.com/tensor-cores) in Volta, and following with both the Turing and Ampere architectures, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using [mixed precision training](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html) previously required two steps:
 
-1. Porting the model to use the FP16 data type where appropriate.
-2. Manually adding loss scaling to preserve small gradient values. 
+1.  Porting the model to use the FP16 data type where appropriate.    
+2.  Adding loss scaling to preserve small gradient values.
 
 This can now be achieved using Automatic Mixed Precision (AMP) for TensorFlow to enable the full [mixed precision methodology](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#tensorflow) in your existing TensorFlow model code.  AMP enables mixed precision training on Volta and Turing GPUs automatically. The TensorFlow framework code makes all necessary model changes internally.
 
 In TF-AMP, the computational graph is optimized to use as few casts as necessary and maximize the use of FP16, and the loss scaling is automatically applied inside of supported optimizers. AMP can be configured to work with the existing tf.contrib loss scaling manager by disabling the AMP scaling with a single environment variable to perform only the automatic mixed-precision optimization. It accomplishes this by automatically rewriting all computation graphs with the necessary operations to enable mixed precision training and automatic loss scaling.
 
 For information about:
- * How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html) documentation.
- * How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/frameworks/tensorflow-user-guide/index.html#tfamp) from the TensorFlow User Guide.
- * Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
- 
+-   How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html) documentation.
+-   Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
+-   How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp) from the TensorFlow User Guide.
+
+
 #### Enabling mixed precision
 
-Mixed precision is enabled in TensorFlow by using the Automatic Mixed Precision (TF-AMP) extension which casts variables to half-precision upon retrieval, while storing variables in single-precision format. Furthermore, to preserve small gradient magnitudes in backpropagation, a [loss scaling](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html#lossscaling) step must be included when applying gradients. In TensorFlow, loss scaling can be applied statically by using simple multiplication of loss by a constant value or automatically, by TF-AMP. Automatic mixed precision makes all the adjustments internally in TensorFlow, providing two benefits over manual operations. First, programmers need not modify network model code, reducing development and maintenance effort. Second, using AMP maintains forward and backward compatibility with all the APIs for defining and running TensorFlow models.
+Mixed precision is enabled in TensorFlow by using the Automatic Mixed Precision (TF-AMP) extension which casts variables to half-precision upon retrieval, while storing variables in single-precision format. Furthermore, to preserve small gradient magnitudes in backpropagation, a [loss scaling](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#lossscaling) step must be included when applying gradients. In TensorFlow, loss scaling can be applied statically by using simple multiplication of loss by a constant value or automatically, by TF-AMP. Automatic mixed precision makes all the adjustments internally in TensorFlow, providing two benefits over manual operations. First, programmers need not modify network model code, reducing development and maintenance effort. Second, using AMP maintains forward and backward compatibility with all the APIs for defining and running TensorFlow models.
 
 To enable mixed precision, you can simply add the values to the environmental variables inside your training script:
 - Enable TF-AMP graph rewrite:
@@ -149,7 +154,19 @@ To enable mixed precision, you can simply add the values to the environmental va
 - Enable Automated Mixed Precision:
   ```
   os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
+
   ```
+
+#### Enabling TF32
+
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
+
+TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
+
+For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
+
+TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
+
 
 ## Setup
 
@@ -158,9 +175,13 @@ The following section lists the requirements that you need to meet in order to u
 ### Requirements
 This repository contains Dockerfile which extends the TensorFlow NGC container and encapsulates all dependencies.  Aside from these dependencies, ensure you have the following software:
 
-* [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [TensorFlow 20.03-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)
-* [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
+- [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
+- [TensorFlow 20.06-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)
+- GPU-based architecture:
+  - [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
+  - [NVIDIA Turing](https://www.nvidia.com/en-us/geforce/turing/)
+  - [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
+
 
 For more information about how to get started with NGC containers, see the
 following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
@@ -168,10 +189,10 @@ following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning
 * [Accessing And Pulling From The NGC container registry](https://docs.nvidia.com/deeplearning/frameworks/user-guide/index.html#accessing_registry),
 * [Running TensorFlow](https://docs.nvidia.com/deeplearning/frameworks/tensorflow-release-notes/running.html#running).
 
-For those unable to use the [TensorFlow 20.03-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) to set up the required environment or create your own container, see the versioned [NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html).
+For those unable to use the [TensorFlow NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) to set up the required environment or create your own container, see the versioned [NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html).
 
 ## Quick Start Guide
-To train your model using mixed precision with Tensor Cores or FP32, perform the following steps using the default parameters of the SE-ResNext101-32x4d model on the [ImageNet](http://www.image-net.org/) dataset. For the specifics concerning training and inference, see the [Advanced](#advanced) section.
+To train your model using mixed precision or TF32 with Tensor Cores or FP32, perform the following steps using the default parameters of the SE-ResNext101-32x4d model on the [ImageNet](http://www.image-net.org/) dataset. For the specifics concerning training and inference, see the [Advanced](#advanced) section.
 
 
 1. Clone the repository.
@@ -211,23 +232,19 @@ one of the scripts in the `se-resnext101-32x4d/training` directory. Ensure Image
 
 For example, to train on DGX-1 for 90 epochs using AMP, run:  
 
-`bash ./se-resnext101-32x4d/training/AMP/DGX1_SE-RNxt101-32x4d_AMP_90E.sh`
+`bash ./se-resnext101-32x4d/training/DGX1_SE-RNxt101-32x4d_AMP_90E.sh /path/to/result /data`
 
 Additionally, features like DALI data preprocessing or TensorFlow XLA can be enabled with
-environmental variables when running those scripts:
+following arguments when running those scripts:
 
-`USE_XLA=1 USE_DALI=1 bash ./se-resnext101-32x4d/training/AMP/DGX1_SE-RNxt101-32x4d_AMP_90E.sh`
-
-To store results in a specific location, add a location as a first argument:
-
-`bash ./resnext101-32x4d/training/AMP/DGX1_RNxt101-32x4d_AMP_90E.sh <location to store>`
+`bash ./se-resnext101-32x4d/training/DGX1_SE-RNxt101-32x4d_AMP_90E.sh /path/to/result /data/ --use_xla --use_dali`
 
 7. Start validation/evaluation.
 To evaluate the validation dataset located in `/data/tfrecords`, run `main.py` with
 `--mode=evaluate`. For example:
 
 `python main.py --arch=se-resnext101-32x4d --mode=evaluate --data_dir=/data/tfrecords --batch_size <batch size> --model_dir
-<model location> --result_dir <output location> [--use_xla] [--use_tf_amp]`
+<model location> --results_dir <output location> [--use_xla] [--use_tf_amp]`
 
 The optional `--use_xla` and `--use_tf_amp` flags control XLA and AMP during evaluation. 
 
@@ -377,17 +394,21 @@ The following section shows how to run benchmarks measuring the model performanc
 To benchmark the training performance on a specific batch size, run:
 
 * For 1 GPU
-    * FP32
+    * FP32 / TF32
+    
         `python ./main.py --arch=se-resnext101-32x4d --mode=training_benchmark --warmup_steps 200 --batch_size <batch size> --data_dir=<path to imagenet> --results_dir=<path to results directory>`
         
-    * FP16
+    * AMP
+
         `python ./main.py --arch=se-resnext101-32x4d --mode=training_benchmark  --use_tf_amp --warmup_steps 200 --batch_size <batch size> --data_dir=<path to imagenet> --results_dir=<path to results directory>`
         
 * For multiple GPUs
-    * FP32
+    * FP32 / TF32
+    
         `mpiexec --allow-run-as-root --bind-to socket -np <num_gpus> python ./main.py --arch=se-resnext101-32x4d --mode=training_benchmark --batch_size <batch size> --data_dir=<path to imagenet> --results_dir=<path to results directory>`
         
-    * FP16
+    * AMP
+
         `mpiexec --allow-run-as-root --bind-to socket -np <num_gpus> python ./main.py --arch=se-resnext101-32x4d --mode=training_benchmark --use_tf_amp --batch_size <batch size> --data_dir=<path to imagenet> --results_dir=<path to results directory>`
         
         
@@ -402,10 +423,12 @@ Suggested batch sizes for training are 96 for mixed precision training and 64 fo
 
 To benchmark the inference performance on a specific batch size, run:
 
-* FP32
+* FP32 / TF32
+
 `python ./main.py --arch=se-resnext101-32x4d --mode=inference_benchmark --warmup_steps 20 --num_iter 100 --iter_unit batch --batch_size <batch size> --data_dir=<path to imagenet> --results_dir=<path to results directory>`
 
-* FP16
+* AMP
+
 `python ./main.py --arch=se-resnext101-32x4d --mode=inference_benchmark --use_tf_amp --warmup_steps 20 --num_iter 100 --iter_unit batch --batch_size <batch size> --data_dir=<path to imagenet> --results_dir=<path to results directory>`
 
 By default, each of these scripts runs 20 warm-up iterations and measures the next 80 iterations.
@@ -424,9 +447,19 @@ The following sections provide details on how we achieved our performance and ac
 
 #### Training accuracy results
 
+##### Training accuracy: NVIDIA DGX A100 (8x A100 40GB)
+
+Our results were obtained by running the `/se-resnet50v1.5/training/DGXA100_RN50_{PRECISION}_90E.sh` 
+training script in the [TensorFlow 20.06-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) 
+NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs.
+
+| Epochs | Batch Size / GPU | Accuracy - TF32 (top1) | Accuracy - mixed precision (top1) | 
+|--------|------------------|-----------------|----------------------------|
+| 90     | 128 (TF32) / 256 (AMP) | 79.73           | 79.60                 |
+
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 16G)
-Our results were obtained by running the `/resnext101-32x4d/training/{PRECISION}/DGX1_RNxt101-32x4d_{PRECISION}_{EPOCHS}E.sh` 
-training script in the [TensorFlow 20.03-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) 
+Our results were obtained by running the `/se-resnext101-32x4d/training/{/DGX1_RNxt101-32x4d_{PRECISION}_{EPOCHS}E.sh` 
+training script in the [TensorFlow 20.06-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) 
 NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs.
 
 | Epochs | Batch Size / GPU | Accuracy - FP32 | Accuracy - mixed precision | 
@@ -440,208 +473,282 @@ NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs.
 
 #### Training performance results
 
+##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
+Our results were obtained by running the `se-resnext101-32x4d/training/training_perf.sh` benchmark script in the 
+[TensorFlow 20.06-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)  NGC container 
+on NVIDIA DGX A100 (8x A100 40GB) GPUs. Performance numbers (in images per second) were averaged over an entire training epoch.
+
+
+| GPUs | Batch Size / GPU | Throughput - TF32 + XLA | Throughput - mixed precision + XLA | Throughput speedup (TF32 - mixed precision) | Weak scaling - TF32 + XLA | Weak scaling - mixed precision + XLA |
+|----|---------------|---------------|------------------------|-----------------|-----------|-------------------|
+| 1  | 128 (TF) / 256 (AMP) | 313 img/s  | 895 img/s    | 2.86x           | 1.00x     | 1.00x             |
+| 8  | 128 (TF) / 256 (AMP) | 2400 img/s | 6930 img/s   | 2.88x           | 7.66x     | 7.74x             |
+
 ##### Training performance: NVIDIA DGX-1 (8x V100 16G)
-Our results were obtained by running the steps from [Training performance benchmark](#training-performance-benchmark) in the 
-[TensorFlow 20.03-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)  NGC container 
+Our results were obtained by running the `se-resnext101-32x4d/training/training_perf.sh` benchmark script in the 
+[TensorFlow 20.06-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)  NGC container 
 on NVIDIA DGX-1 with (8x V100 16G) GPUs. Performance numbers (in images per second) were averaged over an entire training epoch.
 
 
-| GPUs | Batch Size / GPU | Throughput - FP32 | Throughput - mixed precision | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision |
+| GPUs | Batch Size / GPU | Throughput - FP32 + XLA | Throughput - mixed precision + XLA | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 + XLA | Weak scaling - mixed precision + XLA |
 |----|---------------|---------------|-----------------------|---------------|-----------|-------|
-| 1  | 64 (FP32) / 96 (AMP) | 126.44 img/s | 285.99 img/s     | 2.26x         | 1.00x     | 1.00x             |
-| 8  | 64 (FP32) / 96 (AMP) | 921.38 img/s | 2168.40 img/s    | 2.35x         | 7.28x     | 7.58x             |
-
-**XLA Enabled**
-
-| GPUs | Batch Size / GPU | Throughput - mixed precision | Throughput - mixed precision + XLA | Throughput speedup (mixed precision - XLA) |
-|----|------------|---------------|---------------------|-----------|
-| 1  | 128        | 285.99 img/s   |453.39 img/s         |1.58x      |
-| 8  | 128        | 2168.40 img/s  |3297.39 img/s        |1.52x      |
+| 1  | 64 (FP32) / 96 (AMP) | 152 img/s | 475 img/s     | 3.12x         | 1.00x     | 1.00x      |
+| 8  | 64 (FP32) / 96 (AMP) | 1120 img/s | 3360 img/s    | 3.00x         | 7.37x     | 7.07x      |
 
 ##### Training performance: NVIDIA DGX-2 (16x V100 32G)
-Our results were obtained by running the steps from [Training performance benchmark](#training-performance-benchmark) in the 
-[TensorFlow 20.03-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)  NGC container 
+Our results were obtained by running the `se-resnext101-32x4d/training/training_perf.sh` benchmark script in the 
+[TensorFlow 20.06-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)  NGC container 
 on NVIDIA DGX-2 with (16x V100 32G) GPUs. Performance numbers (in images per second) were averaged over an entire training epoch.
 
-| GPUs | Batch Size / GPU | Throughput - FP32 | Throughput - mixed precision | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision |
+| GPUs | Batch Size / GPU | Throughput - FP32 + XLA | Throughput - mixed precision + XLA | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 + XLA | Weak scaling - mixed precision + XLA |
 |----|---------------|---------------|-------------------------|-------|--------|--------|
-| 1  | 64 (FP32) / 96 (AMP) | 128.08 img/s | 309.34 img/s    | 2.39x                 | 1.00x         | 1.00x  |
-| 16 | 64 (FP32) / 96 (AMP) | 1759.44 img/s| 4210.85 img/s   | 2.51x                 | 13.73x        | 13.61x |
-
-**XLA Enabled**
-
-| GPUs | Batch Size / GPU | Throughput - mixed precision | Throughput - mixed precision + XLA | Throughput speedup (mixed precision - XLA) |
-|----|-----|----------|---------------------|-----------|
-| 1  | 96 | 309.34 img/s    |520.10 img/s         |1.68x      |
-| 16 | 96 | 4210.85 img/s   |6835.66 img/s        |1.62x      |
+| 1  | 64 (FP32) / 96 (AMP) | 158 img/s | 472 img/s    | 2.98x                 | 1.00x        | 1.00x  |
+| 16 | 64 (FP32) / 96 (AMP) | 2270 img/s| 6580 img/s   | 2.89x                 | 14.36x        | 13.94x |
 
 #### Training Time for 90 Epochs
+
+##### Training time: NVIDIA DGX A100 (8x A100 40GB)
+
+Our results were estimated based on the [training performance results](#training-performance-nvidia-dgx-a100-8x-a100-40g) 
+on NVIDIA DGX A100 with (8x A100 40G) GPUs.
+
+| GPUs | Time to train - mixed precision + XLA |  Time to train - TF32 + XLA | 
+|---|--------|---------|
+| 1 | ~36h   |  ~102h  | 
+| 8 | ~5h    | ~14h    | 
 
 ##### Training time: NVIDIA DGX-1 (8x V100 16G)
 
 Our results were estimated based on the [training performance results](#training-performance-nvidia-dgx-1-8x-v100-16g) 
 on NVIDIA DGX-1 with (8x V100 16G) GPUs.
 
-| GPUs | Time to train - mixed precision + XLA | Time to train - mixed precision | Time to train - FP32 |
-|---|--------|---------|---------|
-| 1 | ~71h   |  ~112h   |  ~253h   |
-| 8 | ~10h  |  ~15h    |  ~35h | 
+| GPUs | Time to train - mixed precision + XLA | Time to train - FP32 + XLA |
+|---|--------|---------|
+| 1 | ~68h   | ~210h   |
+| 8 | ~10h  |  ~29h | 
 
 ##### Training time: NVIDIA DGX-2 (16x V100 32G)
 
 Our results were estimated based on the [training performance results](#training-performance-nvidia-dgx-2-16x-v100-32g) 
 on NVIDIA DGX-2 with (16x V100 32G) GPUs.
 
-| GPUs | Time to train - mixed precision + XLA | Time to train - mixed precision | Time to train - FP32 |
-|----|-------|--------|-------|
-| 1  | ~61h  | ~103h  | ~247h |
-| 16 | ~4.7h | ~7.5h  | ~19h   | 
-
+| GPUs | Time to train - mixed precision + XLA |  Time to train - FP32 + XLA |
+|----|-------|-------|
+| 1  | ~68h  | ~202h |
+| 16 | ~5h | ~14h   | 
 
 
 #### Inference performance results
 
+##### Inference performance: NVIDIA DGX A100 (1x A100 40GB)
+
+Our results were obtained by running the `inference_benchmark.sh` inferencing benchmarking script
+in the [TensorFlow 20.06-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container 
+on NVIDIA DGX A100 with (1x A100 40G) GPU.
+
+**TF32 Inference Latency**
+
+|**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
+|--------------|------------------|---------------|---------------|---------------|---------------|
+| 1 | 95.32 img/s | 10.52 ms | 10.52 ms | 10.55 ms | 11.10 ms |
+| 2 | 169.59 img/s | 11.82 ms | 11.83 ms | 11.92 ms | 12.56 ms |
+| 4 | 258.97 img/s | 15.45 ms | 15.70 ms | 15.78 ms | 16.22 ms |
+| 8 | 355.09 img/s | 22.53 ms | 22.74 ms | 22.84 ms | 23.17 ms |
+| 16 | 561.11 img/s | 28.52 ms | 28.85 ms | 29.09 ms | 29.50 ms |
+| 32 | 698.94 img/s | 45.78 ms | 46.36 ms | 46.56 ms | 46.87 ms |
+| 64 | 751.17 img/s | 85.21 ms | 86.74 ms | 87.27 ms | 87.95 ms |
+| 128 | 802.64 img/s | 159.47 ms | 160.01 ms | 160.35 ms | 161.42 ms |
+| 256 | 840.72 img/s | 304.50 ms | 305.87 ms | 306.11 ms | 306.57 ms |
+
+**TF32 Inference Latency + XLA**
+
+|**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
+|--------------|------------------|---------------|---------------|---------------|---------------|
+| 1 | 92.46 img/s | 10.84 ms | 10.90 ms | 10.96 ms | 11.14 ms |
+| 2 | 161.55 img/s | 12.40 ms | 12.44 ms | 12.51 ms | 12.62 ms |
+| 4 | 237.41 img/s | 16.88 ms | 17.54 ms | 17.79 ms | 18.25 ms |
+| 8 | 358.39 img/s | 22.35 ms | 23.56 ms | 24.29 ms | 25.53 ms |
+| 16 | 577.33 img/s | 27.72 ms | 28.64 ms | 28.92 ms | 29.22 ms |
+| 32 | 800.81 img/s | 39.97 ms | 40.93 ms | 41.42 ms | 41.87 ms |
+| 64 | 921.00 img/s | 69.64 ms | 70.44 ms | 70.90 ms | 79.54 ms |
+| 128 | 1024.70 img/s | 124.99 ms | 125.70 ms | 126.10 ms | 138.57 ms |
+| 256 | 1089.80 img/s | 234.90 ms | 236.02 ms | 236.37 ms | 237.26 ms |
+
+**Mixed Precision Inference Latency**
+
+|**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
+|--------------|------------------|---------------|---------------|---------------|---------------|
+| 1 | 84.06 img/s | 11.92 ms | 11.94 ms | 11.96 ms | 12.08 ms |
+| 2 | 170.38 img/s | 11.76 ms | 11.82 ms | 11.87 ms | 11.94 ms |
+| 4 | 336.09 img/s | 11.93 ms | 12.06 ms | 12.17 ms | 12.62 ms |
+| 8 | 669.91 img/s | 11.94 ms | 12.33 ms | 12.47 ms | 12.88 ms |
+| 16 | 1119.49 img/s | 14.36 ms | 14.86 ms | 15.11 ms | 16.11 ms |
+| 32 | 1482.46 img/s | 21.66 ms | 22.04 ms | 22.38 ms | 23.72 ms |
+| 64 | 1680.85 img/s | 38.09 ms | 39.02 ms | 39.34 ms | 41.02 ms |
+| 128 | 1728.27 img/s | 74.30 ms | 74.92 ms | 75.22 ms | 75.60 ms |
+| 256 | 1761.56 img/s | 145.33 ms | 146.54 ms | 146.83 ms | 147.34 ms |
+
+**Mixed Precision Inference Latency + XLA**
+
+|**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
+|--------------|------------------|---------------|---------------|---------------|---------------|
+| 1 | 74.83 img/s | 13.39 ms | 13.45 ms | 13.49 ms | 13.57 ms |
+| 2 | 135.28 img/s | 14.81 ms | 14.98 ms | 15.10 ms | 16.19 ms |
+| 4 | 272.18 img/s | 14.70 ms | 15.07 ms | 15.30 ms | 15.80 ms |
+| 8 | 517.69 img/s | 15.50 ms | 16.63 ms | 17.05 ms | 18.10 ms |
+| 16 | 1050.03 img/s | 15.38 ms | 16.84 ms | 17.49 ms | 17.97 ms |
+| 32 | 1781.06 img/s | 18.27 ms | 19.54 ms | 20.00 ms | 25.94 ms |
+| 64 | 2551.55 img/s | 25.26 ms | 26.03 ms | 26.62 ms | 29.67 ms |
+| 128 | 2834.59 img/s | 45.50 ms | 46.85 ms | 47.72 ms | 54.91 ms |
+| 256 | 3367.18 img/s | 76.03 ms | 77.06 ms | 77.36 ms | 78.13 ms |
+
+
 ##### Inference performance: NVIDIA DGX-1 (1x V100 16G)
 
 Our results were obtained by running the `inference_benchmark.sh` inferencing benchmarking script
-in the [TensorFlow 20.03-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container 
+in the [TensorFlow 20.06-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container 
 on NVIDIA DGX-1 with (1x V100 16G) GPU.
 
 **FP32 Inference Latency**
 
 |**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
 |--------------|------------------|---------------|---------------|---------------|---------------|
-|1	|54.71 img/s	|18.32 ms	|18.73 ms	|18.89 ms	|19.95 ms  |
-|2	|98.36 img/s	|20.37 ms	|20.69 ms	|20.75 ms	|21.03 ms  |
-|4	|150.60 img/s	|26.56 ms	|26.83 ms	|26.95 ms	|27.46 ms  |
-|8	|235.17 img/s	|34.02 ms	|34.40 ms	|34.57 ms	|35.37 ms |
-|16	|330.33 img/s	|48.43 ms	|48.91 ms	|49.22 ms	|49.79 ms |
-|32	|393.96 img/s	|81.22 ms	|81.72 ms	|81.99 ms	|82.49 ms |
-|64	|446.13 img/s	|143.54 ms	|144.37 ms	|144.74 ms	|145.93 ms |
-|128	|490.61 img/s	|260.89 ms	|261.56 ms	|261.76 ms	|262.71 ms |
+| 1 | 75.72 img/s | 13.25 ms | 13.38 ms | 13.50 ms | 13.66 ms |
+| 2 | 112.58 img/s | 17.90 ms | 20.74 ms | 20.91 ms | 21.87 ms |
+| 4 | 191.09 img/s | 20.93 ms | 21.05 ms | 21.09 ms | 21.27 ms |
+| 8 | 235.39 img/s | 33.98 ms | 34.14 ms | 34.19 ms | 34.28 ms |
+| 16 | 315.24 img/s | 50.76 ms | 50.96 ms | 51.01 ms | 51.32 ms |
+| 32 | 376.05 img/s | 85.09 ms | 85.56 ms | 85.71 ms | 86.40 ms |
+| 64 | 427.39 img/s | 149.84 ms | 150.08 ms | 150.37 ms | 161.87 ms |
+| 128 | 460.82 img/s | 277.76 ms | 278.97 ms | 279.48 ms | 280.95 ms |
 
 **Mixed Precision Inference Latency**
 
 |**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
 |--------------|------------------|---------------|---------------|---------------|---------------|
-|1	|92.56 img/s	|10.88 ms	|11.04 ms	|11.66 ms	|14.34 ms  |
-|2	|180.61 img/s	|11.11 ms	|11.35 ms	|11.47 ms	|11.79 ms  |
-|4	|354.41 img/s	|11.35 ms	|11.90 ms	|12.13 ms	|13.28 ms  |
-|8	|547.79 img/s	|14.63 ms	|15.53 ms	|15.99 ms	|16.38 ms  |
-|16	|772.41 img/s	|20.80 ms	|21.76 ms	|22.02 ms	|23.02 ms  |
-|32	|965.89 img/s	|33.15 ms	|33.82 ms	|34.24 ms	|35.15 ms |
-|64	|1086.99 img/s	|59.01 ms	|59.42 ms	|59.56 ms	|60.35 ms |
-|128	|1162.59 img/s	|110.36 ms	|110.41 ms	|110.64 ms	|111.18 ms |
+| 1 | 66.44 img/s | 15.10 ms | 15.17 ms | 15.25 ms | 16.01 ms |
+| 2 | 132.33 img/s | 15.16 ms | 15.32 ms | 15.37 ms | 15.50 ms |
+| 4 | 273.84 img/s | 14.63 ms | 15.14 ms | 15.83 ms | 17.38 ms |
+| 8 | 509.35 img/s | 15.71 ms | 16.10 ms | 16.21 ms | 16.55 ms |
+| 16 | 770.02 img/s | 20.78 ms | 20.96 ms | 21.03 ms | 21.24 ms |
+| 32 | 926.46 img/s | 34.55 ms | 34.88 ms | 35.05 ms | 36.32 ms |
+| 64 | 1039.74 img/s | 61.55 ms | 61.82 ms | 61.99 ms | 62.32 ms |
+| 128 | 1102.00 img/s | 116.15 ms | 116.62 ms | 116.80 ms | 116.97 ms |
 
 **Mixed Precision Inference Latency + XLA**
 
 |**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
 |--------------|------------------|---------------|---------------|---------------|---------------|
-|1	|84.98 img/s	|11.81 ms	|12.00 ms	|12.08 ms	|12.85 ms  |
-|2	|150.35 img/s	|13.37 ms	|14.15 ms	|14.56 ms	|15.11 ms  |
-|4	|288.89 img/s	|13.90 ms	|14.37 ms	|14.56 ms	|16.19 ms  |
-|8	|526.94 img/s	|15.19 ms	|15.61 ms	|15.85 ms	|17.91 ms  |
-|16	|818.86 img/s	|19.63 ms	|19.85 ms	|19.97 ms	|20.70 ms |
-|32	|1134.72 img/s	|28.20 ms	|28.60 ms	|28.82 ms	|30.03 ms |
-|64	|1359.55 img/s	|47.22 ms	|47.51 ms	|47.84 ms	|48.96 ms |
-|128	|1515.12 img/s	|84.49 ms	|85.51 ms	|85.82 ms	|86.89 ms |
+| 1 | 58.55 img/s | 17.12 ms | 17.21 ms | 17.28 ms | 17.42 ms |
+| 2 | 105.00 img/s | 19.10 ms | 19.29 ms | 19.36 ms | 19.67 ms |
+| 4 | 207.60 img/s | 19.31 ms | 19.59 ms | 19.67 ms | 19.84 ms |
+| 8 | 413.16 img/s | 19.37 ms | 19.77 ms | 19.87 ms | 20.24 ms |
+| 16 | 739.12 img/s | 21.80 ms | 24.48 ms | 24.71 ms | 26.93 ms |
+| 32 | 1196.83 img/s | 26.99 ms | 27.10 ms | 27.49 ms | 28.80 ms |
+| 64 | 1470.31 img/s | 43.74 ms | 44.02 ms | 44.18 ms | 46.28 ms |
+| 128 | 1683.63 img/s | 76.03 ms | 77.00 ms | 77.23 ms | 78.15 ms |
+
 
 ##### Inference performance: NVIDIA DGX-2 (1x V100 32G)
 
 Our results were obtained by running the `inference_benchmark.sh` inferencing benchmarking script
-in the [TensorFlow 20.03-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container 
+in the [TensorFlow 20.06-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container 
 on NVIDIA DGX-2 with (1x V100 32G) GPU.
 
 **FP32 Inference Latency**
 
 |**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
 |--------------|------------------|---------------|---------------|---------------|---------------|
-|1	|59.41 img/s	|16.86 ms	|17.02 ms	|17.10 ms	|17.47 ms |
-|2	|92.74 img/s	|21.59 ms	|21.88 ms	|22.01 ms	|22.65 ms |
-|4	|141.53 img/s	|28.26 ms	|28.45 ms	|28.55 ms	|28.77 ms |
-|8	|228.80 img/s	|34.96 ms	|35.18 ms	|35.38 ms	|35.72 ms |
-|16	|324.11 img/s	|49.36 ms	|49.61 ms	|49.76 ms	|50.17 ms |
-|32	|397.66 img/s	|80.47 ms	|80.69 ms	|80.82 ms	|82.15 ms |
-|64	|468.28 img/s	|136.67 ms	|137.03 ms	|137.18 ms	|138.11 ms|
-|128	|514.25 img/s	|248.91 ms	|250.42 ms	|251.89 ms	|253.55 ms|
+| 1 | 71.44 img/s | 14.07 ms | 14.22 ms | 14.43 ms | 16.44 ms |
+| 2 | 149.68 img/s | 13.43 ms | 13.79 ms | 13.94 ms | 16.63 ms |
+| 4 | 183.01 img/s | 21.85 ms | 22.12 ms | 22.18 ms | 22.44 ms |
+| 8 | 220.67 img/s | 36.25 ms | 36.84 ms | 37.17 ms | 37.43 ms |
+| 16 | 310.27 img/s | 51.57 ms | 51.88 ms | 52.09 ms | 53.37 ms |
+| 32 | 381.41 img/s | 83.89 ms | 84.30 ms | 84.66 ms | 85.04 ms |
+| 64 | 440.37 img/s | 145.45 ms | 145.49 ms | 145.86 ms | 147.53 ms |
+| 128 | 483.84 img/s | 264.54 ms | 265.04 ms | 265.46 ms | 266.43 ms |
+
 
 **Mixed Precision Inference Latency**
 
 |**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
 |--------------|------------------|---------------|---------------|---------------|---------------|
-|1	|103.55 img/s	|9.70 ms	|9.94 ms	|10.03 ms	|10.26 ms |
-|2	|227.06 img/s	|8.86 ms	|9.07 ms	|9.19 ms	|9.78 ms  |
-|4	|380.22 img/s	|10.53 ms	|10.97 ms	|11.11 ms	|11.64 ms |
-|8	|579.59 img/s	|13.82 ms	|14.07 ms	|14.29 ms	|14.99 ms |
-|16	|833.08 img/s	|19.20 ms	|19.33 ms	|19.37 ms	|19.68 ms |
-|32	|990.96 img/s	|32.30 ms	|32.53 ms	|32.70 ms	|33.45 ms |
-|64	|1114.78 img/s	|57.41 ms	|57.61 ms	|57.86 ms	|58.78 ms |
-|128	|1203.04 img/s	|106.40 ms	|106.54 ms	|106.62 ms	|107.93 ms|
+| 1 | 73.06 img/s | 13.74 ms | 14.07 ms | 14.20 ms | 14.35 ms |
+| 2 | 155.23 img/s | 12.95 ms | 13.13 ms | 13.33 ms | 15.49 ms |
+| 4 | 303.68 img/s | 13.23 ms | 13.38 ms | 13.46 ms | 14.34 ms |
+| 8 | 583.43 img/s | 13.72 ms | 13.90 ms | 14.08 ms | 15.47 ms |
+| 16 | 783.30 img/s | 20.43 ms | 20.66 ms | 21.31 ms | 21.97 ms |
+| 32 | 932.10 img/s | 34.34 ms | 34.71 ms | 34.81 ms | 35.70 ms |
+| 64 | 1058.07 img/s | 60.48 ms | 60.75 ms | 60.94 ms | 62.49 ms |
+| 128 | 1129.65 img/s | 113.30 ms | 113.53 ms | 113.66 ms | 114.81 ms |
+
 
 **Mixed Precision Inference Latency + XLA**
 
 |**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
 |--------------|------------------|---------------|---------------|---------------|---------------|
-|1	|92.52 img/s	|10.85 ms	|10.95 ms	|11.12 ms	|11.99 ms |
-|2	|177.54 img/s	|11.32 ms	|11.59 ms	|11.66 ms	|13.16 ms |
-|4	|322.44 img/s	|12.44 ms	|12.63 ms	|12.71 ms	|12.98 ms |
-|8	|548.33 img/s	|14.59 ms	|14.90 ms	|15.58 ms	|15.95 ms |
-|16	|818.34 img/s	|19.55 ms	|19.75 ms	|19.91 ms	|20.30 ms |
-|32	|1178.12 img/s	|27.16 ms	|27.41 ms	|27.53 ms	|28.24 ms|
-|64	|1397.25 img/s	|45.96 ms	|46.03 ms	|46.19 ms	|47.01 ms|
-|128	|1613.78 img/s	|79.32 ms	|80.02 ms	|80.46 ms	|81.71 ms|
+| 1 | 66.43 img/s | 15.14 ms | 15.24 ms | 15.31 ms | 19.18 ms |
+| 2 | 122.85 img/s | 16.39 ms | 18.28 ms | 18.45 ms | 20.33 ms |
+| 4 | 247.80 img/s | 16.14 ms | 16.44 ms | 16.57 ms | 17.24 ms |
+| 8 | 498.19 img/s | 16.07 ms | 16.26 ms | 16.66 ms | 17.70 ms |
+| 16 | 831.20 img/s | 19.40 ms | 19.30 ms | 19.39 ms | 25.41 ms |
+| 32 | 1223.75 img/s | 26.42 ms | 26.31 ms | 26.70 ms | 29.88 ms |
+| 64 | 1520.64 img/s | 42.09 ms | 42.45 ms | 42.57 ms | 42.84 ms |
+| 128 | 1739.61 img/s | 73.58 ms | 73.98 ms | 74.17 ms | 74.72 ms |
 
 ##### Inference performance: NVIDIA T4 (1x T4 16G)
 
 Our results were obtained by running the `inference_benchmark.sh` inferencing benchmarking script
-in the [TensorFlow 20.03-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container 
+in the [TensorFlow 20.06-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container 
 on NVIDIA T4 with (1x T4 16G) GPU.
 
 **FP32 Inference Latency**
 
 |**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
 |--------------|------------------|---------------|---------------|---------------|---------------|
-|1	|48.92 img/s	|20.47 ms	|20.75 ms	|20.88 ms	|21.23 ms    |
-|2	|82.59 img/s	|24.24 ms	|24.42 ms	|24.50 ms	|24.64 ms    |
-|4	|111.08 img/s	|36.03 ms	|36.37 ms	|36.45 ms	|36.67 ms   |
-|8	|131.84 img/s	|60.68 ms	|61.36 ms	|61.62 ms	|62.21 ms   |
-|16	|144.27 img/s	|110.90 ms	|112.04 ms	|112.29 ms	|112.80 ms   |
-|32	|156.59 img/s	|204.35 ms	|206.12 ms	|206.78 ms	|208.08 ms   |
-|64	|162.58 img/s	|393.66 ms	|396.45 ms	|396.94 ms	|397.52 ms  |
-|128	|162.41 img/s	|788.13 ms	|790.86 ms	|791.47 ms	|792.43 ms  |
+| 1 | 27.39 img/s | 36.68 ms | 38.85 ms | 39.01 ms | 40.40 ms |
+| 2 | 44.56 img/s | 44.96 ms | 46.25 ms | 46.92 ms | 48.92 ms |
+| 4 | 65.11 img/s | 61.43 ms | 62.22 ms | 62.93 ms | 65.01 ms |
+| 8 | 80.09 img/s | 99.88 ms | 100.34 ms | 100.85 ms | 101.79 ms |
+| 16 | 93.98 img/s | 170.24 ms | 170.72 ms | 171.27 ms | 171.98 ms |
+| 32 | 99.86 img/s | 320.42 ms | 320.99 ms | 321.37 ms | 322.28 ms |
+| 64 | 103.31 img/s | 619.44 ms | 620.08 ms | 620.55 ms | 622.19 ms |
+| 128 | 105.16 img/s | 1217.18 ms | 1218.09 ms | 1218.59 ms | 1221.16 ms |
 
 **Mixed Precision Inference Latency**
 
 |**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
 |--------------|------------------|---------------|---------------|---------------|---------------|
-|1	|79.57 img/s	|12.74 ms	|13.31 ms	|13.37 ms	|13.85 ms    |
-|2	|190.25 img/s	|10.55 ms	|10.63 ms	|10.67 ms	|10.77 ms    |
-|4	|263.72 img/s	|15.16 ms	|15.37 ms	|15.44 ms	|15.58 ms   |
-|8	|312.07 img/s	|25.64 ms	|26.14 ms	|26.25 ms	|26.98 ms   |
-|16	|347.43 img/s	|46.05 ms	|46.60 ms	|46.82 ms	|47.09 ms   |
-|32	|360.20 img/s	|88.84 ms	|89.44 ms	|89.60 ms	|90.20 ms   |
-|64	|367.23 img/s	|174.28 ms	|175.81 ms	|176.13 ms	|176.74 ms  |
-|128	|362.43 img/s	|353.17 ms	|354.91 ms	|355.52 ms	|356.07 ms  |
+| 1 | 57.21 img/s | 17.57 ms | 18.06 ms | 18.15 ms | 20.74 ms |
+| 2 | 80.34 img/s | 24.97 ms | 25.38 ms | 25.69 ms | 27.12 ms |
+| 4 | 115.12 img/s | 34.77 ms | 35.61 ms | 36.74 ms | 37.61 ms |
+| 8 | 147.51 img/s | 54.24 ms | 54.79 ms | 55.28 ms | 58.25 ms |
+| 16 | 173.83 img/s | 92.04 ms | 92.50 ms | 93.26 ms | 94.72 ms |
+| 32 | 182.19 img/s | 175.64 ms | 176.51 ms | 177.44 ms | 178.52 ms |
+| 64 | 193.20 img/s | 331.25 ms | 332.56 ms | 333.34 ms | 334.58 ms |
+| 128 | 195.17 img/s | 655.82 ms | 657.24 ms | 658.79 ms | 661.76 ms |
+
 
 **Mixed Precision Inference Latency + XLA**
 
 |**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
 |--------------|------------------|---------------|---------------|---------------|---------------|
-|1  |89.30 img/s	|11.24 ms	|11.31 ms	|11.38 ms	|11.75 ms  |
-|2	|152.93 img/s	|13.11 ms	|13.20 ms	|13.25 ms	|13.58 ms  |
-|4	|254.87 img/s	|15.69 ms	|15.84 ms	|15.87 ms	|15.95 ms  |
-|8	|356.48 img/s	|22.44 ms	|22.79 ms	|22.86 ms	|23.08 ms |
-|16	|442.24 img/s	|36.18 ms	|36.63 ms	|36.76 ms	|36.76 ms |
-|32	|471.28 img/s	|67.90 ms	|68.62 ms	|68.80 ms	|69.14 ms |
-|64	|483.18 img/s	|132.46 ms	|133.72 ms	|134.08 ms	|134.88 ms |
-|128	|501.38 img/s	|255.31 ms	|258.46 ms	|259.19 ms	|260.17 ms|
+| 1 | 46.19 img/s | 21.72 ms | 21.90 ms | 21.93 ms | 23.64 ms |
+| 2 | 80.98 img/s | 24.77 ms | 24.99 ms | 25.15 ms | 25.63 ms |
+| 4 | 129.49 img/s | 30.89 ms | 31.26 ms | 31.34 ms | 32.31 ms |
+| 8 | 156.91 img/s | 51.00 ms | 52.17 ms | 52.51 ms | 53.32 ms |
+| 16 | 204.45 img/s | 78.26 ms | 79.58 ms | 79.96 ms | 80.44 ms |
+| 32 | 215.22 img/s | 148.68 ms | 149.63 ms | 150.41 ms | 151.62 ms |
+| 64 | 235.36 img/s | 272.05 ms | 273.56 ms | 274.33 ms | 275.86 ms |
+| 128 | 244.45 img/s | 523.62 ms | 525.12 ms | 525.89 ms | 528.42 ms |
+
 
 ## Release notes
 
 ### Changelog
 
-June 2020
+April 2020
    - Initial release
 
 ### Known issues
-There are no known issues with this model.
+Performance without XLA enabled is low. We recommend using XLA.
