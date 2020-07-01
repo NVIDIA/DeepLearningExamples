@@ -393,11 +393,12 @@ These operations are automatically added at weights and activation layers in the
 operations for `tf.contrib.quantize.experimental_create_training_graph` has been added in <a href="https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow">TensorFlow 20.01-py3 NGC container</a> and later versions, which is required for this task.
 
 #### Post process checkpoint
-  * `post_process_ckpt.py` is a utility to convert the final classification FC layer into a 1x1 convolution layer using the same weights. This is required to ensure TensorRT can parse QAT models successfully.
+  `postprocess_ckpt.py` is a utility to convert the final classification FC layer into a 1x1 convolution layer using the same weights. This is required to ensure TensorRT can parse QAT models successfully.
   This script should be used after performing QAT to reshape the FC layer weights in the final checkpoint.
   Arguments:
-     * `--ckpt` : Path to the trained checkpoint of RN50.
-     * `--out` : Name of the new checkpoint file which has the FC layer weights reshaped into 1x1 conv layer weights.
+     * `--input` : Path to the trained checkpoint of RN50.
+     * `--output` : Name of the new checkpoint file which has the FC layer weights reshaped into 1x1 conv layer weights.
+     * `--dense_layer` : Name of the FC layer
 
 ### Exporting Frozen graphs
 To export frozen graphs (which can be used for inference with <a href="https://developer.nvidia.com/tensorrt">TensorRT</a>), use:

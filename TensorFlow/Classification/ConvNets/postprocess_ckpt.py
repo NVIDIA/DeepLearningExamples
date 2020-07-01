@@ -1,11 +1,9 @@
 import tensorflow as tf
-import pdb
 import numpy as np
 import argparse
 import os
-import shutil
         
-def process_checkpoint(input_ckpt, output_ckpt_path):
+def process_checkpoint(input_ckpt, output_ckpt_path, dense_layer):
     """
     This function loads a RN50 checkpoint with Dense layer as the final layer 
     and transforms the final dense layer into a 1x1 convolution layer. The weights
@@ -15,25 +13,23 @@ def process_checkpoint(input_ckpt, output_ckpt_path):
     Returns:
         None. New checkpoint with 1x1 conv layer as classification layer is generated.
     """
-    
     with tf.Session() as sess:
         # Load all the variables
-        all_vars = tf.train.list_variables(ckpt)
-        ckpt_reader = tf.train.load_checkpoint(ckpt)
+        all_vars = tf.train.list_variables(input_ckpt)
         # Capture the dense layer weights and reshape them to a 4D tensor which would be 
         # the weights of a 1x1 convolution layer. This code replaces the dense (FC) layer
         # to a 1x1 conv layer. 
         dense_layer_value=0.
         new_var_list=[]
         for var in all_vars:
-            curr_var = tf.train.load_variable(ckpt, var[0])
+            curr_var = tf.train.load_variable(input_ckpt, var[0])
             if var[0]==dense_layer:
                 dense_layer_value = curr_var
             else:
                 new_var_list.append(tf.Variable(curr_var, name=var[0]))
-        
+ 
         dense_layer_shape = [1, 1, 2048, 1001]
-        new_var_value = np.reshape(dense_layer_value, )
+        new_var_value = np.reshape(dense_layer_value, dense_layer_shape)
         new_var = tf.Variable(new_var_value, name=dense_layer)
         new_var_list.append(new_var)
         
@@ -44,10 +40,9 @@ def process_checkpoint(input_ckpt, output_ckpt_path):
 if __name__=='__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--input', type=str, required=True, help='Path to pretrained RN50 checkpoint with dense layer')
-    parser.add_argument('--dense_layer', type=str, default='resnet/output/dense/kernel')
+    parser.add_argument('--dense_layer', type=str, default='resnet50/output/dense/kernel')
     parser.add_argument('--output', type=str, default='output_dir', help="Output directory to store new checkpoint")
     args = parser.parse_args()
-    main(args)
     
     input_ckpt = args.input
     # Create an output directory
@@ -55,12 +50,8 @@ if __name__=='__main__':
     
     new_ckpt='new.ckpt'
     new_ckpt_path = os.path.join(args.output, new_ckpt)
-    with open(os.path.join(output_dir, "checkpoint"), 'w') as file:
+    with open(os.path.join(args.output, "checkpoint"), 'w') as file:
         file.write("model_checkpoint_path: "+ "\"" + new_ckpt + "\"")
         
     # Process the input checkpoint, apply transforms and generate a new checkpoint.
-    process_checkpoint(input_ckpt, new_ckpt_path)
-    
-    
-
-    
+    process_checkpoint(input_ckpt, new_ckpt_path, args.dense_layer)
