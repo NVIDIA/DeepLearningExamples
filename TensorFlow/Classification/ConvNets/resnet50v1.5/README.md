@@ -383,7 +383,7 @@ a <a href="https://www.tensorflow.org/versions/r1.14/api_docs/python/tf/contrib/
 for training QAT networks is to train a model until convergence and then finetune with the quantization layers. It is recommended that QAT is performed on a single GPU.
 
 * For 1 GPU
-    * Command: `sh resnet50v1.5/training/QAT/GPU1_RN50_QAT.sh <path to pre-trained ckpt dir> <path to dataset directory> <result_directory>`
+    * Command: `sh resnet50v1.5/training/GPU1_RN50_QAT.sh <path to pre-trained ckpt dir> <path to dataset directory> <result_directory>`
         
 It is recommended to finetune a model with quantization nodes rather than train a QAT model from scratch. The latter can also be performed by setting `quant_delay` parameter.
 `quant_delay` is the number of steps after which quantization nodes are added for QAT. If we are fine-tuning, `quant_delay` is set to 0. 
