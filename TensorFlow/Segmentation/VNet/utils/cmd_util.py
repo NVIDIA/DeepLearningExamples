@@ -124,5 +124,6 @@ PARSER.add_argument('--data_dir',
                     type=str)
 
 PARSER.add_argument('--benchmark', dest='benchmark', action='store_true', default=False)
-PARSER.add_argument('--use_amp', dest='use_amp', action='store_true', default=False)
+PARSER.add_argument('--use_amp', '--amp', dest='use_amp', action='store_true', default=False)
+PARSER.add_argument('--use_xla', '--xla', dest='use_xla', action='store_true', default=False)
 PARSER.add_argument('--augment', dest='augment', action='store_true', default=False)

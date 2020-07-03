@@ -41,10 +41,7 @@ PARSER.add_argument('--batch_size',
                     required=True,
                     type=int)
 
-PARSER.add_argument('--precision',
-                    choices=['fp32', 'fp16'],
-                    required=True,
-                    type=str)
+PARSER.add_argument('--amp', dest='use_amp', action='store_true', default=False)
 
 
 def build_horovod_prefix(gpus):
@@ -65,7 +62,7 @@ def build_command(FLAGS, path_to_main, use_amp):
 def main():
     FLAGS = PARSER.parse_args()
 
-    use_amp = '--use_amp' if FLAGS.precision == 'fp16' else ''
+    use_amp = '--amp' if FLAGS.use_amp else ''
     path_to_main = os.path.join(dirname(dirname(os.path.realpath(__file__))), 'main.py')
 
     cmd = build_command(FLAGS, path_to_main, use_amp)

@@ -1,0 +1,19 @@
+jobs:
+  # no AMP
+  - export TF_ENABLE_AUTO_MIXED_PRECISION=0 && python main.py --data_dir /data/Task04_Hippocampus --model_dir /tmp --exec_mode train_and_evaluate --augment --train_epochs 80 --split_seed 42 --base_lr 0.0001 --train_split 0.9 --log_dir /result/log.json --batch_size 2 --use_xla
+  # with AMP
+  - export TF_ENABLE_AUTO_MIXED_PRECISION=0 && python main.py --data_dir /data/Task04_Hippocampus --model_dir /tmp --exec_mode train_and_evaluate --augment --train_epochs 80 --split_seed 42 --base_lr 0.0001 --train_split 0.9 --log_dir /result/log.json --batch_size 2 --use_xla --use_amp
+
+backend:
+  container: nvcr.io/nvidian/swdl/vnet_tf1:20.06
+  download_dir: /tmp
+  hostname: ngc
+  instance: dgx1v.16g.1.norm
+  result_dir: /result
+  datasets:
+    /data: 36816
+
+reports:
+  filename: vnet_ngc_conv_1gpu_20.06
+  types:
+    - xls
