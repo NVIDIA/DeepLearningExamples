@@ -13,66 +13,26 @@
 # limitations under the License.
 
 
-import math
-import os
-import time
-import numpy as np
 import argparse
+import time
+from typing import Tuple, Optional
 
-import torch
-from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
 
-class CriteoBinDataset(Dataset):
-    """Simple dataloader for a recommender system. Designed to work with a single binary file."""
-
-    def __init__(self, data_file, batch_size=1, subset=None,
-                 numerical_features=13, categorical_features=26,
-                 data_type='int32', online_shuffle=True):
-        self.data_type = np.__dict__[data_type]
-        bytes_per_feature = self.data_type().nbytes
-
-        self.tad_fea = 1 + numerical_features
-        self.tot_fea = 1 + numerical_features + categorical_features
-
-        self.batch_size = batch_size
-        self.bytes_per_entry = (bytes_per_feature * self.tot_fea * batch_size)
-
-        self.num_entries = math.ceil(os.path.getsize(data_file) / self.bytes_per_entry)
-
-        if subset is not None:
-            if subset <= 0 or subset > 1:
-                raise ValueError('Subset parameter must be in (0,1) range')
-            self.num_entries = self.num_entries * subset
-
-        print('data file:', data_file, 'number of batches:', self.num_entries)
-        self.file = open(data_file, 'rb')
-        self.online_shuffle=online_shuffle
-
-    def __len__(self):
-        return self.num_entries
-
-    def __getitem__(self, idx):
-        if idx == 0:
-            self.file.seek(0, 0)
-
-        if self.online_shuffle:
-            self.file.seek(idx * self.bytes_per_entry, 0)
-
-        raw_data = self.file.read(self.bytes_per_entry)
-        array = np.frombuffer(raw_data, dtype=self.data_type).reshape(-1, self.tot_fea)
-
-        # numerical features are encoded as float32
-        numerical_features = array[:, 1:self.tad_fea].view(dtype=np.float32)
-        numerical_features = torch.from_numpy(numerical_features)
+from dlrm.data.datasets import CriteoBinDataset
+from dlrm.data.factories import create_dataset_factory
 
 
-        categorical_features = torch.from_numpy(array[:, self.tad_fea:])
-        labels = torch.from_numpy(array[:, 0])
+def get_data_loaders(flags, device_mapping: Optional[dict] = None) -> Tuple[DataLoader, DataLoader]:
+    dataset_factory = create_dataset_factory(flags, device_mapping=device_mapping)
 
-        return numerical_features, categorical_features, labels
+    dataset_train, dataset_test = dataset_factory.create_datasets()
+    train_sampler = dataset_factory.create_sampler(dataset_train) if flags.shuffle_batch_order else None
+    collate_fn = dataset_factory.create_collate_fn()
 
-    def __del__(self):
-        self.file.close()
+    data_loader_train = dataset_factory.create_data_loader(dataset_train, collate_fn=collate_fn, sampler=train_sampler)
+    data_loader_test = dataset_factory.create_data_loader(dataset_test, collate_fn=collate_fn)
+    return data_loader_train, data_loader_test
 
 
 if __name__ == '__main__':
@@ -90,7 +50,7 @@ if __name__ == '__main__':
     for i in range(args.steps):
         _ = dataset[i]
     end = time.time()
-    
+
     step_time = (end - begin) / args.steps
     throughput = args.batch_size / step_time
 

@@ -11,29 +11,21 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-
 import datetime
-import os
-import numpy as np
-import json
-from pprint import pprint
 from time import time
-from sklearn.metrics import roc_auc_score
-
-from absl import app
-from absl import flags
 
 import dllogger
-
+import numpy as np
 import torch
+from absl import app, flags
 from apex import amp
 
-from dlrm.data import data_loader
-from dlrm.data.synthetic_dataset import SyntheticDataset
-from dlrm.model import Dlrm
-
 import dlrm.scripts.utils as utils
+from dlrm.data.data_loader import get_data_loaders
+from dlrm.data.utils import get_categorical_feature_sizes, prefetcher
+from dlrm.model.single import Dlrm
+from dlrm.utils.checkpointing.serial import SerialCheckpointWriter, make_serial_checkpoint_writer, \
+    make_serial_checkpoint_loader
 
 FLAGS = flags.FLAGS
 
@@ -55,23 +47,31 @@ flags.DEFINE_integer("warmup_steps", 6400, "Number of warmup optimization steps"
 flags.DEFINE_integer("decay_steps", 80000, "Polynomial learning rate decay steps. If equal to 0 will not do any decaying")
 flags.DEFINE_integer("decay_start_step", 64000,
     "Optimization step after which to start decaying the learning rate, if None will start decaying right after the warmup phase is completed")
+flags.DEFINE_integer("decay_power", 2, "Polynomial learning rate decay power")
+flags.DEFINE_float("decay_end_lr", 0, "LR after the decay ends")
 
 # Model configuration
+flags.DEFINE_enum("embedding_type", "joint_fused", ["joint", "joint_fused", "joint_sparse", "multi_table"],
+                  help="The type of the embedding operation to use")
 flags.DEFINE_integer("embedding_dim", 128, "Dimensionality of embedding space for categorical features")
 flags.DEFINE_list("top_mlp_sizes", [1024, 1024, 512, 256, 1], "Linear layer sizes for the top MLP")
 flags.DEFINE_list("bottom_mlp_sizes", [512, 256, 128], "Linear layer sizes for the bottom MLP")
 
-flags.DEFINE_string("interaction_op", "dot",
-                    "Type of interaction operation to perform. Supported choices: 'dot' or 'cat'")
-flags.DEFINE_boolean("self_interaction", False, "Set to True to use self-interaction")
+flags.DEFINE_enum("interaction_op", default="cuda_dot", enum_values=["cuda_dot", "dot", "cat"],
+                  help="Type of interaction operation to perform.")
 
 flags.DEFINE_string(
     "dataset", None,
     "Full path to binary dataset. Must include files such as: train_data.bin, test_data.bin")
+flags.DEFINE_enum("dataset_type", default="split", enum_values=['binary', 'split', 'synthetic_gpu', 'synthetic_disk'],
+                  help='The type of the dataset to use')
 
-flags.DEFINE_boolean("synthetic_dataset", False, "Use synthetic instead of real data for benchmarking purposes")
+flags.DEFINE_string("synthetic_dataset_dir", "/tmp/dlrm_sythetic_dataset", "Default synthetic disk dataset directory")
 flags.DEFINE_list("synthetic_dataset_table_sizes", default=','.join(26 * [str(10**5)]),
                   help="Embedding table sizes to use with the synthetic dataset")
+
+flags.DEFINE_integer("synthetic_dataset_num_entries", default=int(2**15 * 1024), # 1024 batches by default
+                     help="Number of samples per epoch for the synthetic dataset")
 
 flags.DEFINE_boolean("shuffle_batch_order", False, "Read batch in train dataset by random order", short_name="shuffle")
 
@@ -101,8 +101,8 @@ flags.DEFINE_integer("benchmark_warmup_steps", 0, "Number of initial iterations 
 
 # Machine setting flags
 flags.DEFINE_string("base_device", "cuda", "Device to run the majority of the model operations")
-flags.DEFINE_boolean("fp16", True, "If True (default) the script will use Automatic Mixed Precision")
-flags.DEFINE_float("loss_scale", 8192, "Static loss scale for Mixed Precision Training")
+flags.DEFINE_boolean("amp", False, "If True the script will use Automatic Mixed Precision")
+flags.DEFINE_float("loss_scale", 1024, "Static loss scale for Mixed Precision Training")
 
 # inference benchmark
 flags.DEFINE_list("inference_benchmark_batch_sizes", default=[1, 64, 4096],
@@ -111,91 +111,30 @@ flags.DEFINE_integer("inference_benchmark_steps", 200,
                      "Number of steps for measuring inference latency and throughput")
 
 flags.DEFINE_float("auc_threshold", None, "Stop the training after achieving this AUC")
+flags.DEFINE_boolean("optimized_mlp", True, "Use an optimized implementation of MLP from apex")
 
 
 def validate_flags():
     if FLAGS.max_table_size is not None and not FLAGS.hash_indices:
        raise ValueError('Hash indices must be True when setting a max_table_size')
 
+    if FLAGS.base_device == 'cpu':
+        if FLAGS.embedding_type in ('joint_fused', 'joint_sparse'):
+            print('WARNING: CUDA joint embeddings are not supported on CPU')
+            FLAGS.embedding_type = 'joint'
 
-def create_synthetic_datasets(train_batch_size, test_batch_size):
-    categorical_sizes = get_categorical_feature_sizes()
+        if FLAGS.amp:
+            print('WARNING: Automatic mixed precision not supported on CPU')
+            FLAGS.amp = False
 
-    dataset_train = SyntheticDataset(num_entries=4 * 10**9,
-                                     batch_size=train_batch_size,
-                                     dense_features=FLAGS.num_numerical_features,
-                                     categorical_feature_sizes=categorical_sizes)
-
-    dataset_test = SyntheticDataset(num_entries=100 * 10**6,
-                                    batch_size=test_batch_size,
-                                    dense_features=FLAGS.num_numerical_features,
-                                    categorical_feature_sizes=categorical_sizes)
-
-    return dataset_train, dataset_test
+        if FLAGS.optimized_mlp:
+            print('WARNING: Optimized MLP is not supported on CPU')
+            FLAGS.optimized_mlp = False
 
 
-def create_real_datasets(train_batch_size, test_batch_size, online_shuffle=True):
-    train_dataset = os.path.join(FLAGS.dataset, "train_data.bin")
-    test_dataset = os.path.join(FLAGS.dataset, "test_data.bin")
-    categorical_sizes = get_categorical_feature_sizes()
+def is_data_prefetching_enabled() -> bool:
+    return FLAGS.base_device == 'cuda'
 
-    dataset_train = data_loader.CriteoBinDataset(
-        data_file=train_dataset,
-        batch_size=train_batch_size, subset=FLAGS.dataset_subset,
-        numerical_features=FLAGS.num_numerical_features,
-        categorical_features=len(categorical_sizes),
-        online_shuffle=online_shuffle
-    )
-
-    dataset_test = data_loader.CriteoBinDataset(
-        data_file=test_dataset, batch_size=test_batch_size,
-        numerical_features=FLAGS.num_numerical_features,
-        categorical_features=len(categorical_sizes),
-        online_shuffle = False
-    )
-
-    return dataset_train, dataset_test
-
-def get_dataloaders(train_batch_size, test_batch_size):
-    print("Creating data loaders")
-    if FLAGS.synthetic_dataset:
-        dataset_train, dataset_test = create_synthetic_datasets(train_batch_size, test_batch_size)
-    else:
-        dataset_train, dataset_test = create_real_datasets(train_batch_size,
-                                                           test_batch_size,
-                                                           online_shuffle=FLAGS.shuffle_batch_order)
-
-    if FLAGS.shuffle_batch_order and not FLAGS.synthetic_dataset:
-        train_sampler = torch.utils.data.RandomSampler(dataset_train)
-    else:
-        train_sampler = None
-    data_loader_train = torch.utils.data.DataLoader(
-        dataset_train, batch_size=None, num_workers=0, pin_memory=False, sampler=train_sampler)
-    data_loader_test = torch.utils.data.DataLoader(
-        dataset_test, batch_size=None, num_workers=0, pin_memory=False)
-
-    return data_loader_train, data_loader_test
-
-
-def get_categorical_feature_sizes():
-    if FLAGS.synthetic_dataset:
-        feature_sizes = [int(s) for s in FLAGS.synthetic_dataset_table_sizes]
-        return feature_sizes
-
-    categorical_sizes_file = os.path.join(FLAGS.dataset, "model_size.json")
-    with open(categorical_sizes_file) as f:
-        categorical_sizes = json.load(f).values()
-
-    categorical_sizes = list(categorical_sizes)
-
-    # need to add 1 because the JSON file contains the max value not the count
-    categorical_sizes = [s + 1 for s in categorical_sizes]
-
-    if FLAGS.max_table_size is None:
-        return categorical_sizes
-
-    clipped_sizes = [min(s, FLAGS.max_table_size) for s in categorical_sizes]
-    return clipped_sizes
 
 def create_model():
     print("Creating model")
@@ -203,22 +142,29 @@ def create_model():
     model_config = {
         'top_mlp_sizes': FLAGS.top_mlp_sizes,
         'bottom_mlp_sizes': FLAGS.bottom_mlp_sizes,
+        'embedding_type': FLAGS.embedding_type,
         'embedding_dim': FLAGS.embedding_dim,
         'interaction_op': FLAGS.interaction_op,
-        'self_interaction': FLAGS.self_interaction,
-        'categorical_feature_sizes': get_categorical_feature_sizes(),
+        'categorical_feature_sizes': get_categorical_feature_sizes(FLAGS),
         'num_numerical_features': FLAGS.num_numerical_features,
         'hash_indices': FLAGS.hash_indices,
+        'use_cpp_mlp': FLAGS.optimized_mlp,
+        'fp16': FLAGS.amp,
         'base_device': FLAGS.base_device,
     }
 
     model = Dlrm.from_dict(model_config)
     print(model)
 
-    if FLAGS.load_checkpoint_path is not None:
-        model.load_state_dict(torch.load(FLAGS.load_checkpoint_path, map_location="cpu"))
-
     model.to(FLAGS.base_device)
+
+    if FLAGS.load_checkpoint_path is not None:
+        checkpoint_loader = make_serial_checkpoint_loader(
+            embedding_indices=range(len(get_categorical_feature_sizes(FLAGS))),
+            device="cpu"
+        )
+        checkpoint_loader.load_checkpoint(model, FLAGS.load_checkpoint_path)
+        model.to(FLAGS.base_device)
 
     return model
 
@@ -230,25 +176,21 @@ def main(argv):
     utils.init_logging(log_path=FLAGS.log_path)
     dllogger.log(data=FLAGS.flag_values_dict(), step='PARAMETER')
 
-    data_loader_train, data_loader_test = get_dataloaders(train_batch_size=FLAGS.batch_size,
-                                                          test_batch_size=FLAGS.test_batch_size)
+    data_loader_train, data_loader_test = get_data_loaders(FLAGS)
 
-    scaled_lr = FLAGS.lr / FLAGS.loss_scale if FLAGS.fp16 else FLAGS.lr
+    scaled_lr = FLAGS.lr / FLAGS.loss_scale if FLAGS.amp else FLAGS.lr
 
     model = create_model()
 
     optimizer = torch.optim.SGD(model.parameters(), lr=scaled_lr)
 
-    if FLAGS.fp16 and FLAGS.mode == 'train':
-        (model.top_mlp, model.bottom_mlp), optimizer = amp.initialize([model.top_mlp, model.bottom_mlp],
-                                                                      optimizer, opt_level="O2",
-                                                                      loss_scale=1)
-    elif FLAGS.fp16:
+    if FLAGS.amp and FLAGS.mode == 'train':
+        (model.top_model, model.bottom_model.mlp), optimizer = amp.initialize([model.top_model, model.bottom_model.mlp],
+                                                                              optimizer, opt_level="O2", loss_scale=1)
+    elif FLAGS.amp:
         model = model.half()
 
     loss_fn = torch.nn.BCEWithLogitsLoss(reduction="mean")
-    loss_fn = torch.jit.trace(loss_fn.forward, (torch.rand(FLAGS.batch_size, 1).cuda(),
-                                                torch.rand(FLAGS.batch_size, 1).cuda()))
 
     if FLAGS.mode == 'test':
         loss, auc, test_step_time = evaluate(model, loss_fn, data_loader_test)
@@ -265,14 +207,15 @@ def main(argv):
     if FLAGS.mode == 'inference_benchmark':
         results = {}
 
-        if FLAGS.fp16:
+        if FLAGS.amp:
             # can use pure FP16 for inference
             model = model.half()
 
         for batch_size in FLAGS.inference_benchmark_batch_sizes:
             batch_size = int(batch_size)
-            _, benchmark_data_loader = get_dataloaders(train_batch_size=batch_size,
-                                                       test_batch_size=batch_size)
+            FLAGS.test_batch_size = batch_size
+
+            _, benchmark_data_loader = get_data_loaders(FLAGS)
 
             latencies = inference_benchmark(model=model, data_loader=benchmark_data_loader,
                                             num_batches=FLAGS.inference_benchmark_steps)
@@ -293,12 +236,14 @@ def main(argv):
         train(model, loss_fn, optimizer, data_loader_train, data_loader_test, scaled_lr)
 
 
-def maybe_save_checkpoint(model, path):
+def maybe_save_checkpoint(checkpoint_writer: SerialCheckpointWriter, model, path):
     if path is None:
         return
 
+    print(f'Saving a checkpoint to {path}')
+
     begin = time()
-    torch.save(model.state_dict(), path)
+    checkpoint_writer.save_checkpoint(model, path)
     end = time()
     print(f'Checkpoint saving took {end-begin:,.2f} [s]')
 
@@ -314,35 +259,43 @@ def train(model, loss_fn, optimizer, data_loader_train, data_loader_test, scaled
         data_loader_test (torch.utils.data.DataLoader):
     """
     model.train()
+    prefetching_enabled = is_data_prefetching_enabled()
     base_device = FLAGS.base_device
     print_freq = FLAGS.print_freq
     steps_per_epoch = len(data_loader_train)
 
-    test_freq = FLAGS.test_freq if FLAGS.test_freq is not None else steps_per_epoch
+    checkpoint_writer = make_serial_checkpoint_writer(
+        embedding_indices=range(len(get_categorical_feature_sizes(FLAGS))),
+        config=FLAGS.flag_values_dict()
+    )
+
+    test_freq = FLAGS.test_freq if FLAGS.test_freq is not None else steps_per_epoch - 1
 
     metric_logger = utils.MetricLogger(delimiter="  ")
-    metric_logger.add_meter('loss', utils.SmoothedValue(window_size=print_freq, fmt='{avg:.4f}'))
-    metric_logger.add_meter('step_time', utils.SmoothedValue(window_size=print_freq, fmt='{avg:.6f}'))
+    metric_logger.add_meter('loss', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
+    metric_logger.add_meter('step_time', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
+
+    if prefetching_enabled:
+        data_stream = torch.cuda.Stream()
 
     timer = utils.StepTimer()
 
     best_auc = 0
     best_epoch = 0
     start_time = time()
+
+    timer.click()
+
     for epoch in range(FLAGS.epochs):
+        input_pipeline = iter(data_loader_train)
 
-        batch_iter = iter(data_loader_train)
-        for step in range(len(data_loader_train)):
-            timer.click()
+        if prefetching_enabled:
+            input_pipeline = prefetcher(input_pipeline, data_stream)
 
+        for step, batch in enumerate(input_pipeline):
             global_step = steps_per_epoch * epoch + step
-
-            numerical_features, categorical_features, click = next(batch_iter)
-
-            categorical_features = categorical_features.to(base_device).to(torch.long)
-            numerical_features = numerical_features.to(base_device)
-            click = click.to(base_device).to(torch.float32)
+            numerical_features, categorical_features, click = batch
 
             utils.lr_step(optimizer, num_warmup_iter=FLAGS.warmup_steps, current_step=global_step + 1,
                           base_lr=scaled_lr, warmup_factor=FLAGS.warmup_factor,
@@ -352,37 +305,43 @@ def train(model, loss_fn, optimizer, data_loader_train, data_loader_test, scaled
                 print(F"Reached max global steps of {FLAGS.max_steps}. Stopping.")
                 break
 
+            if prefetching_enabled:
+                torch.cuda.synchronize()
+
             output = model(numerical_features, categorical_features).squeeze().float()
 
             loss = loss_fn(output, click.squeeze())
 
-            optimizer.zero_grad()
-            if FLAGS.fp16:
+            # Setting grad to None is faster than zero_grad()
+            for param_group in optimizer.param_groups:
+                for param in param_group['params']:
+                    param.grad = None
+
+            if FLAGS.amp:
                 loss *= FLAGS.loss_scale
                 with amp.scale_loss(loss, optimizer) as scaled_loss:
                     scaled_loss.backward()
             else:
                 loss.backward()
+
             optimizer.step()
 
-            loss_value = loss.item()
-
-            if timer.measured is None:
-                # first iteration, no step time etc. to print
-                continue
-
-
-            if global_step < FLAGS.benchmark_warmup_steps:
-                metric_logger.update(
-                    loss=loss_value, lr=optimizer.param_groups[0]["lr"])
-            else:
-                unscale_factor = FLAGS.loss_scale if FLAGS.fp16 else 1
-                metric_logger.update(
-                     loss=loss_value / unscale_factor, step_time=timer.measured,
-                     lr=optimizer.param_groups[0]["lr"] * unscale_factor
-                )
-
             if step % print_freq == 0 and step > 0:
+                loss_value = loss.item()
+
+                timer.click()
+
+                if global_step < FLAGS.benchmark_warmup_steps:
+                    metric_logger.update(
+                        loss=loss_value, lr=optimizer.param_groups[0]["lr"])
+                else:
+                    unscale_factor = FLAGS.loss_scale if FLAGS.amp else 1
+                    metric_logger.update(
+                        loss=loss_value / unscale_factor,
+                        step_time=timer.measured / FLAGS.print_freq,
+                        lr=optimizer.param_groups[0]["lr"] * unscale_factor
+                    )
+
                 if global_step < FLAGS.benchmark_warmup_steps:
                     print(F'Warming up, step [{global_step}/{FLAGS.benchmark_warmup_steps}]')
                     continue
@@ -391,14 +350,15 @@ def train(model, loss_fn, optimizer, data_loader_train, data_loader_test, scaled
                 metric_logger.print(
                     header=F"Epoch:[{epoch}/{FLAGS.epochs}] [{step}/{steps_per_epoch}]  eta: {eta_str}")
 
-            if (global_step + 1) % test_freq == 0 and global_step > 0 and global_step / steps_per_epoch >= FLAGS.test_after:
+            if (global_step % test_freq == 0 and global_step > 0 and
+                    global_step / steps_per_epoch >= FLAGS.test_after):
                 loss, auc, test_step_time = evaluate(model, loss_fn, data_loader_test)
                 print(F"Epoch {epoch} step {step}. Test loss {loss:.5f}, auc {auc:.6f}")
 
                 if auc > best_auc:
                     best_auc = auc
                     best_epoch = epoch + ((step + 1) / steps_per_epoch)
-                    maybe_save_checkpoint(model, FLAGS.save_checkpoint_path)
+                    maybe_save_checkpoint(checkpoint_writer, model, FLAGS.save_checkpoint_path)
 
                 if FLAGS.auc_threshold and auc >= FLAGS.auc_threshold:
                     stop_time = time()
@@ -407,6 +367,12 @@ def train(model, loss_fn, optimizer, data_loader_train, data_loader_test, scaled
                           F"{global_step/steps_per_epoch:.2f} in {run_time_s}s. "
                           F"Average speed {global_step * FLAGS.batch_size / run_time_s:.1f} records/s.")
                     return
+
+    stop_time = time()
+    run_time_s = int(stop_time - start_time)
+
+    print(F"Finished training in {run_time_s}s. "
+          F"Average speed {global_step * FLAGS.batch_size / run_time_s:.1f} records/s.")
 
     avg_throughput = FLAGS.batch_size / metric_logger.step_time.avg
 
@@ -430,30 +396,35 @@ def evaluate(model, loss_fn, data_loader):
         data_loader (torch.utils.data.DataLoader):
     """
     model.eval()
-    base_device = FLAGS.base_device
     print_freq = FLAGS.print_freq
+    prefetching_enabled = is_data_prefetching_enabled()
 
     steps_per_epoch = len(data_loader)
     metric_logger = utils.MetricLogger(delimiter="  ")
-    metric_logger.add_meter('loss', utils.SmoothedValue(window_size=print_freq, fmt='{avg:.4f}'))
-    metric_logger.add_meter('step_time', utils.SmoothedValue(window_size=print_freq, fmt='{avg:.4f}'))
+    metric_logger.add_meter('loss', utils.SmoothedValue(window_size=1, fmt='{avg:.4f}'))
+    metric_logger.add_meter('step_time', utils.SmoothedValue(window_size=1, fmt='{avg:.4f}'))
+
+    if prefetching_enabled:
+        data_stream = torch.cuda.Stream()
+
     with torch.no_grad():
         y_true = []
         y_score = []
 
         timer = utils.StepTimer()
-        batch_iter = iter(data_loader)
-
         timer.click()
-        for step in range(len(data_loader)):
-            numerical_features, categorical_features, click = next(batch_iter)
 
-            categorical_features = categorical_features.to(base_device).to(torch.long)
-            numerical_features = numerical_features.to(base_device)
-            click = click.to(torch.float32).to(base_device)
+        input_pipeline = iter(data_loader)
 
-            if FLAGS.fp16:
+        if prefetching_enabled:
+            input_pipeline = prefetcher(input_pipeline, data_stream)
+
+        for step, (numerical_features, categorical_features, click) in enumerate(input_pipeline):
+            if FLAGS.amp:
                 numerical_features = numerical_features.half()
+
+            if prefetching_enabled:
+                torch.cuda.synchronize()
 
             output = model(numerical_features, categorical_features).squeeze()
 
@@ -469,9 +440,12 @@ def evaluate(model, loss_fn, data_loader):
                 if step % print_freq == 0 and step > 0:
                     metric_logger.print(header=F"Test: [{step}/{steps_per_epoch}]")
 
-        y_true = torch.cat(y_true).cpu().numpy()
-        y_score = torch.cat(y_score).cpu().numpy()
-        auc = roc_auc_score(y_true=y_true, y_score=y_score)
+        y_true = torch.cat(y_true)
+        y_score = torch.cat(y_score)
+
+        before_auc_timestamp = time()
+        auc = utils.roc_auc_score(y_true=y_true, y_score=y_score)
+        print(f'AUC computation took: {time() - before_auc_timestamp:.2f} [s]')
 
     model.train()
 
@@ -491,7 +465,7 @@ def inference_benchmark(model, data_loader, num_batches=100):
             step_start_time = time()
 
             numerical_features = numerical_features.to(base_device)
-            if FLAGS.fp16:
+            if FLAGS.amp:
                 numerical_features = numerical_features.half()
 
             categorical_features = categorical_features.to(device=base_device, dtype=torch.int64)
