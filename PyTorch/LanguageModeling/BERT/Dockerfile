@@ -11,8 +11,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.03-py3
-FROM nvcr.io/nvidia/tritonserver:20.03-py3-clientsdk as trt
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.06-py3
+FROM nvcr.io/nvidia/tritonserver:20.06-py3-clientsdk as trt
 FROM ${FROM_IMAGE_NAME}
 RUN apt-get update && apt-get install -y pbzip2 pv bzip2 cabextract
 

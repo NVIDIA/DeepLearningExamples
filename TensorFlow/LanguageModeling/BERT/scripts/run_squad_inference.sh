@@ -43,15 +43,18 @@ echo "Results directory set as " $RESULTS_DIR
 
 use_fp16=""
 if [ "$precision" = "fp16" ] ; then
-        echo "fp16 activated!"
-        use_fp16="--use_fp16"
+    echo "fp16 activated!"
+    use_fp16="--amp"
+else
+    echo "fp32/tf32 activated!"
+    use_fp16="--noamp"
 fi
 
 if [ "$use_xla" = "true" ] ; then
     use_xla_tag="--use_xla"
     echo "XLA activated"
 else
-    use_xla_tag=""
+    use_xla_tag="--nouse_xla"
 fi
 
 ckpt_str=${init_checkpoint//\//-}

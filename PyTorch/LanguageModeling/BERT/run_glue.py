@@ -33,7 +33,7 @@ from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 
 from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
-from modeling import BertForSequenceClassification, BertConfig, WEIGHTS_NAME, CONFIG_NAME
+import modeling
 from tokenization import BertTokenizer
 from optimization import BertAdam, warmup_linear
 from schedulers import LinearWarmUpScheduler
@@ -552,12 +552,13 @@ def main():
             num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
 
     # Prepare model
-    config = BertConfig.from_json_file(args.config_file)
+    config = modeling.BertConfig.from_json_file(args.config_file)
     # Padding for divisibility by 8
     if config.vocab_size % 8 != 0:
         config.vocab_size += 8 - (config.vocab_size % 8)
 
-    model = BertForSequenceClassification(config, num_labels=num_labels)
+    modeling.ACT2FN["bias_gelu"] = modeling.bias_gelu_training
+    model = modeling.BertForSequenceClassification(config, num_labels=num_labels)
     print("USING CHECKPOINT from", args.init_checkpoint)
     model.load_state_dict(torch.load(args.init_checkpoint, map_location='cpu')["model"], strict=False)
     print("USED CHECKPOINT from", args.init_checkpoint)

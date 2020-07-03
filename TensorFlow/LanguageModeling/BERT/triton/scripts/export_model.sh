@@ -32,12 +32,17 @@ additional_args="--triton_model_version=$triton_model_version --triton_model_nam
 
 if [ "$precision" = "fp16" ] ; then
    echo "fp16 activated!"
-   additional_args="$additional_args --use_fp16"
+   additional_args="$additional_args --amp"
+else
+   echo "fp32/tf32 activated!"
+   additional_args="$additional_args --noamp"
 fi
 
 if [ "$use_xla" = "true" ] ; then
     echo "XLA activated"
     additional_args="$additional_args --use_xla"
+else
+    additional_args="$additional_args --nouse_xla"
 fi
 
 echo "Additional args: $additional_args"

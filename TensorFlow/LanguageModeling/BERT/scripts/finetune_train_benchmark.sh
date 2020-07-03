@@ -41,7 +41,7 @@ echo "Results directory set as " $RESULTS_DIR
 if [ "$use_xla" = "true" ] ; then
     use_xla_tag="--use_xla"
 else
-    use_xla_tag=""
+    use_xla_tag="--nouse_xla"
 fi
 
 if [ $num_gpu -gt 1 ] ; then
@@ -75,18 +75,10 @@ if [ "$task" = "squad" ] ; then
         fi
 
         for batch_size in 1 2 4; do
-            for precision in fp16 fp32; do
-                res_dir=${RESULTS_DIR}/bert_${bert_model}_gpu_${num_gpu}_sl_${seq_len}_prec_${precision}_bs_${batch_size}
+            for use_fp16 in "--amp" "--noamp"; do
+                res_dir=${RESULTS_DIR}/bert_${bert_model}_gpu_${num_gpu}_sl_${seq_len}_prec_${use_fp16}_bs_${batch_size}
                 mkdir -p $res_dir
                 tmp_file="${res_dir}/${task}_training_benchmark.log"
-
-                if [ "$precision" = "fp16" ] ; then
-                    echo "fp16 activated!"
-                    use_fp16="--use_fp16"
-                else
-                    echo "fp32 activated!"
-                    use_fp16=""
-                fi
 
                 $mpi_command python run_squad.py \
                 --vocab_file=$BERT_DIR/vocab.txt \
@@ -105,7 +97,7 @@ if [ "$task" = "squad" ] ; then
                 $use_xla_tag |& tee $tmp_file
 
                 perf=`cat $tmp_file | grep -F 'Throughput Average (sentences/sec) =' | head -1 | awk -F'= ' '{print $2}' | awk -F' sen' '{print $1}'`
-                echo "$precision $seq_len  $batch_size $perf" >> $LOGFILE
+                echo "$use_fp16 $seq_len  $batch_size $perf" >> $LOGFILE
 
             done
         done

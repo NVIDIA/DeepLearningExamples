@@ -13,17 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-bert_model=${1:-"large"}
-task=${2:-"squad"}
-
-if [ "$bert_model" = "large" ] ; then
-    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16
-else
-    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-12_H-768_A-12
-fi
-echo  "BERT directory set as " $BERT_DIR
-
-init_checkpoint="$BERT_DIR/bert_model.ckpt"
+task=${1:-"squad"}
 
 #Edit to save logs & checkpoints in a different directory
 RESULTS_DIR=/results
@@ -41,24 +31,24 @@ if [ "$task" = "squad" ] ; then
     echo "Squad directory set as " $SQUAD_DIR
 
     echo "Inference performance benchmarking for BERT $bert_model from $BERT_DIR" >> $LOGFILE
-    echo "Precision Sequence-Length Batch-size Precision Throughput-Average(sent/sec) Latency-Average(ms) Latency-50%(ms) Latency-90%(ms) Latency-95%(ms) Latency-99%(ms) Latency-100%(ms)" >> $LOGFILE
-
-    for seq_len in 128 384; do
-
-    for bs in 1 2 4 8; do
-
-    for precision in fp16 fp32; do
+    for bert_model in "base" "large"; do
+      echo "Model Sequence-Length Batch-size Precision Throughput-Average(sent/sec) Latency-Average(ms) Latency-50%(ms) Latency-90%(ms) Latency-95%(ms) Latency-99%(ms) Latency-100%(ms)" >> $LOGFILE
 
 
-        if [ "$precision" = "fp16" ] ; then
-            echo "fp16 and XLA activated!"
-            use_fp16="--use_fp16"
-            use_xla_tag="--use_xla"
-        else
-            echo "fp32 activated!"
-            use_fp16=""
-            use_xla_tag=""
-        fi
+      if [ "$bert_model" = "large" ] ; then
+        export BERT_DIR=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16
+      else
+          export BERT_DIR=data/download/google_pretrained_weights/uncased_L-12_H-768_A-12
+      fi
+      echo  "BERT directory set as " $BERT_DIR
+
+      init_checkpoint="$BERT_DIR/bert_model.ckpt"
+
+      for seq_len in 128 384; do
+
+      for bs in 1 2 4 8; do
+
+      for use_fp16 in "--amp" "--noamp"; do
 
         python run_squad.py \
         --vocab_file=$BERT_DIR/vocab.txt \
@@ -71,21 +61,21 @@ if [ "$task" = "squad" ] ; then
         --doc_stride=128 \
         --output_dir=${RESULTS_DIR} \
         "$use_fp16" \
-        $use_xla_tag --num_eval_iterations=1024 |& tee $tmp_file
+        --use_xla --num_eval_iterations=1024 |& tee $tmp_file
 
-        perf=`cat $tmp_file | grep -F 'Throughput Average (sentences/sec) =' | tail -1 | awk -F'= ' '{print $2}'`
-        la=`cat $tmp_file | grep -F 'Latency Average (ms)' | awk -F'= ' '{print $2}'`
-        l50=`cat $tmp_file | grep -F 'Latency Confidence Level 50 (ms)' | awk -F'= ' '{print $2}'`
-        l90=`cat $tmp_file | grep -F 'Latency Confidence Level 90 (ms)' | awk -F'= ' '{print $2}'`
-        l95=`cat $tmp_file | grep -F 'Latency Confidence Level 95 (ms)' | awk -F'= ' '{print $2}'`
-        l99=`cat $tmp_file | grep -F 'Latency Confidence Level 99 (ms)' | awk -F'= ' '{print $2}'`
-        l100=`cat $tmp_file | grep -F 'Latency Confidence Level 100 (ms)' | awk -F'= ' '{print $2}'`
+        perf=`cat $tmp_file | grep -F 'INFO:tensorflow:Throughput Average (sentences/sec) =' | tail -1 | awk -F'= ' '{print $2}'`
+        la=`cat $tmp_file | grep -F 'INFO:tensorflow:Latency Average (ms)' | awk -F'= ' '{print $2}'`
+        l50=`cat $tmp_file | grep -F 'INFO:tensorflow:Latency Confidence Level 50 (ms)' | awk -F'= ' '{print $2}'`
+        l90=`cat $tmp_file | grep -F 'INFO:tensorflow:Latency Confidence Level 90 (ms)' | awk -F'= ' '{print $2}'`
+        l95=`cat $tmp_file | grep -F 'INFO:tensorflow:Latency Confidence Level 95 (ms)' | awk -F'= ' '{print $2}'`
+        l99=`cat $tmp_file | grep -F 'INFO:tensorflow:Latency Confidence Level 99 (ms)' | awk -F'= ' '{print $2}'`
+        l100=`cat $tmp_file | grep -F 'INFO:tensorflow:Latency Confidence Level 100 (ms)' | awk -F'= ' '{print $2}'`
 
-        echo "$precision $seq_len $bs $precision $perf $la $l50 $l90 $l95 $l99 $l100" >> $LOGFILE
+        echo "$bert_model $seq_len $bs $use_fp16 $perf $la $l50 $l90 $l95 $l99 $l100" >> $LOGFILE
 
-     done
-     done
-     done
+       done
+       done
+       done
 
 else
 
