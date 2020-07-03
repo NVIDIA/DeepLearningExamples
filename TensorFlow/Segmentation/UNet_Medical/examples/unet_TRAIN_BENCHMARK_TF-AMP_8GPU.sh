@@ -15,4 +15,4 @@
 # This script launches U-Net run in FP16 on 8 GPUs for training benchmarking. Usage:
 # bash unet_TRAIN_BENCHMARK_TF-AMP_8GPU.sh <path to dataset> <path to results directory> <batch size>
 
-horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --batch_size $3 --exec_mode train --augment --benchmark --warmup_steps 200 --max_steps 1000 --use_xla --use_amp
+horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --batch_size $3 --exec_mode train --augment --benchmark --warmup_steps 200 --max_steps 1000 --xla --amp

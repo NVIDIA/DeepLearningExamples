@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script launches U-Net run in FP32 on 8 GPUs for training benchmarking. Usage:
-# bash unet_TRAIN_BENCHMARK_FP32_8GPU.sh <path to dataset> <path to results directory> <batch size>
+# This script launches U-Net run in FP32 on 1 GPU and trains for 6400 iterations with batch_size 8. Usage:
+# bash unet_FP32_1GPU.sh <path to dataset> <path to results directory>
 
-horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --batch_size $3 --exec_mode train --augment --benchmark --warmup_steps 200 --max_steps 1000 --use_xla
+horovodrun -np 1 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size 8 --exec_mode train_and_evaluate --crossvalidation_idx 0 --augment --xla --log_dir $2/log.json
