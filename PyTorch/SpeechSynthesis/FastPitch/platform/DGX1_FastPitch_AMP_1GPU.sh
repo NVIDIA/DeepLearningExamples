@@ -1,7 +1,8 @@
 #!/bin/bash
 
 mkdir -p output
-python -m multiproc train.py \
+python train.py \
+    --amp \
     --cuda \
     --cudnn-enabled \
     -o ./output/ \
@@ -14,10 +15,10 @@ python -m multiproc train.py \
     --epochs-per-checkpoint 100 \
     --warmup-steps 1000 \
     -lr 0.1 \
-    -bs 32 \
+    -bs 64 \
     --optimizer lamb \
     --grad-clip-thresh 1000.0 \
     --dur-predictor-loss-scale 0.1 \
     --pitch-predictor-loss-scale 0.1 \
     --weight-decay 1e-6 \
-    --gradient-accumulation-steps 1
+    --gradient-accumulation-steps 4

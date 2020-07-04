@@ -1,8 +1,8 @@
 #!/bin/bash
 
 mkdir -p output
-python train.py \
-    --amp-run \
+python -m torch.distributed.launch --nproc_per_node 8 train.py \
+    --amp \
     --cuda \
     --cudnn-enabled \
     -o ./output/ \
@@ -15,10 +15,10 @@ python train.py \
     --epochs-per-checkpoint 100 \
     --warmup-steps 1000 \
     -lr 0.1 \
-    -bs 64 \
+    -bs 32 \
     --optimizer lamb \
     --grad-clip-thresh 1000.0 \
     --dur-predictor-loss-scale 0.1 \
     --pitch-predictor-loss-scale 0.1 \
     --weight-decay 1e-6 \
-    --gradient-accumulation-steps 4
+    --gradient-accumulation-steps 1

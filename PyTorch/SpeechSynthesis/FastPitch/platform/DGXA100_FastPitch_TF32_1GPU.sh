@@ -1,8 +1,7 @@
 #!/bin/bash
 
 mkdir -p output
-python -m multiproc train.py \
-    --set-world-size 4 \
+python train.py \
     --cuda \
     --cudnn-enabled \
     -o ./output/ \
@@ -21,4 +20,4 @@ python -m multiproc train.py \
     --dur-predictor-loss-scale 0.1 \
     --pitch-predictor-loss-scale 0.1 \
     --weight-decay 1e-6 \
-    --gradient-accumulation-steps 2
+    --gradient-accumulation-steps 8

@@ -1,8 +1,8 @@
 #!/bin/bash
 
 mkdir -p output
-python -m multiproc train.py \
-    --amp-run \
+python -m torch.distributed.launch --nproc_per_node 8 train.py \
+    --amp \
     --cuda \
     --cudnn-enabled \
     -o ./output/ \
