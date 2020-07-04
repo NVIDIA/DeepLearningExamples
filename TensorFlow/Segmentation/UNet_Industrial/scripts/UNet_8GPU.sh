@@ -14,16 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script launches UNet training in FP32-AMP on 4 GPUs using 16 batch size (4 per GPU)
-# Usage ./UNet_AMP_4GPU_XLA.sh <path to result repository> <path to dataset> <dagm classID (1-10)>
+# This script launches UNet training in FP32 on 8 GPUs using 16 batch size (2 per GPU)
+# Usage ./UNet_FP32_8GPU_XLA.sh <path to result repository> <path to dataset> <dagm classID (1-10)>
 
 BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 export TF_CPP_MIN_LOG_LEVEL=3
 
 mpirun \
-    -np 4 \
-    -H localhost:4 \
+    -np 8 \
+    -H localhost:8 \
     -bind-to none \
     -map-by slot \
     -x NCCL_DEBUG=VERSION \
@@ -37,7 +37,7 @@ mpirun \
         --exec_mode='train_and_evaluate' \
         --iter_unit='batch' \
         --num_iter=2500 \
-        --batch_size=4 \
+        --batch_size=2 \
         --warmup_step=10 \
         --results_dir="${1}" \
         --data_dir="${2}" \
@@ -45,7 +45,7 @@ mpirun \
         --dataset_classID="${3}" \
         --data_format='NCHW' \
         --use_auto_loss_scaling \
-        --amp \
+        --noamp \
         --xla \
         --learning_rate=1e-4 \
         --learning_rate_decay_factor=0.8 \

@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script launches UNet evaluation benchmark in FP32-AMP on 1 GPUs using 16 batch size
-# Usage ./DGX1v_evalbench_AMP.sh <path to dataset> <dagm classID (1-10)>
+# This script launches UNet evaluation benchmark in TF-AMP on 1 GPUs using 16 batch size
+# Usage ./UNet_evalbench_AMP.sh <path to dataset> <dagm classID (1-10)>
 
 BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -39,8 +39,8 @@ python "${BASEDIR}/../../main.py" \
     --dataset_classID="${2}" \
     --data_format='NCHW' \
     --use_auto_loss_scaling \
-    --use_tf_amp \
-    --use_xla \
+    --amp \
+    --xla \
     --learning_rate=1e-4 \
     --learning_rate_decay_factor=0.8 \
     --learning_rate_decay_steps=500 \

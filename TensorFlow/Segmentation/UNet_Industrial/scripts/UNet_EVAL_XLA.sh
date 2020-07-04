@@ -14,8 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script launches UNet evaluation in FP32-AMP on 1 GPUs using 16 batch size
-# Usage ./UNet_AMP_EVAL_XLA.sh <path to result repository> <path to dataset> <dagm classID (1-10)>
+# This script launches UNet evaluation in FP32 on 1 GPUs using 16 batch size
+# Usage ./UNet_FP32_EVAL_XLA.sh <path to result repository> <path to dataset> <dagm classID (1-10)>
 
 BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -35,7 +35,7 @@ python "${BASEDIR}/../main.py" \
     --dataset_classID="${3}" \
     --data_format='NCHW' \
     --use_auto_loss_scaling \
-    --amp \
+    --noamp \
     --xla \
     --learning_rate=1e-4 \
     --learning_rate_decay_factor=0.8 \
