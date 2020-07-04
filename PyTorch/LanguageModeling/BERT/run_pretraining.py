@@ -211,7 +211,11 @@ def parse_arguments():
     parser.add_argument('--fp16',
                         default=False,
                         action='store_true',
-                        help="Whether to use 16-bit float precision instead of 32-bit")
+                        help="Mixed precision training")
+    parser.add_argument('--amp',
+                        default=False,
+                        action='store_true',
+                        help="Mixed precision training")
     parser.add_argument('--loss_scale',
                         type=float, default=0.0,
                         help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
@@ -276,6 +280,7 @@ def parse_arguments():
                         help='If provided, only run this many steps before exiting')
 
     args = parser.parse_args()
+    args.fp16 = args.fp16 or args.amp
 
     if args.steps_this_run < 0:
         args.steps_this_run = args.max_steps

@@ -472,11 +472,6 @@ def get_answers(examples, features, results, args):
                 preds,
                 key=lambda x: (x.start_logit + x.end_logit),
                 reverse=True)[:args.n_best_size]
-        
-        # In very rare edge cases we could only have single null prediction.
-	      # So we just create a nonce prediction in this case to avoid failure.
-        if not nbest:                                                    
-	          nbest.append(Prediction(text="empty", start_logit=0.0, end_logit=0.0))
 
         # In very rare edge cases we could only have single null prediction.
         # So we just create a nonce prediction in this case to avoid failure.
@@ -796,8 +791,13 @@ def main():
                         default=os.getenv('LOCAL_RANK', -1),
                         help="local_rank for distributed training on gpus")
     parser.add_argument('--fp16',
+                        default=False,
                         action='store_true',
-                        help="Whether to use 16-bit float precision instead of 32-bit")
+                        help="Mixed precision training")
+    parser.add_argument('--amp',
+                        default=False,
+                        action='store_true',
+                        help="Mixed precision training")
     parser.add_argument('--loss_scale',
                         type=float, default=0,
                         help="Loss scaling to improve fp16 numeric stability. Only used when fp16 set to True.\n"
@@ -851,6 +851,7 @@ def main():
                         help="Location to cache train feaures. Will default to the dataset directory")
 
     args = parser.parse_args()
+    args.fp16 = args.fp16 or args.amp    
 
     if args.local_rank == -1 or args.no_cuda:
         device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")

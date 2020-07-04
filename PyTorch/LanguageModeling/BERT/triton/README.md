@@ -38,7 +38,7 @@ Moreover, you may set `precision` to either `fp32` or `fp16`.
 
 To launch the Triton server, execute the following command. 
 
-`docker run --rm --gpus device=0 --ipc=host --network=host -p 8000:8000 -p 8001:8001 -p 8002:8002 -v $PWD/results/triton_models:/models nvcr.io/nvidia/tritonserver:20.03-py3 trtserver --model-store=/models --log-verbose=1`
+`docker run --rm --gpus device=0 --ipc=host --network=host -p 8000:8000 -p 8001:8001 -p 8002:8002 -v $PWD/results/triton_models:/models nvcr.io/nvidia/tritonserver:20.06-v1-py3 trtserver --model-store=/models --log-verbose=1`
 
 Here `device=0,1,2,3` selects GPUs indexed by ordinals `0,1,2` and `3`, respectively. The server will see only these GPUs. If you write `device=all`, then the server will see all the available GPUs. 
 
