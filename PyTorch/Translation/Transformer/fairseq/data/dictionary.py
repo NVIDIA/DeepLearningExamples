@@ -153,6 +153,19 @@ class Dictionary(object):
         return self.unk_index
 
     @classmethod
+    def loads(cls, s):
+        lines = s.strip().split('\n')
+        d = cls()
+        for line in lines:
+            idx = line.rfind(' ')
+            word = line[:idx]
+            count = int(line[idx+1:])
+            d.indices[word] = len(d.symbols)
+            d.symbols.append(word)
+            d.count.append(count)
+        return d
+
+    @classmethod
     def load(cls, f, ignore_utf_errors=False):
         """Loads the dictionary from a text file with the format:
 
@@ -175,15 +188,8 @@ class Dictionary(object):
             except Exception:
                 raise Exception("Incorrect encoding detected in {}, please "
                                 "rebuild the dataset".format(f))
-
-        d = cls()
-        for line in f.readlines():
-            idx = line.rfind(' ')
-            word = line[:idx]
-            count = int(line[idx+1:])
-            d.indices[word] = len(d.symbols)
-            d.symbols.append(word)
-            d.count.append(count)
+        cont = f.read()
+        d = cls.loads(cont)
         return d
 
     def save(self, f):
@@ -192,10 +198,17 @@ class Dictionary(object):
             os.makedirs(os.path.dirname(f), exist_ok=True)
             with open(f, 'w', encoding='utf-8') as fd:
                 return self.save(fd)
-        for symbol, count in zip(self.symbols[self.nspecial:], self.count[self.nspecial:]):
-            print('{} {}'.format(symbol, count), file=f)
+        d = self.saves()
+        f.write(d)
 
+    def saves(self):
+        rv = ''
+        for symbol, count in zip(self.symbols[self.nspecial:], self.count[self.nspecial:]):
+            rv += '{} {}\n'.format(symbol, count)
+        return rv
     def dummy_sentence(self, length):
         t = torch.Tensor(length).uniform_(self.nspecial + 1, len(self)).long()
         t[-1] = self.eos()
         return t
+    def get_metadata(self):
+        return {'len':self.__len__(), 'pad':self.pad_index, 'eos':self.eos_index, 'unk':self.unk_index, 'nspecial':self.nspecial}
