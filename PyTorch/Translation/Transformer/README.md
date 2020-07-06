@@ -2,19 +2,20 @@
 
 This repository provides a script and recipe to train the Transformer model to achieve state of the art accuracy, and is tested and maintained by NVIDIA.
 
-**Table Of Contents**
-- [Model overview](#model-overview)
+## Table Of Contents
+* [Model overview](#model-overview)
     * [Model architecture](#model-architecture)
     * [Default configuration](#default-configuration)
     * [Feature support matrix](#feature-support-matrix)
 	    * [Features](#features)
     * [Mixed precision training](#mixed-precision-training)
 	    * [Enabling mixed precision](#enabling-mixed-precision)
-        * [Glossary](#glossary)
-- [Setup](#setup)
+        * [Enabling TF32](#enabling-tf32)
+    * [Glossary](#glossary)
+* [Setup](#setup)
     * [Requirements](#requirements)
-- [Quick Start Guide](#quick-start-guide)
-- [Advanced](#advanced)
+* [Quick Start Guide](#quick-start-guide)
+* [Advanced](#advanced)
     * [Scripts and sample code](#scripts-and-sample-code)
     * [Parameters](#parameters)
     * [Command-line options](#command-line-options)
@@ -23,17 +24,23 @@ This repository provides a script and recipe to train the Transformer model to a
         * [Multi-dataset](#multi-dataset)
     * [Training process](#training-process)
     * [Inference process](#inference-process)
-- [Performance](#performance)
+* [Performance](#performance)
     * [Benchmarking](#benchmarking)
         * [Training performance benchmark](#training-performance-benchmark)
         * [Inference performance benchmark](#inference-performance-benchmark)
     * [Results](#results)
         * [Training accuracy results](#training-accuracy-results)
+            * [Training accuracy: NVIDIA DGX A100 (8x A100 40GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-40gb)
+            * [Training accuracy: NVIDIA DGX-1 (8x V100 16GB)](#training-accuracy-nvidia-dgx-1-8x-v100-16gb)
+            * [Training stability test](#training-stability-test)
         * [Training performance results](#training-performance-results)
-            * [NVIDIA DGX-1 (8x V100 16G)](#nvidia-dgx-1-8x-v100-16g)
-            * [NVIDIA DGX-2 (16x V100 32G)](#nvidia-dgx-2-16x-v100-32g))
+            * [Training performance: NVIDIA DGX A100 (8x A100 40GB)](#training-performance-nvidia-dgx-a100-8x-a100-40gb)
+            * [Training performance: NVIDIA DGX-1 (8x V100 16GB)](#training-performance-nvidia-dgx-1-8x-v100-16gb)
+            * [Training performance: NVIDIA DGX-2 (16x V100 32GB)](#training-performance-nvidia-dgx-2-16x-v100-32gb)
         * [Inference performance results](#inference-performance-results)
-- [Release notes](#release-notes)
+            * [Inference performance: NVIDIA DGX A100 (1x A100 40GB)](#inference-performance-nvidia-dgx-a100-1x-a100-40gb)
+            * [Inference performance: NVIDIA DGX-1 (1x V100 16GB)](#inference-performance-nvidia-dgx-1-1x-v100-16gb)
+* [Release notes](#release-notes)
     * [Changelog](#changelog)
     * [Known issues](#known-issues)
 
@@ -43,7 +50,7 @@ This repository provides a script and recipe to train the Transformer model to a
 The Transformer is a Neural Machine Translation (NMT) model which uses attention mechanism to boost training speed and overall accuracy. The Transformer model was introduced in [Attention Is All You Need](https://arxiv.org/abs/1706.03762) and improved in [Scaling Neural Machine Translation](https://arxiv.org/abs/1806.00187).
 This implementation is based on the optimized implementation in [Facebook's Fairseq NLP toolkit](https://github.com/pytorch/fairseq), built on top of PyTorch.
 
-This model is trained with mixed precision using Tensor Cores on NVIDIA Volta and Turing GPUs. Therefore, researchers can get results 3.6x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
+This model is trained with mixed precision using Tensor Cores on NVIDIA Volta, Turing and Ampere GPU architectures. Therefore, researchers can get results 6.5x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
 
 ### Model architecture
 
@@ -69,11 +76,11 @@ The model also applies embeddings on the input and output tokens, and adds a con
 The complete description of the Transformer architecture can be found in [Attention Is All You Need](https://arxiv.org/abs/1706.03762) paper.
 ### Default configuration
 
-The Transformer uses Byte Pair Encoding tokenization scheme using [Moses decoder](https://github.com/moses-smt/mosesdecoder). This is a lossy compression method (we drop information about white spaces). Tokenization is applied over whole [WMT14](http://statmt.org/wmt14/) en-de dataset including test set. Default vocabulary size is 33708, excluding all special tokens. Encoder and decoder are using shared embeddings.
+The Transformer uses Byte Pair Encoding tokenization scheme using [Moses decoder](https://github.com/moses-smt/mosesdecoder). This is a lossy compression method (we drop information about white spaces). Tokenization is applied over whole [WMT14](http://statmt.org/wmt14/translation-task.html#Download) en-de dataset including test set. Default vocabulary size is 33708, excluding all special tokens. Encoder and decoder are using shared embeddings.
 We use 6 blocks in each encoder and decoder stacks. Self attention layer computes it's outputs according to the following formula $`Attention(Q,K,V) = softmax(\frac{QK^T}{\sqrt{d_k}})V`$. At each attention step, the model computes 16 different attention representations (which we will call attention heads) and concatenates them.
-We trained the Transformer model using the Adam optimizer with betas `(0.9, 0.997)`, epsilon `1e-9` and learning rate `6e-4`. We used the inverse square root training schedule preceded with liniar warmup of 4000 steps.
+We trained the Transformer model using the Adam optimizer with betas `(0.9, 0.997)`, epsilon `1e-9` and learning rate `6e-4`. We used the inverse square root training schedule preceded with linear warmup of 4000 steps.
 The implementation allows to perform training in mixed precision. We use dynamic loss scaling and custom mixed precision optimizer. Distributed multi-GPU and multi-Node is implemented with `torch.distirbuted` module with NCCL backend.
-For inference, we use beam search with default beam size of 5. Model performance is evaluated with BLEU4 metrics. For clarity, we report internal (legacy) BLEU implementation as well as external [SacreBleu](https://github.com/mjpost/sacreBLEU) score.
+For inference, we use beam search with default beam size of 5. Model performance is evaluated with BLEU4 metrics. For clarity, we report internal (legacy) BLEU implementation as well as external [SacreBleu](https://github.com/mjpost/sacreBLEU)  score.
 
 ### Feature support matrix
 
@@ -82,21 +89,21 @@ The following features are supported by this model.<br>
 | Feature                  | Yes column                
 |--------------------------|--------------------------
 | Multi-GPU training with [Distributed Communication Package](https://pytorch.org/docs/stable/distributed.html)  | Yes          
-| APEX                     | Yes         
+| Nvidia APEX              | Yes         
+| AMP                      | Yes
+| TorchScript              | Yes
 
 #### Features
 
-Multi-GPU training with [Distributed Communication Package](https://pytorch.org/docs/stable/distributed.html) 
+* Multi-GPU training with [Distributed Communication Package](https://pytorch.org/docs/stable/distributed.html): Our model uses torch.distributed package to implement efficient multi-GPU training with NCCL.
+To enable multi-GPU training with torch.distributed, you have to initialize your model identically in every process spawned by torch.distributed.launch. Distributed strategy is implemented with APEX's DistributedDataParallel.
+For details, see example sources in this repo or see the [pytorch tutorial](https://pytorch.org/docs/stable/distributed.html)
 
-Our model uses torch.distributed package to implement efficient multi-GPU training with NCCL.
-To enable multi-GPU training with torch.distributed, you have to initialize your model
-identically in every process spawned by torch.distributed.launch. For efficiency the only point of synchronization is gradient gathering.
-For details, see example sources in this repo or see
-the [pytorch tutorial](https://pytorch.org/docs/stable/distributed.html)
+* Nvidia APEX: The purpose of the APEX is to provide easy and intuitive framework for distributed training and mixed precision training. For details, see official [APEX repository](https://github.com/NVIDIA/apex).
 
-APEX - This implementation uses Apex's FP16_Optimizer API to perform mixed precision training.
-The purpose of the APEX is to provide easy and intuitive framework for distributed training and mixed precision training.
-For details, see official [APEX repository](https://github.com/NVIDIA/apex).
+* AMP: This implementation uses Apex's AMP to perform mixed precision training.
+
+* TorchScript: Transformer can be converted to TorchScript format offering ease of deployment on platforms without Python dependencies. For more information see official [TorchScript](https://pytorch.org/docs/stable/jit.html) documentation.
 
 
 ### Mixed precision training
@@ -113,18 +120,28 @@ For information about:
 
 #### Enabling mixed precision
 
-Mixed precision is enabled using the `--fp16` option in the `train.py` script. The script then builds a custom mixed precision optimizer. Forward and backward pass are computed with FP16 precision with exclusion of a loss function which is computed in FP32 precision. We keep a copy of a model in higher precision in order to perform accurate weight update. After the update FP32 weights are again copied to FP16 model. We use dynamic loss scaling with initial scale of 2^7 increasing it by a factor of 2 every 2000 successful iterations. Overflow is being checked after reducing gradients from all of the workers. If we encounter infs or nans the whole batch is dropped.
+Mixed precision is enabled using the `--amp` option in the `train.py` script. The default is optimization level `O2` but can be overriden with `--amp-level $LVL` option (for details see [amp documentation](https://nvidia.github.io/apex/amp.html)). Forward and backward pass are computed with FP16 precision with exclusion of a loss function which is computed in FP32 precision. Default optimization level keeps a copy of a model in higher precision in order to perform accurate weight update. After the update FP32 weights are again copied to FP16 model. We use dynamic loss scaling with initial scale of 2^7 increasing it by a factor of 2 every 2000 successful iterations. Overflow is being checked after reducing gradients from all of the workers. If we encounter infs or nans the whole batch is dropped.
+
+#### Enabling TF32
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
+
+TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
+
+For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
+
+TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
+
 
 ### Glossary
 
-Attention layer - Layer that computes which elements of input sequence or it's hidden representation contribute the most to the currently considered output element.
-Beam search - A heuristic search algorithm which at each step of predictions keeps N most possible outputs as a base to perform further prediction.
-BPE - Binary Pair Encoding, compression algorithm that find most common pair of symbols in a data and replaces them with new symbol absent in the data.
-EOS - End of a sentence.
-Self attention layer - Attention layer that computes hidden representation of input using the same tensor as query, key and value.
-Token - A  string that is representable within the model. We also refer to the token's position in the dictionary as a token. There are special non-string tokens: alphabet tokens (all characters in a dataset), EOS token, PAD token.
-Tokenizer - Object that converts raw strings to sequences of tokens.
-Vocabulary embedding - Layer that projects one-hot token representations to a high dimensional space which preserves some information about correlations between tokens.
+Attention layer - Layer that computes which elements of input sequence or it's hidden representation contribute the most to the currently considered output element.  
+Beam search - A heuristic search algorithm which at each step of predictions keeps N most possible outputs as a base to perform further prediction.  
+BPE - Binary Pair Encoding, compression algorithm that find most common pair of symbols in a data and replaces them with new symbol absent in the data.  
+EOS - End of a sentence.  
+Self attention layer - Attention layer that computes hidden representation of input using the same tensor as query, key and value.  
+Token - A  string that is representable within the model. We also refer to the token's position in the dictionary as a token. There are special non-string tokens: alphabet tokens (all characters in a dataset), EOS token, PAD token.  
+Tokenizer - Object that converts raw strings to sequences of tokens.  
+Vocabulary embedding - Layer that projects one-hot token representations to a high dimensional space which preserves some information about correlations between tokens.  
 
 ## Setup
 
@@ -135,8 +152,11 @@ The following section lists the requirements in order to start training the Tran
 This repository contains Dockerfile which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 
 -   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
--   [PyTorch 19.03-py3+ NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
--   [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
+-   [PyTorch 20.03-py3+ NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
+-   GPU-based architecture:
+	- [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
+	- [NVIDIA Turing](https://www.nvidia.com/en-us/geforce/turing/)
+	- [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
 
 For more information about how to get started with NGC containers, see the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
 -   [Getting Started Using NVIDIA GPU Cloud](https://docs.nvidia.com/ngc/ngc-getting-started-guide/index.html)
@@ -146,11 +166,11 @@ For more information about how to get started with NGC containers, see the follo
 For those unable to use the PyTorch NGC container, to set up the required environment or create your own container, see the versioned [NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html).
 
 ## Quick Start Guide
-To train your model using mixed precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the Transformer model on the [WMT14 English-German](http://statmt.org/wmt14/translation-task.html#Download) dataset. For the specifics concerning training and inference, see the [Advanced](#advanced) section.
+To train your model using mixed or TF32 precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the Transformer model on the [WMT14 English-German](http://statmt.org/wmt14/translation-task.html#Download) dataset. For the specifics concerning training and inference, see the [Advanced](#advanced) section.
 
 1. Clone the repository 
 ```
-git clone --recurse-submodules https://github.com/NVIDIA/DeepLearningExamples.git 
+git clone https://github.com/NVIDIA/DeepLearningExamples.git 
 cd DeepLearningExamples/PyTorch/Translation/Transformer
 ```
 
@@ -159,18 +179,22 @@ cd DeepLearningExamples/PyTorch/Translation/Transformer
 docker build . -t your.repository:transformer
 nvidia-docker run -it --rm --ipc=host your.repository:transformer bash
 ```
-If you have already preprocessed data, use:
+If you already have preprocessed data, use:
 ```bash
-nvidia-docker run -it --rm --ipc=host -v path/to/your/data/:/data/wmt14_en_de_joined_dict your.repository:transformer bash
+nvidia-docker run -it --rm --ipc=host -v <path to your preprocessed data>:/data/wmt14_en_de_joined_dict your.repository:transformer bash
 ```
-3. Download and preprocess dataset
-Download and preprocess the WMT14 English-German dataset.
+If you already have data downloaded, but it has not yet been preprocessed, use:
 ```bash
-./run_preprocessing.sh
+nvidia-docker run -it --rm --ipc=host -v <path to your unprocessed data>:/workspace/translation/examples/translation/orig your.repository:transformer bash
 ```
-After running this command, the processed dataset will be put into: `/data/wmt14_en_de_joined_dict` directory.
+3. Download and preprocess dataset: Download and preprocess the WMT14 English-German dataset.
+
+```bash 
+scripts/run_preprocessing.sh
+```
+After running this command, data will be downloaded to `/workspace/translation/examples/translation/orig` directory and this data will be processed and put into `/data/wmt14_en_de_joined_dict` directory.
+
 4. Start training
-The following command runs the training script that is distributed between 8 workers.
 ```bash
 python -m torch.distributed.launch --nproc_per_node 8 /workspace/translation/train.py /data/wmt14_en_de_joined_dict \
   --arch transformer_wmt_en_de_big_t2t \
@@ -190,22 +214,37 @@ python -m torch.distributed.launch --nproc_per_node 8 /workspace/translation/tra
   --label-smoothing 0.1 \
   --max-tokens 5120 \
   --seed 1 \
-  --target-bleu 28.3 \
-  --ignore-case \
-  --fp16 \
+  --fuse-layer-norm \
+  --amp \
+  --amp-level O2 \
   --save-dir /workspace/checkpoints \
   --distributed-init-method env:// 
 ```
 
 The script saves checkpoints every epoch to the directory specified in the `--save-dir` option. In addition, the best performing checkpoint (in terms of loss) and the latest checkpoints are saved separately.
-**WARNING**: If you don't have access to sufficient disk space, use the `--save-interval $N` option. The checkpoints are ~2.5GB large. For example, it takes the Transformer model 16 epochs to reach the BLEU score of 28 points. The default option is to save last checkpoint, the best checkpoint and a checkpoint for every epoch, which means (16+1+1)*2.5GB = 45GB of a disk space used. Specifying `--save-interval 5` reduces this to (16/5+1+1)*2.5GB = 12.5GB. 
+**WARNING**: If you don't have access to sufficient disk space, use the `--save-interval $N` option. The checkpoints are ~3.4GB large. For example, it takes the Transformer model 30 epochs for the validation loss to plateau. The default option is to save last checkpoint, the best checkpoint and a checkpoint for every epoch, which means (30+1+1)*3.4GB = 108.8GB of a disk space used. Specifying `--save-interval 10` reduces this to (30/10+1+1)*3.4GB = 17GB. 
+
+5. Start interactive inference
+```bash
+python inference.py \ 
+  --buffer-size 5000 \
+  --path /path/to/your/checkpoint.pt \
+  --max-tokens 10240 \
+  --fuse-dropout-add \
+  --remove-bpe \
+  --bpe-codes /path/to/bpe_code_file \
+  --fp16
+```
+where, 
+* `--path` option is the location of the checkpoint file.  
+* `--bpe-codes` option is the location of the `code` file. If the default training command mentioned above is used, this file can be found in the preprocessed data ( i.e., `/data/wmt14_en_de_joined_dict` ) directory.
 
 ## Advanced
 The following sections provide greater details of the dataset, running training and inference, and the training results.
 
 ### Scripts and sample code
 
-The `preprocess.py` script performs binarization of the dataset obtained and tokenized by the `examples/translation/prepare-wmt14en2de.sh` script. The `train.py` script contains training loop as well as statistics gathering code. Steps performed in single training step can be found in `fairseq/trainer.py` if you are using FP32 precision or inside `fairseq/fp16_trainer.py` for mixed precision. Model definition is placed in the file `fairseq/models/transformer.py`. Model specific modules including multiheaded attention and sinusoidal positional embedding are inside the `fairseq/modules/` directory. Finally, the data wrappers are placed inside the `fairseq/data/` directory.
+The `preprocess.py` script performs binarization of the dataset obtained and tokenized by the `examples/translation/prepare-wmt14en2de.sh` script. The `train.py` script contains training loop as well as statistics gathering code. Steps performed in single training step can be found in `fairseq/ddp_trainer.py`. Model definition is placed in the file `fairseq/models/transformer.py`. Model specific modules including multiheaded attention and sinusoidal positional embedding are inside the `fairseq/modules/` directory. Finally, the data wrappers are placed inside the `fairseq/data/` directory.
 
 ### Parameters
 
@@ -229,9 +268,8 @@ In this section we give a user friendly description of the most common options u
 `--seed` - set random seed for NumPy and PyTorch RNGs.<br/>
 `--max-epochs` - set the maximum number of epochs.<br/>
 `--online-eval` - perform inference on test set and then compute BLEU score after every epoch.<br/>
-`--ignore-case` - used with `--online-eval`, ignore case while computing BLEU score.<br/>
 `--target-bleu` - works like `--online-eval` and sets a BLEU score threshold which after being attained will cause training to stop.<br/>
-`--fp16` - use mixed precision.<br/>
+`--amp` - use mixed precision.<br/>
 `--save-dir` - set directory for saving checkpoints.<br/>
 `--distributed-init-method` - method for initializing torch.distributed package. You can either provide addresses with the `tcp` method or use the envionment variables initialization with `env` method<br/>
 `--update-freq` - use gradient accumulation. Set number of training steps across which gradient will be accumulated.<br/>
@@ -275,7 +313,7 @@ usage: train.py [-h] [--no-progress-bar] [--log-interval N]
                 [--replace-unk [REPLACE_UNK]] [--score-reference]
                 [--prefix-size PS] [--sampling] [--sampling-topk PS]
                 [--sampling-temperature N] [--print-alignment]
-                [--model-overrides DICT] [--online-eval] [--ignore-case]
+                [--model-overrides DICT] [--online-eval] 
                 [--bpe-codes CODES] [--fuse-dropout-add] [--fuse-relu-dropout]
 ```
 
@@ -300,27 +338,29 @@ The model has been tested oni the [wmt14 en-fr](http://www.statmt.org/wmt14/tran
 The default training configuration can be launched by running the `train.py` training script. By default, the script saves one checkpoint every epoch in addition to the latest and the best ones. The best checkpoint is considered the one with the lowest value of loss, not the one with the highest BLEU score. To override this behavior use the `--save-interval $N` option to save epoch checkpoints every N epoch or `--no-epoch-checkpoints` to disable them entirely (with this option the latest and the best checkpoints still will be saved). Specify save the directory with `--save-dir` option.<br/>
 In order to run multi-GPU training, launch the training script with `python -m torch.distributed.launch --nproc_per_node $N` prepended, where N is the number of GPUs.
 We have tested reliance on up to 16 GPUs on a single node.<br/>
-After each training epoch, the script runs a loss validation on the validation split of the dataset and outputs the validation loss. By default the evaluation after each epoch is disabled. To enable it, use the `--online-eval` option or to use the BLEU score value as the training stopping condition use the `--target-bleu $TGT` option. In order to compute the case insensitive BLEU score, use the flag `--ignore-case` along with previous ones. The BLEU is computed by the internal fairseq algorithm which implementation can be found in the `fairseq/bleu.py` script.<br/>
+After each training epoch, the script runs a loss validation on the validation split of the dataset and outputs the validation loss. By default the evaluation after each epoch is disabled. To enable it, use the `--online-eval` option or to use the BLEU score value as the training stopping condition use the `--target-bleu $TGT` option. The BLEU scores computed are case insensitive. The BLEU is computed by the internal fairseq algorithm which implementation can be found in the `fairseq/bleu.py` script.<br/>
 By default, the `train.py` script will launch FP32 training without Tensor Cores. To use mixed precision with Tensor Cores use the `--fp16` option.<br/>
 
 To reach the BLEU score reported in [Scaling Neural Machine Translation](https://arxiv.org/abs/1806.00187) research paper, we used mixed precision training with a batch size of 5120 per GPU and learning rate of 6e-4 on a DGX-1V system with 8 Tesla V100s 16G. If you use a different setup, we recommend you scale your hyperparameters by applying the following rules:
-1. To use FP32, reduce the batch size to 2560 and set the `--update-freq 2` and `--warmup-updates 8000` options.
-2. To train on a fewer GPUs, multiply `--update-freq` and `--warmup-updates` by the reciprocal of scaling factor.
+1. To use FP32, reduce the batch size to 2560 and set the `--update-freq 2` option.
+2. To train on a fewer GPUs, multiply `--update-freq` by the reciprocal of the scaling factor.
 
-For example, when training in FP32 mode on 4 GPUs, use the `--update-freq=4` and `--warmup-updates 16000` options.
+For example, when training in FP32 mode on 4 GPUs, use the `--update-freq=4` option.
 
 ### Inference process
 
-Inference on a raw input can be performed by launching the `interactive.py` inference script. It requires a pre-trained model checkpoint, BPE codes file and dictionary file (both are produced by the `run_preprocessing.sh` script and can be found in the dataset directory).<br/>
-To enhance the speed of the inference on large input files, it is recommended to preprocess them the same way as the dataset and run inference on a binarized input with the `generate.py` script.<br/>
-Both scripts run inference with a default beam size of 4 and give tokenized output. To remove BPE codes use the `--remove-bpe` option.<br/>
+Inference on a raw input can be performed by piping file to be translated into the `inference.py` script. It requires a pre-trained model checkpoint, BPE codes file and dictionary file (both are produced by the `run_preprocessing.sh` script and can be found in the dataset directory).<br/>
 In order to run interactive inference, run command:
 ```
-python interactive.py --buffer-size 1 --fp16 --path /path/to/your/checkpoint.pt --max-tokens 128 \
-        --fuse-dropout-add --remove-bpe --bpe-codes /path/to/code/file \
-        /path/to/dataset/wmt14_en_de_joined_dict/
+python inference.py --path /path/to/your/checkpoint.pt --fuse-dropout-add --remove-bpe --bpe-codes /path/to/code/file
 ```
 The `--buffer-size` option allows the batching of input sentences up to `--max_token` length.
+
+To test model checkpoint accuracy on wmt14 test set run following command:
+
+```bash
+sacrebleu -t wmt14/full -l en-de --echo src | python inference.py --buffer-size 5000 --path /path/to/your/checkpoint.pt --max-tokens 10240 --fuse-dropout-add --remove-bpe --bpe-codes /data/code --fp16 | sacrebleu -t wmt14/full -l en-de -lc
+```
 
 ## Performance
 
@@ -330,11 +370,15 @@ The following section shows how to run benchmarks measuring the model performanc
 
 #### Training performance benchmark
 
-To benchmark the training performance on a specific batch size, just run `train.py` training script. Performance in words/s will be printed to standard output every N iterations, specified by the `--log-interval` option. After each epoch, the mean performance across the epoch will be reported as well.
+To benchmark the training performance on a specific batch size, run `train.py` training script. Performance in tokens/s will be printed to standard output every N iterations, specified by the `--log-interval` option. Additionally performance and loss values will be logged by [dllogger](https://github.com/NVIDIA/dllogger) to the file specified in `--stat-file` option. Every line in the output file will be a valid JSON file prepended with `DLLL` prefix.
 
 #### Inference performance benchmark
 
-To benchmark the inference performance on a specific batch size, run the `generate.py` script. The mean throughput will be reported at the end of the script.
+To benchmark the inference performance on a specific batch size, run following command to start the benchmark
+```bash
+for i in {1..10}; do sacrebleu -t wmt14/full -l en-de --echo src; done | python inference.py --buffer-size 5000 --path /path/to/your/checkpoint.pt --max-tokens 10240 --fuse-dropout-add --remove-bpe --bpe-codes /data/code --fp16 > /dev/null
+```
+Results will be printed to stderr.
 
 ### Results
 
@@ -342,100 +386,177 @@ The following sections provide details on how we achieved our performance and ac
 
 #### Training accuracy results
 
-In order to test the accuracy of our implementation, we have run experiments with different seeds for 100 epochs with batch size 5120 per GPU and learning rate 6e-4 in the pytorch-18.12-py3 Docker container. The plot below shows the BLEU score changes.<br/>
-![Accuracy plot](./BLEU.png)
+Following the spirit of the paper [A Call for Clarity in Reporting BLEU Scores](https://arxiv.org/pdf/1804.08771.pdf) we decided to change evaluation metric implemented in fairseq to [SacreBleu](https://github.com/mjpost/sacreBLEU) score. We have calculated that the new metric has almost linear relationship with the old one. We run linear regression on nearly 2000 checkpoints to discover that the SacreBleu score almost perfectly follows the formula: newScore = 0.978 * oldScore - 0.05.
+<p align="center">
+    <img src="./bleu_relationship.png" />
+    <br>
+    Figure 2. Linear relationship between old and new BLEU metric.
+</p>
+To take into account the varibaility of the results we computed basic statistics that help us verify whether a model trains correctly. Evaluating nearly 2000 checkpoints from 20 runs, the best score we achieved is 28.09 BLEU (which corresponds to 28.77 old score). Variance of the score of the best performing model between those 20 runs is 0.011. Knowing that max statistic is skewed toward higher values we have also run studies which calculate threshold beyond which validation loss is no longer correlated with BLEU score.
+Of course our hope is that dev's set distribution is similar to test's set distribution and when validation loss drops, BLEU score rises. But due to the finiteness of the validation and test sets we expect that there is such a loss value that makes performance on both sets decoupled from each other. To find this point we used Pearson correlation coefficient as a metric. The results indicate that optimizing beyond 4.02 validation loss value is no longer beneficial for the BLEU score. Further optimization does not cause overfitting but results become stochastic.
+Mean BLEU score after reaching 4.02 validation loss is 27.38. We observe variance of 0.08, which translate to nearly 0.3 BLEU average difference between mean score and obtained score.
+<p align="center">
+    <img src="./decorrelation_threshold.png" />
+    <br>
+    Figure 3. Validation loss vs BLEU score. Plots are trimmed to certain validation loss threshold.
+</p>
 
-Running this code with the provided hyperparameters will allow you to achieve the following results. Our setup is a DGX-1 with 8x Tesla V100 16GB. We've verified our results after training 32 epochs to obtain multi-GPU and mixed precision scaling results.
+##### Training accuracy: NVIDIA DGX A100 (8x A100 40GB)
+Our results were obtained by running the `run_DGXA100_AMP_8GPU.sh` and `run_DGXA100_TF32_8GPU.sh` training scripts in the pytorch-20.06-py3 NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs. We report average accuracy over 6 runs. We consider a model trained when it reaches minimal validation loss. Time to train contains only training time without validation. Depending on a configuration and frequency of validation it can take up to additional minute per epoch. 
 
- GPU count | Mixed precision BLEU | fp32 BLEU | Mixed precision training time | fp32 training time
----|---|---|---|---
- 8 | 28.69 | 28.43 | 446 min | 1896 min
- 4 | 28.35 | 28.31 | 834 min | 3733 min
+| GPUs    | Batch size / GPU    | Accuracy - TF32  | Accuracy - mixed precision  |   Time to train - TF32  |  Time to train - mixed precision | Time to train speedup (TF32 to mixed precision)        
+|---------|---------------------|------------------|-----------------------------|-------------------------|----------------------------------|------------------------------------
+| 8       | 10240               | 27.92            | 27.76                       | 2.87 hours              | 2.79 hours                       | x1.03
 
-In some cases we can train further with the same setup to achieve slightly better results. 
+##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
+
+Our results were obtained by running the `run_DGX1_AMP_8GPU.sh` and `run_DGX1_FP32_8GPU.sh` training scripts in the pytorch-20.06-py3 NGC container on NVIDIA DGX-1 (8x V100 16GB) GPUs. We report average accuracy over 6 runs. We consider a model trained when it reaches minimal validation loss. Time to train contains only training time without validation. Depending on a configuration and frequency of validation it can take up to additional minute per epoch. Using mixed precision we could fit a larger batch size in the memory, further speeding up the training.
+
+| GPUs    | Batch size / GPU    | Accuracy - FP32  | Accuracy - mixed precision  |   Time to train - FP32  |  Time to train - mixed precision | Time to train speedup (FP32 to mixed precision)        
+|---------|---------------------|------------------|-----------------------------|-------------------------|----------------------------------|------------------------------------
+| 8       | 5120/2560           | 27.66            | 27.82                       | 12 hours                | 4.6  hours                       | x2.64
 
 #### Training performance results
 
-##### NVIDIA DGX-1 (8x V100 16G)
+##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
 
-Our results were obtained by running the `run_training.sh` and `run_training_fp32.sh` training scripts in the PyTorch NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs. Performance numbers (in tokens per second) were averaged over an entire training epoch.
+Our results were obtained by running the `run_DGXA100_AMP_8GPU.sh` and `run_DGXA100_TF32_8GPU.sh` training scripts in the pytorch-20.06-py3 NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs. Performance numbers (in tokens per second) were averaged over an entire training epoch.
 
-| GPUs   | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)   | Weak scaling - FP32    | Weak scaling - mixed precision        
-|--------|--------------------|----------------------|---------------------------------|-----------------------------------------------|------------------------|------------------------------
-|8       |2560                | 53641                | 186442                          | 3.48                                          |  7.03                  | 7.82
-|4       |2560                | 26647                | 92514                           | 3.47                                          |  3.49                  | 3.88
-|1       |2560                | 7635                 | 23821                           | 3.12                                          |  1                     | 1
+| GPUs   | Batch size / GPU   | Throughput - TF32    | Throughput - mixed precision    | Throughput speedup (TF32 - mixed precision)   | Weak scaling - TF32    | Weak scaling - mixed precision        
+|--------|--------------------|----------------------|---------------------------------|-----------------------------------------------|------------------------|-----
+| 8      | 10240              | 316913               | 582721                          | x1.84                                         | 6.93                   | 7.05 
+| 4      | 10240              | 161980               | 298741                          | x1.84                                         | 3.54                   | 3.62
+| 1      | 10240              | 45755                | 82618                           | x1.81                                         | 1                      | 1
 
-In addition mixed precision training has lower memory requirements, so we can train with batch size twice as big
-
-| GPUs   | Batch size / GPU   | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)   | Weak scaling - mixed precision        
-|--------|--------------------|---------------------------------|-----------------------------------------------|--------------------
-|8       |5120                | 235077                          | 4.38                                          | 7.31 
-|4       |5120                | 75574                           | 2.83                                          | 2.35
-|1       |5120                | 32153                           | 4.21                                          | 1
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
-##### NVIDIA DGX-2 (16x V100 32G)
+##### Training stability test
 
-Our results were obtained by running the `run_training.sh` and `run_training_fp32.sh` training scripts in the Pytorch NGC container on NVIDIA DGX-2 with (16x V100 32G) GPUs. Performance numbers (in items/images per second) were averaged over an entire training epoch.
+The following plot shows average validation loss curves for different configs. We can see that training with AMP O2 converges slightly slower that FP32 and TF32 training. In order to mitigate this, you can use option `--amp-level O1` at the cost of 20% performance drop compared to the default AMP setting.
+
+<p align="center">
+    <img width="75%" hight="75%" src="./average_valid_loss.png" />
+    <br>
+    Figure 4. Validation loss curves
+</p>
+
+##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
+
+Our results were obtained by running the `run_DGX1_AMP_8GPU.sh` and `run_DGX1_FP32_8GPU.sh` training scripts in the pytorch-20.06-py3 NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs. Performance numbers (in tokens per second) were averaged over an entire training epoch. Using mixed precision we could fit a larger batch size in the memory, further speeding up the training.
 
 | GPUs   | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)   | Weak scaling - FP32    | Weak scaling - mixed precision        
-|--------|--------------------|----------------------|---------------------------------|-----------------------------------------------|------------------------|-----------------------------
-| 16     | 5120               | 128319               | 476585                          | 3.71                                          |                        |                         
- 
+|--------|--------------------|----------------------|---------------------------------|-----------------------------------------------|------------------------|-----
+| 8      | 5120/2560          | 58742                | 223245                          | x3.80                                         | 6.91                   | 6.67
+| 4      | 5120/2560          | 29674                | 115269                          | x3.88                                         | 3.49                   | 3.44
+| 1      | 5120/2560          | 8498                 | 33468                           | x3.94                                         | 1                      | 1
+
+
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+
+##### Training performance: NVIDIA DGX-2 (16x V100 32GB)
+
+Our results were obtained by running the `run_DGX1_AMP_8GPU.sh` and `run_DGX1_FP32_8GPU.sh` training scripts setting number of GPUs to 16 in the pytorch-20.06-py3 NGC container on NVIDIA DGX-2 with (16x V100 32GB) GPUs. Performance numbers (in tokens per second) were averaged over an entire training epoch. Using mixed precision we could fit a larger batch size in the memory, further speeding up the training.
+
+| GPUs   | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)   | Weak scaling - FP32    | Weak scaling - mixed precision        
+|--------|--------------------|----------------------|---------------------------------|-----------------------------------------------|------------------------|-----
+| 16     | 10240/5120         | 130867               | 510267                          | x3.9                                          | 13.38                  | 12.7
+| 8      | 10240/5120         | 68829                | 269464                          | x3.91                                         | 7.04                   | 6.71
+| 4      | 10240/5120         | 35168                | 141143                          | x4.01                                         | 3.6                    | 3.51
+| 1      | 10240/5120         | 9779                 | 40163                           | x4.11                                         | 1                      | 1   
+
+
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
 #### Inference performance results
 
-We provide two inference scripts, `generate.py` for preprocessed data and `interactive.py` for raw input. To measure throughput of the Transformer model, run:
-```bash
-python generate.py /path/to/dataset/wmt14_en_de_joined_dict  \
-  --path /path/to/your/checkpoint.pt \
-  --beam 4 \
-  --remove-bpe \
-  --quiet \
-  --fp16
-```
-To measure end-to-end inference with tokenization,
-```
-python interactive.py \
-    --buffer-size 1 \
-    --fp16 \
-    --path /path/to/your/checkpoint.pt \
-    --max-tokens 128 \
-    --fuse-dropout-add \
-    --remove-bpe\
-    --bpe-codes /path/to/code/file \
-    /path/to/dataset/wmt14_en_de_joined_dict/
+Our implementation of the Transformer has dynamic batching algorithm, which batches sentences together in such a way that there are no more than `N` tokens in each batch or no more than `M` sentences in each batch. In this benchmark we use the first option in order to get the most stable results.
 
-```
-We have benchmarked the inference performance by running the `generate.py` script using the pytorch-19.03-py3 NGC Docker container. Inference was run on a single GPU.
+##### Inference performance: NVIDIA DGX A100 (1x A100 40GB)
 
-GPU | Mixed precision | FP32 | FP16/Mixed speedup
----|---|---|---
-Tesla V100-SXM2-32GB | 6010 | 3414 | 1.76
+Our results were obtained by running the `inference.py` inferencing benchmarking script in the pytorch-20.06-py3 NGC container on NVIDIA DGX A100 (1x A100 40GB) GPU.
+
+FP16
+
+| Batch size |  Throughput Avg | Latency Avg | Latency 90% |Latency 95% |Latency 99% |
+|------------|-----------------|-------------|-------------|------------|------------|
+| 10240      | 9653            | 0.986s      | 1.291s      | 2.157s     | 2.167s     |
+| 2560       | 5092            | 0.504s      | 0.721s      | 0.830s     | 1.752s     |
+| 1024       | 2590            | 0.402s      | 0.587s      | 0.666s     | 0.918s     |
+| 512        | 1357            | 0.380s      | 0.561s      | 0.633s     | 0.788s     |
+| 256        | 721             | 0.347s      | 0.513s      | 0.576s     | 0.698s     | 
+
+TF32
+
+| Batch size | Throughput Avg | Latency Avg | Latency 90% |Latency 95% |Latency 99% |
+|------------|----------------|-------------|-------------|------------|------------|
+|  10240     | 7755           | 1.227s      | 1.592s      | 2.512s     | 2.525s     |
+|  2560      | 4624           | 0.555s      | 0.786s      | 0.872s     | 1.886s     |
+|  1024      | 2394           | 0.435s      | 0.627s      | 0.702s     | 0.881s     |
+|  512       | 1275           | 0.405s      | 0.586s      | 0.663s     | 0.821s     |
+|  256       | 677            | 0.370s      | 0.546s      | 0.613s     | 0.733s     |    
+
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+
+##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
+
+Our results were obtained by running the `inference.py` inferencing benchmarking script in the pytorch-20.06-py3 NGC container on NVIDIA DGX-1 with (1x V100 16GB) GPU.
+
+FP16
+
+| Batch size | Throughput Avg | Latency Avg | Latency 90% |Latency 95% |Latency 99% |
+|------------|----------------|-------------|-------------|------------|------------|
+| 10240      | 7464           | 1.283s      | 1.704s      | 1.792s     | 1.801s     |
+| 2560       | 3596           | 0.719s      | 1.066s      | 1.247s     | 1.423s     |
+| 1024       | 1862           | 0.563s      | 0.857s      | 0.936s     | 1.156s     |
+| 512        | 1003           | 0.518s      | 0.782s      | 0.873s     | 1.103s     |
+| 256        | 520            | 0.484s      | 0.723s      | 0.813s     | 0.992s     |
+
+FP32
+
+| Batch size | Throughput Avg | Latency Avg | Latency 90% | Latency 95% | Latency 99% |
+|------------|----------------|-------------|-------------|-------------|-------------|
+| 10240      | 3782           | 2.531s      | 3.091s      | 3.121s      | 3.136s      |
+| 2560       | 2910           | 0.888s      | 1.221s      | 1.252s      | 1.432s      |
+| 1024       | 1516           | 0.692s      | 1.001s      | 1.126s      | 1.297s      |
+| 512        | 941            | 0.551s      | 0.812s      | 0.893s      | 1.133s      |
+| 256        | 502            | 0.501s      | 0.734s      | 0.822s      | 0.978s      |
+
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+
 
 ## Release notes
 
 ### Changelog
 
-January 2019
-- initial commit, forked from [fairseq](https://github.com/pytorch/fairseq/commit/ac5fddfc691267285a84c81d39475411da5ed1c6)
+June 2020
+- add TorchScript support
+- Ampere support
 
-May 2019:
-- add mid-training [SacreBLEU](https://pypi.org/project/sacrebleu/1.2.10/) evaluation. Better handling of OOMs.
+March 2020
+- remove language modeling from the repository
+- one inference script for large chunks of data as well as for interactive demo
+- change custom distributed strategy to APEX's DDP
+- replace custom fp16 training with AMP
+- major refactoring of the codebase
 
-June 2019
-- new README
-
-July 2019
-- replace custom fused operators with jit functions
+December 2019
+- Change evaluation metric
 
 August 2019
 - add basic AMP support
 
+July 2019
+- Replace custom fused operators with jit functions
+
+June 2019
+- New README
+
+March 2019
+- Add mid-training [SacreBLEU](https://pypi.org/project/sacrebleu/1.2.10/) evaluation. Better handling of OOMs.
+
+Initial commit, forked from [fairseq](https://github.com/pytorch/fairseq/commit/ac5fddfc691267285a84c81d39475411da5ed1c6)
+
 ## Known issues
 
-- Course of a training heavily depends on a random seed. There is high variance in the time required to reach a certain BLEU score. Also the highest BLEU score value observed vary between runs with different seeds.
-- Translations produced by training script during online evaluation may differ from those produced by `generate.py` script. It is probably a format conversion issue.
+- Using batch size greater than 16k causes indexing error in strided_batched_gemm module

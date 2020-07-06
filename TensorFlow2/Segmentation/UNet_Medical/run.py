@@ -23,14 +23,6 @@ from utils.losses import partial_losses
 from utils.parse_results import process_performance_stats
 
 
-def restore_checkpoint(model, model_dir):
-    try:
-        model.load_weights(os.path.join(model_dir, "checkpoint"))
-    except:
-        print("Failed to load checkpoint, model will have randomly initialized weights.")
-    return model
-
-
 def train(params, model, dataset, logger):
     np.random.seed(params.seed)
     tf.random.set_seed(params.seed)
@@ -42,6 +34,9 @@ def train(params, model, dataset, logger):
 
     ce_loss = tf.keras.metrics.Mean(name='ce_loss')
     f1_loss = tf.keras.metrics.Mean(name='dice_loss')
+    checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=model)
+    if params.resume_training:
+        checkpoint.restore(tf.train.latest_checkpoint(params.model_dir))
 
     @tf.function
     def train_step(features, labels, warmup_batch=False):
@@ -83,10 +78,9 @@ def train(params, model, dataset, logger):
                 break
         timestamps = np.mean(timestamps, axis=0)
         if hvd.rank() == 0:
-            throughput_imgps, latency_ms = process_performance_stats(timestamps, params)
+            stats = process_performance_stats(timestamps, params)
             logger.log(step=(),
-                       data={"throughput_train": throughput_imgps,
-                             "latency_train": latency_ms})
+                       data={metric: value for (metric, value) in stats})
     else:
         for iteration, (images, labels) in enumerate(dataset.train_fn()):
             train_step(images, labels, warmup_batch=iteration == 0)
@@ -102,13 +96,16 @@ def train(params, model, dataset, logger):
             if iteration >= max_steps:
                 break
         if hvd.rank() == 0:
-            model.save_weights(os.path.join(params.model_dir, "checkpoint"))
+            checkpoint.save(file_prefix=os.path.join(params.model_dir, "checkpoint"))
+
     logger.flush()
 
 
 def evaluate(params, model, dataset, logger):
     ce_loss = tf.keras.metrics.Mean(name='ce_loss')
     f1_loss = tf.keras.metrics.Mean(name='dice_loss')
+    checkpoint = tf.train.Checkpoint(model=model)
+    checkpoint.restore(tf.train.latest_checkpoint(params.model_dir)).expect_partial()
 
     @tf.function
     def validation_step(features, labels):
@@ -132,10 +129,12 @@ def evaluate(params, model, dataset, logger):
 
 
 def predict(params, model, dataset, logger):
+    checkpoint = tf.train.Checkpoint(model=model)
+    checkpoint.restore(tf.train.latest_checkpoint(params.model_dir)).expect_partial()
 
     @tf.function
     def prediction_step(features):
-        return model(features, training=False)
+        return tf.nn.softmax(model(features, training=False), axis=-1)
 
     if params.benchmark:
         assert params.max_steps > params.warmup_steps, \
@@ -147,10 +146,9 @@ def predict(params, model, dataset, logger):
             timestamps[iteration] = time() - t0
             if iteration >= params.max_steps:
                 break
-        throughput_imgps, latency_ms = process_performance_stats(timestamps, params)
+        stats = process_performance_stats(timestamps, params)
         logger.log(step=(),
-                   data={"throughput_test": throughput_imgps,
-                         "latency_test": latency_ms})
+                   data={metric: value for (metric, value) in stats})
     else:
         predictions = np.concatenate([prediction_step(images).numpy()
                                       for images in dataset.test_fn(count=1)], axis=0)

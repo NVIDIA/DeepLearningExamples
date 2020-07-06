@@ -11,3 +11,6 @@ h5py
 html2text
 nltk
 progressbar
+#Others
+onnxruntime
+git+https://github.com/NVIDIA/dllogger

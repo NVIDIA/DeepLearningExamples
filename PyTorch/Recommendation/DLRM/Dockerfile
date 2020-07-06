@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.03-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.06-py3
 FROM ${FROM_IMAGE_NAME}
 
 RUN apt update && \
@@ -24,11 +24,8 @@ RUN apt update && \
 ADD requirements.txt .
 RUN pip install -r requirements.txt
 
-RUN pip uninstall -y apex && \
-    git clone https://github.com/NVIDIA/apex && \
-    cd apex && \
-    pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
-
 WORKDIR /workspace/dlrm
 
 COPY . .
+
+RUN pip install --no-cache-dir -e .

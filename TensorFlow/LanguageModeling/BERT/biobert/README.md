@@ -355,7 +355,7 @@ mpi_command="mpirun -np 16 -H localhost:16 \
     -x NCCL_DEBUG=INFO \
     -x LD_LIBRARY_PATH \
     -x PATH -mca pml ob1 -mca btl ^openib" \
-     python run_ner.py --horovod --use_fp16 --use_xla \
+     python run_ner.py --horovod --amp --use_xla \
       --vocab_file=$BERT_DIR/vocab.txt \
      --bert_config_file=$BERT_DIR/bert_config.json \
      --output_dir=/results --data_dir=$DATA_DIR"

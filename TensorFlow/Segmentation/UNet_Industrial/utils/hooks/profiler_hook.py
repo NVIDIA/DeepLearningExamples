@@ -68,7 +68,7 @@ class ProfilerHook(tf.train.SessionRunHook):
         Logger._stage = "train" if self._is_training else "eval"
 
         Logger.log(
-            step=(),
+            step=('PARAMETER'),
             data={"# Total Trainable Parameters": int(_params_count)}, verbosity=Logger.Verbosity.DEFAULT
         )
 
@@ -307,21 +307,11 @@ class ProfilerHook(tf.train.SessionRunHook):
         total_processing_time = time.time() - self._start_training_time
 
         total_processing_hours, rem = divmod(total_processing_time, 3600)
-        total_processing_minutes, total_processing_seconds = divmod(rem, 60)
 
         print("\n============== Final Summary ==============")
         Logger.log(
             step=(),
             data={"{prefix}.avg_ips".format(prefix=Logger._stage): avg_processing_speed},
-            verbosity=Logger.Verbosity.DEFAULT
-        )
-        Logger.log(
-            step=(),
-            data={"{prefix} - Total Processing Time".format(prefix=Logger._stage.capitalize()): "%dh %02dm %02ds" % (
-                total_processing_hours,
-                total_processing_minutes,
-                total_processing_seconds
-            )},
             verbosity=Logger.Verbosity.DEFAULT
         )
 

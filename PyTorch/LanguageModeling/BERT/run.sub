@@ -19,8 +19,8 @@
 set -eux
 
 # The following variables variables need to be set
-# Base container to be used  
-readonly docker_image="nvcr.io/nvidia/pytorch:19.10-py3"
+# Base container to be used - container built in step 1 on quick start guide 
+readonly docker_image="nvcr.io/nvidia/pytorch:20.06-py3"
 # Location of dataset for phase 1
 readonly datadir="/raid/datasets/bert/hdf5/shard_1472_test_split_10/seq_128_pred_20_dupe_5/training"
 # Location of dataset for phase 2
@@ -29,6 +29,8 @@ readonly datadir_phase2="/raid/datasets/bert/hdf5/shard_1472_test_split_10/seq_5
 readonly checkpointdir="$PWD/checkpoints"
 
 readonly mounts=".:/workspace/bert,${datadir}:/workspace/data,${datadir_phase2}:/workspace/data_phase2,${checkpointdir}:/results"
+
+BIND_CMD="./bind.sh --cpu=exclusive --ib=single --"
 
 srun --ntasks="${SLURM_JOB_NUM_NODES}" --ntasks-per-node=1 mkdir -p "${checkpointdir}"
 
@@ -59,7 +61,7 @@ PHASES=( "$PHASE1" "$PHASE2" )
 PHASE=${PHASE:-1}
 
 BERT_CMD="\
-    python -u /workspace/bert/run_pretraining.py \
+    ${BIND_CMD} python -u /workspace/bert/run_pretraining.py \
     --seed=42 \
     ${PHASES[$((PHASE-1))]} \
     --do_train \

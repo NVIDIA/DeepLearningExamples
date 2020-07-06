@@ -78,6 +78,3 @@ We're posting these examples on GitHub to better support the community, facilita
 
 ## Known issues
 In each of the network READMEs, we indicate any known issues and encourage the community to provide feedback.
-
-
-

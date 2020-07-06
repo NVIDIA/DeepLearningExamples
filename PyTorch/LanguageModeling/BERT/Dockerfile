@@ -11,8 +11,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.03-py3
-FROM nvcr.io/nvidia/tritonserver:20.03-py3-clientsdk as trt
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.06-py3
+FROM nvcr.io/nvidia/tritonserver:20.06-v1-py3-clientsdk as trt
 FROM ${FROM_IMAGE_NAME}
 RUN apt-get update && apt-get install -y pbzip2 pv bzip2 cabextract
 
@@ -27,7 +27,8 @@ COPY --from=trt /workspace/install/ /workspace/install/
 ENV LD_LIBRARY_PATH /workspace/install/lib:${LD_LIBRARY_PATH}
 
 # Install trt python api
-RUN pip install /workspace/install/python/tensorrtserver-1.*-py3-none-linux_x86_64.whl
+RUN apt-get install libb64-0d
+RUN pip install /workspace/install/python/tensorrtserver*.whl
 
 WORKDIR /workspace/bert
 RUN pip install --upgrade --no-cache-dir pip \

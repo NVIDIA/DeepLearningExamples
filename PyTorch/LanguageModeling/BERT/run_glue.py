@@ -33,7 +33,7 @@ from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm, trange
 
 from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
-from modeling import BertForSequenceClassification, BertConfig, WEIGHTS_NAME, CONFIG_NAME
+import modeling
 from tokenization import BertTokenizer
 from optimization import BertAdam, warmup_linear
 from schedulers import LinearWarmUpScheduler
@@ -458,8 +458,13 @@ def main():
                         default=1,
                         help="Number of updates steps to accumulate before performing a backward/update pass.")
     parser.add_argument('--fp16',
+                        default=False,
                         action='store_true',
-                        help="Whether to use 16-bit float precision instead of 32-bit")
+                        help="Mixed precision training")
+    parser.add_argument('--amp',
+                        default=False,
+                        action='store_true',
+                        help="Mixed precision training")
     parser.add_argument('--loss_scale',
                         type=float, default=0,
                         help="Loss scaling to improve fp16 numeric stability. Only used when fp16 set to True.\n"
@@ -478,7 +483,8 @@ def main():
                         help="The BERT model config")
 
     args = parser.parse_args()
-
+    args.fp16 = args.fp16 or args.amp
+    
     if args.server_ip and args.server_port:
         # Distant debugging - see https://code.visualstudio.com/docs/python/debugging#_attach-to-a-local-script
         import ptvsd
@@ -552,12 +558,13 @@ def main():
             num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
 
     # Prepare model
-    config = BertConfig.from_json_file(args.config_file)
+    config = modeling.BertConfig.from_json_file(args.config_file)
     # Padding for divisibility by 8
     if config.vocab_size % 8 != 0:
         config.vocab_size += 8 - (config.vocab_size % 8)
 
-    model = BertForSequenceClassification(config, num_labels=num_labels)
+    modeling.ACT2FN["bias_gelu"] = modeling.bias_gelu_training
+    model = modeling.BertForSequenceClassification(config, num_labels=num_labels)
     print("USING CHECKPOINT from", args.init_checkpoint)
     model.load_state_dict(torch.load(args.init_checkpoint, map_location='cpu')["model"], strict=False)
     print("USED CHECKPOINT from", args.init_checkpoint)

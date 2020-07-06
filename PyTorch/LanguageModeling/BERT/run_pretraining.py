@@ -198,7 +198,7 @@ def parse_arguments():
                              "E.g., 0.1 = 10%% of training.")
     parser.add_argument("--local_rank",
                         type=int,
-                        default=-1,
+                        default=os.getenv('LOCAL_RANK', -1),
                         help="local_rank for distributed training on gpus")
     parser.add_argument('--seed',
                         type=int,
@@ -211,7 +211,11 @@ def parse_arguments():
     parser.add_argument('--fp16',
                         default=False,
                         action='store_true',
-                        help="Whether to use 16-bit float precision instead of 32-bit")
+                        help="Mixed precision training")
+    parser.add_argument('--amp',
+                        default=False,
+                        action='store_true',
+                        help="Mixed precision training")
     parser.add_argument('--loss_scale',
                         type=float, default=0.0,
                         help='Loss scaling, positive power of 2 values can improve fp16 convergence.')
@@ -272,7 +276,14 @@ def parse_arguments():
                         default=False,
                         action='store_true',
                         help='Disable tqdm progress bar')
+    parser.add_argument('--steps_this_run', type=int, default=-1,
+                        help='If provided, only run this many steps before exiting')
+
     args = parser.parse_args()
+    args.fp16 = args.fp16 or args.amp
+
+    if args.steps_this_run < 0:
+        args.steps_this_run = args.max_steps
     
     return args
 
@@ -291,7 +302,7 @@ def setup_training(args):
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
         args.n_gpu = 1
-
+        
     if args.gradient_accumulation_steps == 1:
         args.allreduce_post_accumulation = False
         args.allreduce_post_accumulation_fp16 = False
@@ -336,7 +347,7 @@ def prepare_model_and_optimizer(args, device):
     if config.vocab_size % 8 != 0:
         config.vocab_size += 8 - (config.vocab_size % 8)
 
-    modeling.ACT2FN["bias_gelu"] = torch.jit.script(modeling.ACT2FN["bias_gelu"])
+    modeling.ACT2FN["bias_gelu"] = modeling.bias_gelu_training
     model = modeling.BertForPreTraining(config)
 
     checkpoint = None
@@ -481,9 +492,6 @@ def main():
     global timeout_sent
 
     args = parse_arguments()
-
-    if args.use_env and 'LOCAL_RANK' in os.environ:
-        args.local_rank = int(os.environ['LOCAL_RANK'])
         
     random.seed(args.seed + args.local_rank)
     np.random.seed(args.seed + args.local_rank)
@@ -604,7 +612,7 @@ def main():
                         lr_scheduler.step()  # learning rate warmup
                         global_step = take_optimizer_step(args, optimizer, model, overflow_buf, global_step)
 
-                    if global_step >= args.max_steps:
+                    if global_step >= args.steps_this_run or timeout_sent:
                         train_time_raw = time.time() - raw_train_start
                         last_num_steps = int(training_steps / args.gradient_accumulation_steps) % args.log_freq
                         last_num_steps = args.log_freq if last_num_steps == 0 else last_num_steps
@@ -623,7 +631,8 @@ def main():
                                                                             "learning_rate": optimizer.param_groups[0]['lr']})
                         average_loss = 0
 
-                    if global_step >= args.max_steps or training_steps % (
+
+                    if global_step >= args.steps_this_run or training_steps % (
                             args.num_steps_per_checkpoint * args.gradient_accumulation_steps) == 0 or timeout_sent:
                         if is_main_process() and not args.skip_checkpoint:
                             # Save a trained model
@@ -649,7 +658,7 @@ def main():
 
                         # Exiting the training due to hitting max steps, or being sent a 
                         # timeout from the cluster scheduler
-                        if global_step >= args.max_steps or timeout_sent:
+                        if global_step >= args.steps_this_run or timeout_sent:
                             del train_dataloader
                             # thread.join()
                             return args, final_loss, train_time_raw, global_step

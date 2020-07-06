@@ -20,6 +20,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 from collections import Counter
 import re
 
@@ -28,7 +29,7 @@ import torch
 
 SPACE_NORMALIZER = re.compile("\s+")
 
-path = 'fairseq/prefixes/nonbreaking_prefix.en'
+path = os.path.join(os.path.dirname(os.path.abspath(__file__)),'prefixes/nonbreaking_prefix.en')
 prefixes ={}
 
 with open(path, 'r') as f:

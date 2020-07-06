@@ -1,8 +1,8 @@
-# U-Net Medical Image Segmentation for TensorFlow 1.x
+# UNet Medical Image Segmentation for TensorFlow 1.x
  
-This repository provides a script and recipe to train U-Net Medical to achieve state of the art accuracy, and is tested and maintained by NVIDIA.
- 
-## Table of contents
+This repository provides a script and recipe to train UNet Medical to achieve state of the art accuracy, and is tested and maintained by NVIDIA.
+
+## Table of Contents
  
 - [Model overview](#model-overview)
    * [Model architecture](#model-architecture)
@@ -11,6 +11,7 @@ This repository provides a script and recipe to train U-Net Medical to achieve s
      * [Features](#features)
    * [Mixed precision training](#mixed-precision-training)
      * [Enabling mixed precision](#enabling-mixed-precision)
+     * [Enabling TF32](#enabling-tf32)
 - [Setup](#setup)
    * [Requirements](#requirements)
 - [Quick Start Guide](#quick-start-guide)
@@ -29,38 +30,44 @@ This repository provides a script and recipe to train U-Net Medical to achieve s
      * [Inference performance benchmark](#inference-performance-benchmark)
    * [Results](#results)
      * [Training accuracy results](#training-accuracy-results)
-       * [Training accuracy: NVIDIA DGX-1 (8x V100 16G)](#training-accuracy-nvidia-dgx-1-8x-v100-16g)
+       * [Training accuracy: NVIDIA DGX A100 (8x A100 40GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-40gb)  
+       * [Training accuracy: NVIDIA DGX-1 (8x V100 16GB)](#training-accuracy-nvidia-dgx-1-8x-v100-16gb)
      * [Training performance results](#training-performance-results)
-       * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16g)
+       * [Training performance: NVIDIA DGX A100 (8x A100 40GB)](#training-performance-nvidia-dgx-a100-8x-a100-40gb) 
+       * [Training performance: NVIDIA DGX-1 (8x V100 16GB)](#training-performance-nvidia-dgx-1-8x-v100-16gb)
      * [Inference performance results](#inference-performance-results)
-        * [Inference performance: NVIDIA DGX-1 (1x V100 16G)](#inference-performance-nvidia-dgx-1-1x-v100-16g)
+        * [Inference performance: NVIDIA DGX A100 (1x A100 40GB)](#inference-performance-nvidia-dgx-a100-1x-a100-40gb)
+        * [Inference performance: NVIDIA DGX-1 (1x V100 16GB)](#inference-performance-nvidia-dgx-1-1x-v100-16gb)
 - [Release notes](#release-notes)
    * [Changelog](#changelog)
    * [Known issues](#known-issues)
  
+ 
 ## Model overview
  
-The U-Net model is a convolutional neural network for 2D image segmentation. This repository contains a U-Net implementation as described in the original paper [U-Net: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597), without any alteration.
+The UNet model is a convolutional neural network for 2D image segmentation. This repository contains a UNet implementation as described in the original paper [UNet: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597), without any alteration.
  
-This model is trained with mixed precision using Tensor Cores on NVIDIA Volta and Turing GPUs. Therefore, researchers can get results  2.2x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
- 
+This model is trained with mixed precision using Tensor Cores on Volta, Turing, and the NVIDIA Ampere GPU architectures. Therefore, researchers can get results  2.2x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
+
 ### Model architecture
  
-U-Net was first introduced by Olaf Ronneberger, Philip Fischer, and Thomas Brox in the paper: [U-Net: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597). U-Net allows for seamless segmentation of 2D images, with high accuracy and performance, and can be adapted to solve many different segmentation problems.
+UNet was first introduced by Olaf Ronneberger, Philip Fischer, and Thomas Brox in the paper: [UNet: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597). UNet allows for seamless segmentation of 2D images, with high accuracy and performance, and can be adapted to solve many different segmentation problems.
  
-The following figure shows the construction of the U-Net model and its different components. U-Net is composed of a contractive and an expanding path, that aims at building a bottleneck in its centermost part through a combination of convolution and pooling operations. After this bottleneck, the image is reconstructed through a combination of convolutions and upsampling. Skip connections are added with the goal of helping the backward flow of gradients in order to improve the training.
+The following figure shows the construction of the UNet model and its different components. UNet is composed of a contractive and an expanding path, that aims at building a bottleneck in its centermost part through a combination of convolution and pooling operations. After this bottleneck, the image is reconstructed through a combination of convolutions and upsampling. Skip connections are added with the goal of helping the backward flow of gradients in order to improve the training.
  
-![U-Net](images/unet.png)
+![UNet](images/unet.png)
+
+Figure 1. UNet architecture
  
 ### Default configuration
  
-U-Net consists of a contractive (left-side) and expanding (right-side) path. It repeatedly applies unpadded convolutions followed by max pooling for downsampling. Every step in the expanding path consists of an upsampling of the feature maps and a concatenation with the correspondingly cropped feature map from the contractive path.
+UNet consists of a contractive (left-side) and expanding (right-side) path. It repeatedly applies unpadded convolutions followed by max pooling for downsampling. Every step in the expanding path consists of an upsampling of the feature maps and a concatenation with the correspondingly cropped feature map from the contractive path.
  
 ### Feature support matrix
  
 The following features are supported by this model.
  
-| **Feature** | **U-Net Medical** |
+| **Feature** | **UNet Medical** |
 |---------------------------------|-----|
 | Automatic mixed precision (AMP) | Yes |
 | Horovod Multi-GPU (NCCL)        | Yes |
@@ -70,13 +77,13 @@ The following features are supported by this model.
  
 **Automatic Mixed Precision (AMP)**
  
-This implementation of U-Net uses AMP to implement mixed precision training. It allows us to use FP16 training with FP32 master weights by modifying just a few lines of code.
+This implementation of UNet uses AMP to implement mixed precision training. It allows us to use FP16 training with FP32 master weights by modifying just a few lines of code.
  
 **Horovod**
  
 Horovod is a distributed training framework for TensorFlow, Keras, PyTorch, and MXNet. The goal of Horovod is to make distributed deep learning fast and easy to use. For more information about how to get started with Horovod, see the [Horovod: Official repository](https://github.com/horovod/horovod).
  
-Multi-GPU training with Horovod
+**Multi-GPU training with Horovod**
  
 Our model uses Horovod to implement efficient multi-GPU training with NCCL. For details, see example sources in this repository or see the [TensorFlow tutorial](https://github.com/horovod/horovod/#usage).
  
@@ -86,40 +93,58 @@ XLA is a domain-specific compiler for linear algebra that can accelerate TensorF
  
 ### Mixed precision training
  
-Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format, while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [tensor cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing architecture, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures.  Using mixed precision training requires two steps:
-1. Porting the model to use the FP16 data type where appropriate.
-2. Adding loss scaling to preserve small gradient values.
- 
-The ability to train deep learning networks with lower precision was introduced in the Pascal architecture and first supported in [CUDA 8](https://devblogs.nvidia.com/parallelforall/tag/fp16/) in the NVIDIA Deep Learning SDK.
- 
+Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [Tensor Cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing architecture, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using [mixed precision training](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html) previously required two steps:
+1.  Porting the model to use the FP16 data type where appropriate.    
+2.  Adding loss scaling to preserve small gradient values.
+
+This can now be achieved using Automatic Mixed Precision (AMP) for TensorFlow to enable the full [mixed precision methodology](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#tensorflow) in your existing TensorFlow model code.  AMP enables mixed precision training on Volta and Turing GPUs automatically. The TensorFlow framework code makes all necessary model changes internally.
+
+In TF-AMP, the computational graph is optimized to use as few casts as necessary and maximize the use of FP16, and the loss scaling is automatically applied inside of supported optimizers. AMP can be configured to work with the existing tf.contrib loss scaling manager by disabling the AMP scaling with a single environment variable to perform only the automatic mixed-precision optimization. It accomplishes this by automatically rewriting all computation graphs with the necessary operations to enable mixed precision training and automatic loss scaling.
+
 For information about:
-- How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) documentation.
-- Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
-- How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp) from the TensorFlow User Guide.
- 
+-   How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html) documentation.
+-   Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
+-   How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp) from the TensorFlow User Guide.
+
 #### Enabling mixed precision
  
-This implementation exploits the TensorFlow Automatic Mixed Precision feature. In order to enable mixed precision training, the following environment variables must be defined with the correct value before the training starts:
-```
-TF_ENABLE_AUTO_MIXED_PRECISION=1
-```
-Exporting these variables ensures that loss scaling is performed correctly and automatically.
-By supplying the `--use_amp` flag to the `main.py` script while training in FP32, the following variables are set to their correct value for mixed precision training:
-```
-if params.use_amp:
+Mixed precision is enabled in TensorFlow by using the Automatic Mixed Precision (TF-AMP) extension which casts variables to half-precision upon retrieval, while storing variables in single-precision format. Furthermore, to preserve small gradient magnitudes in backpropagation, a [loss scaling](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#lossscaling) step must be included when applying gradients. In TensorFlow, loss scaling can be applied statically by using simple multiplication of loss by a constant value or automatically, by TF-AMP. Automatic mixed precision makes all the adjustments internally in TensorFlow, providing two benefits over manual operations. First, programmers need not modify network model code, reducing development and maintenance effort. Second, using AMP maintains forward and backward compatibility with all the APIs for defining and running TensorFlow models.
+
+To enable mixed precision, you can simply add the values to the environmental variables inside your training script:
+- Enable TF-AMP graph rewrite:
+  ```
+  os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
+  ```
+  
+- Enable Automated Mixed Precision:
+  ```
   os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
-```
+  ```
  
+#### Enabling TF32
+
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](#https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
+
+TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
+
+For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](#https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
+
+TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
+
 ## Setup
  
-The following section lists the requirements in order to start training the U-Net Medical model.
+The following section lists the requirements in order to start training the UNet Medical model.
  
 ### Requirements
  
 This repository contains Dockerfile which extends the TensorFlow NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 - [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-- TensorFlow 20.02-tf1-py3 [NGC container](https://ngc.nvidia.com/registry/nvidia-tensorflow)
-- [NVIDIA Volta GPU](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
+- TensorFlow 20.06-tf1-py3 [NGC container](https://ngc.nvidia.com/registry/nvidia-tensorflow)
+-   GPU-based architecture:
+    - [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
+    - [NVIDIA Turing](https://www.nvidia.com/en-us/geforce/turing/)
+    - [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
+
  
 For more information about how to get started with NGC containers, see the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
 - [Getting Started Using NVIDIA GPU Cloud](https://docs.nvidia.com/ngc/ngc-getting-started-guide/index.html)
@@ -127,9 +152,10 @@ For more information about how to get started with NGC containers, see the follo
 - [Running TensorFlow](https://docs.nvidia.com/deeplearning/dgx/tensorflow-release-notes/running.html#running)
  
 For those unable to use the TensorFlow NGC container, to set up the required environment or create your own container, see the versioned [NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html).
+
 ## Quick Start Guide
  
-To train your model using mixed precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the U-Net model on the [EM segmentation challenge dataset](http://brainiac2.mit.edu/isbi_challenge/home). These steps enable you to build the U-Net TensorFlow NGC container, train and evaluate your model, and generate predictions on the test data. Furthermore, you can then choose to:
+To train your model using mixed precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the UNet model on the [EM segmentation challenge dataset](http://brainiac2.mit.edu/isbi_challenge/home). These steps enable you to build the UNet TensorFlow NGC container, train and evaluate your model, and generate predictions on the test data. Furthermore, you can then choose to:
 * compare your evaluation accuracy with our [Training accuracy results](#training-accuracy-results),
 * compare your training performance with our [Training performance benchmark](#training-performance-benchmark),
 * compare your inference performance with our [Inference performance benchmark](#inference-performance-benchmark).
@@ -138,13 +164,13 @@ For the specifics concerning training and inference, see the [Advanced](#advance
  
 1. Clone the repository.
  
-   Executing this command will create your local repository with all the code to run U-Net.
+   Executing this command will create your local repository with all the code to run UNet.
   
    ```bash
    git clone https://github.com/NVIDIA/DeepLearningExamples
-   cd DeepLearningExamples/TensorFlow/Segmentation/U-Net_Medical_TF
+   cd DeepLearningExamples/TensorFlow/Segmentation/UNet_Medical_TF
  
-2. Build the U-Net TensorFlow NGC container.
+2. Build the UNet TensorFlow NGC container.
  
    This command will use the `Dockerfile` to create a Docker image named `unet_tf`, downloading all the required components automatically.
   
@@ -169,14 +195,9 @@ For the specifics concerning training and inference, see the [Advanced](#advance
  
 4. Download and preprocess the data.
   
-   The U-Net script `main.py` operates on data from the [ISBI Challenge](http://brainiac2.mit.edu/isbi_challenge/home), the dataset originally employed in the [U-Net paper](https://arxiv.org/abs/1505.04597).
-  
-   The script `download_dataset.py` is provided for data download. It is possible to select the destination folder when downloading the files by using the `--data_dir` flag.  For example:
-   ```bash
-   python download_dataset.py --data_dir /data
-   ```
-  
-   Training and test data are composed of 3 multi-page `TIF` files, each containing 30 2D-images (around 30 Mb total). Once downloaded, the data with the `download_dataset.py` script can be used to run the training and benchmark scripts described below, by pointing `main.py` to its location using the `--data_dir` flag.
+   The UNet script `main.py` operates on data from the [ISBI Challenge](http://brainiac2.mit.edu/isbi_challenge/home), the dataset originally employed in the [UNet paper](https://arxiv.org/abs/1505.04597). The data is available to download upon registration on the website.
+    
+   Training and test data are composed of 3 multi-page `TIF` files, each containing 30 2D-images (around 30 Mb total). Once downloaded, the data can be used to run the training and benchmark scripts described below, by pointing `main.py` to its location using the `--data_dir` flag.
   
    **Note:** Masks are only provided for training data.
  
@@ -185,13 +206,13 @@ For the specifics concerning training and inference, see the [Advanced](#advance
    After the Docker container is launched, the training with the [default hyperparameters](#default-parameters) (for example 1/8 GPUs FP32/TF-AMP) can be started with:
   
    ```bash
-   bash examples/unet_{FP32, TF-AMP}_{1,8}GPU.sh <path/to/dataset> <path/to/checkpoint>
+   bash examples/unet{_TF-AMP}_{1,8}GPU.sh <path/to/dataset> <path/to/checkpoint>
    ```
   
    For example, to run with full precision (FP32) on 1 GPU from the project’s folder, simply use:
   
    ```bash
-   bash examples/unet_FP32_1GPU.sh /data /results
+   bash examples/unet_1GPU.sh /data /results
    ```
   
    This script will launch a training on a single fold and store the model’s checkpoint in <path/to/checkpoint> directory. 
@@ -199,7 +220,7 @@ For the specifics concerning training and inference, see the [Advanced](#advance
    The script can be run directly by modifying flags if necessary, especially the number of GPUs, which is defined after the `-np` flag. Since the test volume does not have labels, 20% of the training data is used for validation in 5-fold cross-validation manner. The number of fold can be changed using `--crossvalidation_idx` with an integer in range 0-4. For example, to run with 4 GPUs using fold 1 use:
   
    ```bash
-   horovodrun -np 4 python main.py --data_dir /data --model_dir /results --batch_size 1 --exec_mode train --crossvalidation_idx 1 --use_xla --use_amp
+   horovodrun -np 4 python main.py --data_dir /data --model_dir /results --batch_size 1 --exec_mode train --crossvalidation_idx 1 --xla --amp
    ```
   
    Training will result in a checkpoint file being written to `./results` on the host machine.
@@ -209,7 +230,7 @@ For the specifics concerning training and inference, see the [Advanced](#advance
    The trained model can be evaluated by passing the `--exec_mode evaluate` flag. Since evaluation is carried out on a validation dataset, the `--crossvalidation_idx` parameter should be filled. For example:
   
    ```bash
-   python main.py --data_dir /data --model_dir /results --batch_size 1 --exec_mode evaluate --crossvalidation_idx 0 --use_xla --use_amp
+   python main.py --data_dir /data --model_dir /results --batch_size 1 --exec_mode evaluate --crossvalidation_idx 0 --xla --amp
    ```
   
    Evaluation can also be triggered jointly after training by passing the `--exec_mode train_and_evaluate` flag.
@@ -217,7 +238,7 @@ For the specifics concerning training and inference, see the [Advanced](#advance
 7. Start inference/predictions.
    To run inference on a checkpointed model, run:
    ```bash
-   bash examples/unet_INFER_{FP32, TF-AMP}.sh <path/to/dataset> <path/to/checkpoint>
+   bash examples/unet_INFER{_TF-AMP}.sh <path/to/dataset> <path/to/checkpoint>
    ```
    For example:
    ```bash
@@ -234,31 +255,31 @@ The following sections provide greater details of the dataset, running training 
  
 In the root directory, the most important files are:
 * `main.py`: Serves as the entry point to the application.
-* `Dockerfile`: Container with the basic set of dependencies to run U-Net.
-* `requirements.txt`: Set of extra requirements for running U-Net.
-* `download_data.py`: Automatically downloads the dataset for training.
+* `Dockerfile`: Container with the basic set of dependencies to run UNet.
+* `requirements.txt`: Set of extra requirements for running UNet.
  
-The `utils/` folder encapsulates the necessary tools to train and perform inference using U-Net. Its main components are:
+The `utils/` folder encapsulates the necessary tools to train and perform inference using UNet. Its main components are:
 * `cmd_util.py`: Implements the command-line arguments parsing.
 * `data_loader.py`: Implements the data loading and augmentation.
 * `model_fn.py`: Implements the logic for training and inference.
 * `hooks/training_hook.py`: Collects different metrics during training.
 * `hooks/profiling_hook.py`: Collects different metrics to be used for benchmarking and testing.
 * `parse_results.py`: Implements the intermediate results parsing.
+* `setup.py`: Implements helper setup functions.
  
-The `model/` folder contains information about the building blocks of U-Net and the way they are assembled. Its contents are:
-* `layers.py`: Defines the different blocks that are used to assemble U-Net
+The `model/` folder contains information about the building blocks of UNet and the way they are assembled. Its contents are:
+* `layers.py`: Defines the different blocks that are used to assemble UNet
 * `unet.py`: Defines the model architecture using the blocks from the `layers.py` script
  
 Other folders included in the root directory are:
-* `dllogger/`: Contains the utils for logging
-* `examples/`: Provides examples for training and benchmarking U-Net
+* `examples/`: Provides examples for training and benchmarking UNet
 * `images/`: Contains a model diagram
  
 ### Parameters
  
 The complete list of the available parameters for the main.py script contains:
 * `--exec_mode`: Select the execution mode to run the model (default: `train`). Modes available:
+  * `train` - trains model from scratch.
   * `evaluate` - loads checkpoint (if available) and performs evaluation on validation subset (requires `--crossvalidation_idx` other than `None`).
   * `train_and_evaluate` - trains model from scratch and performs validation at the end (requires `--crossvalidation_idx` other than `None`).
   * `predict` - loads checkpoint (if available) and runs inference on the test set. Stores the results in `--model_dir` directory.
@@ -276,8 +297,8 @@ The complete list of the available parameters for the main.py script contains:
 * `--augment`: Enable data augmentation (default: `False`).
 * `--benchmark`: Enable performance benchmarking (default: `False`). If the flag is set, the script runs in a benchmark mode - each iteration is timed and the performance result (in images per second) is printed at the end. Works for both `train` and `predict` execution modes.
 * `--warmup_steps`: Used during benchmarking - the number of steps to skip (default: `200`). First iterations are usually much slower since the graph is being constructed. Skipping the initial iterations is required for a fair performance assessment.
-* `--use_xla`: Enable accelerated linear algebra optimization (default: `False`).
-* `--use_amp`: Enable automatic mixed precision (default: `False`).
+* `--xla`: Enable accelerated linear algebra optimization (default: `False`).
+* `--amp`: Enable automatic mixed precision (default: `False`).
  
 ### Command line options
  
@@ -295,10 +316,10 @@ usage: main.py [-h]
               [--crossvalidation_idx CROSSVALIDATION_IDX]
               [--max_steps MAX_STEPS] [--weight_decay WEIGHT_DECAY]
               [--log_every LOG_EVERY] [--warmup_steps WARMUP_STEPS]
-              [--seed SEED] [--augment] [--no-augment] [--benchmark]
-              [--no-benchmark] [--use_amp] [--use_xla]
+              [--seed SEED] [--augment] [--benchmark]
+              [--amp] [--xla]
  
-U-Net-medical
+UNet-medical
  
 optional arguments:
  -h, --help            show this help message and exit
@@ -326,25 +347,21 @@ optional arguments:
                        Number of warmup steps
  --seed SEED           Random seed
  --augment             Perform data augmentation during training
- --no-augment
  --benchmark           Collect performance metrics during training
- --no-benchmark
- --use_amp             Train using TF-AMP
- --use_xla             Train using XLA
+ --amp                 Train using TF-AMP
+ --xla                 Train using XLA
 ```
  
-The U-Net model was trained in the [EM segmentation challenge dataset](http://brainiac2.mit.edu/isbi_challenge/home). Test images provided by the organization were used to produce the resulting masks for submission. Upon registration, the challenge's data is made available through the following links:
- 
-* [train-volume.tif](http://brainiac2.mit.edu/isbi_challenge/sites/default/files/train-volume.tif)
-* [train-labels.tif](http://brainiac2.mit.edu/isbi_challenge/sites/default/files/train-labels.tif)
-* [train-volume.tif](http://brainiac2.mit.edu/isbi_challenge/sites/default/files/test-volume.tif)
- 
+## Getting the data
+
+The UNet model uses the [EM segmentation challenge dataset](http://brainiac2.mit.edu/isbi_challenge/home). Test images provided by the organization were used to produce the resulting masks for submission. The challenge's data is made available upon registration.
+
 Training and test data are comprised of three 512x512x30 `TIF` volumes (`test-volume.tif`, `train-volume.tif` and `train-labels.tif`). Files `test-volume.tif` and `train-volume.tif` contain grayscale 2D slices to be segmented. Additionally, training masks are provided in `train-labels.tif` as a 512x512x30 `TIF` volume, where each pixel has one of two classes:
 * 0 indicating the presence of cellular membrane,
 * 1 corresponding to background.
  
 The objective is to produce a set of masks that segment the data as accurately as possible. The results are expected to be submitted as a 32-bit `TIF` 3D image, with values between `0` (100% membrane certainty) and `1` (100% non-membrane certainty).
- 
+
 #### Dataset guidelines
  
 The training and test datasets are given as stacks of 30 2D-images provided as a multi-page `TIF` that can be read using the Pillow library and NumPy (both Python packages are installed by the `Dockerfile`).
@@ -374,10 +391,10 @@ Generally, the model should scale better for datasets containing more data. For 
  
 ### Training process
  
-The model trains for a total 40,000 batches (40,000 / number of GPUs), with the default U-Net setup:
+The model trains for a total 6,400 batches (6,400 / number of GPUs), with the default UNet setup:
 * Adam optimizer with learning rate of 0.0001.
  
-This default parametrization is applied when running scripts from the `./examples` directory and when running `main.py` without explicitly overriding these parameters. By default, the training is in full precision. To enable AMP, pass the `--use_amp` flag. AMP can be enabled for every mode of execution.
+This default parametrization is applied when running scripts from the `./examples` directory and when running `main.py` without explicitly overriding these parameters. By default, the training is in full precision. To enable AMP, pass the `--amp` flag. AMP can be enabled for every mode of execution.
  
 The default configuration minimizes a function _L = 1 - DICE + cross entropy_ during training.
  
@@ -414,11 +431,11 @@ The following section shows how to run benchmarks measuring the model performanc
  
 To benchmark training, run one of the `TRAIN_BENCHMARK` scripts in `./examples/`:
 ```bash
-bash examples/unet_TRAIN_BENCHMARK_{FP32, TF-AMP}_{1, 8}GPU.sh <path/to/dataset> <path/to/checkpoints> <batch/size>
+bash examples/unet_TRAIN_BENCHMARK{_TF-AMP}_{1, 8}GPU.sh <path/to/dataset> <path/to/checkpoint> <batch/size>
 ```
 For example, to benchmark training using mixed-precision on 8 GPUs use:
 ```bash
-bash examples/unet_TRAIN_BENCHMARK_TF-AMP_8GPU.sh <path/to/dataset> <path/to/checkpoints> <batch/size>
+bash examples/unet_TRAIN_BENCHMARK_TF-AMP_8GPU.sh <path/to/dataset> <path/to/checkpoint> <batch/size>
 ```
  
 Each of these scripts will by default run 200 warm-up iterations and benchmark the performance during training in the next 800 iterations.
@@ -434,12 +451,12 @@ At the end of the script, a line reporting the best train throughput will be pri
  
 To benchmark inference, run one of the scripts in `./examples/`:
 ```bash
-bash examples/unet_INFER_BENCHMARK_{FP32, TF-AMP}.sh <path/to/dataset> <path/to/checkpoints> <batch/size>
+bash examples/unet_INFER_BENCHMARK{_TF-AMP}.sh <path/to/dataset> <path/to/checkpoint> <batch/size>
 ```
  
 For example, to benchmark inference using mixed-precision:
 ```bash
-bash examples/unet_INFER_BENCHMARK_TF-AMP.sh <path/to/dataset> <path/to/checkpoints> <batch/size>
+bash examples/unet_INFER_BENCHMARK_TF-AMP.sh <path/to/dataset> <path/to/checkpoint> <batch/size>
 ```
  
 Each of these scripts will by default run 200 warm-up iterations and benchmark the performance during inference in the next 400 iterations.
@@ -456,19 +473,29 @@ At the end of the script, a line reporting the best inference throughput will be
 The following sections provide details on how we achieved our performance and accuracy in training and inference.
  
 #### Training accuracy results
+
+##### Training accuracy: NVIDIA DGX A100 (8x A100 40GB)
  
-##### Training accuracy: NVIDIA DGX-1 (8x V100 16G)
+The following table lists the average DICE score across 5-fold cross-validation. Our results were obtained by running the `examples/unet_TRAIN{_TF-AMP}_{1, 8}GPU.sh` training script in the `tensorflow:20.06-tf1-py3` NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs.
  
-The following table lists the average DICE score across 5-fold cross-validation. Our results were obtained by running the `examples/unet_TRAIN_{FP32, TF-AMP}_{1, 8}GPU.sh` training script in the tensorflow:20.02-tf1-py3 NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs.
+| GPUs | Batch size / GPU | Accuracy - TF32  | Accuracy - mixed precision  |   Time to train - TF32 [min]  |  Time to train - mixed precision [min] | Time to train speedup (TF32 to mixed precision) |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 1 | 8 | 0.8908 | 0.8910 | 22 | 10 | 2.2 |
+| 8 | 8 | 0.8938 | 0.8942 | 2.6 | 2.5 | 1.04 |
+
+
+##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
  
-| GPUs | Batch size / GPU | Accuracy - FP32 | Accuracy - mixed precision | Time to train - FP32 [hours] | Time to train - mixed precision [hours] | Time to train speedup (FP32 to mixed precision) |
-|------|------------------|-----------------|----------------------------|------------------------------|----------------------------|--------------------------------|
-| 1 | 8 | 0.8884 | 0.8906 | 7.08 | 2.54 | 2.79 |
-| 8 | 8 | 0.8962 | 0.8972 | 0.97 | 0.37 | 2.64 |
+The following table lists the average DICE score across 5-fold cross-validation. Our results were obtained by running the `examples/unet_TRAIN_{FP32, TF-AMP}_{1, 8}GPU.sh` training script in the `tensorflow:20.06-tf1-py3` NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs.
+ 
+| GPUs | Batch size / GPU | Accuracy - FP32 | Accuracy - mixed precision | Time to train - FP32 [min] | Time to train - mixed precision [min] | Time to train speedup (FP32 to mixed precision) |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 1 | 8 | 0.8910 | 0.8903 | 48 | 19 | 2.53 |
+| 8 | 8 | 0.8942 | 0.8940 | 7 | 7.5 | 0.93 |
  
 To reproduce this result, start the Docker container interactively and run one of the TRAIN scripts:
 ```bash
-bash examples/unet_TRAIN_{FP32, TF-AMP}_{1, 8}GPU.sh <path/to/dataset> <path/to/checkpoint> <batch/size>
+bash examples/unet_TRAIN{_TF-AMP}_{1, 8}GPU.sh <path/to/dataset> <path/to/checkpoint> <batch/size>
 ```
  for example
 ```bash
@@ -477,45 +504,91 @@ bash examples/unet_TRAIN_TF-AMP_8GPU.sh /data /results 8
 
 This command will launch a script which will run 5-fold cross-validation training for 40,000 iterations and print the validation DICE score and cross-entropy loss. The time reported is for one fold, which means that the training for 5 folds will take 5 times longer. The default batch size is 8, however if you have less than 16 Gb memory card and you encounter GPU memory issue you should decrease the batch size. The logs of the runs can be found in `/results` directory once the script is finished.
  
+**Learning curves**
+
+The following image show the training loss as a function of iteration for training using DGX A100 (TF32 and TF-AMP) and DGX-1 V100 (FP32 and TF-AMP).
+![LearningCurves](images/U-NetMed_TF1_conv.png)
+
 #### Training performance results
+
+##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
+
+Our results were obtained by running the `examples/unet_TRAIN_BENCHMARK{_TF-AMP}_{1, 8}GPU.sh` training script in the `examples/unet_TRAIN_BENCHMARK_{TF-AMP, FP32}_{1, 8}GPU.sh` NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs. Performance numbers (images per second) were averaged over 1000 iterations, excluding the first 200 warm-up steps.
+
+| GPUs | Batch size / GPU | Throughput - TF32 [img/s] | Throughput - mixed precision [img/s] | Throughput speedup (TF32 - mixed precision) | Weak scaling - TF32 | Weak scaling - mixed precision |
+|:----:|:----------------:|:-------------------------:|:------------------------------------:|:-------------------------------------------:|:-------------------:|:------------------------------:|
+|  1   |        1         |           29.81           |                64.22                 |                    2.15                     |          -          |               -                |
+|  1   |        8         |           46.53           |                120.08                |                    2.58                     |          -          |               -                |
+|  8   |        1         |          169.62           |                293.31                |                    1.73                     |        5.69         |              4.57              |
+|  8   |        8         |          304.64           |                738.64                |                    2.42                     |        6.55         |              6.15              |
+
+##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
  
-##### Training performance: NVIDIA DGX-1 (8x V100 16G)
- 
-Our results were obtained by running the `examples/unet_TRAIN_BENCHMARK_{TF-AMP, FP32}_{1, 8}GPU.sh` training script in the tensorflow:20.02-tf1-py3 NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs. Performance numbers (in items/images per second) were averaged over 1000 iterations, excluding the first 200 warm-up steps.
- 
-| GPUs | Batch size / GPU | Throughput - FP32 [img/s] | Throughput - mixed precision [img/s] | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision |       
-|------|------------------|-------------------|--------------------------------|---------------------------------------------|---------------------------|--------------------------------|
-| 1 | 8 |  18.57 |  52.27 | 2.81 |  N/A |  N/A |
-| 8 | 8 | 138.50 | 366.88 | 2.65 | 7.02 | 7.46 |
- 
+Our results were obtained by running the `examples/unet_TRAIN_BENCHMARK{_TF-AMP}_{1, 8}GPU.sh` training script in the `tensorflow:20.06-tf1-py3` NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs. Performance numbers (in images per second) were averaged over 1000 iterations, excluding the first 200 warm-up steps.
+
+| GPUs | Batch size / GPU | Throughput - FP32 [img/s] | Throughput - mixed precision [img/s] | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision |
+|:----:|:----------------:|:-------------------------:|:------------------------------------:|:-------------------------------------------:|:-------------------:|:------------------------------:|
+|  1   |        1         |           15.70           |                39.62                 |                    2.52                     |          -          |               -                |
+|  1   |        8         |           18.85           |                60.28                 |                    3.20                     |          -          |               -                |
+|  8   |        1         |          102.52           |                212.51                |                    2.07                     |        6.53         |              5.36              |
+|  8   |        8         |          141.75           |                403.88                |                    2.85                     |        7.52         |              6.70              |
+
  
 To achieve these same results, follow the steps in the [Training performance benchmark](#training-performance-benchmark) section.
  
 Throughput is reported in images per second. Latency is reported in milliseconds per image.
  
-##### Inference performance: NVIDIA DGX-1 (1x V100 16G)
+#### Inference performance results
+
+##### Inference performance: NVIDIA DGX A100 (1x A100 40GB)
+
+Our results were obtained by running the `examples/unet_INFER_BENCHMARK{_TF-AMP}.sh` inferencing benchmarking script in the `tensorflow:20.06-tf1-py3` NGC container on NVIDIA DGX A100 (1x A100 40GB) GPU.
+
+FP16
+
+| Batch size | Resolution | Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
+|:----------:|:----------:|:----------------------:|:----------------:|:----------------:|:----------------:|:----------------:|
+|     1      | 572x572x1  |         251.11         |      3.983       |      3.990       |      3.991       |      3.993       |
+|     2      | 572x572x1  |         179.70         |      11.130      |      11.138      |      11.139      |      11.142      |
+|     4      | 572x572x1  |         197.53         |      20.250      |      20.260      |      20.262      |      20.266      |
+|     8      | 572x572x1  |         382.48         |      24.050      |      29.356      |      30.372      |      32.359      |
+|     16     | 572x572x1  |         400.58         |      45.759      |      55.615      |      57.502      |      61.192      |
+
+TF32
+
+| Batch size | Resolution | Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
+|:----------:|:----------:|:----------------------:|:----------------:|:----------------:|:----------------:|:----------------:|
+|     1      | 572x572x1  |         88.80          |      11.261      |      11.264      |      11.264      |      11.265      |
+|     2      | 572x572x1  |         104.62         |      19.120      |      19.149      |      19.155      |      19.166      |
+|     4      | 572x572x1  |         117.02         |      34.184      |      34.217      |      34.223      |      34.235      |
+|     8      | 572x572x1  |         131.54         |      65.094      |      72.577      |      74.009      |      76.811      |
+|     16     | 572x572x1  |         137.41         |     121.552      |     130.795      |     132.565      |     136.027      |
+
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+
+##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
  
-Our results were obtained by running the `examples/unet_INFER_BENCHMARK_{TF-AMP, FP32}.sh` inferencing benchmarking script in the tensorflow:20.02-tf1-py3 NGC container on NVIDIA DGX-1 with (1x V100 16G) GPU.
+Our results were obtained by running the `examples/unet_INFER_BENCHMARK{_TF-AMP}.sh` inferencing benchmarking script in the `tensorflow:20.06-tf1-py3` NGC container on NVIDIA DGX-1 with (1x V100 16GB) GPU.
  
 FP16
  
 | Batch size | Resolution | Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
-|------|-----------|--------|---------|--------|--------|--------|
-|   1  | 572x572x1 | 133.21 |  7.507  | 7.515  | 7.517  | 7.519  |
-|   2  | 572x572x1 | 153.45 |  13.033 | 13.046 | 13.048 | 13.052 |
-|   4  | 572x572x1 | 173.67 |  23.032 | 23.054 | 23.058 | 23.066 |
-|   8  | 572x572x1 | 181.62 |  44.047 | 49.051 | 49.067 | 50.880 |
-|  16  | 572x572x1 | 184.21 |  89.377 | 94.116 | 95.024 | 96.798 |
+|:----------:|:----------:|:----------------------:|:----------------:|:----------------:|:----------------:|:----------------:|
+|     1      | 572x572x1  |         127.11         |      7.868       |      7.875       |      7.876       |      7.879       |
+|     2      | 572x572x1  |         140.32         |      14.256      |      14.278      |      14.283      |      14.291      |
+|     4      | 572x572x1  |         148.28         |      26.978      |      27.005      |      27.010      |      27.020      |
+|     8      | 572x572x1  |         178.28         |      48.432      |      54.613      |      55.797      |      58.111      |
+|     16     | 572x572x1  |         181.94         |      94.812      |     106.743      |     109.028      |     113.496      |
  
 FP32
  
 | Batch size | Resolution | Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
-|------|-----------|--------|---------|---------|---------|---------|
-|   1  | 572x572x1 |  49.97 | 20.018  | 20.044  | 20.048  | 20.058  |
-|   2  | 572x572x1 |  54.30 | 36.837  | 36.865  | 36.871  | 36.881  |
-|   4  | 572x572x1 |  56.27 | 71.085  | 71.150  | 71.163  | 71.187  |
-|   8  | 572x572x1 |  58.41 | 143.347 | 154.845 | 157.047 | 161.353 |
-|  16  | 572x572x1 |  74.57 | 222.532 | 237.184 | 239.990 | 245.477 |
+|:----------:|:----------:|:----------------------:|:----------------:|:----------------:|:----------------:|:----------------:|
+|     1      | 572x572x1  |         47.32          |      21.133      |      21.155      |      21.159      |      21.167      |
+|     2      | 572x572x1  |         51.43          |      38.888      |      38.921      |      38.927      |      38.940      |
+|     4      | 572x572x1  |         53.56          |      74.692      |      74.763      |      74.777      |      74.804      |
+|     8      | 572x572x1  |         54.41          |     152.733      |     163.148      |     165.142      |     169.042      |
+|     16     | 572x572x1  |         67.11          |     245.775      |     259.548      |     262.186      |     267.343      |
  
 To achieve these same results, follow the steps in the [Inference performance benchmark](#inference-performance-benchmark) section.
  
@@ -524,7 +597,11 @@ Throughput is reported in images per second. Latency is reported in milliseconds
 ## Release notes
  
 ### Changelog
- 
+
+June 2020
+* Updated training and inference accuracy with A100 results
+* Updated training and inference performance with A100 results
+
 February 2020
 * Updated README template
 * Added cross-validation for accuracy measurements

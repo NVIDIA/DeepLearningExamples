@@ -56,4 +56,4 @@ class Unet(tf.keras.Model):
             out = up_block(out, skip_connections.pop())
 
         out = self.output_block(out, skip_connections.pop())
-        return tf.keras.activations.softmax(out, axis=-1)
+        return out

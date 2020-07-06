@@ -51,7 +51,7 @@ NVIDIA TensorRT is a platform for high-performance deep learning inference. It i
    Export Tacotron 2 to three ONNX parts: Encoder, Decoder, and Postnet:
 
 	```bash
-   mkdir -p output
+	mkdir -p output
 	python exports/export_tacotron2_onnx.py --tacotron2 ./checkpoints/nvidia_tacotron2pyt_fp16_20190427 -o output/ --fp16
 	```
 

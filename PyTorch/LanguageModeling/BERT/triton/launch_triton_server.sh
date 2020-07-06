@@ -28,4 +28,4 @@ docker run -d --rm \
    -p 8002:8002 \
    --name trt_server_cont \
    -v $PWD/results/triton_models:/models \
-   nvcr.io/nvidia/tritonserver:20.03-py3 trtserver --model-store=/models --log-verbose=1
+   nvcr.io/nvidia/tritonserver:20.06-v1-py3 trtserver --model-store=/models --log-verbose=1

@@ -52,7 +52,7 @@ def main(args):
                          'must be specified for distributed training')
 
     args.distributed_rank = distributed_utils.distributed_init(args)
-    args.device_id = args.local_rank
+    args.device_id = int(os.environ.get('LOCAL_RANK', args.local_rank))
     print('| initialized host {} as rank {} and device id {}'.format(socket.gethostname(), args.distributed_rank, args.device_id))
     single_process_main(args)
 

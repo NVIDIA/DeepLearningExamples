@@ -1,11 +1,26 @@
 import atexit
+import glob
 import os
+import re
 import numpy as np
 
 from tensorboardX import SummaryWriter
 
 import dllogger as DLLogger
 from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
+
+
+def unique_dllogger_fpath(log_fpath):
+
+    if not os.path.isfile(log_fpath):
+        return log_fpath
+
+    # Avoid overwriting old logs
+    saved = sorted([int(re.search('\.(\d+)', f).group(1))
+                    for f in glob.glob(f'{log_fpath}.*')])
+
+    log_num = (saved[-1] if saved else 0) + 1
+    return f'{log_fpath}.{log_num}'
 
 
 def stdout_step_format(step):

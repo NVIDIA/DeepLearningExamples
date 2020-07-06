@@ -28,8 +28,6 @@
 import tensorrt as trt
 import numpy as np
 from scipy.io.wavfile import write
-import pycuda.autoinit
-import pycuda.driver as cuda
 import time
 import torch
 import argparse
@@ -270,14 +268,13 @@ def infer_tacotron2_trt(encoder, decoder_iter, postnet,
 
 def infer_waveglow_trt(waveglow, waveglow_context, mel, measurements, fp16):
 
-    mel = mel.unsqueeze(3)
     mel_size = mel.size(2)
     batch_size = mel.size(0)
     stride = 256
     n_group = 8
     z_size = mel_size*stride
     z_size = z_size//n_group
-    z = torch.randn(batch_size, n_group, z_size, 1).cuda()
+    z = torch.randn(batch_size, n_group, z_size).cuda()
     audios = torch.zeros(batch_size, mel_size*stride).cuda()
 
     if fp16:
