@@ -1,7 +1,5 @@
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:19.10-py3 
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.03-py3
 FROM ${FROM_IMAGE_NAME}
-
-RUN apt-get update && apt-get install -y python3
 
 WORKDIR /tmp/onnx-trt
 COPY trt/onnx-trt.patch .

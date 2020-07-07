@@ -13,20 +13,25 @@
 # limitations under the License.
 
 import argparse
+import copy
 import itertools
+import math
 import os
+import random
 import time
+
 import toml
 import torch
-import apex
-from apex import amp
-import random
 import numpy as np
-import math
+from apex import amp
+
 from dataset import AudioToTextDataLayer
-from helpers import monitor_asr_train_progress, process_evaluation_batch, process_evaluation_epoch,  add_ctc_labels, AmpOptimizations, model_multi_gpu, print_dict, print_once
+from helpers import (add_ctc_labels, model_multi_gpu, monitor_asr_train_progress,
+                     print_dict, print_once, process_evaluation_batch,
+                     process_evaluation_epoch)
 from model import AudioPreprocessing, CTCLossNM, GreedyCTCDecoder, Jasper
 from optimizers import Novograd, AdamW
+
 
 def lr_policy(initial_lr, step, N):
     """
@@ -40,37 +45,57 @@ def lr_policy(initial_lr, step, N):
     res = initial_lr * ((N - step) / N) ** 2
     return max(res, min_lr)
 
-def save(model, optimizer, epoch, output_dir):
+
+def save(model, ema_model, optimizer, epoch, output_dir, optim_level):
     """
     Saves model checkpoint
     Args:
         model: model
+        ema_model: model with exponential averages of weights
         optimizer: optimizer
         epoch: epoch of model training
         output_dir: path to save model checkpoint
     """
-    class_name = model.__class__.__name__
-    unix_time = time.time()
-    file_name = "{0}_{1}-epoch-{2}.pt".format(class_name, unix_time, epoch)
-    print_once("Saving module {0} in {1}".format(class_name, os.path.join(output_dir, file_name)))
-    if (not torch.distributed.is_initialized() or (torch.distributed.is_initialized() and torch.distributed.get_rank() == 0)):
-        model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-        save_checkpoint={
-                        'epoch': epoch,
-                        'state_dict': model_to_save.state_dict(),
-                        'optimizer': optimizer.state_dict()
-                        }
+    out_fpath = os.path.join(output_dir, f"Jasper_epoch{epoch}_checkpoint.pt")
+    print_once(f"Saving {out_fpath}...")
 
-        torch.save(save_checkpoint, os.path.join(output_dir, file_name))
+    if torch.distributed.is_initialized():
+        torch.distributed.barrier()
+        rank = torch.distributed.get_rank()
+    else:
+        rank = 0
+
+    if rank == 0:
+        checkpoint = {
+            'epoch': epoch,
+            'state_dict': getattr(model, 'module', model).state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'amp': amp.state_dict() if optim_level > 0 else None,
+
+        }
+        if ema_model is not None:
+            checkpoint['ema_state_dict'] = getattr(ema_model, 'module', ema_model).state_dict()
+        torch.save(checkpoint, out_fpath)
+
     print_once('Saved.')
 
 
+def apply_ema(model, ema_model, decay):
+    if not decay:
+        return
+    st = model.state_dict()
+    add_module = hasattr(model, 'module') and not hasattr(ema_model, 'module')
+    for k,v in ema_model.state_dict().items():
+        if add_module and not k.startswith('module.'):
+            k = 'module.' + k
+        v.copy_(decay * v + (1 - decay) * st[k])
 
 
 def train(
         data_layer,
         data_layer_eval,
         model,
+        ema_model,
         ctc_loss,
         greedy_decoder,
         optimizer,
@@ -93,7 +118,7 @@ def train(
         args: script input argument list
         fn_lr_policy: learning rate adjustment function
     """
-    def eval():
+    def eval(model, name=''):
         """Evaluates model on evaluation dataset
         """
         with torch.no_grad():
@@ -136,8 +161,11 @@ def train(
             # final aggregation across all workers and minibatches) and logging of results
             wer, eloss = process_evaluation_epoch(_global_var_dict)
 
-            print_once("==========>>>>>>Evaluation Loss: {0}\n".format(eloss))
-            print_once("==========>>>>>>Evaluation WER: {0}\n".format(wer))
+            if name != '':
+                name = '_' + name
+
+            print_once(f"==========>>>>>>Evaluation{name} Loss: {eloss}\n")
+            print_once(f"==========>>>>>>Evaluation{name} WER: {wer}\n")
 
     print_once("Starting .....")
     start_time = time.time()
@@ -178,7 +206,7 @@ def train(
             model.train()
             if optim_level == 1:
               with amp.disable_casts():
-                  t_processed_signal_t, t_processed_sig_length_t = audio_preprocessor(t_audio_signal_t, t_a_sig_length_t) 
+                  t_processed_signal_t, t_processed_sig_length_t = audio_preprocessor(t_audio_signal_t, t_a_sig_length_t)
             else:
               t_processed_signal_t, t_processed_sig_length_t = audio_preprocessor(t_audio_signal_t, t_a_sig_length_t)
             t_processed_signal_t = data_spectr_augmentation(t_processed_signal_t)
@@ -186,12 +214,12 @@ def train(
                 t_log_probs_t, t_encoded_len_t = model.forward((t_processed_signal_t, t_processed_sig_length_t))
             else:
                 t_log_probs_t = model.forward(t_processed_signal_t)
-            
+
             t_loss_t = ctc_loss(log_probs=t_log_probs_t, targets=t_transcript_t, input_length=t_encoded_len_t, target_length=t_transcript_len_t)
             if args.gradient_accumulation_steps > 1:
                     t_loss_t = t_loss_t / args.gradient_accumulation_steps
 
-            if optim_level >=0 and optim_level <=3:
+            if 0 < optim_level <= 3:
                 with amp.scale_loss(t_loss_t, optimizer) as scaled_loss:
                     scaled_loss.backward()
             else:
@@ -211,7 +239,10 @@ def train(
                     print_once("Step time: {0} seconds".format(time.time() - last_iter_start))
                 if step > 0 and step % args.eval_frequency == 0:
                     print_once("Doing Evaluation ....................... ......  ... .. . .")
-                    eval()
+                    eval(model)
+                    if args.ema > 0:
+                        eval(ema_model, 'EMA')
+
                 step += 1
                 batch_counter = 0
                 average_loss = 0
@@ -223,13 +254,16 @@ def train(
         print_once("Finished epoch {0} in {1}".format(epoch, time.time() - last_epoch_start))
         epoch += 1
         if epoch % args.save_frequency == 0 and epoch > 0:
-            save(model, optimizer, epoch, output_dir=args.output_dir)
+            save(model, ema_model, optimizer, epoch, args.output_dir, optim_level)
         if args.num_steps is None and epoch >= args.num_epochs:
             break
     print_once("Done in {0}".format(time.time() - start_time))
     print_once("Final Evaluation ....................... ......  ... .. . .")
-    eval()
-    save(model, optimizer, epoch, output_dir=args.output_dir)
+    eval(model)
+    if args.ema > 0:
+        eval(ema_model, 'EMA')
+    save(model, ema_model, optimizer, epoch, args.output_dir, optim_level)
+
 
 def main(args):
     random.seed(args.seed)
@@ -247,12 +281,9 @@ def main(args):
     multi_gpu = torch.distributed.is_initialized()
     if multi_gpu:
         print_once("DISTRIBUTED TRAINING with {} gpus".format(torch.distributed.get_world_size()))
-                
+
     # define amp optimiation level
-    if args.fp16:
-        optim_level = 1
-    else:
-        optim_level = 0
+    optim_level = 1 if args.amp else 0
 
     jasper_model_definition = toml.load(args.model_toml)
     dataset_vocab = jasper_model_definition['labels']['labels']
@@ -271,9 +302,9 @@ def main(args):
         assert(args.max_duration > 0)
         featurizer_config['max_duration'] = args.max_duration
         featurizer_config_eval['max_duration'] = args.max_duration
-        featurizer_config['pad_to'] = -1        
+        featurizer_config['pad_to'] = -1
         featurizer_config_eval['pad_to'] = -1
-        
+
     print_once('model_config')
     print_dict(jasper_model_definition)
 
@@ -305,14 +336,6 @@ def main(args):
                                     )
 
     model = Jasper(feature_config=featurizer_config, jasper_model_definition=jasper_model_definition, feat_in=1024, num_classes=len(ctc_vocab))
-
-    if args.ckpt is not None:
-        print_once("loading model from {}".format(args.ckpt))
-        checkpoint = torch.load(args.ckpt, map_location="cpu")
-        model.load_state_dict(checkpoint['state_dict'], strict=True)
-        args.start_epoch = checkpoint['epoch']
-    else:
-        args.start_epoch = 0
 
     ctc_loss = CTCLossNM( num_classes=len(ctc_vocab))
     greedy_decoder = GreedyCTCDecoder()
@@ -346,19 +369,53 @@ def main(args):
                         weight_decay=args.weight_decay)
     else:
         raise ValueError("invalid optimizer choice: {}".format(args.optimizer_kind))
-    if optim_level >= 0 and optim_level <=3:
+
+    if 0 < optim_level <= 3:
         model, optimizer = amp.initialize(
             min_loss_scale=1.0,
             models=model,
             optimizers=optimizer,
-            opt_level=AmpOptimizations[optim_level])
-    if args.ckpt is not None:
-        optimizer.load_state_dict(checkpoint['optimizer'])
+            opt_level='O' + str(optim_level))
+
+    if args.ema > 0:
+        ema_model = copy.deepcopy(model)
+    else:
+        ema_model = None
 
     model = model_multi_gpu(model, multi_gpu)
 
+    if args.ckpt is not None:
+        print_once("loading model from {}".format(args.ckpt))
+        checkpoint = torch.load(args.ckpt, map_location="cpu")
+        if hasattr(model, 'module'):
+            model.module.load_state_dict(checkpoint['state_dict'], strict=True)
+        else:
+            model.load_state_dict(checkpoint['state_dict'], strict=True)
 
-    train(data_layer, data_layer_eval, model, \
+        if args.ema > 0:
+            if 'ema_state_dict' in checkpoint:
+                if hasattr(ema_model, 'module'):
+                    ema_model.module.load_state_dict(checkpoint['ema_state_dict'], strict=True)
+                else:
+                    ema_model.load_state_dict(checkpoint['ema_state_dict'], strict=True)
+            else:
+                print_once('WARNING: ema_state_dict not found in the checkpoint')
+                print_once('WARNING: initializing EMA model with regular params')
+                if hasattr(ema_model, 'module'):
+                    ema_model.module.load_state_dict(checkpoint['state_dict'], strict=True)
+                else:
+                    ema_model.load_state_dict(checkpoint['state_dict'], strict=True)
+
+        optimizer.load_state_dict(checkpoint['optimizer'])
+
+        if optim_level > 0:
+            amp.load_state_dict(checkpoint['amp'])
+
+        args.start_epoch = checkpoint['epoch']
+    else:
+        args.start_epoch = 0
+
+    train(data_layer, data_layer_eval, model, ema_model,
           ctc_loss=ctc_loss, \
           greedy_decoder=greedy_decoder, \
           optimizer=optimizer, \
@@ -367,6 +424,7 @@ def main(args):
           multi_gpu=multi_gpu, \
           fn_lr_policy=fn_lr_policy if args.lr_decay else None, \
           args=args)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Jasper')
@@ -389,10 +447,11 @@ def parse_args():
     parser.add_argument("--dataset_dir", dest="dataset_dir", required=True, type=str, help='root dir of dataset')
     parser.add_argument("--lr_decay", action="store_true", default=False, help='use learning rate decay')
     parser.add_argument("--cudnn", action="store_true", default=False, help="enable cudnn benchmark")
-    parser.add_argument("--fp16", action="store_true", default=False, help="use mixed precision training")
+    parser.add_argument("--amp", "--fp16", action="store_true", default=False, help="use mixed precision training")
     parser.add_argument("--output_dir", type=str, required=True, help='saves results in this directory')
     parser.add_argument("--ckpt", default=None, type=str, help="if specified continues training from given checkpoint. Otherwise starts from beginning")
     parser.add_argument("--seed", default=42, type=int, help='seed')
+    parser.add_argument("--ema", type=float, default=0.0, help='discount factor for exponential averaging of model weights during training')
     args=parser.parse_args()
     return args
 

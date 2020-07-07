@@ -16,7 +16,7 @@
 
 from model import GreedyCTCDecoder, AudioPreprocessing, JasperEncoderDecoder
 from dataset import AudioToTextDataLayer
-from helpers import AmpOptimizations, process_evaluation_batch, process_evaluation_epoch, add_ctc_labels, norm
+from helpers import process_evaluation_batch, process_evaluation_epoch, add_ctc_labels, norm
 from apex import amp
 import torch
 import torch.nn as nn
@@ -218,7 +218,7 @@ def get_pytorch_components_and_onnx(args):
     # if we are to produce engine, not run/create ONNX, postpone AMP initialization
     # (ONNX parser cannot handle mixed FP16 ONNX yet)
     if args.pyt_fp16 and args.engine_path is None:
-        amp.initialize(models=model, opt_level=AmpOptimizations[optim_level])
+        amp.initialize(models=model, opt_level='O'+str(optim_level))
         
     if args.make_onnx:
         if args.onnx_path is None or args.ckpt_path is None:
@@ -226,7 +226,7 @@ def get_pytorch_components_and_onnx(args):
         onnx_path = get_onnx(args.onnx_path, model, args)
 
     if args.pyt_fp16 and args.engine_path is not None:
-        amp.initialize(models=model, opt_level=AmpOptimizations[optim_level])
+        amp.initialize(models=model, opt_level='O'+str(optim_level))
     
     return {'data_layer': data_layer,
             'audio_preprocessor': audio_preprocessor,

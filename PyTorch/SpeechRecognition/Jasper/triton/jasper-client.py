@@ -347,9 +347,9 @@ if __name__ == '__main__':
         table = str.maketrans(punctuation, " " * len(punctuation))
 
         import json
-        if "./trtis" not in sys.path:
+        if "./triton" not in sys.path:
             sys.path.append("./")
-            sys.path.append("./trtis")
+            sys.path.append("./triton")
         from speech_utils import normalize_string, parse_transcript
         FLAGS.manifest_filename = FLAGS.manifest_filename.split(',')
         for manifest in FLAGS.manifest_filename:
