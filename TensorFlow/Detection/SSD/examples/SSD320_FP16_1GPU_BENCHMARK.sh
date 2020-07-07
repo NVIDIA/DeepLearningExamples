@@ -16,8 +16,6 @@ CKPT_DIR=${1:-"/results/SSD320_FP16_1GPU"}
 PIPELINE_CONFIG_PATH=${2:-"/workdir/models/research/configs"}"/ssd320_bench.config"
 GPUS=1
 
-export TF_ENABLE_AUTO_MIXED_PRECISION=1
-
 TENSOR_OPS=0
 export TF_ENABLE_CUBLAS_TENSOR_OP_MATH_FP32=${TENSOR_OPS}
 export TF_ENABLE_CUDNN_TENSOR_OP_MATH_FP32=${TENSOR_OPS}
@@ -27,6 +25,7 @@ TRAIN_LOG=$(python -u ./object_detection/model_main.py \
        --pipeline_config_path=${PIPELINE_CONFIG_PATH} \
        --model_dir=${CKPT_DIR} \
        --alsologtostder \
+       --amp \
        "${@:3}" 2>&1)
 PERF=$(echo "$TRAIN_LOG" | sed -n 's|.*global_step/sec: \(\S\+\).*|\1|p' | python -c "import sys; x = sys.stdin.readlines(); x = [float(a) for a in x[int(len(x)*3/4):]]; print(32*$GPUS*sum(x)/len(x), 'img/s')")
 

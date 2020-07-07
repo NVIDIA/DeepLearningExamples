@@ -567,6 +567,7 @@ def create_estimator_and_inputs(run_config,
     'predict_input_fn': A prediction input function.
     'train_steps': Number of training steps. Either directly from input or from
       configuration.
+    'train_batch_size': train batch size per GPU
   """
   get_configs_from_pipeline_file = MODEL_BUILD_UTIL_MAP[
       'get_configs_from_pipeline_file']
@@ -666,7 +667,8 @@ def create_estimator_and_inputs(run_config,
       eval_input_names=eval_input_names,
       eval_on_train_input_fn=eval_on_train_input_fn,
       predict_input_fn=predict_input_fn,
-      train_steps=train_steps)
+      train_steps=train_steps,
+      train_batch_size=train_config.batch_size)
 
 
 def create_train_and_eval_specs(train_input_fn,
