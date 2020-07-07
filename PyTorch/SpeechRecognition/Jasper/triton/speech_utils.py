@@ -25,9 +25,9 @@ import grpc
 from tensorrtserver.api import api_pb2
 from tensorrtserver.api import grpc_service_pb2
 from tensorrtserver.api import grpc_service_pb2_grpc
-if "./trtis" not in sys.path:
+if "./triton" not in sys.path:
     sys.path.append("./")
-    sys.path.append("./trtis")
+    sys.path.append("./triton")
 from parts.text import _clean_text
 
 WINDOWS_FNS = {"hanning": np.hanning, "hamming": np.hamming, "none": None}

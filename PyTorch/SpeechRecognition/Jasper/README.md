@@ -7,9 +7,10 @@ This repository provides scripts to train the Jasper model to achieve near state
    * [Model architecture](#model-architecture)
    * [Default configuration](#default-configuration)
    * [Feature support matrix](#feature-support-matrix)
- 	   * [Features](#features)
+       * [Features](#features)
    * [Mixed precision training](#mixed-precision-training)
- 	   * [Enabling mixed precision](#enabling-mixed-precision)
+       * [Enabling mixed precision](#enabling-mixed-precision)
+       * [Enabling TF32](#enabling-tf32)
    * [Glossary](#glossary)
 - [Setup](#setup)
    * [Requirements](#requirements)
@@ -23,31 +24,33 @@ This repository provides scripts to train the Jasper model to achieve near state
    * [Training process](#training-process)
    * [Inference process](#inference-process)
    * [Evaluation process](#evaluation-process)
-   * [Inference process with TensorRT](#inference-process-with-tensorrt)
-   * [Inference process with TensorRT Inference Server](#inference-process-with-tensorrt-inference-server)
+   * [Deploying Jasper using TensorRT](#deploying-jasper-using-tensorrt)
+   * [Deploying Jasper using Triton Inference Server](#deploying-jasper-using-triton-inference)
 - [Performance](#performance)
    * [Benchmarking](#benchmarking)
        * [Training performance benchmark](#training-performance-benchmark)
        * [Inference performance benchmark](#inference-performance-benchmark)
    * [Results](#results)
        * [Training accuracy results](#training-accuracy-results)
-           * [Training accuracy: NVIDIA DGX-1 (8x V100 32G)](#training-accuracy-nvidia-dgx-1-8x-v100-32G)
+           * [Training accuracy: NVIDIA DGX A100 (8x A100 40GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-40gb)
+           * [Training accuracy: NVIDIA DGX-1 (8x V100 32GB)](#training-accuracy-nvidia-dgx-1-8x-v100-32gb)
            * [Training stability test](#training-stability-test)
        * [Training performance results](#training-performance-results)
-         * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16G)
-         * [Training performance: NVIDIA DGX-1 (8x V100 32G)](#training-performance-nvidia-dgx-1-8x-v100-32G)
-         * [Training performance: NVIDIA DGX-2 (16x V100 32G)](#training-performance-nvidia-dgx-2-16x-v100-32G)
+         * [Training performance: NVIDIA DGX A100 (8x A100 40GB)](#training-performance-nvidia-dgx-a100-8x-a100-40gb)
+         * [Training performance: NVIDIA DGX-1 (8x V100 16GB)](#training-performance-nvidia-dgx-1-8x-v100-16gb)
+         * [Training performance: NVIDIA DGX-1 (8x V100 32GB)](#training-performance-nvidia-dgx-1-8x-v100-32gb)
+         * [Training performance: NVIDIA DGX-2 (16x V100 32GB)](#training-performance-nvidia-dgx-2-16x-v100-32gb)
        * [Inference performance results](#inference-performance-results)
-           * [Inference performance: NVIDIA DGX-1 (1x V100 16G)](#inference-performance-nvidia-dgx-1-1x-v100-16G)
-           * [Inference performance: NVIDIA DGX-1 (1x V100 32G)](#inference-performance-nvidia-dgx-1-1x-v100-32G)
-           * [Inference performance: NVIDIA DGX-2 (1x V100 32G)](#inference-performance-nvidia-dgx-2-1x-v100-32G)
+           * [Inference performance: NVIDIA DGX A100 (1x A100 40GB)](#inference-performance-nvidia-dgx-a100-gpu-1x-a100-40gb)
+           * [Inference performance: NVIDIA DGX-1 (1x V100 16GB)](#inference-performance-nvidia-dgx-1-1x-v100-16gb)
+           * [Inference performance: NVIDIA DGX-1 (1x V100 32GB)](#inference-performance-nvidia-dgx-1-1x-v100-32gb)
+           * [Inference performance: NVIDIA DGX-2 (1x V100 32GB)](#inference-performance-nvidia-dgx-2-1x-v100-32gb)
            * [Inference performance: NVIDIA T4](#inference-performance-nvidia-t4)
 - [Release notes](#release-notes)
    * [Changelog](#changelog)
    * [Known issues](#known-issues)
 
 ## Model overview
-
 This repository provides an implementation of the Jasper model in PyTorch from the paper `Jasper: An End-to-End Convolutional Neural Acoustic Model` [https://arxiv.org/pdf/1904.03288.pdf](https://arxiv.org/pdf/1904.03288.pdf).
 The Jasper model is an end-to-end neural acoustic model for automatic speech recognition (ASR) that provides near state-of-the-art results on LibriSpeech among end-to-end ASR models without any external data. The Jasper architecture of convolutional layers was designed to facilitate fast GPU inference, by allowing whole sub-blocks to be fused into a single GPU kernel. This is important for meeting strict real-time requirements of ASR systems in deployment.
 
@@ -60,9 +63,9 @@ This repository provides a simple implementation of Jasper with scripts for trai
 This includes data preparation scripts, training and inference scripts.
 Both training and inference scripts offer the option to use Automatic Mixed Precision (AMP) to benefit from Tensor Cores for better performance.
 
-In addition to providing the hyperparameters for training a model checkpoint, we publish a thorough inference analysis across different NVIDIA GPU platforms, for example, DGX-1, DGX-2 and T4.
+In addition to providing the hyperparameters for training a model checkpoint, we publish a thorough inference analysis across different NVIDIA GPU platforms, for example, DGX A100, DGX-1, DGX-2 and T4.
 
-This model is trained with mixed precision using Tensor Cores on NVIDIA Volta GPUs and evaluated on Volta and Turing GPUs. Therefore, researchers can get results 3x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
+This model is trained with mixed precision using Tensor Cores on Volta, Turing, and the NVIDIA Ampere GPU architectures. Therefore, researchers can get results 3x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
 
 The original paper takes the output of the Jasper acoustic model and shows results for 3 different decoding variations: greedy decoding, beam search with a 6-gram language model and beam search with further rescoring of the best ranked hypotheses with Transformer XL, which is a neural language model. Beam search and the rescoring with the neural language model scores are run on CPU and result in better word error rates compared to greedy decoding.
 This repository provides instructions to reproduce greedy decoding results. To run beam search or rescoring with TransformerXL, use the following scripts from the [openseq2seq](https://github.com/NVIDIA/OpenSeq2Seq) repository:
@@ -70,7 +73,6 @@ https://github.com/NVIDIA/OpenSeq2Seq/blob/master/scripts/decode.py
 https://github.com/NVIDIA/OpenSeq2Seq/tree/master/external_lm_rescore
 
 ### Model architecture
-
 Details on the model architecture can be found in the paper [Jasper: An End-to-End Convolutional Neural Acoustic Model](https://arxiv.org/pdf/1904.03288.pdf).
 
 |<img src="images/jasper_model.png" width="100%" height="40%"> | <img src="images/jasper_dense_residual.png" width="100%" height="40%">|
@@ -94,34 +96,30 @@ in time in order to process a shorter time sequence for efficiency. The Epilogue
 The paper achieves best results with Jasper 10x5 with dense residual connections, which is also the focus of this repository and is in the following referred to as Jasper Large.
 
 ### Default configuration
-
 The following features were implemented in this model:
 
 * GPU-supported feature extraction with data augmentation options [SpecAugment](https://arxiv.org/abs/1904.08779) and [Cutout](https://arxiv.org/pdf/1708.04552.pdf)
 * offline and online [Speed Perturbation](https://www.danielpovey.com/files/2015_interspeech_augmentation.pdf)
 * data-parallel multi-GPU training and evaluation
 * AMP with dynamic loss scaling for Tensor Core training
-* FP16 inference with AMP
-
+* FP16 inference
 
 Competitive training results and analysis is provided for the following Jasper model configuration
 
-| **Model** | **Number of Blocks**  | **Number of Subblocks**  | **Max sequence length**   | **Number of Parameters**  |
-|---    |---    |---    |---    |---    |
-| Jasper Large  | 10    | 5 | 16.7s | 333M  |
+|    **Model** | **Number of Blocks** | **Number of Subblocks** | **Max sequence length** | **Number of Parameters** |
+|--------------|----------------------|-------------------------|-------------------------|--------------------------|
+| Jasper Large |                   10 |                       5 |                  16.7 s |                    333 M |
 
 
 ### Feature support matrix
-
 The following features are supported by this model.
 
 | **Feature**   | **Jasper**    |
-|---    |---    |
+|---------------|---------------|
 |[Apex AMP](https://nvidia.github.io/apex/amp.html) | Yes |
 |[Apex DistributedDataParallel](https://nvidia.github.io/apex/parallel.html#apex.parallel.DistributedDataParallel) | Yes |
 
 #### Features
-
 [Apex AMP](https://nvidia.github.io/apex/amp.html) - a tool that enables Tensor Core-accelerated training. Refer to the [Enabling mixed precision](#enabling-mixed-precision) section for more details.
 
 [Apex
@@ -136,14 +134,12 @@ smaller gradient transfers to reduce the total number of transfers required.
 
 
 ### Mixed precision training
-
-*Mixed precision* is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format, while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [Tensor Cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing architecture, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using mixed precision training requires two steps:
+*Mixed precision* is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format, while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [Tensor Cores](https://developer.nvidia.com/tensor-cores) in Volta, and following with both the Turing and Ampere architectures, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using mixed precision training requires two steps:
 
 1. Porting the model to use the FP16 data type where appropriate.
 2. Adding loss scaling to preserve small gradient values.
 
 The ability to train deep learning networks with lower precision was introduced in the Pascal architecture and first supported in [CUDA 8](https://devblogs.nvidia.com/parallelforall/tag/fp16/) in the NVIDIA Deep Learning SDK.
-
 
 For information about:
 * How to train using mixed precision, see the[Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) documentation.
@@ -152,10 +148,7 @@ For information about:
 
 
 #### Enabling mixed precision
-
-For training, mixed precision can be enabled by setting the flag: `train.py --fp16`. You can change this behavior and execute the training in
-single precision by removing the `--fp16` flag for the `train.py` training
-script. For example, in the bash scripts `scripts/train.sh`, `scripts/inference.sh`, etc. the precision can be specified with the variable `PRECISION` by setting it to either `PRECISION=’fp16’` or  `PRECISION=’fp32’`.
+For training, mixed precision can be enabled by setting the flag: `train.py --amp`. When using bash helper scripts:  `scripts/train.sh` `scripts/inference.sh`, etc., mixed precision can be enabled with env variable `AMP=true`.
 
 Mixed precision is enabled in PyTorch by using the Automatic Mixed Precision
 (AMP) library from [APEX](https://github.com/NVIDIA/apex) that casts variables
@@ -176,12 +169,12 @@ leverage Tensor Cores performance.
 The following steps were needed to enable mixed precision training in Jasper:
 
 * Import AMP from APEX (file: `train.py`):
-```
+```bash
 from apex import amp
 ```
 
 * Initialize AMP and wrap the model and the optimizer
-```
+```bash
    model, optimizer = amp.initialize(
      min_loss_scale=1.0,
      models=model,
@@ -191,45 +184,52 @@ from apex import amp
 ```
 
 * Apply `scale_loss` context manager
-```
+```bash
 with amp.scale_loss(loss, optimizer) as scaled_loss:
     scaled_loss.backward()
 ```
 
+#### Enabling TF32
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](#https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
+
+TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
+
+For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](#https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
+
+TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
+
 
 ### Glossary
-
-Acoustic model:
+**Acoustic model**
 Assigns a probability distribution over a vocabulary of characters given an audio frame.
 
-Language Model:
+**Language Model**
 Assigns a probability distribution over a sequence of words. Given a sequence of words, it assigns a probability to the whole sequence.
 
-Pre-training:
+**Pre-training**
 Training a model on vast amounts of data on the same (or different) task to build general understandings.
 
-Automatic Speech Recognition (ASR):
+**Automatic Speech Recognition (ASR)**
 Uses both acoustic model and language model to output the transcript of an input audio signal.
 
 
 ## Setup
-
 The following section lists the requirements in order to start training and evaluating the Jasper model.
 
 ### Requirements
-
-This repository contains a `Dockerfile` which extends the PyTorch 19.10-py3 NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
+This repository contains a `Dockerfile` which extends the PyTorch 20.06-py3 NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 19.10-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
-* [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
+* [PyTorch 20.06-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
+-   Supported GPUs:
+    - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
+    - [NVIDIA Turing architecture](https://www.nvidia.com/en-us/geforce/turing/)
+    - [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
 
 Further required python packages are listed in `requirements.txt`, which are automatically installed with the Docker container built. To manually install them, run
 ```bash
 pip install -r requirements.txt
 ```
-
-
 
 For more information about how to get started with NGC containers, see the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
 
@@ -242,7 +242,7 @@ For those unable to use the PyTorch NGC container, to set up the required enviro
 
 ## Quick Start Guide
 
-To train your model using mixed precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the Jasper model on the Librispeech dataset. For details concerning training and inference, see [Advanced](#Advanced) section.
+To train your model using mixed or TF32 precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the Jasper model on the Librispeech dataset. For details concerning training and inference, see [Advanced](#Advanced) section.
 
 1. Clone the repository.
 ```bash
@@ -325,7 +325,7 @@ Make sure the downloaded and preprocessed dataset is located at `<DATA_DIR>/Libr
 ```bash
 bash scripts/train.sh [OPTIONS]
 ```
-By default, this will use automatic mixed precision, a batch size of 64 and run on a total of 8 GPUs. The hyperparameters are tuned for DGX-1 32GB 8x V100 GPUs and will require adjustment for 16GB GPUs (e.g. by using more gradient accumulation steps)
+By default automatic precision is disabled, batch size is 64 over two gradient accumulation steps, and the recipe is run on a total of 8 GPUs. The hyperparameters are tuned for a GPU with at least 32GB of memory and will require adjustment for 16GB GPUs (e.g., by lowering batch size and using more gradient accumulation steps).
 
 More details on available [OPTIONS] can be found in [Parameters](#parameters) and [Training process](#training-process).
 
@@ -345,12 +345,12 @@ More details on available [OPTIONS] can be found in [Parameters](#parameters) an
 
 Inside the container, use the following script to run inference.
  Make sure the downloaded and preprocessed dataset is located at `<DATA_DIR>/LibriSpeech` on the host (see Step 3), which corresponds to `/datasets/LibriSpeech` inside the container.
-A pretrained model checkpoint can be downloaded from `NGC model repository`[https://ngc.nvidia.com/catalog/models/nvidia:jasperpyt_fp16].
+A pretrained model checkpoint can be downloaded from [NGC model repository](https://ngc.nvidia.com/catalog/models/nvidia:jasperpyt_fp16).
 
 ```bash
 bash scripts/inference.sh [OPTIONS]
 ```
-By default this will use full precision, a batch size of 64 and run on a single GPU.
+By default this will use single precision, a batch size of 64 and run on a single GPU.
 
 More details on available [OPTIONS] can be found in [Parameters](#parameters) and [Inference process](#inference-process).
 
@@ -358,7 +358,6 @@ More details on available [OPTIONS] can be found in [Parameters](#parameters) an
 ## Advanced
 
 The following sections provide greater details of the dataset, running training and inference, and getting training and inference results.
-
 
 
 ### Scripts and sample code
@@ -384,29 +383,30 @@ The `scripts/` folder encapsulates all the one-click scripts required for runnin
 
 
 Other folders included in the `root` directory are:
-* `notebooks/` - Contains Jupyter notebooks and example audio files
-* `configs/` - Model configurations
-* `utils/` - Contains the necessary files for data download and  processing
-* `parts/` - Contains the necessary files for data pre-processing
+* `notebooks/` - Jupyter notebooks and example audio files
+* `configs/    - model configurations
+* `utils/`     - data downloading and common routines
+* `parts/`     - data pre-processing
 
 ### Parameters
+
+Parameters could be set as env variables, or passed as positional arguments.
 
 The complete list of available parameters for `scripts/train.sh` script contains:
 ```bash
  DATA_DIR: directory of dataset. (default: '/datasets/LibriSpeech')
  MODEL_CONFIG: relative path to model configuration. (default: 'configs/jasper10x5dr_sp_offline_specaugment.toml')
  RESULT_DIR: directory for results, logs, and created checkpoints. (default: '/results')
-CHECKPOINT: model checkpoint to continue training from. Model checkpoint is a dictionary object that contains apart from the model weights the optimizer state as well as the epoch number. If CHECKPOINT is "none" , training starts from scratch. (default: "none")
- CREATE_LOGFILE: boolean that indicates whether to create a training log that will be stored in `$RESULT_DIR`. (default: "true")
- CUDNN_BENCHMARK: boolean that indicates whether to enable cudnn benchmark mode for using more optimized kernels. (default: 'true')
+ CHECKPOINT: model checkpoint to continue training from. Model checkpoint is a dictionary object that contains apart from the model weights the optimizer state as well as the epoch number. If CHECKPOINT is set, training starts from scratch. (default: "")
+ CREATE_LOGFILE: boolean that indicates whether to create a training log that will be stored in `$RESULT_DIR`. (default: true)
+ CUDNN_BENCHMARK: boolean that indicates whether to enable cudnn benchmark mode for using more optimized kernels. (default: true)
  NUM_GPUS: number of GPUs to use. (default: 8)
- PRECISION: options are fp32 and fp16 with AMP. (default: 'fp16')
+ AMP: if set to `true`, enables automatic mixed precision (default: false)
  EPOCHS: number of training epochs. (default: 400)
  SEED: seed for random number generator and used for ensuring reproducibility. (default: 6)
  BATCH_SIZE: data batch size. (default: 64)
  LEARNING_RATE: Initial learning rate. (default: 0.015)
- GRADIENT_ACCUMULATION_STEPS: number of gradient accumulation steps until optimizer updates weights. (default: 1)
- LAUNCH_OPT: additional launch options. (default: "none")
+ GRADIENT_ACCUMULATION_STEPS: number of gradient accumulation steps until optimizer updates weights. (default: 2)
 ```
 
 The complete list of available parameters for `scripts/inference.sh` script contains:
@@ -416,13 +416,13 @@ DATASET: name of dataset to use. (default: 'dev-clean')
 MODEL_CONFIG: model configuration. (default: 'configs/jasper10x5dr_sp_offline_specaugment.toml')
 RESULT_DIR: directory for results and logs. (default: '/results')
 CHECKPOINT: model checkpoint path. (required)
-CREATE_LOGFILE: boolean that indicates whether to create a log file that will be stored in `$RESULT_DIR`. (default: "true")
-CUDNN_BENCHMARK: boolean that indicates whether to enable cudnn benchmark mode for using more optimized kernels. (default: 'false')
-PRECISION: options are fp32 and fp16 with AMP. (default: 'fp32')
+CREATE_LOGFILE: boolean that indicates whether to create a log file that will be stored in `$RESULT_DIR`. (default: true)
+CUDNN_BENCHMARK: boolean that indicates whether to enable cudnn benchmark mode for using more optimized kernels. (default: false)
+AMP: if set to `true`, enables FP16 inference with AMP (default: false)
 NUM_STEPS: number of inference steps. If -1 runs inference on entire dataset. (default: -1)
 SEED: seed for random number generator and useful for ensuring reproducibility. (default: 6)
 BATCH_SIZE: data batch size.(default: 64)
-MODELOUTPUT_FILE: destination path for serialized model output with binary protocol. If 'none' does not save model output. (default: 'none')
+LOGITS_FILE: destination path for serialized model output with binary protocol. If 'none' does not save model output. (default: 'none')
 PREDICTION_FILE: destination path for saving predictions. If 'none' does not save predictions. (default: '${RESULT_DIR}/${DATASET}.predictions)
 ```
 
@@ -433,10 +433,10 @@ DATASET: name of dataset to use.(default: 'dev-clean')
 MODEL_CONFIG: model configuration.(default: 'configs/jasper10x5dr_sp_offline_specaugment.toml')
 RESULT_DIR: directory for results and logs. (default: '/results')
 CHECKPOINT: model checkpoint path. (required)
-CREATE_LOGFILE: boolean that indicates whether to create a log file that will be stored in `$RESULT_DIR`. (default: 'true')
-CUDNN_BENCHMARK: boolean that indicates whether to enable cudnn benchmark mode for using more optimized kernels. (default: 'false')
+CREATE_LOGFILE: boolean that indicates whether to create a log file that will be stored in `$RESULT_DIR`. (default: true)
+CUDNN_BENCHMARK: boolean that indicates whether to enable cudnn benchmark mde for using more optimized kernels. (default: false)
 NUM_GPUS: number of GPUs to run evaluation on (default: 1)
-PRECISION: options are fp32 and fp16 with AMP.(default: 'fp32')
+AMP: if set to `true`, enables FP16 with AMP (default: false)
 NUM_STEPS: number of inference steps per GPU. If -1 runs inference on entire dataset (default: -1)
 SEED: seed for random number generator and useful for ensuring reproducibility. (default: 0)
 BATCH_SIZE: data batch size.(default: 64)
@@ -454,22 +454,20 @@ The complete list of available parameters for `scripts/train_benchmark.sh` scrip
 DATA_DIR: directory of dataset.(default: '/datasets/LibriSpeech')
 MODEL_CONFIG: model configuration. (default: 'configs/jasper10x5dr_sp_offline_specaugment.toml')
 RESULT_DIR: directory for results and logs. (default: '/results')
-CREATE_LOGFILE: boolean that indicates whether to create a log file that will be stored in `$RESULT_DIR`. (default: 'true')
-CUDNN_BENCHMARK: boolean that indicates whether to enable cudnn benchmark mode for using more optimized kernels. (default: 'true')
+CREATE_LOGFILE: boolean that indicates whether to create a log file that will be stored in `$RESULT_DIR`. (default: true)
+CUDNN_BENCHMARK: boolean that indicates whether to enable cudnn benchmark mode for using more optimized kernels. (default: true)
 NUM_GPUS: number of GPUs to use. (default: 8)
-PRECISION: options are fp32 and fp16 with AMP. (default: 'fp16')
+AMP: if set to `true`, enables automatic mixed precision with AMP (default: false)
 NUM_STEPS: number of training iterations. If -1 runs full training for  400 epochs. (default: -1)
 MAX_DURATION: filters out input audio data that exceed a maximum number of seconds. This ensures that when all filtered audio samples are padded to maximum length that length will stay under this specified threshold (default: 16.7)
 SEED: seed for random number generator and useful for ensuring reproducibility. (default: 0)
-BATCH_SIZE: data batch size.(default: 64)
+BATCH_SIZE: data batch size.(default: 32)
 LEARNING_RATE: Initial learning rate. (default: 0.015)
 GRADIENT_ACCUMULATION_STEPS: number of gradient accumulation steps until optimizer updates weights. (default: 1)
 PRINT_FREQUENCY: number of iterations after which training progress is printed. (default: 1)
 ```
 
-
 ### Command-line options
-
 To see the full list of available options and their descriptions, use the `-h` or `--help` command-line option with the Python file, for example:
 
 ```bash
@@ -478,15 +476,13 @@ python inference.py --help
 ```
 
 ### Getting the data
-
 The Jasper model was trained on LibriSpeech dataset. We use the concatenation of `train-clean-100`, `train-clean-360` and `train-other-500` for training and `dev-clean` for validation.
 
 This repository contains the `scripts/download_librispeech.sh` and `scripts/preprocess_librispeech.sh` scripts which will automatically download and preprocess the training, test and development datasets. By default, data will be downloaded to the `/datasets/LibriSpeech` directory, a minimum of 500GB free space is required for download and preprocessing, the final preprocessed dataset is 320GB.
 
 
 #### Dataset guidelines
-
-The `scripts/preprocess_librispeech.sh` script converts the input audio files to WAV format with a sample rate of 16kHz, target transcripts are striped from whitespace characters, then lower-cased. For `train-clean-100`, `train-clean-360` and `train-other-500` it also creates speed perturbed versions with rates of 0.9 and 1.1 for data augmentation.
+The `scripts/preprocess_librispeech.sh` script converts the input audio files to WAV format with a sample rate of 16kHz, target transcripts are stripped from whitespace characters, then lower-cased. For `train-clean-100`, `train-clean-360` and `train-other-500` it also creates speed perturbed versions with rates of 0.9 and 1.1 for data augmentation.
 
 After preprocessing, the script creates JSON files with output file paths, sample rate, target transcript and other metadata. These JSON files are used by the training script to identify training and validation datasets.
 
@@ -499,11 +495,11 @@ The training is performed using `train.py` script along with parameters defined 
 The `scripts/train.sh` script runs a job on a single node that trains the Jasper model from scratch using LibriSpeech as training data. To make training more efficient, we discard audio samples longer than 16.7 seconds from the training dataset, the total number of these samples is less than 1%. Such filtering does not degrade accuracy, but it allows us to decrease the number of time steps in a batch, which requires less GPU memory and increases training speed.
 Apart from the default arguments as listed in the [Parameters](#parameters) section, by default the training script:
 
-* Runs on 8 32GB V100 GPUs with training and evaluation batch size 64
-* Uses FP16 precision with AMP optimization level O1 (default)
-* Enables cudnn benchmark to make mixed precision training faster
+* Runs on 8 GPUs with at least 32GB of memory and training/evaluation batch size 64, split over two gradient accumulation steps
+* Uses TF32 precision (A100 GPU) or FP32 (other GPUs)
 * Trains on the concatenation of all 3 LibriSpeech training datasets and evaluates on the LibriSpeech dev-clean dataset
-* Uses a seed of 6
+* Maintains an exponential moving average of parameters for evaluation
+* Has cudnn benchmark enabled
 * Runs for 400 epochs
 * Uses an initial learning rate of 0.015 and polynomial (quadratic) learning rate decay
 * Saves a checkpoint every 10 epochs
@@ -516,96 +512,88 @@ Apart from the default arguments as listed in the [Parameters](#parameters) sect
 * Pads each sequence in a batch to the same length (smallest multiple of 16 that is at least the length of the longest sequence in the batch)
 * Uses masked convolutions and dense residuals as described in the paper
 * Uses weight decay of 0.001
-* Uses 1 gradient accumulation step
 * Uses [Novograd](https://arxiv.org/pdf/1905.11286.pdf) as optimizer with betas=(0.95, 0)
 
-
-These parameters will match the greedy WER [Results](#results) of the Jasper paper on a DGX1 with 32GB V100 GPUs.
+Enabling AMP permits batch size 64 with one gradient accumulation step. Such setup will match the greedy WER [Results](#results) of the Jasper paper on a DGX-1 with 32GB V100 GPUs.
 
 ### Inference process
-
 Inference is performed using the `inference.py` script along with parameters defined in `scripts/inference.sh`.
 The `scripts/inference.sh` script runs the job on a single GPU, taking a pre-trained Jasper model checkpoint and running it on the specified dataset.
 Apart from the default arguments as listed in the [Parameters](#parameters) section by default the inference script:
 
 * Evaluates on the LibriSpeech dev-clean dataset
-* Uses full precision
 * Uses a batch size of 64
 * Runs for 1 epoch and prints out the final word error rate
 * Creates a log file with progress and results which will be stored in the results folder
-* Pads each sequence in a batch to the same length (smallest multiple of 16 that is at least the length of the longest sequence in the batch)
+* Pads each sequence in a batch to the same length (smallest multiple of 16 that is at least the length of the longest sequence in the batch
 * Does not use data augmentation
 * Does greedy decoding and saves the transcription in the results folder
 * Has the option to save the model output tensors for more complex decoding, for example, beam search
 * Has cudnn benchmark disabled
 
 ### Evaluation process
-
 Evaluation is performed using the `inference.py` script along with parameters defined in `scripts/evaluation.sh`.
 The `scripts/evaluation.sh` script runs a job on a single GPU, taking a pre-trained Jasper model checkpoint and running it on the specified dataset.
 Apart from the default arguments as listed in the [Parameters](#parameters) section, by default the evaluation script:
 
 * Uses a batch size of 64
 * Evaluates the LibriSpeech dev-clean dataset
-* Uses full precision
 * Runs for 1 epoch and prints out the final word error rate
 * Creates a log file with progress and results which is saved in the results folder
 * Pads each sequence in a batch to the same length (smallest multiple of 16 that is at least the length of the longest sequence in the batch)
 * Does not use data augmentation
 * Has cudnn benchmark disabled
 
-
-### Inference Process with TensorRT
+### Deploying Jasper using TensorRT
 NVIDIA TensorRT is a platform for high-performance deep learning inference. It includes a deep learning inference optimizer and runtime that delivers low latency and high-throughput for deep learning inference applications. Jasper’s architecture, which is of deep convolutional nature, is designed to facilitate fast GPU inference. After optimizing the compute-intensive acoustic model with NVIDIA TensorRT, inference throughput increased by up to 1.8x over native PyTorch. 
 More information on how to perform inference using TensorRT and speed up comparison between TensorRT and native PyTorch can be found in the subfolder [./trt/README.md](trt/README.md)
 
-### Inference Process with TensorRT Inference Server
-The NVIDIA TensorRT Inference Server provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server.
+### Deploying Jasper using Triton Inference Server
+The NVIDIA Triton Inference Server provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server.
 More information on how to perform inference using TensorRT Inference Server with different model backends can be found in the subfolder [./trtis/README.md](trtis/README.md)
 
 
 ## Performance
 
 ### Benchmarking
-
 The following section shows how to run benchmarks measuring the model performance in training and inference modes.
 
 #### Training performance benchmark
-
-To benchmark the training performance on a specific batch size and audio length, run:
+To benchmark the training performance on a specific batch size and audio length, for `NUM_STEPS` run:
 
 ```bash
-bash scripts/train_benchmark.sh <DATA_DIR> <MODEL_CONFIG> <RESULT_DIR> <CREATE_LOGFILE> <CUDNN_BENCHMARK> <NUM_GPUS> <PRECISION> <NUM_STEPS> <MAX_DURATION> <SEED> <BATCH_SIZE>
-<LEARNING_RATE> <GRADIENT_ACCUMULATION_STEPS> <PRINT_FREQUENCY>
+export NUM_STEPS=<NUM_STEPS>
+export MAX_DURATION=<DURATION>
+export BATCH_SIZE=<BATCH_SIZE>
+bash scripts/train_benchmark.sh
 ```
 
-By default, this script runs 400 epochs on the configuration `configs/jasper10x5dr_sp_offline_specaugment.toml` using full precision
-and batch size 64 on a single node with 8x 32GB V100 GPUs cards.
-By default, `NUM_STEPS=-1` means training is run for 400 EPOCHS. If `$NUM_STEPS > 0` is specified, training is only run for a user-defined number of iterations. Audio samples longer than `MAX_DURATION` are filtered out, the remaining ones are padded to this duration such that all batches have the same length. At the end of training the script saves the model checkpoint to the results folder, runs evaluation on LibriSpeech dev-clean dataset, and prints out information such as average training latency performance in seconds, average training throughput in sequences per second, final training loss, final training WER, evaluation loss and evaluation WER.
-
+By default, this script runs 400 epochs on the configuration `configs/jasper10x5dr_sp_offline_specaugment.toml`
+using batch size 32 on a single node with 8x GPUs with at least 32GB of memory.
+By default, `NUM_STEPS=-1` means training is run for 400 EPOCHS. If `$NUM_STEPS > 0` is specified, training is only run for a user-defined number of iterations. Audio samples longer than `MAX_DURATION` are filtered out, the remaining ones are padded to this duration such that all batches have the same length. At the end of training the script saves the model checkpoint to the results folder, runs evaluation on LibriSpeech dev-clean dataset, and prints out information such as average training latency performance in seconds, average trng throughput in sequences per second, final training loss, final training WER, evaluation loss and evaluation WER.
 
 
 #### Inference performance benchmark
-
 To benchmark the inference performance on a specific batch size and audio length, run:
 
 ```bash
-bash scripts/inference_benchmark.sh <DATA_DIR> <DATASET> <MODEL_CONFIG> <RESULT_DIR> <CHECKPOINT> <CREATE_LOGFILE> <CUDNN_BENCHMARK> <PRECISION> <NUM_GPUS> <MAX_DURATION>
-<SEED> <BATCH_SIZE>
+bash scripts/inference_benchmark.sh
 ```
-By default, the script runs on a single GPU and evaluates on the entire dataset using the model configuration `configs/jasper10x5dr_sp_offline_specaugment.toml`, full precision, cudnn benchmark for faster fp16 inference and batch size 64.
+By default, the script runs on a single GPU and evaluates on the entire dataset using the model configuration `configs/jasper10x5dr_sp_offline_specaugment.toml` and batch size 32.
 By default, `MAX_DURATION` is set to 36 seconds, which covers the maximum audio length. All audio samples are padded to this length. The script prints out `MAX_DURATION`, `BATCH_SIZE` and latency performance in milliseconds per batch.
 
-
+Adjustments can be made with env variables, e.g.,
+```bash
+export SEED=42
+export BATCH_SIZE=1
+bash scripts/inference_benchmark.sh
+```
 
 ### Results
-
 The following sections provide details on how we achieved our performance and accuracy in training and inference.
 All results are trained on 960 hours of LibriSpeech with a maximum audio length of 16.7s. The training is evaluated
 on LibriSpeech dev-clean, dev-other, test-clean, test-other.
 The results for Jasper Large's word error rate from the original paper after greedy decoding are shown below:
-
-
 
 | **Number of GPUs**    |  **dev-clean WER** | **dev-other WER**| **test-clean WER**| **test-other WER**
 |---    |---    |---    |---    |---    |
@@ -614,204 +602,241 @@ The results for Jasper Large's word error rate from the original paper after gre
 
 #### Training accuracy results
 
-##### Training accuracy: NVIDIA DGX-1 (8x V100 32G)
+##### Training accuracy: NVIDIA DGX A100 (8x A100 40GB)
+Our results were obtained by running the `scripts/train.sh` training script in the 20.06-py3 NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs.
 
-Our results were obtained by running the `scripts/train.sh` training script in the PyTorch 19.10-py3 NGC container with NVIDIA DGX-1 with (8x V100 32G) GPUs.
+| **Number of GPUs** | **Batch size per GPU** | **Precision** | **dev-clean WER** | **dev-other WER** | **test-clean WER** | **test-other WER** | **Time to train** | **Time to train speedup (TF32 to mixed precision)** |
+|-----|-----|-------|-------|-------|------|-------|-------|-----|
+|   8 |  64 | mixed |  3.53 | 11.11 | 3.75 | 11.07 | 60 h  | 1.9 |
+|   8 |  64 |  TF32 |  3.55 | 11.30 | 3.81 | 11.17 | 115 h |  -  |
+
+For each precision, we show the best of 8 runs chosen based on dev-clean WER. For TF32, two gradient accumulation steps have been used.
+
+##### Training accuracy: NVIDIA DGX-1 (8x V100 32GB)
+Our results were obtained by running the `scripts/train.sh` training script in the PyTorch 20.06-py3 NGC container with NVIDIA DGX-1 with (8x V100 32GB) GPUs.
 The following tables report the word error rate(WER) of the acoustic model with greedy decoding on all LibriSpeech dev and test datasets for mixed precision training.
 
-FP16 (seed #6)
+| **Number of GPUs** | **Batch size per GPU** | **Precision** | **dev-clean WER** | **dev-other WER** | **test-clean WER** | **test-other WER** | **Time to train** | **Time to train speedup (FP32 to mixed precision)** |
+|-----|-----|-------|-------|-------|------|-------|-------|-----|
+|   8 |  64 | mixed |  3.49 | 11.22 | 3.74 | 10.94 | 105 h | 3.1 |
+|   8 |  64 |  FP32 |  3.65 | 11.47 | 3.86 | 11.30 | 330 h |  -  |
 
-| **Number of GPUs**    | **Batch size per GPU**    | **dev-clean WER** | **dev-other WER**| **test-clean WER**| **test-other WER**| **Total time to train with FP16 (Hrs)** |
-|---    |---    |---    |---    |---    |---    |---    |
-|8 |64| 3.51|11.14|3.74|11.06|100
-
-FP32 training matches the results of mixed precision training and takes approximately 330 hours.
-
-
+We show the best of 5 runs (mixed precision) and 2 runs (FP32) chosen based on dev-clean WER. For FP32, two gradient accumulation steps have been used.
 
 ##### Training stability test
-
 The following table compares greedy decoding word error rates across 8 different training runs with different seeds for mixed precision training.
 
-| **FP16, 8x GPUs** | **seed #1** | **seed #2** | **seed #3** | **seed #4** | **seed #5** | **seed #6** | **seed #7** | **seed #8** | **mean** | **std** |
-|:-----------:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|
-|dev-clean|3.74|3.75|3.77|3.68|3.75|3.51|3.71|3.58|3.69|0.09
-|dev-other|11.56|11.62|11.5|11.36|11.62|11.14|11.8|11.3|11.49|0.21
-|test-clean|3.9|3.95|3.88|3.79|3.95|3.74|4.03|3.85|3.89|0.09
-|test-other|11.47|11.54|11.51|11.29|11.54|11.06|11.68|11.29|11.42|0.20
+| **DGX A100, FP16, 8x GPU**   |   **Seed #1** |   **Seed #2** |   **Seed #3** |   **Seed #4** |   **Seed #5** |   **Seed #6** |   **Seed #7** |   **Seed #8** |   **Mean** |   **Std** |
+|-----------:|------:|------:|------:|------:|------:|------:|------:|------:|------:|-----:|
+| dev-clean  |  3.69 |  3.71 |  3.64 |  3.53 |  3.71 |  3.66 |  3.77 |  3.70 |  3.68 | 0.07 |
+| dev-other  | 11.39 | 11.65 | 11.46 | 11.11 | 11.23 | 11.18 | 11.43 | 11.60 | 11.38 | 0.19 |
+| test-clean |  3.97 |  3.96 |  3.81 |  3.75 |  3.90 |  3.82 |  3.93 |  3.82 |  3.87 | 0.08 |
+| test-other | 11.27 | 11.34 | 11.40 | 11.07 | 11.24 | 11.29 | 11.58 | 11.58 | 11.35 | 0.17 |
 
+| **DGX A100, TF32, 8x GPU**   |   **Seed #1** |   **Seed #2** |   **Seed #3** |   **Seed #4** |   **Seed #5** |   **Seed #6** |   **Seed #7** |   **Seed #8** |   **Mean** |   **Std** |
+|-----------:|------:|------:|------:|------:|------:|------:|------:|------:|------:|-----:|
+| dev-clean  |  3.56 |  3.60 |  3.60 |  3.55 |  3.65 |  3.57 |  3.89 |  3.67 |  3.64 | 0.11 |
+| dev-other  | 11.27 | 11.41 | 11.65 | 11.30 | 11.51 | 11.11 | 12.18 | 11.50 | 11.49 | 0.32 |
+| test-clean |  3.80 |  3.79 |  3.88 |  3.81 |  3.94 |  3.82 |  4.13 |  3.85 |  3.88 | 0.11 |
+| test-other | 11.40 | 11.26 | 11.47 | 11.17 | 11.36 | 11.16 | 12.15 | 11.46 | 11.43 | 0.32 |
 
+| **DGX-1 32GB, FP16, 8x GPU**   |   **Seed #1** |   **Seed #2** |   **Seed #3** |   **Seed #4** |   **Seed #5** |   **Mean** |   **Std** |
+|-----------:|------:|------:|------:|------:|------:|------:|-----:|
+| dev-clean  |  3.69 |  3.75 |  3.63 |  3.86 |  3.49 |  3.68 | 0.14 |
+| dev-other  | 11.35 | 11.63 | 11.60 | 11.68 | 11.22 | 11.50 | 0.20 |
+| test-clean |  3.90 |  3.84 |  3.94 |  3.96 |  3.74 |  3.88 | 0.09 |
+| test-other | 11.17 | 11.45 | 11.31 | 11.60 | 10.94 | 11.29 | 0.26 |
 
 #### Training performance results
+Our results were obtained by running the `scripts/train.sh` training script in the PyTorch 20.06-py3 NGC container. Performance (in sequences per second) is the steady-state throughput.
 
-Our results were obtained by running the `scripts/train.sh` training script in the PyTorch 19.10-py3 NGC container. Performance (in sequences per second) is the steady-state throughput.
+##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
+| **GPUs** | **Batch size / GPU** | **Throughput - TF32** | **Throughput - mixed precision** | **Throughput speedup (TF32 to mixed precision)** | **Weak scaling - TF32** | **Weak scaling - mixed precision** |
+|--:|---:|------:|-------:|-----:|-----:|-----:|
+| 1 | 32 |  36.09 |  69.33 | 1.92 | 1.00 | 1.00 |
+| 4 | 32 | 143.05 | 264.91 | 1.85 | 3.96 | 3.82 |
+| 8 | 32 | 285.25 | 524.33 | 1.84 | 7.90 | 7.56 |
 
-##### Training performance: NVIDIA DGX-1 (8x V100 16G)
+| **GPUs** | **Batch size / GPU** | **Throughput - TF32** | **Throughput - mixed precision** | **Throughput speedup (TF32 to mixed precision)** | **Weak scaling - TF32** | **Weak scaling - mixed precision** |
+|--:|---:|------:|-------:|-----:|-----:|-----:|
+| 1 | 64 |      - |  77.79 |    - |    - | 1.00 |
+| 4 | 64 |      - | 304.32 |    - |    - | 3.91 |
+| 8 | 64 |      - | 602.88 |    - |    - | 7.75 |
+
+Note: Mixed precision permits higher batch sizes during training. We report the maximum batch sizes (as powers of 2), which are allowed without gradient accumulation.
+
+To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
+
+##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
+| **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
+|--:|---:|------:|-------:|-----:|-----:|-----:|
+| 1 | 16 | 11.12 |  28.87 | 2.60 | 1.00 | 1.00 |
+| 4 | 16 | 42.39 | 109.40 | 2.58 | 3.81 | 3.79 |
+| 8 | 16 | 84.45 | 194.30 | 2.30 | 7.59 | 6.73 |
 
 | **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
-|---|---|-----|------|----|----|----|
-| 1 | 16 | 10| 29.63| 2.96| 1.00| 1.00|
-| 4 | 16 | 38.79| 106.67| 2.75| 3.88| 3.60|
-| 8 | 16 | 76.64| 209.84| 2.74| 7.66| 7.08|
+|--:|---:|------:|-------:|-----:|-----:|-----:|
+| 1 | 32 |     - |  37.57 |    - |    - | 1.00 |
+| 4 | 32 |     - | 134.80 |    - |    - | 3.59 |
+| 8 | 32 |     - | 276.14 |    - |    - | 7.35 |
 
-
-| **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
-|---|---|-----|------|----|----|----|
-| 1 | 32 | - | 35.16 | - | - | 1.00 |
-| 4 | 32 | - | 134.74 | - | - | 3.83 |
-| 8 | 32 | - | 263.92 | - | - | 7.51 |
-
-
-
-Note: The respective values for FP32 runs that use a batch size of 32 are not available due to out of memory errors that arise. Batch size of 32 is only available when using FP16.
+Note: Mixed precision permits higher batch sizes during training. We report the maximum batch sizes (as powers of 2), which are allowed without gradient accumulation.
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 32GB)
+| **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
+|--:|---:|------:|-------:|-----:|-----:|-----:|
+| 1 | 32 | 13.15 |  35.63 | 2.71 | 1.00 | 1.00 |
+| 4 | 32 | 51.21 | 134.01 | 2.62 | 3.90 | 3.76 |
+| 8 | 32 | 99.88 | 247.97 | 2.48 | 7.60 | 6.96 |
 
 | **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
-|---|---|-----|------|----|----|----|
-| 1 | 32 | 12.26| 34.04| 2.78| 1.00| 1.00|
-| 4 | 32 | 48.67| 131.96| 2.71| 3.97| 3.88|
-| 8 | 32 | 95.88| 253.47| 2.64| 7.82| 7.45|
+|--:|---:|------:|-------:|-----:|-----:|-----:|
+| 1 | 64 |     - |  41.74 |    - |    - | 1.00 |
+| 4 | 64 |     - | 158.44 |    - |    - | 3.80 |
+| 8 | 64 |     - | 312.22 |    - |    - | 7.48 |
 
-
-| **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
-|---|---|-----|------|----|----|----|
-| 1 | 64 | - | 41.03 | - | - | 1.00 |
-| 4 | 64 | - | 159.01 | - | - | 3.88 |
-| 8 | 64 | - | 312.20 | - | - | 7.61 |
-
-
-Note: The respective values for FP32 runs that use a batch size of 64 are not available due to out of memory errors that arise. Batch size of 64 is only available when using FP16.
+Note: Mixed precision permits higher batch sizes during training. We report the maximum batch sizes (as powers of 2), which are allowed without gradient accumulation.
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 ##### Training performance: NVIDIA DGX-2 (16x V100 32GB)
+| **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
+|---:|---:|-------:|-------:|-----:|------:|------:|
+|  1 | 32 |  14.13 |  41.05 | 2.90 |  1.00 |  1.00 |
+|  4 | 32 |  54.32 | 156.47 | 2.88 |  3.84 |  3.81 |
+|  8 | 32 | 110.26 | 307.13 | 2.79 |  7.80 |  7.48 |
+| 16 | 32 | 218.14 | 561.85 | 2.58 | 15.44 | 13.69 |
 
 | **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
-|---|---|-----|------|----|----|----|
-| 1 | 32 | 8.12| 24.24| 2.98| 1.00| 1.00|
-| 4 | 32 | 32.16| 92.09| 2.86| 3.96| 3.80|
-| 8 | 32 | 63.68| 181.56| 2.85| 7.84| 7.49|
-|16 | 32 | 124.88| 275.67| 2.20| 15.38| 11.35|
+|---:|---:|-------:|-------:|-----:|------:|------:|
+|  1 | 64 |      - |  46.41 |    - |     - |  1.00 |
+|  4 | 64 |      - | 147.90 |    - |     - |  3.19 |
+|  8 | 64 |      - | 359.15 |    - |     - |  7.74 |
+| 16 | 64 |      - | 703.13 |    - |     - | 15.15 |
 
-
-| **GPUs** | **Batch size / GPU** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
-|---|---|-----|------|----|----|----|
-| 1 | 64 | - | 29.22 | - | - | 1.00 |
-| 4 | 64 | - | 114.29 | - | - | 3.91 |
-| 8 | 64 | - | 222.61 | - | - | 7.62 |
-|16 | 64 | - | 414.57 | - | - | 14.19 |
-
-
-Note: The respective values for FP32 runs that use a batch size of 64 are not available due to out of memory errors that arise. Batch size of 64 is only available when using FP16.
+Note: Mixed precision permits higher batch sizes during training. We report the maximum batch sizes (as powers of 2), which are allowed without gradient accumulation.
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 
 #### Inference performance results
+Our results were obtained by running the `scripts/inference_benchmark.sh` script in the PyTorch 20.06-py3 NGC container on NVIDIA DGX A100, DGX-1, DGX-2 and T4 on a single GPU. Performance numbers (latency in milliseconds per batch) were averaged over 1000 iterations.
 
-Our results were obtained by running the `scripts/inference_benchmark.sh` script in the PyTorch 19.10-py3 NGC container on NVIDIA DGX-1, DGX-2 and T4 on a single GPU. Performance numbers (latency in milliseconds per batch) were averaged over 1000 iterations.
+##### Inference performance: NVIDIA DGX A100 (1x A100 40GB)
+|    | |FP16 Latency (ms) Percentiles | | | | TF32 Latency (ms) Percentiles | | | | FP16/TF32 speed up |
+|---:|-------------:|------:|------:|------:|------:|-------:|-------:|-------:|-------:|-----:|
+| BS | Duration (s) |   90% |   95% |   99% |   Avg |    90% |    95% |    99% |    Avg |  Avg |
+|  1 |            2 | 36.31 | 36.85 | 43.18 | 35.96 |  41.16 |  41.63 |  47.90 |  40.89 | 1.14 |
+|  2 |            2 | 37.56 | 43.32 | 45.23 | 37.11 |  42.53 |  47.79 |  49.62 |  42.07 | 1.13 |
+|  4 |            2 | 43.10 | 44.85 | 47.22 | 41.43 |  47.88 |  49.75 |  51.55 |  43.25 | 1.04 |
+|  8 |            2 | 44.02 | 44.30 | 45.21 | 39.51 |  50.14 |  50.47 |  51.50 |  45.63 | 1.16 |
+| 16 |            2 | 48.04 | 48.38 | 49.12 | 42.76 |  70.90 |  71.22 |  72.50 |  60.78 | 1.42 |
+|  1 |            7 | 37.74 | 37.88 | 38.92 | 37.02 |  41.53 |  42.17 |  44.75 |  40.79 | 1.10 |
+|  2 |            7 | 40.91 | 41.11 | 42.35 | 40.02 |  46.44 |  46.80 |  49.67 |  45.67 | 1.14 |
+|  4 |            7 | 43.94 | 44.32 | 46.71 | 43.00 |  54.39 |  54.80 |  56.63 |  53.53 | 1.24 |
+|  8 |            7 | 50.01 | 50.19 | 52.92 | 48.62 |  68.55 |  69.25 |  72.28 |  67.61 | 1.39 |
+| 16 |            7 | 60.38 | 60.76 | 62.44 | 57.92 |  93.17 |  94.15 |  98.84 |  92.21 | 1.59 |
+|  1 |         16.7 | 41.39 | 41.75 | 43.62 | 40.73 |  45.79 |  46.10 |  47.76 |  45.21 | 1.11 |
+|  2 |         16.7 | 46.43 | 46.76 | 47.72 | 45.81 |  52.53 |  53.13 |  55.60 |  51.71 | 1.13 |
+|  4 |         16.7 | 50.88 | 51.68 | 54.74 | 50.11 |  66.29 |  66.96 |  70.45 |  65.00 | 1.30 |
+|  8 |         16.7 | 62.09 | 62.76 | 65.08 | 61.40 |  94.16 |  94.67 |  97.46 |  93.00 | 1.51 |
+| 16 |         16.7 | 75.22 | 76.86 | 80.76 | 73.99 | 139.51 | 140.88 | 144.10 | 137.94 | 1.86 |
 
-##### Inference performance: NVIDIA DGX-1 (1x V100 16G)
-
-|   |       |FP16 Latency (ms) Percentiles  | | |       |FP32 Latency (ms) Percentiles  | | | | FP16/FP32 speed up|
-|---    |---    |---    |---    |---    |---    |---    |---    |---    |---    |---    |
-|BS |Sequence Length (in seconds) |90%    |95%    |99%    |Avg   |90%    |95%    |99%    |Avg   |Avg   |
-|1|2|62.16|64.71|67.29|61.31|69.37|69.75|75.38|68.95|1.12
-|2|2|60.94|63.60|68.03|59.57|82.18|83.12|84.26|75.33|1.26
-|4|2|68.38|69.55|75.85|64.82|85.74|86.85|93.78|82.55|1.27
-|8|2|68.80|71.54|73.28|62.83|104.22|106.58|109.41|95.77|1.52
-|16|2|72.33|72.85|74.55|64.69|127.11|129.34|131.46|109.80|1.70
-|1|7|59.06|60.51|62.83|58.10|75.41|75.72|78.64|74.70|1.29
-|2|7|61.68|67.73|68.58|59.53|97.85|98.59|98.99|91.60|1.54
-|4|7|60.88|62.13|65.23|60.38|119.08|119.80|121.28|118.67|1.97
-|8|7|70.71|71.82|74.23|70.16|181.48|185.00|186.20|177.98|2.54
-|16|7|93.75|94.70|100.58|92.96|219.72|220.25|221.28|215.09|2.31
-|1|16.7|68.87|69.48|71.75|63.63|101.03|101.66|104.00|100.32|1.58
-|2|16.7|73.00|73.76|75.58|66.44|145.64|146.64|152.41|143.69|2.16
-|4|16.7|77.71|78.75|79.90|77.34|224.62|225.43|226.43|223.96|2.90
-|8|16.7|96.34|97.07|104.46|95.94|318.52|319.13|320.74|316.14|3.30
-|16|16.7|154.63|156.81|159.25|151.05|375.67|377.00|381.79|371.83|2.46
-
-To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
-
-
-##### Inference performance: NVIDIA DGX-1 (1x V100 32G)
-
-|   |       |FP16 Latency (ms) Percentiles  | | |       |FP32 Latency (ms) Percentiles  | | | | FP16/FP32 speed up|
-|---    |---    |---    |---    |---    |---    |---    |---    |---    |---    |---    |
-|BS |Sequence Length (in seconds) |90%    |95%    |99%    |Avg   |90%    |95%    |99%    |Avg   |Avg   |
-|1|2|61.60|62.81|69.62|60.71|82.32|83.03|85.72|77.48|1.28
-|2|2|68.82|70.10|72.08|61.91|77.99|81.99|85.13|76.93|1.24
-|4|2|70.06|70.69|72.58|74.76|88.36|89.67|95.61|94.50|1.26
-|8|2|69.98|71.51|74.20|64.20|105.82|107.16|110.04|98.02|1.53
-|16|2|72.05|74.16|75.51|65.46|130.49|130.97|132.83|112.74|1.72
-|1|7|61.40|61.78|65.53|60.93|75.72|75.83|76.55|75.35|1.24
-|2|7|60.50|60.63|61.77|60.15|91.05|91.16|92.39|90.75|1.51
-|4|7|64.67|71.41|72.10|64.19|123.77|123.99|124.92|123.38|1.92
-|8|7|67.96|68.04|69.38|67.60|176.43|176.65|177.25|175.39|2.59
-|16|7|95.41|95.80|100.94|93.86|213.04|213.38|215.52|212.05|2.26
-|1|16.7|61.28|61.67|62.52|60.63|104.37|104.56|105.22|103.83|1.71
-|2|16.7|66.88|67.31|68.09|66.40|151.08|151.61|152.26|146.73|2.21
-|4|16.7|80.51|80.79|81.95|80.12|226.75|227.07|228.76|225.82|2.82
-|8|16.7|95.66|95.89|98.86|95.62|314.74|316.74|318.66|312.10|3.26
-|16|16.7|156.60|157.07|160.15|151.13|366.70|367.41|370.98|364.05|2.41
+##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
+|    | |FP16 Latency (ms) Percentiles | | | | FP32 Latency (ms) Percentiles | | | | FP16/FP32 speed up |
+|---:|-------------:|------:|------:|------:|------:|-------:|-------:|-------:|-------:|-----:|
+| BS | Duration (s) |   90% |   95% |   99% |   Avg |    90% |    95% |    99% |    Avg |  Avg |
+|  1 |    2 |  52.26 |  59.93 |  66.62 |  50.34 |  70.90 |  76.47 |  79.84 |  68.61 | 1.36 |
+|  2 |    2 |  62.04 |  67.68 |  70.91 |  58.65 |  75.72 |  80.15 |  83.50 |  71.33 | 1.22 |
+|  4 |    2 |  75.12 |  77.12 |  82.80 |  66.55 |  80.88 |  82.60 |  86.63 |  73.65 | 1.11 |
+|  8 |    2 |  71.62 |  72.99 |  81.10 |  66.39 |  99.57 | 101.43 | 107.16 |  92.34 | 1.39 |
+| 16 |    2 |  78.51 |  80.33 |  87.31 |  72.91 | 104.79 | 107.22 | 114.21 |  96.18 | 1.32 |
+|  1 |    7 |  52.67 |  54.40 |  64.27 |  50.47 |  73.86 |  75.61 |  84.93 |  72.08 | 1.43 |
+|  2 |    7 |  60.49 |  62.41 |  72.87 |  58.45 |  93.07 |  94.51 | 102.40 |  91.55 | 1.57 |
+|  4 |    7 |  70.55 |  72.95 |  82.59 |  68.43 | 131.48 | 137.60 | 149.06 | 129.23 | 1.89 |
+|  8 |    7 |  83.91 |  85.28 |  93.08 |  76.40 | 152.49 | 157.92 | 166.80 | 150.49 | 1.97 |
+| 16 |    7 | 100.21 | 103.12 | 109.00 |  96.31 | 178.45 | 181.46 | 187.20 | 174.33 | 1.81 |
+|  1 | 16.7 |  56.84 |  60.05 |  66.54 |  54.69 | 109.55 | 111.19 | 120.40 | 102.25 | 1.87 |
+|  2 | 16.7 |  69.39 |  70.97 |  75.34 |  67.39 | 149.93 | 150.79 | 154.06 | 147.45 | 2.19 |
+|  4 | 16.7 |  87.48 |  93.96 | 102.73 |  85.09 | 211.78 | 219.66 | 232.99 | 208.38 | 2.45 |
+|  8 | 16.7 | 106.91 | 111.92 | 116.55 | 104.13 | 246.92 | 250.94 | 268.44 | 243.34 | 2.34 |
+| 16 | 16.7 | 149.08 | 153.86 | 166.17 | 146.28 | 292.84 | 298.02 | 313.04 | 288.54 | 1.97 |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
+##### Inference performance: NVIDIA DGX-1 (1x V100 32GB)
+|    | |FP16 Latency (ms) Percentiles | | | | FP32 Latency (ms) Percentiles | | | | FP16/FP32 speed up |
+|---:|-------------:|------:|------:|------:|------:|-------:|-------:|-------:|-------:|-----:|
+| BS | Duration (s) |   90% |   95% |   99% |   Avg |    90% |    95% |    99% |    Avg |  Avg |
+|  1 |    2 |  64.60 |  67.34 |  79.87 |  60.73 |  84.69 |  86.78 |  96.02 |  79.32 | 1.31 |
+|  2 |    2 |  71.52 |  73.32 |  82.00 |  63.93 |  85.33 |  87.65 |  96.34 |  78.09 | 1.22 |
+|  4 |    2 |  80.38 |  84.62 |  93.09 |  74.95 |  90.29 |  97.59 | 100.61 |  84.44 | 1.13 |
+|  8 |    2 |  83.43 |  85.51 |  91.17 |  74.09 | 107.28 | 111.89 | 115.19 |  98.76 | 1.33 |
+| 16 |    2 |  90.01 |  90.81 |  96.48 |  79.85 | 115.39 | 116.95 | 123.71 | 103.26 | 1.29 |
+|  1 |    7 |  53.74 |  54.09 |  56.67 |  53.07 |  86.07 |  86.55 |  91.59 |  78.79 | 1.48 |
+|  2 |    7 |  63.34 |  63.67 |  66.08 |  62.62 |  96.25 |  96.82 |  99.72 |  95.44 | 1.52 |
+|  4 |    7 |  80.35 |  80.86 |  83.80 |  73.41 | 132.19 | 132.94 | 135.59 | 131.46 | 1.79 |
+|  8 |    7 |  77.68 |  78.11 |  86.71 |  75.72 | 156.30 | 157.72 | 165.55 | 154.87 | 2.05 |
+| 16 |    7 | 103.52 | 106.66 | 111.93 |  98.15 | 180.71 | 182.82 | 191.12 | 178.61 | 1.82 |
+|  1 | 16.7 |  57.58 |  57.79 |  59.75 |  56.58 | 104.51 | 104.87 | 108.01 | 104.04 | 1.84 |
+|  2 | 16.7 |  69.19 |  69.58 |  71.49 |  68.58 | 151.25 | 152.07 | 155.21 | 149.30 | 2.18 |
+|  4 | 16.7 |  87.17 |  88.53 |  97.41 |  86.56 | 211.28 | 212.41 | 214.97 | 208.54 | 2.41 |
+|  8 | 16.7 | 116.25 | 116.90 | 120.14 | 109.21 | 247.63 | 248.93 | 254.77 | 245.19 | 2.25 |
+| 16 | 16.7 | 151.99 | 154.79 | 163.36 | 149.80 | 293.99 | 296.05 | 303.04 | 291.00 | 1.94 |
 
+To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
-##### Inference performance: NVIDIA DGX-2 (1x V100 32G)
-
-|   |       |FP16 Latency (ms) Percentiles  | | |       |FP32 Latency (ms) Percentiles  | | | | FP16/FP32 speed up|
-|---    |---    |---    |---    |---    |---    |---    |---    |---    |---    |---    |
-|BS |Sequence Length (in seconds) |90%    |95%    |99%    |Avg   |90%    |95%    |99%    |Avg   |Avg   |
-|1|2|56.11|56.76|62.18|51.77|67.75|68.91|73.80|64.96|1.25
-|2|2|55.56|56.96|61.72|50.63|65.84|69.88|74.05|63.57|1.26
-|4|2|54.84|57.69|61.16|60.74|74.00|76.58|81.62|81.01|1.33
-|8|2|57.15|57.92|60.80|52.47|90.56|91.83|93.79|84.58|1.61
-|16|2|58.27|58.54|60.24|53.26|113.25|113.55|115.41|98.56|1.85
-|1|7|49.16|49.39|50.82|48.31|64.53|64.84|65.79|63.90|1.32
-|2|7|53.54|54.07|55.28|49.11|78.64|79.46|81.25|78.17|1.59
-|4|7|50.87|51.15|53.36|50.07|109.33|110.61|114.00|108.17|2.16
-|8|7|63.57|64.18|65.55|60.64|163.95|164.19|165.75|163.49|2.70
-|16|7|82.15|83.66|87.01|81.46|196.15|197.18|202.09|195.36|2.40
-|1|16.7|49.68|50.00|51.39|48.76|89.10|89.42|90.41|88.57|1.82
-|2|16.7|52.47|52.91|54.27|51.51|128.58|129.09|130.34|127.36|2.47
-|4|16.7|66.60|67.52|68.88|65.88|220.50|221.50|223.14|219.42|3.33
-|8|16.7|85.42|86.03|88.37|85.11|293.80|294.39|296.21|290.58|3.41
-|16|16.7|140.76|141.74|147.25|137.31|345.26|346.29|351.15|342.64|2.50
-
+##### Inference performance: NVIDIA DGX-2 (1x V100 32GB)
+|    | |FP16 Latency (ms) Percentiles | | | | FP32 Latency (ms) Percentiles | | | | FP16/FP32 speed up |
+|---:|-------------:|------:|------:|------:|------:|-------:|-------:|-------:|-------:|-----:|
+| BS | Duration (s) |   90% |   95% |   99% |   Avg |    90% |    95% |    99% |    Avg |  Avg |
+|  1 |    2 |  47.25 |  48.24 |  50.28 |  41.53 |  67.03 |  68.15 |  70.17 |  61.82 | 1.49 |
+|  2 |    2 |  54.11 |  55.20 |  60.44 |  48.82 |  69.11 |  70.38 |  75.93 |  64.45 | 1.32 |
+|  4 |    2 |  63.82 |  67.64 |  71.58 |  61.47 |  71.51 |  74.55 |  79.31 |  67.85 | 1.10 |
+|  8 |    2 |  64.78 |  65.86 |  67.68 |  59.07 |  90.84 |  91.99 |  94.10 |  84.28 | 1.43 |
+| 16 |    2 |  70.59 |  71.49 |  73.58 |  63.85 |  96.92 |  97.58 |  99.98 |  87.73 | 1.37 |
+|  1 |    7 |  42.35 |  42.55 |  43.50 |  41.08 |  63.87 |  64.02 |  64.73 |  62.54 | 1.52 |
+|  2 |    7 |  47.82 |  48.04 |  49.43 |  46.79 |  81.17 |  81.43 |  82.28 |  80.02 | 1.71 |
+|  4 |    7 |  58.27 |  58.54 |  59.69 |  56.96 | 116.00 | 116.46 | 118.79 | 114.82 | 2.02 |
+|  8 |    7 |  62.88 |  63.62 |  67.16 |  61.47 | 143.90 | 144.34 | 147.36 | 139.54 | 2.27 |
+| 16 |    7 |  88.04 |  88.57 |  90.96 |  82.84 | 163.04 | 164.04 | 167.30 | 161.36 | 1.95 |
+|  1 | 16.7 |  44.54 |  44.86 |  45.86 |  43.53 |  88.10 |  88.41 |  89.37 |  87.21 | 2.00 |
+|  2 | 16.7 |  55.21 |  55.55 |  56.92 |  54.33 | 134.99 | 135.69 | 137.87 | 132.97 | 2.45 |
+|  4 | 16.7 |  72.93 |  73.58 |  74.95 |  72.02 | 193.50 | 194.21 | 196.04 | 191.24 | 2.66 |
+|  8 | 16.7 |  96.94 |  97.66 |  99.58 |  92.73 | 227.70 | 228.74 | 231.59 | 225.35 | 2.43 |
+| 16 | 16.7 | 138.25 | 139.75 | 143.71 | 133.82 | 273.69 | 274.53 | 279.50 | 269.13 | 2.01 |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 ##### Inference performance: NVIDIA T4
-|   |       |FP16 Latency (ms) Percentiles  | | |       |FP32 Latency (ms) Percentiles  | | | | FP16/FP32 speed up|
-|---    |---    |---    |---    |---    |---    |---    |---    |---    |---    |---    |
-|BS |Sequence Length (in seconds) |90%    |95%    |99%    |Avg   |90%    |95%    |99%    |Avg   |Avg   |
-|1|2|57.30|57.50|74.62|56.74|73.71|73.98|88.79|72.95|1.29
-|2|2|53.68|69.69|76.08|52.63|82.83|93.38|97.67|78.23|1.49
-|4|2|72.26|76.49|83.92|57.60|116.06|121.25|125.98|104.17|1.81
-|8|2|70.52|71.85|76.26|58.16|159.92|161.22|164.76|148.34|2.55
-|16|2|78.29|79.04|82.86|66.97|251.96|252.67|253.64|206.41|3.08
-|1|7|54.83|54.94|55.50|54.58|85.57|89.11|89.71|84.08|1.54
-|2|7|55.17|55.38|67.09|54.87|134.28|135.76|138.23|131.01|2.39
-|4|7|74.24|78.09|79.51|73.75|214.77|215.65|217.28|211.66|2.87
-|8|7|99.99|100.34|104.26|98.84|379.67|380.96|382.70|375.12|3.80
-|16|7|167.48|168.07|177.29|166.53|623.36|624.11|625.89|619.34|3.72
-|1|16.7|72.23|72.65|80.13|67.77|155.76|157.11|160.05|151.85|2.24
-|2|16.7|75.43|76.04|80.41|74.65|259.56|261.23|266.09|252.80|3.39
-|4|16.7|131.71|132.45|134.92|129.63|481.40|484.17|486.88|469.05|3.62
-|8|16.7|197.10|197.94|200.15|193.88|806.76|812.73|822.27|792.85|4.09
-|16|16.7|364.22|365.22|372.17|358.62|1165.78|1167.11|1171.02|1150.44|3.21
+|    | |FP16 Latency (ms) Percentiles | | | | FP32 Latency (ms) Percentiles | | | | FP16/FP32 speed up |
+|---:|-------------:|------:|------:|------:|------:|-------:|-------:|-------:|-------:|-----:|
+| BS | Duration (s) |   90% |   95% |   99% |   Avg |    90% |    95% |    99% |    Avg |  Avg |
+|  1 |    2 |  64.13 |  65.25 |  76.11 |  59.08 |  94.69 |  98.23 | 109.86 |  89.00 | 1.51 |
+|  2 |    2 |  67.59 |  70.77 |  84.06 |  57.47 | 103.88 | 105.37 | 114.59 |  93.30 | 1.62 |
+|  4 |    2 |  75.19 |  81.05 |  87.01 |  65.79 | 120.73 | 128.29 | 146.83 | 112.96 | 1.72 |
+|  8 |    2 |  74.15 |  77.69 |  84.96 |  62.77 | 161.97 | 163.46 | 170.25 | 153.07 | 2.44 |
+| 16 |    2 | 100.62 | 105.08 | 113.00 |  82.06 | 216.18 | 217.92 | 222.46 | 188.57 | 2.30 |
+|  1 |    7 |  77.88 |  79.61 |  81.90 |  70.22 | 110.37 | 113.93 | 121.39 | 107.17 | 1.53 |
+|  2 |    7 |  81.09 |  83.94 |  87.28 |  78.06 | 148.30 | 151.21 | 158.55 | 141.26 | 1.81 |
+|  4 |    7 |  99.85 | 100.83 | 104.24 |  96.81 | 229.94 | 232.34 | 238.11 | 225.43 | 2.33 |
+|  8 |    7 | 147.38 | 150.37 | 153.66 | 142.64 | 394.26 | 396.35 | 398.89 | 390.77 | 2.74 |
+| 16 |    7 | 280.32 | 281.37 | 282.74 | 278.01 | 484.20 | 485.74 | 499.89 | 482.67 | 1.74 |
+|  1 | 16.7 |  76.97 |  79.78 |  81.61 |  75.55 | 171.45 | 176.90 | 179.18 | 167.95 | 2.22 |
+|  2 | 16.7 |  96.48 |  99.42 | 101.21 |  92.74 | 276.12 | 278.67 | 282.06 | 270.05 | 2.91 |
+|  4 | 16.7 | 129.63 | 131.67 | 134.42 | 124.55 | 522.23 | 524.79 | 527.32 | 509.75 | 4.09 |
+|  8 | 16.7 | 209.64 | 211.36 | 214.66 | 204.83 | 706.84 | 709.21 | 715.57 | 697.97 | 3.41 |
+| 16 | 16.7 | 342.23 | 344.62 | 350.84 | 337.42 | 848.02 | 849.83 | 858.22 | 834.38 | 2.47 |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 ## Release notes
 
 ### Changelog
+June 2020
+- Updated performance tables to include A100 results
 
 December 2019
 * Inference support for TRT 6 with dynamic shapes
@@ -828,7 +853,5 @@ September 2019
 August 2019
 * Initial release
 
-
 ### Known issues
-
 There are no known issues in this release.
