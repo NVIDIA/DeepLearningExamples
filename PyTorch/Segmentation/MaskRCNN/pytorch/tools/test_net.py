@@ -51,7 +51,7 @@ def main():
         help="Mixed precision training",
         action="store_true",
     )
-   parser.add_argument(
+    parser.add_argument(
         "--amp",
         help="Mixed precision training",
         action="store_true",
