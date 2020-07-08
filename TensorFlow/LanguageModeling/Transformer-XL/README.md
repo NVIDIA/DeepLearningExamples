@@ -280,8 +280,6 @@ To enable mixed precision, you can simply add the values to the environmental va
 
 #### Enabling TF32
 
-This section is model specific and needs to show how to enable TF32.  How is TF32 being implemented? Tweaking layers, preprocessing data, etc… 
-
 TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
 
 TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
