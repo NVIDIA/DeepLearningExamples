@@ -254,10 +254,10 @@ If you want to use a pre-trained checkpoint, visit [NGC](https://ngc.nvidia.com/
  
 Resultant logs and checkpoints of pretraining and fine-tuning routines are stored in the `results/` folder.
  
-`data` and `vocab.txt` are downloaded in the `data/` directory by default. Refer to the [Getting the data](#getting-the-data) section for more details on how to process a custom corpus as required for BERT pretraining.
- 
+`data` and `vocab.txt` are downloaded in the `data/` directory by default. Refer to the [Getting the data](#getting-the-data) section for more details on how to process a custom corpus as required for BERT pretraining. 
+
 5. Download and preprocess the dataset.
- 
+
 This repository provides scripts to download, verify, and extract the following datasets:
  
 -   [SQuAD](https://rajpurkar.github.io/SQuAD-explorer/) (fine-tuning for question answering)
@@ -266,9 +266,23 @@ This repository provides scripts to download, verify, and extract the following 
  
 To download, verify, extract the datasets, and create the shards in `.hdf5` format, run:  
 `/workspace/bert/data/create_datasets_from_start.sh`
- 
-Note: For fine tuning only, Wikipedia and Bookscorpus dataset download can be skipped by commenting it out. The pretraining dataset is 170GB+ and takes 15+ hours to download. The BookCorpus server could sometimes get overloaded and also contain broken links resulting in HTTP 403 and 503 errors. You can either skip the missing files or retry downloading at a later time. Expired dataset links are ignored during data download.
- 
+
+Note: For fine tuning only, Wikipedia and Bookscorpus dataset download and preprocessing can be skipped by commenting it out.
+
+- Download Wikipedia only for pretraining
+
+The pretraining dataset is 170GB+ and takes 15+ hours to download. The BookCorpus server most of the times get overloaded and also contain broken links resulting in HTTP 403 and 503 errors. Hence, it is recommended to skip downloading BookCorpus data by running:
+
+`/workspace/bert/data/create_datasets_from_start.sh wiki_only`
+
+- Download Wikipedia and BookCorpus
+
+Users are welcome to download BookCorpus from other sources to match our accuracy, or repeatedly try our script until the required number of files are downloaded by running the following:
+
+`/workspace/bert/data/create_datasets_from_start.sh wiki_books`
+
+Note: Not using BookCorpus can potentially change final accuracy on a few downstream tasks.
+
 6. Start pretraining.
  
 To run on a single node 8 x V100 32G cards, from within the container, you can use the following script to run pre-training.  
