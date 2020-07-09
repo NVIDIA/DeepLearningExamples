@@ -40,7 +40,6 @@ to achieve state-of-the-art accuracy and is tested and maintained by NVIDIA.
       * [Training accuracy: NVIDIA DGX-2 (16x V100 32G)](#training-accuracy-nvidia-dgx-2-16x-v100-32gb)
         * [Base model](#base-model-2)
       * [Training loss plot](#training-loss-plot)
-        * [Base model](#base-model-3)
       * [Training stability test](#training-stability-test)
         * [Base model](#base-model-4)
     * [Training performance results](#training-performance-results)
@@ -893,8 +892,11 @@ training iterations.
 
 |**GPUs**|**Batch Size / GPU**|**Throughput - TF32 (tok/s)**|**Throughput - Mixed precision (tok/s)**|**Throughput speedup (TF32 to Mixed precision)**|**Weak Scaling - TF32**|**Weak Scaling - Mixed precision**|
 |-------:|-------------------:|----------------------------:|---------------------------------------:|-----------------------------------------------:|----------------------:|---------------------------------:|
-| 1 | 16 |  34,244 |  36,455 | 1.065 | 1.000 | 6.555 |
-| 8 | 32 | 224,474 | 227,502 | 1.013 | 8.636 | 6.241 |
+| 1 | 16 |  25,127 |  26,130 | 1.040 | 1.000 | 1.000 |
+| 1 | 32 |  30,958 |  33,117 | 1.070 | 1.000 | 1.000 |
+| 1 | 64 |  34,244 |  36,455 | 1.065 | 1.000 | 1.000 |
+| 8 | 16 | 157,538 | 155,656 | 0.988 | 6.270 | 5.957 |
+| 8 | 32 | 224,474 | 227,502 | 1.013 | 7.251 | 6.870 |
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
