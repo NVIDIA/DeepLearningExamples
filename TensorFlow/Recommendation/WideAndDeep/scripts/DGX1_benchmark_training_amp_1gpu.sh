@@ -1,5 +1,4 @@
-#! /usr/bin/python
-# -*- coding: utf-8 -*-
+#!/bin/bash
 
 # Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
 #
@@ -15,14 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-class MeanAccumulator:
-    def __init__(self):
-        self.sum = 0
-        self.count = 0
+set -x
+set -e
 
-    def consume(self, value):
-        self.sum += value
-        self.count += 1
-
-    def value(self):
-        return self.sum / self.count
+python -m trainer.task \
+  --benchmark_warmup_steps 50 \
+  --benchmark_steps 200 \
+  --gpu \
+  --benchmark \
+  --amp

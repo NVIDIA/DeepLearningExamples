@@ -15,13 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import time
-import tensorflow as tf
-
 import dllogger
+import tensorflow as tf
+import time
 
 from .training_hooks import MeanAccumulator
-
 
 __all__ = ['BenchmarkLoggingHook']
 
@@ -43,7 +41,6 @@ class BenchmarkLoggingHook(tf.train.SessionRunHook):
         samplesps = self.global_batch_size / batch_time
         if self.current_step >= self.warmup_steps:
             self.mean_throughput.consume(samplesps)
-            dllogger.log(data={"samplesps" : samplesps}, step=(0, self.current_step))
+            dllogger.log(data={"samplesps": samplesps}, step=(0, self.current_step))
 
         self.current_step += 1
-

@@ -635,8 +635,8 @@ def main(_):
     time_list = eval_hooks[-1].time_list
     time_list.sort()
     # Removing outliers (init/warmup) in throughput computation.
-    eval_time_wo_overhead = sum(time_list[:int(len(time_list) * 0.99)])
-    num_sentences = (int(len(time_list) * 0.99)) * FLAGS.predict_batch_size
+    eval_time_wo_overhead = sum(time_list[:int(len(time_list) * 0.8)])
+    num_sentences = (int(len(time_list) * 0.8)) * FLAGS.eval_batch_size
 
     avg = np.mean(time_list)
     cf_50 = max(time_list[:int(len(time_list) * 0.50)])
@@ -662,7 +662,7 @@ def main(_):
     tf.compat.v1.logging.info("Latency Confidence Level 100 (ms) = %0.2f", cf_100 * 1000)
     tf.compat.v1.logging.info("Latency Average (ms) = %0.2f", avg * 1000)
     tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
-    dllogging.logger.log(step=(), data={"throughput_train": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
+    dllogging.logger.log(step=(), data={"throughput_val": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
     tf.compat.v1.logging.info("-----------------------------")
 
 
@@ -707,11 +707,12 @@ def main(_):
 
 
     predict_time_elapsed = time.time() - predict_start_time
-    predict_time_wo_overhead = predict_hooks[-1].total_time
 
     time_list = predict_hooks[-1].time_list
     time_list.sort()
-    num_sentences = (predict_hooks[-1].count - predict_hooks[-1].skipped) * FLAGS.predict_batch_size
+    # Removing outliers (init/warmup) in throughput computation.
+    predict_time_wo_overhead = sum(time_list[:int(len(time_list) * 0.8)])
+    num_sentences = (int(len(time_list) * 0.8)) * FLAGS.predict_batch_size
 
     avg = np.mean(time_list)
     cf_50 = max(time_list[:int(len(time_list) * 0.50)])
@@ -725,7 +726,7 @@ def main(_):
     tf.compat.v1.logging.info("Total Inference Time = %0.2f for Sentences = %d", predict_time_elapsed,
                     predict_hooks[-1].count * FLAGS.predict_batch_size)
     tf.compat.v1.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", predict_time_wo_overhead,
-                    (predict_hooks[-1].count - predict_hooks[-1].skipped) * FLAGS.predict_batch_size)
+                              num_sentences)
     tf.compat.v1.logging.info("Summary Inference Statistics on TEST SET")
     tf.compat.v1.logging.info("Batch size = %d", FLAGS.predict_batch_size)
     tf.compat.v1.logging.info("Sequence Length = %d", FLAGS.max_seq_length)

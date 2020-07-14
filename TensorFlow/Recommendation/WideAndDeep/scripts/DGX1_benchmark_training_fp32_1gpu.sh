@@ -17,4 +17,8 @@
 set -x
 set -e
 
-mpiexec --allow-run-as-root --bind-to socket -np 4 python -m trainer.task --hvd --model_dir . --benchmark_warmup_steps 50 --benchmark_steps 200 --gpu --benchmark
+python -m trainer.task \
+  --benchmark_warmup_steps 50 \
+  --benchmark_steps 200 \
+  --gpu \
+  --benchmark

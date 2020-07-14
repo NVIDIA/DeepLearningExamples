@@ -39,9 +39,11 @@ This repository provides a script and recipe to train the BERT model for TensorF
     * [Training accuracy results](#training-accuracy-results)
       * [Pre-training accuracy](#pre-training-accuracy)
       * [Fine-tuning accuracy for SQuAD v1.1: NVIDIA DGX A100 (8x A100 40GB)](#fine-tuning-accuracy-for-squad-v1.1-nvidia-dgx-a100-8x-a100-40GB)
+      * [Fine-tuning accuracy for GLUE MRPC: NVIDIA DGX A100 (8x A100 40GB)](#fine-tuning-accuracy-for-glue-mrpc-nvidia-dgx-a100-8x-a100-40GB)
       * [Training stability test](#training-stability-test)
         * [Pre-training SQuAD v1.1 stability test: NVIDIA DGX A100 (256x A100 40GB)](#pre-training-squad-v1.1-stability-test-nvidia-dgx-a100-256x-a100-40GB)
         * [Fine-tuning SQuAD v1.1 stability test: NVIDIA DGX A100 (8x A100 40GB)](#fine-tuning-squad-v1.1-stability-test-nvidia-dgx-a100-8x-a100-40GB)
+        * [Fine-tuning GLUE MRPC stability test: NVIDIA DGX A100 (8x A100 40GB)](#fine-tuning-glue-mrpc-stability-test-nvidia-dgx-a100-8x-a100-40GB)
     * [Training performance results](#training-performance-results)
       * [Training performance: NVIDIA DGX-1 (8x V100 16GB)](#training-performance-nvidia-dgx-1-8x-v100-16GB)
         * [Pre-training training performance: single-node on DGX-1 16GB](#pre-training-training-performance-single-node-on-dgx-1-16GB)
@@ -137,7 +139,7 @@ The following features are supported by this model.
 
 Multi-GPU training with Horovod - Our model uses Horovod to implement efficient multi-GPU training with NCCL. For details, see example sources in this repository or see the [TensorFlow tutorial](https://github.com/horovod/horovod/#usage)
 
-[LAMB](https://arxiv.org/pdf/1904.00962.pdf) stands for Layerwise Adaptive Moments based optimizer, is a large batch optimization technique that helps accelerate training of deep neural networks using large minibatches. It allows using a global batch size of 65536 and 32768 on sequence lengths 128 and 512 respectively, compared to a batch size of 256 for Adam. The optimized implementation accumulates 1024 gradients batches in phase 1 and 4096 steps in phase 2 before updating weights once. This results in 27% training speedup on a single DGX2 node. On multi-node systems, LAMB allows scaling up to 1024 GPUs resulting in training speedups of up to 17x in comparison to [Adam](https://arxiv.org/pdf/1412.6980.pdf). Adam has limitations on the learning rate that can be used since it is applied globally on all parameters whereas LAMB follows a layerwise learning rate strategy.
+[LAMB](https://arxiv.org/pdf/1904.00962.pdf) stands for Layerwise Adaptive Moments based optimizer, is a large batch optimization technique that helps accelerate training of deep neural networks using large minibatches. It allows using a global batch size of 65536 and 32768 on sequence lengths 128 and 512 respectively, compared to a batch size of 256 for Adam. The optimized implementation accumulates 1024 gradient batches in phase 1 and 4096 steps in phase 2 before updating weights once. This results in 27% training speedup on a single DGX2 node. On multi-node systems, LAMB allows scaling up to 1024 GPUs resulting in training speedups of up to 17x in comparison to [Adam](https://arxiv.org/pdf/1412.6980.pdf). Adam has limitations on the learning rate that can be used since it is applied globally on all parameters whereas LAMB follows a layerwise learning rate strategy.
 
 NVLAMB adds necessary tweaks to [LAMB version 1](https://arxiv.org/abs/1904.00962v1), to ensure correct convergence. A guide to implementating the LAMB optimizer can be found in our [article](https://medium.com/@NvidiaAI/a-guide-to-optimizer-implementation-for-bert-at-scale-8338cc7f45fd) on Medium.com. The algorithm is as follows:
   ![NVLAMB](data/images/images_nvlamb.png)
@@ -254,11 +256,24 @@ bash scripts/data_download.sh
 
 The script launches a Docker container with the current directory mounted and downloads the datasets to a `data/` folder on the host.
 
-Note: For fine tuning only, Wikipedia and Bookscorpus dataset download can be skipped by commenting it out. The pretraining dataset is 170GB+ and takes 15+ hours to download. The BookCorpus server could sometimes get overloaded and also contain broken links resulting in HTTP 403 and 503 errors. You can either skip the missing files or retry downloading at a later time. Expired dataset links are ignored during data download.
+Note: For fine tuning only, Wikipedia and Bookscorpus dataset download and preprocessing can be skipped by commenting it out.
+
+- Download Wikipedia only for pretraining
+
+The pretraining dataset is 170GB+ and takes 15+ hours to download. The BookCorpus server most of the times get overloaded and also contain broken links resulting in HTTP 403 and 503 errors. Hence, it is recommended to skip downloading BookCorpus data by running:
+
+`bash scripts/data_download.sh wiki_only`
+
+- Download Wikipedia and BookCorpus
+
+Users are welcome to download BookCorpus from other sources to match our accuracy, or repeatedly try our script until the required number of files are downloaded by running the following:
+`bash scripts/data_download.sh wiki_books`
+
+Note: Not using BookCorpus can potentially change final accuracy on a few downstream tasks.
 
 4. Download the pretrained models from NGC.
 
-We have uploaded checkpoints for both [fine tuning](https://ngc.nvidia.com/catalog/models/nvidia:bert_tf_v1_1_large_fp32_384) and [pre-training](https://ngc.nvidia.com/catalog/models/nvidia:bert_tf_pretraining_lamb_16n) for various configurations on the NGC Model Registry. You can browse and download the relevant checkpoints directly from the [NGC model catalog](https://ngc.nvidia.com/catalog/models). Download them to the `results/models/` to easily access them in your scripts. 
+We have uploaded checkpoints that have been [fine tuned](https://ngc.nvidia.com/catalog/models/nvidia:bert_tf_v1_1_large_fp32_384) and [pre-trained](https://ngc.nvidia.com/catalog/models/nvidia:bert_tf_pretraining_lamb_16n) for various configurations on the NGC Model Registry. You can browse and download the relevant checkpoints directly from the [NGC model catalog](https://ngc.nvidia.com/catalog/models). Download them to the `results/models/` to easily access them in your scripts. 
 
 5. Start an interactive session in the NGC container to run training/inference.
 
@@ -330,6 +345,11 @@ Alternatively, to run fine tuning on GLUE benchmark, run:
 ```bash
 bash scripts/run_glue.sh <task_name> <batch_size_per_gpu> <learning_rate_per_gpu> <precision> <use_xla> <num_gpus> <seq_length> <doc_stride> <bert_model> <epochs> <warmup_proportion> <checkpoint>
 ```
+For MRPC FP16 training with XLA using a DGX A100 40GB, run:
+
+```bash
+bash scripts/run_glue.sh MRPC 16 3e-6 true 8 128 64 large 3 0.1
+```
 
 The GLUE tasks supported include CoLA, MRPC and MNLI.
 
@@ -341,12 +361,12 @@ The `run_squad_inference.sh` script runs inference on a checkpoint fine tuned fo
 bash scripts/run_squad_inference.sh <init_checkpoint> <batch_size> <precision> <use_xla> <seq_length> <doc_stride> <bert_model> <squad_version>
 ```
 
-For SQuAD 2.0 FP16 inference with XLA using a DGX-1 V100 32GB, run:
+For SQuAD 2.0 FP16 inference with XLA using a DGX-1 V100 32GB using checkpoint at `/results/model.ckpt` , run:
 ```bash
 bash scripts/run_squad_inference.sh /results/model.ckpt 8 fp16 true 384 128 large 2.0
 ```
 
-For SQuAD 1.1 FP32 inference without XLA using a DGX A100 40GB, run:
+For SQuAD 1.1 FP32 inference without XLA using a DGX A100 40GB using checkpoint at `/results/model.ckpt`, run:
 ```bash
 bash scripts/run_squad_inference.sh /results/model.ckpt 8 fp32 false 384 128 large 1.1
 ```
@@ -588,7 +608,7 @@ Multi-GPU training is enabled with the Horovod TensorFlow module. The following 
 
 ```bash
 BERT_DIR=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16
-
+SQUAD_DIR=data/download/squad/v1.1
 mpi_command="mpirun -np 8 -H localhost:8 \
     --allow-run-as-root -bind-to none -map-by slot \
     -x NCCL_DEBUG=INFO \
@@ -596,7 +616,7 @@ mpi_command="mpirun -np 8 -H localhost:8 \
     -x PATH -mca pml ob1 -mca btl ^openib" \
      python run_squad.py --horovod --vocab_file=$BERT_DIR/vocab.txt \
      --bert_config_file=$BERT_DIR/bert_config.json \
-     --output_dir=/results
+     --output_dir=/results --do_train --train_file=$SQUAD_DIR/train-v1.1.json
 ```
 
 #### Multi-node
@@ -713,6 +733,14 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 |:---:|:----:|:----:|:---:|:----:|:----:|
 | 8 | 24 |91.41 |91.52 |0.26|0.26|
 
+###### Fine-tuning accuracy for GLUE MRPC: NVIDIA DGX A100 (8x A100 40G)
+
+Our results were obtained by running the `scripts/run_glue.sh` training script in the TensorFlow 20.06-py3 NGC container on NVIDIA DGX A100 with 8x A100 40GB GPUs for 10 different seeds and picking the maximum accuracy on MRPC dev set.
+
+| **GPUs** | **Batch size / GPU** | **Accuracy - TF32** | **Accuracy - mixed precision** | **Time to Train - TF32 (Hrs)** | **Time to Train - mixed precision (Hrs)** | **Throughput - TF32** | **Throughput - mixed precision ** |
+|:---:|:----:|:----:|:---:|:----:|:----:|:----:|:----:|
+| 8 | 16 | 87.99 | 87.09 |0.009 | 0.009 |357.91|230.16|
+
 ##### Training stability test
 
 ###### Pre-training SQuAD v1.1 stability test: NVIDIA DGX A100 (256x A100 40GB)
@@ -738,6 +766,18 @@ The following tables compare `F1` scores across 5 different training runs with d
 | **TF32, 8x GPUs** | **seed 1** | **seed 2** | **seed 3** | **seed 4** | **seed 5** | **mean** | **std** |
 |:-----------:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|
 |F1         |91.50|91.49|91.64|91.29|91.67|91.52|0.15 |
+
+###### Fine-tuning GLUE MRPC stability test: NVIDIA DGX A100 (8x A100 40GB)
+
+The following tables compare `F1` scores across 10 different training runs with different seeds, for both FP16 and TF32 respectively using (Nvidia's Pretrained Checkpoint)[https://ngc.nvidia.com/catalog/models/nvidia:bert_tf_pretraining_lamb_16n].  The runs showcase consistent convergence on all 10 seeds with very little deviation.
+
+| ** FP16, 8 GPUs ** | ** seed 1 ** | ** seed 2 ** | ** seed 3 ** | ** seed 4 ** | ** seed 5 ** | ** seed 6 ** | ** seed 7 ** | ** seed 8 ** | ** seed 9 ** | ** seed 10 ** | ** Mean **  | ** Std **   |
+|--------------------|--------------|--------------|--------------|--------------|--------------|--------------|--------------|--------------|--------------|---------------|-------------|-------------|
+| Eval Accuracy      |  84.31372643 |  85.78431606 |  86.76471114 |  87.00980544 |  86.27451062 |  86.27451062 |   85.5392158 |  86.51961088 |  86.27451062 |    85.2941215 | 86.00490391 | 0.795887906 |
+
+| ** TF32, 8 GPUs ** | ** seed 1 ** | ** seed 2 ** | ** seed 3 ** | ** seed 4 ** | ** seed 5 ** | ** seed 6 ** | ** seed 7 ** | ** seed 8 ** | ** seed 9 ** | ** seed 10 ** | ** Mean ** | ** Std **    |
+|--------------------|--------------|--------------|--------------|--------------|--------------|--------------|--------------|--------------|--------------|---------------|------------|--------------|
+| Eval Accuracy      |  87.00980544 |  86.27451062 |  87.99020052 |  86.27451062 |  86.02941632 |  87.00980544 |  86.27451062 |  86.51961088 |  87.74510026 |   86.02941632 | 86.7156887 | 0.7009024515 |
 
 
 #### Training performance results
@@ -858,7 +898,6 @@ Note: The respective values for FP32 runs that use a batch size of 24 are not av
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
-
 ##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
 
 ###### Pre-training training performance: single-node on DGX A100 40GB
@@ -906,7 +945,6 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 Note: The respective values for TF32 runs that use a batch size of 32 are not available due to out of memory errors that arise.
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
-
 
 #### Inference performance results
 
@@ -1047,6 +1085,7 @@ Our results were obtained by running the `scripts/finetune_inference_benchmark.s
 | large |             384 |          4 | fp32      |                        43.32 |              107.53 |           93.07 |           93.47 |           94.27 |
 | large |             384 |          8 | fp32      |                        44.64 |              196.28 |          180.21 |          180.75 |          182.41 |
 
+
 ##### Inference performance: NVIDIA DGX A100 (1x A100 40GB)
 
 ###### Fine-tuning inference performance for SQuAD v1.1 on DGX A100  40GB
@@ -1110,7 +1149,6 @@ Our results were obtained by running the `scripts/finetune_inference_benchmark.s
 | large |             384 |          8 | fp32      |                        58.38 |              147.63 |          137.43 |          137.82 |           138.3 |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
-
 
 ##### Inference performance: NVIDIA Tesla T4 (1x T4 16GB)
 
@@ -1187,3 +1225,4 @@ March 2019
 
 ### Known issues
 
+There are no known issues with this model.
