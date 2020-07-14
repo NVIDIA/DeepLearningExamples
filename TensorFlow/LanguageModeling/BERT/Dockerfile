@@ -22,7 +22,7 @@ RUN mkdir -p /workspace/install \
     && curl -L ${TRTIS_CLIENTS_URL} | tar xvz -C /workspace/install
 
 #Install the python wheel with pip
-RUN pip install /workspace/install/python/tensorrtserver*.whl
+RUN pip install /workspace/install/python/tensorrtserver-1.12.0-py3-none-linux_x86_64.whl
 
 WORKDIR /workspace/bert
 COPY . .

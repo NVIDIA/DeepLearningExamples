@@ -16,8 +16,8 @@
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
 
 task_name=${1:-"MRPC"}
-batch_size=${2:-"32"}
-learning_rate=${3:-"2e-5"}
+batch_size=${2:-"16"}
+learning_rate=${3:-"3e-6"}
 precision=${4:-"fp16"}
 use_xla=${5:-"true"}
 num_gpu=${6:-"8"}
