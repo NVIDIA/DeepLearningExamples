@@ -39,22 +39,21 @@ with open('requirements.txt') as f:
     reqs = f.read()
 
 
-bleu = Extension(
-    'fairseq.libbleu',
-    sources=[
-        'fairseq/clib/libbleu/libbleu.cpp',
-        'fairseq/clib/libbleu/module.cpp',
-    ],
-    extra_compile_args=['-std=c++11'],
-)
+extra_compile_args = {'cxx' : ['-O2']}
+extra_compile_args['nvcc'] = ['-O3',
+                              '-I./cutlass/',
+                              '-U__CUDA_NO_HALF_OPERATORS__',
+                              '-U__CUDA_NO_HALF_CONVERSIONS__',
+                              '-gencode', 'arch=compute_70,code=sm_70',
+                              '-gencode', 'arch=compute_70,code=compute_70',
+                              '-gencode', 'arch=compute_80,code=sm_80',
+                              '-gencode', 'arch=compute_80,code=compute_80',
+                              ]
 
 strided_batched_gemm = CUDAExtension(
                         name='strided_batched_gemm',
                         sources=['fairseq/modules/strided_batched_gemm/strided_batched_gemm.cpp', 'fairseq/modules/strided_batched_gemm/strided_batched_gemm_cuda.cu'],
-                        extra_compile_args={
-                                'cxx': ['-O2',],
-                                'nvcc':['--gpu-architecture=compute_70','--gpu-code=sm_70','-O3','-I./cutlass/','-U__CUDA_NO_HALF_OPERATORS__', '-U__CUDA_NO_HALF_CONVERSIONS__']
-                        }
+                        extra_compile_args=extra_compile_args
 )
 
 batch_utils = CppExtension(
@@ -72,9 +71,9 @@ setup(
     license=license,
     install_requires=reqs.strip().split('\n'),
     packages=find_packages(),
-    ext_modules=[bleu, strided_batched_gemm, batch_utils],
+    ext_modules=[strided_batched_gemm, batch_utils],
     cmdclass={
-                'build_ext': BuildExtension
+                'build_ext': BuildExtension.with_options(use_ninja=False)
     },
     test_suite='tests',
 )

@@ -1,0 +1,19 @@
+jobs:
+  # no AMP
+  - export TF_ENABLE_AUTO_MIXED_PRECISION=0 && horovodrun -np 8 python3 main.py --exec_mode train_and_evaluate --iter_unit batch --num_iter 2500 --data_dir /data --dataset_name DAGM2007 --dataset_classID 1 --log_dir /result/log.json --results_dir /tmp --batch_size 2 --xla
+  # with AMP
+  - export TF_ENABLE_AUTO_MIXED_PRECISION=0 && horovodrun -np 8 python3 main.py --exec_mode train_and_evaluate --iter_unit batch --num_iter 2500 --data_dir /data --dataset_name DAGM2007 --dataset_classID 1 --log_dir /result/log.json --results_dir /tmp --batch_size 2 --xla --amp
+
+backend:
+  container: nvcr.io/nvidian/swdl/unetind_tf1:20.06
+  download_dir: /tmp
+  hostname: ngc
+  instance: dgx1v.16g.8.norm
+  result_dir: /result
+  datasets:
+    /data: 24410
+
+reports:
+  filename: unetind_tf1_ngc_conv_8gpu_20.06
+  types:
+    - xls

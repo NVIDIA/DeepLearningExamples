@@ -19,8 +19,6 @@ from exp_utils import AverageMeter, setup_dllogger
 
 import numpy as np
 
-flags.DEFINE_integer("num_core_per_host", default=8,
-      help="Number of cores per host")
 flags.DEFINE_bool('horovod', True, 'Use Horovod ')
 # Experiment (data/checkpoint/directory) config
 flags.DEFINE_string("raport_file", default="summary.json",
@@ -41,8 +39,8 @@ flags.DEFINE_string("eval_ckpt_path", None,
       help="Checkpoint path for do_test evaluation."
            "If set, model_dir will be ignored."
            "If unset, will use the latest ckpt in model_dir.")
-flags.DEFINE_bool("fp16", default=False,
-      help="Whether to enable AMP ops.")
+flags.DEFINE_bool("amp", default=False,
+      help="Whether to enable AMP ops. When false, uses TF32 on A100 and FP32 on V100 GPUS.")
 flags.DEFINE_bool("jit_optimizer", default=True,
       help="Whether to enable XLA on optimizer")
 
@@ -211,10 +209,10 @@ def single_core_graph(n_token, cutoffs, is_training, inp, tgt, mems):
   return model_ret
 
 
-def train(n_token, cutoffs, rank, local_rank, size):
+def train(n_token, cutoffs, rank, local_rank, num_core_per_host):
 
   meters = {}
-  warmup = 2 + 12/size
+  warmup = 3
   meters['train_throughput'] = AverageMeter(warmup=warmup)
   train_batch_size = FLAGS.train_batch_size // FLAGS.batch_chunk
   ##### Get input function and model function
@@ -223,7 +221,7 @@ def train(n_token, cutoffs, rank, local_rank, size):
       split="train",
       per_host_bsz=train_batch_size,
       tgt_len=FLAGS.tgt_len,
-      num_core_per_host=FLAGS.num_core_per_host,
+      num_core_per_host=num_core_per_host,
       num_hosts=1)
 
   tf.logging.info("num of batches {}".format(train_record_info["num_batch"]))
@@ -235,7 +233,7 @@ def train(n_token, cutoffs, rank, local_rank, size):
 
   inputs, labels = train_set.make_one_shot_iterator().get_next()
 
-  per_core_bsz = train_batch_size // FLAGS.num_core_per_host
+  per_core_bsz = train_batch_size // num_core_per_host
 
   with tf.variable_scope(tf.get_variable_scope()):
     mems = [tf.Variable(tf.zeros([FLAGS.mem_len, per_core_bsz, FLAGS.d_model], tf.float32), trainable=False)
@@ -327,7 +325,7 @@ def train(n_token, cutoffs, rank, local_rank, size):
 
       if curr_step > 0 and curr_step % FLAGS.log_interval == 0:
         curr_loss = total_loss / (curr_step - prev_step)
-        throughput = target_tokens * size / (time.time()-start_time)
+        throughput = target_tokens * num_core_per_host / (time.time()-start_time)
         meters['train_throughput'].update(throughput)
         if rank == 0:
           tf.logging.info("step {} | lr {:8.9f} "
@@ -367,7 +365,7 @@ def evaluate(n_token, cutoffs):
       split=FLAGS.eval_split,
       per_host_bsz=FLAGS.eval_batch_size,
       tgt_len=FLAGS.tgt_len,
-      num_core_per_host=FLAGS.num_core_per_host,
+      num_core_per_host=1, #multicore inference is not supported
       num_hosts=1)
 
   meters = {}
@@ -417,7 +415,8 @@ def evaluate(n_token, cutoffs):
     else:
       eval_ckpt_path = FLAGS.eval_ckpt_path
     tf.logging.info("Evaluate {}".format(eval_ckpt_path))
-    saver.restore(sess, eval_ckpt_path)
+    if FLAGS.eval_ckpt_path != "random":
+      saver.restore(sess, eval_ckpt_path)
 
     fetches = [loss, new_mems, target_tokens]
 
@@ -457,7 +456,7 @@ def evaluate(n_token, cutoffs):
       start_time = time.time()
     avg_loss = total_loss / total_cnt
     latency_data = np.array(meters['eval_latency'].vals)
-    tf.logging.info("Evaluating with: bs {}, math {} ".format(FLAGS.eval_batch_size, "fp16" if FLAGS.fp16 else "fp32"))
+    tf.logging.info("Evaluating with: bs {}, math {} ".format(FLAGS.eval_batch_size, "amp" if FLAGS.amp else "fp32"))
     tf.logging.info("| loss {:.2f} | pplx {:>7.2f}, bpc {:>7.4f}, tok/s {:>6.1f}, ms/batch {:>4.2f}".format(
         avg_loss, math.exp(avg_loss), avg_loss / math.log(2), meters['eval_throughput'].avg, meters['eval_latency'].avg))
     summary = {
@@ -476,17 +475,17 @@ def evaluate(n_token, cutoffs):
 
 
 def main(unused_argv):
-  rank, local_rank, size = 0, 0, 1
+  rank, local_rank, num_core_per_host = 0, 0, 1
   if FLAGS.horovod:
     hvd.init()
     rank = hvd.rank()
     local_rank = hvd.local_rank()
-    size = hvd.size()
+    num_core_per_host = hvd.size() #singlenode support
   del unused_argv  # Unused
 
   tf.logging.set_verbosity(tf.logging.INFO)
 
-  if FLAGS.fp16:
+  if FLAGS.amp:
       os.environ["TF_ENABLE_AUTO_MIXED_PRECISION"] = "1"
   else:
       os.environ["TF_ENABLE_AUTO_MIXED_PRECISION"] = "0"
@@ -500,7 +499,7 @@ def main(unused_argv):
   setup_dllogger(enabled=True, filename=FLAGS.raport_file, rank=rank)
 
   if FLAGS.do_train:
-    train(n_token, cutoffs, rank, local_rank, size)
+    train(n_token, cutoffs, rank, local_rank, num_core_per_host)
   if FLAGS.do_eval:
     evaluate(n_token, cutoffs)
 

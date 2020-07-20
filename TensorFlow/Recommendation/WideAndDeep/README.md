@@ -14,6 +14,7 @@ This repository provides a script and recipe to train the Wide and Deep Recommen
 	    * [Enabling mixed precision](#enabling-mixed-precision)
             * [Impact of mixed precision on training accuracy](#impact-of-mixed-precision-on-training-accuracy)
             * [Impact of mixed precision on inference accuracy](#impact-of-mixed-precision-on-inference-accuracy)
+	    * [Enabling TF32](#enabling-tf32)
     * [Glossary](#glossary)
 - [Setup](#setup)
     * [Requirements](#requirements)
@@ -31,11 +32,13 @@ This repository provides a script and recipe to train the Wide and Deep Recommen
         * [Training performance benchmark](#training-performance-benchmark)
     * [Results](#results)
         * [Training accuracy results](#training-accuracy-results)
-            * [Training accuracy: NVIDIA DGX-1 (8x V100 16G)](#training-accuracy-nvidia-dgx-1-8x-v100-16g)
+            * [Training accuracy: NVIDIA DGX A100 (8x A100 40GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-40gb)
+            * [Training accuracy: NVIDIA DGX-1 (8x V100 16GB)](#training-accuracy-nvidia-dgx-1-8x-v100-16gb)
             * [Training accuracy plots](#training-accuracy-plots)
             * [Training stability test](#training-stability-test)
         * [Training performance results](#training-performance-results)
-            * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16g)
+            * [Training performance: NVIDIA DGX A100 (8x A100 40GB)](#training-performance-nvidia-dgx-a100-8x-a100-40gb)
+            * [Training performance: NVIDIA DGX-1 (8x V100 16GB)](#training-performance-nvidia-dgx-1-8x-v100-16gb)
 - [Release notes](#release-notes)
     * [Changelog](#changelog)
     * [Known issues](#known-issues)
@@ -49,7 +52,7 @@ The differences between this Wide & Deep Recommender Model and the model from th
 
 The model enables you to train a recommender model that combines the memorization of the Wide part and generalization of the Deep part of the network.
 
-This model is trained with mixed precision using Tensor Cores on NVIDIA Volta and Turing GPUs. Therefore, researchers can get results 1.44 times faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
+This model is trained with mixed precision using Tensor Cores on NVIDIA Volta, Turing and the NVIDIA Ampere GPU architectures. Therefore, researchers can get results 1.43 times faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
 
 ### Model architecture
 
@@ -74,8 +77,7 @@ For reference, and to give context to the acceleration numbers described below, 
     - Request Level
         - 16 scalar numeric features `(shape=(1,)`)
         - 12 one-hot categorical features (all `int` dtype)
-            - 5 indicator embeddings
-	        - sizes 2, 2, 3, 3, 6
+            - 5 indicator embeddings with sizes 2, 2, 3, 3, 6
             - 7 trainable embeddings
                 - all except two have an embedding size of 64 (remaining two have 128), though it's important to note for *all* categorical features that we *do not* leverage that information to short-circuit the lookups by treating them as a single multi-hot lookup. Our API is fully general to any combination of embedding sizes.
                 - all use hash bucketing with `num_buckets=` 300k, 100k, 4k, 2.5k, 2k, 1k, and 300 respectively
@@ -141,6 +143,15 @@ The accuracy of training, measured with MAP@12 metric was not impacted by enabli
 ##### Impact of mixed precision on inference accuracy
 For our reference model, the average absolute error on the probability of interaction induced by reduced precision inference is `0.0002`, producing a near-perfect fit between predictions produced by full and mixed precision models. Moreover, this error is uncorrelated with the magnitude of the predicted value, which means for most predictions of interest (i.e. greater than `0.01` or `0.1` likelihood of interaction), the relative magnitude of the error is approaching the noise floor of the problem.
 
+#### Enabling TF32
+
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
+
+TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
+
+For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
+
+TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
 
 
 ### Glossary
@@ -157,8 +168,11 @@ The following section lists the requirements that you need to meet in order to s
 
 This repository contains Dockerfile which extends the TensorFlow NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 -   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
--   [20.02-tf1-py3](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container
--   [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
+-   [20.06-tf1-py3](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container
+-   Supported GPUs:
+	- [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
+	- [NVIDIA Turing architecture](https://www.nvidia.com/en-us/geforce/turing/)
+	- [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
 
 For more information about how to get started with NGC containers, see the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
 -   [Getting Started Using NVIDIA GPU Cloud](https://docs.nvidia.com/ngc/ngc-getting-started-guide/index.html)
@@ -169,7 +183,7 @@ For those unable to use the TensorFlow NGC container, to set up the required env
 
 ## Quick Start Guide
 
-To train your model using mixed precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the Wide & Deep model on the Outbrain dataset. For the specifics concerning training and inference, see the [Advanced](#advanced) section.
+To train your model using mixed or TF32 precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the Wide & Deep model on the Outbrain dataset. For the specifics concerning training and inference, see the [Advanced](#advanced) section.
 
 1. Clone the repository.
 
@@ -210,11 +224,11 @@ size (4096 is the default).
 
 Single GPU:
 ```bash
-python -m trainer.task --gpu --amp --global_batch_size 131072 --num_epochs 120
+python -m trainer.task --gpu
 ```
 8 GPU:
 ```bash
-mpiexec --allow-run-as-root --bind-to socket -np 8 python -m trainer.task --gpu --amp --hvd --global_batch_size 131072 --num_epochs 120
+mpiexec --allow-run-as-root --bind-to socket -np 8 python -m trainer.task --gpu --hvd
 ```
 
 If you want to run validation or inference, you can either use the checkpoint obtained from the training 
@@ -231,7 +245,7 @@ Download the checkpoint files and unzip them to some path, e.g. to `/raid/outbra
 In order to validate the checkpoint on the evaluation set, run the `task.py` script with `--evaluate` flag:
 
 ```bash
-python -m trainer.task --gpu --amp --evaluate --model_dir /outbrain/checkpoints 
+python -m trainer.task --gpu --evaluate --model_dir /outbrain/checkpoints
 ```
 
 8. Start inference/predictions.
@@ -240,7 +254,7 @@ In order to run inference and predict the results, run the `task.py`
 script with `--predict` flag:
 
 ```bash
-python -m trainer.task --gpu --amp --predict --model_dir /outbrain/checkpoints
+python -m trainer.task --gpu --predict --model_dir /outbrain/checkpoints
 ```
 
 
@@ -262,7 +276,7 @@ These are the important parameters in the `trainer/task.py` script:
 --model_dir: Path to model checkpoint directory
 --deep_hidden_units: [DEEP_LAYER1 DEEP_LAYER2 ...] hidden units per layer, separated by spaces
 --prebatch_size: Number of samples in each pre-batch in tfrecords
---batch_size: Training batch size (must be a multiplicity of prebatch_size)
+--global_batch_size: Training batch size (per all GPUs, must be a multiplicity of prebatch_size)
 --eval_batch_size: Evaluation batch size (must be a multiplicity of prebatch_size)
 --num_epochs: Number of epochs to train
 --linear_learning_rate: Learning rate for the wide part of the model
@@ -278,6 +292,7 @@ These are the important parameters in the `trainer/task.py` script:
 --amp: Enable Automatic Mixed Precision
 --xla: Enable XLA
 --hvd: Use Horovod for multi-GPU training
+--eval_epoch_interval: Perform evaluation every this many epochs
 ```
 
 ### Command-line options
@@ -347,15 +362,15 @@ configs are also present in the `trainer/task.py` and can be seen using the comm
 Two separate optimizers are used to optimize the wide and the deep part of the network:
     
 -  FTLR (Follow the Regularized Leader) optimizer is used to optimize the wide part of the network.
--  Proximal Adagrad optimizer is used to optimize the deep part of the network.
+-  Adagrad optimizer is used to optimize the deep part of the network.
 
 The training log will contain information about:
 
 -  Loss value after every 100 steps.
 -  Training throughput if `--benchmark` option is selected.
--  Evaluation metrics after every evaluation cycle at the end of every epoch.
+-  Evaluation metrics after every `--eval_epoch_interval` epochs.
 
-Checkpoints are stored at the end of every `--save_checkpoints_steps` at the `--model_dir` location.
+Checkpoints are stored with every evaluation at the `--model_dir` location.
 
 ## Performance
 
@@ -365,14 +380,16 @@ The following section shows how to run benchmarks measuring the model performanc
 
 #### Training performance benchmark
 
-We provide 6 scripts to benchmark the performance of training:
+We provide 8 scripts to benchmark the performance of training:
 ```bash
-bash scripts/benchmark_training_fp32_1gpu.sh
-bash scripts/benchmark_training_fp16_1gpu.sh
-bash scripts/benchmark_training_fp32_4gpu.sh
-bash scripts/benchmark_training_fp16_4gpu.sh
-bash scripts/benchmark_training_fp32_8gpu.sh
-bash scripts/benchmark_training_fp16_8gpu.sh
+bash scripts/DGXA100_benchmark_training_tf32_1gpu.sh
+bash scripts/DGXA100_benchmark_training_amp_1gpu.sh
+bash scripts/DGXA100_benchmark_training_tf32_8gpu.sh
+bash scripts/DGXA100_benchmark_training_amp_8gpu.sh
+bash scripts/DGX1_benchmark_training_fp32_1gpu.sh
+bash scripts/DGX1_benchmark_training_amp_1gpu.sh
+bash scripts/DGX1_benchmark_training_fp32_8gpu.sh
+bash scripts/DGX1_benchmark_training_amp_8gpu.sh
 ```
 
 ### Results
@@ -382,64 +399,96 @@ accuracy in training.
 
 #### Training accuracy results
 
-##### Training accuracy: NVIDIA DGX-1 (8x V100 16G)
+##### Training accuracy: NVIDIA DGX A100 (8x A100 40GB)
 
-Our results were obtained by running the benchmark scripts from the `scripts` directory in the TensorFlow NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs.
+Our results were obtained by running the benchmark scripts from the `scripts` directory in the TensorFlow NGC container on NVIDIA DGX A100 with (8x A100 40GB) GPUs.
 
-|**GPUs**|**Batch Size / GPU**|**Accuracy - FP32 (MAP@12)**|**Accuracy - Mixed precision (MAP@12)**|**Time to Train - FP32 (minutes)**|**Time to Train - Mixed precision (minutes)**|**Time to Train Speedup (FP32 to Mixed precision)**|
+|**GPUs**|**Batch size / GPU**|**Accuracy - TF32 (MAP@12)**|**Accuracy - mixed precision (MAP@12)**|**Time to train - TF32 (minutes)**|**Time to train - mixed precision (minutes)**|**Time to train speedup (FP32 to mixed precision)**|
 |-------:|-------------------:|----------------------------:|---------------------------------------:|-----------------------------------------------:|----------------------:|---------------------------------:|
-| 1 | 131,072 |  0.67647 | 0.67634  | 654 | 454 | 1.44 |
-| 4 | 32,768 | 0.67599 | 0.67652  | 226 | 183 | 1.23 |
-| 8 | 16,384 | 0.67688 | 0.67690  | 167 | 153 | 1.09 |
+| 1 | 131,072 | 0.67683 | 0.67632  | 312 | 325 | [-](#known-issues) |
+| 8 | 16,384 | 0.67709 | 0.67721  | 178 | 188 | [-](#known-issues) |
+
+To achieve the same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+
+##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
+
+Our results were obtained by running the benchmark scripts from the `scripts` directory in the TensorFlow NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs.
+
+|**GPUs**|**Batch size / GPU**|**Accuracy - FP32 (MAP@12)**|**Accuracy - mixed precision (MAP@12)**|**Time to train - FP32 (minutes)**|**Time to train - mixed precision (minutes)**|**Time to train speedup (FP32 to mixed precision)**|
+|-------:|-------------------:|----------------------------:|---------------------------------------:|-----------------------------------------------:|----------------------:|---------------------------------:|
+| 1 | 131,072 | 0.67648 | 0.67744 | 609 | 426 | 1.429 |
+| 8 | 16,384 | 0.67692 | 0.67725  | 233 | 232 |  [-](#known-issues) |
 
 To achieve the same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
 ##### Training accuracy plots
 
-![MAP12](img/map12_WnD.png)
+Models trained with FP32, TF32 and Automatic Mixed Precision (AMP) achieve similar precision.
+
+![MAP12](img/lc20.06.png)
 
 ##### Training stability test
 
 The Wide and Deep model was trained for 54,713 training steps, starting
-from 50 different initial random seeds. The training was performed in the 20.02-tf1-py3-stage NGC container on
-NVIDIA DGX-1 with 8x V100 16G GPUs with mixed precision enabled.
-After training, the models were evaluated on the test dataset. The following
-table summarizes the final MAP@12 score on the test set.
+from 6 different initial random seeds for each setup. The training was performed in the 20.06-tf1-py3 NGC container on
+NVIDIA DGX A100 40GB and DGX-1 16GB machines with and without mixed precision enabled.
+After training, the models were evaluated on the validation set. The following
+table summarizes the final MAP@12 score on the validation set.
 
-|**Average MAP@12**|**Standard deviation**|**Minimum**|**Maximum**|
-|---------------------:|---------------------:|----------:|----------:|
-| 0.67690 | 0.00081 | 0.67432 | 0.67821 | 
+||**Average MAP@12**|**Standard deviation**|**Minimum**|**Maximum**|
+|:-------|-----------------:|---------------------:|----------:|----------:|
+| DGX A100 TF32            | 0.67709 | 0.00094 | 0.67463 | 0.67813 | 
+| DGX A100 mixed precision | 0.67721 | 0.00048 | 0.67643 | 0.67783 | 
+| DGX-1 FP32               | 0.67692 | 0.00060 | 0.67587 | 0.67791 | 
+| DGX-1 mixed precision    | 0.67725 | 0.00064 | 0.67561 | 0.67803 | 
 
 
 #### Training performance results
 
 
-##### Training performance: NVIDIA DGX-1 (8x V100 16G)
+##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
 
-Our results were obtained by running the `trainer/task.py` training script in the TensorFlow NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs. Performance numbers (in samples per second) were averaged over 50 training iterations. Improving model scaling for multi-GPU is planned, see [known issues](#known-issues).
+Our results were obtained by running the `trainer/task.py` training script in the TensorFlow NGC container on NVIDIA DGX A100 with (8x A100 40GB) GPUs. Performance numbers (in samples per second) were averaged over 50 training iterations. Improving model scaling for multi-GPU is [under development](#known-issues).
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
-|**GPUs**|**Batch Size / GPU**|**Throughput - FP32 (samples/s)**|**Throughput - Mixed precision (samples/s)**|**Throughput speedup (FP32 to Mixed precision)**|**Weak Scaling - FP32**|**Weak Scaling - Mixed precision**|
-|-------:|-------------------:|----------------------------:|---------------------------------------:|-----------------------------------------------:|----------------------:|---------------------------------:|
-| 1 | 131,072 | 168,181 | 242,332 | 1.44 | 1.00 | 1.00 |
-| 4 | 131,072 | 487,719 | 602,027 | 1.23 | 2.47 | 2.89 |
-| 8 | 131,072 | 659,533 | 718,820 | 1.09 | 3.11 | 3.91 |
+|**GPUs**|**Batch size / GPU**|**Throughput - TF32 (samples/s)**|**Throughput - mixed precision (samples/s)**|**Strong scaling - FP32**|**Strong scaling - mixed precision**|
+|-------:|-------------------:|----------------------------:|---------------------------------------:|----------------------:|---------------------------------:|
+| 1 | 131,072 | 352,904 | 338,356 | 1.00 | 1.00 |
+| 8 | 16,384 | 617,910 | 584,688 | 1.75 | 1.73 |
 
+
+##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
+
+Our results were obtained by running the `trainer/task.py` training script in the TensorFlow NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs. Performance numbers (in samples per second) were averaged over 50 training iterations. Improving model scaling for multi-GPU is planned, see [known issues](#known-issues).
+
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+
+|**GPUs**|**Batch size / GPU**|**Throughput - FP32 (samples/s)**|**Throughput - mixed precision (samples/s)**|**Throughput speedup (FP32 to mixed precision)**|**Strong scaling - FP32**|**Strong scaling - mixed precision**|
+|-------:|-------------------:|----------------------------:|---------------------------------------:|-----------------------------------------------:|----------------------:|---------------------------------:|
+| 1 | 131,072 | 180,561 | 257,995 | 1.429 | 1.00 | 1.00 |
+| 8 | 16,384 | 472,143 | 473,195 | 1.002 | 2.61 | 1.83 |
 
 
 ## Release notes
 
 ### Changelog
 
-This section needs to include the date of the release and the most important changes after the initial release.
+June 2020
+- Updated performance tables to include A100 results
+
+April 2020
+- Improved Spark preprocessing scripts performance
 
 March 2020
 - Initial release
 
-May 2020
-- Improved Spark preprocessing scripts performance
 ### Known issues
 
 - Limited tf.feature_column support
 - Limited scaling for multi-GPU because of inefficient handling of embedding operations (multiple memory transfers between CPU and GPU), work in progress to cover all the operations on GPU.
+- In this model the TF32 precision can in some cases be as fast as the FP16 precision on Ampere GPUs.
+This is because TF32 also uses Tensor Cores and doesn't need any additional logic
+such as maintaining FP32 master weights and casts.
+However, please note that W&D is, by modern recommender standards, a very small model.
+Larger models should still see significant benefits of using FP16 math.

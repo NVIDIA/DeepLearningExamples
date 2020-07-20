@@ -1,4 +1,4 @@
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.03-tf1-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.06-tf1-py3
 
 FROM ${FROM_IMAGE_NAME}
 
@@ -22,7 +22,7 @@ RUN mkdir -p /workspace/install \
     && curl -L ${TRTIS_CLIENTS_URL} | tar xvz -C /workspace/install
 
 #Install the python wheel with pip
-RUN pip install /workspace/install/python/tensorrtserver*.whl
+RUN pip install /workspace/install/python/tensorrtserver-1.12.0-py3-none-linux_x86_64.whl
 
 WORKDIR /workspace/bert
 COPY . .

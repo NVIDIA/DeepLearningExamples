@@ -80,7 +80,7 @@ BERT_CMD="\
      --do_train=True \
      --do_eval=True \
      --save_checkpoints_steps=5000 \
-     --horovod --use_fp16 --use_xla \
+     --horovod --amp --use_xla \
      --allreduce_post_accumulation=True \
      --eval_batch_size=8"
 

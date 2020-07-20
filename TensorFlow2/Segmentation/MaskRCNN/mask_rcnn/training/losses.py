@@ -45,6 +45,10 @@ def _huber_loss(y_true, y_pred, weights, delta):
         name='huber_loss'
     )
 
+    if LooseVersion(tf.__version__) >= LooseVersion("2.2.0"):
+        y_true = tf.expand_dims(y_true, axis=-1)
+        y_pred = tf.expand_dims(y_pred, axis=-1)
+
     huber_loss = huber_keras_loss(
         y_true,
         y_pred,

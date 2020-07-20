@@ -1,16 +1,16 @@
 # Deploying the BERT model using Triton Inference Server
 
-The [NVIDIA Triton Inference Server](https://github.com/NVIDIA/triton-inference-server) provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server.
-This folder contains detailed performance analysis as well as scripts to run SQuAD fine-tuning on BERT model using Triton Inference Server.
-
 ## Table Of Contents
 
-- [Triton Inference Server Overview](#triton-inference-server-overview)
-- [Running the Triton Inference Server and client](#running-the-triton-inference-server-and-client)
-- [Performance analysis for Triton Inference Server](#performance-analysis-for-triton-inference-server)
+- [Solution Overview](#solution-overview)
+- [Quick Start Guide](#quick-start-guide)
+- [Performance](#performance)
   * [Advanced Details](#advanced-details)
 
-## Triton Inference Server Overview
+## Solution Overview
+
+The [NVIDIA Triton Inference Server](https://github.com/NVIDIA/triton-inference-server) provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server.
+This subfolder of the BERT TensorFlow repository contains detailed performance analysis as well as scripts to run SQuAD fine-tuning on BERT model using Triton Inference Server.
 
 A typical Triton Inference Server pipeline can be broken down into the following 8 steps:
 1. Client serializes the inference request into a message and sends it to the server (Client Send)
@@ -27,7 +27,7 @@ In this section, we will go over how to launch Triton Inference Server and clien
 
 Note: The following instructions are run from outside the container and call `docker run` commands as required.
 
-## Running the Triton Inference Server and client
+## Quick Start Guide
 
 The `run_triton.sh` script exports the TensorFlow BERT model as a `tensorflow_savedmodel` that Triton Inference Server accepts, builds a matching [Triton Inference Server model config](https://docs.nvidia.com/deeplearning/sdk/triton-inference-server-guide/docs/model_configuration.html#), starts the server on local host in a detached state, runs client on SQuAD v1.1 dataset and then evaluates the validity of predictions on the basis of exact match and F1 score all in one step.
 
@@ -37,7 +37,7 @@ bash triton/scripts/run_triton.sh <init_checkpoint> <batch_size> <precision> <us
 
 You can also run inference with a sample by passing `--question` and `--context` arguments to the client.
 
-## Performance analysis for Triton Inference Server
+## Performance
 
 Based on the figures 1 and 2 below, we recommend using the Dynamic Batcher with `max_batch_size = 8`, `max_queue_delay_microseconds` as large as possible to fit within your latency window (the values used below are extremely large to exaggerate their effect), and only 1 instance of the engine. The largest improvements to both throughput and latency come from increasing the batch size due to efficiency gains in the GPU with larger batches. The Dynamic Batcher combines the best of both worlds by efficiently batching together a large number of simultaneous requests, while also keeping latency down for infrequent requests. We recommend only 1 instance of the engine due to the negligible improvement to throughput at the cost of significant increases in latency. Many models can benefit from multiple engine instances but as the figures below show, that is not the case for this model.
 

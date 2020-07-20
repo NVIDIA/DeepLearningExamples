@@ -122,6 +122,7 @@ def vnet_v2(features, labels, mode, params):
                         loss_scale='dynamic'
                     )
 
+
                 train_op = optimizer.minimize(total_loss, global_step=global_step)
 
         eval_metric_ops = None

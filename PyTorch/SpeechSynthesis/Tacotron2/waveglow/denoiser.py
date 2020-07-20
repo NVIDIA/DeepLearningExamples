@@ -37,24 +37,15 @@ class Denoiser(torch.nn.Module):
     def __init__(self, waveglow, cpu_run=False, filter_length=1024, n_overlap=4,
                  win_length=1024, mode='zeros'):
         super(Denoiser, self).__init__()
-        if cpu_run:
-            self.stft = STFT(filter_length=filter_length,
+        device = waveglow.upsample.weight.device
+        dtype = waveglow.upsample.weight.dtype
+        self.stft = STFT(filter_length=filter_length,
                          hop_length=int(filter_length/n_overlap),
-                         win_length=win_length)
-        else:
-            self.stft = STFT(filter_length=filter_length,
-                         hop_length=int(filter_length/n_overlap),
-                         win_length=win_length).cuda()
+                         win_length=win_length).to(device)
         if mode == 'zeros':
-            mel_input = torch.zeros(
-                (1, 80, 88),
-                dtype=waveglow.upsample.weight.dtype,
-                device=waveglow.upsample.weight.device)
+            mel_input = torch.zeros((1, 80, 88), dtype=dtype, device=device)
         elif mode == 'normal':
-            mel_input = torch.randn(
-                (1, 80, 88),
-                dtype=waveglow.upsample.weight.dtype,
-                device=waveglow.upsample.weight.device)
+            mel_input = torch.randn((1, 80, 88), dtype=dtype, device=device)
         else:
             raise Exception("Mode {} if not supported".format(mode))
 
@@ -65,7 +56,7 @@ class Denoiser(torch.nn.Module):
         self.register_buffer('bias_spec', bias_spec[:, :, 0][:, :, None])
 
     def forward(self, audio, strength=0.1):
-        audio_spec, audio_angles = self.stft.transform(audio.float())
+        audio_spec, audio_angles = self.stft.transform(audio)
         audio_spec_denoised = audio_spec - self.bias_spec * strength
         audio_spec_denoised = torch.clamp(audio_spec_denoised, 0.0)
         audio_denoised = self.stft.inverse(audio_spec_denoised, audio_angles)

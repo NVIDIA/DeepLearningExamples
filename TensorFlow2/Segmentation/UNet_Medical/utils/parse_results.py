@@ -26,12 +26,13 @@ def process_performance_stats(timestamps, params):
     std = timestamps_ms.std()
     n = np.sqrt(len(timestamps_ms))
     throughput_imgps = (1000.0 * batch_size / timestamps_ms).mean()
-    print('Throughput Avg:', round(throughput_imgps, 3), 'img/s')
-    print('Latency Avg:', round(latency_ms, 3), 'ms')
+
+    stats = [("Throughput Avg", str(throughput_imgps)),
+             ('Latency Avg:', str(latency_ms))]
     for ci, lvl in zip(["90%:", "95%:", "99%:"],
                        [1.645, 1.960, 2.576]):
-        print("Latency", ci, round(latency_ms + lvl * std / n, 3), "ms")
-    return float(throughput_imgps), float(latency_ms)
+        stats.append(("Latency_"+ci, str(latency_ms + lvl * std / n)))
+    return stats
 
 
 def parse_convergence_results(path, environment):
@@ -42,14 +43,14 @@ def parse_convergence_results(path, environment):
         raise FileNotFoundError("No logfile found at {}".format(path))
     for logfile in logfiles:
         with open(os.path.join(path, logfile), "r") as f:
-            content = f.readlines()
-        if "eval_dice_score" not in content[-1]:
+            content = f.readlines()[-1]
+        if "eval_dice_score" not in content:
             print("Evaluation score not found. The file", logfile, "might be corrupted.")
             continue
-        dice_scores.append(float([val for val in content[-1].split()
-                                  if "eval_dice_score" in val][0].split(":")[1]))
-        ce_scores.append(float([val for val in content[-1].split()
-                                if "eval_ce_loss" in val][0].split(":")[1]))
+        dice_scores.append(float([val for val in content.split("  ")
+                                  if "eval_dice_score" in val][0].split()[-1]))
+        ce_scores.append(float([val for val in content.split("  ")
+                                if "eval_ce_loss" in val][0].split()[-1]))
     if dice_scores:
         print("Evaluation dice score:", sum(dice_scores) / len(dice_scores))
         print("Evaluation cross-entropy loss:", sum(ce_scores) / len(ce_scores))

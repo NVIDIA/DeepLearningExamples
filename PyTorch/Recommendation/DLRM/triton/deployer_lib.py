@@ -54,7 +54,7 @@ output [
 instance_group [
     {{
         count: {engine_count}
-        kind: KIND_GPU
+        kind: {kind}
         gpus: [ {gpu_list} ]
     }}
 ]
@@ -149,6 +149,9 @@ def create_deployer(argv, model_args_parser):
                            type=str,
                            default='./triton_models',
                            help='Saved model directory')
+
+    parser.add_argument("--deploy_cpu", default=False, action="store_true")
+
     # other args
     arguments = parser.add_argument_group('other flags')
 
@@ -369,26 +372,17 @@ dynamic_batching {{
             accelerator_str = accelerator_template.format_map({})
 
         config_values = {
-            "model_name":
-            self.args.triton_model_name,
-            "platform":
-            self.platform,
-            "max_batch_size":
-            max_batch_size,
-            "spec_inputs":
-            spec_inputs,
-            "spec_outputs":
-            spec_outputs,
-            "dynamic_batching":
-            batching_str,
-            "model_parameters":
-            parameters_str,
-            "model_optimizations":
-            accelerator_str,
-            "gpu_list":
-            ", ".join([str(x) for x in range(torch.cuda.device_count())]),
-            "engine_count":
-            self.args.triton_engine_count
+            "model_name": self.args.triton_model_name,
+            "platform": self.platform,
+            "max_batch_size": max_batch_size,
+            "spec_inputs": spec_inputs,
+            "spec_outputs": spec_outputs,
+            "dynamic_batching": batching_str,
+            "model_parameters": parameters_str,
+            "model_optimizations": accelerator_str,
+            "gpu_list": "" if self.args.deploy_cpu else ", ".join([str(x) for x in range(torch.cuda.device_count())]),
+            "engine_count": self.args.triton_engine_count,
+            "kind": "KIND_CPU" if self.args.deploy_cpu else "KIND_GPU"
         }
 
         # write config

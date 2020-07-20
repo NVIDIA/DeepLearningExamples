@@ -24,39 +24,30 @@ import argparse
 
 import torch
 
-from fairseq.criterions import CRITERION_REGISTRY
 from fairseq.models import ARCH_MODEL_REGISTRY, ARCH_CONFIG_REGISTRY
+from fairseq.criterions import CRITERION_REGISTRY
 from fairseq.optim import OPTIMIZER_REGISTRY
 from fairseq.optim.lr_scheduler import LR_SCHEDULER_REGISTRY
-from fairseq.tasks import TASK_REGISTRY
 
 
-def get_training_parser(default_task='translation'):
-    parser = get_parser('Trainer', default_task)
+def get_training_parser():
+    parser = get_parser('Trainer')
     add_dataset_args(parser, train=True, gen=True)
     add_distributed_training_args(parser)
     add_model_args(parser)
     add_optimization_args(parser)
     add_checkpoint_args(parser)
-    add_generation_args(parser)
+    add_inference_args(parser)
     add_perf_args(parser)
+    add_profiling_args(parser)
     return parser
 
 
-def get_generation_parser(interactive=False, default_task='translation'):
-    parser = get_parser('Generation', default_task)
+def get_inference_parser():
+    parser = get_parser('Generation')
     add_dataset_args(parser, gen=True)
-    add_generation_args(parser)
+    add_inference_args(parser)
     add_perf_args(parser)
-    if interactive:
-        add_interactive_args(parser)
-    return parser
-
-
-def get_eval_lm_parser(default_task='language_modeling'):
-    parser = get_parser('Evaluate Language Model', default_task)
-    add_dataset_args(parser, gen=True)
-    add_eval_lm_args(parser)
     return parser
 
 
@@ -69,15 +60,6 @@ def eval_str_list(x, type=float):
         return list(map(type, x))
     except TypeError:
         return [type(x)]
-
-
-def eval_bool(x, default=False):
-    if x is None:
-        return default
-    try:
-        return bool(eval(x))
-    except TypeError:
-        return default
 
 
 def parse_args_and_arch(parser, input_args=None, parse_known=False):
@@ -99,14 +81,10 @@ def parse_args_and_arch(parser, input_args=None, parse_known=False):
         ARCH_MODEL_REGISTRY[args.arch].add_args(model_specific_group)
 
     # Add *-specific args to parser.
-    if hasattr(args, 'criterion'):
-        CRITERION_REGISTRY[args.criterion].add_args(parser)
     if hasattr(args, 'optimizer'):
         OPTIMIZER_REGISTRY[args.optimizer].add_args(parser)
     if hasattr(args, 'lr_scheduler'):
         LR_SCHEDULER_REGISTRY[args.lr_scheduler].add_args(parser)
-    if hasattr(args, 'task'):
-        TASK_REGISTRY[args.task].add_args(parser)
 
     # Parse a second time.
     if parse_known:
@@ -123,9 +101,15 @@ def parse_args_and_arch(parser, input_args=None, parse_known=False):
     if hasattr(args, 'max_sentences_valid') and args.max_sentences_valid is None:
         args.max_sentences_valid = args.max_sentences
 
+    args.max_positions = (args.max_source_positions, args.max_target_positions)
+
     # Apply architecture configuration.
     if hasattr(args, 'arch'):
         ARCH_CONFIG_REGISTRY[args.arch](args)
+
+    # Override args for profiling
+    if hasattr(args, 'profile') and args.profile:
+        args.max_update = args.profiler_steps
 
     if parse_known:
         return args, extra
@@ -133,26 +117,20 @@ def parse_args_and_arch(parser, input_args=None, parse_known=False):
         return args
 
 
-def get_parser(desc, default_task='translation'):
+def get_parser(desc):
     parser = argparse.ArgumentParser(
         description='Facebook AI Research Sequence-to-Sequence Toolkit -- ' + desc)
-    parser.add_argument('--no-progress-bar', action='store_true', help='disable progress bar')
     parser.add_argument('--log-interval', type=int, default=1000, metavar='N',
-                        help='log progress every N batches (when progress bar is disabled)')
-    parser.add_argument('--log-format', default=None, help='log format to use',
-                        choices=['json', 'none', 'simple', 'tqdm'])
+                        help='print aggregated stats and flush json log every N iteration')
     parser.add_argument('--seed', default=1, type=int, metavar='N',
                         help='pseudo random number generator seed')
-    parser.add_argument('--fp16', action='store_true', help='use FP16')
     parser.add_argument('--amp', action='store_true', help='use Automatic Mixed Precision')
     parser.add_argument('--amp-level', type=str, default="O1", help='choose apm\'s optimization level')
-
-    parser.add_argument('--profile', type=int, default=None)
-    # Task definitions can be found under fairseq/tasks/
-    parser.add_argument(
-        '--task', metavar='TASK', default=default_task, choices=TASK_REGISTRY.keys(),
-        help='task: {} (default: {})'.format(', '.join(TASK_REGISTRY.keys()), default_task)
-    )
+    parser.add_argument('--stat-file', type=str, default='run_log.json', help='Name of the file containing DLLogger output')
+    parser.add_argument('--save-dir', metavar='DIR', default='results',
+                       help='path to save checkpoints and logs')
+    parser.add_argument('--do-sanity-check', action='store_true',
+                        help='Perform evaluation on test set before running the training')
 
     return parser
 
@@ -167,7 +145,24 @@ def add_dataset_args(parser, train=False, gen=False):
                        help='maximum number of sentences in a batch')
     group.add_argument('--sentencepiece', action='store_true',
                         help='use when dataset uses sentencepiece encoding')
+    parser.add_argument('-s', '--source-lang', default=None, metavar='SRC',
+                        help='source language')
+    parser.add_argument('-t', '--target-lang', default=None, metavar='TARGET',
+                        help='target language')
+    parser.add_argument('--raw-text', action='store_true',
+                        help='load raw text dataset')
+    parser.add_argument('--left-pad-source', default=True, type=bool, metavar='BOOL',
+                        help='pad the source on the left (default: True)')
+    parser.add_argument('--left-pad-target', default=False, type=bool, metavar='BOOL',
+                        help='pad the target on the left (default: False)')
+    parser.add_argument('--max-source-positions', default=1024, type=int, metavar='N',
+                        help='max number of tokens in the source sequence')
+    parser.add_argument('--max-target-positions', default=1024, type=int, metavar='N',
+                        help='max number of tokens in the target sequence')
+    parser.add_argument('--pad-sequence', default=1, type=int, metavar='N',
+                            help='Pad sequences to a multiple of N')
     if train:
+        parser.add_argument('data', metavar='DIR', help='path to data directory')
         group.add_argument('--train-subset', default='train', metavar='SPLIT',
                            choices=['train', 'valid', 'test'],
                            help='data subset to use for training (train, valid, test)')
@@ -247,6 +242,10 @@ def add_optimization_args(parser):
     group.add_argument('--min-loss-scale', default=1e-4, type=float, metavar='D',
                        help='minimum loss scale (for FP16 training)')
 
+    # Criterion args
+    parser.add_argument('--label-smoothing', default=0., type=float, metavar='D',
+                        help='epsilon for label smoothing, 0 means no label smoothing')
+
     # Parallel backward + all-reduce optimization
     group.add_argument('--enable-parallel-backward-allred-opt', action='store_true',
                        help='enable all reduce of w-gradients in parallel with backward propagation (only for FP16 training)')
@@ -260,8 +259,6 @@ def add_optimization_args(parser):
 
 def add_checkpoint_args(parser):
     group = parser.add_argument_group('Checkpointing')
-    group.add_argument('--save-dir', metavar='DIR', default='checkpoints',
-                       help='path to save checkpoints')
     group.add_argument('--restore-file', default='checkpoint_last.pt',
                        help='filename in save-dir from which to load checkpoint')
     group.add_argument('--save-interval', type=int, default=1, metavar='N',
@@ -289,14 +286,7 @@ def add_common_eval_args(group):
                        help='only print final scores')
 
 
-def add_eval_lm_args(parser):
-    group = parser.add_argument_group('LM Evaluation')
-    add_common_eval_args(group)
-    group.add_argument('--output-word-probs', action='store_true',
-                       help='if set, outputs words and their predicted log probabilities to standard output')
-
-
-def add_generation_args(parser):
+def add_inference_args(parser):
     group = parser.add_argument_group('Generation')
     add_common_eval_args(group)
     group.add_argument('--beam', default=4, type=int, metavar='N',
@@ -341,17 +331,29 @@ def add_generation_args(parser):
                        help='a dictionary used to override model args at generation that were used during model training')
     group.add_argument('--online-eval', action='store_true',
                        help='score model at the end of epoch')
-    group.add_argument('--ignore-case', action='store_true',
-                       help='ignore case druing online eval')
+    group.add_argument('--save-predictions', action='store_true',
+                       help='Save predictions produced with online evaluation')
+    group.add_argument('--test-cased-bleu', action='store_true',
+                       help='Use cased bleu for online eval')
     group.add_argument('--bpe-codes', default=None, type=str, metavar='CODES',
                         help='file with bpe codes')
+    group.add_argument('--buffer-size', default=64, type=int, metavar='N',
+                       help='read this many sentences into a buffer before processing them')
+    group.add_argument('--fp16', action='store_true', help='use fp16 precision')
     return group
 
 
-def add_interactive_args(parser):
-    group = parser.add_argument_group('Interactive')
-    group.add_argument('--buffer-size', default=0, type=int, metavar='N',
-                       help='read this many sentences into a buffer before processing them')
+def add_profiling_args(parser):
+    group = parser.add_argument_group('Profiling')
+    group.add_argument('--profile', action='store_true',
+                       help='Run profiler')
+    group.add_argument('--profiler-file', type=str, default=None,
+                       help='File to save profiling info into')
+    group.add_argument('--profiler-steps', type=int, default=100,
+                        help='Override to the max steps argument')
+    return group
+
+
 
 
 def add_model_args(parser):
@@ -387,4 +389,7 @@ def add_perf_args(parser):
                        help='Fuse dropout and residual adds.')
     group.add_argument('--fuse-relu-dropout', action='store_true',
                        help='Fuse Relu and Dropout.')
+    group.add_argument('--fuse-layer-norm', action='store_true',
+                       help='Use APEX\'s FusedLayerNorm instead of torch.nn.LayerNorm')
+
     return group

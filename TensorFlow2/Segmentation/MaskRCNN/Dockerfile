@@ -16,7 +16,7 @@
 #
 # ==============================================================================
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.02-tf2-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.06-tf1-py3
 FROM ${FROM_IMAGE_NAME}
 
 ENV DEBIAN_FRONTEND=noninteractive

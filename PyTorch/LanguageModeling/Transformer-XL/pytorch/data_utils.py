@@ -63,10 +63,14 @@ class LMOrderedIterator(object):
         # Number of mini-batches
         self.n_batch = (self.data.size(0) + self.bptt - 1) // self.bptt
 
-    def roll(self):
+        self.last_iter = None
+
+    def roll(self, seed):
+        rng = torch.Generator()
+        rng.manual_seed(seed)
         for i in range(self.data.size(1)):
             row = self.data[:, i]
-            shift = torch.randint(0, self.data.size(0), (1,))
+            shift = torch.randint(0, self.data.size(0), (1,), generator=rng)
             row = torch.cat((row[shift:], row[:shift]))
             self.data[:, i] = row
 
@@ -90,7 +94,10 @@ class LMOrderedIterator(object):
         return data, target, seq_len, warm
 
     def get_fixlen_iter(self, start=0):
+        if start != 0:
+            start += self.bptt
         for i in range(start, self.data.size(0) - 1, self.bptt):
+            self.last_iter = i
             yield self.get_batch(i)
 
     def get_varlen_iter(self, start=0, std=5, min_len=5, max_deviation=3):

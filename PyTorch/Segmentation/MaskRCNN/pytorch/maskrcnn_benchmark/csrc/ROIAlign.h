@@ -14,7 +14,7 @@ at::Tensor ROIAlign_forward(const at::Tensor& input,
                             const int pooled_height,
                             const int pooled_width,
                             const int sampling_ratio) {
-  if (input.type().is_cuda()) {
+  if (input.is_cuda()) {
 #ifdef WITH_CUDA
     return ROIAlign_forward_cuda(input, rois, spatial_scale, pooled_height, pooled_width, sampling_ratio);
 #else
@@ -34,7 +34,7 @@ at::Tensor ROIAlign_backward(const at::Tensor& grad,
                              const int height,
                              const int width,
                              const int sampling_ratio) {
-  if (grad.type().is_cuda()) {
+  if (grad.is_cuda()) {
 #ifdef WITH_CUDA
     return ROIAlign_backward_cuda(grad, rois, spatial_scale, pooled_height, pooled_width, batch_size, channels, height, width, sampling_ratio);
 #else

@@ -39,9 +39,9 @@ conversion_intermediate_dir=${conversion_intermediate_dir:-'/data/dlrm/intermedi
 final_output_dir=${final_output_dir:-'/data/dlrm/binary_dataset'}
 
 
-if [ -f ${final_output_dir}/train_data.bin ] \
-   && [ -f ${final_output_dir}/val_data.bin ] \
-   && [ -f ${final_output_dir}/test_data.bin ] \
+if [ -d ${final_output_dir}/train ] \
+   && [ -d ${final_output_dir}/val ] \
+   && [ -d ${final_output_dir}/test ] \
    && [ -f ${final_output_dir}/model_sizes.json ]; then
 
     echo "Final conversion already done"
@@ -52,8 +52,16 @@ else
                                 --dst_dir ${final_output_dir}
 
     cp "${spark_output_path}/model_size.json" "${final_output_dir}/model_size.json"
+
+    python split_dataset.py --dataset "${final_output_dir}" --output "${final_output_dir}/split"
+    rm ${final_output_dir}/train_data.bin
+    rm ${final_output_dir}/val_data.bin
+    rm ${final_output_dir}/test_data.bin
+
+    mv ${final_output_dir}/split/* ${final_output_dir}
+    rm -rf ${final_output_dir}/split
 fi
 
 echo "Done preprocessing the Criteo Kaggle Dataset"
 echo "You can now start the training with: "
-echo "python -m dlrm.scripts.main --mode train --dataset  /data/dlrm/binary_dataset/ --model_config dlrm/config/default.json"
+echo "python -m dlrm.scripts.main --mode train --dataset  ${final_output_dir}"

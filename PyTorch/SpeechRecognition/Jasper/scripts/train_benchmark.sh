@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,59 +14,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#!/bin/bash
 
-echo "Container nvidia build = " $NVIDIA_BUILD_ID
+echo "NVIDIA container build: ${NVIDIA_BUILD_ID}"
+
 SCRIPT_DIR=$(cd $(dirname $0); pwd)
 PROJECT_DIR=${SCRIPT_DIR}/..
 
-DATA_DIR=${1:-"/datasets/LibriSpeech"}
-MODEL_CONFIG=${2:-"configs/jasper10x5dr_sp_offline_specaugment.toml"}
-RESULT_DIR=${3:-"/results"}
-CREATE_LOGFILE=${4:-"true"}
-CUDNN_BENCHMARK=${5:-"true"}
-NUM_GPUS=${6:-8}
-PRECISION=${7:-"fp16"}
-NUM_STEPS=${8:-"-1"}
-MAX_DURATION=${9:-16.7}
-SEED=${10:-0}
-BATCH_SIZE=${11:-64}
-LEARNING_RATE=${12:-"0.015"}
-GRADIENT_ACCUMULATION_STEPS=${13:-1}
-PRINT_FREQUENCY=${14:-1}
+DATA_DIR=${1:-${DATA_DIR:-"/datasets/LibriSpeech"}}
+MODEL_CONFIG=${2:-${MODEL_CONFIG:-"configs/jasper10x5dr_sp_offline_specaugment.toml"}}
+RESULT_DIR=${3:-${RESULT_DIR:-"/results"}}
+CREATE_LOGFILE=${4:-${CREATE_LOGFILE:-"true"}}
+CUDNN_BENCHMARK=${5:-${CUDNN_BENCHMARK:-"true"}}
+NUM_GPUS=${6:-${NUM_GPUS:-8}}
+AMP=${7:-${AMP:-"false"}}
+NUM_STEPS=${8:-${NUM_STEPS:-"-1"}}
+MAX_DURATION=${9:-${MAX_DURATION:-16.7}}
+SEED=${10:-${SEED:-0}}
+BATCH_SIZE=${11:-${BATCH_SIZE:-32}}
+LEARNING_RATE=${12:-${LEARNING_RATE:-"0.015"}}
+GRADIENT_ACCUMULATION_STEPS=${13:-${GRADIENT_ACCUMULATION_STEPS:-1}}
+PRINT_FREQUENCY=${14:-${PRINT_FREQUENCY:-1}}
 USE_PROFILER=${USE_PROFILER:-"false"}
 
-PREC=""
-if [ "$PRECISION" = "fp16" ] ; then
-   PREC=" --fp16"
-elif [ "$PRECISION" = "fp32" ] ; then
-   PREC=""
-else
-   echo "Unknown <precision> argument"
-   exit -2
-fi
+mkdir -p "$RESULT_DIR"
 
-STEPS=""
-if [ "$NUM_STEPS" -ne "-1" ] ; then
-   STEPS=" --num_steps=$NUM_STEPS"
-elif [ "$NUM_STEPS" = "-1" ] ; then
-   STEPS=""
-else
-   echo "Unknown <precision> argument"
-   exit -2
-fi
+[ "${USE_PROFILER}" = "true" ] && PYTHON_ARGS="-m cProfile -s cumtime"
 
-CUDNN=""
-if [ "$CUDNN_BENCHMARK" = "true" ] ; then
-   CUDNN=" --cudnn"
-else
-   CUDNN=""
-fi
-
-if [ "${USE_PROFILER}" = "true" ] ; then
-    PYTHON_ARGS+="-m cProfile  -s cumtime"
-fi
-    
 CMD="${PYTHON_ARGS} ${PROJECT_DIR}/train.py"
 CMD+=" --batch_size=$BATCH_SIZE"
 CMD+=" --num_epochs=400"
@@ -76,7 +51,9 @@ CMD+=" --optimizer=novograd"
 CMD+=" --gradient_accumulation_steps=$GRADIENT_ACCUMULATION_STEPS"
 CMD+=" --dataset_dir=$DATA_DIR"
 CMD+=" --val_manifest=$DATA_DIR/librispeech-dev-clean-wav.json"
-CMD+=" --train_manifest=$DATA_DIR/librispeech-train-clean-100-wav.json,$DATA_DIR/librispeech-train-clean-360-wav.json,$DATA_DIR/librispeech-train-other-500-wav.json"
+CMD+=" --train_manifest=$DATA_DIR/librispeech-train-clean-100-wav.json,"
+CMD+="$DATA_DIR/librispeech-train-clean-360-wav.json,"
+CMD+="$DATA_DIR/librispeech-train-other-500-wav.json"
 CMD+=" --weight_decay=1e-3"
 CMD+=" --save_freq=100000"
 CMD+=" --eval_freq=100000"
@@ -84,24 +61,25 @@ CMD+=" --max_duration=$MAX_DURATION"
 CMD+=" --pad_to_max"
 CMD+=" --train_freq=$PRINT_FREQUENCY"
 CMD+=" --lr_decay "
-CMD+=" $CUDNN"
-CMD+=" $PREC"
-CMD+=" $STEPS"
+[ "$AMP" == "true" ] && \
+CMD+=" --amp"
+[ "$CUDNN_BENCHMARK" = "true" ] && \
+CMD+=" --cudnn"
+[ "$NUM_STEPS" -gt 1 ] && \
+CMD+=" --num_steps=$NUM_STEPS"
 
 if [ "$NUM_GPUS" -gt 1  ] ; then
    CMD="python3 -m torch.distributed.launch --nproc_per_node=$NUM_GPUS $CMD"
 else
-   CMD="python3  $CMD"
+   CMD="python3 $CMD"
 fi
 
-
 if [ "$CREATE_LOGFILE" = "true" ] ; then
-  export GBS=$(expr $BATCH_SIZE \* $NUM_GPUS)
-  printf -v TAG "jasper_train_benchmark_%s_gbs%d" "$PRECISION" $GBS
-  DATESTAMP=`date +'%y%m%d%H%M%S'`
-  LOGFILE="${RESULT_DIR}/${TAG}.${DATESTAMP}.log"
-  printf "Logs written to %s\n" "$LOGFILE"
-
+   export GBS=$(expr $BATCH_SIZE \* $NUM_GPUS)
+   printf -v TAG "jasper_train_benchmark_amp-%s_gbs%d" "$AMP" $GBS
+   DATESTAMP=`date +'%y%m%d%H%M%S'`
+   LOGFILE="${RESULT_DIR}/${TAG}.${DATESTAMP}.log"
+   printf "Logs written to %s\n" "$LOGFILE"
 fi
 
 if [ -z "$LOGFILE" ] ; then

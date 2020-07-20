@@ -14,9 +14,11 @@ from maskrcnn_benchmark.engine.inference import inference
 from maskrcnn_benchmark.modeling.detector import build_detection_model
 from maskrcnn_benchmark.utils.checkpoint import DetectronCheckpointer
 from maskrcnn_benchmark.utils.collect_env import collect_env_info
-from maskrcnn_benchmark.utils.comm import synchronize, get_rank
+from maskrcnn_benchmark.utils.comm import synchronize, get_rank, is_main_process
 from maskrcnn_benchmark.utils.logger import setup_logger
 from maskrcnn_benchmark.utils.miscellaneous import mkdir
+from maskrcnn_benchmark.utils.logger import format_step
+import dllogger
 
 # Check if we can enable mixed-precision via apex.amp
 try:
@@ -33,11 +35,25 @@ def main():
         metavar="FILE",
         help="path to config file",
     )
-    parser.add_argument("--local_rank", type=int, default=0)
+    parser.add_argument("--local_rank", type=int, default=os.getenv('LOCAL_RANK', 0))
+    parser.add_argument("--json-summary",
+                        help="Out file for DLLogger",
+                        default="dllogger_inference.out",
+                        type=str)
     parser.add_argument(
         "--skip-eval",
         dest="skip_eval",
         help="Do not eval the predictions",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--fp16",
+        help="Mixed precision training",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--amp",
+        help="Mixed precision training",
         action="store_true",
     )
     parser.add_argument(
@@ -48,7 +64,7 @@ def main():
     )
 
     args = parser.parse_args()
-
+    args.fp16 = args.fp16 or args.amp
     num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
     distributed = num_gpus > 1
 
@@ -62,20 +78,29 @@ def main():
     cfg.merge_from_file(args.config_file)
     cfg.merge_from_list(args.opts)
     cfg.freeze()
-
+    
     save_dir = ""
     logger = setup_logger("maskrcnn_benchmark", save_dir, get_rank())
-    logger.info("Using {} GPUs".format(num_gpus))
-    logger.info(cfg)
+    if is_main_process():
+        dllogger.init(backends=[dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE,
+                                filename=args.json_summary),
+                                dllogger.StdOutBackend(verbosity=dllogger.Verbosity.VERBOSE, step_format=format_step)])
+    else:
+        dllogger.init(backends=[])
 
-    logger.info("Collecting env info (might take some time)")
-    logger.info("\n" + collect_env_info())
 
+    save_dir = ""
+    dllogger.log(step="PARAMETER", data={"config":cfg})
+    dllogger.log(step="PARAMETER", data={"gpu_count": num_gpus})
+    # dllogger.log(step="PARAMETER", data={"env_info": collect_env_info()})
     model = build_detection_model(cfg)
     model.to(cfg.MODEL.DEVICE)
 
     # Initialize mixed-precision if necessary
-    use_mixed_precision = cfg.DTYPE == 'float16'
+    if args.fp16:
+        use_mixed_precision = True
+    else:
+        use_mixed_precision = cfg.DTYPE == "float16"
     amp_handle = amp.init(enabled=use_mixed_precision, verbose=cfg.AMP_VERBOSE)
 
     output_dir = cfg.OUTPUT_DIR
@@ -93,8 +118,10 @@ def main():
             mkdir(output_folder)
             output_folders[idx] = output_folder
     data_loaders_val = make_data_loader(cfg, is_train=False, is_distributed=distributed)
+
+    results = []
     for output_folder, dataset_name, data_loader_val in zip(output_folders, dataset_names, data_loaders_val):
-        inference(
+        result = inference(
             model,
             data_loader_val,
             dataset_name=dataset_name,
@@ -105,9 +132,17 @@ def main():
             expected_results_sigma_tol=cfg.TEST.EXPECTED_RESULTS_SIGMA_TOL,
             output_folder=output_folder,
             skip_eval=args.skip_eval,
+            dllogger=dllogger,
         )
         synchronize()
-
+        results.append(result)
+    
+    if is_main_process() and not args.skip_eval:
+        map_results, raw_results = results[0]
+        bbox_map = map_results.results["bbox"]['AP']
+        segm_map = map_results.results["segm"]['AP']
+        dllogger.log(step=tuple(), data={"BBOX_mAP": bbox_map, "MASK_mAP": segm_map})
 
 if __name__ == "__main__":
     main()
+    dllogger.log(step=tuple(), data={})

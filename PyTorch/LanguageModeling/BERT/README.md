@@ -11,7 +11,8 @@ This repository provides a script and recipe to train the BERT model for PyTorch
         * [Features](#features)
     * [Mixed precision training](#mixed-precision-training)
         * [Enabling mixed precision](#enabling-mixed-precision)
-        * [Glossary](#glossary)
+        * [Enabling TF32](#enabling-tf32)
+    * [Glossary](#glossary)
 - [Setup](#setup)
     * [Requirements](#requirements)
 - [Quick Start Guide](#quick-start-guide)
@@ -30,7 +31,6 @@ This repository provides a script and recipe to train the BERT model for PyTorch
         * [Pre-training](#pre-training)
         * [Fine-tuning](#fine-tuning)   
     * [Inference process](#inference-process)
-        * [Pre-training inference](#pre-training-inference)
         * [Fine-tuning inference](#fine-tuning-inference)
     * [Deploying BERT using NVIDIA Triton Inference Server](#deploying-bert-using-nvidia-triton-inference-server)
 - [Performance](#performance)
@@ -39,12 +39,19 @@ This repository provides a script and recipe to train the BERT model for PyTorch
         * [Inference performance benchmark](#inference-performance-benchmark)
     * [Results](#results)
         * [Training accuracy results](#training-accuracy-results)
+            * [Pre-training loss results: NVIDIA DGX A100 (8x A100 40GB)](#pre-training-loss-results-nvidia-dgx-a100-8x-a100-40gb)
+            * [Pre-training loss results: NVIDIA DGX-2H V100 (16x V100 32GB)](#pre-training-loss-results-nvidia-dgx-2h-v100-16x-v100-32gb)  
             * [Pre-training loss results](#pre-training-loss-results)
-            * [Fine-tuning accuracy results](#fine-tuning-accuracy-results) 
+            * [Pre-training loss curves](#pre-training-loss-curves)
+            * [Fine-tuning accuracy results: NVIDIA DGX A100 (8x A100 40GB)](#fine-tuning-accuracy-results-nvidia-dgx-a100-8x-a100-40gb)
+            * [Fine-tuning accuracy results: NVIDIA DGX-1 (8x V100 16G)](#fine-tuning-accuracy-results-nvidia-dgx-1-8x-v100-16g)
             * [Training stability test](#training-stability-test)
                 * [Pre-training stability test](#pre-training-stability-test)
                 * [Fine-tuning stability test](#fine-tuning-stability-test) 
           * [Training performance results](#training-performance-results)
+              * [Training performance: NVIDIA DGX A100 (8x A100 40GB)](#training-performance-nvidia-dgx-a100-8x-a100-40gb)
+                  * [Pre-training NVIDIA DGX A100 (8x A100 40GB)](#pre-training-nvidia-dgx-a100-8x-a100-40gb)
+                  * [Fine-tuning NVIDIA DGX A100 (8x A100 40GB)](#fine-tuning-nvidia-dgx-a100-8x-a100-40gb)      
               * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16g)
                   * [Pre-training NVIDIA DGX-1 With 16G](#pre-training-nvidia-dgx-1-with-16g)
                   * [Pre-training on multiple NVIDIA DGX-1 With 16G](#pre-training-on-multiple-nvidia-dgx-1-with-16g)
@@ -57,22 +64,23 @@ This repository provides a script and recipe to train the BERT model for PyTorch
                   * [Pre-training on multiple NVIDIA DGX-2H With 32G](#pre-training-on-multiple-nvidia-dgx-2h-with-32g)
                   * [Fine-tuning NVIDIA DGX-2 With 32G](#fine-tuning-nvidia-dgx-2-with-32g)   
           * [Inference performance results](#inference-performance-results)
+              * [Inference performance: NVIDIA DGX A100 (1x A100 40GB)](#inference-performance-nvidia-dgx-a100-1x-a100-40gb)
+                  * [Fine-tuning inference on NVIDIA DGX A100 (1x A100 40GB)](#fine-tuning-inference-on-nvidia-dgx-a100-1x-a100-40gb)
               * [Inference performance: NVIDIA DGX-1 (1x V100 16G)](#inference-performance-nvidia-dgx-1-1x-v100-16g)
-                  * [Pre-training inference on NVIDIA DGX-1 with 16G](#pre-training-inference-on-nvidia-dgx-1-with-16g)
                   * [Fine-tuning inference on NVIDIA DGX-1 with 16G](#fine-tuning-inference-on-nvidia-dgx-1-with-16g)
               * [Inference performance: NVIDIA DGX-1 (1x V100 32G)](#inference-performance-nvidia-dgx-1-1x-v100-32g)
-                  * [Pre-training inference on NVIDIA DGX-1 with 32G](#pre-training-inference-on-nvidia-dgx-1-with-32g)
                   * [Fine-tuning inference on NVIDIA DGX-1 with 32G](#fine-tuning-inference-on-nvidia-dgx-1-with-32g)
               * [Inference performance: NVIDIA DGX-2 (1x V100 32G)](#inference-performance-nvidia-dgx-2-1x-v100-32g)
-                  * [Pre-training inference on NVIDIA DGX-2 with 32G](#pre-training-inference-on-nvidia-dgx-2-with-32g)
                   * [Fine-tuning inference on NVIDIA DGX-2 with 32G](#fine-tuning-inference-on-nvidia-dgx-2-with-32g)
 - [Release notes](#release-notes)
     * [Changelog](#changelog)
     * [Known issues](#known-issues)
-
+ 
+ 
+ 
 ## Model overview
  
-BERT, or Bidirectional Encoder Representations from Transformers, is a new method of pre-training language representations which obtains state-of-the-art results on a wide array of Natural Language Processing (NLP) tasks. This model is based on the [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805) paper. NVIDIA's implementation of BERT is an optimized version of the [Hugging Face implementation](https://github.com/huggingface/pytorch-pretrained-BERT), leveraging mixed precision arithmetic and Tensor Cores on Volta V100 GPUs for faster training times while maintaining target accuracy.
+BERT, or Bidirectional Encoder Representations from Transformers, is a new method of pre-training language representations which obtains state-of-the-art results on a wide array of Natural Language Processing (NLP) tasks. This model is based on the [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/abs/1810.04805) paper. NVIDIA's implementation of BERT is an optimized version of the [Hugging Face implementation](https://github.com/huggingface/pytorch-pretrained-BERT), leveraging mixed precision arithmetic and Tensor Cores on Volta V100 and Ampere A100 GPUs for faster training times while maintaining target accuracy.
  
 This repository contains scripts to interactively launch data download, training, benchmarking and inference routines in a Docker container for both pre-training and fine-tuning for tasks such as question answering. The major differences between the original implementation of the paper and this version of BERT are as follows:
  
@@ -92,7 +100,7 @@ Other publicly available implementations of BERT include:
 5. [Google's implementation](https://github.com/google-research/bert)
     
 This model trains with mixed precision Tensor Cores on Volta and provides a push-button solution to pretraining on a corpus of choice. As a result, researchers can get results 4x faster than training without Tensor Cores. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
-
+ 
 ### Model architecture
  
 The BERT model uses the same architecture as the encoder of the Transformer. Input sequences are projected into an embedding space before being fed into the encoder structure. Additionally, positional and segment encodings are added to the embeddings to preserve positional information. The encoder structure is simply a stack of Transformer blocks, which consist of a multi-head attention layer followed by successive stages of feed-forward networks and layer normalization. The multi-head attention layer accomplishes self-attention on multiple input representations.
@@ -111,7 +119,9 @@ The BERT paper reports the results for two configurations of BERT, each correspo
 |:---------:|:----------:|:----:|:---:|:--------:|:---:|:----:|
 |BERTBASE |12 encoder| 768| 12|4 x  768|512|110M|
 |BERTLARGE|24 encoder|1024| 16|4 x 1024|512|330M|
-
+ 
+ 
+ 
 ### Feature support matrix
  
 The following features are supported by this model.  
@@ -128,16 +138,16 @@ The following features are supported by this model.
 [APEX](https://github.com/NVIDIA/apex) is a PyTorch extension with NVIDIA-maintained utilities to streamline mixed precision and distributed training, whereas [AMP](https://nvidia.github.io/apex/amp.html) is an abbreviation used for automatic mixed precision training.
  
 [DDP](https://nvidia.github.io/apex/parallel.html) stands for DistributedDataParallel and is used for multi-GPU training.
-
-[LAMB](https://arxiv.org/pdf/1904.00962.pdf) stands for Layerwise Adaptive Moments based optimizer, is a large batch optimization technique that helps accelerate training of deep neural networks using large minibatches. It allows using a global batch size of 65536 and 32768 on sequence lengths 128 and 512 respectively, compared to a batch size of 256 for Adam. The optimized implementation accumulates 1024 gradients batches in phase 1 and 4096 steps in phase 2 before updating weights once. This results in 15% training speedup. On multi-node systems, LAMB allows scaling up to 1024 GPUs resulting in training speedups of up to 72x in comparison to [Adam](https://arxiv.org/pdf/1412.6980.pdf). Adam has limitations on the learning rate that can be used since it is applied globally on all parameters whereas LAMB follows a layerwise learning rate strategy.
-
-NVLAMB adds necessary tweaks to [LAMB version 1](https://arxiv.org/abs/1904.00962v1), to ensure correct convergence. A guide to implementating the LAMB optimizer can be found in our [article](https://medium.com/@NvidiaAI/a-guide-to-optimizer-implementation-for-bert-at-scale-8338cc7f45fd) on Medium.com. The algorithm is as follows:
-
+ 
+[LAMB](https://arxiv.org/pdf/1904.00962.pdf) stands for Layerwise Adaptive Moments based optimizer, is a large batch optimization technique that helps accelerate training of deep neural networks using large minibatches. It allows using a global batch size of 65536 and 32768 on sequence lengths 128 and 512 respectively, compared to a batch size of 256 for [Adam](https://arxiv.org/pdf/1412.6980.pdf). The optimized implementation accumulates 1024 gradient batches in phase 1 and 4096 steps in phase 2 before updating weights once. This results in 15% training speedup. On multi-node systems, LAMB allows scaling up to 1024 GPUs resulting in training speedups of up to 72x in comparison to Adam. Adam has limitations on the learning rate that can be used since it is applied globally on all parameters whereas LAMB follows a layerwise learning rate strategy.
+ 
+NVLAMB adds the necessary tweaks to [LAMB version 1](https://arxiv.org/abs/1904.00962v1), to ensure correct convergence. The algorithm is as follows:
+ 
   ![NVLAMB](images/nvlamb.png)
  
 ### Mixed precision training
  
-Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format, while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [Tensor Cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing architecture, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using mixed precision training requires two steps:
+Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format, while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [tensor cores](https://developer.nvidia.com/tensor-cores) in the Volta, and following with both the Turing and Ampere architectures, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using mixed precision training requires two steps:
  
 1.  Porting the model to use the FP16 data type where appropriate.
 2.  Adding loss scaling to preserve small gradient values.
@@ -146,7 +156,7 @@ For information about:
 -   How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html) documentation.
 -   Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
 -   APEX tools for mixed precision training, see the [NVIDIA APEX: Tools for Easy Mixed-Precision Training in PyTorch](https://devblogs.nvidia.com/apex-pytorch-easy-mixed-precision-training/).
-
+ 
 #### Enabling mixed precision
  
 In this repository, mixed precision training is enabled by NVIDIA’s APEX library. The APEX library has an automatic mixed precision module that allows mixed precision to be enabled with minimal code changes.
@@ -165,6 +175,16 @@ if fp16:
    ```
  
 Where `<opt_level>` is the optimization level. In the pretraining, `O2` is set as the optimization level. Mixed precision training can be turned on by passing the `fp16` argument to the `run_pretraining.py` and `run_squad.py`. All shell scripts have a positional argument available to enable mixed precision training.
+
+#### Enabling TF32
+
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
+
+TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
+
+For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
+
+TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
 
 ### Glossary
  
@@ -185,25 +205,27 @@ Pretraining on samples of sequence length 128 and 20 masked predictions per sequ
  
 **Phase 2**  
 Pretraining on samples of sequence length 512 and 80 masked predictions per sequence.
-
+ 
 ## Setup
  
 The following section lists the requirements that you need to meet in order to start training the BERT model. 
-
+ 
 ### Requirements
  
 This repository contains Dockerfile which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
  
 -   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
--   [PyTorch 19.07-py3 NGC container or later](https://ngc.nvidia.com/registry/nvidia-pytorch)
--   [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
+-   [PyTorch 20.06-py3 NGC container or later](https://ngc.nvidia.com/registry/nvidia-pytorch)
+-   Supported GPUs:
+- [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
+- [NVIDIA Turing architecture](https://www.nvidia.com/en-us/geforce/turing/)
+- [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
  
 For more information about how to get started with NGC containers, see the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
 -   [Getting Started Using NVIDIA GPU Cloud](https://docs.nvidia.com/ngc/ngc-getting-started-guide/index.html)
 -   [Accessing And Pulling From The NGC Container Registry](https://docs.nvidia.com/deeplearning/dgx/user-guide/index.html#accessing_registry)
 -   [Running PyTorch](https://docs.nvidia.com/deeplearning/dgx/pytorch-release-notes/running.html#running)
  
-
 For those unable to use the PyTorch NGC container, to set up the required environment or create your own container, see the versioned [NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/dgx/support-matrix/index.html).
  
 For multi-node, the sample provided in this repository requires [Enroot](https://github.com/NVIDIA/enroot) and [Pyxis](https://github.com/NVIDIA/pyxis) set up on a [SLURM](https://slurm.schedmd.com) cluster.
@@ -212,8 +234,8 @@ More information on how to set up and launch can be found in the [Multi-node Doc
  
 ## Quick Start Guide
  
-To train your model using mixed precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the BERT model. The default parameters for pretraining have been set to run on 8x V100 32G cards. For the specifics concerning training and inference, see the [Advanced](#advanced) section.
-
+To train your model using mixed or TF32 precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the BERT model. Training configurations to run on 8 x A100 40G, 8 x V100 16G, 16 x V100 32G cards and examples of usage are provided at the end of this section. For the specifics concerning training and inference, see the [Advanced](#advanced) section.
+ 
  
 1. Clone the repository.
 `git clone https://github.com/NVIDIA/DeepLearningExamples.git`
@@ -222,7 +244,7 @@ To train your model using mixed precision with Tensor Cores or using FP32, perfo
  
 2. Download the NVIDIA pretrained checkpoint.
  
-If you want to use a pretrained checkpoint, visit [NGC](https://ngc.nvidia.com/catalog/models) and browse the available models. This downloaded checkpoint is used to fine-tune on SQuAD. Ensure you place the downloaded checkpoint in the `checkpoints/` folder.
+If you want to use a pre-trained checkpoint, visit [NGC](https://ngc.nvidia.com/catalog/models/nvidia:bert_large_pyt_amp_ckpt_pretraining_lamb). This downloaded checkpoint is used to fine-tune on SQuAD. Ensure you unzip the downloaded file and place the checkpoint in the `checkpoints/` folder. For a checkpoint already fine-tuned for QA on SQuAD v1.1 visit [NGC](https://ngc.nvidia.com/catalog/models/nvidia:bert_large_pyt_amp_ckpt_squad_qa1_1).
  
 3. Build BERT on top of the  NGC container.
 `bash scripts/docker/build.sh`
@@ -232,10 +254,10 @@ If you want to use a pretrained checkpoint, visit [NGC](https://ngc.nvidia.com/c
  
 Resultant logs and checkpoints of pretraining and fine-tuning routines are stored in the `results/` folder.
  
-`data` and `vocab.txt` are downloaded in the `data/` directory by default. Refer to the [Getting the data](#getting-the-data) section for more details on how to process a custom corpus as required for BERT pretraining.
- 
+`data` and `vocab.txt` are downloaded in the `data/` directory by default. Refer to the [Getting the data](#getting-the-data) section for more details on how to process a custom corpus as required for BERT pretraining. 
+
 5. Download and preprocess the dataset.
- 
+
 This repository provides scripts to download, verify, and extract the following datasets:
  
 -   [SQuAD](https://rajpurkar.github.io/SQuAD-explorer/) (fine-tuning for question answering)
@@ -244,8 +266,23 @@ This repository provides scripts to download, verify, and extract the following 
  
 To download, verify, extract the datasets, and create the shards in `.hdf5` format, run:  
 `/workspace/bert/data/create_datasets_from_start.sh`
- 
- 
+
+Note: For fine tuning only, Wikipedia and Bookscorpus dataset download and preprocessing can be skipped by commenting it out.
+
+- Download Wikipedia only for pretraining
+
+The pretraining dataset is 170GB+ and takes 15+ hours to download. The BookCorpus server most of the times get overloaded and also contain broken links resulting in HTTP 403 and 503 errors. Hence, it is recommended to skip downloading BookCorpus data by running:
+
+`/workspace/bert/data/create_datasets_from_start.sh wiki_only`
+
+- Download Wikipedia and BookCorpus
+
+Users are welcome to download BookCorpus from other sources to match our accuracy, or repeatedly try our script until the required number of files are downloaded by running the following:
+
+`/workspace/bert/data/create_datasets_from_start.sh wiki_books`
+
+Note: Not using BookCorpus can potentially change final accuracy on a few downstream tasks.
+
 6. Start pretraining.
  
 To run on a single node 8 x V100 32G cards, from within the container, you can use the following script to run pre-training.  
@@ -263,16 +300,37 @@ The above pretrained BERT representations can be fine tuned with just one additi
  
 9. Start validation/evaluation.
  
-Validation can be performed with the `bash scripts/run_squad.sh /workspace/checkpoints/<downloaded_checkpoint>`, setting `mode` to `eval`.
+Validation can be performed with the `bash scripts/run_squad.sh /workspace/checkpoints/<downloaded_checkpoint>`, setting `mode` to `eval` in `scripts/run_squad.sh` as follows:
+
+```
+mode=${11:-"eval"}
+```
  
 10. Start inference/predictions.
  
-Inference can be performed with the `bash scripts/run_squad.sh /workspace/checkpoints/<downloaded_checkpoint>`, setting `mode` to `prediction`. Inference predictions are saved to `<OUTPUT_DIRECTORY>/predictions.json`.
+Inference can be performed with the `bash scripts/run_squad.sh /workspace/checkpoints/<downloaded_checkpoint>`, setting `mode` to `prediction` in `scripts/run_squad.sh` as follows:
+
+```
+mode=${11:-"prediction"}
+```
+
+Inference predictions are saved to `<OUT_DIR>/predictions.json`, set in `scripts/run_squad.sh` as follows:
+
+```
+OUT_DIR=${10:-"/workspace/bert/results/SQuAD"}
+```
+
+This repository contains a number of predefined configurations to run the SQuAD and pretraining on NVIDIA DGX-1, NVIDIA DGX-2H or NVIDIA DGX A100 nodes in `scripts/configs/squad_config.sh` and `scripts/configs/pretrain_config.sh`. For example, to use the default DGX A100 8 gpu config, run:
+
+```
+bash scripts/run_squad.sh $(source scripts/configs/squad_config.sh && dgxa100_8gpu_fp16)
+bash scripts/run_pretraining.sh $(source scripts/configs/pretrain_config.sh && dgxa100_8gpu_fp16)
+```
 
 ## Advanced
  
 The following sections provide greater details of the dataset, running training and inference, and the training results.
-
+ 
 ### Scripts and sample code
  
 Descriptions of the key scripts and folders are provided below.
@@ -288,7 +346,7 @@ Descriptions of the key scripts and folders are provided below.
 -   `run_squad.py` - Implements fine tuning training and evaluation for question answering on the [SQuAD](https://rajpurkar.github.io/SQuAD-explorer/) dataset.
 -   `run_pretraining.py` - Implements BERT pre-training.
 -   `run_pretraining_inference.py` - Implements evaluation of a BERT pre-trained model.
-
+ 
 ### Parameters
  
 #### Pre-training parameters
@@ -351,7 +409,7 @@ The complete list of the available parameters for the `run_pretraining.py` scrip
   
   --allreduce_post_accumulation_fp16 -  If set to true, performs allreduce after gradient accumulation steps in FP16.
  
-  --fp16                      - If set, will perform computations using
+  --amp or --fp16                      - If set, will perform computations using
                                 automatic mixed precision.
  
   --loss_scale LOSS_SCALE        - Sets the loss scaling value to use when
@@ -377,13 +435,13 @@ The complete list of the available parameters for the `run_pretraining.py` scrip
 
 #### Fine tuning parameters
  
-Default arguments are listed below in the order the scripts expects:
+Default arguments are listed below in the order `scripts/run_squad.sh` expects:
  
 -   Initial checkpoint - The default is `/workspace/checkpoints/bert_uncased.pt`.
 -   Number of training Epochs - The default is `2`.
 -   Batch size - The default is `3`.
 -   Learning rate - The default is `3e-5`.
--   Precision (either `fp16` or `fp32`) - The default is `fp16`.
+-   Precision (either `fp16`, `tf32` or `fp32`) - The default is `fp16`.
 -   Number of GPUs - The default is `8`.
 -   Seed - The default is `1`.
 -   SQuAD directory -  The default is `/workspace/bert/data/v1.1`.
@@ -393,6 +451,7 @@ Default arguments are listed below in the order the scripts expects:
 -   Config file for the BERT model (It should be the same as the pretrained model) - The default is `/workspace/bert/bert_config.json`.
  
 The script saves the final checkpoint to the `/results/SQuAD/pytorch_model.bin` file.
+
 
 #### Multi-node
  
@@ -412,7 +471,8 @@ The batch variables `BATCHSIZE`, `LR`, `GRADIENT_STEPS`,`PHASE` refer to the Pyt
 Note that the `run.sub` script is a starting point that has to be adapted depending on the environment. In particular, variables such as `datadir` handle the location of the files for each phase. 
  
 Refer to the files contents to see the full list of variables to adjust for your system.
-
+ 
+ 
 #### Fine-tuning parameters
  
 The `run_squad.py` script contains many of the same arguments as `run_pretraining.py`.
@@ -472,7 +532,7 @@ The main script specific parameters are:
                               - A null answer will be predicted if null_score if
                                 best_non_null is greater than NULL_SCORE_DIFF_THRESHOLD.
 ```
-
+ 
 ### Command-line options
  
 To see the full list of available options and their descriptions, use the `-h` or `--help` command line option, for example:
@@ -482,7 +542,7 @@ To see the full list of available options and their descriptions, use the `-h` o
 `python run_squad.py --help`
  
 Detailed descriptions of command-line options can be found in the [Parameters](#parameters) section.
-
+ 
 ### Getting the data
  
 For pre-training BERT, we use the concatenation of Wikipedia (2500M words) as well as BookCorpus (800M words). For Wikipedia, we extract only the text passages and ignore headers, lists, and tables. BERT requires that datasets are structured as a document level corpus rather than a shuffled sentence level corpus because it is critical to extract long contiguous sentences.
@@ -506,7 +566,7 @@ For fine-tuning a pre-trained BERT model for specific tasks, by default this rep
 -   [SQuAD](https://rajpurkar.github.io/SQuAD-explorer/): for question answering
  
 Depending on the speed of your internet connection, this process takes about a day to complete. The BookCorpus server could sometimes get overloaded and also contain broken links resulting in HTTP 403 and 503 errors. You can either skip the missing files or retry downloading at a later time.
-
+ 
 #### Dataset guidelines
  
 The procedure to prepare a text corpus for pre-training is described in the above section. This section will provide additional insight into how exactly raw text is processed so that it is ready for pre-training.
@@ -520,15 +580,15 @@ BERT pre-training optimizes for two unsupervised classification tasks. The first
 The second task is next sentence prediction. One training instance of BERT pre-training is two sentences (a sentence pair). A sentence pair may be constructed by simply taking two adjacent sentences from a single document, or by pairing up two random sentences with equal probability. The goal of this task is to predict whether or not the second sentence followed the first in the original document.
  
 The `create_pretraining_data.py` script takes in raw text and creates training instances for both pre-training tasks.
-
+ 
 #### Multi-dataset
  
 This repository provides functionality to combine multiple datasets into a single dataset for pre-training on a diverse text corpus at the shard level in `data/create_datasets_from_start.sh`.
-
+ 
 ### Training process
  
 The training process consists of two steps: pre-training and fine-tuning.
-
+ 
 #### Pre-training
  
 Pre-training is performed using the `run_pretraining.py` script along with parameters defined in the `scripts/run_pretraining.sh`.
@@ -542,7 +602,7 @@ Phase 1: (Maximum sequence length of 128)
 -   Runs for 7038 steps, where the first 28.43% (2000) are warm-up steps
 -   Saves a checkpoint every 200 iterations (keeps only the latest 3 checkpoints) and at the end of training. All checkpoints, and training logs are saved to the `/results` directory (in the container which can be mounted to a local directory).
 -   Creates a log file containing all the output
-
+ 
 Phase 2: (Maximum sequence length of 512)
 -   Runs on 8 GPUs with training batch size of 8 per GPU
 -   Uses a learning rate of 4e-3
@@ -550,7 +610,7 @@ Phase 2: (Maximum sequence length of 512)
 -   Runs for 1563 steps, where the first 12.8% are warm-up steps
 -   Saves a checkpoint every 200 iterations (keeps only the latest 3 checkpoints) and at the end of training. All checkpoints, and training logs are saved to the `/results` directory (in the container which can be mounted to a local directory).
 -   Creates a log file containing all the output
-
+ 
 These parameters will train on Wikipedia and BookCorpus to state-of-the-art accuracy on a DGX-1 with 32GB V100 cards.
  
 `bash run_pretraining.sh <training_batch_size> <learning-rate> <precision> <num_gpus> <warmup_proportion> <training_steps> <save_checkpoint_steps> <resume_training> <create_logfile> <accumulate_gradients> <gradient_accumulation_steps> <seed> <job_name> <allreduce_post_accumulation> <allreduce_post_accumulation_fp16> <accumulate_into_fp16> <train_bath_size_phase2> <learning_rate_phase2> <warmup_proportion_phase2> <train_steps_phase2> <gradient_accumulation_steps_phase2> `
@@ -574,7 +634,7 @@ Where:
 - `<allreduce_post_accumulation>` - If set to `true`, performs `allreduce` only after the defined number of gradient accumulation steps.
 - `<allreduce_post_accumulation_fp16>` -  If set to `true`, performs `allreduce` after gradient accumulation steps in FP16.
  
-    Note: The above two options need to be set to false when running on FP32. 
+    Note: The above two options need to be set to false when running either TF32 or  FP32. 
     
 -  `<training_batch_size_phase2>` is per-GPU batch size used for training in phase 2. Larger batch sizes run more efficiently, but require more memory.
 -   `<learning_rate_phase2>` is the base learning rate for training phase 2.
@@ -586,7 +646,7 @@ Where:
 For example:
  
 `bash scripts/run_pretraining.sh`
-
+ 
 Trains BERT-large from scratch on a DGX-1 32G using FP16 arithmetic. 90% of the training steps are done with sequence length 128 (phase 1 of training) and 10% of the training steps are done with sequence length 512 (phase 2 of training).
  
 To train on a DGX-1 16G, set `gradient_accumulation_steps` to `512` and `gradient_accumulation_steps_phase2` to `1024` in `scripts/run_pretraining.sh`.
@@ -597,19 +657,19 @@ In order to run pre-training routine on an initial checkpoint, do the following 
 -   point the `init_checkpoint` variable to location of the checkpoint
 -   set `resume_training` to `true`
 -   Note: The parameter value assigned to `BERT_CONFIG` during training should remain unchanged. Also to resume pretraining on your corpus of choice, the training dataset should be created using the same vocabulary file used in `data/create_datasets_from_start.sh`.
-
+ 
 #### Fine-tuning
  
 Fine-tuning is provided for a variety of tasks. The following tasks are included with this repository through the following scripts:
  
 -   Question Answering (`scripts/run_squad.sh`)
-
+ 
 By default, each Python script implements fine-tuning a pre-trained BERT model for a specified number of training epochs as well as evaluation of the fine-tuned model. Each shell script invokes the associated Python script with the following default parameters:
  
 -   Uses 8 GPUs
 -   Has FP16 precision enabled
 -   Saves a checkpoint at the end of training to the `/results/<dataset_name>` folder
-
+ 
 Fine-tuning Python scripts implement support for mixed precision and multi-GPU training through NVIDIA’s [APEX](https://github.com/NVIDIA/apex) library. For a full list of parameters and associated explanations, see the [Parameters](#parameters) section.
  
 All fine-tuning shell scripts have the same positional arguments, outlined below:
@@ -621,60 +681,28 @@ By default, the mode positional argument is set to train eval. See the [Quick St
 Note: The first positional argument (the path to the checkpoint to load) is required.
  
 Each fine-tuning script assumes that the corresponding dataset files exist in the `data/` directory or separate path can be a command-line input to `run_squad.sh`.
-
-
+ 
 ### Inference process
- 
-#### Pre-training inference
- 
-Inference on a pretrained model is performed using the `run_pretraining_inference.py` script along with parameters defined in `scripts/run_pretraining_inference.sh`. Inference is supported both for single and multi-GPU. By setting either the `--eval` or `--prediction` flag, you can choose between running evaluation on a given dataset or doing prediction (on both masked language model and next sentence prediction).
- 
-Prediction mode can be used to measure the inference turnaround time.
- 
-The `run_pretraining_inference.sh` script takes a model and a dataset and performs inference/evaluation on it. By default, the inferencing script:
- 
--   Has FP16 precision enabled
--   Runs on 8 GPUs
--   Evaluates the latest checkpoint present in `/results/checkpoints` with a batch size of 14
--   Runs inference on the entire Wikipedia dataset
 
-This script outputs a prediction file to `/results/pyt_bert_pretraining_inference_<precision>_<global_batchsize>.<datestamp>.log`. The output log contains information about:
+Fine-tuning inference can be run in order to obtain predictions on fine-tuning tasks, for example Q&A on SQuAD.
  
--   Inference performance
--   Loss (masked language model loss and next sentence prediction loss) of the specified dataset if ground truths exist with the `--eval` flag.
-
-For example:
- 
-`bash scripts/run_pretraining_inference.sh <evaluation_batch_size> <precision> <num_gpus> <inference_mode><model_checkpoint><inference_steps><create_logfile>`
- 
-Where:
- 
--   `<evaluation_batch_size>` is per-GPU batch size used for inference. Larger batch sizes run more efficiently, but require more memory.
--   `<precision>` is the type of math in your model, can be either `fp32` or `fp16`. The options mean:
-    -   `fp32`: 32-bit IEEE single precision floats
-    -   `fp16`: 16-bit floats for 3.2x faster inference
--   `<num_gpus>` is the number of GPUs to use for inference. Must be equal to or smaller than the number of GPUs attached to your node.
--   `<inference_mode>` is either `--eval` for evaluation or `--prediction` for inference
--   `<model_checkpoint>` is the model checkpoint to run inference on. Default is `-1`, which takes the most recent model checkpoint from the `checkpoints` folder.
--   `<inference_steps>` is the total number of inference steps per process. Default is `-1`, which iterates over the entire dataset.
--   `<create_logfile>` a flag indicating if output should be written to a logfile or not (acceptable values are `true` or `false`. `true` indicates output should be saved to a logfile.)
-
-For example:
- 
-`bash scripts/run_pretraining_inference.sh 14 fp16 8 eval -1 -1 true`
-
 #### Fine-tuning inference
  
 Evaluation fine-tuning is enabled by the same scripts as training:
  
 -   Question Answering (`scripts/run_squad.sh`)
-
+ 
 The mode positional argument of the shell script is used to run in evaluation mode. The fine-tuned BERT model will be run on the evaluation dataset, and the evaluation loss and accuracy will be displayed.
  
 Each inference shell script expects dataset files to exist in the same locations as the corresponding training scripts. The inference scripts can be run with default settings. By setting the `mode` variable in the script to either `eval` or `prediction` flag, you can choose between running predictions and evaluating them on a given dataset or just the former.
  
 `bash scripts/run_squad.sh <path to fine-tuned model checkpoint>`
+
+To run inference interactively on question-context pairs, use the script `inference.py` as follows:
  
+`python inference.py --bert_model "bert-large-uncased" --init_checkpoint=<fine_tuned_checkpoint> --config_file="bert_config.json" --vocab_file=<path to vocab file>  --question="What food does Harry like?" --context="My name is Harry and I grew up in Canada. I love apples."`
+
+
 ### Deploying BERT using NVIDIA Triton Inference Server
  
 The [NVIDIA Triton Inference Server](https://github.com/NVIDIA/triton-inference-server) provides a cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or GRPC endpoint, allowing remote clients to request inferencing for any model being managed by the server. More information on how to perform inference using NVIDIA Triton Inference Server can be found in [triton/README.md](./triton/README.md).
@@ -695,6 +723,8 @@ To benchmark the training performance on a specific batch size, run:
 An example call used to generate throughput numbers:
 `bash scripts/run_squad.sh /workspace/bert/bert_large_uncased_wiki+books.pt.model 2.0 4 3e-5 fp16 8 42 /workspace/bert/squad_data /workspace/bert/scripts/vocab/vocab /results/SQuAD train /workspace/bert/bert_config.json -1`
  
+ 
+ 
 #### Inference performance benchmark
  
 Inference performance benchmarks for both pretraining and fine-tuning can be obtained by running `scripts/run_pretraining_inference.sh` and `scripts/run_squad.sh` respectively. The required parameters can be passed through the command-line as described in [Inference process](#inference-process).
@@ -705,27 +735,54 @@ To benchmark the inference performance on a specific batch size, run:
 An example call used to generate throughput numbers:
 `bash scripts/run_squad.sh /workspace/bert/bert_large_uncased_wiki+books.pt.model 2.0 4 3e-5 fp16 8 42 /workspace/bert/squad_data /workspace/bert/scripts/vocab/vocab /results/SQuAD eval /workspace/bert/bert_config.json -1`
  
+ 
+ 
 ### Results
  
 The following sections provide details on how we achieved our performance and accuracy in training and inference. 
  
 #### Training accuracy results
  
-Our results were obtained by running the `scripts/run_squad.sh` and `scripts/run_pretraining.sh` training scripts in the pytorch:19.07-py3 NGC container on NVIDIA DGX-2 with (16x V100 32G) GPUs for pretraining and NVIDIA DGX-1 with (8x V100 16G) GPUs for fine-tuning.
+Our results were obtained by running the `scripts/run_squad.sh` and `scripts/run_pretraining.sh` training scripts in the pytorch:20.06-py3 NGC container unless otherwise specified.
  
-##### Pre-training loss results
- 
+##### Pre-training loss results: NVIDIA DGX A100 (8x A100 40GB)
+
+| DGX System | GPUs | Accumulated Batch size / GPU (Phase 1 and Phase 2) | Accumulation steps (Phase 1 and Phase 2) | Final Loss - TF32 | Final Loss - mixed precision | Time to train(hours) - TF32 | Time to train(hours) - mixed precision | Time to train speedup (TF32 to mixed precision)
+|---|---|---|---|---|---|---|---|---
+|32 x DGX A100 |8|256 and 128|4 and 8|---|1.3415|---|2.3|---  
+|32 x DGX A100 |8|256 and 128|4 and 16|1.3415|---|3.7|---|--- 
+
+##### Pre-training loss results: NVIDIA DGX-2H V100 (16x V100 32GB)
+
 | DGX System | GPUs | Accumulated Batch size / GPU (Phase 1 and Phase 2) | Accumulation steps (Phase 1 and Phase 2) | Final Loss - FP32 | Final Loss - mixed precision | Time to train(hours) - FP32 | Time to train(hours) - mixed precision | Time to train speedup (FP32 to mixed precision)
 |---|---|---|---|---|---|---|---|---
-| 1 x NVIDIA DGX-1 With 16G|8|8192 and 4096 |512 and 1024|-|1.36|-|153.16|-
-| 1 x NVIDIA DGX-2H With 32G|16|4096 and 2048 |64 and 256|-|1.35|-|58.4|-
-| 4 x NVIDIA DGX-1 With 16G|8|2048 and 1024 |128 and 256|-|1.34|-|39.27|-
-| 4 x NVIDIA DGX-2H With 32G|16|1024 and 512 |16 and 64|-|1.33|-|15.35|-
-| 16 x NVIDIA DGX-1 With 16G|8|512 and 256 |32 and 64|-|1.329|-|10.36|-
-| 16 x NVIDIA DGX-2H With 32G|16|256 and 128 |4 and 16|-|1.33|-|3.94|-
-| 64 x NVIDIA DGX-2H With 32G|16|64 and 32 |(1 and 4)FP16 and (2 and 8)FP32|1.33|1.331|4.338|1.124|3.85
+|32 x DGX-2H |16|128 and 64|2 and 8|---|1.3223|---|2.07|---  
+|32 x DGX-2H |16|128 and 64|4 and 16|1.3305|---|7.9|---|---  
+
+##### Pre-training loss results
+
+Following results were obtained by running on pytorch:19.07-py3 NGC container.
+
+| DGX System | GPUs | Accumulated Batch size / GPU (Phase 1 and Phase 2) | Accumulation steps (Phase 1 and Phase 2) | Final Loss - FP32 | Final Loss - mixed precision | Time to train(hours) - FP32 | Time to train(hours) - mixed precision | Time to train speedup (FP32 to mixed precision)
+|---|---|---|---|---|---|---|---|---
+| 1 x NVIDIA DGX-1|8|8192 and 4096 |512 and 1024|-|1.36|-|153.16|-
+| 1 x NVIDIA DGX-2H|16|4096 and 2048 |64 and 256|-|1.35|-|58.4|-
+| 4 x NVIDIA DGX-1|8|2048 and 1024 |128 and 256|-|1.34|-|39.27|-
+| 4 x NVIDIA DGX-2H|16|1024 and 512 |16 and 64|-|1.33|-|15.35|-
+| 16 x NVIDIA DGX-1|8|512 and 256 |32 and 64|-|1.329|-|10.36|-
+| 16 x NVIDIA DGX-2H|16|256 and 128 |4 and 16|-|1.33|-|3.94|-
+| 64 x NVIDIA DGX-2H|16|64 and 32 |FP16:(1;4) FP32(2;8)|1.33|1.331|4.338|1.124|3.85
  
-##### Fine-tuning accuracy results
+##### Pre-training loss curves
+![Pretraining Loss Curves](images/loss_curves.png)
+
+##### Fine-tuning accuracy results: NVIDIA DGX A100 (8x A100 40GB)
+
+| GPUs | Batch size / GPU (TF32 and FP16) | Accuracy - TF32(% F1) | Accuracy - mixed precision(% F1) | Time to train(hours) - TF32 | Time to train(hours) - mixed precision | Time to train speedup (TF32 to mixed precision)
+|---|------------|---------|--------|-------|--------|-----
+|8|16 and 32|91.344|91.34|0.174|0.065|2.68
+
+##### Fine-tuning accuracy results: NVIDIA DGX-1 (8x V100 16G)
  
 | GPUs | Batch size / GPU | Accuracy - FP32(% F1) | Accuracy - mixed precision(% F1) | Time to train(hours) - FP32 | Time to train(hours) - mixed precision | Time to train speedup (FP32 to mixed precision)
 |---|---|---|---|---|---|---
@@ -748,25 +805,53 @@ Training stability with 8 GPUs, FP16 computations, batch size of 4:
 |Exact Match %| 84.50 | 84.07 | 84.52 | 84.23 | 84.17 | 84.30 | .200
 | f1 % | 91.29 | 91.01 | 91.14 |  91.10 | 90.85 | 91.08 | 0.162
  
-#### Training performance results
  
+#### Training performance results
+
+##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
+
+Our results were obtained by running the `scripts run_pretraining.sh` training script in the pytorch:20.06-py3 NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs. Performance numbers (in items/images per second) were averaged over a few training iterations.
+
+###### Pre-training NVIDIA DGX A100 (8x A100 40GB)
+
+| GPUs | Batch size / GPU (TF32 and FP16) | Accumulation steps (TF32 and FP16) | Sequence length | Throughput - TF32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (TF32 - mixed precision) | Weak scaling - TF32 | Weak scaling - mixed precision
+|------------------|----------------------|----------------------|-------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
+|1 | 65232 and 65536 | 1208 and 1024| 128| 234 |415 |1.77 |1.00 | 1.00
+|4 | 16308 and 16384 | 302 and 256| 128| 910 |1618 | 1.77| 3.89| 3.90
+|8 | 8154 and 8192 | 151 and 128| 128| 1777 |3231 | 1.81| 7.59| 7.79
+|1 | 32768 and 32768| 4096 and 2048| 512| 41 |78 |1.90 |1.00 | 1.00
+|4 | 8192 and 8192| 1024 and 512| 512| 159 |308 | 1.93| 3.88| 3.95
+| 8| 4096 and 4096| 512 and 256| 512| 318 |620 | 1.94| 7.95| 7.76
+
+###### Fine-tuning NVIDIA DGX A100 (8x A100 40GB)
+  
+| GPUs | Batch size / GPU (TF32 and FP16) | Throughput - TF32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (TF32 - mixed precision) | Weak scaling - TF32 | Weak scaling - mixed precision
+|------------------|----------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
+|1 | 16 and 32|44 |116 | 2.63| 1.00| 1.00
+|4 | 16 and 32|165 |441 | 2.67| 3.75| 3.80
+| 8| 16 and 32|324 |861 | 2.65| 7.42| 7.36
+
+
 ##### Training performance: NVIDIA DGX-1 (8x V100 16G)
  
-Our results were obtained by running the `scripts/run_pretraining.sh` and `scripts/run_squad.sh` training scripts in the pytorch:19.07-py3 NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs. Performance numbers (in sequences per second) were averaged over a predefined number of training iterations.
+Our results were obtained by running the `scripts/run_pretraining.sh` and `scripts/run_squad.sh` training scripts in the pytorch:20.06-py3 NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs. Performance numbers (in sequences per second) were averaged over a few training iterations.
  
 ###### Pre-training NVIDIA DGX-1 With 16G
  
-| GPUs | Batch size / GPU (FP32) | Batch size / GPU (FP16) | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
+| GPUs | Batch size / GPU (FP32 and FP16) | Accumulation steps (FP32 and FP16) | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
 |------------------|----------------------|----------------------|-------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
-|1 | 8 | 16| 128| 33.36 |125.44 |3.76 |1.00 | 1.00
-|4 | 8 | 16| 128| 121.92 |458.24 | 3.75| 3.65| 3.65
-|8 | 8 | 16| 128| 245.12 |919.04 | 3.74| 7.34| 7.32
-|1 | 2| 4| 512| 7.56 |26.64 |3.52 |1.00 | 1.00
-|4 | 2| 4| 512| 28 |98.24 | 3.50| 3.70| 3.69
-| 8| 2| 4| 512| 56.16 |194.56 | 3.46| 7.43| 7.30
+|1 | 65536 and 65536  | 8192 and 4096| 128| 40 |164 |4.1 |1.00 | 1.00
+|4 | 16384 and 16384  | 2048 and 1024| 128| 155 |615 | 3.96| 3.88| 3.75
+|8 | 8192 and 8192  | 1024 and 512| 128| 313 |1236 | 3.94| 7.83| 7.54
+|1 | 32768 and 32768 | 16384 and 8192| 512| 9 |34 |3.77 |1.00 | 1.00
+|4 | 8192 and 8192 | 4096 and 2048| 512| 35 |131 | 3.74| 3.89| 3.85
+| 8| 4096 and 4096 | 2048 and 1024| 512| 71 |263 | 3.70| 7.89| 7.74
+ 
  
 ###### Pre-training on multiple NVIDIA DGX-1 With 16G
- 
+
+Following numbers were obtained on NGC pytorch:19.07-py3 NGC container.
+
 | Nodes | GPUs | Batch size / GPU (FP32) | Batch size / GPU (FP16) | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
 |------------------|----------------------|----------------------|-------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------|--------------
 |1 |8 | N/A | 16| 128| N/A |874.24 |N/A |N/A | 1.00
@@ -776,64 +861,64 @@ Our results were obtained by running the `scripts/run_pretraining.sh` and `scrip
 |4 |8 | N/A | 4| 512| N/A |700.16 | N/A| N/A| 3.57
 |16| 8| N/A | 4| 512| N/A |2746.368 | N/A| N/A| 14.02
  
+ 
 ###### Fine-tuning NVIDIA DGX-1 With 16G
-
-| GPUs | Batch size / GPU | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
+ 
+ 
+| GPUs | Batch size / GPU (FP32 and FP16) | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
 |------------------|----------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
-|1 | 4|8.96 |35.88 | 3.99| 1.00| 1.00
-|4 | 4|31.04 |120.00 | 3.86| 3.46| 3.34
-| 8| 4|64.64 |227.84 | 3.52| 7.20| 6.35
-|1 | 10|N/A |45.2| N/A| N/A| 1.0
-|4 | 10|N/A |163.6 | N/A| N/A| 3.62
-| 8| 10|N/A |327.2| N/A| N/A| 7.24
+|1 | 4 and 10|9 |50 | 5.55| 1.00| 1.00
+|4 | 4 and 10|32 |183 | 5.71| 3.56| 3.66
+| 8| 4 and 10|61 |359 | 5.88| 6.78| 7.18
+ 
  
 ##### Training performance: NVIDIA DGX-1 (8x V100 32G)
  
-Our results were obtained by running the `scripts/run_pretraining.sh` and `scripts/run_squad.sh` training scripts in the pytorch:19.07-py3 NGC container on NVIDIA DGX-1 with (8x V100 32G) GPUs. Performance numbers (in sequences per second) were averaged over an entire training epoch.
+Our results were obtained by running the `scripts/run_pretraining.sh` and `scripts/run_squad.sh` training scripts in the pytorch:20.06-py3 NGC container on NVIDIA DGX-1 with (8x V100 32G) GPUs. Performance numbers (in sequences per second) were averaged over a few training iterations.
  
 ###### Pre-training NVIDIA DGX-1 With 32G
-
-| GPUs | Batch size / GPU (FP32) | Batch size / GPU (FP16) | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
+ 
+| GPUs | Batch size / GPU (FP32 and FP16) | Accumulation steps (FP32 and FP16) | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
 |------------------|----------------------|----------------------|-------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
-|1 |32 | 64| 128| 40.32 |171.52| 4.25| 1.0| 1.0
-|4 |32 | 64| 128| 154.88 |655.36 | 4.23| 3.84| 3.82
-|8 |32 | 64| 128|309.76 |1305.6| 4.21| 7.68 | 7.62
-|1 | 4| 8| 512|8.36 |30.08 | 3.68| 1.00| 1.00
-|4 | 4| 8| 512|31.52 |116.80 | 3.70| 3.84| 3.82
-| 8| 4| 8| 512|62.72 |231.68 | 3.69| 7.68| 7.61
+|1 | 65536 and 65536  | 8192 and 4096| 128| 40 |158 |3.95 |1.00 | 1.00
+|4 | 16384 and 16384  | 2048 and 1024| 128| 157 |625 | 3.93| 3.96| 3.65
+|8 | 8192 and 8192  | 1024 and 512| 128| 317 |1203 | 3.79| 7.93| 7.61
+|1 | 32768 and 32768 | 16384 and 8192| 512| 9 |33 |3.66 |1.00 | 1.00
+|4 | 8192 and 8192 | 4096 and 2048| 512| 35 |130 | 3.71| 3.89| 3.94
+| 8| 4096 and 4096 | 2048 and 1024| 512| 72 |262 | 3.63| 8.0| 7.94
+ 
  
 ###### Fine-tuning NVIDIA DGX-1 With 32G
-
-| GPUs | Batch size / GPU | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
+ 
+| GPUs | Batch size / GPU (FP32 and FP16) | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
 |------------------|----------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
-|1 | 8|8.64 |36.04 | 4.171| 1.00| 1.00
-|4 | 8|31.52 |116.80 | 3.71| 3.64| 3.24
-| 8| 8|64.32 |231.04 | 3.59| 7.44| 6.41
-|1 | 10|N/A |46.00| N/A| N/A| 1.0
-|4 | 10|N/A |164.00 | N/A| N/A| 3.57
-| 8| 10|N/A |325.60| N/A| N/A| 7.08
+|1 | 8 and 10|12 |49 | 4.08| 1.00| 1.00
+|4 | 8 and 10|42 |178 | 4.23| 3.5| 3.63
+| 8| 8 and 10|67 |351 | 5.23| 5.58| 7.16 
  
 ##### Training performance: NVIDIA DGX-2 (16x V100 32G)
  
-Our results were obtained by running the `scripts/run_pretraining.sh` and `scripts/run_squad.sh` training scripts in the pytorch:19.07-py3 NGC container on NVIDIA DGX-2 with (16x V100 32G) GPUs. Performance numbers (in sequences per second) were averaged over an entire training epoch.
+Our results were obtained by running the `scripts/run_pretraining.sh` and `scripts/run_squad.sh` training scripts in the pytorch:20.06-py3 NGC container on NVIDIA DGX-2 with (16x V100 32G) GPUs. Performance numbers (in sequences per second) were averaged over a few training iterations.
  
 ###### Pre-training NVIDIA DGX-2 With 32G
-
-| GPUs | Batch size / GPU (FP32) | Batch size / GPU (FP16) | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
-|------------------|----------------------|----------------------|-------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
-|1 |32 | 64 | 128|43.52 | 181.76 | 4.17| 1.00| 1.00
-|4 |32 | 64 | 128| 168.96| 704| 4.16| 3.88| 3.87
-|8 |32 | 64| 128| 335.36| 1402.88| 4.18| 7.70| 7.72
-|16 |32 | 64| 128| 665.6| 2775.04| 4.16| 15.29| 15.26
-|1 | 4 | 8 | 512|9.0| 32.32| 3.59| 1.00| 1.00
-|4 | 4 |8 | 512| 34.4| 124.16| 3.60| 3.82| 3.84
-|8 | 4 | 8| 512| 68.16| 247.04| 3.62| 7.57| 7.64
-|16 | 4 | 8| 512| 135.68| 488.96| 3.60| 15.08| 15.13
  
-###### Pre-training on multiple NVIDIA DGX-2H With 32G
+| GPUs | Batch size / GPU (FP32 and FP16) | Accumulation steps (FP32 and FP16) | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
+|------------------|----------------------|----------------------|-------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
+|1 | 65536 and 65536  | 8192 and 4096| 128| 42 |173 |4.11 |1.00 | 1.00
+|4 | 16384 and 16384  | 2048 and 1024| 128| 166 |669 | 4.03| 3.95| 3.87
+|8 | 8192 and 8192  | 1024 and 512| 128| 330 |1324 | 4.01| 7.86| 7.65
+|16 | 4096 and 4096  | 512 and 256| 128| 658 |2557 | 3.88| 15.67| 14.78
+|1 | 32768 and 32768 | 16384 and 8192| 512| 10 |36 |3.6 |1.00 | 1.00
+|4 | 8192 and 8192 | 4096 and 2048| 512| 37 |137 | 3.70| 3.70| 3.81
+| 8| 4096 and 4096 | 2048 and 1024| 512| 75 |273 | 3.64| 7.50| 7.58
+| 16| 2048 and 2048 | 1024 and 512| 512| 150 |551 | 3.67| 15.00| 15.31
 
+###### Pre-training on multiple NVIDIA DGX-2H With 32G
+ 
 Note: Multi-node performance numbers below are on DGX-2H whereas the single node performance numbers above are on DGX-2.
 
+Following numbers are obtained on pytorch:19.07-py3 NGC container. 
+ 
 | Nodes | GPUs | Batch size / GPU (FP32) | Batch size / GPU (FP16) | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
 |------------------|----------------------|----------------------|-------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------|---------------------
 |1 |16 | N/A | 64| 128| N/A |3379.2 |N/A |N/A | 1.00
@@ -846,69 +931,58 @@ Note: Multi-node performance numbers below are on DGX-2H whereas the single node
 |64| 16| 4 | 8| 512| 9543.68 |37478.4 | 3.92| N/A| 59.9
  
 ###### Fine-tuning NVIDIA DGX-2 With 32G
-
-| GPUs | Batch size / GPU | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
+ 
+| GPUs | Batch size / GPU (FP32 and FP16) | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision
 |------------------|----------------------|-----------------------------------------------|------------------------------------|---------------------------------|----------------------|----------------------------------------------
-|1 |4 |9.92| 38.16| 3.84| 1.00| 1.00
-|4 |4 | 35.52| 122.08| 3.43| 3.58| 3.20
-|8 | 4| 71.36| 241.28| 3.38| 7.19| 6.32
-|16 | 4| 141.40| 462.08| 3.27| 14.25| 12.11
-|1 |10 |N/A | 47.40| N/A| N/A| 1.00
-|4 |10 | N/A| 165.60| N/A| N/A| 3.49
-|8 | 10| N/A| 325.60| N/A| N/A| 6.87
-|16 | 10| N/A| 648.00| N/A| N/A| 13.67
+|1 |8 and 10 |12| 53| 4.41| 1.00| 1.00
+|4 |8 and 10 | 47| 188| 4| 3.92| 3.55
+|8 | 8 and 10| 92| 369| 4.01| 7.67| 6.96
+|16 | 8 and 10| 178| 700| 3.93| 14.83| 13.21
  
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
  
 #### Inference performance results
+
+##### Inference performance: NVIDIA DGX A100 (1x A100 40GB) 
  
+Our results were obtained by running `scripts/run_squad.sh` in the pytorch:20.06-py3 NGC container on NVIDIA DGX-1 with (1x V100 16G) GPUs.
+ 
+###### Fine-tuning inference on NVIDIA DGX A100 (1x A100 40GB)
+ 
+| GPUs |  Batch Size \(TF32/FP16\) | Sequence Length | Throughput \- TF32\(sequences/sec\) | Throughput \- Mixed Precision\(sequences/sec\) |
+|------|---------------------------|-----------------|-------------------|------------------------------------------------|
+| 1    | 8/8  | 384             |      188       | 283    |
+
+
 ##### Inference performance: NVIDIA DGX-1 (1x V100 16G)
  
-Our results were obtained by running the `scripts/run_pretraining_inference.sh` script on data of sequence length 512 and the `scripts/run_squad.sh` script in the pytorch:19.07-py3 NGC container on NVIDIA DGX-1 with (1x V100 16G) GPUs.
- 
-###### Pre-training inference on NVIDIA DGX-1 with 16G
-
-| GPUs |  Batch Size \(FP32/FP16\) | Sequence Length | Throughput \- FP32\(sequences/sec\) | Throughput \- Mixed Precision\(sequences/sec\) |
-|------|---------------------------|-----------------|-------------------|------------------------------------------------|
-| 1    | 2/4                       | 512             |     28\.32        | 94\.36                                         |
+Our results were obtained by running `scripts/run_squad.sh` in the pytorch:20.06-py3 NGC container on NVIDIA DGX-1 with (1x V100 16G) GPUs.
  
 ###### Fine-tuning inference on NVIDIA DGX-1 with 16G
-
+ 
 | GPUs |  Batch Size \(FP32/FP16\) | Sequence Length | Throughput \- FP32\(sequences/sec\) | Throughput \- Mixed Precision\(sequences/sec\) |
 |------|---------------------------|-----------------|-------------------|------------------------------------------------|
-| 1    | 4/4                       | 384             |      37\.64       | 119\.76                                        |
+| 1    | 8/8                       | 384             |      42       | 153                                        |
  
 ##### Inference performance: NVIDIA DGX-1 (1x V100 32G)
  
-Our results were obtained by running the `scripts/run_pretraining_inference.sh` and  `scripts/run_squad.sh` scripts in the pytorch:19.07-py3 NGC container on NVIDIA DGX-1 with (1x V100 32G) GPUs.
- 
-###### Pre-training inference on NVIDIA DGX-1 with 32G
-
-| GPUs |  Batch Size \(FP32/FP16\) | Sequence Length | Throughput \- FP32\(sequences/sec\) | Throughput \- Mixed Precision\(sequences/sec\) |
-|------|---------------------------|-----------------|-------------------|------------------------------------------------|
-| 1    | 4/8                       | 512             | 27\.58            | 90\.16                                         |
- 
+Our results were obtained by running `scripts/run_squad.sh` in the pytorch:20.06-py3 NGC container on NVIDIA DGX-1 with (1x V100 32G) GPUs.
+  
 ###### Fine-tuning inference on NVIDIA DGX-1 with 32G
-
+ 
 | GPUs |  Batch Size \(FP32/FP16\) | Sequence Length | Throughput \- FP32\(sequences/sec\) | Throughput \- Mixed Precision\(sequences/sec\) |
 |------|---------------------------|-----------------|-------------------|------------------------------------------------|
-| 1    | 4/4                       | 384             |37\.64             | 119\.76                                        |
+| 1    | 8/8                       | 384             |48             | 143                                        |
  
 ##### Inference performance: NVIDIA DGX-2 (1x V100 32G)
  
-Our results were obtained by running the `scripts/run_pretraining_inference.sh` and  `scripts/run_squad.sh` scripts in the pytorch:19.07-py3 NGC container on NVIDIA DGX-2 with (1x V100 32G) GPUs.
- 
-###### Pre-training inference on NVIDIA DGX-2 with 32G
-
-| GPUs |  Batch Size \(FP32/FP16\) | Sequence Length | Throughput \- FP32\(sequences/sec\) | Throughput \- Mixed Precision\(sequences/sec\) |
-|------|---------------------------|-----------------|--------------------|------------------------------------------------|
-| 1    | 4/8                       | 512             | 30\.24             | 97\.72                                         |
+Our results were obtained by running `scripts/run_squad.sh` in the pytorch:20.06-py3 NGC container on NVIDIA DGX-2 with (1x V100 32G) GPUs.
  
 ###### Fine-tuning inference on NVIDIA DGX-2 with 32G
 
 | GPUs |  Batch Size \(FP32/FP16\) | Sequence Length | Throughput \- FP32\(sequences/sec\) | Throughput \- Mixed Precision\(sequences/sec\) |
-|------|---------------------------|-----------------|--------------------|------------------------------------------------|
-| 1    | 4/4                       | 384             | 35\.76             | 112\.60                                        |
+|------|---------------------------|-----------------|-------------------|------------------------------------------------|
+| 1    | 8/8                       | 384             |43             | 148                                        |
  
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
  
@@ -917,6 +991,9 @@ The inference performance metrics used were items/second.
 ## Release notes
  
 ### Changelog
+ 
+July 2020
+-  Updated accuracy and performance tables to include A100 results
  
 March 2020
 - TRITON Inference Server support.
@@ -943,4 +1020,3 @@ July 2019
 ### Known issues
  
 There are no known issues with this model.
-

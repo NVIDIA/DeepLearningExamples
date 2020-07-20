@@ -38,7 +38,10 @@ from utils.logging import init_dllogger
 if __name__ == "__main__":
 
     tf.logging.set_verbosity(tf.logging.ERROR)
+    os.environ["TF_EXTRA_PTXAS_OPTIONS"] = "-sw200428197=true" # TODO: NINJA WAR
+
     FLAGS = parse_cmdline()
+    
     init_dllogger(FLAGS.log_dir)
 
     RUNNING_CONFIG = tf.contrib.training.HParams(
@@ -65,8 +68,8 @@ if __name__ == "__main__":
         input_normalization_method="zero_one",
 
         # ======== Runtime HParams ======== #
-        use_tf_amp=FLAGS.use_tf_amp,
-        use_xla=FLAGS.use_xla,
+        amp=FLAGS.amp,
+        xla=FLAGS.xla,
 
         # ======= Training HParams ======== #
         iter_unit=FLAGS.iter_unit,
@@ -114,8 +117,8 @@ if __name__ == "__main__":
         weight_init_method=RUNNING_CONFIG.weight_init_method,
 
         #  Runtime HParams
-        use_tf_amp=RUNNING_CONFIG.use_tf_amp,
-        use_xla=RUNNING_CONFIG.use_xla,
+        amp=RUNNING_CONFIG.amp,
+        xla=RUNNING_CONFIG.xla,
 
         # Directory Params
         log_dir=RUNNING_CONFIG.log_dir,

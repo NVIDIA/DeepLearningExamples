@@ -46,15 +46,18 @@ echo "Squad directory set as " $SQUAD_DIR " BERT directory set as " $BERT_DIR
 
 use_fp16=""
 if [ "$precision" = "fp16" ] ; then
-        echo "fp16 activated!"
-        use_fp16="--use_fp16"
+    echo "fp16 activated!"
+    use_fp16="--amp"
+else
+    echo "fp32/tf32 activated!"
+    use_fp16="--noamp"
 fi
 
 if [ "$use_xla" = "true" ] ; then
     use_xla_tag="--use_xla"
     echo "XLA activated"
 else
-    use_xla_tag=""
+    use_xla_tag="--nouse_xla"
 fi
 
 if [ $num_gpu -gt 1 ] ; then
@@ -94,6 +97,7 @@ $mpi_command python run_squad.py \
 --train_file=$SQUAD_DIR/train-v${squad_version}.json \
 --do_predict=True \
 --predict_file=$SQUAD_DIR/dev-v${squad_version}.json \
+--eval_script=$SQUAD_DIR/evaluate-v${squad_version}.py \
 --train_batch_size=$batch_size \
 --learning_rate=$learning_rate \
 --num_train_epochs=$epochs \
@@ -104,4 +108,3 @@ $mpi_command python run_squad.py \
 --horovod "$use_fp16" \
 $use_xla_tag --version_2_with_negative=${version_2_with_negative} |& tee $LOGFILE
 
-python $SQUAD_DIR/evaluate-v${squad_version}.py $SQUAD_DIR/dev-v${squad_version}.json ${RESULTS_DIR}/predictions.json |& tee -a $LOGFILE

@@ -21,6 +21,7 @@
 
 #include <vector>
 
+namespace rpn {
 /**
  * Generate boxes associated to topN pre-NMS scores
  */
@@ -38,3 +39,4 @@ std::vector<at::Tensor> GeneratePreNMSUprightBoxes(
     const int rpn_min_size,
     const float bbox_xform_clip_default,
     const bool correct_transform_coords);
+} // namespace rpn

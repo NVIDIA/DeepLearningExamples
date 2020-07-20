@@ -2,40 +2,42 @@
 
 This repository provides a script and recipe to train the V-Net model to achieve state of the art accuracy, and is tested and maintained by NVIDIA.
 
-## Table Of Contents
+## Table of Contents
+ 
 - [Model overview](#model-overview)
-    * [Model architecture](#model-architecture)
-    * [Default configuration](#default-configuration)
-    * [Feature support matrix](#feature-support-matrix)
-	    * [Features](#features)
-    * [Mixed precision training](#mixed-precision-training)
-	    * [Enabling mixed precision](#enabling-mixed-precision)
+   * [Model architecture](#model-architecture)
+   * [Default configuration](#default-configuration)
+   * [Feature support matrix](#feature-support-matrix)
+     * [Features](#features)
+   * [Mixed precision training](#mixed-precision-training)
+     * [Enabling mixed precision](#enabling-mixed-precision)
+     * [Enabling TF32](#enabling-tf32)
 - [Setup](#setup)
-    * [Requirements](#requirements)
+   * [Requirements](#requirements)
 - [Quick Start Guide](#quick-start-guide)
 - [Advanced](#advanced)
-    * [Scripts and sample code](#scripts-and-sample-code)
-    * [Parameters](#parameters)
-    * [Command-line options](#command-line-options)
-    * [Getting the data](#getting-the-data)
-        * [Dataset guidelines](#dataset-guidelines)
-    * [Training process](#training-process)
-        * [Optimizer](#optimizer)
-    * [Inference process](#inference-process)
-- [Performance](#performance)
-    * [Benchmarking](#benchmarking)
-        * [Training performance benchmark](#training-performance-benchmark)
-        * [Inference performance benchmark](#inference-performance-benchmark)
-    * [Results](#results)
-        * [Training accuracy results](#training-accuracy-results)
-            * [Training accuracy: NVIDIA DGX-1 (8x V100 16G)](#training-accuracy-nvidia-dgx-1-8x-v100-16g)
-        * [Training performance results](#training-performance-results)
-            * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16g)
-        * [Inference performance results](#inference-performance-results)
-            * [Inference performance: NVIDIA DGX-1 (1x V100 16G)](#inference-performance-nvidia-dgx-1-1x-v100-16g)
+   * [Scripts and sample code](#scripts-and-sample-code)
+   * [Parameters](#parameters)
+   * [Command-line options](#command-line-options)
+   * [Getting the data](#getting-the-data)
+     * [Dataset guidelines](#dataset-guidelines)
+     * [Multi-dataset](#multi-dataset)
+   * [Training process](#training-process)
+   * [Inference process](#inference-process)
+- [Performance](#performance)   
+   * [Benchmarking](#benchmarking)
+     * [Training performance benchmark](#training-performance-benchmark)
+     * [Inference performance benchmark](#inference-performance-benchmark)
+   * [Results](#results)
+     * [Training accuracy results](#training-accuracy-results)
+       * [Training accuracy: NVIDIA DGX-1 (8x V100 16GB)](#training-accuracy-nvidia-dgx-1-8x-v100-16gb)
+     * [Training performance results](#training-performance-results)
+       * [Training performance: NVIDIA DGX-1 (8x V100 16GB)](#training-performance-nvidia-dgx-1-8x-v100-16gb)
+     * [Inference performance results](#inference-performance-results)
+        * [Inference performance: NVIDIA DGX-1 (1x V100 16GB)](#inference-performance-nvidia-dgx-1-1x-v100-16gb)
 - [Release notes](#release-notes)
-    * [Changelog](#changelog)
-    * [Known issues](#known-issues)
+   * [Changelog](#changelog)
+   * [Known issues](#known-issues)
 
 
 ## Model overview
@@ -47,7 +49,7 @@ This implementation differs from the original in the following ways:
 * The number of upsample/downsample levels is reduced to 3 to accommodate the different input size
 * PReLU activation has been substituted by ReLU to increase performance without negatively affecting the accuracy
 
-This model is trained with mixed precision using Tensor Cores on NVIDIA Volta and Turing GPUs. Therefore, researchers can get results 2x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
+This model is trained with mixed precision using Tensor Cores on Volta, Turing, and the NVIDIA Ampere GPU architectures. Therefore, researchers can get results  2.2x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
 
 ### Model architecture
 
@@ -57,6 +59,8 @@ The following figure shows the construction of the standard V-Net model and its 
 
 ![V-Net](images/vnet.png)
  
+Figure 1. VNet architecture
+
 ### Default configuration
 
 V-Net consists of a contractive (left-side) and expanding (right-side) path. It repeatedly applies unpadded convolutions followed by max pooling for downsampling. Every step in the expanding path consists of an upsampling of the feature maps and a concatenation with the correspondingly cropped feature map from the contractive path.
@@ -93,14 +97,15 @@ Enables mixed precision training without any changes to the code-base by perform
 
 ### Mixed precision training
 
-Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format, while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [Tensor Cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing architecture, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using mixed precision training requires two steps:
+Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [Tensor Cores](https://developer.nvidia.com/tensor-cores) in Volta, and following with both the Turing and Ampere architectures, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using [mixed precision training](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html) previously required two steps:
 1.  Porting the model to use the FP16 data type where appropriate.    
 2.  Adding loss scaling to preserve small gradient values.
 
-The ability to train deep learning networks with lower precision was introduced in the Pascal architecture and first supported in [CUDA 8](https://devblogs.nvidia.com/parallelforall/tag/fp16/) in the NVIDIA Deep Learning SDK.
+This can now be achieved using Automatic Mixed Precision (AMP) for TensorFlow to enable the full [mixed precision methodology](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#tensorflow) in your existing TensorFlow model code.  AMP enables mixed precision training on Volta and Turing GPUs automatically. The TensorFlow framework code makes all necessary model changes internally.
 
-For information about:
--   How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) documentation.
+In TF-AMP, the computational graph is optimized to use as few casts as necessary and maximize the use of FP16, and the loss scaling is automatically applied inside of supported optimizers. AMP can be configured to work with the existing tf.contrib loss scaling manager by disabling the AMP scaling with a single environment variable to perform only the automatic mixed-precision optimization. It accomplishes this by automatically rewriting all computation graphs with the necessary operations to enable mixed precision training and automatic loss scaling.
+
+-   How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html) documentation.
 -   Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
 -   How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp) from the TensorFlow User Guide.
 
@@ -111,12 +116,23 @@ In order to enable mixed precision training, the following environment variables
 TF_ENABLE_AUTO_MIXED_PRECISION=1
 ```
 Exporting these variables ensures that loss scaling is performed correctly and automatically. 
-By supplying the `--use_amp` flag to the `main.py` script while training in FP32, the following variables are set to their correct value for mixed precision training inside the `./utils/runner.py` script:
+By supplying the `--amp` flag to the `main.py` script while training in FP32, the following variables are set to their correct value for mixed precision training inside the `./utils/runner.py` script:
 ```
 if params['use_amp']:
    LOGGER.log("TF AMP is activated - Experimental Feature")
    os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
 ```
+
+#### Enabling TF32
+
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](#https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
+
+TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
+
+For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](#https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
+
+TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
+
 
 ## Setup
 
@@ -126,8 +142,12 @@ The following section lists the requirements in order to start training the V-Ne
 
 This repository contains a `Dockerfile` which extends the TensorFlow NGC container and encapsulates some additional dependencies. Aside from these dependencies, ensure you have the following components:
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [nvcr.io/nvidia/tensorflow:19.11-tf1-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-tensorflow) or greater
-* [NVIDIA Volta based GPU](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
+- TensorFlow 20.06-tf1-py3 [NGC container](https://ngc.nvidia.com/registry/nvidia-tensorflow)
+- GPU-based architecture:
+    - [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
+    - [NVIDIA Turing](https://www.nvidia.com/en-us/geforce/turing/)
+    - [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
+
 
 For more information about how to get started with NGC containers, see the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning DGX Documentation:
 
@@ -180,16 +200,16 @@ $ docker run --runtime=nvidia --rm -it --shm-size=1g --ulimit memlock=-1 --ulimi
 To run training on all training data for a default configuration (for example 1/4/8 GPUs FP32/TF-AMP), run the `vnet_train.py` script in the `./examples` directory:
 ```
 usage: vnet_train.py [-h] 
-                          [--data_dir DATA_DIR 
+                          --data_dir DATA_DIR 
                           --model_dir MODEL_DIR 
                           --gpus {1, 8} 
                           --batch_size BATCH_SIZE 
                           --epochs EPOCHS
-                          --precision {fp32,fp16}
+                          OPTIONAL [--amp]
 ```
 For example:
 ```
-python examples/vnet_train.py --data_dir ./data/Task04_Hippocampus --model_dir ./tmp --gpus 8 --batch_size 260 --epochs 50 --precision fp16
+python examples/vnet_train.py --data_dir ./data/Task04_Hippocampus --model_dir ./tmp --gpus 8 --batch_size 260 --epochs 50 --amp
 ```
 
 To run training on 9/10 of the training data and perform evaluation on the remaining 1/10, run the `vnet_train_and_evaluate.py` script in the `./examples` directory:
@@ -200,11 +220,11 @@ usage: vnet_train_and_evaluate.py [-h]
                           --gpus {1, 8} 
                           --batch_size BATCH_SIZE 
                           --epochs EPOCHS
-                          --precision {fp32,fp16}
+                          OPTIONAL [--amp]
 ```
 This is useful to estimate the convergence point of the training. For example:
 ```
-python examples/vnet_train_and_evaluate.py --data_dir ./data/Task04_Hippocampus --model_dir ./tmp --gpus 1 --batch_size 8 --epochs 260 --precision fp16
+python examples/vnet_train_and_evaluate.py --data_dir ./data/Task04_Hippocampus --model_dir ./tmp --gpus 1 --batch_size 8 --epochs 260 --amp
 ```
 
 6. Start inference/predictions
@@ -214,11 +234,11 @@ usage: vnet_predict.py [-h]
                          --data_dir DATA_DIR 
                          --model_dir MODEL_DIR
                          --batch_size BATCH_SIZE 
-                         --precision {fp32,fp16}
+                         OPTIONAL [--amp]
 ```
 For example:
 ```
-python examples/vnet_predict.py --data_dir ./data/Task04_Hippocampus --model_dir ./tmp --batch_size 4 --precision fp16
+python examples/vnet_predict.py --data_dir ./data/Task04_Hippocampus --model_dir ./tmp --batch_size 4 --amp
 ```
 
 ## Advanced
@@ -279,7 +299,8 @@ The complete list of the available parameters for the main.py script contains:
 * `--data_dir`: Path to the dataset
 * `--augment`: Enable data augmentation (default: `False`)
 * `--benchmark`: Enable performance benchmarking (default: `False`)
-* `--use_amp`: Enable automatic mixed precision (default: `False`)
+* `--amp`: Enable automatic mixed precision (default: `False`)
+* `--xla`: Enable xla (default: `False`)
 
 ### Command-line options
 
@@ -312,7 +333,8 @@ usage: main.py [-h]
                --model_dir MODEL_DIR
                --data_dir DATA_DIR
                [--benchmark]
-               [--use_amp]
+               [--amp]
+               [--xla]
                [--augment]
 
 ```
@@ -354,7 +376,7 @@ The model trains for 80 epochs with the following hyperparameters:
 
 To run inference on a checkpointed model, run the script below, although it requires a pre-trained model checkpoint and tokenized input.
 ```
-python examples/vnet_predict.py --data_dir ./data/Task04_Hippocampus --model_dir ./tmp --batch_size {N} --precision {fp16, fp32}
+python examples/vnet_predict.py --data_dir ./data/Task04_Hippocampus --model_dir ./tmp --batch_size {N} [--amp]
 ```
 This script should produce the prediction results over a set of masks which will be located in `./tmp/eval`.
 
@@ -387,7 +409,7 @@ usage: vnet_benchmark.py [-h]
                         --mode train 
                         --gpus {1, 8} 
                         --batch_size BATCH_SIZE 
-                        --precision {fp32,fp16}
+                        OPTIONAL [--amp]
 ```
 
 This script will by default run 200 warm-up iterations and benchmark the performance during training in the next 200 iterations.
@@ -402,7 +424,7 @@ usage: vnet_benchmark.py [-h]
                         --mode predict
                         --gpus {1, 8} 
                         --batch_size BATCH_SIZE 
-                        --precision {fp32,fp16}
+                        OPTIONAL [--amp]
 ```
 
 This script will by default run 200 warm-up iterations and benchmark the performance  during inference in the next 200 iterations.
@@ -417,82 +439,100 @@ Dataset is divided on training data (samples with ground truth) and test data (u
 
 For training, 90% of the traning data is used, while for validation it is used the remaining 10%, which is treated as validation data. This validation data remains unseen during training and it is used exclusively to calculate the final accuracy of the model.
 
-#### Training accuracy: NVIDIA DGX-1 (8x V100 16G)
+##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
 
-Our results were obtained by running the `./examples/vnet_train_and_evaluate.py` script in the `nvcr.io/nvidia/tensorflow:19.11-tf1-py3` NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
+Our results were obtained by running the `./examples/vnet_train_and_evaluate.py` script in the `nvcr.io/nvidia/tensorflow:20.06-tf1-py3` NGC container on NVIDIA DGX-1 with 8x V100 16GB GPUs.
 
 To train until convergence in FP32 using 1GPU, run:
 ```
-python examples/vnet_train_and_evaluate.py --gpus 1 --batch_size 2 --base_lr 0.0001 --epochs 80 --data_dir ./data/Task04_Hippocampus/ --model_dir /tmp --precision fp32
+python examples/vnet_train_and_evaluate.py --gpus 1 --batch_size 2 --base_lr 0.0001 --epochs 80 --data_dir ./data/Task04_Hippocampus/ --model_dir /tmp
 ```
 To train until convergence in FP32 using 8GPU, run:
 ```
-python examples/vnet_train_and_evaluate.py --gpus 8 --batch_size 2 --base_lr 0.0001 --epochs 320 --data_dir ./data/Task04_Hippocampus/ --model_dir /tmp --precision fp32
+python examples/vnet_train_and_evaluate.py --gpus 8 --batch_size 2 --base_lr 0.0001 --epochs 320 --data_dir ./data/Task04_Hippocampus/ --model_dir /tmp
 ```
 To train until convergence in FP16 using 1GPU, run:
 ```
-python examples/vnet_train_and_evaluate.py --gpus 1 --batch_size 2 --base_lr 0.0001 --epochs 80 --data_dir ./data/Task04_Hippocampus/ --model_dir /tmp --precision fp16
+python examples/vnet_train_and_evaluate.py --gpus 1 --batch_size 2 --base_lr 0.0001 --epochs 80 --data_dir ./data/Task04_Hippocampus/ --model_dir /tmp --amp
 ```
 To train until convergence in FP16 using 8GPU, run:
 ```
-python examples/vnet_train_and_evaluate.py --gpus 8 --batch_size 2 --base_lr 0.0001 --epochs 320 --data_dir ./data/Task04_Hippocampus/ --model_dir /tmp --precision fp16
+python examples/vnet_train_and_evaluate.py --gpus 8 --batch_size 2 --base_lr 0.0001 --epochs 320 --data_dir ./data/Task04_Hippocampus/ --model_dir /tmp --amp
 ```
  
-| GPUs | FP32 - Background DICE | FP32 - Anterior DICE | FP32 - Posterior DICE | Mixed precision - Background DICE | Mixed precision - Anterior DICE | Mixed precision - Posterior DICE | 
-|:---:|:--------:|:-------:|:--------:|:--------:|:-------:|:--------:|
-|1 | 0.9922 | 0.8436 | 0.8203 | 0.9946 | 0.8409 | 0.8222 | 
-|8 | 0.9918 | 0.8351 | 0.8198 | 0.9966 | 0.8401 | 0.8132 | 
+| GPUs    | Batch size / GPU    | Anterior dice - FP32  | Anterior dice - mixed precision  |   Time to train - FP32  |  Time to train - mixed precision | Time to train speedup (FP32 to mixed precision)|        
+|---------|-------|----------|----------|----------|---------|---------|
+|    1    |   2   |  0.8537  |  0.8533  | 11 min   | 11 min  |   1.0   |
+|    8    |   2   |  0.8409  |  0.8398  | 2 min    | 2 min   |   1.0   |
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
+
 ### Training performance results
 
-#### Training performance: NVIDIA DGX-1 (8x V100 16G)
+##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
 
-Our results were obtained by running the `./examples/vnet_benchmark.py` scripts in the `nvcr.io/nvidia/tensorflow:19.11-tf1-py3` NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
-
-For example:
-```
-python examples/vnet_benchmark.py --data_dir ./data/Task04_Hippocampus --model_dir /tmp --mode train --gpus {1,8} --batch_size {8, 16, 32} --precision {fp16, fp32}
-```
-
-| GPUs | Batch size / GPU | Throughput - FP32 (img/s) | Throughput - Mixed precision (img/s) | Speedup factor | 
-|:---:|:--------:|:-------:|:-------:|:-------:|
-| 1 | 8 | 237 | 381 | 1.61 |
-| 1 | 16 | 306 | 476 | 1.55 |
-| 1 | 32 | 400 | 586 | 1.46 |
-| 8 | 8 | 1390 | 2043 | 1.46 |
-| 8 | 16 | 1907 | 2966 | 1.55 |
-| 8 | 32 | 2598 | 3761 | 1.44 |
-
-To achieve these same results, follow the [Quick start guide](#quick-start-guide) outlined above.
-
-### Inference performance results
-
-#### Inference performance: NVIDIA DGX-1 (1x V100 16G)
-
-Our results were obtained by running the `./examples/vnet_benchmark.py` scripts in the `nvcr.io/nvidia/tensorflow:19.11-tf1-py3` NGC container on NVIDIA DGX-1 with 1x V100 16G GPUs.
+Our results were obtained by running the `./examples/vnet_benchmark.py` scripts in the `nvcr.io/nvidia/tensorflow:20.06-tf1-py3` NGC container on NVIDIA DGX-1 with 8x V100 16GB GPUs. Performance numbers (in images per second) were averaged over 200 iterations.
 
 For example:
 ```
-python examples/vnet_benchmark.py --data_dir ./data/Task04_Hippocampus --model_dir /tmp --mode predict --gpus 1 --batch_size {8, 16, 32} --precision {fp16, fp32}
+python examples/vnet_benchmark.py --data_dir ./data/Task04_Hippocampus --model_dir /tmp --mode train --gpus {1,8} --batch_size {8,16,32} [--amp]
 ```
 
-| GPUs | Batch size / GPU | Throughput - FP32 (img/s) | Throughput - Mixed precision (img/s) | Speedup factor | 
-|:---:|:--------:|:-------:|:-------:|:-------:|
-| 1 | 8 | 846 | 1365 | 1.61 |
-| 1 | 16 | 983 |  1646 | 1.67 |
-| 1 | 32 | 1100 |  1780 | 1.61 |
+| GPUs | Batch size / GPU | Throughput - FP32 | Throughput - mixed precision | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision |       
+|---|----|---------|---------|------|------|------|
+| 1 |  2 |  117.82 |  114.11 | 0.97 |  N/A |  N/A |
+| 1 |  8 |  277.46 |  368.93 | 1.33 |  N/A |  N/A |
+| 1 | 16 |  339.56 |  427.02 | 1.26 |  N/A |  N/A |
+| 1 | 32 |  444.98 |  639.03 | 1.44 |  N/A |  N/A |
+| 8 |  2 |  584.23 |  497.05 | 0.85 | 4.96 | 4.36 |
+| 8 |  8 | 1783.44 | 1851.75 | 1.04 | 6.43 | 5.02 |
+| 8 | 16 | 2342.51 | 2821.20 | 1.20 | 6.90 | 6.61 |
+| 8 | 32 | 3189.86 | 4282.41 | 1.34 | 7.17 | 6.70 |
+
 
 To achieve these same results, follow the [Quick start guide](#quick-start-guide) outlined above.
 
+#### Inference performance results
+
+##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
+
+Our results were obtained by running the `./examples/vnet_benchmark.py` scripts in the `nvcr.io/nvidia/tensorflow:20.06-tf1-py3` NGC container on NVIDIA DGX-1 with 1x V100 16GB GPUs.
+
+For example:
+```
+python examples/vnet_benchmark.py --data_dir ./data/Task04_Hippocampus --model_dir /tmp --mode predict --gpus 1 --batch_size {8, 16, 32} [--amp]
+```
+
+FP16
+
+| Batch size | Sequence length | Throughput Avg | Latency Avg | Latency 90% |Latency 95% |Latency 99% |
+|----|------------|---------|-------|-------|-------|-------|
+|  8 | 32x32x32x1 | 1428.89 | 6.59  |  8.25	|  8.57 |  9.19 |
+| 16 | 32x32x32x1 | 2010.71 | 10.23 | 14.04	| 14.77 | 16.20 |
+| 32 | 32x32x32x1 | 3053.85 | 16.36 | 26.08	| 27.94 | 31.58 |
+
+FP32
+
+| Batch size | Sequence length | Throughput Avg | Latency Avg | Latency 90% | Latency 95% | Latency 99% |
+|----|------------|---------|-------|-------|-------|-------|
+|  8 | 32x32x32x1 | 1009.75 |  8.89 | 10.53 | 10.84 | 11.45 |
+| 16 | 32x32x32x1 | 1262.54 | 14.92 | 18.71 | 19.43 | 20.85 |
+| 32 | 32x32x32x1 | 1496.08 | 27.32 | 37.27 | 39.17 | 42.90 |
+
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
 ## Release notes
 
 ### Changelog
 
+June 2020
+
+* Updated training and inference accuracy
+* Updated training and inference performance
+
 November 2019
-- Initial release
+* Initial release
 
 ### Known issues
 

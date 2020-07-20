@@ -26,5 +26,3 @@ class MeanAccumulator:
 
     def value(self):
         return self.sum / self.count
-
-

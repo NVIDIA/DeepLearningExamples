@@ -16,15 +16,16 @@
 #
 # ==============================================================================
 
-FROM nvcr.io/nvidia/tensorflow:20.01-tf1-py3
-
-LABEL version="1.0" maintainer="Jonathan DEKHTIAR <jonathan.dekhtiar@nvidia.com>"
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.06-tf1-py3
+FROM ${FROM_IMAGE_NAME}
 
 WORKDIR /opt
 COPY requirements.txt /opt/requirements_unet_tf_industrial.txt
 
 RUN python -m pip --no-cache-dir --no-cache install --upgrade pip && \
     pip --no-cache-dir --no-cache install -r /opt/requirements_unet_tf_industrial.txt
+
+ENV TF_EXTRA_PTXAS_OPTIONS="-sw200428197=true"
 
 ADD . /workspace/unet_industrial
 WORKDIR /workspace/unet_industrial

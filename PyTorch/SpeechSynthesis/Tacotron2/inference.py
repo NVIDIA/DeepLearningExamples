@@ -31,6 +31,7 @@ import torch
 import argparse
 import numpy as np
 from scipy.io.wavfile import write
+import matplotlib
 import matplotlib.pyplot as plt
 
 import sys
@@ -38,8 +39,6 @@ import sys
 import time
 import dllogger as DLLogger
 from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
-
-from apex import amp
 
 from waveglow.denoiser import Denoiser
 
@@ -60,16 +59,19 @@ def parse_args(parser):
     parser.add_argument('-d', '--denoising-strength', default=0.01, type=float)
     parser.add_argument('-sr', '--sampling-rate', default=22050, type=int,
                         help='Sampling rate')
-    parser.add_argument('--amp-run', action='store_true',
-                        help='inference with AMP')
+
+    run_mode = parser.add_mutually_exclusive_group()
+    run_mode.add_argument('--fp16', action='store_true',
+                        help='Run inference with mixed precision')
+    run_mode.add_argument('--cpu', action='store_true',
+                        help='Run inference on CPU')
+
     parser.add_argument('--log-file', type=str, default='nvlog.json',
                         help='Filename for logging')
     parser.add_argument('--include-warmup', action='store_true',
                         help='Include warmup')
     parser.add_argument('--stft-hop-length', type=int, default=256,
                         help='STFT hop length for estimating audio length from mel size')
-    parser.add_argument('--cpu-run', action='store_true', 
-                        help='Run inference on CPU')
 
     return parser
 
@@ -103,18 +105,18 @@ def unwrap_distributed(state_dict):
     return new_state_dict
 
 
-def load_and_setup_model(model_name, parser, checkpoint, amp_run, cpu_run, forward_is_infer=False):
+def load_and_setup_model(model_name, parser, checkpoint, fp16_run, cpu_run, forward_is_infer=False):
     model_parser = models.parse_model_args(model_name, parser, add_help=False)
     model_args, _ = model_parser.parse_known_args()
     model_config = models.get_model_config(model_name, model_args)
-    model = models.get_model(model_name, model_config, cpu_run, forward_is_infer=forward_is_infer)
-    
+    model = models.get_model(model_name, model_config, cpu_run=cpu_run,
+                             forward_is_infer=forward_is_infer)
+
     if checkpoint is not None:
         if cpu_run:
             state_dict = torch.load(checkpoint, map_location=torch.device('cpu'))['state_dict']
         else:
             state_dict = torch.load(checkpoint)['state_dict']
-            
         if checkpoint_from_distributed(state_dict):
             state_dict = unwrap_distributed(state_dict)
 
@@ -125,7 +127,7 @@ def load_and_setup_model(model_name, parser, checkpoint, amp_run, cpu_run, forwa
 
     model.eval()
 
-    if amp_run:
+    if fp16_run:
         model.half()
 
     return model
@@ -156,29 +158,29 @@ def prepare_input_sequence(texts, cpu_run=False):
             text_to_sequence(text, ['english_cleaners'])[:]))
 
     text_padded, input_lengths = pad_sequences(d)
-    if torch.cuda.is_available() and not cpu_run:
-        text_padded = torch.autograd.Variable(text_padded).cuda().long()
-        input_lengths = torch.autograd.Variable(input_lengths).cuda().long()
+    if not cpu_run:
+        text_padded = text_padded.cuda().long()
+        input_lengths = input_lengths.cuda().long()
     else:
-        text_padded = torch.autograd.Variable(text_padded).long()
-        input_lengths = torch.autograd.Variable(input_lengths).long()
+        text_padded = text_padded.long()
+        input_lengths = input_lengths.long()
 
     return text_padded, input_lengths
 
 
 class MeasureTime():
-    def __init__(self, measurements, key, cpu_run):
+    def __init__(self, measurements, key, cpu_run=False):
         self.measurements = measurements
         self.key = key
         self.cpu_run = cpu_run
 
     def __enter__(self):
-        if self.cpu_run == False:
+        if not self.cpu_run:
             torch.cuda.synchronize()
         self.t0 = time.perf_counter()
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        if self.cpu_run == False:
+        if not self.cpu_run:
             torch.cuda.synchronize()
         self.measurements[self.key] = time.perf_counter() - self.t0
 
@@ -201,14 +203,12 @@ def main():
     DLLogger.log(step="PARAMETER", data={'model_name':'Tacotron2_PyT'})
 
     tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2,
-                                     args.amp_run, args.cpu_run, forward_is_infer=True)
+                                     args.fp16, args.cpu, forward_is_infer=True)
     waveglow = load_and_setup_model('WaveGlow', parser, args.waveglow,
-                                    args.amp_run, args.cpu_run, forward_is_infer=True)
-    
-    if args.cpu_run:
-        denoiser = Denoiser(waveglow, args.cpu_run)
-    else:
-        denoiser = Denoiser(waveglow, args.cpu_run).cuda()
+                                    args.fp16, args.cpu, forward_is_infer=True)
+    denoiser = Denoiser(waveglow)
+    if not args.cpu:
+        denoiser.cuda()
 
     jitted_tacotron2 = torch.jit.script(tacotron2)
 
@@ -221,14 +221,11 @@ def main():
         sys.exit(1)
 
     if args.include_warmup:
-        if args.cpu_run:
-            sequence = torch.randint(low=0, high=148, size=(1,50),
-                                 dtype=torch.long)
-            input_lengths = torch.IntTensor([sequence.size(1)]).long()
-        else:
-            sequence = torch.randint(low=0, high=148, size=(1,50),
-                                 dtype=torch.long).cuda()
-            input_lengths = torch.IntTensor([sequence.size(1)]).cuda().long()
+        sequence = torch.randint(low=0, high=148, size=(1,50)).long()
+        input_lengths = torch.IntTensor([sequence.size(1)]).long()
+        if not args.cpu:
+            sequence = sequence.cuda()
+            input_lengths = input_lengths.cuda()
         for i in range(3):
             with torch.no_grad():
                 mel, mel_lengths, _ = jitted_tacotron2(sequence, input_lengths)
@@ -236,14 +233,15 @@ def main():
 
     measurements = {}
 
-    sequences_padded, input_lengths = prepare_input_sequence(texts, args.cpu_run)
+    sequences_padded, input_lengths = prepare_input_sequence(texts, args.cpu)
 
-    with torch.no_grad(), MeasureTime(measurements, "tacotron2_time", args.cpu_run):
+    with torch.no_grad(), MeasureTime(measurements, "tacotron2_time", args.cpu):
         mel, mel_lengths, alignments = jitted_tacotron2(sequences_padded, input_lengths)
 
-    with torch.no_grad(), MeasureTime(measurements, "waveglow_time", args.cpu_run):
+    with torch.no_grad(), MeasureTime(measurements, "waveglow_time", args.cpu):
         audios = waveglow(mel, sigma=args.sigma_infer)
         audios = audios.float()
+    with torch.no_grad(), MeasureTime(measurements, "denoiser_time", args.cpu):
         audios = denoiser(audios, strength=args.denoising_strength).squeeze(1)
 
     print("Stopping after",mel.size(2),"decoder steps")
@@ -255,7 +253,8 @@ def main():
     DLLogger.log(step=0, data={"tacotron2_latency": measurements['tacotron2_time']})
     DLLogger.log(step=0, data={"waveglow_items_per_sec": waveglow_infer_perf})
     DLLogger.log(step=0, data={"waveglow_latency": measurements['waveglow_time']})
-    DLLogger.log(step=0, data={"latency": (measurements['tacotron2_time']+measurements['waveglow_time'])})
+    DLLogger.log(step=0, data={"denoiser_latency": measurements['denoiser_time']})
+    DLLogger.log(step=0, data={"latency": (measurements['tacotron2_time']+measurements['waveglow_time']+measurements['denoiser_time'])})
 
     for i, audio in enumerate(audios):
 

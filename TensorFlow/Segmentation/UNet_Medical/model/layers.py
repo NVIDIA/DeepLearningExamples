@@ -168,7 +168,7 @@ def output_block(inputs, residual_input, filters, n_classes):
         return tf.layers.conv2d(inputs=out,
                                 filters=n_classes,
                                 kernel_size=(1, 1),
-                                activation=tf.nn.relu)
+                                activation=None)
 
 
 def input_block(inputs, filters):

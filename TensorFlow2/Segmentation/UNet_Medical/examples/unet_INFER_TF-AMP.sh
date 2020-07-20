@@ -15,4 +15,4 @@
 # This script launches U-Net run in FP16 on 1 GPU for inference batch_size 1. Usage:
 # bash unet_INFER_TF-AMP.sh <path to dataset> <path to results directory>
 
-horovodrun -np 1 python main.py --data_dir $1 --model_dir $2 --batch_size 1 --exec_mode predict --use_xla --use_amp
+horovodrun -np 1 python main.py --data_dir $1 --model_dir $2 --batch_size 1 --exec_mode predict --xla --amp

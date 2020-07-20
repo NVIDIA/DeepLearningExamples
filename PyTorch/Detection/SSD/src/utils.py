@@ -257,7 +257,7 @@ class DefaultBoxes(object):
                     cx, cy = (j+0.5)/fk[idx], (i+0.5)/fk[idx]
                     self.default_boxes.append((cx, cy, w, h))
 
-        self.dboxes = torch.tensor(self.default_boxes)
+        self.dboxes = torch.tensor(self.default_boxes, dtype=torch.float)
         self.dboxes.clamp_(min=0, max=1)
         # For IoU calculation
         self.dboxes_ltrb = self.dboxes.clone()

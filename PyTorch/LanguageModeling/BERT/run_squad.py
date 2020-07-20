@@ -37,7 +37,7 @@ from tqdm import tqdm, trange
 from apex import amp
 from schedulers import LinearWarmUpScheduler
 from file_utils import PYTORCH_PRETRAINED_BERT_CACHE
-from modeling import BertForQuestionAnswering, BertConfig, WEIGHTS_NAME, CONFIG_NAME
+import modeling
 from optimization import BertAdam, warmup_linear
 from tokenization import (BasicTokenizer, BertTokenizer, whitespace_tokenize)
 from utils import is_main_process, format_step
@@ -472,11 +472,11 @@ def get_answers(examples, features, results, args):
                 preds,
                 key=lambda x: (x.start_logit + x.end_logit),
                 reverse=True)[:args.n_best_size]
-        
+
         # In very rare edge cases we could only have single null prediction.
-	      # So we just create a nonce prediction in this case to avoid failure.
+        # So we just create a nonce prediction in this case to avoid failure.
         if not nbest:                                                    
-	          nbest.append(Prediction(text="empty", start_logit=0.0, end_logit=0.0))
+            nbest.append(Prediction(text="empty", start_logit=0.0, end_logit=0.0))
 
         total_scores = []
         best_non_null_entry = None
@@ -788,11 +788,16 @@ def main():
                         help="Whether to lower case the input text. True for uncased models, False for cased models.")
     parser.add_argument("--local_rank",
                         type=int,
-                        default=-1,
+                        default=os.getenv('LOCAL_RANK', -1),
                         help="local_rank for distributed training on gpus")
     parser.add_argument('--fp16',
+                        default=False,
                         action='store_true',
-                        help="Whether to use 16-bit float precision instead of 32-bit")
+                        help="Mixed precision training")
+    parser.add_argument('--amp',
+                        default=False,
+                        action='store_true',
+                        help="Mixed precision training")
     parser.add_argument('--loss_scale',
                         type=float, default=0,
                         help="Loss scaling to improve fp16 numeric stability. Only used when fp16 set to True.\n"
@@ -846,9 +851,7 @@ def main():
                         help="Location to cache train feaures. Will default to the dataset directory")
 
     args = parser.parse_args()
-
-    if args.use_env and 'LOCAL_RANK' in os.environ:
-        args.local_rank = int(os.environ['LOCAL_RANK'])
+    args.fp16 = args.fp16 or args.amp    
 
     if args.local_rank == -1 or args.no_cuda:
         device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
@@ -917,13 +920,14 @@ def main():
             num_train_optimization_steps = num_train_optimization_steps // torch.distributed.get_world_size()
 
     # Prepare model
-    config = BertConfig.from_json_file(args.config_file)
+    config = modeling.BertConfig.from_json_file(args.config_file)
     # Padding for divisibility by 8
     if config.vocab_size % 8 != 0:
         config.vocab_size += 8 - (config.vocab_size % 8)
 
-    model = BertForQuestionAnswering(config)
-    # model = BertForQuestionAnswering.from_pretrained(args.bert_model,
+    modeling.ACT2FN["bias_gelu"] = modeling.bias_gelu_training
+    model = modeling.BertForQuestionAnswering(config)
+    # model = modeling.BertForQuestionAnswering.from_pretrained(args.bert_model,
                 # cache_dir=os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE), 'distributed_{}'.format(args.local_rank)))
     dllogger.log(step="PARAMETER", data={"loading_checkpoint": True})
     model.load_state_dict(torch.load(args.init_checkpoint, map_location='cpu')["model"], strict=False)
@@ -1089,9 +1093,9 @@ def main():
     if args.do_train and is_main_process() and not args.skip_checkpoint:
         # Save a trained model and the associated configuration
         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-        output_model_file = os.path.join(args.output_dir, WEIGHTS_NAME)
+        output_model_file = os.path.join(args.output_dir, modeling.WEIGHTS_NAME)
         torch.save({"model":model_to_save.state_dict()}, output_model_file)
-        output_config_file = os.path.join(args.output_dir, CONFIG_NAME)
+        output_config_file = os.path.join(args.output_dir, modeling.CONFIG_NAME)
         with open(output_config_file, 'w') as f:
             f.write(model_to_save.config.to_json_string())
 

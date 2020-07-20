@@ -15,4 +15,4 @@
 # This script launches U-Net training in FP32 on 1 GPUs using 2 batch size
 # Usage ./unet_INFER_BENCHMARK_FP32.sh <path to this repository> <path to dataset> <path to results directory> <batch size>
 
-python $1/main.py --data_dir $2 --model_dir $3 --batch_size $4 --benchmark --exec_mode predict --augment --warmup_steps 200 --log_every 100 --max_steps 300 --use_xla
+python $1/main.py --data_dir $2 --model_dir $3 --batch_size $4 --benchmark --exec_mode predict --augment --warmup_steps 200 --log_every 100 --max_steps 300 --xla

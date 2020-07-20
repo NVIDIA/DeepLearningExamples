@@ -86,7 +86,10 @@ def main(_):
 
     gpu_options = tf.GPUOptions()
     config = tf.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)
-    config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
+
+    if FLAGS.use_xla:
+        config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
+
     config.gpu_options.allow_growth = True
     config.gpu_options.visible_device_list = str(hvd.local_rank())
 
@@ -135,9 +138,9 @@ def main(_):
                 steps=dataset.eval_steps,
                 hooks=[])
 
-            DLLogger.log(step=tuple(), data={'background_dice': str(result['background dice'])})
-            DLLogger.log(step=tuple(), data={'anterior_dice': str(result['Anterior dice'])})
-            DLLogger.log(step=tuple(), data={'posterior_dice': str(result['Posterior dice'])})
+            DLLogger.log(step=tuple(), data={'background_dice': str(result['background dice']),
+                                             'anterior_dice': str(result['Anterior dice']),
+                                             'posterior_dice': str(result['Posterior dice'])})
 
     if 'predict' in FLAGS.exec_mode:
         count = 1

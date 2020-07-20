@@ -12,20 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.03-py3
-FROM nvcr.io/nvidia/tritonserver:20.03-py3-clientsdk as trt
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.06-py3
+ARG TRITON_BASE_IMAGE=nvcr.io/nvidia/tritonserver:20.06-py3-clientsdk
+FROM ${TRITON_BASE_IMAGE} as trt
 FROM ${FROM_IMAGE_NAME}
 
 ADD requirements.txt .
 RUN pip install -r requirements.txt
 RUN pip install onnxruntime
 
-COPY --from=trt /workspace/install /workspace/install/
+COPY --from=trt /workspace/v2.0.0.clients.tar.gz ./v2.0.0.clients.tar.gz
+RUN tar -xzf v2.0.0.clients.tar.gz \
+    && pip install ./python/tritonclientutils-2.0.0-py3-none-any.whl \
+    && pip install ./python/tritonhttpclient-2.0.0-py3-none-any.whl \
+    && pip install ./python/tritongrpcclient-2.0.0-py3-none-any.whl
 
-ENV LD_LIBRARY_PATH /workspace/install/lib:${LD_LIBRARY_PATH}
-RUN ls /workspace/install/python
-RUN pip install /workspace/install/python/tensorrtserver-1.12.0-py3-none-linux_x86_64.whl
-
-ENV PYTHONPATH /workspace/dlrm
 WORKDIR /workspace/dlrm
 COPY . .
+RUN pip install --no-cache-dir -e .

@@ -140,14 +140,14 @@ def parse_cmdline():
 
     _add_bool_argument(
         parser=p,
-        name="use_tf_amp",
+        name="amp",
         default=False,
         required=False,
         help="Enable Automatic Mixed Precision to speedup FP32 computation using tensor cores"
     )
 
     _add_bool_argument(
-        parser=p, name="use_xla", default=False, required=False, help="Enable Tensorflow XLA to maximise performance."
+        parser=p, name="xla", default=False, required=False, help="Enable Tensorflow XLA to maximise performance."
     )
 
     p.add_argument(
