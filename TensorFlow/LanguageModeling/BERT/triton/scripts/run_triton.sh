@@ -88,7 +88,7 @@ if [ "$triton_export_model" = "true" ] ; then
 fi
 
 # Start TRTIS server in detached state
-bash triton/scripts/launch_server.sh $precision
+bash triton/scripts/launch_server.sh
 
 # Wait until server is up. curl on the health of the server and sleep until its ready
 bash triton/scripts/wait_for_triton_server.sh localhost

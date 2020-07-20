@@ -325,9 +325,9 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
     if init_checkpoint and (hvd is None or hvd.rank() == 0):
       (assignment_map, initialized_variable_names
       ) = modeling.get_assignment_map_from_checkpoint(tvars, init_checkpoint)
-
+      
       tf.train.init_from_checkpoint(init_checkpoint, assignment_map)
-    
+
     if FLAGS.verbose_logging:
         tf.compat.v1.logging.info("**** Trainable Variables ****")
         for var in tvars:
@@ -370,8 +370,9 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
       dummy_op = tf.no_op()
       # Need to call mixed precision graph rewrite if fp16 to enable graph rewrite
       if amp:
+        loss_scaler = tf.train.experimental.FixedLossScale(1)
         dummy_op = tf.train.experimental.enable_mixed_precision_graph_rewrite(
-            optimization.LAMBOptimizer(learning_rate=0.0))
+            optimization.LAMBOptimizer(learning_rate=0.0), loss_scaler)
 
       predictions = {
           "unique_ids": unique_ids,
@@ -807,8 +808,6 @@ def validate_flags_or_throw(bert_config):
 
 def export_model(estimator, export_dir, init_checkpoint):
     """Exports a checkpoint in SavedModel format in a directory structure compatible with Triton."""
-
-
     def serving_input_fn():
         label_ids = tf.placeholder(tf.int32, [None,], name='unique_ids')
         input_ids = tf.placeholder(tf.int32, [None, FLAGS.max_seq_length], name='input_ids')

@@ -379,8 +379,9 @@ def model_fn_builder(task_name, bert_config, num_labels, init_checkpoint, learni
       dummy_op = tf.no_op()
       # Need to call mixed precision graph rewrite if fp16 to enable graph rewrite
       if FLAGS.amp:
+        loss_scaler = tf.train.experimental.FixedLossScale(1)
         dummy_op = tf.train.experimental.enable_mixed_precision_graph_rewrite(
-            optimization.LAMBOptimizer(learning_rate=0.0))
+            optimization.LAMBOptimizer(learning_rate=0.0), loss_scaler)
       eval_metric_ops = metric_fn(per_example_loss, label_ids, logits)
       output_spec = tf.estimator.EstimatorSpec(
           mode=mode,
