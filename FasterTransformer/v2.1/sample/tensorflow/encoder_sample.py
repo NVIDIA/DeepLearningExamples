@@ -14,7 +14,7 @@
 
 '''
 This is a sample code to demonstrate how to use the TensorFlow custom op with 
-FasterTransformer library in decoder. 
+FasterTransformer library in encoder.
 
 This sample code builds a BERT transformer model by TensorFlow and TensorFlow 
 custom op. Then compare the maximum difference of them to verify the correctness
