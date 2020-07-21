@@ -37,15 +37,6 @@ use_xla=true
 EXPORT_MODEL_ARGS="${precision} ${use_xla} ${seq_length} ${doc_stride} ${BERT_DIR} 1 ${MODEL_NAME}"
 PERF_CLIENT_ARGS="1000 10 20 localhost"
 
-# Start Server
-bash triton/scripts/launch_server.sh $precision
-
-# Restart Server
-restart_server() {
-docker kill triton_server_cont
-bash triton/scripts/launch_server.sh $precision
-}
-
 ############## Dynamic Batching Comparison ##############
 SERVER_BATCH_SIZE=8
 CLIENT_BATCH_SIZE=1
@@ -54,30 +45,22 @@ TRITON_ENGINE_COUNT=1
 # Dynamic batching 10 ms
 TRITON_DYN_BATCHING_DELAY=10
 bash triton/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRITON_DYN_BATCHING_DELAY} ${TRITON_ENGINE_COUNT} ${TRITON_MODEL_OVERWRITE}
-restart_server
-sleep 15
 bash triton/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
 
 # Dynamic batching 5 ms
 TRITON_DYN_BATCHING_DELAY=5
 bash triton/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRITON_DYN_BATCHING_DELAY} ${TRITON_ENGINE_COUNT} ${TRITON_MODEL_OVERWRITE}
-restart_server
-sleep 15
 bash triton/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
 
 # Dynamic batching 2 ms
 TRITON_DYN_BATCHING_DELAY=2
 bash triton/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRITON_DYN_BATCHING_DELAY} ${TRITON_ENGINE_COUNT} ${TRITON_MODEL_OVERWRITE}
-restart_server
-sleep 15
 bash triton/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
 
 
 # Static Batching (i.e. Dynamic batching 0 ms)
 TRITON_DYN_BATCHING_DELAY=0
 bash triton/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRITON_DYN_BATCHING_DELAY} ${TRITON_ENGINE_COUNT} ${TRITON_MODEL_OVERWRITE}
-restart_server
-sleep 15
 bash triton/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
 
 
@@ -89,22 +72,16 @@ TRITON_DYN_BATCHING_DELAY=0
 # Engine Count = 4
 TRITON_ENGINE_COUNT=4
 bash triton/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRITON_DYN_BATCHING_DELAY} ${TRITON_ENGINE_COUNT} ${TRITON_MODEL_OVERWRITE}
-restart_server
-sleep 15
 bash triton/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
 
 # Engine Count = 2
 TRITON_ENGINE_COUNT=2
 bash triton/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRITON_DYN_BATCHING_DELAY} ${TRITON_ENGINE_COUNT} ${TRITON_MODEL_OVERWRITE}
-restart_server
-sleep 15
 bash triton/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
 
 # Engine Count = 1
 TRITON_ENGINE_COUNT=1
 bash triton/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRITON_DYN_BATCHING_DELAY} ${TRITON_ENGINE_COUNT} ${TRITON_MODEL_OVERWRITE}
-restart_server
-sleep 15
 bash triton/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} ${PERF_CLIENT_ARGS}
 
 
@@ -112,35 +89,27 @@ bash triton/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BAT
 # BATCH=1 Generate model and perf
 SERVER_BATCH_SIZE=1
 CLIENT_BATCH_SIZE=1
-TRITON_ENGINE_COUNT=1 
-TRITON_DYN_BATCHING_DELAY=0 
+TRITON_ENGINE_COUNT=1
+TRITON_DYN_BATCHING_DELAY=0
 
 bash triton/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRITON_DYN_BATCHING_DELAY} ${TRITON_ENGINE_COUNT} ${TRITON_MODEL_OVERWRITE}
-restart_server
-sleep 15
 bash triton/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} 1000 10 64 localhost
 
 # BATCH=2 Generate model and perf
 SERVER_BATCH_SIZE=2
 CLIENT_BATCH_SIZE=2
 bash triton/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRITON_DYN_BATCHING_DELAY} ${TRITON_ENGINE_COUNT} ${TRITON_MODEL_OVERWRITE}
-restart_server
-sleep 15
 bash triton/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} 1000 10 32 localhost
 
 # BATCH=4 Generate model and perf
 SERVER_BATCH_SIZE=4
 CLIENT_BATCH_SIZE=4
 bash triton/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRITON_DYN_BATCHING_DELAY} ${TRITON_ENGINE_COUNT} ${TRITON_MODEL_OVERWRITE}
-restart_server
-sleep 15
 bash triton/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} 1000 10 16 localhost
 
 # BATCH=8 Generate model and perf
 SERVER_BATCH_SIZE=8
 CLIENT_BATCH_SIZE=8
 bash triton/scripts/export_model.sh ${init_checkpoint} ${SERVER_BATCH_SIZE} ${EXPORT_MODEL_ARGS} ${TRITON_DYN_BATCHING_DELAY} ${TRITON_ENGINE_COUNT} ${TRITON_MODEL_OVERWRITE}
-restart_server
-sleep 15
 bash triton/scripts/run_perf_client.sh ${MODEL_NAME} 1 ${precision} ${CLIENT_BATCH_SIZE} 1000 10 8 localhost
 

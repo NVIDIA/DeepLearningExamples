@@ -32,7 +32,7 @@ then
     if [ ! "$(docker inspect -f "{{.State.Running}}" triton_server_cont)" = "true" ] ; then
 
         echo "Launching TRITON server"
-        bash triton/scripts/launch_server.sh $precision
+        bash triton/scripts/launch_server.sh
         SERVER_LAUNCHED=true
 
         function cleanup_server {
