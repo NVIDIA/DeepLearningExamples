@@ -274,7 +274,7 @@ def main():
         local_rank = int(os.environ['LOCAL_RANK'])
         world_size = int(os.environ['WORLD_SIZE'])
     else:
-        local_rank = args.rank
+        local_rank = args.local_rank
         world_size = args.world_size
     distributed_run = world_size > 1
 
