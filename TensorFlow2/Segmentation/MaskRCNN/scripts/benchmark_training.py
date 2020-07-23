@@ -38,7 +38,7 @@ def main():
         f'python {main_path}'
         f' --mode train'
         f' --model_dir "{flags.model_dir}"'
-        f' --checkpoint "{os.path.join(flags.weights_dir, "resnet/resnet-nhwc-2018-10-14/model.ckpt-112602")}"'
+        f' --checkpoint "{os.path.join(flags.weights_dir, "resnet/resnet-nhwc-2018-02-07/model.ckpt-112603")}"'
         f' --training_file_pattern "{os.path.join(flags.data_dir, "train*.tfrecord")}"'
         f' --init_learning_rate 0.04'
         f' --total_steps 200'
