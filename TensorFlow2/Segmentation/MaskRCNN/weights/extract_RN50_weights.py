@@ -20,7 +20,6 @@ import sys
 import getopt
 import logging
 import tensorflow as tf
-from distutils.version import LooseVersion
 
 """
 python weights/extract_RN50_weights.py \
@@ -45,12 +44,7 @@ def rename(checkpoint_dir, save_to, dry_run, verbose):
 
         total_vars_loaded = 0
 
-        if LooseVersion(tf.__version__) < LooseVersion("2.0.0"):
-            file_list = tf.contrib.framework.list_variables(checkpoint_dir)
-        else:
-            file_list = tf.train.list_variables(checkpoint_dir)
-
-        for var_name, _ in file_list:
+        for var_name, _ in tf.train.list_variables(checkpoint_dir):
 
             if "resnet50" in var_name:
                 # Load the variable
