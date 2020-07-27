@@ -81,11 +81,12 @@ class WorkerInitObj(object):
 
 def create_pretraining_dataset(input_file, max_pred_length, shared_list, args, worker_init):
     train_data = pretraining_dataset(input_file=input_file, max_pred_length=max_pred_length)
-    train_sampler = RandomSampler(train_data)
-    train_dataloader = DataLoader(train_data, sampler=train_sampler,
-                                  batch_size=args.train_batch_size * args.n_gpu, 
-                                  num_workers=4, worker_init_fn=worker_init,
-                                  pin_memory=True)
+    if args.local_rank == -1:
+        train_sampler = RandomSampler(train_data)
+        train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size * args.n_gpu, num_workers=4, pin_memory=True)
+    else:
+        train_sampler = DistributedSampler(train_data)
+        train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size, num_workers=4, pin_memory=True)
     return train_dataloader, input_file
 
 class pretraining_dataset(Dataset):
@@ -555,11 +556,12 @@ def main():
 
             if restored_data_loader is None:
                 train_data = pretraining_dataset(data_file, args.max_predictions_per_seq)
-                train_sampler = RandomSampler(train_data)
-                train_dataloader = DataLoader(train_data, sampler=train_sampler,
-                                              batch_size=args.train_batch_size * args.n_gpu,
-                                              num_workers=4, worker_init_fn=worker_init,
-                                              pin_memory=True)
+                if args.local_rank == -1:
+                    train_sampler = RandomSampler(train_data)
+                    train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size * args.n_gpu, num_workers=4, pin_memory=True)
+                else:
+                    train_sampler = DistributedSampler(train_data)
+                    train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=args.train_batch_size, num_workers=4, pin_memory=True)
                 # shared_file_list["0"] = (train_dataloader, data_file)
             else:
                 train_dataloader = restored_data_loader
