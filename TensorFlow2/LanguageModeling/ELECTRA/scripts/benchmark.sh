@@ -25,4 +25,4 @@ OUT_DIR=${8:-"results/"}
 init_checkpoint=${9:-"None"}
 cache_dir=${10:-"$squad_dir"}
 
-bash scripts/run_squad.sh google/electra-base-discriminator 1 $batch_size $infer_batch_size 8e-4 $precision 8 $RANDOM $SQUAD_VERSION $squad_dir $OUT_DIR $init_checkpoint $mode interactive $cache_dir 200
+bash scripts/run_squad.sh google/electra-base-discriminator 1 $batch_size $infer_batch_size 8e-4 $precision $num_gpu $RANDOM $SQUAD_VERSION $squad_dir $OUT_DIR $init_checkpoint $mode interactive $cache_dir 200

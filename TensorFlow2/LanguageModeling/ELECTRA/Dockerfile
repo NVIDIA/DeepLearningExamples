@@ -11,8 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidian/tensorflow:20.06-tf2-py3
-#FROM gitlab-master.nvidia.com:5005/dl/dgx/tensorrtserver:master-py3.1164446-client as trt
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.06-tf2-py3
 #FROM nvcr.io/nvidia/tensorrtserver:20.03-py3-clientsdk as trt
 FROM ${FROM_IMAGE_NAME}
 RUN apt-get update && apt-get install -y pbzip2 pv bzip2 cabextract
