@@ -1,0 +1,13 @@
+# Inheritance
+parent_yaml: "base.yaml"
+
+# Data
+meta_file: "metadata_test.csv"
+
+# Infer
+n_workers: 16               # Num of workers used in data loader.
+batch_size: 1               # Batch size.
+log_step: 1                 # Step interval in logging on command-line and Tensorboard.
+use_fp16: False              # Usage of half precision.
+use_trt: False              # Usage of accelerated inference using TensorRT.
+pyprof_enabled: False       # Usage of pyprof. Enable it only for profiling use.
