@@ -1,0 +1,7 @@
+# Inheritance
+parent_yaml: "train.yaml"
+
+# Train
+n_workers: 32
+batch_size: 64
+final_steps: 80000
