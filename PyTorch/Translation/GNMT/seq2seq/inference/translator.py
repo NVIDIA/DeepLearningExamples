@@ -1,5 +1,5 @@
 # Copyright (c) 2017 Elad Hoffer
-# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -201,10 +201,11 @@ class Translator:
             preds = preds.scatter(0, indices.unsqueeze(1).expand_as(preds), preds)
             preds = gather_predictions(preds).cpu()
 
-            for pred in preds:
-                pred = pred.tolist()
-                detok = self.tokenizer.detokenize(pred)
-                output.append(detok)
+            if self.tokenizer:
+                for pred in preds:
+                    pred = pred.tolist()
+                    detok = self.tokenizer.detokenize(pred)
+                    output.append(detok)
 
             elapsed = time.time() - translate_timer
             batch_time.update(elapsed, batch_size)
