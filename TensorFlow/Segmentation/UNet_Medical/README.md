@@ -518,7 +518,7 @@ Our results were obtained by running the `examples/unet_TRAIN_BENCHMARK{_TF-AMP}
 | GPUs | Batch size / GPU | Throughput - TF32 [img/s] | Throughput - mixed precision [img/s] | Throughput speedup (TF32 - mixed precision) | Weak scaling - TF32 | Weak scaling - mixed precision |
 |:----:|:----------------:|:-------------------------:|:------------------------------------:|:-------------------------------------------:|:-------------------:|:------------------------------:|
 |  1   |        1         |           29.81           |                64.22                 |                    2.15                     |          -          |               -                |
-|  1   |        8         |           46.53           |                120.08                |                    2.58                     |          -          |               -                |
+|  1   |        8         |           40.50           |                120.08                |                    2.58                     |          -          |               -                |
 |  8   |        1         |          169.62           |                293.31                |                    1.73                     |        5.69         |              4.57              |
 |  8   |        8         |          304.64           |                738.64                |                    2.42                     |        6.55         |              6.15              |
 
