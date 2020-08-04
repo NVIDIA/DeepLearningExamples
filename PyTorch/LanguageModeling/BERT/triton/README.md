@@ -13,7 +13,7 @@ The first step is to train BERT for question answering. The process is the same 
 
 2. Build the Docker container with `bash ./scripts/docker/build.sh`. 
 
-3. [train](https://gitlab-master.nvidia.com/dl/JoC/bert_pyt#training-process) your own checkpoint and fine-tune it, or [download](https://ngc.nvidia.com/catalog/models/nvidia:bert_large_pyt_amp_ckpt_squad_qa1_1/files) the already trained and fine-tuned checkpoint from the [NGC](https://ngc.nvidia.com/catalog/models/nvidia:bert_large_pyt_amp_ckpt_squad_qa1_1/files) model repository. 
+3. [train](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/LanguageModeling/BERT#training-process) your own checkpoint and fine-tune it, or [download](https://ngc.nvidia.com/catalog/models/nvidia:bert_large_pyt_amp_ckpt_squad_qa1_1/files) the already trained and fine-tuned checkpoint from the [NGC](https://ngc.nvidia.com/catalog/models/nvidia:bert_large_pyt_amp_ckpt_squad_qa1_1/files) model repository. 
 
 The checkpoint should be placed in `[bert folder]/checkpoints/<checkpoint>`. By default, the scripts assume `<checkpoint>` is `bert_qa.pt`, therefore, you might have to rename the trained or downloaded models as necessary. 
 
