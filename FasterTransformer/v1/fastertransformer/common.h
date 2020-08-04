@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #pragma once
-
+#include <stdexcept>
 #include <iostream>
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>

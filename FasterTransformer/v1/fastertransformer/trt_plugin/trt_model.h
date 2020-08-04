@@ -65,7 +65,7 @@ class TRT_Transformer
       auto from_tensor = network->addInput(INPUT_BLOB_NAME, dtype_, nvinfer1::Dims2{seq_len_, hidden_dim_});
       auto mask_tensor = network->addInput(MASK_BLOB_NAME, dtype_, nvinfer1::Dims2{seq_len_, seq_len_});
 
-      assert(input_tensor);
+      assert(from_tensor);
       assert(mask_tensor);
 
       nvinfer1::ITensor* output_tensor = nullptr;
