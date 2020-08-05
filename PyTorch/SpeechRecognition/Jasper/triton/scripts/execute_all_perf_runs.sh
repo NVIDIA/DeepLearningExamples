@@ -44,7 +44,7 @@ export GPU=${GPU:-}
 
 SCRIPT_DIR=$(cd $(dirname $0); pwd)
 PROJECT_DIR=${SCRIPT_DIR}/../..
-MODEL_REPO=${MODEL_REPO:-"${PROJECT_DIR}/trtis/model_repo"}
+MODEL_REPO=${MODEL_REPO:-"${PROJECT_DIR}/triton/model_repo"}
 
 # We need to make sure TRTIS uses only one GPU, same as export does
 # for TRTIS
@@ -78,7 +78,7 @@ do
   
     if [ "${REGENERATE_ENGINES}" == "yes" ]; then
         ARCH=${ARCH} CHECKPOINT_DIR=${CHECKPOINT_DIR} CHECKPOINT=${CHECKPOINT} PRECISION=${PRECISION} MAX_SEQUENCE_LENGTH_FOR_ENGINE=${MAX_SEQUENCE_LENGTH_FOR_ENGINE} \
-        ${PROJECT_DIR}/trtis/scripts/export_model.sh || exit 1
+        ${PROJECT_DIR}/triton/scripts/export_model.sh || exit 1
     fi
   
     for BATCH_SIZE in 1 2 4 8 16 32 64;

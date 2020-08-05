@@ -25,12 +25,12 @@ GPU=${GPU:-0}
 SCRIPT_DIR=$(cd $(dirname $0); pwd)
 PROJECT_DIR=${SCRIPT_DIR}/../..
 if [ -f /.dockerenv ]; then # inside docker
-	CUDA_VISIBLE_DEVICES=${GPU} CHECKPOINT=${CHECKPOINT} CHECKPOINT_DIR=${CHECKPOINT_DIR} PRECISION=${PRECISION} ARCH=${ARCH} MAX_SEQUENCE_LENGTH_FOR_ENGINE=${MAX_SEQUENCE_LENGTH_FOR_ENGINE} ${PROJECT_DIR}/trtis/scripts/export_model_helper.sh || exit 1
+	CUDA_VISIBLE_DEVICES=${GPU} CHECKPOINT=${CHECKPOINT} CHECKPOINT_DIR=${CHECKPOINT_DIR} PRECISION=${PRECISION} ARCH=${ARCH} MAX_SEQUENCE_LENGTH_FOR_ENGINE=${MAX_SEQUENCE_LENGTH_FOR_ENGINE} ${PROJECT_DIR}/triton/scripts/export_model_helper.sh || exit 1
 else
 	set -x
-	PROGRAM_PATH="/jasper/trtis/scripts/export_model_helper.sh"  \
+	PROGRAM_PATH="/jasper/triton/scripts/export_model_helper.sh"  \
 	EXTRA_JASPER_ENV="-e PRECISION=${PRECISION} -e CHECKPOINT=${CHECKPOINT} -e CHECKPOINT_DIR=/checkpoints -e ARCH=${ARCH} -e MAX_SEQUENCE_LENGTH_FOR_ENGINE=${MAX_SEQUENCE_LENGTH_FOR_ENGINE} -e CUDA_VISIBLE_DEVICES=${GPU}" \
 	CHECKPOINT_DIR=${CHECKPOINT_DIR} DATA_DIR= RESULT_DIR= \
-	${PROJECT_DIR}/trtis/scripts/docker/launch.sh || exit 1
+	${PROJECT_DIR}/triton/scripts/docker/launch.sh || exit 1
 	set +x
 fi

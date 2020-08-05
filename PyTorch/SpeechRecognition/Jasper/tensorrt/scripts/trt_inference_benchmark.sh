@@ -130,7 +130,7 @@ else
    PYT_PREDICTION_PATH=" --pyt_prediction_path=${PYT_PREDICTION_PATH}"
 fi
 
-CMD="python trt/perf.py"
+CMD="python tensorrt/perf.py"
 CMD+=" --batch_size $BATCH_SIZE"
 CMD+=" --engine_batch_size $BATCH_SIZE"
 CMD+=" --model_toml configs/jasper10x5dr_nomask.toml"
