@@ -18,8 +18,8 @@ set -x
 set -e
 
 python -m trainer.task \
-  --benchmark_warmup_steps 50 \
-  --benchmark_steps 200 \
+  --benchmark_warmup_steps 500 \
+  --benchmark_steps 1000 \
   --gpu \
   --benchmark \
   --amp
