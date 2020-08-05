@@ -23,7 +23,6 @@ import scipy.sparse as sp
 import numpy as np
 from scipy.sparse import load_npz, csr_matrix
 
-from vae.load.downloaders import download_movielens
 import logging
 import json
 
@@ -69,7 +68,7 @@ def save_id_mappings(cache_dir, show2id, profile2id):
             json.dump(d, f, indent=4)
 
 
-def load_and_parse_ML_20M(data_dir, threshold=4):
+def load_and_parse_ML_20M(data_dir, threshold=4, parse=True):
     """
     Original way of processing ml-20m dataset from VAE for CF paper
 	Copyright [2018] [Dawen Liang, Rahul G. Krishnan, Matthew D. Hoffman, and Tony Jebara]
@@ -98,11 +97,14 @@ def load_and_parse_ML_20M(data_dir, threshold=4):
                 load_npz(test_data_true_file), \
                 load_npz(test_data_test_file),
 
+    if not parse:
+        raise ValueError('Dataset not preprocessed. Please run python3 prepare_dataset.py first.')
+
     LOG.info("Parsing movielens.")
 
     source_file = os.path.join(data_dir, "ml-20m/extracted/ml-20m", "ratings.csv")
     if not glob(source_file):
-        download_movielens(data_dir=data_dir)
+        raise ValueError('Dataset not downloaded. Please download the ML-20m dataset from https://grouplens.org/datasets/movielens/20m/, unzip it and put it in ', source_file)
 
     raw_data = pd.read_csv(source_file)
     raw_data.drop('timestamp', axis=1, inplace=True)
