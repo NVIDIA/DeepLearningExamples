@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-# Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2020, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,14 +15,21 @@
 # limitations under the License.
 
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 from functools import partial
 import json
 import logging
 from argparse import ArgumentParser
+
 import tensorflow as tf
+tf.logging.set_verbosity(tf.logging.ERROR)
+
 import numpy as np
 import horovod.tensorflow as hvd
+from mpi4py import MPI
 import dllogger
+import time
 
 from vae.utils.round import round_8
 from vae.metrics.recall import recall
@@ -32,18 +39,16 @@ from vae.load.preprocessing import load_and_parse_ML_20M
 
 def main():
     hvd.init()
+    mpi_comm = MPI.COMM_WORLD
 
     parser = ArgumentParser(description="Train a Variational Autoencoder for Collaborative Filtering in TensorFlow")
     parser.add_argument('--train', action='store_true',
                         help='Run training of VAE')
     parser.add_argument('--test', action='store_true',
                         help='Run validation of VAE')
-    parser.add_argument('--inference', action='store_true',
-                        help='Run inference on a single random example.'
-                        'This can also be used to measure the latency for a batch size of 1')
     parser.add_argument('--inference_benchmark', action='store_true',
-                        help='Benchmark the inference throughput on a very large batch size')
-    parser.add_argument('--use_tf_amp', action='store_true',
+                        help='Measure inference latency and throughput on a variety of batch sizes')
+    parser.add_argument('--amp', action='store_true', default=False,
                         help='Enable Automatic Mixed Precision')
     parser.add_argument('--epochs', type=int, default=400,
                         help='Number of epochs to train')
@@ -85,6 +90,7 @@ def main():
                         default=None,
                         help='Path for saving a checkpoint after the training')
     args = parser.parse_args()
+    args.world_size = hvd.size()
 
     if args.batch_size_train % hvd.size() != 0:
         raise ValueError('Global batch size should be a multiple of the number of workers')
@@ -101,16 +107,27 @@ def main():
         dllogger.init(backends=[])
         logger.setLevel(logging.ERROR)
 
-    dllogger.log(data=vars(args), step='PARAMETER')
+    if args.seed is None:
+        if hvd.rank() == 0:
+            seed = int(time.time())
+        else:
+            seed = None
 
-    np.random.seed(args.seed)
-    tf.set_random_seed(args.seed)
+        seed = mpi_comm.bcast(seed, root=0)
+    else:
+        seed = args.seed
+
+    tf.random.set_random_seed(seed)
+    np.random.seed(seed)
+    args.seed = seed
+
+    dllogger.log(data=vars(args), step='PARAMETER')
 
     # Suppress TF warnings
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
     # set AMP
-    os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1' if args.use_tf_amp else '0'
+    os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1' if args.amp else '0'
 
     # load dataset
     (train_data,
@@ -159,21 +176,36 @@ def main():
     elif args.test and hvd.size() > 1:
         print("Testing is not supported with horovod multigpu yet")
 
-    if args.inference_benchmark and hvd.size() <= 1:
-        # use the train data to get accurate throughput numbers for inference
-        # the test and validation sets are too small to measure this accurately
-        # vae.inference_benchmark()
-        _ = vae.test(test_data_input=train_data,
-                     test_data_true=train_data, metrics={})
-        
-
     elif args.test and hvd.size() > 1:
         print("Testing is not supported with horovod multigpu yet")
 
-    if args.inference:
-        input_data = np.random.randint(low=0, high=10000, size=10)
-        recommendations = vae.query(input_data=input_data)
-        print('Recommended item indices: ', recommendations)
+    if args.inference_benchmark:
+        items_per_user = 10
+        item_indices = np.random.randint(low=0, high=10000, size=items_per_user)
+        user_indices = np.zeros(len(item_indices))
+        indices = np.stack([user_indices, item_indices], axis=1)
+
+        num_batches = 200
+        latencies = []
+        for i in range(num_batches):
+            start_time = time.time()
+            _ = vae.query(indices=indices)
+            end_time = time.time()
+
+            if i < 10:
+                #warmup steps
+                continue
+
+            latencies.append(end_time - start_time)
+
+        result_data = {}
+        result_data[f'batch_1_mean_throughput'] = 1 / np.mean(latencies)
+        result_data[f'batch_1_mean_latency'] = np.mean(latencies)
+        result_data[f'batch_1_p90_latency'] = np.percentile(latencies, 90)
+        result_data[f'batch_1_p95_latency'] = np.percentile(latencies, 95)
+        result_data[f'batch_1_p99_latency'] = np.percentile(latencies, 99)
+
+        dllogger.log(data=result_data, step=tuple())
 
     vae.close_session()
     dllogger.flush()
