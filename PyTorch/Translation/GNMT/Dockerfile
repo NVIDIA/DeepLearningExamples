@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -18,15 +18,18 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:19.05-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.06-py3
 FROM ${FROM_IMAGE_NAME}
 
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
+RUN pip install --global-option="--cpp_ext" --global-option="--cuda_ext" git+git://github.com/NVIDIA/apex.git#egg=apex
+
 WORKDIR /workspace/gnmt
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir git+https://github.com/NVIDIA/dllogger.git#egg=dllogger
 
 ADD . /workspace/gnmt

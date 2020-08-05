@@ -1,5 +1,5 @@
 # Copyright (c) 2017 Elad Hoffer
-# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -60,6 +60,7 @@ class Seq2SeqTrainer:
                  loss_scaling={},
                  intra_epoch_eval=0,
                  prealloc_mode='always',
+                 warmup=0,
                  iter_size=1,
                  translator=None,
                  verbose=False):
@@ -85,6 +86,7 @@ class Seq2SeqTrainer:
             training epoch
         :param prealloc_mode: controls preallocation,
             choices=['off', 'once', 'always']
+        :param warmup: number of warmup iterations for performance counters
         :param iter_size: number of iterations between weight updates
         :param translator: instance of Translator, runs inference on test set
         :param verbose: enables verbose logging
@@ -106,6 +108,7 @@ class Seq2SeqTrainer:
         self.loss = None
         self.translator = translator
         self.intra_epoch_eval = intra_epoch_eval
+        self.warmup = warmup
         self.iter_size = iter_size
         self.prealloc_mode = prealloc_mode
         self.preallocated = False
@@ -122,7 +125,7 @@ class Seq2SeqTrainer:
                 dls_upscale_interval=loss_scaling['upscale_interval']
                 )
             params = self.fp_optimizer.fp32_params
-        elif math == 'fp32':
+        elif math == 'fp32' or math == 'tf32':
             self.fp_optimizer = FP32Optimizer(self.model, grad_clip)
 
         opt_name = opt_config.pop('optimizer')
@@ -208,14 +211,14 @@ class Seq2SeqTrainer:
             eval_iters = eval_iters * self.iter_size
             eval_iters = set(eval_iters)
 
-        batch_time = AverageMeter()
-        data_time = AverageMeter()
+        batch_time = AverageMeter(self.warmup)
+        data_time = AverageMeter(self.warmup)
         losses_per_token = AverageMeter()
         losses_per_sentence = AverageMeter()
 
-        tot_tok_time = AverageMeter()
-        src_tok_time = AverageMeter()
-        tgt_tok_time = AverageMeter()
+        tot_tok_time = AverageMeter(self.warmup)
+        src_tok_time = AverageMeter(self.warmup)
+        tgt_tok_time = AverageMeter(self.warmup)
 
         batch_size = data_loader.batch_size
 

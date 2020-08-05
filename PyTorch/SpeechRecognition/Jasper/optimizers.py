@@ -98,7 +98,7 @@ class AdamW(Optimizer):
   
                 state['step'] += 1
                 # Decay the first and second moment running average coefficient
-                exp_avg.mul_(beta1).add_(1 - beta1, grad)
+                exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
                 exp_avg_sq.mul_(beta2).addcmul_(1 - beta2, grad, grad)
                 if amsgrad:
                     # Maintains the maximum of all 2nd moment running avg. till now
@@ -111,7 +111,7 @@ class AdamW(Optimizer):
                 bias_correction1 = 1 - beta1 ** state['step']
                 bias_correction2 = 1 - beta2 ** state['step']
                 step_size = group['lr'] * math.sqrt(bias_correction2) / bias_correction1
-                p.data.add_(-step_size,  torch.mul(p.data, group['weight_decay']).addcdiv_(1, exp_avg, denom) )
+                p.data.add_(torch.mul(p.data, group['weight_decay']).addcdiv_(1, exp_avg, denom), alpha=-step_size)
   
         return loss
   
@@ -201,7 +201,7 @@ class Novograd(Optimizer):
                 if exp_avg_sq == 0:
                     exp_avg_sq.copy_(norm)
                 else:
-                    exp_avg_sq.mul_(beta2).add_(1 - beta2, norm)
+                    exp_avg_sq.mul_(beta2).add_(norm, alpha=1 - beta2)
 
                 if amsgrad:
                     # Maintains the maximum of all 2nd moment running avg. till now
@@ -213,11 +213,11 @@ class Novograd(Optimizer):
 
                 grad.div_(denom)
                 if group['weight_decay'] != 0:
-                    grad.add_(group['weight_decay'], p.data)
+                    grad.add_(p.data, alpha=group['weight_decay'])
                 if group['grad_averaging']:
                     grad.mul_(1 - beta1)
                 exp_avg.mul_(beta1).add_(grad)
 
-                p.data.add_(-group['lr'], exp_avg)
+                p.data.add_(exp_avg, alpha=-group['lr'])
         
         return loss

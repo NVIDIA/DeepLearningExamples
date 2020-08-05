@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,8 +28,8 @@ REPO_DIR='/workspace/gnmt'
 REFERENCE_FILE=$REPO_DIR/scripts/tests/reference_training_performance
 
 MATH=$1
-if [[ ${MATH} != "fp16" && ${MATH} != "fp32" ]]; then
-   echo "Unsupported option for MATH, use either 'fp16' or 'fp32'"
+if [[ ${MATH} != "fp16" && ${MATH} != "fp32" && ${MATH} != "tf32" ]]; then
+   echo "Unsupported option for MATH, use either 'fp16' or 'fp32' or 'tf32'"
    exit 1
 fi
 
@@ -62,7 +62,7 @@ fi
 
 cd $REPO_DIR
 
-python3 -m launch train.py \
+python3 -m torch.distributed.launch --nproc_per_node=${GPU_COUNT} train.py \
    --dataset-dir $DATASET_DIR \
    --seed 2 \
    --epochs 1 \

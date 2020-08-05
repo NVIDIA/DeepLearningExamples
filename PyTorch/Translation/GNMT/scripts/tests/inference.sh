@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,8 +28,8 @@ REPO_DIR='/workspace/gnmt'
 REFERENCE_FILE=$REPO_DIR/scripts/tests/reference_inference_performance
 
 MATH=$1
-if [[ ${MATH} != "fp16" && ${MATH} != "fp32" ]]; then
-   echo "Unsupported option for MATH, use either 'fp16' or 'fp32'"
+if [[ ${MATH} != "fp16" && ${MATH} != "fp32" && ${MATH} != "tf32" ]]; then
+   echo "Unsupported option for MATH, use either 'fp16' or 'fp32' or 'tf32'"
    exit 1
 fi
 
@@ -57,7 +57,7 @@ python3 translate.py \
    --input ${DATASET_DIR}/newstest2014.en \
    --reference ${DATASET_DIR}/newstest2014.de \
    --output /tmp/output \
-   --model results/gnmt/model_best.pth \
+   --model gnmt/model_best.pth \
    --batch-size ${BATCH_SIZE} \
    --beam-size ${BEAM_SIZE} \
    --math ${MATH} \

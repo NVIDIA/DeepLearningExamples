@@ -48,7 +48,7 @@ RM=${RM:-"--rm"}
 
 set -x
 docker run -p 8000:8000 -p 8001:8001 -p 8002:8002 \
-       --runtime nvidia \
+       --gpus all \
        -e NVIDIA_VISIBLE_DEVICES=${NV_VISIBLE_DEVICES} \
        -v ${MODELS_DIR}:/models \
        -v ${TRTIS_DIR}/model_repo:/model_repo \
