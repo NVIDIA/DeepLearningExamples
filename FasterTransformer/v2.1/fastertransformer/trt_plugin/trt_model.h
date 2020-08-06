@@ -104,7 +104,7 @@ class TRT_Transformer
 
       builder->setMaxBatchSize(batch_size_);
       builder->setMaxWorkspaceSize(1 << 20);
-      builder->setFp16Mode(false);
+      builder->setFp16Mode(sizeof(T) == 2);
 
       engine_ = builder->buildCudaEngine(*network);
       assert(engine_);
