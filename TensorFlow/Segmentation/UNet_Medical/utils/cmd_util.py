@@ -81,28 +81,24 @@ PARSER.add_argument('--seed',
 
 PARSER.add_argument('--augment', dest='augment', action='store_true',
                     help="""Perform data augmentation during training""")
-PARSER.add_argument('--no-augment', dest='augment', action='store_false')
-PARSER.set_defaults(augment=False)
 
 PARSER.add_argument('--benchmark', dest='benchmark', action='store_true',
                     help="""Collect performance metrics during training""")
-PARSER.add_argument('--no-benchmark', dest='benchmark', action='store_false')
-PARSER.set_defaults(augment=False)
 
-PARSER.add_argument('--use_amp', dest='use_amp', action='store_true',
+PARSER.add_argument('--use_amp', '--amp', dest='use_amp', action='store_true',
                     help="""Train using TF-AMP""")
-PARSER.set_defaults(use_amp=False)
 
-PARSER.add_argument('--use_xla', dest='use_xla', action='store_true',
+PARSER.add_argument('--use_xla', '--xla', dest='use_xla', action='store_true',
                     help="""Train using XLA""")
-PARSER.set_defaults(use_amp=False)
 
 PARSER.add_argument('--use_trt', dest='use_trt', action='store_true',
                     help="""Use TF-TRT""")
-PARSER.set_defaults(use_trt=False)
+
+PARSER.add_argument('--resume_training', dest='resume_training', action='store_true',
+                    help="""Resume training from a checkpoint""")
 
 
-def _cmd_params(flags):
+def parse_args(flags):
     return Munch({
         'exec_mode': flags.exec_mode,
         'model_dir': flags.model_dir,
@@ -121,4 +117,5 @@ def _cmd_params(flags):
         'use_amp': flags.use_amp,
         'use_trt': flags.use_trt,
         'use_xla': flags.use_xla,
+        'resume_training': flags.resume_training,
     })

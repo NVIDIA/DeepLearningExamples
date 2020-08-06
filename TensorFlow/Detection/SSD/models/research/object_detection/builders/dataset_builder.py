@@ -74,6 +74,9 @@ def read_dataset(file_read_func, input_files, config):
   """
   # Shard, shuffle, and read files.
   filenames = tf.gfile.Glob(input_files)
+  if not filenames:
+      raise ValueError('Invalid input path specified in '
+                       '`input_reader_config`.')
   num_readers = config.num_readers
   if num_readers > len(filenames):
     num_readers = len(filenames)

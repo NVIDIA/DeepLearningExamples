@@ -37,7 +37,7 @@ def parse_args(parser):
                         help='full path to the generator checkpoint file')
     parser.add_argument('-o', '--output', type=str, default="trtis_repo/tacotron/1/model.pt",
                         help='filename for the Tacotron 2 TorchScript model')
-    parser.add_argument('--amp-run', action='store_true',
+    parser.add_argument('--amp', action='store_true',
                         help='inference with AMP')
     return parser
 
@@ -49,7 +49,7 @@ def main():
 
     model = load_and_setup_model(
         args.generator_name, parser, args.generator_checkpoint,
-        args.amp_run, device='cpu', forward_is_infer=True, polyak=False,
+        args.amp, device='cpu', forward_is_infer=True, polyak=False,
         jitable=True)
     
     torch.jit.save(torch.jit.script(model), args.output)

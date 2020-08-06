@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,24 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-""" Runner class encapsulating the training
-
-This module provides the functionality to initialize a run with hyper-parameters
-which can be later used for training and inference.
-
-Example:
-    Runner can be created with a parameter dictionary, and those parameters
-    are reused for training and inference::
-
-        params = {...}
-
-        runner = Runner(params)
-        runner.train()
-        runner.predict()
-
-"""
-import os
 
 import horovod.tensorflow as hvd
 import tensorflow as tf
@@ -66,15 +48,6 @@ def regularization_l2loss(weight_decay):
     return l2_loss
 
 
-def is_using_hvd():
-    env_vars = ["OMPI_COMM_WORLD_RANK", "OMPI_COMM_WORLD_SIZE"]
-
-    if all([var in os.environ for var in env_vars]):
-        return True
-    else:
-        return False
-
-
 def unet_fn(features, labels, mode, params):
     """ Model function for tf.Estimator
 
@@ -96,9 +69,6 @@ def unet_fn(features, labels, mode, params):
     device = '/gpu:0'
 
     global_step = tf.compat.v1.train.get_global_step()
-
-    if mode == tf.estimator.ModeKeys.TRAIN:
-        lr_init = params.learning_rate
 
     with tf.device(device):
         features = tf.cast(features, dtype)
@@ -130,10 +100,8 @@ def unet_fn(features, labels, mode, params):
                                "eval_dice_score": tf.compat.v1.metrics.mean(1.0 - dice_loss)}
             return tf.estimator.EstimatorSpec(mode=mode, loss=dice_loss, eval_metric_ops=eval_metric_ops)
 
-        opt = tf.compat.v1.train.AdamOptimizer(learning_rate=lr_init)
-
-        if is_using_hvd():
-            opt = hvd.DistributedOptimizer(opt, device_dense='/gpu:0')
+        opt = tf.compat.v1.train.AdamOptimizer(learning_rate=params.learning_rate)
+        opt = hvd.DistributedOptimizer(opt, device_dense='/gpu:0')
 
         with tf.control_dependencies(tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.UPDATE_OPS)):
             deterministic = True

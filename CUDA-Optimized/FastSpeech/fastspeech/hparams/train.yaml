@@ -1,0 +1,16 @@
+# Inheritance
+parent_yaml: "base.yaml"
+
+# Data
+meta_file: "metadata_train.csv"
+
+# Train
+n_workers: 16               # Num of workers used in data loader.
+learning_rate: 0.001        # Learning rate.
+warmup_steps: 4000          # Num of warmup steps.
+batch_size: 16              # Batch size.
+final_steps: 320000         # Num of steps to the end.
+save_step: 1000             # Step interval in checkpointing.
+log_step: 1                 # Step interval in logging on command-line and Tensorboard.
+use_amp: False              # Usage of AMP.
+pyprof_enabled: False       # Usage of pyprof. Enable it only for profiling use.

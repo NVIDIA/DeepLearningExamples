@@ -1,16 +1,7 @@
-precision=${1:-"fp16"}
 NV_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-"all"}
 
-if [ "$precision" = "fp16" ] ; then
-   echo "fp16 activated!"
-   export TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE=1
-else
-   echo "fp32 activated!"
-   export TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE=0
-fi
-
 # Start TRITON server in detached state
-docker run --gpus all -d --rm \
+docker run --gpus $NV_VISIBLE_DEVICES --rm -d \
    --shm-size=1g \
    --ulimit memlock=-1 \
    --ulimit stack=67108864 \
@@ -19,6 +10,5 @@ docker run --gpus all -d --rm \
    -p8002:8002 \
    --name triton_server_cont \
    -e NVIDIA_VISIBLE_DEVICES=$NV_VISIBLE_DEVICES \
-   -e TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE \
    -v $PWD/results/triton_models:/models \
-   nvcr.io/nvidia/tritonserver:20.03-py3 trtserver --model-store=/models --strict-model-config=false
+   nvcr.io/nvidia/tritonserver:20.06-v1-py3 tritonserver --model-store=/models --strict-model-config=false

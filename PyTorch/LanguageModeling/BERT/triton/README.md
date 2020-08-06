@@ -13,7 +13,7 @@ The first step is to train BERT for question answering. The process is the same 
 
 2. Build the Docker container with `bash ./scripts/docker/build.sh`. 
 
-3. [train](https://gitlab-master.nvidia.com/dl/JoC/bert_pyt#training-process) your own checkpoint and fine-tune it, or [download](https://ngc.nvidia.com/catalog/models/nvidia:bert_large_pyt_amp_ckpt_squad_qa1_1/files) the already trained and fine-tuned checkpoint from the [NGC](https://ngc.nvidia.com/catalog/models/nvidia:bert_large_pyt_amp_ckpt_squad_qa1_1/files) model repository. 
+3. [train](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/LanguageModeling/BERT#training-process) your own checkpoint and fine-tune it, or [download](https://ngc.nvidia.com/catalog/models/nvidia:bert_large_pyt_amp_ckpt_squad_qa1_1/files) the already trained and fine-tuned checkpoint from the [NGC](https://ngc.nvidia.com/catalog/models/nvidia:bert_large_pyt_amp_ckpt_squad_qa1_1/files) model repository. 
 
 The checkpoint should be placed in `[bert folder]/checkpoints/<checkpoint>`. By default, the scripts assume `<checkpoint>` is `bert_qa.pt`, therefore, you might have to rename the trained or downloaded models as necessary. 
 
@@ -38,7 +38,7 @@ Moreover, you may set `precision` to either `fp32` or `fp16`.
 
 To launch the Triton server, execute the following command. 
 
-`docker run --rm --gpus device=0 --ipc=host --network=host -p 8000:8000 -p 8001:8001 -p 8002:8002 -v $PWD/results/triton_models:/models nvcr.io/nvidia/tritonserver:20.03-py3 trtserver --model-store=/models --log-verbose=1`
+`docker run --rm --gpus device=0 --ipc=host --network=host -p 8000:8000 -p 8001:8001 -p 8002:8002 -v $PWD/results/triton_models:/models nvcr.io/nvidia/tritonserver:20.06-v1-py3 trtserver --model-store=/models --log-verbose=1`
 
 Here `device=0,1,2,3` selects GPUs indexed by ordinals `0,1,2` and `3`, respectively. The server will see only these GPUs. If you write `device=all`, then the server will see all the available GPUs. 
 

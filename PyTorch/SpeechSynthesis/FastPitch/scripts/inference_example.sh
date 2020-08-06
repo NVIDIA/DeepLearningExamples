@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 
 DATA_DIR="LJSpeech-1.1"
-EXP_DIR="output"
-WAVEG_CH="pretrained_models/waveglow/waveglow_256channels_ljs_v3.pt"
 
-CHECKPOINT=${1:-1500}
+[ ! -n "$WAVEG_CH" ] && WAVEG_CH="pretrained_models/waveglow/waveglow_1076430_14000_amp.pt"
+[ ! -n "$FASTPITCH_CH" ] && FASTPITCH_CH="output/FastPitch_checkpoint_1500.pt"
+[ ! -n "$BS" ] && BS=32
+[ ! -n "$PHRASES" ] && PHRASES="phrases/devset10.tsv"
+[ ! -n "$OUTPUT_DIR" ] && OUTPUT_DIR="./output/audio_$(basename ${PHRASES} .tsv)"
+[ "$AMP" == "true" ] && AMP_FLAG="--amp"
 
-python inference.py -i phrases/devset10.tsv \
-                    -o ${EXP_DIR}/audio_devset10_checkpoint${CHECKPOINT} \
-                    --log-file ${EXP_DIR}/nvlog_inference.json \
+python inference.py --cuda \
+                    -i ${PHRASES} \
+                    -o ${OUTPUT_DIR} \
                     --dataset-path ${DATA_DIR} \
-                    --fastpitch ${EXP_DIR}/checkpoint_FastPitch_${CHECKPOINT}.pt \
+                    --fastpitch ${FASTPITCH_CH} \
                     --waveglow ${WAVEG_CH} \
 		    --wn-channels 256 \
-                    --batch-size 32 \
-                    --amp-run \
-                    --cuda
+                    --batch-size ${BS} \
+                    ${AMP_FLAG}

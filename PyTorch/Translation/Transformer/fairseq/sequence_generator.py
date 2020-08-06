@@ -23,6 +23,7 @@
 import math
 
 import torch
+import torch.nn.functional as F
 
 from fairseq import utils
 from fairseq.models import FairseqIncrementalDecoder
@@ -30,7 +31,7 @@ from fairseq.models import FairseqIncrementalDecoder
 
 class SequenceGenerator(object):
     def __init__(
-        self, models, tgt_dict, beam_size=1, minlen=1, maxlen=None, stop_early=True,
+        self, models, vocab_meta, maxlen, beam_size=1, minlen=1, stop_early=True,
         normalize_scores=True, len_penalty=1, unk_penalty=0, retain_dropout=False,
         sampling=False, sampling_topk=-1, sampling_temperature=1,
     ):
@@ -44,15 +45,16 @@ class SequenceGenerator(object):
             normalize_scores: Normalize scores by the length of the output.
         """
         self.models = models
-        self.pad = tgt_dict.pad()
-        self.unk = tgt_dict.unk()
-        self.eos = tgt_dict.eos()
-        self.vocab_size = len(tgt_dict)
+        self.pad = vocab_meta['pad']
+        self.unk = vocab_meta['unk']
+        self.eos = vocab_meta['eos']
+        self.vocab_size = vocab_meta['len']
         self.beam_size = beam_size
         self.minlen = minlen
-        max_decoder_len = min(m.max_decoder_positions() for m in self.models)
-        max_decoder_len -= 1  # we define maxlen not including the EOS marker
-        self.maxlen = max_decoder_len if maxlen is None else min(maxlen, max_decoder_len)
+        #max_decoder_len = min(m.max_decoder_positions() for m in self.models)
+        #max_decoder_len -= 1  # we define maxlen not including the EOS marker
+        #self.maxlen = max_decoder_len if maxlen is None else min(maxlen, max_decoder_len)
+        self.maxlen = maxlen
         self.stop_early = stop_early
         self.normalize_scores = normalize_scores
         self.len_penalty = len_penalty
@@ -286,7 +288,7 @@ class SequenceGenerator(object):
                 for i, model in enumerate(self.models):
                     if isinstance(model.decoder, FairseqIncrementalDecoder):
                         model.decoder.reorder_incremental_state(incremental_states[model], reorder_state)
-                    encoder_outs[i] = model.encoder.reorder_encoder_out(encoder_outs[i], reorder_state)
+                    encoder_outs[i] = model.encoder.reorder_encoder_out(*encoder_outs[i], reorder_state)
 
             probs, avg_attn_scores = self._decode(tokens[:, :step + 1], encoder_outs, incremental_states)
             if step == 0:
@@ -543,12 +545,21 @@ class SequenceGenerator(object):
     def _decode_one(self, tokens, model, encoder_out, incremental_states, log_probs):
         with torch.no_grad():
             if incremental_states[model] is not None:
-                decoder_out = list(model.decoder(tokens, encoder_out, incremental_state=incremental_states[model]))
+                decoder_out = list(model.decoder(tokens, encoder_out[0], encoder_out[1], incremental_state=incremental_states[model]))
             else:
-                decoder_out = list(model.decoder(tokens, encoder_out))
+                decoder_out = list(model.decoder(tokens, encoder_out[0], encoder_out[1]))
             decoder_out[0] = decoder_out[0][:, -1, :]
             attn = decoder_out[1]
+            if isinstance(attn, torch.Tensor) and attn.numel() == 0:
+                attn = None
             if attn is not None:
                 attn = attn[:, -1, :]
-        probs = model.get_normalized_probs(decoder_out, log_probs=log_probs)
+
+        #TODO: this has to be moved. Also we have to take into account adaptive softmax
+        logits = decoder_out[0]
+        if log_probs:
+            probs = F.log_softmax(logits, dim=-1, dtype=torch.float32)
+        else:
+            probs = F.softmax(logits, dim=-1, dtype=torch.float32)
+
         return probs, attn

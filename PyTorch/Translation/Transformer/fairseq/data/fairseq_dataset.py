@@ -21,9 +21,6 @@ class FairseqDataset(torch.utils.data.Dataset):
         """Merge a list of samples to form a mini-batch."""
         raise NotImplementedError
 
-    def get_dummy_batch(self, num_tokens, max_positions):
-        """Return a dummy batch with a given number of tokens."""
-        raise NotImplementedError
 
     def num_tokens(self, index):
         """Return an example's length (number of tokens), used for batching."""

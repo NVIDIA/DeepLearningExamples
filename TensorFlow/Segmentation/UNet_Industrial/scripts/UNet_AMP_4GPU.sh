@@ -15,7 +15,7 @@
 # limitations under the License.
 
 # This script launches UNet training in FP32-AMP on 4 GPUs using 16 batch size (4 per GPU)
-# Usage ./UNet_AMP_4GPU.sh <path to result repository> <path to dataset> <dagm classID (1-10)>
+# Usage ./UNet_AMP_4GPU_XLA.sh <path to result repository> <path to dataset> <dagm classID (1-10)>
 
 BASEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -45,8 +45,8 @@ mpirun \
         --dataset_classID="${3}" \
         --data_format='NCHW' \
         --use_auto_loss_scaling \
-        --use_tf_amp \
-        --nouse_xla \
+        --amp \
+        --xla \
         --learning_rate=1e-4 \
         --learning_rate_decay_factor=0.8 \
         --learning_rate_decay_steps=500 \

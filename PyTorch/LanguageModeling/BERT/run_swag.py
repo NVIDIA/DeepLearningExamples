@@ -322,8 +322,13 @@ def main():
                         default=1,
                         help="Number of updates steps to accumulate before performing a backward/update pass.")
     parser.add_argument('--fp16',
+                        default=False,
                         action='store_true',
-                        help="Whether to use 16-bit float precision instead of 32-bit")
+                        help="Mixed precision training")
+    parser.add_argument('--amp',
+                        default=False,
+                        action='store_true',
+                        help="Mixed precision training")
     parser.add_argument('--loss_scale',
                         type=float, default=0,
                         help="Loss scaling to improve fp16 numeric stability. Only used when fp16 set to True.\n"
@@ -331,7 +336,8 @@ def main():
                              "Positive power of 2: static loss scaling value.\n")
 
     args = parser.parse_args()
-
+    args.fp16 = args.fp16 or args.amp
+    
     if args.local_rank == -1 or args.no_cuda:
         device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
         n_gpu = torch.cuda.device_count()

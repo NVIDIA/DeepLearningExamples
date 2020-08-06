@@ -84,6 +84,7 @@ def benchmark_train_loop(model, loss_func, epoch, optim, train_dataloader, val_d
     result = torch.zeros((1,)).cuda()
     for i, data in enumerate(loop(train_dataloader)):
         if i >= args.benchmark_warmup:
+            torch.cuda.synchronize()
             start_time = time.time()
 
         img = data[0][0][0]
@@ -144,6 +145,7 @@ def benchmark_train_loop(model, loss_func, epoch, optim, train_dataloader, val_d
             break
 
         if i >= args.benchmark_warmup:
+            torch.cuda.synchronize()
             logger.update(args.batch_size, time.time() - start_time)
 
 
@@ -155,10 +157,12 @@ def benchmark_train_loop(model, loss_func, epoch, optim, train_dataloader, val_d
 
 
 
-def loop(dataloader):
+def loop(dataloader, reset=True):
     while True:
         for data in dataloader:
             yield data
+        if reset:
+            dataloader.reset()
 
 def benchmark_inference_loop(model, loss_func, epoch, optim, train_dataloader, val_dataloader, encoder, iteration, logger, args, mean, std):
     assert args.N_gpu == 1, 'Inference benchmark only on 1 gpu'
@@ -166,7 +170,7 @@ def benchmark_inference_loop(model, loss_func, epoch, optim, train_dataloader, v
     model.eval()
 
     i = -1
-    val_datas = loop(val_dataloader)
+    val_datas = loop(val_dataloader, False)
 
     while True:
         i += 1

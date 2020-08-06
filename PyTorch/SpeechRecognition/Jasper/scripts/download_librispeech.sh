@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,16 +15,18 @@
 # limitations under the License.
 
 
-#!/usr/bin/env bash
-
 DATA_SET="LibriSpeech"
 DATA_ROOT_DIR="/datasets"
 DATA_DIR="${DATA_ROOT_DIR}/${DATA_SET}"
+
 if [ ! -d "$DATA_DIR" ]
 then
-    mkdir $DATA_DIR
-    chmod go+rx $DATA_DIR
-    python utils/download_librispeech.py utils/librispeech.csv $DATA_DIR -e ${DATA_ROOT_DIR}/
+   mkdir --mode 755 $DATA_DIR
+
+   python utils/download_librispeech.py \
+      utils/librispeech.csv \
+      $DATA_DIR \
+      -e ${DATA_ROOT_DIR}/
 else
-    echo "Directory $DATA_DIR already exists."
+   echo "Directory $DATA_DIR already exists."
 fi

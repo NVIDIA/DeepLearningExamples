@@ -15,10 +15,10 @@
 
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
 
-train_batch_size=${1:-14}
+train_batch_size=${1:-16}
 eval_batch_size=${2:-8}
 learning_rate=${3:-"1e-4"}
-precision=${4:-"manual_fp16"}
+precision=${4:-"fp16"}
 use_xla=${5:-"true"}
 num_gpus=${6:-8}
 warmup_steps=${7:-"10000"}
@@ -39,11 +39,13 @@ fi
 
 PREC=""
 if [ "$precision" = "fp16" ] ; then
-   PREC="--use_fp16"
+   PREC="--amp"
 elif [ "$precision" = "fp32" ] ; then
-   PREC=""
+   PREC="--noamp"
+elif [ "$precision" = "tf32" ] ; then
+   PREC="--noamp"
 elif [ "$precision" = "manual_fp16" ] ; then
-   PREC="--manual_fp16"
+   PREC="--noamp --manual_fp16"
 else
    echo "Unknown <precision> argument"
    exit -2
@@ -52,6 +54,8 @@ fi
 if [ "$use_xla" = "true" ] ; then
     PREC="$PREC --use_xla"
     echo "XLA activated"
+else
+    PREC="$PREC --nouse_xla"
 fi
 
 export GBS=$(expr $train_batch_size \* $num_gpus \* $num_accumulation_steps)

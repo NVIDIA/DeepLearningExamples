@@ -15,6 +15,7 @@
 #include <iostream>
 
 #include <ATen/ATen.h>
+#include <ATen/cuda/CUDAContext.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <cuda_fp16.h>
@@ -44,8 +45,8 @@ void CublasGemm(THCState *state, char transa, char transb, long m, long n, long 
     cublasOperation_t opa = convertTransToCublasOperation(transa);
     cublasOperation_t opb = convertTransToCublasOperation(transb);
  
-    cublasHandle_t handle = THCState_getCurrentBlasHandle(state);
-    cublasSetStream(handle, THCState_getCurrentStream(state));
+    cublasHandle_t handle = at::cuda::getCurrentCUDABlasHandle();
+    //cublasSetStream(handle, THCState_getCurrentStream(state));
     float fAlpha = alpha;
     float fBeta = beta;
     THCublasCheck(cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH));
@@ -119,8 +120,9 @@ void CutlassGemm_FP32Accum(cudaStream_t stream, long m, long n, long k,
 void gemm_switch_fp32accum(THCState *state, char transa, char transb, long m, long n, long k,
                            float alpha, const half *a, long lda, long strideA, const half *b, long ldb, long strideB,
                            float beta, half *c, long ldc, long strideC, long batchCount) {
-  cudaStream_t stream = THCState_getCurrentStream(state);
+  //cudaStream_t stream = THCState_getCurrentStream(state);
   //printf("GEMM   -> %c%c M: %i N: %i K: %i Alpha: %f Beta: %f\n", (transa == 't' ? 'T' : 'N'), (transb =='t' ? 'T' : 'N'), m, n, k, alpha, beta);
+  auto stream = c10::cuda::getCurrentCUDAStream();
   if        ( (transa == 't') && (transb == 'n') ) { 
     if      (!(lda & 0x7) && !(ldb & 0x7) && !(ldc & 0x7)) { CublasGemm(state, transa, transb, m, n, k, alpha, a, lda, strideA, b, ldb, strideB, beta, c, ldc, strideC, batchCount); }
     else if (!(lda & 0x7) && !(ldb & 0x7) && !(ldc & 0x3)) { CutlassGemm_FP32Accum<cutlass::MatrixLayout::kRowMajor,cutlass::MatrixLayout::kColumnMajor,8,8,4>(stream, m, n, k, alpha, a, lda, strideA, b, ldb, strideB, beta, c, ldc, strideC, batchCount); }

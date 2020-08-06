@@ -277,7 +277,7 @@ if __name__ == "__main__":
         '--fraction_test_set',
         type=float,
         help='Specify the fraction (0..1) of the data to withhold for the test data split (based on number of sequences)',
-        default=0.2
+        default=0.1
     )
 
     parser.add_argument(

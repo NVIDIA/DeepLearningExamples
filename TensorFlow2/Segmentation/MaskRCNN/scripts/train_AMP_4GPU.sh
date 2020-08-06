@@ -32,7 +32,7 @@ mpirun \
     --allow-run-as-root \
     python ${BASEDIR}/../mask_rcnn_main.py \
         --mode="train_and_eval" \
-        --checkpoint="/model/resnet/resnet-nhwc-2018-10-14/model.ckpt-112602" \
+        --checkpoint="/model/resnet/resnet-nhwc-2018-02-07/model.ckpt-112603" \
         --eval_samples=5000 \
         --init_learning_rate=0.02 \
         --learning_rate_steps="60000,80000" \

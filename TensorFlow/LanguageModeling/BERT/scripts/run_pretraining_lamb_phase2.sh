@@ -22,7 +22,7 @@ learning_rate_phase1=${4:-"7.5e-4"}
 learning_rate_phase2=${5:-"5e-4"}
 precision=${6:-"fp16"}
 use_xla=${7:-"true"}
-num_gpus=${8:-2}
+num_gpus=${8:-8}
 warmup_steps_phase1=${9:-"2000"}
 warmup_steps_phase2=${10:-"200"}
 train_steps=${11:-7820}
@@ -45,11 +45,13 @@ echo "Container nvidia build = " $NVIDIA_BUILD_ID
 
 PREC=""
 if [ "$precision" = "fp16" ] ; then
-   PREC="--use_fp16"
+   PREC="--amp"
 elif [ "$precision" = "fp32" ] ; then
-   PREC=""
+   PREC="--noamp"
+elif [ "$precision" = "tf32" ] ; then
+   PREC="--noamp"
 elif [ "$precision" = "manual_fp16" ] ; then
-   PREC="--manual_fp16"
+   PREC="--noamp --manual_fp16"
 else
    echo "Unknown <precision> argument"
    exit -2
@@ -58,6 +60,8 @@ fi
 if [ "$use_xla" = "true" ] ; then
     PREC="$PREC --use_xla"
     echo "XLA activated"
+else
+    PREC="$PREC --nouse_xla"
 fi
 
 mpi=""

@@ -105,5 +105,5 @@ if __name__ == "__main__":
             tf_time = time_test(sess, tf_encoder_result, ite)
             op_time = time_test(sess, op_encoder_result, ite)
 
-            print("[INFO] TF decoder time costs: {} ms".format(tf_time))
-            print("[INFO] OP decoder time costs: {} ms".format(op_time))
+            print("[INFO] TF encoder time costs: {} ms".format(tf_time))
+            print("[INFO] OP encoder time costs: {} ms".format(op_time))

@@ -40,6 +40,7 @@ import numpy as np
 import torch.distributed as dist
 from scipy.io.wavfile import write as write_wav
 from torch.autograd import Variable
+from torch.nn.parallel import DistributedDataParallel
 from torch.nn.parameter import Parameter
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -47,13 +48,12 @@ from torch.utils.data.distributed import DistributedSampler
 import dllogger as DLLogger
 from apex import amp
 from apex.optimizers import FusedAdam, FusedLAMB
-from apex.parallel import DistributedDataParallel as DDP
 
 import common
 import data_functions
 import loss_functions
 import models
-from common.log_helper import init_dllogger, TBLogger
+from common.log_helper import init_dllogger, TBLogger, unique_dllogger_fpath
 
 
 def parse_args(parser):
@@ -64,8 +64,8 @@ def parse_args(parser):
                         help='Directory to save checkpoints')
     parser.add_argument('-d', '--dataset-path', type=str, default='./',
                         help='Path to dataset')
-    parser.add_argument('--log-file', type=str, default='nvlog.json',
-                        help='Filename for logging')
+    parser.add_argument('--log-file', type=str, default=None,
+                        help='Path to a DLLogger log file')
 
     training = parser.add_argument_group('training setup')
     training.add_argument('--epochs', type=int, required=True,
@@ -74,11 +74,11 @@ def parse_args(parser):
                           help='Number of epochs per checkpoint')
     training.add_argument('--checkpoint-path', type=str, default=None,
                           help='Checkpoint path to resume training')
-    training.add_argument('--checkpoint-resume', action='store_true',
+    training.add_argument('--resume', action='store_true',
                           help='Resume training from the last available checkpoint')
     training.add_argument('--seed', type=int, default=1234,
                           help='Seed for PyTorch random number generators')
-    training.add_argument('--amp-run', action='store_true',
+    training.add_argument('--amp', action='store_true',
                           help='Enable AMP')
     training.add_argument('--cuda', action='store_true',
                           help='Run on GPU using CUDA')
@@ -121,16 +121,10 @@ def parse_args(parser):
                          help='Type of text cleaners for input text')
 
     distributed = parser.add_argument_group('distributed setup')
-    distributed.add_argument('--rank', default=0, type=int,
+    distributed.add_argument('--local_rank', type=int, default=os.getenv('LOCAL_RANK', 0),
                              help='Rank of the process for multiproc. Do not set manually.')
-    distributed.add_argument('--world-size', default=1, type=int,
+    distributed.add_argument('--world_size', type=int, default=os.getenv('WORLD_SIZE', 1),
                              help='Number of processes for multiproc. Do not set manually.')
-    distributed.add_argument('--dist-url', type=str, default='tcp://localhost:23456',
-                             help='Url used to set up distributed training')
-    distributed.add_argument('--group-name', type=str, default='group_name',
-                             required=False, help='Distributed group name')
-    distributed.add_argument('--dist-backend', default='nccl', type=str, choices={'nccl'},
-                             help='Distributed run backend')
     return parser
 
 
@@ -141,7 +135,7 @@ def reduce_tensor(tensor, num_gpus):
     return rt
 
 
-def init_distributed(args, world_size, rank, group_name):
+def init_distributed(args, world_size, rank):
     assert torch.cuda.is_available(), "Distributed mode requires CUDA."
     print("Initializing distributed training")
 
@@ -149,9 +143,8 @@ def init_distributed(args, world_size, rank, group_name):
     torch.cuda.set_device(rank % torch.cuda.device_count())
 
     # Initialize distributed communication
-    dist.init_process_group(
-        backend=args.dist_backend, init_method=args.dist_url,
-        world_size=world_size, rank=rank, group_name=group_name)
+    dist.init_process_group(backend=('nccl' if args.cuda else 'gloo'),
+                            init_method='env://')
     print("Done initializing distributed training")
 
 
@@ -177,13 +170,14 @@ def last_checkpoint(output):
         return None
 
 
-def save_checkpoint(local_rank, model, ema_model, optimizer, epoch, config,
-                    amp_run, filepath):
+def save_checkpoint(local_rank, model, ema_model, optimizer, epoch, total_iter,
+                    config, amp_run, filepath):
     if local_rank != 0:
         return
     print(f"Saving model and optimizer state at epoch {epoch} to {filepath}")
     ema_dict = None if ema_model is None else ema_model.state_dict()
     checkpoint = {'epoch': epoch,
+                  'iteration': total_iter,
                   'config': config,
                   'state_dict': model.state_dict(),
                   'ema_state_dict': ema_dict,
@@ -193,12 +187,13 @@ def save_checkpoint(local_rank, model, ema_model, optimizer, epoch, config,
     torch.save(checkpoint, filepath)
 
 
-def load_checkpoint(local_rank, model, ema_model, optimizer, epoch, config,
-                    amp_run, filepath, world_size):
+def load_checkpoint(local_rank, model, ema_model, optimizer, epoch, total_iter,
+                    config, amp_run, filepath, world_size):
     if local_rank == 0:
         print(f'Loading model and optimizer state from {filepath}')
     checkpoint = torch.load(filepath, map_location='cpu')
     epoch[0] = checkpoint['epoch'] + 1
+    total_iter[0] = checkpoint['iteration']
     config = checkpoint['config']
 
     sd = {k.replace('module.', ''): v
@@ -289,12 +284,14 @@ def main():
     if local_rank == 0:
         if not os.path.exists(args.output):
             os.makedirs(args.output)
-        init_dllogger(args.log_file)
+
+        log_fpath = args.log_file or os.path.join(args.output, 'nvlog.json')
+        log_fpath = unique_dllogger_fpath(log_fpath)
+        init_dllogger(log_fpath)
     else:
         init_dllogger(dummy=True)
 
-    for k,v in vars(args).items():
-        DLLogger.log(step="PARAMETER", data={k:v})
+    [DLLogger.log("PARAMETER", {k:v}) for k,v in vars(args).items()]
 
     parser = models.parse_model_args('FastPitch', parser)
     args, unk_args = parser.parse_known_args()
@@ -305,7 +302,7 @@ def main():
     torch.backends.cudnn.benchmark = args.cudnn_benchmark
 
     if distributed_run:
-        init_distributed(args, world_size, local_rank, args.group_name)
+        init_distributed(args, world_size, local_rank)
 
     device = torch.device('cuda' if args.cuda else 'cpu')
     model_config = models.get_model_config('FastPitch', args)
@@ -328,7 +325,7 @@ def main():
     else:
         raise ValueError
 
-    if args.amp_run:
+    if args.amp:
         model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
 
     if args.ema_decay > 0:
@@ -337,24 +334,29 @@ def main():
         ema_model = None
 
     if distributed_run:
-        model = DDP(model)
+        model = DistributedDataParallel(
+            model, device_ids=[args.local_rank], output_device=args.local_rank,
+            find_unused_parameters=True)
 
     start_epoch = [1]
+    start_iter = [0]
 
-    assert args.checkpoint_path is None or args.checkpoint_resume is False, (
+    assert args.checkpoint_path is None or args.resume is False, (
         "Specify a single checkpoint source")
     if args.checkpoint_path is not None:
         ch_fpath = args.checkpoint_path
-    elif args.checkpoint_resume:
+    elif args.resume:
         ch_fpath = last_checkpoint(args.output)
     else:
         ch_fpath = None
 
     if ch_fpath is not None:
         load_checkpoint(local_rank, model, ema_model, optimizer, start_epoch,
-                        model_config, args.amp_run, ch_fpath, world_size)
+                        start_iter, model_config, args.amp, ch_fpath,
+                        world_size)
 
     start_epoch = start_epoch[0]
+    total_iter = start_iter[0]
 
     criterion = loss_functions.get_loss_function('FastPitch',
         dur_predictor_loss_scale=args.dur_predictor_loss_scale,
@@ -385,7 +387,6 @@ def main():
         val_ema_tblogger = TBLogger(local_rank, args.output, 'val_ema')
 
     val_loss = 0.0
-    total_iter = 0
     torch.cuda.synchronize()
     for epoch in range(start_epoch, args.epochs + 1):
         epoch_start_time = time.time()
@@ -435,7 +436,7 @@ def main():
             meta = {k: v / args.gradient_accumulation_steps
                     for k, v in meta.items()}
 
-            if args.amp_run:
+            if args.amp:
                 with amp.scale_loss(loss, optimizer) as scaled_loss:
                     scaled_loss.backward()
             else:
@@ -459,7 +460,7 @@ def main():
             if accumulated_steps % args.gradient_accumulation_steps == 0:
 
                 train_tblogger.log_grads(total_iter, model)
-                if args.amp_run:
+                if args.amp:
                     torch.nn.utils.clip_grad_norm_(
                         amp.master_params(optimizer), args.grad_clip_thresh)
                 else:
@@ -537,7 +538,7 @@ def main():
             checkpoint_path = os.path.join(
                 args.output, f"FastPitch_checkpoint_{epoch}.pt")
             save_checkpoint(local_rank, model, ema_model, optimizer, epoch,
-                            model_config, args.amp_run, checkpoint_path)
+                            total_iter, model_config, args.amp, checkpoint_path)
         if local_rank == 0:
             DLLogger.flush()
 

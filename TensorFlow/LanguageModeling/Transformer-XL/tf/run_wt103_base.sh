@@ -64,7 +64,6 @@ elif [[ $1 == 'train' ]]; then
         --warmup_steps=1000 \
         --tgt_len=${TGT_LEN} \
         --mem_len=${MEM_LEN} \
-        --num_core_per_host=${NUM_CORE} \
         ${@:3}
 elif [[ $1 == 'eval' ]]; then
     echo 'Run evaluation...'
@@ -87,7 +86,6 @@ elif [[ $1 == 'eval' ]]; then
         --mem_len=${TEST_MEM_LEN} \
         --clamp_len=${TEST_CLAMP_LEN} \
         --same_length=True \
-        --num_core_per_host=${TEST_NUM_CORE} \
         --do_train=False \
         --do_eval=True \
         --horovod=False \

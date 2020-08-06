@@ -1,27 +1,27 @@
 #!/bin/bash
 
-MODEL_DIR="pretrained_models"
-EXP_DIR="output"
+[ ! -n "$WAVEG_CH" ] && WAVEG_CH="pretrained_models/waveglow/waveglow_1076430_14000_amp.pt"
+[ ! -n "$FASTPITCH_CH" ] && FASTPITCH_CH="output/FastPitch_checkpoint_1500.pt"
+[ ! -n "$REPEATS" ] && REPEATS=1000
+[ ! -n "$BS_SEQ" ] && BS_SEQ="1 4 8"
+[ ! -n "$PHRASES" ] && PHRASES="phrases/benchmark_8_128.tsv"
+[ ! -n "$OUTPUT_DIR" ] && OUTPUT_DIR="./output/audio_$(basename ${PHRASES} .tsv)"
+[ "$AMP" == "true" ] && AMP_FLAG="--amp" || AMP=false
+[ "$SET_AFFINITY" == "true" ] && SET_AFFINITY_FLAG="--set-affinity"
 
-WAVEG_CH="waveglow_256channels_ljs_v3.pt"
+for BS in $BS_SEQ ; do
 
-BSZ=${1:-4}
-PRECISION=${2:-fp16}
+  echo -e "\nAMP: ${AMP}, batch size: ${BS}\n"
 
-for PRECISION in fp16 fp32; do
-  for BSZ in 1 4 8 ; do
-
-    echo -e "\nprecision=${PRECISION} batch size=${BSZ}\n"
-
-    [ "$PRECISION" == "fp16" ] && AMP_FLAG="--amp-run" || AMP_FLAG=""
-
-    python inference.py --cuda --wn-channels 256 ${AMP_FLAG} \
-                        --fastpitch ${EXP_DIR}/checkpoint_FastPitch_1500.pt \
-                        --waveglow ${MODEL_DIR}/waveglow/${WAVEG_CH} \
-                        --include-warmup \
-                        --batch-size ${BSZ} \
-                        --repeats 1000 \
-                        --torchscript \
-                        -i phrases/benchmark_8_128.tsv
-  done
+  python inference.py --cuda \
+                      -i ${PHRASES} \
+                      -o ${OUTPUT_DIR} \
+                      --fastpitch ${FASTPITCH_CH} \
+                      --waveglow ${WAVEG_CH} \
+                      --wn-channels 256 \
+                      --include-warmup \
+                      --batch-size ${BS} \
+                      --repeats ${REPEATS} \
+                      --torchscript \
+                      ${AMP_FLAG} ${SET_AFFINITY_FLAG}
 done

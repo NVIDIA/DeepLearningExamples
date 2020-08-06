@@ -4,27 +4,16 @@ JASPER_REPO=${JASPER_REPO:-"${SCRIPT_DIR}/../.."}
 
 # Launch TRT JASPER container.
 
-DATA_DIR=${DATA_DIR:-"/datasets"}
-CHECKPOINT_DIR=${CHECKPOINT_DIR:-"/checkpoints"}
-RESULT_DIR=${RESULT_DIR:-"/results"}
+DATA_DIR=${1:-${DATA_DIR-"/datasets"}}
+CHECKPOINT_DIR=${2:-${CHECKPOINT_DIR:-"/checkpoints"}}
+RESULT_DIR=${3:-${RESULT_DIR:-"/results"}}
 PROGRAM_PATH=${PROGRAM_PATH}
-    
 
 MOUNTS=""
-if [ ! -z "$DATA_DIR" ]; 
-then
-    MOUNTS="$MOUNTS -v $DATA_DIR:/datasets "
-fi
-
-if [ ! -z "$CHECKPOINT_DIR" ]; 
-then
-    MOUNTS="$MOUNTS -v $CHECKPOINT_DIR:/checkpoints "
-fi
-
-if [ ! -z "$RESULT_DIR" ]; 
-then
-    MOUNTS="$MOUNTS -v $RESULT_DIR:/results "
-fi
+MOUNTS+=" -v $DATA_DIR:/datasets"
+MOUNTS+=" -v $CHECKPOINT_DIR:/checkpoints"
+MOUNTS+=" -v $RESULT_DIR:/results"
+MOUNTS+=" -v ${JASPER_REPO}:/jasper"
 
 echo $MOUNTS
 nvidia-docker run -it --rm \
@@ -33,6 +22,5 @@ nvidia-docker run -it --rm \
   --ulimit memlock=-1 \
   --ulimit stack=67108864 \
   ${MOUNTS} \
-  -v ${JASPER_REPO}:/jasper \
   ${EXTRA_JASPER_ENV} \
   jasper:latest bash $PROGRAM_PATH

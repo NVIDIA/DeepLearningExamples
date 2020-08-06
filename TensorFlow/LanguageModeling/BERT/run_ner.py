@@ -124,8 +124,8 @@ flags.DEFINE_integer(
 tf.flags.DEFINE_string("master", None, "[Optional] TensorFlow master URL.")
 
 flags.DEFINE_bool("horovod", False, "Whether to use Horovod for multi-gpu runs")
-flags.DEFINE_bool("use_fp16", False, "Whether to use fp32 or fp16 arithmetic on GPU.")
-flags.DEFINE_bool("use_xla", False, "Whether to enable XLA JIT compilation.")
+flags.DEFINE_bool("amp", True, "Whether to enable AMP ops. When false, uses TF32 on A100 and FP32 on V100 GPUS.")
+flags.DEFINE_bool("use_xla", True, "Whether to enable XLA JIT compilation.")
 
 class InputExample(object):
     """A single training/test example for simple sequence classification."""
@@ -501,7 +501,7 @@ def create_model(bert_config, is_training, input_ids, input_mask,
 
 def model_fn_builder(bert_config, num_labels, init_checkpoint=None, learning_rate=None,
                      num_train_steps=None, num_warmup_steps=None,
-                     use_one_hot_embeddings=False, hvd=None, use_fp16=False):
+                     use_one_hot_embeddings=False, hvd=None, amp=False):
     def model_fn(features, labels, mode, params):
         tf.compat.v1.logging.info("*** Features ***")
         for name in sorted(features.keys()):
@@ -536,12 +536,18 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint=None, learning_rat
         output_spec = None
         if mode == tf.estimator.ModeKeys.TRAIN:
             train_op = optimization.create_optimizer(
-                total_loss, learning_rate, num_train_steps, num_warmup_steps, hvd, False, use_fp16)
+                total_loss, learning_rate, num_train_steps, num_warmup_steps, hvd, False, amp)
             output_spec = tf.estimator.EstimatorSpec(
               mode=mode,
               loss=total_loss,
               train_op=train_op)
         elif mode == tf.estimator.ModeKeys.EVAL:
+            dummy_op = tf.no_op()
+            # Need to call mixed precision graph rewrite if fp16 to enable graph rewrite
+            if amp:
+                loss_scaler = tf.train.experimental.FixedLossScale(1)
+                dummy_op = tf.train.experimental.enable_mixed_precision_graph_rewrite(
+                    optimization.LAMBOptimizer(learning_rate=0.0), loss_scaler)
 
             def metric_fn(per_example_loss, label_ids, logits):
                 # def metric_fn(label_ids, logits):
@@ -562,6 +568,13 @@ def model_fn_builder(bert_config, num_labels, init_checkpoint=None, learning_rat
               loss=total_loss,
               eval_metric_ops=eval_metric_ops)
         else:
+
+            dummy_op = tf.no_op()
+            # Need to call mixed precision graph rewrite if fp16 to enable graph rewrite
+            if amp:
+                dummy_op = tf.train.experimental.enable_mixed_precision_graph_rewrite(
+                    optimization.LAMBOptimizer(learning_rate=0.0))
+
             output_spec = tf.estimator.EstimatorSpec(
               mode=mode, predictions=predicts)#probabilities)
         return output_spec
@@ -613,7 +626,11 @@ def result_to_pair(predict_line, pred_ids, id2label, writer, err_writer):
 
 
 def main(_):
-    os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false" #causes memory fragmentation for bert leading to OOM
+    # causes memory fragmentation for bert leading to OOM
+    if os.environ.get("TF_XLA_FLAGS", None) is not None:
+        os.environ["TF_XLA_FLAGS"] += "--tf_xla_enable_lazy_compilation=false"
+    else:
+        os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false"
 
     tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
     dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)
@@ -716,7 +733,7 @@ def main(_):
         num_warmup_steps=num_warmup_steps,
         use_one_hot_embeddings=False,
         hvd=None if not FLAGS.horovod else hvd,
-        use_fp16=FLAGS.use_fp16)
+        amp=FLAGS.amp)
 
     estimator = tf.estimator.Estimator(
       model_fn=model_fn,
@@ -852,7 +869,7 @@ def main(_):
         tf.compat.v1.logging.info("Summary Inference Statistics")
         tf.compat.v1.logging.info("Batch size = %d", FLAGS.predict_batch_size)
         tf.compat.v1.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
-        tf.compat.v1.logging.info("Precision = %s", "fp16" if FLAGS.use_fp16 else "fp32")
+        tf.compat.v1.logging.info("Precision = %s", "fp16" if FLAGS.amp else "fp32")
         tf.compat.v1.logging.info("Latency Confidence Level 50 (ms) = %0.2f", cf_50 * 1000)
         tf.compat.v1.logging.info("Latency Confidence Level 90 (ms) = %0.2f", cf_90 * 1000)
         tf.compat.v1.logging.info("Latency Confidence Level 95 (ms) = %0.2f", cf_95 * 1000)

@@ -72,15 +72,13 @@ def parse_args():
                         help='learning rate for optimizer')
     parser.add_argument('-k', '--topk', type=int, default=10,
                         help='rank for test examples to be considered a hit')
-    parser.add_argument('--seed', '-s', type=int, default=0,
+    parser.add_argument('--seed', '-s', type=int, default=None,
                         help='manually set random seed for random number generation')
     parser.add_argument('--target', '-t', type=float, default=0.9562,
                         help='stop training early at target')
-    parser.add_argument('--fp16', action='store_true', dest='amp',
+    parser.add_argument('--amp', action='store_true', dest='amp', default=False,
                         help='enable half-precision computations using automatic mixed precision \
                               (only available in supported containers)')
-    parser.add_argument('--manual-fp16', action='store_true', dest='fp16',
-                        help='manually enable mixed precision using code changes')
     parser.add_argument('--xla', action='store_true',
                         help='enable TensorFlow XLA (Accelerated Linear Algebra)')
     parser.add_argument('--valid-negative', type=int, default=100,
@@ -95,7 +93,7 @@ def parse_args():
                         help='Dropout probability, if equal to 0 will not use dropout at all')
     parser.add_argument('--loss-scale', default=8192, type=int,
                         help='Loss scale value to use when manually enabling mixed precision')
-    parser.add_argument('--checkpoint-dir', default='/data/checkpoints/', type=str,
+    parser.add_argument('--checkpoint-dir', default=None, type=str,
                         help='Path to the store the result checkpoint file for training')
     parser.add_argument('--load-checkpoint-path', default=None, type=str,
                         help='Path to the checkpoint for initialization. If None will initialize with random weights')
@@ -178,22 +176,31 @@ def main():
     else:
         dllogger.init(backends=[])
 
+    args.world_size = hvd.size()
     dllogger.log(data=vars(args), step='PARAMETER')
 
-    if args.seed is not None:
-        tf.random.set_random_seed(args.seed)
-        np.random.seed(args.seed)
-        cp.random.seed(args.seed)
+    if args.seed is None:
+        if hvd.rank() == 0:
+            seed = int(time.time())
+        else:
+            seed = None
+
+        seed = mpi_comm.bcast(seed, root=0)
+    else:
+        seed = args.seed
+
+    tf.random.set_random_seed(seed)
+    np.random.seed(seed)
+    cp.random.seed(seed)
 
     if args.amp:
         os.environ["TF_ENABLE_AUTO_MIXED_PRECISION"] = "1"
-    if "TF_ENABLE_AUTO_MIXED_PRECISION" in os.environ \
-       and os.environ["TF_ENABLE_AUTO_MIXED_PRECISION"] == "1":
-        args.fp16 = False
 
-    if not os.path.exists(args.checkpoint_dir) and args.checkpoint_dir != '':
+    if args.checkpoint_dir is not None:
         os.makedirs(args.checkpoint_dir, exist_ok=True)
-    final_checkpoint_path = os.path.join(args.checkpoint_dir, 'model.ckpt')
+        final_checkpoint_path = os.path.join(args.checkpoint_dir, 'model.ckpt')
+    else:
+        final_checkpoint_path = None
 
     # Load converted data and get statistics
     train_df = pd.read_pickle(args.data+'/train_ratings.pickle')
@@ -256,7 +263,6 @@ def main():
         labels,
         is_dup,
         params={
-            'fp16': args.fp16,
             'val_batch_size': args.valid_negative+1,
             'top_k': args.topk,
             'learning_rate': args.learning_rate,
@@ -321,8 +327,8 @@ def main():
             eval_throughput = pos_test_users.shape[0] * (args.valid_negative + 1) / eval_duration
             dllogger.log(step=tuple(), data={'eval_throughput': eval_throughput,
                                              'eval_time': eval_duration,
-                                             'hr@10': hit_rate,
-                                             'ndcg': ndcg})
+                                             'hr@10': float(hit_rate),
+                                             'ndcg': float(ndcg)})
         return
 
     # Performance Metrics
@@ -389,10 +395,12 @@ def main():
             local_ndcg_sum[0] = sess.run(ndcg_sum)
             local_ndcg_count[0] = sess.run(ndcg_cnt)
             # Reduce metrics across all workers
+
             mpi_comm.Reduce(local_hr_count, global_hr_count)
             mpi_comm.Reduce(local_hr_sum, global_hr_sum)
             mpi_comm.Reduce(local_ndcg_count, global_ndcg_count)
             mpi_comm.Reduce(local_ndcg_sum, global_ndcg_sum)
+
             # Calculate metrics
             hit_rate = global_hr_sum[0] / global_hr_count[0]
             ndcg = global_ndcg_sum[0] / global_ndcg_count[0]
@@ -417,7 +425,7 @@ def main():
                     best_hr = hit_rate
                     best_epoch = epoch
                     time_to_best =  time.time() - begin_train
-                    if hit_rate > args.target:
+                    if hit_rate > args.target and final_checkpoint_path:
                         saver.save(sess, final_checkpoint_path)
 
     # Final Summary

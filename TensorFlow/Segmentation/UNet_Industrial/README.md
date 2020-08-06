@@ -1,43 +1,62 @@
-# U-Net Industrial Defect Segmentation for TensorFlow
+# UNet Industrial Defect Segmentation for TensorFlow
 
-This repository provides a script and recipe to train U-Net Industrial to achieve state of the art
+This repository provides a script and recipe to train UNet Industrial to achieve state of the art
 accuracy on the dataset DAGM2007, and is tested and maintained by NVIDIA.
 
 
 ## Table of Contents
-
-* [Model overview](#model-overview)
-    * [Default Configuration](#default-configuration)
-    * [Enabling mixed precision](#enabling-mixed-precision)
-* [Setup](#setup)
-    * [Requirements](#requirements)
-* [Quick Start Guide](#quick-start-guide)
-* [Advanced](#advanced)
-    * [Command line options](#command-line-options)
-    * [Getting the data](#getting-the-data)
-    * [Training process](#training-process)
-* [Performance](#performance)
-    * [Benchmarking](#benchmarking)
-        * [Training performance benchmark](#training-performance-benchmark)
-        * [Inference performance benchmark](#inference-performance-benchmark)
-    * [Results](#results)
-        * [Training accuracy results](#training-accuracy-results)
-        * [Training performance results](#training-performance-results)
-        * [Inference performance results](#inference-performance-results)
-* [Release notes](#release-notes)
-    * [Changelog](#changelog)
-    * [Known issues](#known-issues)
+ 
+- [Model overview](#model-overview)
+   * [Model architecture](#model-architecture)
+   * [Default configuration](#default-configuration)
+   * [Feature support matrix](#feature-support-matrix)
+     * [Features](#features)
+   * [Mixed precision training](#mixed-precision-training)
+     * [Enabling mixed precision](#enabling-mixed-precision)
+     * [Enabling TF32](#enabling-tf32)
+- [Setup](#setup)
+   * [Requirements](#requirements)
+- [Quick Start Guide](#quick-start-guide)
+- [Advanced](#advanced)
+   * [Scripts and sample code](#scripts-and-sample-code)
+   * [Parameters](#parameters)
+   * [Command-line options](#command-line-options)
+   * [Getting the data](#getting-the-data)
+     * [Dataset guidelines](#dataset-guidelines)
+     * [Multi-dataset](#multi-dataset)
+   * [Training process](#training-process)
+   * [Inference process](#inference-process)
+- [Performance](#performance)   
+   * [Benchmarking](#benchmarking)
+     * [Training performance benchmark](#training-performance-benchmark)
+     * [Inference performance benchmark](#inference-performance-benchmark)
+   * [Results](#results)
+     * [Training accuracy results](#training-accuracy-results)
+       * [Training accuracy: NVIDIA DGX A100 (8x A100 40GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-40gb)  
+       * [Training accuracy: NVIDIA DGX-1 (8x V100 16GB)](#training-accuracy-nvidia-dgx-1-8x-v100-16gb)
+     * [Training stability results](#training-stability-results)
+       * [Training stability: NVIDIA DGX A100 (8x A100 40GB)](#training-stability-nvidia-dgx-a100-8x-a100-40gb)
+       * [Training stability: NVIDIA DGX-1 (8x V100 16GB)](#training-stability-nvidia-dgx-1-8x-v100-16gb)
+     * [Training performance results](#training-performance-results)
+       * [Training performance: NVIDIA DGX A100 (8x A100 40GB)](#training-performance-nvidia-dgx-a100-8x-a100-40gb) 
+       * [Training performance: NVIDIA DGX-1 (8x V100 16GB)](#training-performance-nvidia-dgx-1-8x-v100-16gb)
+     * [Inference performance results](#inference-performance-results)
+        * [Inference performance: NVIDIA DGX A100 (1x A100 40GB)](#inference-performance-nvidia-dgx-a100-1x-a100-40gb)
+        * [Inference performance: NVIDIA DGX-1 (1x V100 16GB)](#inference-performance-nvidia-dgx-1-1x-v100-16gb)
+- [Release notes](#release-notes)
+   * [Changelog](#changelog)
+   * [Known issues](#known-issues)
 
 ## Model overview
 
-This U-Net model is adapted from the original version of the [U-Net model](https://arxiv.org/abs/1505.04597) which is
-a convolutional auto-encoder for 2D image segmentation. U-Net was first introduced by
+This UNet model is adapted from the original version of the [UNet model](https://arxiv.org/abs/1505.04597) which is
+a convolutional auto-encoder for 2D image segmentation. UNet was first introduced by
 Olaf Ronneberger, Philip Fischer, and Thomas Brox in the paper:
-[U-Net: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597).
+[UNet: Convolutional Networks for Biomedical Image Segmentation](https://arxiv.org/abs/1505.04597).
 
-This work proposes a modified version of U-Net, called `TinyUNet` which performs efficiently and with very high accuracy
+This work proposes a modified version of UNet, called `TinyUNet` which performs efficiently and with very high accuracy
 on the industrial anomaly dataset [DAGM2007](https://resources.mpi-inf.mpg.de/conference/dagm/2007/prizes.html).
-*TinyUNet*, like the original *U-Net* is composed of two parts:
+*TinyUNet*, like the original *UNet* is composed of two parts:
 - an encoding sub-network (left-side)
 - a decoding sub-network (right-side).
 
@@ -50,20 +69,7 @@ small dataset like DAGM2007. The complete architecture is presented in the figur
 
 ![UnetModel](images/unet.png)
 
-This model trains with mixed precision tensor cores on Volta, therefore researchers can get results much faster than
-training without tensor cores. This model is tested against each NGC monthly container release to ensure consistent
-accuracy and performance over time.
-
-The following features were implemented in this model:
-* Data-parallel multi-GPU training with Horovod.
-* Mixed precision support with TensorFlow Automatic Mixed Precision (TF-AMP), which enables mixed precision
-training without any changes to the code-base by performing automatic graph rewrites and loss scaling controlled
-by an environmental variable.
-* Tensor Core operations to maximize throughput using NVIDIA Volta GPUs.
-* Loss auto-scaling for Tensor Cores (mixed precision) training
-
-The following performance optimizations were implemented in this model:
-* [XLA](https://www.tensorflow.org/xla) support (experimental)
+Figure 1. Architecture of the UNet Industrial
 
 ### Default Configuration
 
@@ -97,126 +103,173 @@ This model trains in 2500 epochs, under the following setup:
 
 * Weight decay: 1e-5
 
-### Enabling mixed precision
+### Feature support matrix
+ 
+The following features are supported by this model.
+ 
+| **Feature** | **UNet Medical** |
+|---------------------------------|-----|
+| Automatic mixed precision (AMP) | Yes |
+| Horovod Multi-GPU (NCCL)        | Yes |
+| Accelerated Linear Algebra (XLA)| Yes |
+ 
+#### Features
+ 
+**Automatic Mixed Precision (AMP)**
+ 
+This implementation of UNet uses AMP to implement mixed precision training. It allows us to use FP16 training with FP32 master weights by modifying just a few lines of code.
+ 
+**Horovod**
+ 
+Horovod is a distributed training framework for TensorFlow, Keras, PyTorch, and MXNet. The goal of Horovod is to make distributed deep learning fast and easy to use. For more information about how to get started with Horovod, see the [Horovod: Official repository](https://github.com/horovod/horovod).
+ 
+**Multi-GPU training with Horovod**
+ 
+Our model uses Horovod to implement efficient multi-GPU training with NCCL. For details, see example sources in this repository or see the [TensorFlow tutorial](https://github.com/horovod/horovod/#usage).
+ 
+**XLA support (experimental)**
+ 
+XLA is a domain-specific compiler for linear algebra that can accelerate TensorFlow models with potentially no source code changes. The results are improvements in speed and memory usage: most internal benchmarks run ~1.1-1.5x faster after XLA is enabled.
+ 
+### Mixed precision training
+ 
+Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [Tensor Cores](https://developer.nvidia.com/tensor-cores) in Volta, and following with both the Turing and Ampere architectures, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using [mixed precision training](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html) previously required two steps:
+1.  Porting the model to use the FP16 data type where appropriate.    
+2.  Adding loss scaling to preserve small gradient values.
 
-[Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing
-operations in half-precision format, while storing minimal information in single-precision to retain as much
-information as possible in critical parts of the network.  Since the introduction of
-[tensor cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing architectures, significant training
-speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically
-intense model architectures.  Using
-[mixed precision training](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) previously
-required two steps:
-1. Porting the model to use the FP16 data type where appropriate.
-2. Manually adding loss scaling to preserve small gradient values.
+This can now be achieved using Automatic Mixed Precision (AMP) for TensorFlow to enable the full [mixed precision methodology](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#tensorflow) in your existing TensorFlow model code.  AMP enables mixed precision training on Volta and Turing GPUs automatically. The TensorFlow framework code makes all necessary model changes internally.
 
-This can now be achieved using Automatic Mixed Precision (AMP) for TensorFlow to enable the full [mixed precision
-methodology](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#tensorflow) in your existing
-TensorFlow model code.  AMP enables mixed precision training on Volta and Turing GPUs automatically. The TensorFlow
-framework code makes all necessary model changes internally.
+In TF-AMP, the computational graph is optimized to use as few casts as necessary and maximize the use of FP16, and the loss scaling is automatically applied inside of supported optimizers. AMP can be configured to work with the existing tf.contrib loss scaling manager by disabling the AMP scaling with a single environment variable to perform only the automatic mixed-precision optimization. It accomplishes this by automatically rewriting all computation graphs with the necessary operations to enable mixed precision training and automatic loss scaling.
 
-In TF-AMP, the computational graph is optimized to use as few casts as necessary and maximize the use of FP16,
-and the loss scaling is automatically applied inside of supported optimizers. AMP can be configured to work with
-the existing tf.contrib loss scaling manager by disabling the AMP scaling with a single environment variable to
-perform only the automatic mixed-precision optimization. It accomplishes this by automatically rewriting all
-computation graphs with the necessary operations to enable mixed precision training and automatic loss scaling.
+-   How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html) documentation.
+-   Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
+-   How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp) from the TensorFlow User Guide.
 
-For information about:
-- How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and
-[Training With Mixed Precision](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) documentation.
-- How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp) from the TensorFlow User Guide.
-- Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
+#### Enabling mixed precision
+ 
+This implementation exploits the TensorFlow Automatic Mixed Precision feature. In order to enable mixed precision training, the following environment variables must be defined with the correct value before the training starts:
+```
+TF_ENABLE_AUTO_MIXED_PRECISION=1
+```
+Exporting these variables ensures that loss scaling is performed correctly and automatically.
+By supplying the `--amp` flag to the `main.py` script while training in FP32, the following variables are set to their correct value for mixed precision training:
+```
+if params.use_amp:
+  os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
+```
+ 
+#### Enabling TF32
+
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](#https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
+
+TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
+
+For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](#https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
+
+TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
 
 ## Setup
-
-The following section list the requirements in order to start training the U-Net model
-(only the `TinyUnet` model is proposed here).
-
+ 
+The following section lists the requirements in order to start training the UNet Medical model.
+ 
 ### Requirements
-This repository contains Dockerfile which extends the TensorFlow NGC container and encapsulates some dependencies.  
-Aside from these dependencies, ensure you have the following components:
+ 
+This repository contains Dockerfile which extends the TensorFlow NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
+- [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
+- TensorFlow 20.06-tf1-py3 [NGC container](https://ngc.nvidia.com/registry/nvidia-tensorflow)
+-   GPU-based architecture:
+    - [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
+    - [NVIDIA Turing](https://www.nvidia.com/en-us/geforce/turing/)
+    - [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
 
-* [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-
-* [TensorFlow 19.12-tf1-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow)
-* (optional) NVIDIA Volta GPU (see section below) - for best training performance using mixed precision
-
-For more information about how to get started with NGC containers, see the
-following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
-- [Getting Started Using NVIDIA GPU Cloud](https://docs.nvidia.com/ngc/ngc-getting-started-guide/index.html),
+ 
+For more information about how to get started with NGC containers, see the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
+- [Getting Started Using NVIDIA GPU Cloud](https://docs.nvidia.com/ngc/ngc-getting-started-guide/index.html)
 - [Accessing And Pulling From The NGC container registry](https://docs.nvidia.com/deeplearning/dgx/user-guide/index.html#accessing_registry)
-- [Running TensorFlow](https://docs.nvidia.com/deeplearning/dgx/tensorflow-release-notes/running.html#running).
-
+- [Running TensorFlow](https://docs.nvidia.com/deeplearning/dgx/tensorflow-release-notes/running.html#running)
+ 
+For those unable to use the TensorFlow NGC container, to set up the required environment or create your own container, see the versioned [NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html).
 
 ## Quick Start Guide
+ 
+To train your model using mixed precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the UNet model on the [EM segmentation challenge dataset](http://brainiac2.mit.edu/isbi_challenge/home). These steps enable you to build the UNet TensorFlow NGC container, train and evaluate your model, and generate predictions on the test data. Furthermore, you can then choose to:
+* compare your evaluation accuracy with our [Training accuracy results](#training-accuracy-results),
+* compare your training performance with our [Training performance benchmark](#training-performance-benchmark),
+* compare your inference performance with our [Inference performance benchmark](#inference-performance-benchmark).
+ 
+For the specifics concerning training and inference, see the [Advanced](#advanced) section.
 
-To train your model using mixed precision with tensor cores or using FP32, perform the following steps using the
-default configuration of the U-Net model (only `TinyUNet` has been made available here) on the DAGM2007 dataset.
+1. Clone the repository.
 
-### Clone the repository
+    ```bash
+    git clone https://github.com/NVIDIA/DeepLearningExamples
+    cd DeepLearningExamples/TensorFlow/Segmentation/UNet_Industrial
+    ```
 
-```bash
-git clone https://github.com/NVIDIA/DeepLearningExamples
-cd DeepLearningExamples/TensorFlow/Segmentation/UNetIndustrial
-```
+2. Build the UNet TensorFlow NGC container.
 
-### Download and preprocess the dataset: DAGM2007
+    ```bash
+    # Build the docker container
+    docker build . --rm -t unet_industrial:latest
+    ```
+3. Start an interactive session in the NGC container to run preprocessing/training/inference.
 
-In order to download the dataset. You can execute the following:
+    ```bash
+    # make a directory for the dataset, for example ./dataset
+    mkdir <path/to/dataset/directory>
+    # make a directory for results, for example ./results
+    mkdir <path/to/results/directory>
+    # start the container with nvidia-docker
+    nvidia-docker run -it --rm \
+        --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 \
+        -v <path/to/dataset/directory>:/data/ \
+        -v <path/to/result/directory>:/results \
+        unet_industrial:latest
+    ```
 
-```bash
-./download_and_preprocess_dagm2007.sh /path/to/dataset/directory/
-```
+4. Download and preprocess the dataset: DAGM2007
 
-**Important Information:** Some files of the dataset require an account to be downloaded, the script will invite you to download them manually and put them in the correct directory.
+    In order to download the dataset. You can execute the following:
+   
+    ```bash
+    ./download_and_preprocess_dagm2007.sh /data
+    ```
 
-### Build and start the docker container based on the TensorFlow NGC container.
+    **Important Information:** Some files of the dataset require an account to be downloaded, the script will invite you to download them manually and put them in the correct directory.
 
-```bash
-# Build the docker container
-docker build . --rm -t unet_industrial:latest
-
-# start the container with nvidia-docker
-nvidia-docker run -it --rm \
-    --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 \
-    -v /path/to/dataset:/data/dagm2007/ \
-    -v /path/to/results:/results \
-    unet_industrial:latest
-```
-
-### Run training  
+5. Start training.
 
 To run training for a default configuration (as described in Default configuration, for example 1/4/8 GPUs,
 FP32/TF-AMP), launch one of the scripts in the `./scripts` directory called
-`./scripts/UNet_{FP32, AMP}_{1, 4, 8}GPU.sh`
+`./scripts/UNet{_AMP}_{1, 4, 8}GPU.sh`
 
 Each of the scripts requires three parameters:
-* path to the result directory of the model as the first argument
+* path to the results directory of the model as the first argument
 * path to the dataset as a second argument
 * class ID from DAGM used (between 1-10)
 
-For example:
+For example, for class 1:
 
 ```bash
 cd scripts/
-./UNet_FP32_1GPU.sh <path to result repository> <path to dataset> <DAGM2007 classID (1-10)>
+./UNet_1GPU.sh /results /data 1
 ```
 
-### Run evaluation
+6. Run evaluation
 
 Model evaluation on a checkpoint can be launched by running  one of the scripts in the `./scripts` directory
-called `./scripts/UNet_{FP32, AMP}_EVAL.sh`.
+called `./scripts/UNet{_AMP}_EVAL.sh`.
 
 Each of the scripts requires three parameters:
-* path to the result directory of the model as the first argument
+* path to the results directory of the model as the first argument
 * path to the dataset as a second argument
 * class ID from DAGM used (between 1-10)
 
-For example:
+For example, for class 1:
 
 ```bash
 cd scripts/
-./UNet_FP32_EVAL.sh <path to result repository> <path to dataset> <DAGM2007 classID (1-10)>
+./UNet_EVAL.sh /results /data 1
 ```
 
 ## Advanced
@@ -254,15 +307,15 @@ general
 model
 -----
 
-`--use_tf_amp` Enable Automatic Mixed Precision to speedup FP32 computation using tensor cores.
+`--amp` Enable Automatic Mixed Precision to speedup FP32 computation using tensor cores.
 
-`--use_xla` Enable TensorFlow XLA to maximise performance.
+`--xla` Enable TensorFlow XLA to maximise performance.
 
 `--use_auto_loss_scaling` Use AutoLossScaling in TF-AMP
 
-### Getting the data
+#### Dataset guidelines
 
-The U-Net model was trained with the [Weakly Supervised Learning for Industrial Optical Inspection (DAGM 2007)](https://resources.mpi-inf.mpg.de/conference/dagm/2007/prizes.html) dataset.
+The UNet model was trained with the [Weakly Supervised Learning for Industrial Optical Inspection (DAGM 2007)](https://resources.mpi-inf.mpg.de/conference/dagm/2007/prizes.html) dataset.
 
 > The competition is inspired by problems from industrial image processing. In order to satisfy their customers' needs, companies have to guarantee the quality of their products, which can often be achieved only by inspection of the finished product. Automatic visual defect detection has the potential to reduce the cost of quality assurance significantly.
 >
@@ -271,8 +324,6 @@ The U-Net model was trained with the [Weakly Supervised Learning for Industrial 
 > The particular challenge of this contest is that the algorithm must learn, without human intervention, to discern defects automatically from a weakly labeled (i.e., labels are not exact to the pixel level) training set, the exact characteristics of which are unknown at development time. During the competition, the programs have to be trained on new data without any human guidance.
 
 **Source:** https://resources.mpi-inf.mpg.de/conference/dagm/2007/prizes.html
-
-#### Data description
 
 > The provided data is artificially generated, but similar to real world problems. It consists of multiple data sets, each consisting of 1000 images showing the background texture without defects, and of 150 images with one labeled defect each on the background texture. The images in a single data set are very similar, but each data set is generated by a different texture model and defect model.
 
@@ -289,8 +340,6 @@ The number of classes and sub-challenges for the development set is 6.
 - A competition set: which requires an account to be downloaded from [here](https://hci.iwr.uni-heidelberg.de/node/3616).
 The number of classes and sub-challenges for the competition set is 10.
 
-#### Challenge description
-
 The challenge consists in designing a single model with a set of predefined hyper-parameters which will not change
 across the 10 different classes or sub-challenges of the competition set.
 
@@ -299,13 +348,13 @@ while offering the most unbiased evaluation method.
 
 ### Training Process
 
-#### Laplace Smoothing
+*Laplace Smoothing*
 
 We use this technique in the DICE loss to improve the training efficiency. This technique consists in replacing the
 epsilon parameter (used to avoid dividing by zero and very small: +/- 1e-7) by 1. You can find more information on:
 [https://en.wikipedia.org/wiki/Additive_smoothing](https://en.wikipedia.org/wiki/Additive_smoothing)
 
-#### Adaptive Loss
+*Adaptive Loss*
 
 The DICE Loss is not able to provide a meaningful gradient at initialisation. This leads to a model instability which
 often push the model to diverge. Nonetheless, once the model starts to converge, DICE loss is able to very efficiently
@@ -317,7 +366,7 @@ fully train the model. Therefore, we implemented an *adaptive loss* which is com
 The model is trained with the BCE loss until the DICE Loss reach a experimentally defined threshold (0.3).
 Thereafter, DICE loss is used to finish training.
 
-#### Weak Labelling
+*Weak Labelling*
 
 This dataset is referred as weakly labelled. That means that the segmentation labels are not given at the pixel level
 but rather in an approximate fashion.
@@ -331,35 +380,33 @@ The following sections shows how to run benchmarks measuring the model performan
 #### Training performance benchmark
 
 To benchmark the inference performance, you can run one of the scripts in the `./scripts/benchmarking/` directory
-called `./scripts/benchmarking/DGX1v_trainbench_{FP32, AMP}_{1, 4, 8}GPU.sh`.
+called `./scripts/benchmarking/UNet_trainbench{_AMP}_{1, 4, 8}GPU.sh`.
 
 Each of the scripts requires three parameters:
-* path to the result directory of the model as the first argument
-* path to the dataset as a second argument
+* path to the dataset as the first argument
 * class ID from DAGM used (between 1-10)
 
 For example:
 
 ```bash
 cd scripts/benchmarking/
-./DGX1v_trainbench_FP32_1GPU.sh <path to result repository> <path to dataset> <DAGM2007 classID (1-10)>
+./UNet_trainbench_1GPU.sh /data 1
 ```
 
 #### Inference performance benchmark
 
 To benchmark the training performance, you can run one of the scripts in the `./scripts/benchmarking/` directory
-called `./scripts/benchmarking/DGX1v_trainbench_{FP32, AMP}_{1, 4, 8}GPU.sh`.
+called `./scripts/benchmarking/UNet_evalbench{_AMP}.sh`.
 
 Each of the scripts requires three parameters:
-* path to the result directory of the model as the first argument
-* path to the dataset as a second argument
+* path to the dataset as the first argument
 * class ID from DAGM used (between 1-10)
 
 For example:
 
 ```bash
 cd scripts/benchmarking/
-./DGX1v_evalbench_FP16_1GPU.sh <path to result repository> <path to dataset> <dagm classID (1-10)>
+./UNet_evalbench_AMP.sh /data 1
 ```
 
 ### Results
@@ -368,137 +415,101 @@ The following sections provide details on the achieved results in training accur
 
 #### Training accuracy results
 
-Our results were obtained by running the `./scripts/UNet_{FP32, AMP}_{1, 4, 8}GPU.sh` training
-script in the Tensorflow:19.12-tf1-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs.
+##### Training accuracy: NVIDIA DGX A100 (8x A100 40GB)
+ 
+Our results were obtained by running the `./scripts/UNet{_AMP}_{1, 8}GPU.sh` training
+script in the `tensorflow:20.06-tf1-py3` NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs.
 
-##### Threshold = 0.75
+| GPUs | Batch size / GPU | Accuracy - TF32 | Accuracy - mixed precision | Time to train - TF32 [min] | Time to train - mixed precision [min] | Time to train speedup (TF32 to mixed precision) |
+|:----:|:----------------:|:---------------:|:--------------------------:|:--------------------:|:-------------------------------:|:-----------------------------------------------:|
+|  1   |        16        |     0.9717      |           0.9726           |         3.6          |               2.3               |                      1.57                       |
+|  8   |        2         |     0.9733      |           0.9683           |         4.3          |               3.5               |                      1.23                       |
 
-| # DAGM Class ID | Precision                       | IoU (Intersection over Union) | TPR (True Positive Rate) | TNR (True Negative Rate) |
-|-----------------|---------------------------------|-------------------------------|--------------------------|--------------------------|
-| 1               | FP32                            | 0.968                         | 100.00                   | 97.88                    |
-| 1               | Automatic Mixed Precision (AMP) | 0.966                         | 100.00                   | 97.55                    |
-| 2               | FP32                            | 0.976                         | 100.00                   | 99.62                    |
-| 2               | Automatic Mixed Precision (AMP) | 0.976                         | 100.00                   | 99.66                    |
-| 3               | FP32                            | 0.979                         | 100.00                   | 99.64                    |
-| 3               | Automatic Mixed Precision (AMP) | 0.979                         | 100.00                   | 99.63                    |
-| 4               | FP32                            | 0.965                         | 100.00                   | 97.43                    |
-| 4               | Automatic Mixed Precision (AMP) | 0.960                         | 100.00                   | 96.85                    |
-| 5               | FP32                            | 0.992                         | 100.00                   | 99.88                    |
-| 5               | Automatic Mixed Precision (AMP) | 0.991                         | 100.00                   | 99.78                    |
-| 6               | FP32                            | 0.982                         | 100.00                   | 98.78                    |
-| 6               | Automatic Mixed Precision (AMP) | 0.979                         | 100.00                   | 98.39                    |
-| 7               | FP32                            | 0.980                         | 100.00                   | 99.58                    |
-| 7               | Automatic Mixed Precision (AMP) | 0.980                         | 100.00                   | 99.56                    |
-| 8               | FP32                            | 0.970                         | 100.00                   | 99.85                    |
-| 8               | Automatic Mixed Precision (AMP) | 0.971                         | 100.00                   | 100.00                   |
-| 9               | FP32                            | 0.988                         | 99.82                    | 99.81                    |
-| 9               | Automatic Mixed Precision (AMP) | 0.988                         | 99.87                    | 99.81                    |
-| 10              | FP32                            | 0.979                         | 100.00                   | 99.43                    |
-| 10              | Automatic Mixed Precision (AMP) | 0.982                         | 100.00                   | 99.70                    |
+##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
 
-##### Threshold = 0.85
+Our results were obtained by running the `./scripts/UNet{_AMP}_{1, 8}GPU.sh` training
+script in the `tensorflow:20.06-tf1-py3` NGC container on NVIDIA DGX-1 (8x V100 16GB) GPUs.
 
-| # DAGM Class ID | Precision                       | IoU (Intersection over Union) | TPR (True Positive Rate) | TNR (True Negative Rate) |
-|-----------------|---------------------------------|-------------------------------|--------------------------|--------------------------|
-| 1               | FP32                            | 0.968                         | 100.00                   | 97.88                    |
-| 1               | Automatic Mixed Precision (AMP) | 0.966                         | 100.00                   | 97.56                    |
-| 2               | FP32                            | 0.976                         | 100.00                   | 99.62                    |
-| 2               | Automatic Mixed Precision (AMP) | 0.976                         | 100.00                   | 99.66                    |
-| 3               | FP32                            | 0.979                         | 100.00                   | 99.64                    |
-| 3               | Automatic Mixed Precision (AMP) | 0.977                         | 100.00                   | 99.33                    |
-| 4               | FP32                            | 0.966                         | 100.00                   | 97.44                    |
-| 4               | Automatic Mixed Precision (AMP) | 0.960                         | 100.00                   | 96.85                    |
-| 5               | FP32                            | 0.992                         | 100.00                   | 99.88                    |
-| 5               | Automatic Mixed Precision (AMP) | 0.991                         | 100.00                   | 99.78                    |
-| 6               | FP32                            | 0.982                         | 100.00                   | 98.80                    |
-| 6               | Automatic Mixed Precision (AMP) | 0.979                         | 100.00                   | 98.41                    |
-| 7               | FP32                            | 0.980                         | 100.00                   | 99.60                    |
-| 7               | Automatic Mixed Precision (AMP) | 0.980                         | 100.00                   | 99.58                    |
-| 8               | FP32                            | 0.970                         | 100.00                   | 99.85                    |
-| 8               | Automatic Mixed Precision (AMP) | 0.971                         | 100.00                   | 100.00                   |
-| 9               | FP32                            | 0.988                         | 99.82                    | 99.81                    |
-| 9               | Automatic Mixed Precision (AMP) | 0.988                         | 99.87                    | 99.81                    |
-| 10              | FP32                            | 0.980                         | 100.00                   | 99.45                    |
-| 10              | Automatic Mixed Precision (AMP) | 0.982                         | 100.00                   | 99.71                    |
-
-##### Threshold = 0.95
-
-| # DAGM Class ID | Precision                       | IoU (Intersection over Union) | TPR (True Positive Rate) | TNR (True Negative Rate) |
-|-----------------|---------------------------------|-------------------------------|--------------------------|--------------------------|
-| 1               | FP32                            | 0.969                         | 100.00                   | 97.93                    |
-| 1               | Automatic Mixed Precision (AMP) | 0.966                         | 100.00                   | 97.58                    |
-| 2               | FP32                            | 0.976                         | 100.00                   | 99.64                    |
-| 2               | Automatic Mixed Precision (AMP) | 0.976                         | 100.00                   | 99.66                    |
-| 3               | FP32                            | 0.979                         | 100.00                   | 99.64                    |
-| 3               | Automatic Mixed Precision (AMP) | 0.980                         | 100.00                   | 99.64                    |
-| 4               | FP32                            | 0.966                         | 100.00                   | 97.52                    |
-| 4               | Automatic Mixed Precision (AMP) | 0.961                         | 100.00                   | 96.88                    |
-| 5               | FP32                            | 0.992                         | 100.00                   | 99.88                    |
-| 5               | Automatic Mixed Precision (AMP) | 0.991                         | 100.00                   | 99.78                    |
-| 6               | FP32                            | 0.982                         | 100.00                   | 98.83                    |
-| 6               | Automatic Mixed Precision (AMP) | 0.980                         | 100.00                   | 98.58                    |
-| 7               | FP32                            | 0.981                         | 100.00                   | 99.65                    |
-| 7               | Automatic Mixed Precision (AMP) | 0.980                         | 100.00                   | 99.59                    |
-| 8               | FP32                            | 0.970                         | 100.00                   | 99.88                    |
-| 8               | Automatic Mixed Precision (AMP) | 0.971                         | 100.00                   | 100.00                   |
-| 9               | FP32                            | 0.988                         | 99.82                    | 99.83                    |
-| 9               | Automatic Mixed Precision (AMP) | 0.988                         | 99.87                    | 99.82                    |
-| 10              | FP32                            | 0.980                         | 100.00                   | 99.54                    |
-| 10              | Automatic Mixed Precision (AMP) | 0.982                         | 100.00                   | 99.72                    |
-
-##### Threshold = 0.99
-
-| # DAGM Class ID | Precision                       | IoU (Intersection over Union) | TPR (True Positive Rate) | TNR (True Negative Rate) |
-|-----------------|---------------------------------|-------------------------------|--------------------------|--------------------------|
-| 1               | FP32                            | 0.969                         | 100.00                   | 97.95                    |
-| 1               | Automatic Mixed Precision (AMP) | 0.967                         | 100.00                   | 97.66                    |
-| 2               | FP32                            | 0.976                         | 100.00                   | 99.64                    |
-| 2               | Automatic Mixed Precision (AMP) | 0.976                         | 100.00                   | 99.71                    |
-| 3               | FP32                            | 0.979                         | 100.00                   | 99.64                    |
-| 3               | Automatic Mixed Precision (AMP) | 0.980                         | 100.00                   | 99.66                    |
-| 4               | FP32                            | 0.967                         | 100.00                   | 97.55                    |
-| 4               | Automatic Mixed Precision (AMP) | 0.961                         | 100.00                   | 96.89                    |
-| 5               | FP32                            | 0.992                         | 100.00                   | 99.88                    |
-| 5               | Automatic Mixed Precision (AMP) | 0.991                         | 100.00                   | 99.78                    |
-| 6               | FP32                            | 0.983                         | 100.00                   | 98.88                    |
-| 6               | Automatic Mixed Precision (AMP) | 0.981                         | 100.00                   | 98.65                    |
-| 7               | FP32                            | 0.981                         | 100.00                   | 99.67                    |
-| 7               | Automatic Mixed Precision (AMP) | 0.980                         | 100.00                   | 99.62                    |
-| 8               | FP32                            | 0.970                         | 100.00                   | 99.92                    |
-| 8               | Automatic Mixed Precision (AMP) | 0.971                         | 100.00                   | 100.00                   |
-| 9               | FP32                            | 0.988                         | 99.82                    | 99.84                    |
-| 9               | Automatic Mixed Precision (AMP) | 0.988                         | 99.87                    | 99.82                    |
-| 10              | FP32                            | 0.981                         | 100.00                   | 99.62                    |
-| 10              | Automatic Mixed Precision (AMP) | 0.982                         | 100.00                   | 99.78                    |
+| GPUs | Batch size / GPU | Accuracy - FP32 | Accuracy - mixed precision | Time to train - FP32 [min] | Time to train - mixed precision [min] | Time to train speedup (FP32 to mixed precision) |
+|:----:|:----------------:|:---------------:|:--------------------------:|:--------------------:|:-------------------------------:|:-----------------------------------------------:|
+|  1   |        16        |     0.9643      |           0.9653           |          10          |                8                |                      1.25                       |
+|  8   |        2         |     0.9637      |           0.9655           |         2.5          |               2.5               |                      1.00                       |
 
 #### Training performance results
 
-<!-- Spreedsheet to Markdown: https://thisdavej.com/copy-table-in-excel-and-paste-as-a-markdown-table/ -->
+##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
 
 Our results were obtained by running the scripts
-`./scripts/benchmarking/DGX1v_trainbench_{FP32, AMP}_{1, 4, 8}GPU.sh` training script in the
-TensorFlow `19.12-tf1-py3` NGC container on an NVIDIA DGX-1 with 8 V100 16G GPUs.
+`./scripts/benchmarking/UNet_trainbench{_AMP}_{1, 4, 8}GPU.sh` training script in the
+TensorFlow `20.06-tf1-py3` NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs.
 
-| # GPUs | Precision                       | Throughput (Imgs/sec) | AMP Speedup | Scaling efficiency |
-|--------|---------------------------------|-----------------------|-------------|--------------------|
-| 1      | FP32                            | 92                    | 1.00        | 1.00               |
-| 1      | Automatic Mixed Precision (AMP) | 167                   | 1.82        | 1.00               |
-| 4      | FP32                            | 299                   | 1.00        | 3.25               |
-| 4      | Automatic Mixed Precision (AMP) | 458                   | 1.53        | 2.74               |
-| 8      | FP32                            | 507                   | 1.00        | 5.51               |
-| 8      | Automatic Mixed Precision (AMP) | 561                   | 1.11        | 3.36               |
+| GPUs | Batch size / GPU | Throughput - TF32 [img/s] | Throughput - mixed precision [img/s] | Throughput speedup (TF32 - mixed precision) | Strong scaling - TF32 | Strong scaling - mixed precision |
+|:----:|:----------------:|:-------------------------:|:------------------------------------:|:-------------------------------------------:|:---------------------:|:--------------------------------:|
+|  1   |        16        |          135.95           |                255.26                |                    1.88                     |           -           |                -                 |
+|  4   |        4         |           420.2           |                691.19                |                    1.64                     |         3.09          |               2.71               |
+|  8   |        2         |          655.05           |                665.66                |                    1.02                     |         4.82          |               2.61               |
+
+##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
+
+Our results were obtained by running the scripts
+`./scripts/benchmarking/UNet_trainbench{_AMP}_{1, 4, 8}GPU.sh` training script in the
+TensorFlow `20.06-tf1-py3` NGC container on an NVIDIA DGX-1 (8 V100 16GB) GPUs.
+
+| GPUs | Batch size / GPU | Throughput - FP32 [img/s] | Throughput - mixed precision [img/s] | Throughput speedup (FP32 - mixed precision) | Strong scaling - FP32 | Strong scaling - mixed precision |
+|:----:|:----------------:|:-------------------------:|:------------------------------------:|:-------------------------------------------:|:---------------------:|:--------------------------------:|
+|  1   |        16        |           86.95           |                168.54                |                    1.94                     |           -           |                -                 |
+|  4   |        4         |          287.01           |                459.07                |                    1.60                     |         3.30          |               2.72               |
+|  8   |        2         |          474.77           |                444.13                |                    0.94                     |         5.46          |               2.64               |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 #### Inference performance results
 
-Our results were obtained by running the scripts `./scripts/benchmarking/DGX1v_evalbench_{FP32, AMP}.sh`
-evaluation script in the `19.12-tf1-py3` NGC container on an NVIDIA DGX-1 server with 8 V100 16G GPUs.
+#### Inference performance results
 
-| # GPUs | Precision                       | Throughput (Imgs/sec) | Speedup |
-|--------|---------------------------------|-----------------------|---------|
-| 1      | FP32                            | 306                   | 1.00    |
-| 1      | Automatic Mixed Precision (AMP) | 550                   | 1.80    |
+##### Inference performance: NVIDIA DGX A100 (1x A100 40GB)
+
+Our results were obtained by running the scripts `./scripts/benchmarking/UNet_evalbench{_AMP}.sh`
+evaluation script in the `20.06-tf1-py3` NGC container on NVIDIA DGX A100 (1x A100 40GB) GPUs.
+
+FP16
+
+| Batch size | Resolution | Throughput Avg [img/s] |
+|:----------:|:----------:|:----------------------:|
+|     1      | 512x512x1  |         247.83         |
+|     8      | 512x512x1  |         761.41         |
+|     16     | 512x512x1  |         823.46         |
+
+TF32
+
+| Batch size | Resolution | Throughput Avg [img/s] |
+|:----------:|:----------:|:----------------------:|
+|     1      | 512x512x1  |         227.97         |
+|     8      | 512x512x1  |         419.70         |
+|     16     | 512x512x1  |         424.57         |
+
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+
+##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
+
+Our results were obtained by running the scripts `./scripts/benchmarking/UNet_evalbench{_AMP}.sh`
+evaluation script in the `20.06-tf1-py3` NGC container on NVIDIA DGX-1 (8x V100 16GB) GPUs.
+
+FP16
+
+| Batch size | Resolution | Throughput Avg [img/s] |
+|:----------:|:----------:|:----------------------:|
+|     1      | 512x512x1  |         157.91         |
+|     8      | 512x512x1  |         438.00         |
+|     16     | 512x512x1  |         469.27         |
+
+FP32
+
+| Batch size | Resolution | Throughput Avg [img/s] |
+|:----------:|:----------:|:----------------------:|
+|     1      | 512x512x1  |         159.65         |
+|     8      | 512x512x1  |         243.99         |
+|     16     | 512x512x1  |         250.23         |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
@@ -506,9 +517,15 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 ### Changelog
 
-* October 2019
+June 2020
+
+* Updated training and inference accuracy with A100 results
+* Updated training and inference performance with A100 results
+
+October 2019
   * Jupyter notebooks added
-* March,2019
+
+March,2019
   * Initial release
 
 ### Known issues

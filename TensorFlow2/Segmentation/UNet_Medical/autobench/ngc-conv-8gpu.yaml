@@ -1,0 +1,17 @@
+jobs:
+  # no AMP
+  - horovodrun -np 8 python main.py --data_dir dataset --model_dir /tmp --warmup_steps 200 --max_steps 6400 --learning_rate 0.0001 --batch_size 8 --exec_mode train_and_evaluate --augment --use_xla  --log_dir /result/log.json --crossvalidation_idx 0
+  # with AMP
+  - horovodrun -np 8 python main.py --data_dir dataset --model_dir /tmp --warmup_steps 200 --max_steps 6400 --learning_rate 0.0001 --batch_size 8 --exec_mode train_and_evaluate --augment --use_xla  --log_dir /result/log.json --crossvalidation_idx 0 --use_amp
+
+backend:
+  container: nvcr.io/nvidian/swdl/unetmed_tf2:20.06
+  download_dir: /tmp
+  hostname: ngc
+  instance: dgx1v.16g.8.norm
+  result_dir: /result
+
+reports:
+  filename: unetmed_tf2_ngc_conv_8gpu
+  types:
+    - xls

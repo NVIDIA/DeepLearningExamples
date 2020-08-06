@@ -14,6 +14,7 @@ to achieve state-of-the-art accuracy and is tested and maintained by NVIDIA.
     * [Features](#features)
   * [Mixed precision training](#mixed-precision-training)
     * [Enabling mixed precision](#enabling-mixed-precision)
+    * [Enabling TF32](#enabling-tf32)
 * [Setup](#setup)
   * [Requirements](#requirements)
 * [Quick Start Guide](#quick-start-guide)
@@ -32,24 +33,29 @@ to achieve state-of-the-art accuracy and is tested and maintained by NVIDIA.
     * [Inference performance benchmark](#inference-performance-benchmark)
   * [Results](#results)
     * [Training accuracy results](#training-accuracy-results)
-      * [Training accuracy: NVIDIA DGX-1 (8x V100 16G)](#training-accuracy-nvidia-dgx-1-8x-v100-16g)
+      * [Training accuracy: NVIDIA DGX A100 (8x A100 40GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-40gb)
         * [Base model](#base-model)
-      * [Training accuracy: NVIDIA DGX-2 (16x V100 32G)](#training-accuracy-nvidia-dgx-2-16x-v100-32g)
+      * [Training accuracy: NVIDIA DGX-1 (8x V100 16G)](#training-accuracy-nvidia-dgx-1-8x-v100-16gb)
         * [Base model](#base-model-1)
-      * [Training loss plot](#training-loss-plot)
+      * [Training accuracy: NVIDIA DGX-2 (16x V100 32G)](#training-accuracy-nvidia-dgx-2-16x-v100-32gb)
         * [Base model](#base-model-2)
+      * [Training loss plot](#training-loss-plot)
       * [Training stability test](#training-stability-test)
-        * [Base model](#base-model-3)
-    * [Training performance results](#training-performance-results)
-      * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16g)
         * [Base model](#base-model-4)
-      * [Training performance: NVIDIA DGX-2 (16x V100 32G)](#training-performance-nvidia-dgx-2-16x-v100-32g)
+    * [Training performance results](#training-performance-results)
+      * [Training performance: NVIDIA DGX A100 (8x A100 40GB)](#training-performance-nvidia-dgx-a100-8x-a100-40gb)
         * [Base model](#base-model-5)
-    * [Inference performance results](#inference-performance-results)
-      * [Inference performance: NVIDIA DGX-1 (1x V100 16G)](#inference-performance-nvidia-dgx-1-1x-v100-16g)
+      * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16bg)
         * [Base model](#base-model-6)
-      * [Inference performance: NVIDIA T4](#inference-performance-nvidia-t4)
+      * [Training performance: NVIDIA DGX-2 (16x V100 32G)](#training-performance-nvidia-dgx-2-16x-v100-32gb)
         * [Base model](#base-model-7)
+    * [Inference performance results](#inference-performance-results)
+      * [Inference performance: NVIDIA DGX A100 (1x A100 40GB)](#inference-performance-nvidia-dgx-a100-1x-a100-40gb)
+        * [Base model](#base-model-8)
+      * [Inference performance: NVIDIA DGX-1 (1x V100 16G)](#inference-performance-nvidia-dgx-1-1x-v100-16gb)
+        * [Base model](#base-model-9)
+      * [Inference performance: NVIDIA T4](#inference-performance-nvidia-t4)
+        * [Base model](#base-model-10)
 * [Release notes](#release-notes)
   * [Changelog](#changelog)
   * [Known issues](#known-issues)
@@ -78,8 +84,8 @@ implementation available from
 Refer to the [Model architecture](#model-architecture) section for more
 details.
 
-This model is trained with mixed precision using Tensor Cores on NVIDIA Volta
-GPUs and evaluated on Volta and Turing GPUs. Therefore, researchers can get
+This model is trained with mixed precision using Tensor Cores on Volta, Turing,
+and the NVIDIA Ampere GPU architectures. Therefore, researchers can get
 results up to 1.5x faster than training without Tensor Cores, while
 experiencing the benefits of mixed precision training. This model is tested
 against each NGC monthly container release to ensure consistent accuracy and
@@ -148,7 +154,6 @@ The following features were implemented in this model:
   * single-node, Horovod multi-GPU training
   * training and inference with mixed precision using Tensor Cores
   * automatic mixed precision training (AMP)
-
 * model
   * 16-layer base Transformer-XL model with hidden size 512, 8 attention heads,
     each head with hidden size 64
@@ -157,7 +162,6 @@ The following features were implemented in this model:
     dataset, using word-level vocabulary and
     adaptive softmax
   * embedding weights are tied with weights in the classifier
-
 * training
   * training with [LAMB](https://arxiv.org/abs/1904.00962) optimizer, the
     implementation of the optimizer uses [XLA](https://www.tensorflow.org/xla), which enables
@@ -168,7 +172,6 @@ The following features were implemented in this model:
       learning rate schedule, the initial learning rate is set to 0.0, and the final
       learning rate is set to 0.001 (min_lr_ratio * base_lr)
     * training for 40,000 steps, using a batch size of 256
-
 * inference
   * support for single-GPU inference
   * each token is using the same size of the context from previous time steps.
@@ -217,19 +220,25 @@ computational method.
 computational speedup by performing operations in half-precision format while
 storing minimal information in single-precision to retain as much information
 as possible in critical parts of the network. Since the introduction of [Tensor
-Cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing
-architectures, significant training speedups are experienced by switching to
+Cores](https://developer.nvidia.com/tensor-cores) in Volta, and following with both the
+Turing and Ampere architectures, significant training speedups are experienced by switching to
 mixed precision -- up to 3x overall speedup on the most arithmetically intense
 model architectures. Using mixed precision training previously required two
 steps:
 
-1. Porting the model to use the FP16 data type where appropriate.
-2. Manually adding loss scaling to preserve small gradient values.
+1.  Porting the model to use the FP16 data type where appropriate.    
+2.  Adding loss scaling to preserve small gradient values.
 
-The ability to train deep learning networks with lower precision was introduced
-in the Pascal architecture and first supported in [CUDA
-8](https://devblogs.nvidia.com/parallelforall/tag/fp16/) in the NVIDIA Deep
-Learning SDK.
+This can now be achieved using Automatic Mixed Precision (AMP) for TensorFlow to enable the full
+[mixed precision methodology](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#tensorflow)
+in your existing TensorFlow model code.  AMP enables mixed precision training on Volta and Turing GPUs automatically.
+The TensorFlow framework code makes all necessary model changes internally.
+
+In TF-AMP, the computational graph is optimized to use as few casts as necessary and maximize the use of FP16,
+and the loss scaling is automatically applied inside of supported optimizers. AMP can be configured to work
+with the existing tf.contrib loss scaling manager by disabling the AMP scaling with a single environment
+variable to perform only the automatic mixed-precision optimization. It accomplishes this by automatically
+rewriting all computation graphs with the necessary operations to enable mixed precision training and automatic loss scaling.
 
 For information about:
 
@@ -247,16 +256,36 @@ For information about:
 
 #### Enabling mixed precision
 
-Automatic Mixed Precision (AMP) for TensorFlow enables the full [mixed precision
-methodology](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#tensorflow) in your existing
-TensorFlow model code.  AMP enables mixed precision training on Volta and Turing GPUs automatically. The TensorFlow
-framework code makes all necessary model changes internally.
+Mixed precision is enabled in TensorFlow by using the Automatic Mixed Precision (TF-AMP)
+extension which casts variables to half-precision upon retrieval, while storing variables
+in single-precision format. Furthermore, to preserve small gradient magnitudes in backpropagation,
+a [loss scaling](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html#lossscaling)
+step must be included when applying gradients. In TensorFlow, loss scaling can be applied statically by
+using simple multiplication of loss by a constant value or automatically, by TF-AMP. Automatic mixed
+precision makes all the adjustments internally in TensorFlow, providing two benefits over manual operations.
+First, programmers need not modify network model code, reducing development and maintenance effort.
+Second, using AMP maintains forward and backward compatibility with all the APIs for defining and running TensorFlow models.
 
-In TF-AMP, the computational graph is optimized to use as few casts as necessary and maximizes the use of FP16, and the
-loss scaling is automatically applied inside of supported optimizers. AMP can be configured to work with the existing
-`tf.contrib` loss scaling manager by disabling the AMP scaling with a single environment variable to perform only the
-automatic mixed precision optimization. It accomplishes this by automatically rewriting all computation graphs with the
-necessary operations to enable mixed precision training and automatic loss scaling.
+To enable mixed precision, you can simply add the values to the environmental variables inside your training script:
+- Enable TF-AMP graph rewrite:
+  ```
+  os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
+  ```
+  
+- Enable Automated Mixed Precision:
+  ```
+  os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
+  ```
+
+#### Enabling TF32
+
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
+
+TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
+
+For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
+
+TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
 
 ## Setup
 
@@ -270,9 +299,11 @@ and encapsulates some dependencies. Aside from these dependencies, ensure you
 have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [TensorFlow 19.12-tf1-py3](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container
-* [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
-  or [Turing](https://www.nvidia.com/pl-pl/geforce/turing/) based GPU
+* [TensorFlow 20.06-tf1-py3](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container
+* GPU-based architecture:
+    * [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
+    * [NVIDIA Turing](https://www.nvidia.com/en-us/geforce/turing/)
+    * [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
 
 For more information about how to get started with NGC containers, see the
 following sections from the NVIDIA GPU Cloud Documentation and the Deep
@@ -325,6 +356,11 @@ bash tf/scripts/docker/interactive.sh
 5. Create tfrecords before your first training/evaluation for a given batch size per GPU.
 Use same --batch_chunk and --training_batch_size flags as in the training.
 
+For training on DGX-A100 without gradient accumulation:
+```
+bash run_wt103_base.sh train_data
+```
+
 For training on DGX-1 with gradient accumulation in 2 steps:
 ```
 bash run_wt103_base.sh train_data --batch_chunk 2
@@ -342,10 +378,16 @@ bash run_wt103_base.sh test_data
 
 6. Start training.
 
+To start TF32 training on 8 GPUs on DGX-A100, run:
+
+```
+bash run_wt103_base.sh train 8
+```
+
 To start mixed precision training on 8 GPUs on DGX-1, run:
 
 ```
-bash run_wt103_base.sh train 8 --fp16 --batch_chunk 2
+bash run_wt103_base.sh train 8 --amp --batch_chunk 2
 ```
 
 To start FP32 training on single GPU, run:
@@ -357,7 +399,7 @@ bash run_wt103_base.sh train 1 --batch_chunk 16
 To start mixed precision training on 16 GPUs on DGX-2, run:
 
 ```
-bash run_wt103_base.sh train 16 --fp16
+bash run_wt103_base.sh train 16 --amp
 ```
 
 To start FP32 training on 16 GPUs on DGX-2, run:
@@ -375,10 +417,10 @@ process](#training-process) section.
 To start mixed precision inference on the test set, run:
 
 ```
-bash run_wt103_base.sh eval [--fp16]
+bash run_wt103_base.sh eval [--amp]
 ```
 
-The `--fp16` flag is optional, however, if it's set, then the script
+The `--amp` flag is optional, however, if it's set, then the script
 launches mixed precision inference with Tensor Cores. If the flag is not
 present, then the script launches FP32 inference.
 By default, the script is loading the checkpoint from
@@ -458,7 +500,7 @@ The complete list of available parameters for the `tf/main.py` script contains:
   --eval_ckpt_path: Checkpoint path for do_test evaluation.If set, model_dir will be ignored.If unset, will use the latest ckpt in model_dir.
   --eval_split: Which data split to evaluate.
     (default: 'valid')
-  --[no]fp16: Whether to enable AMP ops.
+  --amp: Whether to enable AMP ops.
     (default: 'false')
   --init: <normal|uniform>: Initialization method.
     (default: 'normal')
@@ -599,10 +641,10 @@ WikiText-103 dataset with the word-based vocabulary and adaptive softmax using
 `<#GPUs>` GPUs. For example:
 
 ```
-bash run_wt103_base.sh train <#GPUs> [--fp16] [--batch_chunk CHUNK]
+bash run_wt103_base.sh train <#GPUs> [--amp] [--batch_chunk CHUNK]
 ```
 
-The `--fp16` flag is optional, however, if it's set, then the script
+The `--amp` flag is optional, however, if it's set, then the script
 launches mixed precision training with Tensor Cores; if the flag is not
 present, then the script launches FP32 training.
 
@@ -611,13 +653,20 @@ gradient accumulation, the batch size is split into `CHUNK` chunks of equal
 size, the training script executes the forward and backward pass using each
 chunk and then executes the optimizer using accumulated gradients.
 
+
+The `--train batch_size GBS` parameter can be used to change batch size.
+Equation below shows the relation between parameters:
+```
+global batch size (--train_batch_size) = <#GPU> * gradient accumulation steps (--batch_chunk) * local batch size
+```
+
 **Examples**
 
 You can launch mixed precision training of the Transformer-XL base model on the
 WikiText-103 dataset using 16 GPUs. For example:
 
 ```
-bash run_wt103_base.sh train 16 --fp16 --batch_chunk 1
+bash run_wt103_base.sh train 16 --amp --batch_chunk 1
 ```
 
 The batch size per GPU is equal to the default global batch size of 256
@@ -673,10 +722,10 @@ WikiText-103 dataset with the word-based vocabulary and adaptive softmax.
 For example:
 
 ```
-bash run_wt103_base.sh eval --model_dir <PATH TO THE CHECKPOINT> [--fp16]
+bash run_wt103_base.sh eval --model_dir <PATH TO THE CHECKPOINT> [--amp]
 ```
 
-The `--fp16` flag is optional, however, if it's specified, then the script
+The `--amp` flag is optional, however, if it's specified, then the script
 launches inference with Tensor Cores; if the flag is not present, then the
 script launches FP32 inference.
 
@@ -686,7 +735,7 @@ To launch mixed precision inference on a single GPU using a checkpoint
 loaded from `LM-TFM/model.ckpt*`, run:
 
 ```
-bash run_wt103_base.sh eval --model_dir LM-TFM --fp16
+bash run_wt103_base.sh eval --model_dir LM-TFM --amp
 ```
 
 To launch FP32 inference on a single GPU using a checkpoint loaded
@@ -721,7 +770,7 @@ iterations `<ITER>` run:
 For the base model:
 
 ```
-bash run_wt103_base.sh train <#GPUs> --train_batch_size <BS> --train_steps <ITER> --log_interval 1 [--fp16] [--batch_chunk CHUNK]
+bash run_wt103_base.sh train <#GPUs> --train_batch_size <BS> --train_steps <ITER> --log_interval 1 [--amp] [--batch_chunk CHUNK]
 ```
 
 It's recommended to launch at least 1500 training steps to get a reliable
@@ -753,7 +802,7 @@ trained model.
 To benchmark the inference performance on a specific global batch size `<BS>`, run:
 
 ```
-bash run_wt103_base.sh eval --model_dir <CHECKPOINT_DIR> --eval_batch_size <BS> [--fp16]
+bash run_wt103_base.sh eval --model_dir <CHECKPOINT_DIR> --eval_batch_size <BS> [--amp]
 ```
 
 The inference script prints information in the following format:
@@ -774,24 +823,37 @@ accuracy in training and inference.
 
 #### Training accuracy results
 
-##### Training accuracy: NVIDIA DGX-1 (8x V100 16G)
+##### Training accuracy: NVIDIA DGX A100 (8x A100 40GB)
 
 ###### Base model
 Our results were obtained by running the `tf/run_wt103_base.sh`
-training script in the tensorflow:19.12-tf1-py3 NGC container on NVIDIA DGX-1
+training script in the tensorflow:20.06-tf1-py3 NGC container on NVIDIA DGX A100
+with8x A100 40GB GPUs.
+
+|**GPUs**|**Batch Size / GPU**|**Accuracy - TF32 (perplexity)**|**Accuracy - Mixed precision (perplexity)**|**Time to Train - TF32 (minutes)**|**Time to Train - Mixed precision (minutes)**|**Time to Train Speedup (TF32 to Mixed precision)**|
+|-------:|-------------------:|-------------------------------:|------------------------------------------:|---------------------------------:|--------------------------------------------:|--------------------------------------------------:|
+| 1 | 16 | 23.53 | 23.50 | 960  | 880 | 1.09 |
+| 8 | 16 | 23.45 | 23.48 | 150  | 142 | 1.06 |
+
+
+##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
+
+###### Base model
+Our results were obtained by running the `tf/run_wt103_base.sh`
+training script in the tensorflow:20.06-tf1-py3 NGC container on NVIDIA DGX-1
 with 8x V100 16G GPUs.
 
 |**GPUs**|**Batch Size / GPU**|**Accuracy - FP32 (perplexity)**|**Accuracy - Mixed precision (perplexity)**|**Time to Train - FP32 (minutes)**|**Time to Train - Mixed precision (minutes)**|**Time to Train Speedup (FP32 to Mixed precision)**|
 |-------:|-------------------:|-------------------------------:|------------------------------------------:|---------------------------------:|--------------------------------------------:|--------------------------------------------------:|
-| 1 | 16 | 23.64 | 23.58 | 2943 | 2011 | 1.46 |
-| 8 | 16 | 23.36 | 23.38 | 439  | 333 | 1.32 |
+| 1 | 16 | 23.64 | 23.58 | 2949 | 2021 | 1.46 |
+| 8 | 16 | 23.35 | 23.34 | 459  | 343 | 1.34 |
 
-##### Training accuracy: NVIDIA DGX-2 (16x V100 32G)
+##### Training accuracy: NVIDIA DGX-2 (16x V100 32GB)
 
 ###### Base model
 
 Our results were obtained by running the `tf/run_wt103_base.sh`
-training script in the tensorflow:19.12-tf1-py3 NGC container on NVIDIA DGX-2
+training script in the tensorflow:20.06-tf1-py3 NGC container on NVIDIA DGX-2
 with 16x V100 32G GPUs.
 
 |**GPUs**|**Batch Size / GPU**|**Accuracy - FP32 (perplexity)**|**Accuracy - Mixed precision (perplexity)**|**Time to Train - FP32 (minutes)**|**Time to Train - Mixed precision (minutes)**|**Time to Train Speedup (FP32 to Mixed precision)**|
@@ -810,23 +872,40 @@ with 16x V100 32G GPUs.
 
 ###### Base model
 The Transformer-XL base model was trained for 40,000 training steps, starting
-from 20 different initial random seeds. The training was performed in the tensorflow:19.12-tf1-py3 NGC container on
+from 20 different initial random seeds. The training was performed in the tensorflow:20.06-tf1-py3 NGC container on
 NVIDIA DGX-1 with 8x V100 16G GPUs.
 After training, the models were evaluated on the test dataset. The following
 table summarizes the final perplexity on the test set.
 
 |**Average perplexity**|**Standard deviation**|**Minimum**|**Maximum**|**Median**|
 |---------------------:|---------------------:|----------:|----------:|---------:|
-| 23.39 | 0.0878 | 23.24 | 23.58 | 23.39 |
+| 23.38 | 0.0879 | 23.24 | 23.58 | 23.39 |
 
 #### Training performance results
 
-##### Training performance: NVIDIA DGX-1 (8x V100 16G)
+##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
+
+Our results were obtained by running the `tf/run_wt103_base.sh`
+training script in the tensorflow:20.06-tf1-py3 NGC container on NVIDIA DGX A100
+with 8x A100 40GB GPUs. Performance numbers (in tokens per second) were averaged over 2000
+training iterations.
+
+|**GPUs**|**Batch Size / GPU**|**Throughput - TF32 (tok/s)**|**Throughput - Mixed precision (tok/s)**|**Throughput speedup (TF32 to Mixed precision)**|**Weak Scaling - TF32**|**Weak Scaling - Mixed precision**|
+|-------:|-------------------:|----------------------------:|---------------------------------------:|-----------------------------------------------:|----------------------:|---------------------------------:|
+| 1 | 16 |  25,127 |  26,130 | 1.040 | 1.000 | 1.000 |
+| 1 | 32 |  30,958 |  33,117 | 1.070 | 1.000 | 1.000 |
+| 1 | 64 |  34,244 |  36,455 | 1.065 | 1.000 | 1.000 |
+| 8 | 16 | 157,538 | 155,656 | 0.988 | 6.270 | 5.957 |
+| 8 | 32 | 224,474 | 227,502 | 1.013 | 7.251 | 6.870 |
+
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+
+##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
 
 ###### Base model
 
 Our results were obtained by running the `tf/run_wt103_base.sh`
-training script in the tensorflow:19.12-tf1-py3 NGC container on NVIDIA DGX-1 with 8x
+training script in the tensorflow:20.06-tf1-py3 NGC container on NVIDIA DGX-1 with 8x
 V100 16G GPUs. Performance numbers (in tokens per second) were averaged over 2000
 training iterations.
 
@@ -839,12 +918,12 @@ training iterations.
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
-##### Training performance: NVIDIA DGX-2 (16x V100 32G)
+##### Training performance: NVIDIA DGX-2 (16x V100 32GB)
 
 ###### Base model
 
 Our results were obtained by running the `tf/run_wt103_base.sh` training
-script in the tensorflow:19.12-tf1-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G
+script in the tensorflow:20.06-tf1-py3 NGC container on NVIDIA DGX-2 with 16x V100 32G
 GPUs. Performance numbers (in tokens per second) were averaged over 2000
 training iterations.
 
@@ -860,13 +939,13 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 #### Inference performance results
 
-##### Inference performance: NVIDIA DGX-1 (1x V100 16G)
+##### Inference performance: NVIDIA DGX A100 (1x A100 40GB)
 
 ###### Base model
 
 Our results were obtained by running the
 `tf/scripts/inference_benchmark.sh` inferencing benchmarking script in the
-tensorflow:19.12-tf1-py3 NGC container on NVIDIA DGX-1 with 1x V100 16G GPU.
+tensorflow:20.06-tf1-py3 NGC container on NVIDIA DGX A100 (1x A100 40GB) GPU.
 
 The command to launch the inference performance benchmark is provided in the
 [Inference performance benchmark](#inference-performance-benchmark) section.
@@ -875,23 +954,58 @@ The command to launch the inference performance benchmark is provided in the
 
 |**Batch size**|**Sequence length**|**Memory length**|**Throughput Avg (tok/s)**|**Latency Avg (ms)**|**Latency 90% (ms)**|**Latency 95% (ms)**|**Latency 99% (ms)**|
 |-------------:|------------------:|----------------:|-------------------------:|-------------------:|-------------------:|-------------------:|-------------------:|
-|  1  | 64 | 640 | 1394.7    | 45.91  | 47.18  | 47.98  | 49.47  |
-|  2  | 64 | 640 | 2560.9    | 50.00  | 51.30  | 52.08  | 54.94  |
-|  4  | 64 | 640 | 4326.6    | 59.14  | 60.47  | 61.21  | 63.00  |
-|  8  | 64 | 640 | 6621.9    | 77.29  | 78.50  | 79.01  | 81.36  |
-| 16  | 64 | 640 | 8872.3    | 115.34 | 116.93 | 117.98 | 121.15 |
-| 32  | 64 | 640 | 10441.9   | 196.00 | 197.94 | 199.43 | 203.96 |
+|  1  | 64 | 640 |  2592.8 | 24.71  | 25.72  | 26.12  | 26.68  |
+|  2  | 64 | 640 |  5060.4 | 25.32  | 26.58  | 26.93  | 27.71  |
+|  4  | 64 | 640 |  8910.2 | 28.73  | 29.74  | 30.06  | 30.58  |
+|  8  | 64 | 640 | 13844.1 | 36.96  | 37.62  | 37.80  | 38.34  |
+| 16  | 64 | 640 | 18313.1 | 55.92  | 56.46  | 56.69  | 57.39  |
+| 32  | 64 | 640 | 21854.7 | 93.63  | 94.37  | 94.74  | 94.92  |
+
+**TF32**
+
+|**Batch size**|**Sequence length**|**Memory length**|**Throughput Avg (tok/s)**|**Latency Avg (ms)**|**Latency 90% (ms)**|**Latency 95% (ms)**|**Latency 99% (ms)**|
+|-------------:|------------------:|----------------:|-------------------------:|-------------------:|-------------------:|-------------------:|-------------------:|
+|  1  | 64 | 640 |  2587.6 | 24.75  | 25.63  | 25.92  | 26.44  |
+|  2  | 64 | 640 |  5177.8 | 24.73  | 25.71  | 26.03  | 26.56  |
+|  4  | 64 | 640 |  9113.6 | 28.09  | 29.40  | 29.71  | 30.07  |
+|  8  | 64 | 640 | 13371.7 | 38.27  | 38.95  | 39.34  | 40.07  |
+| 16  | 64 | 640 | 16971.0 | 60.29  | 60.88  | 61.13  | 61.73  |
+| 32  | 64 | 640 | 19434.5 | 105.29 | 106.00 | 106.19 | 106.79 |
+
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+
+##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
+
+###### Base model
+
+Our results were obtained by running the
+`tf/scripts/inference_benchmark.sh` inferencing benchmarking script in the
+tensorflow:20.06-tf1-py3 NGC container on NVIDIA DGX-1 with 1x V100 16G GPU.
+
+The command to launch the inference performance benchmark is provided in the
+[Inference performance benchmark](#inference-performance-benchmark) section.
+
+**FP16**
+
+|**Batch size**|**Sequence length**|**Memory length**|**Throughput Avg (tok/s)**|**Latency Avg (ms)**|**Latency 90% (ms)**|**Latency 95% (ms)**|**Latency 99% (ms)**|
+|-------------:|------------------:|----------------:|-------------------------:|-------------------:|-------------------:|-------------------:|-------------------:|
+|  1  | 64 | 640 | 1823.8    | 35.17  | 37.27  | 38.22  | 41.28  |
+|  2  | 64 | 640 | 3337.6    | 38.46  | 41.09  | 41.94  | 43.91  |
+|  4  | 64 | 640 | 5354.0    | 47.83  | 49.74  | 50.54  | 53.08  |
+|  8  | 64 | 640 | 7779.7    | 65.79  | 67.71  | 68.37  | 69.71  |
+| 16  | 64 | 640 | 9796.5    | 104.46 | 107.22 | 108.07 | 108.69 |
+| 32  | 64 | 640 | 11215.5   | 182.45 | 184.11 | 184.49 | 186.92 |
 
 **FP32**
 
 |**Batch size**|**Sequence length**|**Memory length**|**Throughput Avg (tok/s)**|**Latency Avg (ms)**|**Latency 90% (ms)**|**Latency 95% (ms)**|**Latency 99% (ms)**|
 |-------------:|------------------:|----------------:|-------------------------:|-------------------:|-------------------:|-------------------:|-------------------:|
-|  1  | 64 | 640 | 1315.2  | 48.70  | 49.78  | 50.54  | 53.31  |
-|  2  | 64 | 640 | 2419.2  | 52.91  | 54.17  | 54.73  | 56.13  |
-|  4  | 64 | 640 | 4012.7  | 63.76  | 65.27  | 66.11  | 67.81  |
-|  8  | 64 | 640 | 5650.1  | 90.56  | 91.92  | 92.47  | 94.15  |
-| 16  | 64 | 640 | 7041.2  | 145.34 | 147.20 | 148.38 | 151.37 |
-| 32  | 64 | 640 | 8051.3  | 254.14 | 256.58 | 257.51 | 258.39 |
+|  1  | 64 | 640 | 1912.7  | 33.56  | 35.98  | 36.84  | 38.96  |
+|  2  | 64 | 640 | 3497.0  | 36.66  | 39.07  | 39.85  | 41.28  |
+|  4  | 64 | 640 | 4732.9  | 54.10  | 56.32  | 57.10  | 58.14  |
+|  8  | 64 | 640 | 6303.7  | 81.19  | 83.32  | 84.02  | 88.12  |
+| 16  | 64 | 640 | 7676.3  | 133.29 | 134.84 | 135.33 | 136.70 |
+| 32  | 64 | 640 | 8555.6  | 239.15 | 240.02 | 240.20 | 240.48 |
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -901,7 +1015,7 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 Our results were obtained by running the
 `tf/scripts/inference_benchmark.sh` inferencing benchmarking script in the
-tensorflow:19.12-tf1-py3 NGC container on NVIDIA T4.
+tensorflow:20.06-tf1-py3 NGC container on NVIDIA T4.
 
 The command to launch the inference performance benchmark is provided in the
 [Inference performance benchmark](#inference-performance-benchmark) section.
@@ -910,29 +1024,33 @@ The command to launch the inference performance benchmark is provided in the
 
 |**Batch size**|**Sequence length**|**Memory length**|**Throughput Avg (tok/s)**|**Latency Avg (ms)**|**Latency 90% (ms)**|**Latency 95% (ms)**|**Latency 99% (ms)**|
 |-------------:|------------------:|----------------:|-------------------------:|-------------------:|-------------------:|-------------------:|-------------------:|
-|  1  | 64 | 640 | 1053.6    | 60.75  | 61.59  | 62.02  | 63.58  |
-|  2  | 64 | 640 | 2024.5    | 63.22  | 63.95  | 64.76  | 67.33  |
-|  4  | 64 | 640 | 3309.7    | 77.30  | 78.33  | 78.85  | 80.12  |
-|  8  | 64 | 640 | 4713.7    | 108.53 | 109.66 | 110.26 | 111.15 |
-| 16  | 64 | 640 | 6075.8    | 168.40 | 169.62 | 170.28 | 171.88 |
-| 32  | 64 | 640 | 6850.5    | 298.69 | 300.42 | 301.04 | 302.21 |
+|  1  | 64 | 640 | 1228.6    | 52.21  | 55.14  | 56.32  | 59.77  |
+|  2  | 64 | 640 | 2108.5    | 60.78  | 63.62  | 64.68  | 67.07  |
+|  4  | 64 | 640 | 3376.7    | 75.83  | 78.77  | 79.63  | 82.80  |
+|  8  | 64 | 640 | 4666.3    | 109.69 | 112.58 | 113.88 | 117.35 |
+| 16  | 64 | 640 | 5557.0    | 184.14 | 186.51 | 187.20 | 189.64 |
+| 32  | 64 | 640 | 6174.3    | 331.41 | 333.67 | 334.94 | 336.90 |
 
 **FP32**
 
 |**Batch size**|**Sequence length**|**Memory length**|**Throughput Avg (tok/s)**|**Latency Avg (ms)**|**Latency 90% (ms)**|**Latency 95% (ms)**|**Latency 99% (ms)**|
 |-------------:|------------------:|----------------:|-------------------------:|-------------------:|-------------------:|-------------------:|-------------------:|
-|  1  | 64 | 640 | 929.5  | 68.88  | 70.43  | 70.88  | 72.05  |
-|  2  | 64 | 640 | 1757.6  | 72.84  | 74.30  | 75.08  | 76.62  |
-|  4  | 64 | 640 | 2696.7  | 94.87  | 97.02  | 97.58  | 99.19  |
-|  8  | 64 | 640 | 3561.6  | 143.65 | 145.98 | 146.96 | 148.18 |
-| 16  | 64 | 640 | 4190.4  | 244.16 | 246.34 | 246.62 | 247.32 |
-| 32  | 64 | 640 | 4567.7  | 447.96 | 451.19 | 452.77 | 455.32 |
+|  1  | 64 | 640 | 1029.7  | 62.28  | 65.82  | 66.93  | 70.22  |
+|  2  | 64 | 640 | 1667.7  | 76.81  | 79.80  | 80.71  | 84.35  |
+|  4  | 64 | 640 | 2302.3  | 111.13 | 113.75 | 114.85 | 118.57 |
+|  8  | 64 | 640 | 2756.9  | 185.58 | 188.16 | 189.38 | 192.68 |
+| 16  | 64 | 640 | 3188.8  | 320.86 | 324.24 | 325.63 | 327.76 |
+| 32  | 64 | 640 | 3439.1  | 594.96 | 599.13 | 599.89 | 602.59 |
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
 ## Release notes
 
 ### Changelog
+
+June 2020
+ * upgrade the TensorFlow container to 20.06
+ * update performance tables to include A100 results
 
 * April 2020
   * Initial release

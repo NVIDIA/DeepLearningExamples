@@ -6,9 +6,12 @@
 # can be found in the PATENTS file in the same directory.
 
 import math
+from typing import Optional, Dict
+
 
 import torch
 import torch.nn as nn
+from torch import Tensor
 
 from fairseq import utils
 
@@ -31,9 +34,10 @@ class SinusoidalPositionalEmbedding(nn.Module):
             padding_idx,
         )
         self.register_buffer('_float_tensor', torch.FloatTensor(1))
+        self.register_buffer('positions_buffer', torch.arange(padding_idx + 1, init_size + padding_idx + 1)) #JIT compliance
 
     @staticmethod
-    def get_embedding(num_embeddings, embedding_dim, padding_idx=None):
+    def get_embedding(num_embeddings: int, embedding_dim: int, padding_idx: int):
         """Build sinusoidal embeddings.
 
         This matches the implementation in tensor2tensor, but differs slightly
@@ -47,11 +51,10 @@ class SinusoidalPositionalEmbedding(nn.Module):
         if embedding_dim % 2 == 1:
             # zero pad
             emb = torch.cat([emb, torch.zeros(num_embeddings, 1)], dim=1)
-        if padding_idx is not None:
-            emb[padding_idx, :] = 0
+        emb[padding_idx] = torch.zeros(emb.shape[1]) # emb[padding_idx, :] = 0
         return emb
 
-    def forward(self, input, incremental_state=None):
+    def forward(self, input: Tensor, incremental_state: Optional[Dict[str, Dict[str, Tensor]]]=None):
         """Input is expected to be of size [bsz x seqlen]."""
         # recompute/expand embeddings if needed
         bsz, seq_len = input.size()
@@ -68,9 +71,13 @@ class SinusoidalPositionalEmbedding(nn.Module):
             # positions is the same for every token when decoding a single step
             return self.weights[self.padding_idx + seq_len, :].expand(bsz, 1, -1)
 
-        positions = utils.make_positions(input.data, self.padding_idx, self.left_pad)
+        #### JIT ####
+        mask = input.ne(self.padding_idx)
+        positions = self.positions_buffer[:input.size(1)].expand_as(input)
+        if self.left_pad:
+            positions = positions - mask.size(1) + mask.long().sum(dim=1).unsqueeze(1)
+        positions = input.clone().masked_scatter_(mask, positions[mask])
+        #############
+
         return self.weights.index_select(0, positions.view(-1)).view(bsz, seq_len, -1).detach()
 
-    def max_positions(self):
-        """Maximum number of supported positions."""
-        return int(1e5)  # an arbitrary large number

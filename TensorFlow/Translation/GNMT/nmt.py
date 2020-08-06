@@ -41,6 +41,8 @@ import numpy as np
 import time
 import tensorflow as tf
 
+import dllogger
+
 import estimator
 from utils import evaluation_utils
 from utils import iterator_utils
@@ -351,8 +353,8 @@ def add_arguments(parser):
   parser.add_argument("--num_workers", type=int, default=1,
                       help="Number of workers (inference only).")
 
-  parser.add_argument("--use_amp", type="bool", default=True,
-                      help="use_amp for training and inference")
+  parser.add_argument("--amp", action='store_true',
+                      help="use amp for training and inference")
   parser.add_argument("--use_fastmath", type="bool", default=False,
                       help="use_fastmath for training and inference")
   parser.add_argument("--use_fp16", type="bool", default=False,
@@ -653,7 +655,7 @@ def create_hparams(flags):
       random_seed=flags.random_seed,
       language_model=flags.language_model,
 
-      use_amp=flags.use_amp,
+      amp=flags.amp,
       use_fastmath=flags.use_fastmath,
       use_fp16=flags.use_fp16,
       fp16_loss_scale=flags.fp16_loss_scale,
@@ -906,10 +908,10 @@ def main(unused_argv):
   if FLAGS.use_fp16 and FLAGS.use_dist_strategy:
     raise ValueError("use_fp16 and use_dist_strategy aren't compatible")
 
-  if FLAGS.use_fp16 + FLAGS.use_amp + FLAGS.use_fastmath > 1:
-    raise ValueError("Only one of use_fp16, use_amp, use_fastmath can be set")
+  if FLAGS.use_fp16 + FLAGS.amp + FLAGS.use_fastmath > 1:
+    raise ValueError("Only one of use_fp16, amp, use_fastmath can be set")
 
-  if FLAGS.use_amp:
+  if FLAGS.amp:
     utils.print_out('Enabling TF-AMP')
 
     os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
@@ -969,6 +971,12 @@ def main(unused_argv):
       utils.print_out("# Creating output directory %s ..." % output_dir)
       tf.gfile.MakeDirs(output_dir)
 
+    dllogger.init(backends=[
+        dllogger.StdOutBackend(dllogger.Verbosity.DEFAULT),
+        dllogger.JSONStreamBackend(dllogger.Verbosity.VERBOSE, os.path.join(FLAGS.output_dir, FLAGS.mode + '-report.json')),
+    ])
+    dllogger.log('PARAMETER', vars(FLAGS))
+
     # Load hparams.
     default_hparams = create_hparams(FLAGS)
     default_hparams.num_buckets = 1
@@ -1015,6 +1023,12 @@ def main(unused_argv):
       utils.print_out("# Creating output directory %s ..." % output_dir)
       tf.gfile.MakeDirs(output_dir)
 
+    dllogger.init(backends=[
+        dllogger.StdOutBackend(dllogger.Verbosity.DEFAULT),
+        dllogger.JSONStreamBackend(dllogger.Verbosity.VERBOSE, os.path.join(FLAGS.output_dir, FLAGS.mode + '-report.json')),
+    ])
+    dllogger.log('PARAMETER', vars(FLAGS))
+
     # Load hparams.
     default_hparams = create_hparams(FLAGS)
 
@@ -1051,6 +1065,10 @@ def main(unused_argv):
       train_delta = train_end - train_start
       utils.print_out("training time for epoch %d: %.2f mins (%.2f sent/sec, %.2f tokens/sec)" %
                       (epochs + 1, train_delta / 60., train_speed, train_speed * (train_src_tokens + train_tgt_tokens) / train_sentences), f=sys.stderr)
+      logging_data = {
+        'train_speed_sent': train_speed,
+        'train_speed_toks': train_speed * (train_src_tokens + train_tgt_tokens) / train_sentences,
+      }
 
       # This is probably sub-optimal, doing eval per-epoch
       eval_start = time.time()
@@ -1059,8 +1077,17 @@ def main(unused_argv):
       eval_delta = eval_end - eval_start
       utils.print_out("eval time for epoch %d: %.2f mins (%.2f sent/sec, %.2f tokens/sec)" %
                       (epochs + 1, eval_delta / 60., eval_speed, eval_speed * (eval_src_tokens + eval_output_tokens) / eval_sentences), f=sys.stderr)
+      logging_data.update({
+        'bleu': bleu_score,
+        'eval_speed_sent': eval_speed,
+        'eval_speed_toks': eval_speed * (eval_src_tokens + eval_output_tokens) / eval_sentences,
+      })
       for lat in sorted(eval_latencies):
         utils.print_out("eval latency_%s for epoch %d: %.2f ms" % (lat, epochs + 1, eval_latencies[lat] * 1000))
+        logging_data['eval_latency_{}'.format(lat)] = eval_latencies[lat] * 1000
+
+      dllogger.log((epochs,), logging_data)
+      dllogger.flush()
 
 
       if FLAGS.debug or (FLAGS.target_bleu is not None and bleu_score > FLAGS.target_bleu):
@@ -1074,6 +1101,9 @@ def main(unused_argv):
         should_stop = True
         utils.print_out("Stop job since max_train_epochs is reached.",
                         f=sys.stderr)
+
+    dllogger.log((), logging_data)
+    dllogger.flush()
 
   experiment_end = time.time()
   utils.print_out('Experiment took {} min'.format((experiment_end - experiment_start) / 60))

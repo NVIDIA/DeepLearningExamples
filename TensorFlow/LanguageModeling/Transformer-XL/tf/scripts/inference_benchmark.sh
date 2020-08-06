@@ -16,7 +16,7 @@
 
 BATCH_SIZES=(1 2 4 8 16 32)
 # "empty" MATH corresponds to fp32
-MATHS=("" "--fp16")
+MATHS=("" "--amp")
 
 
 for (( j = 0; j < ${#BATCH_SIZES[@]}; j++ )); do

@@ -34,6 +34,7 @@ import utils.dllogger_class
 from dllogger import Verbosity
 from utils.create_glue_data import *
 import numpy as np
+import tf_metrics
 
 flags = tf.flags
 
@@ -63,6 +64,10 @@ flags.DEFINE_string(
 flags.DEFINE_string(
     "dllog_path", "/results/bert_dllog.json",
     "filename where dllogger writes to")
+
+flags.DEFINE_string(
+    "optimizer_type", "lamb",
+    "Optimizer type : adam or lamb")
 
 flags.DEFINE_string(
     "init_checkpoint", None,
@@ -107,15 +112,16 @@ flags.DEFINE_float(
 
 flags.DEFINE_integer("save_checkpoints_steps", 1000,
                      "How often to save the model checkpoint.")
+flags.DEFINE_integer("display_loss_steps", 10,
+                     "How often to print loss from estimator")
 
 flags.DEFINE_integer("iterations_per_loop", 1000,
                      "How many steps to make in each estimator call.")
 flags.DEFINE_integer("num_accumulation_steps", 1,
                      "Number of accumulation steps before gradient update" 
                       "Global batch size = num_accumulation_steps * train_batch_size")
-flags.DEFINE_bool("use_fp16", False, "Whether to use fp32 or fp16 arithmetic on GPU.")
-
-flags.DEFINE_bool("use_xla", False, "Whether to enable XLA JIT compilation.")
+flags.DEFINE_bool("amp", True, "Whether to enable AMP ops. When false, uses TF32 on A100 and FP32 on V100 GPUS.")
+flags.DEFINE_bool("use_xla", True, "Whether to enable XLA JIT compilation.")
 flags.DEFINE_bool("horovod", False, "Whether to use Horovod for multi-gpu runs")
 
 flags.DEFINE_bool(
@@ -181,7 +187,7 @@ def create_model(bert_config, is_training, input_ids, input_mask, segment_ids,
       input_mask=input_mask,
       token_type_ids=segment_ids,
       use_one_hot_embeddings=use_one_hot_embeddings,
-      compute_type=tf.float16 if FLAGS.use_fp16 else tf.float32)
+      compute_type=tf.float32)
 
   # In the demo, we are doing a simple classification task on the entire
   # segment.
@@ -254,7 +260,7 @@ def get_frozen_tftrt_model(bert_config, shape, num_labels, use_one_hot_embedding
         input_graph_def=frozen_graph,
         nodes_blacklist=output_node_names,
         max_workspace_size_bytes=(4096 << 20) - 1000,
-        precision_mode = "FP16" if FLAGS.use_fp16 else "FP32",
+        precision_mode = "FP16" if FLAGS.amp else "FP32",
         minimum_segment_size=4,
         is_dynamic_op=True,
         maximum_cached_engines=1000
@@ -292,6 +298,16 @@ def model_fn_builder(task_name, bert_config, num_labels, init_checkpoint, learni
             MCC = (TP * TN - FP * FN) / ((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)) ** 0.5
             MCC_op = tf.group(FN_op, TN_op, TP_op, FP_op, tf.identity(MCC, name="MCC"))
             return {"MCC": (MCC, MCC_op)}
+        elif task_name == "mrpc":
+            accuracy = tf.metrics.accuracy(
+                labels=label_ids, predictions=predictions)
+            loss = tf.metrics.mean(values=per_example_loss)
+            f1 = tf_metrics.f1(labels=label_ids, predictions=predictions, num_classes=2, pos_indices=[1])
+            return {
+                "eval_accuracy": accuracy,
+                "eval_f1": f1,
+                "eval_loss": loss,
+            }
         else:
             accuracy = tf.metrics.accuracy(
                 labels=label_ids, predictions=predictions)
@@ -354,19 +370,29 @@ def model_fn_builder(task_name, bert_config, num_labels, init_checkpoint, learni
 
       train_op = optimization.create_optimizer(
           total_loss, learning_rate, num_train_steps, num_warmup_steps,
-          hvd, False, FLAGS.use_fp16, FLAGS.num_accumulation_steps)
-
+          hvd, False, FLAGS.amp, FLAGS.num_accumulation_steps, FLAGS.optimizer_type)
       output_spec = tf.estimator.EstimatorSpec(
           mode=mode,
           loss=total_loss,
           train_op=train_op)
     elif mode == tf.estimator.ModeKeys.EVAL:
+      dummy_op = tf.no_op()
+      # Need to call mixed precision graph rewrite if fp16 to enable graph rewrite
+      if FLAGS.amp:
+        loss_scaler = tf.train.experimental.FixedLossScale(1)
+        dummy_op = tf.train.experimental.enable_mixed_precision_graph_rewrite(
+            optimization.LAMBOptimizer(learning_rate=0.0), loss_scaler)
       eval_metric_ops = metric_fn(per_example_loss, label_ids, logits)
       output_spec = tf.estimator.EstimatorSpec(
           mode=mode,
           loss=total_loss,
           eval_metric_ops=eval_metric_ops)
     else:
+      dummy_op = tf.no_op()
+      # Need to call mixed precision graph rewrite if fp16 to enable graph rewrite
+      if FLAGS.amp:
+        dummy_op = tf.train.experimental.enable_mixed_precision_graph_rewrite(
+            optimization.LAMBOptimizer(learning_rate=0.0))
       output_spec = tf.estimator.EstimatorSpec(
           mode=mode, predictions=probabilities)
     return output_spec
@@ -429,7 +455,11 @@ def input_fn_builder(features, batch_size, seq_length, is_training, drop_remaind
 
 
 def main(_):
-  os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false" #causes memory fragmentation for bert leading to OOM
+  # causes memory fragmentation for bert leading to OOM
+  if os.environ.get("TF_XLA_FLAGS", None) is not None:
+    os.environ["TF_XLA_FLAGS"] += "--tf_xla_enable_lazy_compilation=false"
+  else:
+    os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false"
 
   tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
   dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)
@@ -494,6 +524,8 @@ def main(_):
       model_dir=FLAGS.output_dir if master_process else None,
       session_config=config,
       save_checkpoints_steps=FLAGS.save_checkpoints_steps if master_process else None,
+      save_summary_steps=FLAGS.save_checkpoints_steps if master_process else None,
+      log_step_count_steps=FLAGS.display_loss_steps,
       keep_checkpoint_max=1)
 
   if master_process:
@@ -505,7 +537,7 @@ def main(_):
   train_examples = None
   num_train_steps = None
   num_warmup_steps = None
-  training_hooks.append(LogTrainRunHook(global_batch_size, hvd_rank))
+  training_hooks.append(LogTrainRunHook(global_batch_size, hvd_rank, FLAGS.save_checkpoints_steps, num_steps_ignore_xla=10))
 
   if FLAGS.do_train:
     train_examples = processor.get_train_examples(FLAGS.data_dir)
@@ -604,8 +636,8 @@ def main(_):
     time_list = eval_hooks[-1].time_list
     time_list.sort()
     # Removing outliers (init/warmup) in throughput computation.
-    eval_time_wo_overhead = sum(time_list[:int(len(time_list) * 0.99)])
-    num_sentences = (int(len(time_list) * 0.99)) * FLAGS.predict_batch_size
+    eval_time_wo_overhead = sum(time_list[:int(len(time_list) * 0.8)])
+    num_sentences = (int(len(time_list) * 0.8)) * FLAGS.eval_batch_size
 
     avg = np.mean(time_list)
     cf_50 = max(time_list[:int(len(time_list) * 0.50)])
@@ -623,7 +655,7 @@ def main(_):
     tf.compat.v1.logging.info("Summary Inference Statistics on EVAL set")
     tf.compat.v1.logging.info("Batch size = %d", FLAGS.eval_batch_size)
     tf.compat.v1.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
-    tf.compat.v1.logging.info("Precision = %s", "fp16" if FLAGS.use_fp16 else "fp32")
+    tf.compat.v1.logging.info("Precision = %s", "fp16" if FLAGS.amp else "fp32")
     tf.compat.v1.logging.info("Latency Confidence Level 50 (ms) = %0.2f", cf_50 * 1000)
     tf.compat.v1.logging.info("Latency Confidence Level 90 (ms) = %0.2f", cf_90 * 1000)
     tf.compat.v1.logging.info("Latency Confidence Level 95 (ms) = %0.2f", cf_95 * 1000)
@@ -631,7 +663,7 @@ def main(_):
     tf.compat.v1.logging.info("Latency Confidence Level 100 (ms) = %0.2f", cf_100 * 1000)
     tf.compat.v1.logging.info("Latency Average (ms) = %0.2f", avg * 1000)
     tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
-    dllogging.logger.log(step=(), data={"throughput_train": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
+    dllogging.logger.log(step=(), data={"throughput_val": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
     tf.compat.v1.logging.info("-----------------------------")
 
 
@@ -676,11 +708,12 @@ def main(_):
 
 
     predict_time_elapsed = time.time() - predict_start_time
-    predict_time_wo_overhead = predict_hooks[-1].total_time
 
     time_list = predict_hooks[-1].time_list
     time_list.sort()
-    num_sentences = (predict_hooks[-1].count - predict_hooks[-1].skipped) * FLAGS.predict_batch_size
+    # Removing outliers (init/warmup) in throughput computation.
+    predict_time_wo_overhead = sum(time_list[:int(len(time_list) * 0.8)])
+    num_sentences = (int(len(time_list) * 0.8)) * FLAGS.predict_batch_size
 
     avg = np.mean(time_list)
     cf_50 = max(time_list[:int(len(time_list) * 0.50)])
@@ -694,11 +727,11 @@ def main(_):
     tf.compat.v1.logging.info("Total Inference Time = %0.2f for Sentences = %d", predict_time_elapsed,
                     predict_hooks[-1].count * FLAGS.predict_batch_size)
     tf.compat.v1.logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", predict_time_wo_overhead,
-                    (predict_hooks[-1].count - predict_hooks[-1].skipped) * FLAGS.predict_batch_size)
+                              num_sentences)
     tf.compat.v1.logging.info("Summary Inference Statistics on TEST SET")
     tf.compat.v1.logging.info("Batch size = %d", FLAGS.predict_batch_size)
     tf.compat.v1.logging.info("Sequence Length = %d", FLAGS.max_seq_length)
-    tf.compat.v1.logging.info("Precision = %s", "fp16" if FLAGS.use_fp16 else "fp32")
+    tf.compat.v1.logging.info("Precision = %s", "fp16" if FLAGS.amp else "fp32")
     tf.compat.v1.logging.info("Latency Confidence Level 50 (ms) = %0.2f", cf_50 * 1000)
     tf.compat.v1.logging.info("Latency Confidence Level 90 (ms) = %0.2f", cf_90 * 1000)
     tf.compat.v1.logging.info("Latency Confidence Level 95 (ms) = %0.2f", cf_95 * 1000)

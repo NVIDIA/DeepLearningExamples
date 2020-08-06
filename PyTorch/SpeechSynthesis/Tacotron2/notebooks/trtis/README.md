@@ -34,7 +34,7 @@ file by executing points 1-5. You have to train WaveGlow in a different way than
 the following command instead of the one given in QuickStart at point 5:
 
 ```bash
-python -m multiproc train.py -m WaveGlow -o output/ --amp-run -lr 1e-4 --epochs 2001 --wn-channels 256 -bs 12 --segment-length 16000 --weight-decay 0 --grad-clip-thresh 65504.0 --cudnn-benchmark --cudnn-enabled --log-file output/nvlog.json
+python -m multiproc train.py -m WaveGlow -o output/ --amp -lr 1e-4 --epochs 2001 --wn-channels 256 -bs 12 --segment-length 16000 --weight-decay 0 --grad-clip-thresh 65504.0 --cudnn-benchmark --cudnn-enabled --log-file output/nvlog.json
 ```
 
 This will train the WaveGlow model with a smaller number of residual connections

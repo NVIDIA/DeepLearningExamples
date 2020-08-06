@@ -49,8 +49,6 @@ class ProfilingHook(tf.estimator.SessionRunHook):
 
     def end(self, session):
         if hvd.rank() == 0:
-            throughput_imgps, latency_ms = process_performance_stats(np.array(self._timestamps),
-                                                                     self._global_batch_size)
-            self.logger.log(step=(),
-                            data={'throughput_{}'.format(self.mode): throughput_imgps,
-                                  'latency_{}'.format(self.mode): latency_ms})
+            stats = process_performance_stats(np.array(self._timestamps),
+                                              self._global_batch_size)
+            self.logger.log(step=(), data={metric: value for (metric, value) in stats})

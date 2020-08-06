@@ -24,54 +24,15 @@ import numpy as np
 import torch
 
 from . import data_utils, FairseqDataset
+import itertools
+import os
+import sys
+from fairseq.data import (
+    Dictionary, IndexedInMemoryDataset,
+    IndexedRawTextDataset,
+)
 
 
-def collate(samples, pad_idx, eos_idx, left_pad_source=True, left_pad_target=False, pad_sequence=1):
-    if len(samples) == 0:
-        return {}
-
-    def merge(key, left_pad, move_eos_to_beginning=False):
-        return data_utils.collate_tokens(
-            [s[key] for s in samples],
-            pad_idx, eos_idx, left_pad, move_eos_to_beginning,
-            pad_sequence,
-        )
-
-    id = torch.LongTensor([s['id'] for s in samples])
-    src_tokens = merge('source', left_pad=left_pad_source)
-    # sort by descending source length
-    src_lengths = torch.LongTensor([s['source'].numel() for s in samples])
-    src_lengths, sort_order = src_lengths.sort(descending=True)
-    id = id.index_select(0, sort_order)
-    src_tokens = src_tokens.index_select(0, sort_order)
-
-    prev_output_tokens = None
-    target = None
-    if samples[0].get('target', None) is not None:
-        target = merge('target', left_pad=left_pad_target)
-        # we create a shifted version of targets for feeding the
-        # previous output token(s) into the next decoder step
-        prev_output_tokens = merge(
-            'target',
-            left_pad=left_pad_target,
-            move_eos_to_beginning=True,
-        )
-        prev_output_tokens = prev_output_tokens.index_select(0, sort_order)
-        target = target.index_select(0, sort_order)
-        ntokens = sum(len(s['target']) for s in samples)
-    else:
-        ntokens = sum(len(s['source']) for s in samples)
-
-    return {
-        'id': id,
-        'ntokens': ntokens,
-        'net_input': {
-            'src_tokens': src_tokens,
-            'src_lengths': src_lengths,
-            'prev_output_tokens': prev_output_tokens,
-        },
-        'target': target,
-    }
 
 
 class LanguagePairDataset(FairseqDataset):
@@ -100,7 +61,7 @@ class LanguagePairDataset(FairseqDataset):
         self.max_target_positions = max_target_positions
         self.pad_sequence = pad_sequence
         self.shuffle = shuffle
-        print("| Sentences are being padded to multiples of: {}".format(self.pad_sequence))
+        print("| Sentences are being padded to multiples of: {}".format(self.pad_sequence), file=sys.stderr)
 
     def __getitem__(self, index):
         return {
@@ -114,24 +75,12 @@ class LanguagePairDataset(FairseqDataset):
 
     def collater(self, samples):
         """Merge a list of samples to form a mini-batch."""
-        return collate(
+        return data_utils.collate(
             samples, pad_idx=self.src_dict.pad(), eos_idx=self.src_dict.eos(),
             left_pad_source=self.left_pad_source, left_pad_target=self.left_pad_target,
             pad_sequence=self.pad_sequence,
         )
 
-    def get_dummy_batch(self, num_tokens, max_positions, src_len=128, tgt_len=128):
-        max_source_positions, max_target_positions = self._get_max_positions(max_positions)
-        src_len, tgt_len = min(src_len, max_source_positions), min(tgt_len, max_target_positions)
-        bsz = num_tokens // max(src_len, tgt_len)
-        return self.collater([
-            {
-                'id': i,
-                'source': self.src_dict.dummy_sentence(src_len),
-                'target': self.tgt_dict.dummy_sentence(tgt_len) if self.tgt_dict is not None else None,
-            }
-            for i in range(bsz)
-        ])
 
     def num_tokens(self, index):
         """Return an example's length (number of tokens), used for batching."""
@@ -172,3 +121,85 @@ class LanguagePairDataset(FairseqDataset):
         assert len(max_positions) == 2
         max_src_pos, max_tgt_pos = max_positions
         return min(self.max_source_positions, max_src_pos), min(self.max_target_positions, max_tgt_pos)
+
+def load_dataset(args, datasets, split, src_dict, tgt_dict, combine=False):
+    """Load a dataset split."""
+
+    def split_exists(split, src, tgt, lang):
+        filename = os.path.join(args.data, '{}.{}-{}.{}'.format(split, src, tgt, lang))
+        if args.raw_text and IndexedRawTextDataset.exists(filename):
+            return True
+        elif not args.raw_text and IndexedInMemoryDataset.exists(filename):
+            return True
+        return False
+
+    def indexed_dataset(path, dictionary):
+        if args.raw_text:
+            return IndexedRawTextDataset(path, dictionary)
+        elif IndexedInMemoryDataset.exists(path):
+            return IndexedInMemoryDataset(path, fix_lua_indexing=True)
+        return None
+
+    src_datasets = []
+    tgt_datasets = []
+
+    for k in itertools.count():
+        split_k = split + (str(k) if k > 0 else '')
+
+        # infer langcode
+        src, tgt = args.source_lang, args.target_lang
+        if split_exists(split_k, src, tgt, src):
+            prefix = os.path.join(args.data, '{}.{}-{}.'.format(split_k, src, tgt))
+        elif split_exists(split_k, tgt, src, src):
+            prefix = os.path.join(args.data, '{}.{}-{}.'.format(split_k, tgt, src))
+        else:
+            if k > 0:
+                break
+            else:
+                raise FileNotFoundError('Dataset not found: {} ({})'.format(split, args.data))
+
+        src_datasets.append(indexed_dataset(prefix + src, src_dict))
+        tgt_datasets.append(indexed_dataset(prefix + tgt, tgt_dict))
+
+        print('| {} {} {} examples'.format(args.data, split_k, len(src_datasets[-1])))
+
+        if not combine:
+            break
+
+    assert len(src_datasets) == len(tgt_datasets)
+
+    if len(src_datasets) == 1:
+        src_dataset, tgt_dataset = src_datasets[0], tgt_datasets[0]
+        src_sizes = src_dataset.sizes
+        tgt_sizes = tgt_dataset.sizes
+    else:
+        src_dataset = ConcatDataset(src_datasets)
+        tgt_dataset = ConcatDataset(tgt_datasets)
+        src_sizes = np.concatenate([ds.sizes for ds in src_datasets])
+        tgt_sizes = np.concatenate([ds.sizes for ds in tgt_datasets])
+
+    datasets[split] = LanguagePairDataset(
+        src_dataset, src_sizes, src_dict,
+        tgt_dataset, tgt_sizes, tgt_dict,
+        left_pad_source=args.left_pad_source,
+        left_pad_target=args.left_pad_target,
+        max_source_positions=args.max_source_positions,
+        max_target_positions=args.max_target_positions,
+        pad_sequence=args.pad_sequence,
+    )
+
+def load_dataset_splits(args, splits, src_dict, tgt_dict):
+    datasets = {}
+    for split in splits:
+        if split == 'train':
+            load_dataset(args, datasets, split, src_dict, tgt_dict, combine=True)
+        else:
+            for k in itertools.count():
+                split_k = split + (str(k) if k > 0 else '')
+                try:
+                    load_dataset(args, datasets, split_k, src_dict, tgt_dict, combine=False)
+                except FileNotFoundError as e:
+                    if k > 0:
+                        break
+                    raise e
+    return datasets

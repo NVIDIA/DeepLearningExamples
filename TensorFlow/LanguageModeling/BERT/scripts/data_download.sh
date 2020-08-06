@@ -12,8 +12,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+NV_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-"all"}
 
-docker run --runtime=nvidia -v $PWD:/workspace/bert \
-    --rm --shm-size=1g --ulimit memlock=-1 \
-    --ulimit stack=67108864 --ipc=host -t -i \
-    bert bash -c "bash data/create_datasets_from_start.sh"
+to_download=${1:-"wiki_only"} # By default, we don't download BooksCorpus dataset due to recent issues with the host server
+
+docker run --gpus $NV_VISIBLE_DEVICES \
+    --rm -it \
+    --net=host \
+    --shm-size=1g \
+    --ulimit memlock=-1 \
+    --ulimit stack=67108864 \
+    -v $PWD:/workspace/bert \
+    bert bash -c "bash data/create_datasets_from_start.sh ${to_download}"
