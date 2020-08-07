@@ -1,7 +1,0 @@
-__pycache__
-tags
-*.log
-/results
-/data
-.DS_Store
-.rsyncignore

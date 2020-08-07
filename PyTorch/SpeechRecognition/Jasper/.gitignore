@@ -1,9 +1,0 @@
-__pycache__
-*.pt
-results/
-datasets/
-checkpoints/
-
-*.swp
-*.swo
-*.swn

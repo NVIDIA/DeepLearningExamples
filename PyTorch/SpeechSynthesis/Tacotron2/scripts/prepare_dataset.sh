@@ -1,16 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
-
-DATADIR="LJSpeech-1.1"
-BZ2ARCHIVE="${DATADIR}.tar.bz2"
-ENDPOINT="http://data.keithito.com/data/speech/$BZ2ARCHIVE"
-
-if [ ! -d "$DATADIR" ]; then
-  echo "dataset is missing, unpacking ..."
-  if [ ! -f "$BZ2ARCHIVE" ]; then
-    echo "dataset archive is missing, downloading ..."
-    wget "$ENDPOINT"
-  fi
-  tar jxvf "$BZ2ARCHIVE"
-fi
+mkdir -p $HOME/DeepLearningExamples/PyTorch/SpeechSynthesis/Tacotron2/SLRDATA
+mkdir -p $HOME/DeepLearningExamples/PyTorch/SpeechSynthesis/Tacotron2/SLRDATA/mel
+gcsfuse research-datasets/bn_slr/SLR37/bn_bd $HOME/DeepLearningExamples/PyTorch/SpeechSynthesis/Tacotron2/SLRDATA
+python datamodifier.py

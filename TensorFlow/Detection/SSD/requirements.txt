@@ -1,2 +1,0 @@
-pycocotools==2.0.0
-contextlib2

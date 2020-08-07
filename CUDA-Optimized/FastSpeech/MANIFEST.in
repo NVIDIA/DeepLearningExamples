@@ -1,2 +1,0 @@
-include fastspeech/hparams/*.yaml
-recursive-include fastspeech/trt/plugins *.so
