@@ -9,7 +9,7 @@ RUN pip --no-cache-dir --no-cache install git+https://github.com/NVIDIA/dllogger
 
 WORKDIR /workspace
 RUN git clone https://github.com/openai/gradient-checkpointing.git
-RUN git clone https://github.com/attardi/wikiextractor.git
+RUN git clone https://github.com/attardi/wikiextractor.git && cd wikiextractor && git checkout 6408a430fc504a38b04d37ce5e7fc740191dee16 && cd ..
 RUN git clone https://github.com/soskek/bookcorpus.git
 RUN git clone https://github.com/titipata/pubmed_parser
 
