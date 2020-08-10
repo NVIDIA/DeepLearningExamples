@@ -66,13 +66,13 @@ echo "export_model.sh: Exporting TRT engine, CUDA ARCH = ${ARCH} ... "
 PREC_FLAGS=""
 if [ "$PRECISION" == "fp16" ]
 then
-	PREC_FLAGS="--trt_fp16"
+ 	PREC_FLAGS="--trt_fp16"
 fi
 
 # remove targtes first
 rm -f ${MODEL_REPO}/jasper-trt/1/jasper_${ARCH}.plan ${MODEL_REPO}/jasper-onnx/1/jasper.onnx
 
-python  ${JASPER_REPO}/trt/perf.py \
+python  ${JASPER_REPO}/tensorrt/perf.py \
 	--ckpt_path ${CHECKPOINT_DIR}/${CHECKPOINT} \
 	--wav=${JASPER_REPO}/notebooks/example1.wav \
 	--model_toml=${JASPER_REPO}/configs/${MODEL_CONFIG} \
@@ -85,7 +85,7 @@ if [ "$PRECISION" == "fp16" ]
 then
 	PREC_FLAGS="--trt_fp16 --pyt_fp16"
 fi
-python  ${JASPER_REPO}/trt/perf.py \
+python  ${JASPER_REPO}/tensorrt/perf.py \
 	--ckpt_path ${CHECKPOINT_DIR}/${CHECKPOINT} \
 	--wav=${JASPER_REPO}/notebooks/example1.wav \
 	--model_toml=${JASPER_REPO}/configs/${MODEL_CONFIG} \

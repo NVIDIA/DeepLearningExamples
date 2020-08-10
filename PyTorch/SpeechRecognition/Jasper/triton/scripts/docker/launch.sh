@@ -29,11 +29,11 @@ fi
 
 echo $MOUNTS
 docker run -it --rm \
-  --runtime=nvidia \
+  --gpus=all \
   --shm-size=4g \
   --ulimit memlock=-1 \
   --ulimit stack=67108864 \
   ${MOUNTS} \
   -v ${JASPER_REPO}:/jasper \
   ${EXTRA_JASPER_ENV} \
-  jasper:trtis bash $PROGRAM_PATH
+  jasper:triton bash $PROGRAM_PATH

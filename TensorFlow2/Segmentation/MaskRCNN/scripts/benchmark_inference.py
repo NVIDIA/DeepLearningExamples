@@ -36,7 +36,7 @@ def main():
         f'python {main_path}'
         f' --mode eval'
         f' --model_dir "{flags.model_dir}"'
-        f' --checkpoint "{os.path.join(flags.weights_dir, "resnet/resnet-nhwc-2018-10-14/model.ckpt-112602")}"'
+        f' --checkpoint "{os.path.join(flags.weights_dir, "resnet/resnet-nhwc-2018-02-07/model.ckpt-112603")}"'
         f' --validation_file_pattern "{os.path.join(flags.data_dir, "val*.tfrecord")}"'
         f' --val_json_file "{os.path.join(flags.data_dir, "annotations/instances_val2017.json")}"' 
         f' --num_steps_per_eval 200'

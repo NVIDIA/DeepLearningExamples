@@ -1,0 +1,16 @@
+parent_yaml: 'trt.yaml'
+
+# TRT
+trt_multi_engine: True
+trt_file_path_list: [
+  "/fastspeech/preprocessed/v0.2.0/fastspeech.i32.o256.trt",
+  "/fastspeech/preprocessed/v0.2.0/fastspeech.i64.o512.trt",
+  "/fastspeech/preprocessed/v0.2.0/fastspeech.i96.o768.trt",
+  "/fastspeech/preprocessed/v0.2.0/fastspeech.i128.o1024.trt",
+  ]
+trt_max_input_seq_len_list: [32, 64, 96, 128]
+trt_max_output_seq_len_list: [256, 512, 768, 1024]
+
+trt_file_path: ""
+trt_max_input_seq_len: None
+trt_max_output_seq_len: None

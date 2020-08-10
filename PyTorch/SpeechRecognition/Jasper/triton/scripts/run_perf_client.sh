@@ -67,13 +67,13 @@ ARGS="\
 curl -s "http://${SERVER_HOSTNAME}:8000/api/status/${MODEL_NAME}" | grep ready_state | grep SERVER_READY || (echo "Model ${MODEL_NAME} is not ready, perf_client skipped..." && exit 1)
 
 echo "=== STARTING: perf client ${ARGS} --concurrency-range 1:4:1 ==="
-docker run  -e DISPLAY=${DISPLAY}  --runtime nvidia --rm \
+docker run  -e DISPLAY=${DISPLAY}  --gpus all --rm \
 	      --privileged --net=host \
 	      -v ${RESULT_DIR_H}:/results --name jasper-perf-client \
 	      ${TRTIS_CLIENT_CONTAINER_TAG}  perf_client $ARGS -f /results/${OUTPUT_FILE_CSV}_p1 --concurrency-range 1:4:1 2>&1 | tee -a $LOGNAME
 
 echo "=== STARTING: perf client ${ARGS} --concurrency-range 8:${MAX_CONCURRENCY}:8 ==="
-docker run  -e DISPLAY=${DISPLAY}  --runtime nvidia --rm \
+docker run  -e DISPLAY=${DISPLAY}  --gpus all --rm \
 	      --privileged --net=host \
 	      -v ${RESULT_DIR_H}:/results --name jasper-perf-client \
 	      ${TRTIS_CLIENT_CONTAINER_TAG}  perf_client $ARGS -f /results/${OUTPUT_FILE_CSV}_p2 --concurrency-range 8:${MAX_CONCURRENCY}:8 2>&1 | tee -a $LOGNAME

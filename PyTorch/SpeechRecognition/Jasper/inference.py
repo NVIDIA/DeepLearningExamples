@@ -56,6 +56,10 @@ def parse_args():
     parser.add_argument("--wav", type=str, help='absolute path to .wav file (16KHz)')
     parser.add_argument("--cpu", action="store_true", help="Run inference on CPU")
     parser.add_argument("--ema", action="store_true", help="If available, load EMA model weights")
+
+    # FIXME Unused, but passed by Triton helper scripts
+    parser.add_argument("--pyt_fp16", action='store_true', help='use half precision')
+
     return parser.parse_args()
 
 def calc_wer(data_layer, audio_processor,

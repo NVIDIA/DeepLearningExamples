@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvcr.io/nvidia/tensorflow:19.07-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.06-tf1-py3
+FROM ${FROM_IMAGE_NAME}
 
-COPY . /workspace/gnmt
 WORKDIR /workspace/gnmt
 
+COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-ENTRYPOINT ["/bin/sh", "-c"]
-CMD ["bash"]
+COPY . .

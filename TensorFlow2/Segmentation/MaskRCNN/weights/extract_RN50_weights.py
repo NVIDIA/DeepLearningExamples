@@ -44,7 +44,7 @@ def rename(checkpoint_dir, save_to, dry_run, verbose):
 
         total_vars_loaded = 0
 
-        for var_name, _ in tf.contrib.framework.list_variables(checkpoint_dir):
+        for var_name, _ in tf.train.list_variables(checkpoint_dir):
 
             if "resnet50" in var_name:
                 # Load the variable

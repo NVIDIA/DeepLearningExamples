@@ -1,5 +1,5 @@
 # Copyright (c) 2017 Elad Hoffer
-# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -26,6 +26,7 @@ import sys
 import time
 from contextlib import contextmanager
 
+import dllogger
 import numpy as np
 import torch
 import torch.distributed as dist
@@ -220,6 +221,21 @@ def setup_logging(log_all_ranks=True, log_file=os.devnull):
     logging.getLogger('').addFilter(rank_filter)
 
 
+def setup_dllogger(enabled=True, filename=os.devnull):
+    rank = get_rank()
+
+    if enabled and rank == 0:
+        backends = [
+            dllogger.JSONStreamBackend(
+                dllogger.Verbosity.VERBOSE,
+                filename,
+                ),
+            ]
+        dllogger.init(backends)
+    else:
+        dllogger.init([])
+
+
 def set_device(cuda, local_rank):
     """
     Sets device based on local_rank and returns instance of torch.device.
@@ -262,7 +278,7 @@ def log_env_info():
 
 
 def pad_vocabulary(math):
-    if math == 'fp16' or math == 'manual_fp16':
+    if math == 'tf32' or math == 'fp16' or math == 'manual_fp16':
         pad_vocab = 8
     elif math == 'fp32':
         pad_vocab = 1

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -44,6 +44,8 @@ class AccuracyTable:
         data_header = []
         if 'fp32' in write_math:
             data_header += [f'**Accuracy - FP32 ({self.unit})**']
+        if 'tf32' in write_math:
+            data_header += [f'**Accuracy - TF32 ({self.unit})**']
         if 'fp16' in write_math:
             data_header += [f'**Accuracy - FP16 ({self.unit})**']
         writer.headers = main_header + data_header
@@ -54,6 +56,8 @@ class AccuracyTable:
             row = [batch_size, beam_size]
             if 'fp32' in write_math:
                 row.append(v['fp32'])
+            if 'tf32' in write_math:
+                row.append(v['tf32'])
             if 'fp16' in write_math:
                 row.append(v['fp16'])
             writer.value_matrix.append(row)

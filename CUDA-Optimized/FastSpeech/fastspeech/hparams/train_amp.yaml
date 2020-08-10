@@ -1,0 +1,14 @@
+# Inheritance
+parent_yaml: "train.yaml"
+
+# Path
+log_path: ""
+checkpoint_path: ""
+
+# Train
+final_steps: 25
+log_step: 1
+use_amp: True
+nvprof_iter_start: 5
+nvprof_iter_end: 25
+pyprof_enabled: False

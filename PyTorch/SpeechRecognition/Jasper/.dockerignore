@@ -5,3 +5,5 @@ checkpoints/
 datasets/
 external/tensorrt-inference-server/
 checkpoints/
+triton/model_repo
+triton/deploy

@@ -26,13 +26,13 @@ FILE=${3} # json manifest file, OR single wav file
 JASPER_CONTAINER_TAG=${JASPER_CONTAINER_TAG:-jasper:trtis}
 
 if [ "$#" -ge 1 ] && [ "${FILE: -4}" == ".wav" ]; then 
-  CMD="python /jasper/trtis/jasper-client.py --data_dir /data --audio_filename ${FILE} --model_platform ${MODEL_TYPE}"
+  CMD="python /jasper/triton/jasper-client.py --data_dir /data --audio_filename ${FILE} --model_platform ${MODEL_TYPE}"
   ARGS=""
   ARGS="$ARGS -v $DATA_DIR:/data"
 elif [ "$#" -ge 1 ] && [ "${FILE: -4}" == "json" ]; then
   ARGS=""
   ARGS="$ARGS -v $DATA_DIR:/data"
-  CMD="python /jasper/trtis/jasper-client.py --manifest_filename ${FILE} --model_platform ${MODEL_TYPE} --data_dir /data"
+  CMD="python /jasper/triton/jasper-client.py --manifest_filename ${FILE} --model_platform ${MODEL_TYPE} --data_dir /data"
 else
   ARGS="-it"
   CMD=""

@@ -100,7 +100,7 @@ class SpecAugment(nn.Module):
     def forward(self, x):
         sh = x.shape
 
-        mask = torch.zeros(x.shape).byte()
+        mask = torch.zeros(x.shape, dtype=torch.bool)
         for idx in range(sh[0]):
             for _ in range(self.cutout_x_regions):
                 cutout_x_left = int(random.uniform(0, sh[1] - self.cutout_x_width))
@@ -130,7 +130,7 @@ class SpecCutoutRegions(nn.Module):
     def forward(self, x):
         sh = x.shape
 
-        mask = torch.zeros(x.shape, dtype=torch.uint8)
+        mask = torch.zeros(x.shape, dtype=torch.bool)
 
         for idx in range(sh[0]):
             for i in range(self.cutout_rect_regions):
@@ -275,7 +275,7 @@ class MaskedConv1d(nn.Conv1d):
 
     def get_seq_len(self, lens):
         return ((lens + 2 * self.padding[0] - self.dilation[0] * (
-            self.kernel_size[0] - 1) - 1) / self.stride[0] + 1)
+            self.kernel_size[0] - 1) - 1) // self.stride[0] + 1)
 
     def forward(self, inp):
         if self.use_conv_mask:
