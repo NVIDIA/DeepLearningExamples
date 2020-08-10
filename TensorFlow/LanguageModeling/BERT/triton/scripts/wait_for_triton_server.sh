@@ -17,8 +17,8 @@ SERVER_URI=${1:-"localhost"}
 
 echo "Waiting for TRITON Server to be ready at http://$SERVER_URI:8000..."
 
-live_command="curl -m 1 -L -s -o /dev/null -w %{http_code} http://$SERVER_URI:8000/api/health/live"
-ready_command="curl -m 1 -L -s -o /dev/null -w %{http_code} http://$SERVER_URI:8000/api/health/ready"
+live_command="curl -m 1 -L -s -o /dev/null -w %{http_code} http://$SERVER_URI:8000/v2/health/live"
+ready_command="curl -m 1 -L -s -o /dev/null -w %{http_code} http://$SERVER_URI:8000/v2/health/ready"
 
 current_status=$($live_command)
 

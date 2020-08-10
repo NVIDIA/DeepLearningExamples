@@ -25,8 +25,8 @@ fi
 python3 /workspace/bert/data/bertPrep.py --action download --dataset wikicorpus_en
 python3 /workspace/bert/data/bertPrep.py --action download --dataset google_pretrained_weights  # Includes vocab
 python3 /workspace/bert/data/bertPrep.py --action download --dataset squad
-python3 /workspace/bert/data/bertPrep.py --action download --dataset mrpc
-python3 /workspace/bert/data/bertPrep.py --action download --dataset sst-2
+python3 /workspace/bert/data/bertPrep.py --action download --dataset MRPC
+python3 /workspace/bert/data/bertPrep.py --action download --dataset SST
 
 # Properly format the text files
 if [ "$to_download" = "wiki_books" ] ; then

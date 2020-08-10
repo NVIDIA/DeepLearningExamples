@@ -61,6 +61,8 @@ class Downloader:
 
         elif self.dataset_name == 'CoLA':
             self.download_glue(self.dataset_name)
+        elif self.dataset_name == 'SST':
+            self.download_glue(self.dataset_name)
 
         elif self.dataset_name == 'squad':
             self.download_squad()
@@ -78,6 +80,7 @@ class Downloader:
             self.download_glue("CoLA")
             self.download_glue("MNLI")
             self.download_glue("MRPC")
+            self.download_glue("SST")
             self.download_squad()
 
         else:

@@ -729,9 +729,9 @@ Note: Time to train includes upto 16 minutes of start up time for every restart 
 
 Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 20.06-py3 NGC container on NVIDIA DGX A100 with 8x A100 40GB GPUs.
 
-| **GPUs** | **Batch size / GPU** | **Accuracy - TF32** | **Accuracy - mixed precision** | **Time to Train - TF32 (Hrs)** | **Time to Train - mixed precision (Hrs)** |
+| **GPUs** | **Batch size / GPU: TF32, FP16 ** | **Accuracy - TF32** | **Accuracy - mixed precision** | **Time to Train - TF32 (Hrs)** | **Time to Train - mixed precision (Hrs)** |
 |:---:|:----:|:----:|:---:|:----:|:----:|
-| 8 | 24 |91.41 |91.52 |0.26|0.26|
+| 8 | 16, 24 |91.41 |91.52 |0.26|0.26|
 
 ###### Fine-tuning accuracy for GLUE MRPC: NVIDIA DGX A100 (8x A100 40G)
 

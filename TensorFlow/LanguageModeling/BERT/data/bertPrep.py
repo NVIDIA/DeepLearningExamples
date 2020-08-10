@@ -63,7 +63,7 @@ def main(args):
     elif args.action == 'text_formatting':
         assert args.dataset != 'google_pretrained_weights' and args.dataset != 'nvidia_pretrained_weights' \
                and args.dataset != 'squad' and args.dataset != 'MRPC' and args.dataset != 'CoLA' and \
-               args.dataset != 'MNLI', 'Cannot perform text_formatting on pretrained weights'
+               args.dataset != 'MNLI' and args.dataset != 'SST', 'Cannot perform text_formatting on pretrained weights'
 
         if not os.path.exists(directory_structure['extracted']):
             os.makedirs(directory_structure['extracted'])
@@ -274,6 +274,7 @@ if __name__ == "__main__":
             'MRPC',
             'CoLA',
             'MNLI',
+            'SST',
             'all'
         }
     )
