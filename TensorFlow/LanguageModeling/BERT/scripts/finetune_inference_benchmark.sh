@@ -76,6 +76,7 @@ if [ "$task" = "squad" ] ; then
        done
        done
        done
+    done
 
 else
 

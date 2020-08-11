@@ -457,9 +457,9 @@ def input_fn_builder(features, batch_size, seq_length, is_training, drop_remaind
 def main(_):
   # causes memory fragmentation for bert leading to OOM
   if os.environ.get("TF_XLA_FLAGS", None) is not None:
-    os.environ["TF_XLA_FLAGS"] += "--tf_xla_enable_lazy_compilation=false"
+    os.environ["TF_XLA_FLAGS"] += " --tf_xla_enable_lazy_compilation false"
   else:
-    os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false"
+    os.environ["TF_XLA_FLAGS"] = " --tf_xla_enable_lazy_compilation false"
 
   tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
   dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)

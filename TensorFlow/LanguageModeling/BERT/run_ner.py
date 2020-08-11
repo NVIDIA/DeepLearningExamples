@@ -628,9 +628,9 @@ def result_to_pair(predict_line, pred_ids, id2label, writer, err_writer):
 def main(_):
     # causes memory fragmentation for bert leading to OOM
     if os.environ.get("TF_XLA_FLAGS", None) is not None:
-        os.environ["TF_XLA_FLAGS"] += "--tf_xla_enable_lazy_compilation=false"
+        os.environ["TF_XLA_FLAGS"] += " --tf_xla_enable_lazy_compilation false"
     else:
-        os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false"
+        os.environ["TF_XLA_FLAGS"] = " --tf_xla_enable_lazy_compilation false"
 
     tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
     dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)
