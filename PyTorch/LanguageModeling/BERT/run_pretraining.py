@@ -396,7 +396,7 @@ def prepare_model_and_optimizer(args, device):
     model.checkpoint_activations(args.checkpoint_activations)
 
     if args.resume_from_checkpoint:
-        if args.phase2 or args.init_checkpoint:
+        if args.phase2:
             keys = list(checkpoint['optimizer']['state'].keys())
             #Override hyperparameters from previous checkpoint
             for key in keys:
@@ -406,10 +406,11 @@ def prepare_model_and_optimizer(args, device):
                 checkpoint['optimizer']['param_groups'][iter]['t_total'] = args.max_steps
                 checkpoint['optimizer']['param_groups'][iter]['warmup'] = args.warmup_proportion
                 checkpoint['optimizer']['param_groups'][iter]['lr'] = args.learning_rate
-        optimizer.load_state_dict(checkpoint['optimizer'])  # , strict=False)
+        if not args.init_checkpoint:
+            optimizer.load_state_dict(checkpoint['optimizer'])  # , strict=False)
 
         # Restore AMP master parameters          
-        if args.fp16:
+        if args.fp16 and not args.init_checkpoint:
             optimizer._lazy_init_maybe_master_weights()
             optimizer._amp_stash.lazy_init_called = True
             optimizer.load_state_dict(checkpoint['optimizer'])
