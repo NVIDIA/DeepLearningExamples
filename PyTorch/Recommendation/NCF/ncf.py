@@ -115,6 +115,39 @@ def init_distributed(args):
     else:
         args.local_rank = 0
 
+import pdb
+
+def roc_auc_score(y_true, y_score):
+    """ROC AUC score in PyTorch
+    Args:
+        y_true (Tensor):
+        y_score (Tensor):
+    """
+    device = 'cpu'
+    y_true.squeeze_()
+    y_score.squeeze_()
+    if y_true.shape != y_score.shape:
+        raise TypeError(F"Shape of y_true and y_score must match. Got {y_true.shape()} and {y_score.shape()}.")
+
+    desc_score_indices = torch.argsort(y_score, descending=True)
+    y_score = y_score[desc_score_indices]
+    y_true = y_true[desc_score_indices]
+
+    distinct_value_indices = torch.nonzero(y_score[1:] - y_score[:-1]).squeeze()
+    threshold_idxs = torch.cat([distinct_value_indices, torch.tensor([y_true.numel() - 1], device=device)])
+
+    tps = torch.cumsum(y_true, dim=0)[threshold_idxs]
+    fps = 1 + threshold_idxs - tps
+
+    tps = torch.cat([torch.zeros(1, device=device), tps])
+    fps = torch.cat([torch.zeros(1, device=device), fps])
+
+    fpr = fps / fps[-1]
+    tpr = tps / tps[-1]
+
+    area = torch.trapz(tpr, fpr).item()
+
+    return area
 
 def val_epoch(model, x, y, dup_mask, real_indices, K, samples_per_user, num_user,
               epoch=None, distributed=False):
@@ -126,6 +159,16 @@ def val_epoch(model, x, y, dup_mask, real_indices, K, samples_per_user, num_user
             p.append(model(u, n, sigmoid=True).detach())
 
         temp = torch.cat(p).view(-1,samples_per_user)
+        #pdb.set_trace()
+        
+        y_pred = torch.reshape(temp, (-1,1)).cpu()
+        y_true = np.zeros((138493, 101), dtype=np.int64)
+        y_true[:,-1] = 1
+        y_true = np.reshape(y_true, (-1,1))
+        y_true = torch.from_numpy(y_true)
+
+        print("=============AUC: %f", roc_auc_score(y_true, y_pred))
+
         del x, y, p
 
         # set duplicate results for the same item to -1 before topk
