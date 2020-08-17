@@ -19,6 +19,7 @@ import numpy as np
 import torch
 from absl import app, flags
 from apex import amp
+from apex.optimizers import FusedAdam
 
 import dlrm.scripts.utils as utils
 from dlrm.data.data_loader import get_data_loaders
@@ -43,9 +44,9 @@ flags.DEFINE_integer("epochs", 1, "Number of epochs to train for")
 flags.DEFINE_integer("max_steps", None, "Stop training after doing this many optimization steps")
 
 flags.DEFINE_integer("warmup_factor", 0, "Learning rate warmup factor. Must be a non-negative integer")
-flags.DEFINE_integer("warmup_steps", 6400, "Number of warmup optimization steps")
-flags.DEFINE_integer("decay_steps", 80000, "Polynomial learning rate decay steps. If equal to 0 will not do any decaying")
-flags.DEFINE_integer("decay_start_step", 64000,
+flags.DEFINE_integer("warmup_steps", 3000, "Number of warmup optimization steps")
+flags.DEFINE_integer("decay_steps", 30000, "Polynomial learning rate decay steps. If equal to 0 will not do any decaying")
+flags.DEFINE_integer("decay_start_step", 5000,
     "Optimization step after which to start decaying the learning rate, if None will start decaying right after the warmup phase is completed")
 flags.DEFINE_integer("decay_power", 2, "Polynomial learning rate decay power")
 flags.DEFINE_float("decay_end_lr", 0, "LR after the decay ends")
@@ -54,8 +55,8 @@ flags.DEFINE_float("decay_end_lr", 0, "LR after the decay ends")
 flags.DEFINE_enum("embedding_type", "joint_fused", ["joint", "joint_fused", "joint_sparse", "multi_table"],
                   help="The type of the embedding operation to use")
 flags.DEFINE_integer("embedding_dim", 128, "Dimensionality of embedding space for categorical features")
-flags.DEFINE_list("top_mlp_sizes", [1024, 1024, 512, 256, 1], "Linear layer sizes for the top MLP")
-flags.DEFINE_list("bottom_mlp_sizes", [512, 256, 128], "Linear layer sizes for the bottom MLP")
+flags.DEFINE_list("top_mlp_sizes", [128, 1], "Linear layer sizes for the top MLP")
+flags.DEFINE_list("bottom_mlp_sizes", [128, 128], "Linear layer sizes for the bottom MLP")
 
 flags.DEFINE_enum("interaction_op", default="cuda_dot", enum_values=["cuda_dot", "dot", "cat"],
                   help="Type of interaction operation to perform.")
@@ -182,8 +183,12 @@ def main(argv):
 
     model = create_model()
 
-    optimizer = torch.optim.SGD(model.parameters(), lr=scaled_lr)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=scaled_lr)
+    
+    #optimizer =  torch.optim.Adam(model.parameters(), lr=1e-4, betas=(0.9, 0.999), eps=1e-8)
 
+    optimizer =  FusedAdam(model.parameters(), lr=0.001, betas=(0.25, 0.5), eps=1e-8)
+    
     if FLAGS.amp and FLAGS.mode == 'train':
         (model.top_model, model.bottom_model.mlp), optimizer = amp.initialize([model.top_model, model.bottom_model.mlp],
                                                                               optimizer, opt_level="O2", loss_scale=1)
@@ -248,6 +253,9 @@ def maybe_save_checkpoint(checkpoint_writer: SerialCheckpointWriter, model, path
     print(f'Checkpoint saving took {end-begin:,.2f} [s]')
 
 
+# +
+import pdb
+
 def train(model, loss_fn, optimizer, data_loader_train, data_loader_test, scaled_lr):
     """Train and evaluate the model
 
@@ -272,7 +280,7 @@ def train(model, loss_fn, optimizer, data_loader_train, data_loader_test, scaled
     test_freq = FLAGS.test_freq if FLAGS.test_freq is not None else steps_per_epoch - 1
 
     metric_logger = utils.MetricLogger(delimiter="  ")
-    metric_logger.add_meter('loss', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
+    metric_logger.add_meter('loss', utils.SmoothedValue(window_size=1, fmt='{value:.15f}'))
     metric_logger.add_meter('step_time', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
 
@@ -307,9 +315,25 @@ def train(model, loss_fn, optimizer, data_loader_train, data_loader_test, scaled
 
             if prefetching_enabled:
                 torch.cuda.synchronize()
-
+            
+            #pdb.set_trace()
+            #generate random negatives on the fly
+            num_samples = list(numerical_features.shape)[0]
+            neg_numerical_features = torch.tensor(numerical_features)
+            
+            neg_users = categorical_features[:,0].reshape(-1,1) # Use the same set of users
+            neg_items = torch.randint(low=0, high=26745, size=(num_samples,1), dtype=torch.int64, device='cuda')
+            neg_categorical_features = torch.cat((neg_users, neg_items), 1)
+                                      
+                                      
+            numerical_features = torch.cat((numerical_features, neg_numerical_features), 0)
+            categorical_features = torch.cat((categorical_features, neg_categorical_features), 0)                          
+                                                     
             output = model(numerical_features, categorical_features).squeeze().float()
 
+            #pdb.set_trace()
+            
+            click = torch.cat((click, torch.zeros((num_samples), dtype=torch.float32, device='cuda')), 0)
             loss = loss_fn(output, click.squeeze())
 
             # Setting grad to None is faster than zero_grad()
@@ -328,7 +352,8 @@ def train(model, loss_fn, optimizer, data_loader_train, data_loader_test, scaled
 
             if step % print_freq == 0 and step > 0:
                 loss_value = loss.item()
-
+                #pdb.set_trace()
+                
                 timer.click()
 
                 if global_step < FLAGS.benchmark_warmup_steps:
@@ -353,7 +378,7 @@ def train(model, loss_fn, optimizer, data_loader_train, data_loader_test, scaled
             if (global_step % test_freq == 0 and global_step > 0 and
                     global_step / steps_per_epoch >= FLAGS.test_after):
                 loss, auc, test_step_time = evaluate(model, loss_fn, data_loader_test)
-                print(F"Epoch {epoch} step {step}. Test loss {loss:.5f}, auc {auc:.6f}")
+                print(F"Epoch {epoch} step {step}. Test loss {loss:.10f}, auc {auc:.6f}")
 
                 if auc > best_auc:
                     best_auc = auc
@@ -386,6 +411,8 @@ def train(model, loss_fn, optimizer, data_loader_train, data_loader_test, scaled
 
     dllogger.log(data=results, step=tuple())
 
+
+# -
 
 def evaluate(model, loss_fn, data_loader):
     """Test dlrm model
