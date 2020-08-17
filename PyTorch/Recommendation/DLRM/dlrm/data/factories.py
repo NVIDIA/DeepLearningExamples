@@ -163,19 +163,24 @@ class SplitBinaryDatasetFactory(DatasetFactory):
         test_dataset_path = os.path.join(self._flags.dataset, "test")
         categorical_sizes = get_categorical_feature_sizes(self._flags)
 
+        # prefetching is currently unsupported if using the batch-wise shuffle
+        prefetch_depth = 0 if self._flags.shuffle_batch_order else 10
+
         dataset_train = SplitCriteoDataset(
             data_path=train_dataset_path,
             batch_size=self._flags.batch_size,
             numerical_features=self._numerical_features,
             categorical_features=self._categorical_features,
-            categorical_feature_sizes=categorical_sizes
+            categorical_feature_sizes=categorical_sizes,
+            prefetch_depth=prefetch_depth
         )
         dataset_test = SplitCriteoDataset(
             data_path=test_dataset_path,
             batch_size=self._flags.test_batch_size,
             numerical_features=self._numerical_features,
             categorical_features=self._categorical_features,
-            categorical_feature_sizes=categorical_sizes
+            categorical_feature_sizes=categorical_sizes,
+            prefetch_depth=prefetch_depth
         )
         return dataset_train, dataset_test
 
