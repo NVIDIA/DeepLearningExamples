@@ -82,8 +82,8 @@ class CriteoBinDataset(Dataset):
         data_file: str,
         batch_size: int = 1,
         subset: float = None,
-        numerical_features: int = 13,
-        categorical_features: int = 26,
+        numerical_features: int = 1,
+        categorical_features: int = 2,
         data_type: str = 'int32'
     ):
         self.data_type = np.__dict__[data_type]
@@ -147,7 +147,7 @@ class SplitCriteoDataset(Dataset):
         prefetch_depth: int = 10
     ):
         self._label_bytes_per_batch = np.dtype(np.bool).itemsize * batch_size
-        self._numerical_bytes_per_batch = 13 * np.dtype(np.float16).itemsize * batch_size if numerical_features else 0
+        self._numerical_bytes_per_batch = 1 * np.dtype(np.float16).itemsize * batch_size if numerical_features else 0
         self._categorical_feature_types = [
             get_categorical_feature_type(size) for size in categorical_feature_sizes
         ] if categorical_feature_sizes else []
@@ -219,7 +219,7 @@ class SplitCriteoDataset(Dataset):
         raw_numerical_data = os.pread(self._numerical_features_file, self._numerical_bytes_per_batch,
                                       idx * self._numerical_bytes_per_batch)
         array = np.frombuffer(raw_numerical_data, dtype=np.float16)
-        return torch.from_numpy(array).view(-1, 13)
+        return torch.from_numpy(array).view(-1, 1)
 
     def _get_categorical_features(self, idx: int) -> Optional[torch.Tensor]:
         if self._categorical_features_files is None:
