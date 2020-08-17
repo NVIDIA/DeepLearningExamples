@@ -139,6 +139,9 @@ def is_data_prefetching_enabled() -> bool:
 def create_model():
     print("Creating model")
 
+    FLAGS.top_mlp_sizes = [int(s) for s in FLAGS.top_mlp_sizes]
+    FLAGS.bottom_mlp_sizes = [int(s) for s in FLAGS.bottom_mlp_sizes]
+
     model_config = {
         'top_mlp_sizes': FLAGS.top_mlp_sizes,
         'bottom_mlp_sizes': FLAGS.bottom_mlp_sizes,

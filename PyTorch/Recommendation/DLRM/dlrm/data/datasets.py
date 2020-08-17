@@ -236,7 +236,10 @@ class SplitCriteoDataset(Dataset):
         return torch.cat(categorical_features, dim=1)
 
     def __del__(self):
-        data_files = [self._label_file, self._numerical_features_file] + self._categorical_features_files
+        data_files = [self._label_file, self._numerical_features_file]
+        if self._categorical_features_files is not None:
+            data_files += self._categorical_features_files
+
         for data_file in data_files:
             if data_file is not None:
                 os.close(data_file)

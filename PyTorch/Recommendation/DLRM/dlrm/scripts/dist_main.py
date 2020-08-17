@@ -32,7 +32,7 @@ from dlrm.model.distributed import DistributedDlrm
 from dlrm.scripts.main import FLAGS, get_categorical_feature_sizes
 from dlrm.utils import distributed as dist
 from dlrm.utils.checkpointing.distributed import make_distributed_checkpoint_writer, make_distributed_checkpoint_loader
-from dlrm.utils.distributed import get_gpu_batch_sizes, get_criteo_device_mapping, is_main_process, is_distributed
+from dlrm.utils.distributed import get_gpu_batch_sizes, get_device_mapping, is_main_process, is_distributed
 
 # Training schedule flags
 FLAGS.set_default("batch_size", 65536)
@@ -75,7 +75,7 @@ def main(argv):
 
     categorical_feature_sizes = get_categorical_feature_sizes(FLAGS)
     world_categorical_feature_sizes = np.asarray(categorical_feature_sizes)
-    device_mapping = get_criteo_device_mapping(world_size)
+    device_mapping = get_device_mapping(categorical_feature_sizes, num_gpus=world_size)
 
     batch_sizes_per_gpu = get_gpu_batch_sizes(FLAGS.batch_size, num_gpus=world_size)
     batch_indices = tuple(np.cumsum([0] + list(batch_sizes_per_gpu)))

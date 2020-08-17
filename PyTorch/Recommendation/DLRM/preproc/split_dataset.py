@@ -22,7 +22,15 @@ from tqdm import tqdm
 import numpy as np
 from typing import Sequence
 
-from dlrm.data.utils import get_categorical_feature_type
+
+def get_categorical_feature_type(size: int):
+    types = (np.int8, np.int16, np.int32)
+
+    for numpy_type in types:
+        if size < np.iinfo(numpy_type).max:
+            return numpy_type
+
+    raise RuntimeError(f"Categorical feature of size {size} is too big for defined types")
 
 
 def split_binary_file(
