@@ -526,7 +526,74 @@ Our results were obtained by running the `scripts/benchmark.sh` inferencing benc
  
 ###### Fine-tuning inference on NVIDIA DGX A100 (1x A100 40GB)
  
-1425.408
+FP16
+ 
+| Batch size | Sequence length | Throughput Avg (sequences/sec) | Latency Avg (ms) | Latency 90% (ms) | Latency 95% (ms) | Latency 99% (ms) |
+|------------|-----------------|--------------------------------|------------------|------------------|------------------|------------------|
+|          1 |             384 |                            178 |            5.630 |            5.500 |            5.555 |            5.608 |
+|        256 |             384 |                            857 |           284.67 |           284.416|          284.416 |           284.67 |
+|        512 |             384 |                            864 |           539.648|          538.112 |          539.136 |          539.136 |
+ 
+TF32
+ 
+| Batch size | Sequence length | Throughput Avg (sequences/sec) | Latency Avg (ms) | Latency 90% (ms) | Latency 95% (ms) | Latency 99% (ms) |
+|------------|-----------------|--------------------------------|------------------|------------------|------------------|------------------|
+|          1 |             384 |                            123 |            8.186 |            7.995 |            8.078 |            8.152 |
+|        256 |             384 |                            344 |          724.992 |          722.432 |          723.456 |           724.48 |
+|        512 |             384 |                            351 |         1426.944 |         1423.872 |         1425.408 |         1425.408 |
+ 
+ 
+ 
+##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
+ 
+Our results were obtained by running the `scripts/benchmark.sh` script in the tensorflow:20.06-tf2-py3 NGC container on NVIDIA DGX-1 with (1x V100 16G) GPUs.
+ 
+ 
+###### Fine-tuning inference on NVIDIA DGX-1 with 16GB
+ 
+FP16
+ 
+| Batch size | Sequence length | Throughput Avg (sequences/sec) | Latency Avg (ms) | Latency 90% (ms) | Latency 95% (ms) | Latency 99% (ms) |
+|------------|-----------------|--------------------------------|------------------|------------------|------------------|------------------|
+|          1 |             384 |                            141 |            7.100 |            7.071 |            7.081 |            7.091 |
+|        128 |             384 |                            517 |          247.424 |           247.04 |           247.04 |          247.296 |
+|        256 |             384 |                            524 |          488.96  |          488.192 |          488.448 |          488.704 |
+ 
+ 
+FP32
+ 
+| Batch size | Sequence length | Throughput Avg (sequences/sec) | Latency Avg (ms) | Latency 90% (ms) | Latency 95% (ms) | Latency 99% (ms) |
+|------------|-----------------|--------------------------------|------------------|------------------|------------------|------------------|
+|          1 |             384 |                             84 |           11.869 |           11.814 |           11.832 |           11.850 |
+|        128 |             384 |                            117 |         1094.144 |         1091.456 |         1091.712 |         1092.736 |
+|        256 |             384 |                            141 |         1817.6   |         1810.176 |         1812.736 |         1815.552 |
+ 
+ 
+##### Inference performance: NVIDIA DGX-2 (1x V100 32GB)
+ 
+Our results were obtained by running the `scripts/benchmark.sh` scripts in the tensorflow:20.06-tf2-py3 NGC container on NVIDIA DGX-2 with (1x V100 32G) GPUs.
+ 
+ 
+###### Fine-tuning inference on NVIDIA DGX-2 with 32GB
+  
+FP16
+ 
+| Batch size | Sequence length | Throughput Avg (sequences/sec) | Latency Avg (ms) | Latency 90% (ms) | Latency 95% (ms) | Latency 99% (ms) |
+|------------|-----------------|--------------------------------|------------------|------------------|------------------|------------------|
+|          1 |             384 |                            144 |            6.953 |            6.888 |            6.910 |            6.932 |
+|        128 |             384 |                            547 |          233.984 |          233.856 |          233.856 |          233.984 |
+|        256 |             384 |                            557 |          459.52  |          458.752 |          459.008 |          459.264 |
+ 
+FP32
+ 
+| Batch size | Sequence length | Throughput Avg (sequences/sec) | Latency Avg (ms) | Latency 90% (ms) | Latency 95% (ms) | Latency 99% (ms) |
+|------------|-----------------|--------------------------------|------------------|------------------|------------------|------------------|
+|          1 |             384 |                             86 |           11.580 |           11.515 |           11.535 |           11.558 |
+|        128 |             384 |                            124 |         1031.168 |           1030.4 |         1030.656 |          1031.04 |
+|        256 |             384 |                            125 |         2049.536 |         2048.512 |         2049.024 |          2049.29 |
+ 
+ 
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
   
 ## Release notes
  
