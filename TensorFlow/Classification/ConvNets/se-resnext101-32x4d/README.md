@@ -198,7 +198,7 @@ To train your model using mixed precision or TF32 with Tensor Cores or FP32, per
 1. Clone the repository.
 ```
 git clone https://github.com/NVIDIA/DeepLearningExamples
-cd DeepLearningExamples/TensorFlow/Classification/RN50v1.5
+cd DeepLearningExamples/TensorFlow/Classification/ConvNets
 ```
 
 2. Download and preprocess the dataset.
@@ -415,7 +415,7 @@ To benchmark the training performance on a specific batch size, run:
 Each of these scripts runs 200 warm-up iterations and measures the first epoch.
 
 To control warmup and benchmark length, use the `--warmup_steps`, `--num_iter` and `--iter_unit` flags. Features like XLA or DALI can be controlled
-with `--use_xla` and `--use_dali` flags. 
+with `--use_xla` and `--use_dali` flags. If no `--data_dir=<path to imagenet>` flag is specified then the benchmarks will use a synthetic dataset. 
 Suggested batch sizes for training are 96 for mixed precision training and 64 for single precision training per single V100 16 GB.
 
 
@@ -433,6 +433,7 @@ To benchmark the inference performance on a specific batch size, run:
 
 By default, each of these scripts runs 20 warm-up iterations and measures the next 80 iterations.
 To control warm-up and benchmark length, use the `--warmup_steps`, `--num_iter` and `--iter_unit` flags.
+If no `--data_dir=<path to imagenet>` flag is specified then the benchmarks will use a synthetic dataset. 
 
 The benchmark can be automated with the `inference_benchmark.sh` script provided in `se-resnext101-32x4d`, by simply running:
 `bash ./se-resnext101-32x4d/inference_benchmark.sh <data dir> <data idx dir>`
