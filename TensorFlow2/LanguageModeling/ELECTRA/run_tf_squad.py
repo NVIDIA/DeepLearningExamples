@@ -560,7 +560,7 @@ def main():
 
                     infer_time = (time.time() - iter_start)
                     infer_perf_avg.update_state(1. * EVAL_BATCH_SIZE / infer_time)
-                    latency.append(1. * infer_time / EVAL_BATCH_SIZE)
+                    latency.append(infer_time)
 
                     for iter_ in range(input_ids.shape[0]):
 
