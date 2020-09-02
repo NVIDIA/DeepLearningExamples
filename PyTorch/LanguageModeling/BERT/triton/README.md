@@ -102,7 +102,7 @@ To make the machine wait until the server is initialized, and the model is ready
 
 ## Performance
 
-The numbers below are averages, measured on Triton, with [static batching](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-guide/docs/model_configuration.html#scheduling-and-batching). 
+The numbers below are averages, measured on Triton on V100 32G GPU, with [static batching](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-guide/docs/model_configuration.html#scheduling-and-batching). 
 
 | Format | GPUs | Batch size | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (mixed precision/FP32)  |
 |--------|------|------------|-----------------|----------------------------------|---------------------------------------------|--------------------------------------------|
