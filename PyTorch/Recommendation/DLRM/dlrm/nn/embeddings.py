@@ -123,7 +123,7 @@ class JointEmbedding(Embeddings):
         self.register_buffer("offsets", torch.tensor([0] + list(categorical_feature_sizes), device=device).cumsum(0))
 
         embedding_weight = torch.empty((self.offsets[-1].item(), embedding_dim), device=device)
-        self.embedding = nn.Embedding.from_pretrained(embedding_weight, freeze=False, sparse=True)
+        self.embedding = nn.Embedding.from_pretrained(embedding_weight, freeze=False, sparse=False)
         self.hash_indices = hash_indices
 
     # pylint:disable=missing-docstring
