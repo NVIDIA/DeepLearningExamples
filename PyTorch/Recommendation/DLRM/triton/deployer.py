@@ -26,6 +26,7 @@ from dlrm.data.datasets import SyntheticDataset
 from dlrm.model.single import Dlrm
 from dlrm.utils.checkpointing.serial import make_serial_checkpoint_loader
 from triton import deployer_lib
+import pdb
 
 sys.path.append('../')
 
@@ -41,9 +42,9 @@ def get_model_args(model_args):
     parser.add_argument("--embedding_dim", type=int, default=128)
     parser.add_argument("--embedding_type", type=str, default="joint", choices=["joint", "multi_table"])
     parser.add_argument("--top_mlp_sizes", type=int, nargs="+",
-                        default=[1024, 1024, 512, 256, 1])
+                        default=[128, 1])
     parser.add_argument("--bottom_mlp_sizes", type=int, nargs="+",
-                        default=[512, 256, 128])
+                        default=[128, 128])
     parser.add_argument("--interaction_op", type=str, default="dot",
                         choices=["dot", "cat"])
     parser.add_argument("--cpu", default=False, action="store_true")
@@ -77,9 +78,13 @@ def initialize_model(args, categorical_sizes):
         checkpoint_loader.load_checkpoint(model, args.model_checkpoint)
         model.to(base_device)
 
+    if model.bottom_model.mlp.layers[0].weight.shape!=torch.Size([128, 171]):
+        raise Exception("Invalid dimension")
+
     if args.fp16:
         model = model.half()
 
+    #pdb.set_trace()
     return model
 
 
@@ -119,9 +124,13 @@ if __name__=='__main__':
 
     with open(os.path.join(model_args.dataset, "model_size.json")) as f:
         categorical_sizes = list(json.load(f).values())
-        categorical_sizes = [s + 1 for s in categorical_sizes]
+        #categorical_sizes = [s + 1 for s in categorical_sizes]
+        categorical_sizes = [s for s in categorical_sizes]
 
     model = initialize_model(model_args, categorical_sizes)
+
+    #pdb.set_trace()
+
     dataloader = get_dataloader(model_args, categorical_sizes)
 
     if model_args.dump_perf_data:

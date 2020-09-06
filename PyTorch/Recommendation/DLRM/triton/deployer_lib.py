@@ -25,7 +25,9 @@ import argparse
 import statistics
 import onnxruntime
 from collections import Counter
-
+import pickle
+import pandas as pd
+import pdb
 
 torch_type_to_triton_type = {
     torch.bool: 'TYPE_BOOL',
@@ -189,7 +191,7 @@ class DeployerLibrary:
         '''
         self.platform = platform
 
-    def prepare_inputs(self, dataloader, device):
+    def prepare_inputs1(self, dataloader, device):
         ''' load sample inputs to device '''
         inputs = []
         for batch in dataloader:
@@ -204,6 +206,34 @@ class DeployerLibrary:
                     batch_d.append(x.to(device) if device else x)
                 batch_d = tuple(batch_d)
                 inputs.append(batch_d)
+        return inputs
+
+    def prepare_inputs(self, dataloader, device):
+        ''' load sample inputs to device '''
+        inputs = []
+        MOVIE_LENS_DATA_PATH = './notebooks/data/ml-25m/'
+        movie_data = pd.read_csv(MOVIE_LENS_DATA_PATH + "movies_preprocessed_v4.csv", dtype={'imdbId': str})
+
+        train_data = pd.read_csv(MOVIE_LENS_DATA_PATH + "train.csv")
+        test_data = pd.read_csv(MOVIE_LENS_DATA_PATH + "test.csv")
+
+        all_movies_id = movie_data['movieId']
+
+        with open('./notebooks/assets/features.pkl', 'rb') as f:
+            cat = pickle.load(f)
+            num_feats, cat_feats = cat['numeric_features'], cat['cat_features']
+
+        # prepare test data
+        num_samples_test = test_data.shape[0]
+        test_data_neg = pd.read_csv(MOVIE_LENS_DATA_PATH + "test.csv").copy()
+        test_data_neg['movieId'] = all_movies_id.sample(n=test_data_neg.shape[0], replace=True).values
+        test_data = pd.concat([test_data, test_data_neg])
+        test_data = test_data.merge(movie_data, on='movieId', how='left')
+
+        test_numerical_features = torch.tensor(test_data[num_feats].values[:4096,:], dtype=torch.float16, device='cuda')
+        test_categorical_features = torch.tensor(test_data[cat_feats].values[:4096,:], dtype=torch.int64, device='cuda')
+
+        inputs = [(test_numerical_features, test_categorical_features)]
         return inputs
 
     def get_list_of_shapes(self, l, fun):
@@ -494,14 +524,17 @@ class Deployer:
         
         # generate input types 
         input_types = [x.dtype for x in inputs[0]]
-        
+
+
         # prepare save path 
         model_folder = os.path.join(self.args.save_dir, self.args.triton_model_name)
         version_folder = os.path.join(model_folder, str(self.args.triton_model_version))
         if not os.path.exists(version_folder):
             os.makedirs(version_folder)
         final_model_path = os.path.join(version_folder, 'model.pt')
-        
+
+        pdb.set_trace()
+
         # convert the model 
         with torch.no_grad():
             if self.args.ts_trace: # trace it 
