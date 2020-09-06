@@ -533,7 +533,7 @@ class Deployer:
             os.makedirs(version_folder)
         final_model_path = os.path.join(version_folder, 'model.pt')
 
-        pdb.set_trace()
+        #pdb.set_trace()
 
         # convert the model 
         with torch.no_grad():
