@@ -78,7 +78,7 @@ def main():
     DLLogger.log(step="PARAMETER", data={'model_name':'Tacotron2_PyT'})
 
     model = load_and_setup_model(args.model_name, parser, None, args.amp_run,
-                                 forward_is_infer=True)
+                                 cpu_run=False, forward_is_infer=True)
 
     if args.model_name == "Tacotron2":
         model = torch.jit.script(model)

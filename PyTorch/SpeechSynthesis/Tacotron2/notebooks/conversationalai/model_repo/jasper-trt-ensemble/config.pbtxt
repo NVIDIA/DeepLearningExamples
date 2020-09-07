@@ -1,10 +1,10 @@
 name: "jasper-trt-ensemble"
 platform: "ensemble"
-max_batch_size: 1
+max_batch_size: 1#MAX_BATCH
 input {
   name: "AUDIO_SIGNAL"
   data_type: TYPE_FP32
-  dims: -1
+  dims: -1#AUDIO_LENGTH
 }
 input {
     name: "NUM_SAMPLES"
@@ -58,3 +58,4 @@ ensemble_scheduling {
     }
   }
 }
+

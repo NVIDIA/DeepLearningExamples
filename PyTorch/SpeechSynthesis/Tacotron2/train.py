@@ -44,6 +44,7 @@ from apex.parallel import DistributedDataParallel as DDP
 import models
 import loss_functions
 import data_functions
+from common.utils import ParseFromConfigFile
 
 import dllogger as DLLogger
 from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
@@ -72,6 +73,9 @@ def parse_args(parser):
                         help='Epochs after which decrease learning rate')
     parser.add_argument('--anneal-factor', type=float, choices=[0.1, 0.3], default=0.1,
                         help='Factor for annealing learning rate')
+
+    parser.add_argument('--config-file', action=ParseFromConfigFile,
+                         type=str, help='Path to configuration file')
 
     # training
     training = parser.add_argument_group('training setup')
@@ -162,7 +166,7 @@ def parse_args(parser):
 def reduce_tensor(tensor, num_gpus):
     rt = tensor.clone()
     dist.all_reduce(rt, op=dist.reduce_op.SUM)
-    rt /= num_gpus
+    rt = torch.true_divide(rt, num_gpus)
     return rt
 
 
@@ -211,8 +215,7 @@ def save_checkpoint(model, optimizer, epoch, config, amp_run, output_dir, model_
             checkpoint['amp'] = amp.state_dict()
 
         checkpoint_filename = "checkpoint_{}_{}.pt".format(model_name, epoch)
-        checkpoint_path = os.path.join(
-            output_dir, checkpoint_filename)
+        checkpoint_path = os.path.join(output_dir, checkpoint_filename)
         print("Saving model and optimizer state at epoch {} to {}".format(
             epoch, checkpoint_path))
         torch.save(checkpoint, checkpoint_path)
@@ -221,7 +224,7 @@ def save_checkpoint(model, optimizer, epoch, config, amp_run, output_dir, model_
         symlink_dst = os.path.join(
             output_dir, "checkpoint_{}_last.pt".format(model_name))
         if os.path.exists(symlink_dst) and os.path.islink(symlink_dst):
-            print("|||| Updating symlink", symlink_dst, "to point to", symlink_src)
+            print("Updating symlink", symlink_dst, "to point to", symlink_src)
             os.remove(symlink_dst)
 
         os.symlink(symlink_src, symlink_dst)
@@ -230,10 +233,10 @@ def save_checkpoint(model, optimizer, epoch, config, amp_run, output_dir, model_
 def get_last_checkpoint_filename(output_dir, model_name):
     symlink = os.path.join(output_dir, "checkpoint_{}_last.pt".format(model_name))
     if os.path.exists(symlink):
-        print("|||| Loading checkpoint from symlink", symlink)
+        print("Loading checkpoint from symlink", symlink)
         return os.path.join(output_dir, os.readlink(symlink))
     else:
-        print("|||| No last checkpoint available - starting from epoch 0 ")
+        print("No last checkpoint available - starting from epoch 0 ")
         return ""
 
 
@@ -350,8 +353,8 @@ def main():
     distributed_run = world_size > 1
 
     if local_rank == 0:
-        DLLogger.init(backends=[JSONStreamBackend(Verbosity.DEFAULT,
-                                                  args.output+'/'+args.log_file),
+        log_file = os.path.join(args.output, args.log_file)
+        DLLogger.init(backends=[JSONStreamBackend(Verbosity.DEFAULT, log_file),
                                 StdOutBackend(Verbosity.VERBOSE)])
     else:
         DLLogger.init(backends=[])
@@ -361,7 +364,7 @@ def main():
     DLLogger.log(step="PARAMETER", data={'model_name':'Tacotron2_PyT'})
 
     model_name = args.model_name
-    parser = models.parse_model_args(model_name, parser)
+    parser = models.model_parser(model_name, parser)
     args, _ = parser.parse_known_args()
 
     torch.backends.cudnn.enabled = args.cudnn_enabled

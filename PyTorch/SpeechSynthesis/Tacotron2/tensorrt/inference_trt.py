@@ -31,8 +31,8 @@ from scipy.io.wavfile import write
 import time
 import torch
 import argparse
-import sys
 
+import sys
 sys.path.append('./')
 
 from common.utils import to_gpu, get_mask_from_lengths
@@ -40,7 +40,7 @@ from tacotron2.text import text_to_sequence
 from inference import MeasureTime, prepare_input_sequence, load_and_setup_model
 import dllogger as DLLogger
 from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
-from trt.trt_utils import load_engine, run_trt_engine
+from trt_utils import load_engine, run_trt_engine
 
 from waveglow.denoiser import Denoiser
 
@@ -284,9 +284,9 @@ def infer_waveglow_trt(waveglow, waveglow_context, mel, measurements, fp16):
 
     waveglow_tensors = {
         "inputs" :
-        {'mel': mel, 'z': z},
+        {'input__0': mel, 'input__1': z},
         "outputs" :
-        {'audio': audios}
+        {'output__0': audios}
     }
     print("Running WaveGlow")
     with MeasureTime(measurements, "waveglow_time"):
@@ -343,6 +343,7 @@ def main():
     sequences, sequence_lengths = prepare_input_sequence(texts)
     sequences = sequences.to(torch.int32)
     sequence_lengths = sequence_lengths.to(torch.int32)
+
     with MeasureTime(measurements, "latency"):
         mel, mel_lengths = infer_tacotron2_trt(encoder, decoder_iter, postnet,
                                                encoder_context, decoder_context, postnet_context,

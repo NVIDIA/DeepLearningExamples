@@ -27,14 +27,15 @@
 
 import pycuda.driver as cuda
 import pycuda.autoinit
-import tensorrt as trt
 import onnx
 import argparse
+import tensorrt as trt
+import os
 
 import sys
 sys.path.append('./')
 
-from trt.trt_utils import build_engine
+from trt_utils import build_engine
 
 def parse_args(parser):
     """
@@ -119,7 +120,8 @@ def main():
         print("Building WaveGlow ...")
         waveglow_engine = build_engine(args.waveglow, shapes=shapes, fp16=args.fp16)
         if waveglow_engine is not None:
-            with open(args.output+"/"+"waveglow"+engine_prec+".engine", 'wb') as f:
+            engine_path = os.path.join(args.output, "waveglow"+engine_prec+".engine")
+            with open(engine_path, 'wb') as f:
                 f.write(waveglow_engine.serialize())
         else:
             print("Failed to build engine from", args.waveglow)
