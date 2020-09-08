@@ -152,7 +152,7 @@ def main(argv):
         dllogger.log(data=results, step=tuple())
 
         if auc is not None:
-            print(F"Finished testing. Test auc {auc:.4f}")
+            print(f"Finished testing. Test auc {auc:.4f}")
         return
 
     if FLAGS.save_checkpoint_path and not FLAGS.bottom_features_ordered and is_main_process():
@@ -209,7 +209,7 @@ def main(argv):
             global_step = steps_per_epoch * epoch + step
 
             if FLAGS.max_steps and global_step > FLAGS.max_steps:
-                print(F"Reached max global steps of {FLAGS.max_steps}. Stopping.")
+                print(f"Reached max global steps of {FLAGS.max_steps}. Stopping.")
                 break
 
             lr_scheduler.step()
@@ -245,7 +245,7 @@ def main(argv):
                 continue
 
             if step == 0:
-                print(F"Started epoch {epoch}...")
+                print(f"Started epoch {epoch}...")
             elif step % print_freq == 0:
                 torch.cuda.current_stream().wait_stream(moving_loss_stream)
                 # Averaging cross a print_freq period to reduce the error.
@@ -264,7 +264,7 @@ def main(argv):
 
                 eta_str = datetime.timedelta(seconds=int(metric_logger.step_time.global_avg * (steps_per_epoch - step)))
                 metric_logger.print(
-                    header=F"Epoch:[{epoch}/{FLAGS.epochs}] [{step}/{steps_per_epoch}]  eta: {eta_str}")
+                    header=f"Epoch:[{epoch}/{FLAGS.epochs}] [{step}/{steps_per_epoch}]  eta: {eta_str}")
 
                 with torch.cuda.stream(moving_loss_stream):
                     moving_loss = 0.
@@ -275,7 +275,7 @@ def main(argv):
                 if auc is None:
                     continue
 
-                print(F"Epoch {epoch} step {step}. auc {auc:.6f}")
+                print(f"Epoch {epoch} step {step}. auc {auc:.6f}")
                 stop_time = time()
 
                 if auc > best_auc:
@@ -284,15 +284,15 @@ def main(argv):
 
                 if FLAGS.auc_threshold and auc >= FLAGS.auc_threshold:
                     run_time_s = int(stop_time - start_time)
-                    print(F"Hit target accuracy AUC {FLAGS.auc_threshold} at epoch "
-                          F"{global_step/steps_per_epoch:.2f} in {run_time_s}s. "
-                          F"Average speed {global_step * FLAGS.batch_size / run_time_s:.1f} records/s.")
+                    print(f"Hit target accuracy AUC {FLAGS.auc_threshold} at epoch "
+                          f"{global_step/steps_per_epoch:.2f} in {run_time_s}s. "
+                          f"Average speed {global_step * FLAGS.batch_size / run_time_s:.1f} records/s.")
                     sys.exit()
 
         epoch_stop_time = time()
         epoch_time_s = epoch_stop_time - epoch_start_time
-        print(F"Finished epoch {epoch} in {datetime.timedelta(seconds=int(epoch_time_s))}. "
-              F"Average speed {steps_per_epoch * FLAGS.batch_size / epoch_time_s:.1f} records/s.")
+        print(f"Finished epoch {epoch} in {datetime.timedelta(seconds=int(epoch_time_s))}. "
+              f"Average speed {steps_per_epoch * FLAGS.batch_size / epoch_time_s:.1f} records/s.")
 
     avg_throughput = FLAGS.batch_size / metric_logger.step_time.avg
 
@@ -383,7 +383,7 @@ def dist_evaluate(model, data_loader):
             if timer.measured is not None:
                 metric_logger.update(step_time=timer.measured)
                 if step % print_freq == 0 and step > 0:
-                    metric_logger.print(header=F"Test: [{step}/{steps_per_epoch}]")
+                    metric_logger.print(header=f"Test: [{step}/{steps_per_epoch}]")
 
         if is_main_process():
             auc = utils.roc_auc_score(torch.cat(y_true), torch.sigmoid(torch.cat(y_score).float()))

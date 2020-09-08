@@ -63,7 +63,7 @@ def split_binary_file(
 
         categorical_fs = []
         for i in range(len(categorical_feature_sizes)):
-            fs = open(os.path.join(output_dir, F'cat_{i}.bin'), 'wb+')
+            fs = open(os.path.join(output_dir, f'cat_{i}.bin'), 'wb+')
             categorical_fs.append(fs)
             file_streams.append(fs)
 

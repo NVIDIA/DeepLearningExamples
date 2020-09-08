@@ -204,7 +204,7 @@ def main(argv):
                    'average_test_throughput': avg_test_throughput}
         dllogger.log(data=results, step=tuple())
 
-        print(F"Finished testing. Test Loss {loss:.4f}, auc {auc:.4f}")
+        print(f"Finished testing. Test Loss {loss:.4f}, auc {auc:.4f}")
         return
 
     if FLAGS.mode == 'inference_benchmark':
@@ -227,12 +227,12 @@ def main(argv):
 
             mean_latency = np.mean(latencies)
             mean_inference_throughput = batch_size / mean_latency
-            subresult = {F'mean_inference_latency_batch_{batch_size}': mean_latency,
-                         F'mean_inference_throughput_batch_{batch_size}': mean_inference_throughput}
+            subresult = {f'mean_inference_latency_batch_{batch_size}': mean_latency,
+                         f'mean_inference_throughput_batch_{batch_size}': mean_inference_throughput}
             results.update(subresult)
         dllogger.log(data=results, step=tuple())
 
-        print(F"Finished inference benchmark.")
+        print(f"Finished inference benchmark.")
         return
 
     if FLAGS.mode == 'train':
@@ -305,7 +305,7 @@ def train(model, loss_fn, optimizer, data_loader_train, data_loader_test, scaled
                           decay_steps=FLAGS.decay_steps, decay_start_step=FLAGS.decay_start_step)
 
             if FLAGS.max_steps and global_step > FLAGS.max_steps:
-                print(F"Reached max global steps of {FLAGS.max_steps}. Stopping.")
+                print(f"Reached max global steps of {FLAGS.max_steps}. Stopping.")
                 break
 
             if prefetching_enabled:
@@ -346,17 +346,17 @@ def train(model, loss_fn, optimizer, data_loader_train, data_loader_test, scaled
                     )
 
                 if global_step < FLAGS.benchmark_warmup_steps:
-                    print(F'Warming up, step [{global_step}/{FLAGS.benchmark_warmup_steps}]')
+                    print(f'Warming up, step [{global_step}/{FLAGS.benchmark_warmup_steps}]')
                     continue
 
                 eta_str = datetime.timedelta(seconds=int(metric_logger.step_time.global_avg * (steps_per_epoch - step)))
                 metric_logger.print(
-                    header=F"Epoch:[{epoch}/{FLAGS.epochs}] [{step}/{steps_per_epoch}]  eta: {eta_str}")
+                    header=f"Epoch:[{epoch}/{FLAGS.epochs}] [{step}/{steps_per_epoch}]  eta: {eta_str}")
 
             if (global_step % test_freq == 0 and global_step > 0 and
                     global_step / steps_per_epoch >= FLAGS.test_after):
                 loss, auc, test_step_time = evaluate(model, loss_fn, data_loader_test)
-                print(F"Epoch {epoch} step {step}. Test loss {loss:.5f}, auc {auc:.6f}")
+                print(f"Epoch {epoch} step {step}. Test loss {loss:.5f}, auc {auc:.6f}")
 
                 if auc > best_auc:
                     best_auc = auc
@@ -366,16 +366,16 @@ def train(model, loss_fn, optimizer, data_loader_train, data_loader_test, scaled
                 if FLAGS.auc_threshold and auc >= FLAGS.auc_threshold:
                     stop_time = time()
                     run_time_s = int(stop_time - start_time)
-                    print(F"Hit target accuracy AUC {FLAGS.auc_threshold} at epoch "
-                          F"{global_step/steps_per_epoch:.2f} in {run_time_s}s. "
-                          F"Average speed {global_step * FLAGS.batch_size / run_time_s:.1f} records/s.")
+                    print(f"Hit target accuracy AUC {FLAGS.auc_threshold} at epoch "
+                          f"{global_step/steps_per_epoch:.2f} in {run_time_s}s. "
+                          f"Average speed {global_step * FLAGS.batch_size / run_time_s:.1f} records/s.")
                     return
 
     stop_time = time()
     run_time_s = int(stop_time - start_time)
 
-    print(F"Finished training in {run_time_s}s. "
-          F"Average speed {global_step * FLAGS.batch_size / run_time_s:.1f} records/s.")
+    print(f"Finished training in {run_time_s}s. "
+          f"Average speed {global_step * FLAGS.batch_size / run_time_s:.1f} records/s.")
 
     avg_throughput = FLAGS.batch_size / metric_logger.step_time.avg
 
@@ -441,7 +441,7 @@ def evaluate(model, loss_fn, data_loader):
             if timer.measured is not None:
                 metric_logger.update(loss=loss_value, step_time=timer.measured)
                 if step % print_freq == 0 and step > 0:
-                    metric_logger.print(header=F"Test: [{step}/{steps_per_epoch}]")
+                    metric_logger.print(header=f"Test: [{step}/{steps_per_epoch}]")
 
         y_true = torch.cat(y_true)
         y_score = torch.cat(y_score)

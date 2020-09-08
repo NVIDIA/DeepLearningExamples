@@ -131,12 +131,12 @@ class JointEmbedding(Embeddings):
         if self.hash_indices:
             for cat, size in enumerate(self._categorical_feature_sizes):
                 categorical_inputs[:, cat] %= size
-                logging.log_first_n(logging.WARNING, F"Hashed indices out of range.", 1)
+                logging.log_first_n(logging.WARNING, f"Hashed indices out of range.", 1)
 
         return [self.embedding(categorical_inputs + self.offsets[:-1])]
 
     def extra_repr(self):
-        s = F"offsets={self.offsets.cpu().numpy()}"
+        s = f"offsets={self.offsets.cpu().numpy()}"
         return s
     # pylint:enable=missing-docstring
 
@@ -189,7 +189,7 @@ class FusedJointEmbedding(Embeddings):
         if self.hash_indices:
             for cat, size in enumerate(self._categorical_feature_sizes):
                 categorical_inputs[:, cat] %= size
-                logging.log_first_n(logging.WARNING, F"Hashed indices out of range.", 1)
+                logging.log_first_n(logging.WARNING, f"Hashed indices out of range.", 1)
 
         return [BuckleEmbeddingFusedGatherFunction.apply(self.weight, categorical_inputs, self.offsets, self.amp_train)]
 
@@ -228,7 +228,7 @@ class JointSparseEmbedding(Embeddings):
         if self.hash_indices:
             for cat, size in enumerate(self._categorical_feature_sizes):
                 categorical_inputs[:, cat] %= size
-                logging.log_first_n(logging.WARNING, F"Hashed indices out of range.", 1)
+                logging.log_first_n(logging.WARNING, f"Hashed indices out of range.", 1)
 
         return [
             self.embedding(categorical_inputs)

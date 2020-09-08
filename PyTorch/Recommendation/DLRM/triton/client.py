@@ -48,7 +48,8 @@ def get_data_loader(batch_size, *, data_path, model_config):
             numerical_features=True,
             categorical_features=range(len(categorical_sizes)),
             categorical_feature_sizes=categorical_sizes,
-            prefetch_depth=1
+            prefetch_depth=1,
+            drop_last_batch=model_config.drop_last_batch
         )
     else:
         data = SyntheticDataset(
@@ -58,6 +59,9 @@ def get_data_loader(batch_size, *, data_path, model_config):
             categorical_feature_sizes=categorical_sizes,
             device="cpu"
         )
+
+    if model_config.test_batches > 0:
+        data = torch.utils.data.Subset(data, list(range(model_config.test_batches)))
 
     return torch.utils.data.DataLoader(data,
                                        batch_size=None,
@@ -111,8 +115,12 @@ if __name__ == '__main__':
                         help="Path to file with inference data.")
     parser.add_argument("--batch_size", type=int, default=1,
                         help="Inference request batch size")
+    parser.add_argument("--drop_last_batch", type=bool, default=True,
+                        help="Drops the last batch size if it's not full")
     parser.add_argument("--fp16", action="store_true", default=False,
                         help="Use 16bit for numerical input")
+    parser.add_argument("--test_batches", type=int, default=0,
+                        help="Specifies number of batches used in the inference")
 
     FLAGS = parser.parse_args()
     try:
@@ -152,7 +160,7 @@ if __name__ == '__main__':
     tgt_list = np.concatenate(tgt_list)
 
     score = roc_auc_score(tgt_list, results)
-    print(F"Model score: {score}")
+    print(f"Model score: {score}")
 
     statistics = triton_client.get_inference_statistics(model_name=FLAGS.triton_model_name, headers=headers_dict)
     print(statistics)
