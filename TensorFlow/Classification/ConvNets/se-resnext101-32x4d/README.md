@@ -204,7 +204,7 @@ cd DeepLearningExamples/TensorFlow/Classification/ConvNets
 2. Download and preprocess the dataset.
 The SE-ResNext101-32x4d script operates on ImageNet 1k, a widely popular image classification dataset from the ILSVRC challenge.
 
-To download and preprocess the dataset, use the [Generate ImageNet for TensorFlow](https://github.com/tensorflow/models/blob/master/research/inception/inception/data/download_and_preprocess_imagenet.sh) script. The dataset will be downloaded to a directory specified as the first parameter of the script.
+To download and preprocess the dataset, use the [Generate ImageNet for TensorFlow](https://github.com/tensorflow/models/blob/archive/research/inception/inception/data/download_and_preprocess_imagenet.sh) script. The dataset will be downloaded to a directory specified as the first parameter of the script.
 
 3. Build the SE-ResNext101-32x4d TensorFlow NGC container.
 ```bash

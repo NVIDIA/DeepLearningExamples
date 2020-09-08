@@ -97,7 +97,7 @@ Other publicly available implementations of BERT include:
 1. [NVIDIA TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/LanguageModeling/BERT)
 2. [Hugging Face](https://github.com/huggingface/pytorch-pretrained-BERT)
 3. [codertimo](https://github.com/codertimo/BERT-pytorch)
-4. [gluon-nlp](https://github.com/dmlc/gluon-nlp/tree/master/scripts/bert)
+4. [gluon-nlp](https://github.com/dmlc/gluon-nlp/tree/v0.10.x/scripts/bert)
 5. [Google's implementation](https://github.com/google-research/bert)
     
 This model trains with mixed precision Tensor Cores on Volta and provides a push-button solution to pretraining on a corpus of choice. As a result, researchers can get results 4x faster than training without Tensor Cores. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
