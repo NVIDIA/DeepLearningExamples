@@ -541,7 +541,7 @@ def main():
                 num_files = len(files)
                 # may not exist in all checkpoints
                 epoch = checkpoint.get('epoch', 0)
-                restored_dataloader = checkpoint.get('data_loader', None)
+                restored_data_loader = checkpoint.get('data_loader', None)
 
             shared_file_list = {}
 
