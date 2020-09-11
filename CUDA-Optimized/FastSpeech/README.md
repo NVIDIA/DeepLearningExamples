@@ -148,7 +148,7 @@ To train your model using mixed precision with Tensor Cores or using FP32, perfo
 
    The preprocessed mel-spectrograms are stored in the ./mels_ljspeech1.1 directory. 
 
-   Next, preprocess the alignments on LJSpeech dataset with feed-forwards to the teacher model. Download the Nvidia [pretrained Tacotron2 checkpoint](https://drive.google.com/file/d/1c5ZTuT7J08wLUoVZ2KkUs_VdZuJ86ZqA/view) to get a pretrained teacher model. And set --tacotron2_path to the Tacotron2 checkpoint file path and the result alignments are stored in --aligns_path.
+Next, calculate alignments on the LJSpeech dataset using a pre-trained [NVIDIA Tacotron2 checkpoint](https://drive.google.com/file/d/1c5ZTuT7J08wLUoVZ2KkUs_VdZuJ86ZqA/view). The output directory is specified with `--aligns_path`.
    ```
    python fastspeech/align_tacotron2.py --dataset_path="./LJSpeech-1.1" --tacotron2_path="tacotron2_statedict.pt" --aligns_path="aligns_ljspeech1.1"
    ```
