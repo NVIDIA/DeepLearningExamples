@@ -40,4 +40,4 @@ nvidia-docker run -it --rm \
   -v $RESULT_DIR:/results/ \
   -v ${JASPER_REPO}:/jasper \
   ${EXTRA_JASPER_ENV} \
-  jasper:trt6 bash $PROGRAM_PATH
+  jasper:tensorrt bash $PROGRAM_PATH

@@ -19,8 +19,8 @@ After optimizing the compute-intensive acoustic model with NVIDIA TensorRT, infe
 - [Advanced](#advanced)
    * [Scripts and sample code](#scripts-and-sample-code)
    * [Parameters](#parameters)
-   * [TensorRT Inference Process](#tensorrt-inference-process)
    * [TensorRT Inference Benchmark Process](#tensorrt-inference-benchmark-process)
+   * [TensorRT Inference Process](#tensorrt-inference-process)
 - [Performance](#performance)
    * [Results](#results)
       * [Inference performance: NVIDIA T4](#inference-performance-nvidia-t4)
@@ -51,10 +51,10 @@ The following software version configuration has been tested and known to work:
 
 |Software|Version|
 |--------|-------|
-|Python|3.6.9|
-|PyTorch|1.2.0|
-|TensorRT|6.0.1.5|
-|CUDA|10.1.243|
+|Python|3.6.10|
+|PyTorch|1.7.0a0+8deb4fe|
+|TensorRT|7.1.3.4|
+|CUDA|11.0.221|
 
 ## Setup
 
@@ -65,16 +65,16 @@ The following section lists the requirements in order to start inference on the 
 This repository contains a `Dockerfile` which extends the PyTorch 19.10-py3 NGC container and encapsulates some dependencies. Ensure you have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 19.10-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
-* [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
+* [PyTorch 20.08-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
+* NVIDIA [Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/), [Turing](https://www.nvidia.com/en-us/geforce/turing/), or [Ampere](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/) based GPU
 * [Pretrained Jasper Model Checkpoint](https://ngc.nvidia.com/catalog/models/nvidia:jasperpyt_fp16)
 
-Required Python packages are listed in `requirements.txt` and `trt/requirements.txt`. These packages are automatically installed when the Docker container is built. To manually install them, run:
+Required Python packages are listed in `requirements.txt` and `tensorrt/requirements.txt`. These packages are automatically installed when the Docker container is built. To manually install them, run:
 
 
 ```bash
 pip install -r requirements.txt
-pip install -r trt/requirements.txt
+pip install -r tensorrt/requirements.txt
 ```
 
 
@@ -92,18 +92,18 @@ Running the following scripts will build and launch the container containing all
 2. Build the Jasper PyTorch with TensorRT container:
 
       ```bash
-      bash trt/scripts/docker/build.sh
+      bash tensorrt/scripts/docker/build.sh
       ```
 3. Start an interactive session in the NGC docker container:
 
       ```bash
-      bash trt/scripts/docker/launch.sh <DATA_DIR> <CHECKPOINT_DIR> <RESULT_DIR>
+      bash tensorrt/scripts/docker/launch.sh <DATA_DIR> <CHECKPOINT_DIR> <RESULT_DIR>
       ```
 
       Alternatively, to start a script in the docker container:
 
       ```bash
-      bash trt/scripts/docker/aunch.sh <DATA_DIR> <CHECKPOINT_DIR> <RESULT_DIR> <SCRIPT_PATH>
+      bash tensorrt/scripts/docker/launch.sh <DATA_DIR> <CHECKPOINT_DIR> <RESULT_DIR> <SCRIPT_PATH>
       ```
 
       The `/datasets`, `/checkpoints`, `/results` directories will be mounted as volumes and mapped to the corresponding directories `<DATA_DIR>`, `<CHECKPOINT_DIR>`, `<RESULT_DIR>` on the host. **These three paths should be absolute and should already exist.** The contents of this repository will be mounted to the `/workspace/jasper` directory. Note that `<DATA_DIR>`, `<CHECKPOINT_DIR>`, and `<RESULT_DIR>` directly correspond to the same arguments in `scripts/docker/launch.sh` mentioned in the [Jasper PyTorch README](../README.md).
@@ -117,7 +117,7 @@ Running the following scripts will build and launch the container containing all
       If LibriSpeech has not been downloaded already, note that only a subset of LibriSpeech is typically used for inference (`dev-*` and `test-*`). To acquire the inference subset of LibriSpeech run the following commands inside the container (does not require GPU):
 
       ```bash
-      bash trt/scripts/download_inference_librispeech.sh
+      bash tensorrt/scripts/download_inference_librispeech.sh
       ```
 
       Once the data download is complete, the following folders should exist:
@@ -131,7 +131,7 @@ Running the following scripts will build and launch the container containing all
       Next, preprocessing the data can be performed with the following command:
 
       ```bash
-      bash trt/scripts/preprocess_inference_librispeech.sh
+      bash tensorrt/scripts/preprocess_inference_librispeech.sh
       ```
 
       Once the data is preprocessed, the following additional files should now exist:
@@ -153,10 +153,10 @@ Running the following scripts will build and launch the container containing all
       export TRT_PRECISION=<PRECISION>
       export PYTORCH_PRECISION=<PRECISION>
       export TRT_PREDICTION_PATH=<TRT_PREDICTION_PATH>
-      bash trt/scripts/trt_inference.sh
+      bash tensorrt/scripts/inference.sh
       ```
       A pretrained model checkpoint can be downloaded from [NGC model repository](https://ngc.nvidia.com/catalog/models/nvidia:jasperpyt_fp16). 
-      More details can be found in [Advanced](#advanced) under [Scripts and sample code](#scripts-and-sample-code), [Parameters](#parameters) and [TensorRT Inference process](#trt-inference).
+      More details can be found in [Advanced](#advanced) under [Scripts and sample code](#scripts-and-sample-code), [Parameters](#parameters) and [TensorRT Inference process](#tensorrt-inference).
 
 6.  Start TensorRT inference benchmark
 
@@ -169,10 +169,10 @@ Running the following scripts will build and launch the container containing all
       export TRT_PRECISION=<PRECISION>
       export PYTORCH_PRECISION=<PRECISION>
       export CSV_PATH=<CSV_PATH>
-      bash trt/scripts/trt_inference_benchmark.sh
+      bash tensorrt/scripts/inference_benchmark.sh
       ```
       A pretrained model checkpoint can be downloaded from the [NGC model repository](https://ngc.nvidia.com/catalog/models/nvidia:jasperpyt_fp16). 
-      More details can be found in [Advanced](#advanced) under [Scripts and sample code](#scripts-and-sample-code), [Parameters](#parameters) and [TensorRT Inference Benchmark process](#trt-inference-benchmark).
+      More details can be found in [Advanced](#advanced) under [Scripts and sample code](#scripts-and-sample-code), [Parameters](#parameters) and [TensorRT Inference Benchmark process](#tensorrt-inference-benchmark).
 
 7. Start Jupyter notebook to run inference interactively
 
@@ -185,28 +185,27 @@ Running the following scripts will build and launch the container containing all
 The following sections provide greater details on inference benchmarking with TensorRT and show inference results
 
 ### Scripts and sample code
-In the `trt/` directory, the most important files are:
+In the `tensorrt/` directory, the most important files are:
 * `Dockerfile`: Container to run Jasper inference with TensorRT.
 * `requirements.py`: Python package dependencies. Installed when building the Docker container.
 * `perf.py`: Entry point for inference pipeline using TensorRT.
 * `perfprocedures.py`: Contains functionality to run inference through both the PyTorch model and TensorRT Engine, taking runtime measurements of each component of the inference process for comparison.
 * `trtutils.py`: Helper functions for TensorRT components of Jasper inference.
 * `perfutils.py`: Helper functions for non-TensorRT components of Jasper inference.
-* `onnx-trt.patch`: Used to enable Onnx and TensorRT with dynamic shapes.
 
-The `trt/scripts/` directory has one-click scripts to run supported functionalities, such as:
+The `tensorrt/scripts/` directory has one-click scripts to run supported functionalities, such as:
 
 * `download_librispeech.sh`: Downloads LibriSpeech inference dataset.
 * `preprocess_librispeech.sh`: Preprocess LibriSpeech raw data files to be ready for inference.
-* `trt_inference_benchmark.sh`: Benchmarks and compares TensorRT and PyTorch inference pipelines using the `perf.py` script.
-* `trt_inference.sh`: Runs TensorRT and PyTorch inference using the `trt_inference_benchmark.sh` script.
-* `walk_benchmark.sh`: Illustrates an example of using `trt/scripts/trt_inference_benchmark.sh`, which *walks* a variety of values for `BATCH_SIZE` and `NUM_FRAMES`.
+* `inference_benchmark.sh`: Benchmarks and compares TensorRT and PyTorch inference pipelines using the `perf.py` script.
+* `inference.sh`: Runs TensorRT and PyTorch inference using the `inference_benchmark.sh` script.
+* `walk_benchmark.sh`: Illustrates an example of using `tensorrt/scripts/inference_benchmark.sh`, which *walks* a variety of values for `BATCH_SIZE` and `NUM_FRAMES`.
 * `docker/`: Contains the scripts for building and launching the container.
 
 
 ### Parameters
 
-The list of parameters available for `trt/scripts/trt_inference_benchmark.sh` is:
+The list of parameters available for `tensorrt/scripts/inference_benchmark.sh` is:
 
 ```
 Required:
@@ -232,7 +231,7 @@ FORCE_ENGINE_REBUILD: boolean that indicates whether an already-built TensorRT e
 USE_DYNAMIC_SHAPE: if 'yes' uses dynamic shapes (default: ‘yes’). Dynamic shape is always preferred since it allows to reuse engines.
 ```
 
-The complete list of parameters available for `trt/scripts/trt_inference.sh` is the same as `trt/scripts/trt_inference_benchmark.sh` only with different default input arguments. In the following, only the parameters with different default values are listed:
+The complete list of parameters available for `tensorrt/scripts/inference.sh` is the same as `tensorrt/scripts/inference_benchmark.sh` only with different default input arguments. In the following, only the parameters with different default values are listed:
 
 ```
 TRT_PREDICTION_PATH: file to store inference prediction results generated with TensorRT (default: `/results/trt_predictions.txt`)
@@ -244,7 +243,7 @@ NUM_FRAMES: cuts/pads all pre-processed feature tensors to this length. 100 fram
 
 ### TensorRT Inference Benchmark process
 
-The inference benchmarking is performed on a single GPU by ‘trt/scripts/trt_inference_benchmark.sh’ which delegates to `trt/perf.py`,  which takes the following steps:
+The inference benchmarking is performed on a single GPU by ‘tensorrt/scripts/inference_benchmark.sh’ which delegates to `tensorrt/perf.py`,  which takes the following steps:
 
 
 1. Construct Jasper acoustic model in PyTorch.
@@ -259,11 +258,11 @@ The inference benchmarking is performed on a single GPU by ‘trt/scripts/trt_in
 
 4. Compile performance and WER accuracy results in CSV format, written to `CSV_PATH` file.
 
-`trt/perf.py` utilizes `trt/trtutils.py` and `trt/perfutils.py`, helper functions for TensorRT and non-TensorRT components of Jasper inference respectively.
+`tensorrt/perf.py` utilizes `tensorrt/trtutils.py` and `tensorrt/perfutils.py`, helper functions for TensorRT and non-TensorRT components of Jasper inference respectively.
 
 ### TensorRT Inference process
 
-The inference is performed by `trt/scripts/trt_inference.sh` which delegates to `trt/scripts/trt_inference_benchmark.sh`. The script runs on a single GPU. To do inference prediction on the entire dataset `NUM_FRAMES` is set to 3600, which roughly corresponds to 36 seconds. This covers the longest sentences in both LibriSpeech dev and test dataset. By default, `BATCH_SET` is set to 1 to simulate the online inference scenario in deployment. Other batch sizes can be tried by setting a different value to this parameter. By default `TRT_PRECISION` is set to full precision and can be changed by setting `export TRT_PRECISION=fp16`. The prediction results are stored at `/results/trt_predictions.txt` and `/results/pyt_predictions.txt`.
+The inference is performed by `tensorrt/scripts/inference.sh` which delegates to `tensorrt/scripts/inference_benchmark.sh`. The script runs on a single GPU. To do inference prediction on the entire dataset `NUM_FRAMES` is set to 3600, which roughly corresponds to 36 seconds. This covers the longest sentences in both LibriSpeech dev and test dataset. By default, `BATCH_SET` is set to 1 to simulate the online inference scenario in deployment. Other batch sizes can be tried by setting a different value to this parameter. By default `TRT_PRECISION` is set to full precision and can be changed by setting `export TRT_PRECISION=fp16`. The prediction results are stored at `/results/trt_predictions.txt` and `/results/pyt_predictions.txt`.
 
 
 
@@ -271,7 +270,7 @@ The inference is performed by `trt/scripts/trt_inference.sh` which delegates to 
 
 To benchmark the inference performance on a specific batch size and audio length refer to [Quick-Start-Guide](#quick-start-guide). To do a sweep over multiple batch sizes and audio durations run:
 ```bash
-bash trt/scripts/walk_benchmark.sh
+bash tensorrt/scripts/walk_benchmark.sh
 ```
 The results are obtained by running inference on LibriSpeech dev-clean dataset on a single T4 GPU using half precision with AMP. We compare the throughput of the acoustic model between TensorRT and native PyTorch.   
 

@@ -155,7 +155,7 @@ CMD+=" $PYT_PREDICTION_PATH"
 
 if [ "$CREATE_LOGFILE" == "true" ] ; then
   export GBS=$(expr $BATCH_SIZE )
-  printf -v TAG "jasper_trt_inference_benchmark_%s_gbs%d" "$PYTORCH_PRECISION" $GBS
+  printf -v TAG "jasper_tensorrt_inference_benchmark_%s_gbs%d" "$PYTORCH_PRECISION" $GBS
   DATESTAMP=`date +'%y%m%d%H%M%S'`
   LOGFILE=$LOG_DIR/$TAG.$DATESTAMP.log
   printf "Logs written to %s\n" "$LOGFILE"

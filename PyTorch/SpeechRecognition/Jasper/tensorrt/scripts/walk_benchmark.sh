@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# A usage example of trt_inference_benchmark.sh.
+# A usage example of inference_benchmark.sh.
 
 
 export NUM_STEPS=100
@@ -37,7 +37,7 @@ do
             export BATCH_SIZE=$bs
 
             echo "Doing batch size ${bs}, sequence length ${nf}, precision ${prec}"
-            bash trt/scripts/trt_inference_benchmark.sh $1 $2 $3 $4 $5 $6
+            bash tensorrt/scripts/inference_benchmark.sh $1 $2 $3 $4 $5 $6
         done
     done
 done
