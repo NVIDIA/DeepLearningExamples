@@ -54,7 +54,7 @@ class AdaptiveLogSoftmax(nn.Module):
             l_idx, h_idx = cutoff_values[i], cutoff_values[i + 1]
 
             mask_i = (target >= l_idx) & (target < h_idx)
-            indices_i = mask_i.nonzero().squeeze()
+            indices_i = mask_i.nonzero(as_tuple=False).squeeze()
 
             if indices_i.numel() == 0:
                 continue

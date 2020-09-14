@@ -257,3 +257,4 @@ trainbench: &trainbench
       <<: *train
       log_interval: 1
       max_step: 500
+      max_step_scheduler: 40000
