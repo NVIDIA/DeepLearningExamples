@@ -147,7 +147,7 @@ Running the following scripts will build and launch the container containing all
 
 5. Start TensorRT inference prediction
 
-      Inside the container, use the following script to run inference with TensorRT.
+      Inside the container, use the following script to run inference with TensorRT. To learn more about the following env variables see `tensorrt/scripts/inference.sh`.
       ```bash
       export CHECKPOINT=<CHECKPOINT>
       export TRT_PRECISION=<PRECISION>
