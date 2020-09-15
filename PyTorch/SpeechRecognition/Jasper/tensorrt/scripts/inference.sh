@@ -56,7 +56,7 @@ export TRT_PREDICTION_PATH="$TRT_PREDICTION_PATH"
 export PYT_PREDICTION_PATH="$PYT_PREDICTION_PATH"
 export VERBOSE="$VERBOSE"
 
-bash ./trt/scripts/trt_inference_benchmark.sh $1 $2 $3 $4 $5 $6 $7
+bash ./tensorrt/scripts/inference_benchmark.sh $1 $2 $3 $4 $5 $6 $7
 
 trt_word_error_rate=`cat "$CSV_PATH" | awk '{print $3}'`
 pyt_word_error_rate=`cat "$CSV_PATH" | awk '{print $4}'`
