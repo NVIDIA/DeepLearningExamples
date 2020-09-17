@@ -22,7 +22,6 @@ This repository provides a script and recipe to train the BERT model for PyTorch
         * [Pre-training parameters](#pre-training-parameters)
         * [Fine tuning parameters](#fine-tuning-parameters)    
         * [Multi-node](#multi-node)
-        * [Fine-tuning parameters](#fine-tuning-parameters)     
     * [Command-line options](#command-line-options)
     * [Getting the data](#getting-the-data)
         * [Dataset guidelines](#dataset-guidelines)
@@ -472,7 +471,7 @@ Default arguments are listed below in the order `scripts/run_glue.sh` expects:
  
 -   Initial checkpoint - The default is `/workspace/bert/checkpoints/bert_uncased.pt`.
 -   Data directory -  The default is `/workspace/bert/data/download/glue/MRPC/`.
--   Vocabulary file (token to ID mapping) - The default is `/workspace/bert/data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt`.
+-   Vocabulary file (token to ID mapping) - The default is `/workspace/bert/vocab/vocab`.
 -   Config file for the BERT model (It should be the same as the pretrained model) - The default is `/workspace/bert/bert_config.json`.
 -   Output directory for result - The default is `/workspace/bert/results/MRPC`.
 -   The name of the GLUE task (`mrpc` or `sst-2`) - The default is `mrpc`
@@ -505,139 +504,6 @@ The batch variables `BATCHSIZE`, `LR`, `GRADIENT_STEPS`,`PHASE` refer to the Pyt
 Note that the `run.sub` script is a starting point that has to be adapted depending on the environment. In particular, variables such as `datadir` handle the location of the files for each phase. 
  
 Refer to the files contents to see the full list of variables to adjust for your system.
- 
- 
-#### Fine-tuning parameters
-
-* SQuAD
- 
-The `run_squad.py` script contains many of the same arguments as `run_pretraining.py`.
- 
-The main script specific parameters are:
- 
-```
- --bert_model BERT_MODEL      - Specifies the type of BERT model to use;
-                                should be one of the following:
-        bert-base-uncased
-        bert-large-uncased
-        bert-base-cased
-        bert-base-multilingual
-        bert-base-chinese
- 
- --train_file TRAIN_FILE      - Path to the SQuAD json for training.
-                                For example, train-v1.1.json.
- 
- --predict_file PREDICT_FILE     - Path to the SQuAD json for predictions.
-                                For example, dev-v1.1.json or test-v1.1.json.
- 
- --max_seq_length MAX_SEQ_LENGTH
-                              - The maximum total input sequence length
-                                after WordPiece tokenization.
-                                Sequences longer than this will be truncated,
-                                and sequences shorter than this will be padded.
- 
- --doc_stride DOC_STRIDE      - When splitting up a long document into chunks
-                                this parameters sets how much stride to take
-                                between chunks of tokens.
- 
- --max_query_length MAX_QUERY_LENGTH
-                              - The maximum number of tokens for the question.
-                                Questions longer than <max_query_length>
-                                will be truncated to the value specified.
- 
- --n_best_size N_BEST_SIZE       - The total number of n-best predictions to
-                                generate in the nbest_predictions.json
-                                output file.
- 
- --max_answer_length MAX_ANSWER_LENGTH
-                              - The maximum length of an answer that can be
-                                generated. This is needed because the start and
-                                end predictions are not conditioned on one another.
- 
- --verbose_logging            - If true, all the warnings related to data
-                                processing will be printed. A number of warnings
-                                are expected for a normal SQuAD evaluation.
- 
- --do_lower_case              - Whether to lower case the input text. Set to
-                                true for uncased models and false for cased models.
- 
- --version_2_with_negative       - If true, the SQuAD examples contain questions
-                                that do not have an answer.
- 
- --null_score_diff_threshold NULL_SCORE_DIFF_THRES HOLD
-                              - A null answer will be predicted if null_score if
-                                best_non_null is greater than NULL_SCORE_DIFF_THRESHOLD.
-```
- 
-* GLUE
-
-The `run_glue.py` script contains many of the same arguments as `run_pretraining.py`.
- 
-The main script specific parameters are:
- 
-```
-  --data_dir DATA_DIR   The input data dir. Should contain the .tsv files (or
-                        other data files) for the task.
-  --bert_model BERT_MODEL
-                        Bert pre-trained model selected in the list: bert-
-                        base-uncased, bert-large-uncased, bert-base-cased,
-                        bert-large-cased, bert-base-multilingual-uncased,
-                        bert-base-multilingual-cased, bert-base-chinese.
-  --task_name {cola,mnli,mrpc,sst-2}
-                        The name of the task to train.
-  --output_dir OUTPUT_DIR
-                        The output directory where the model predictions and
-                        checkpoints will be written.
-  --init_checkpoint INIT_CHECKPOINT
-                        The checkpoint file from pretraining
-  --max_seq_length MAX_SEQ_LENGTH
-                        The maximum total input sequence length after
-                        WordPiece tokenization. Sequences longer than this
-                        will be truncated, and sequences shorter than this
-                        will be padded.
-  --do_train            Whether to run training.
-  --do_eval             Whether to get model-task performance on the dev set
-                        by running eval.
-  --do_predict          Whether to output prediction results on the dev set by
-                        running eval.
-  --do_lower_case       Set this flag if you are using an uncased model.
-  --train_batch_size TRAIN_BATCH_SIZE
-                        Batch size per GPU for training.
-  --eval_batch_size EVAL_BATCH_SIZE
-                        Batch size per GPU for eval.
-  --learning_rate LEARNING_RATE
-                        The initial learning rate for Adam.
-  --num_train_epochs NUM_TRAIN_EPOCHS
-                        Total number of training epochs to perform.
-  --max_steps MAX_STEPS
-                        Total number of training steps to perform.
-  --warmup_proportion WARMUP_PROPORTION
-                        Proportion of training to perform linear learning rate
-                        warmup for. E.g., 0.1 = 10% of training.
-  --no_cuda             Whether not to use CUDA when available
-  --local_rank LOCAL_RANK
-                        local_rank for distributed training on gpus
-  --seed SEED           random seed for initialization
-  --gradient_accumulation_steps GRADIENT_ACCUMULATION_STEPS
-                        Number of updates steps to accumulate before
-                        performing a backward/update pass.
-  --fp16                Mixed precision training
-  --amp                 Mixed precision training
-  --loss_scale LOSS_SCALE
-                        Loss scaling to improve fp16 numeric stability. Only
-                        used when fp16 set to True. 0 (default value): dynamic
-                        loss scaling. Positive power of 2: static loss scaling
-                        value.
-  --server_ip SERVER_IP
-                        Can be used for distant debugging.
-  --server_port SERVER_PORT
-                        Can be used for distant debugging.
-  --vocab_file VOCAB_FILE
-                        Vocabulary mapping/file BERT was pretrainined on
-  --config_file CONFIG_FILE
-                        The BERT model config
-  --skip_checkpoint     Whether to save checkpoints
-```
  
 ### Command-line options
  
