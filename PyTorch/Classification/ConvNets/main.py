@@ -363,6 +363,10 @@ def main(args):
                 )
             )
             pretrained_weights = torch.load(args.pretrained_weights)
+
+            #Temporary fix to allow NGC checkpoint loading
+
+            pretrained_weights = {k.replace("module.", ""): v for k, v in pretrained_weights.items()}
         else:
             print("=> no pretrained weights found at '{}'".format(args.resume))
 
