@@ -1,3 +1,5 @@
+#! /bin/bash
+
 # Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#! /bin/bash
+# Examples:
+# to run on a DGX2 with a frequency limit of 3 (will need 8xV100-32GB to fit the model in GPU memory)
+# ./prepare_dataset.sh DGX2 3
+#
+# to run on a DGX2 with a frequency limit of 15 (should fit on a single V100-32GB):
+# ./prepare_dataset.sh DGX2 15
+#
+# to run on CPU with a frequency limit of 15:
+# ./prepare_dataset.sh CPU 15
+
+
 
 set -e
 set -x
@@ -29,19 +41,19 @@ if [ -f ${spark_output_path}/train/_SUCCESS ] \
    && [ -f ${spark_output_path}/validation/_SUCCESS ] \
    && [ -f ${spark_output_path}/test/_SUCCESS ]; then
 
-   echo "Spark preprocessing already carried done"
+   echo "Spark preprocessing already carried out"
 else
    echo "Performing spark preprocessing"
-   ./run_spark.sh ${download_dir} ${spark_output_path}
+   ./run_spark.sh $1 ${download_dir} ${spark_output_path} $2
 fi
 
 conversion_intermediate_dir=${conversion_intermediate_dir:-'/data/dlrm/intermediate_binary'}
 final_output_dir=${final_output_dir:-'/data/dlrm/binary_dataset'}
 
 
-if [ -f ${final_output_dir}/train_data.bin ] \
-   && [ -f ${final_output_dir}/val_data.bin ] \
-   && [ -f ${final_output_dir}/test_data.bin ] \
+if [ -d ${final_output_dir}/train ] \
+   && [ -d ${final_output_dir}/val ] \
+   && [ -d ${final_output_dir}/test ] \
    && [ -f ${final_output_dir}/model_sizes.json ]; then
 
     echo "Final conversion already done"
@@ -52,8 +64,16 @@ else
                                 --dst_dir ${final_output_dir}
 
     cp "${spark_output_path}/model_size.json" "${final_output_dir}/model_size.json"
+
+    python split_dataset.py --dataset "${final_output_dir}" --output "${final_output_dir}/split"
+    rm ${final_output_dir}/train_data.bin
+    rm ${final_output_dir}/val_data.bin
+    rm ${final_output_dir}/test_data.bin
+
+    mv ${final_output_dir}/split/* ${final_output_dir}
+    rm -rf ${final_output_dir}/split
 fi
 
 echo "Done preprocessing the Criteo Kaggle Dataset"
 echo "You can now start the training with: "
-echo "python -m dlrm.scripts.main --mode train --dataset  /data/dlrm/binary_dataset/ --model_config dlrm/config/default.json"
+echo "python -m dlrm.scripts.main --mode train --dataset  ${final_output_dir}"

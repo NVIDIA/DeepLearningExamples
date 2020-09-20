@@ -19,6 +19,7 @@ This repository provides a script and recipe to train the ResNet-50 v1.5 model t
     * [Scripts and sample code](#scripts-and-sample-code)
     * [Parameters](#parameters)
         * [The `main.py` script](#the-mainpy-script)
+    * [Quantization Aware training](#quantization-aware-training)
     * [Inference process](#inference-process)
 * [Performance](#performance)
     * [Benchmarking](#benchmarking)
@@ -193,13 +194,13 @@ To train your model using mixed precision or TF32 with Tensor Cores or FP32, per
 1. Clone the repository.
 ```
 git clone https://github.com/NVIDIA/DeepLearningExamples
-cd DeepLearningExamples/TensorFlow/Classification/RN50v1.5
+cd DeepLearningExamples/TensorFlow/Classification/ConvNets
 ```
 
 2. Download and preprocess the dataset.
 The ResNet50 v1.5 script operates on ImageNet 1k, a widely popular image classification dataset from the ILSVRC challenge.
 
-To download and preprocess the dataset, use the [Generate ImageNet for TensorFlow](https://github.com/tensorflow/models/blob/master/research/inception/inception/data/download_and_preprocess_imagenet.sh) script. The dataset will be downloaded to a directory specified as the first parameter of the script.
+To download and preprocess the dataset, use the [Generate ImageNet for TensorFlow](https://github.com/tensorflow/models/blob/archive/research/inception/inception/data/download_and_preprocess_imagenet.sh) script. The dataset will be downloaded to a directory specified as the first parameter of the script.
 
 3. Build the ResNet-50 v1.5 TensorFlow NGC container.
 ```bash
@@ -368,7 +369,49 @@ optional arguments:
                         Limit memory fraction used by the training script for DALI
   --gpu_id GPU_ID       Specify the ID of the target GPU on a multi-device platform.
                         Effective only for single-GPU mode.
+  --quantize            Used to add quantization nodes in the graph (Default: Asymmetric quantization)
+  --symmetric           If --quantize mode is used, this option enables symmetric quantization
+  --use_qdq             Use quantize_and_dequantize (QDQ) op instead of FakeQuantWithMinMaxVars op for quantization. QDQ does only scaling.
+  --finetune_checkpoint Path to pre-trained checkpoint which can be used for fine-tuning
+  --quant_delay         Number of steps to be run before quantization starts to happen
 ```
+
+### Quantization Aware Training
+Quantization Aware training (QAT) simulates quantization during training by quantizing weights and activation layers. This will help reduce the loss in accuracy when we convert the network
+trained in FP32 to INT8 for faster inference. QAT introduces additional nodes in the graph which will be used to learn the dynamic ranges of weights and activation layers. Tensorflow provides
+a <a href="https://www.tensorflow.org/versions/r1.14/api_docs/python/tf/contrib/quantize">quantization tool</a> which automatically adds these nodes in-place. Typical workflow
+for training QAT networks is to train a model until convergence and then finetune with the quantization layers. It is recommended that QAT is performed on a single GPU.
+
+* For 1 GPU
+    * Command: `sh resnet50v1.5/training/GPU1_RN50_QAT.sh <path to pre-trained ckpt dir> <path to dataset directory> <result_directory>`
+        
+It is recommended to finetune a model with quantization nodes rather than train a QAT model from scratch. The latter can also be performed by setting `quant_delay` parameter.
+`quant_delay` is the number of steps after which quantization nodes are added for QAT. If we are fine-tuning, `quant_delay` is set to 0. 
+        
+For QAT network, we use <a href="https://www.tensorflow.org/versions/r1.15/api_docs/python/tf/quantization/quantize_and_dequantize">tf.quantization.quantize_and_dequantize operation</a>.
+These operations are automatically added at weights and activation layers in the RN50 by using `tf.contrib.quantize.experimental_create_training_graph` utility. Support for using `tf.quantization.quantize_and_dequantize` 
+operations for `tf.contrib.quantize.experimental_create_training_graph` has been added in <a href="https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow">TensorFlow 20.01-py3 NGC container</a> and later versions, which is required for this task.
+
+#### Post process checkpoint
+  `postprocess_ckpt.py` is a utility to convert the final classification FC layer into a 1x1 convolution layer using the same weights. This is required to ensure TensorRT can parse QAT models successfully.
+  This script should be used after performing QAT to reshape the FC layer weights in the final checkpoint.
+  Arguments:
+     * `--input` : Path to the trained checkpoint of RN50.
+     * `--output` : Name of the new checkpoint file which has the FC layer weights reshaped into 1x1 conv layer weights.
+     * `--dense_layer` : Name of the FC layer
+
+### Exporting Frozen graphs
+To export frozen graphs (which can be used for inference with <a href="https://developer.nvidia.com/tensorrt">TensorRT</a>), use:
+
+`python export_frozen_graph.py --checkpoint <path_to_checkpoint> --quantize --use_final_conv --use_qdq --symmetric --input_format NCHW --compute_format NCHW --output_file=<output_file_name>`
+
+Arguments:
+
+* `--checkpoint` : Optional argument to export the model with checkpoint weights.
+* `--quantize` : Optional flag to export quantized graphs.
+* `--use_qdq` : Use quantize_and_dequantize (QDQ) op instead of FakeQuantWithMinMaxVars op for quantization. QDQ does only scaling. 
+* `--input_format` : Data format of input tensor (Default: NCHW). Use NCHW format to optimize the graph with TensorRT.
+* `--compute_format` : Data format of the operations in the network (Default: NCHW). Use NCHW format to optimize the graph with TensorRT.
 
 ### Inference process
 To run inference on a single example with a checkpoint and a model script, use: 
@@ -409,9 +452,8 @@ To benchmark the training performance on a specific batch size, run:
 Each of these scripts runs 200 warm-up iterations and measures the first epoch.
 
 To control warmup and benchmark length, use the `--warmup_steps`, `--num_iter` and `--iter_unit` flags. Features like XLA or DALI can be controlled
-with `--use_xla` and `--use_dali` flags.
+with `--use_xla` and `--use_dali` flags. If no `--data_dir=<path to imagenet>` flag is specified then the benchmarks will use a synthetic dataset. 
 Suggested batch sizes for training are 256 for mixed precision training and 128 for single precision training per single V100 16 GB.
-
 
 #### Inference performance benchmark
 
@@ -427,6 +469,7 @@ To benchmark the inference performance on a specific batch size, run:
 
 By default, each of these scripts runs 20 warm-up iterations and measures the next 80 iterations.
 To control warm-up and benchmark length, use the `--warmup_steps`, `--num_iter` and `--iter_unit` flags.
+If no `--data_dir=<path to imagenet>` flag is specified then the benchmarks will use a synthetic dataset. 
 
 The benchmark can be automated with the `inference_benchmark.sh` script provided in `resnet50v1.5`, by simply running:
 `bash ./resnet50v1.5/inference_benchmark.sh <data dir> <data idx dir>`

@@ -35,8 +35,8 @@ python "${BASEDIR}/../main.py" \
     --dataset_classID="${3}" \
     --data_format='NCHW' \
     --use_auto_loss_scaling \
-    --use_tf_amp \
-    --use_xla \
+    --amp \
+    --xla \
     --learning_rate=1e-4 \
     --learning_rate_decay_factor=0.8 \
     --learning_rate_decay_steps=500 \

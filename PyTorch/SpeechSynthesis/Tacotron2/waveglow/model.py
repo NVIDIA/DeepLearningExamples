@@ -60,27 +60,33 @@ class Invertible1x1Conv(torch.nn.Module):
         W = W.view(c, c, 1)
         self.conv.weight.data = W
 
-    def forward(self, z, reverse=False):
+    def forward(self, z):
         # shape
         batch_size, group_size, n_of_groups = z.size()
 
         W = self.conv.weight.squeeze()
 
-        if reverse:
-            if not hasattr(self, 'W_inverse'):
-                # Reverse computation
-                W_inverse = W.float().inverse()
-                W_inverse = Variable(W_inverse[..., None])
-                if z.type() == 'torch.cuda.HalfTensor' or z.type() == 'torch.HalfTensor':
-                    W_inverse = W_inverse.half()
-                self.W_inverse = W_inverse
-            z = F.conv1d(z, self.W_inverse, bias=None, stride=1, padding=0)
-            return z
-        else:
-            # Forward computation
-            log_det_W = batch_size * n_of_groups * torch.logdet(W.unsqueeze(0).float()).squeeze()
-            z = self.conv(z)
-            return z, log_det_W
+        # Forward computation
+        log_det_W = batch_size * n_of_groups * torch.logdet(W.unsqueeze(0).float()).squeeze()
+        z = self.conv(z)
+        return z, log_det_W
+
+
+    def infer(self, z):
+        # shape
+        batch_size, group_size, n_of_groups = z.size()
+
+        W = self.conv.weight.squeeze()
+
+        if not hasattr(self, 'W_inverse'):
+            # Reverse computation
+            W_inverse = W.float().inverse()
+            W_inverse = Variable(W_inverse[..., None])
+            if z.type() == 'torch.cuda.HalfTensor' or z.type() == 'torch.HalfTensor':
+                W_inverse = W_inverse.half()
+            self.W_inverse = W_inverse
+        z = F.conv1d(z, self.W_inverse, bias=None, stride=1, padding=0)
+        return z
 
 
 class WN(torch.nn.Module):
@@ -260,7 +266,7 @@ class WaveGlow(torch.nn.Module):
             audio_1 = (audio_1 - b) / torch.exp(s)
             audio = torch.cat([audio_0, audio_1], 1)
 
-            audio = self.convinv[k](audio, reverse=True)
+            audio = self.convinv[k].infer(audio)
 
             if k % self.n_early_every == 0 and k > 0:
                 z = torch.randn(spect.size(0), self.n_early_size, spect.size(

@@ -11,8 +11,8 @@ LJS_URL="http://data.keithito.com/data/speech/${LJS_ARCH}"
 TACO_CH="nvidia_tacotron2pyt_fp32_20190427.pt"
 TACO_URL="https://api.ngc.nvidia.com/v2/models/nvidia/tacotron2pyt_fp32/versions/2/files/nvidia_tacotron2pyt_fp32_20190427"
 
-WAVEG_CH="waveglow_256channels_ljs_v3.pt"
-WAVEG_URL="https://api.ngc.nvidia.com/v2/models/nvidia/waveglow_ljs_256channels/versions/3/files/waveglow_256channels_ljs_v3.pt"
+WAVEG_CH="waveglow_1076430_14000_amp.pt"
+WAVEG_URL="https://api.ngc.nvidia.com/v2/models/nvidia/waveglow256pyt_fp16/versions/2/files/waveglow_1076430_14000_amp"
 
 
 if [ ! -f ${LJS_ARCH} ]; then

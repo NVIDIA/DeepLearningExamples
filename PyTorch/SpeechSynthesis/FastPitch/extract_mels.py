@@ -194,7 +194,7 @@ def main():
         DLLogger.log(step="PARAMETER", data={k:v})
 
     model = load_and_setup_model(
-        'Tacotron2', parser, args.tacotron2_checkpoint, amp_run=False,
+        'Tacotron2', parser, args.tacotron2_checkpoint, amp=False,
         device=torch.device('cuda' if args.cuda else 'cpu'),
         forward_is_infer=False, ema=False)
 

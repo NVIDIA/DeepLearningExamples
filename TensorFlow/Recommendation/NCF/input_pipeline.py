@@ -53,7 +53,8 @@ def generate_negatives(neg_users, true_mat, item_range, sort=False, use_trick=Fa
 
     return sorted_users, neg_items[sort_indices]
 
-class DataGenerator():
+
+class DataGenerator:
     """
     Class to handle data augmentation
     """

@@ -34,7 +34,7 @@ from scipy.io.wavfile import write
 
 import sys
 
-from inference import checkpoint_from_distributed, unwrap_distributed, MeasureTime, prepare_input_sequence
+from inference import checkpoint_from_distributed, unwrap_distributed, MeasureTime, prepare_input_sequence, load_and_setup_model
 
 import time
 import dllogger as DLLogger
@@ -56,8 +56,13 @@ def parse_args(parser):
     parser.add_argument('-d', '--denoising-strength', default=0.01, type=float)
     parser.add_argument('-sr', '--sampling-rate', default=22050, type=int,
                         help='Sampling rate')
-    parser.add_argument('--amp-run', action='store_true',
-                        help='inference with AMP')
+
+    run_mode = parser.add_mutually_exclusive_group()
+    run_mode.add_argument('--fp16', action='store_true',
+                        help='Run inference with FP16')
+    run_mode.add_argument('--cpu', action='store_true',
+                        help='Run inference on CPU')
+
     parser.add_argument('--log-file', type=str, default='nvlog.json',
                         help='Filename for logging')
     parser.add_argument('--stft-hop-length', type=int, default=256,
@@ -68,49 +73,10 @@ def parse_args(parser):
                         help='Input length')
     parser.add_argument('-bs', '--batch-size', type=int, default=1,
                         help='Batch size')
-    parser.add_argument('--cpu-run', action='store_true', 
-                        help='Run inference on CPU')
     return parser
 
 
-def load_and_setup_model(model_name, parser, checkpoint, amp_run, cpu_run, forward_is_infer=False):
-    model_parser = models.parse_model_args(model_name, parser, add_help=False)
-    model_args, _ = model_parser.parse_known_args()
-
-    model_config = models.get_model_config(model_name, model_args)
-    model = models.get_model(model_name, model_config, cpu_run, forward_is_infer=forward_is_infer)
-
-    if checkpoint is not None:
-        if cpu_run:
-            state_dict = torch.load(checkpoint, map_location=torch.device('cpu'))['state_dict']
-        else:
-            state_dict = torch.load(checkpoint)['state_dict']
-
-        if checkpoint_from_distributed(state_dict):
-            state_dict = unwrap_distributed(state_dict)
-
-        model.load_state_dict(state_dict)
-
-    if model_name == "WaveGlow":
-        model = model.remove_weightnorm(model)
-
-    model.eval()
-
-    if amp_run:
-        model, _ = amp.initialize(model, [], opt_level="O3")
-
-    return model
-
-
 def print_stats(measurements_all):
-
-    print(np.mean(measurements_all['latency'][1:]),
-          np.mean(measurements_all['throughput'][1:]),
-          np.mean(measurements_all['pre_processing'][1:]),
-          np.mean(measurements_all['type_conversion'][1:])+
-          np.mean(measurements_all['storage'][1:])+
-          np.mean(measurements_all['data_transfer'][1:]),
-          np.mean(measurements_all['num_mels_per_audio'][1:]))
 
     throughput = measurements_all['throughput']
     preprocessing = measurements_all['pre_processing']
@@ -119,6 +85,9 @@ def print_stats(measurements_all):
     data_transfer = measurements_all['data_transfer']
     postprocessing = [sum(p) for p in zip(type_conversion,storage,data_transfer)]
     latency = measurements_all['latency']
+    waveglow_latency = measurements_all['waveglow_latency']
+    tacotron2_latency = measurements_all['tacotron2_latency']
+    denoiser_latency = measurements_all['denoiser_latency']
     num_mels_per_audio = measurements_all['num_mels_per_audio']
 
     latency.sort()
@@ -129,17 +98,20 @@ def print_stats(measurements_all):
     cf_99 = max(latency[:int(len(latency)*0.99)])
     cf_100 = max(latency[:int(len(latency)*1.0)])
 
-    print("Throughput average (samples/sec) = {:.4f}".format(np.mean(throughput)))
-    print("Preprocessing average (seconds) = {:.4f}".format(np.mean(preprocessing)))
-    print("Postprocessing average (seconds) = {:.4f}".format(np.mean(postprocessing)))
-    print("Number of mels per audio average = {}".format(np.mean(num_mels_per_audio)))
-    print("Latency average (seconds) = {:.4f}".format(np.mean(latency)))
-    print("Latency std (seconds) = {:.4f}".format(np.std(latency)))
-    print("Latency cl 50 (seconds) = {:.4f}".format(cf_50))
-    print("Latency cl 90 (seconds) = {:.4f}".format(cf_90))
-    print("Latency cl 95 (seconds) = {:.4f}".format(cf_95))
-    print("Latency cl 99 (seconds) = {:.4f}".format(cf_99))
-    print("Latency cl 100 (seconds) = {:.4f}".format(cf_100))
+    print("Throughput average (samples/sec)    = {:.0f}".format(np.mean(throughput)))
+    print("Preprocessing average (seconds)     = {:.4f}".format(np.mean(preprocessing)))
+    print("Postprocessing average (seconds)    = {:.4f}".format(np.mean(postprocessing)))
+    print("Number of mels per audio average    = {:.0f}".format(np.mean(num_mels_per_audio)))
+    print("Tacotron2 latency average (seconds) = {:.2f}".format(np.mean(tacotron2_latency)))
+    print("WaveGlow latency average (seconds)  = {:.2f}".format(np.mean(waveglow_latency)))
+    print("Denoiser latency average (seconds)  = {:.4f}".format(np.mean(denoiser_latency)))
+    print("Latency average (seconds)           = {:.2f}".format(np.mean(latency)))
+    print("Latency std (seconds)               = {:.2f}".format(np.std(latency)))
+    print("Latency cl 50 (seconds)             = {:.2f}".format(cf_50))
+    print("Latency cl 90 (seconds)             = {:.2f}".format(cf_90))
+    print("Latency cl 95 (seconds)             = {:.2f}".format(cf_95))
+    print("Latency cl 99 (seconds)             = {:.2f}".format(cf_99))
+    print("Latency cl 100 (seconds)            = {:.2f}".format(cf_100))
 
 
 def main():
@@ -161,6 +133,7 @@ def main():
     measurements_all = {"pre_processing": [],
                         "tacotron2_latency": [],
                         "waveglow_latency": [],
+                        "denoiser_latency": [],
                         "latency": [],
                         "type_conversion": [],
                         "data_transfer": [],
@@ -172,15 +145,13 @@ def main():
 
     print("args:", args, unknown_args)
 
-    tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2, args.amp_run, args.cpu_run, forward_is_infer=True)
-    waveglow = load_and_setup_model('WaveGlow', parser, args.waveglow, args.amp_run, args.cpu_run)
-
-    if args.cpu_run:
-        denoiser = Denoiser(waveglow, args.cpu_run)
-    else:
-        denoiser = Denoiser(waveglow, args.cpu_run).cuda()
-
-    jitted_tacotron2 = torch.jit.script(tacotron2)
+    tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2,
+                                     args.fp16, args.cpu, forward_is_infer=True)
+    waveglow = load_and_setup_model('WaveGlow', parser, args.waveglow,
+                                    args.fp16, args.cpu, forward_is_infer=True)
+    denoiser = Denoiser(waveglow)
+    if not args.cpu:
+        denoiser.cuda()
 
     texts = ["The forms of printed letters should be beautiful, and that their arrangement on the page should be reasonable and a help to the shapeliness of the letters themselves. The forms of printed letters should be beautiful, and that their arrangement on the page should be reasonable and a help to the shapeliness of the letters themselves."]
     texts = [texts[0][:args.input_length]]
@@ -192,29 +163,31 @@ def main():
 
         measurements = {}
 
-        with MeasureTime(measurements, "pre_processing", args.cpu_run):
-            sequences_padded, input_lengths = prepare_input_sequence(texts, args.cpu_run)
+        with MeasureTime(measurements, "pre_processing", args.cpu):
+            sequences_padded, input_lengths = prepare_input_sequence(texts, args.cpu)
 
         with torch.no_grad():
-            with MeasureTime(measurements, "latency", args.cpu_run):
-                with MeasureTime(measurements, "tacotron2_latency", args.cpu_run):
-                    mel, mel_lengths, _ = jitted_tacotron2(sequences_padded, input_lengths)
+            with MeasureTime(measurements, "latency", args.cpu):
+                with MeasureTime(measurements, "tacotron2_latency", args.cpu):
+                    mel, mel_lengths, _ = tacotron2.infer(sequences_padded, input_lengths)
 
-                with MeasureTime(measurements, "waveglow_latency", args.cpu_run):
+                with MeasureTime(measurements, "waveglow_latency", args.cpu):
                     audios = waveglow.infer(mel, sigma=args.sigma_infer)
+
+                num_mels = mel.size(0)*mel.size(2)
+                num_samples = audios.size(0)*audios.size(1)
+
+
+                with MeasureTime(measurements, "type_conversion", args.cpu):
                     audios = audios.float()
+
+                with torch.no_grad(), MeasureTime(measurements, "denoiser_latency", args.cpu):
                     audios = denoiser(audios, strength=args.denoising_strength).squeeze(1)
 
-        num_mels = mel.size(0)*mel.size(2)
-        num_samples = audios.size(0)*audios.size(1)
-
-        with MeasureTime(measurements, "type_conversion", args.cpu_run):
-            audios = audios.float()
-
-        with MeasureTime(measurements, "data_transfer", args.cpu_run):
+        with MeasureTime(measurements, "data_transfer", args.cpu):
             audios = audios.cpu()
 
-        with MeasureTime(measurements, "storage", args.cpu_run):
+        with MeasureTime(measurements, "storage", args.cpu):
             audios = audios.numpy()
             for i, audio in enumerate(audios):
                 audio_path = "audio_"+str(i)+".wav"

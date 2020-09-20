@@ -35,7 +35,24 @@ class ProfilingHook(tf.estimator.SessionRunHook):
             self._timestamps.append(time.time())
 
     def end(self, session):
-        deltas = [self._timestamps[i + 1] - self._timestamps[i] for i in range(len(self._timestamps) - 1)]
-        self._logger.log(step=(), data={
-            'average_throughput_train' if self._training else 'average_throughput_test': self._global_batch_size / np.mean(deltas)})
+        deltas = np.array([self._timestamps[i + 1] - self._timestamps[i] for i in range(len(self._timestamps) - 1)])
+        stats = process_performance_stats(np.array(deltas),
+                                          self._global_batch_size)
+
+        self._logger.log(step=(), data={metric: value for (metric, value) in stats})
         self._logger.flush()
+
+
+def process_performance_stats(timestamps, batch_size):
+    timestamps_ms = 1000 * timestamps
+    latency_ms = timestamps_ms.mean()
+    std = timestamps_ms.std()
+    n = np.sqrt(len(timestamps_ms))
+    throughput_imgps = (1000.0 * batch_size / timestamps_ms).mean()
+
+    stats = [("Throughput Avg", str(throughput_imgps)),
+             ('Latency Avg:', str(latency_ms))]
+    for ci, lvl in zip(["90%:", "95%:", "99%:"],
+                       [1.645, 1.960, 2.576]):
+        stats.append(("Latency_"+ci, str(latency_ms + lvl * std / n)))
+    return stats

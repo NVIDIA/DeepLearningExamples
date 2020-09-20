@@ -4,6 +4,21 @@
 # This source code is licensed under the license found in the LICENSE file in
 # the root directory of this source tree. An additional grant of patent rights
 # can be found in the PATENTS file in the same directory.
+#
+#--------------------------------------------------------------------
+#
+# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 from collections import defaultdict, OrderedDict
 import logging
@@ -13,7 +28,6 @@ import torch
 import traceback
 
 from torch.serialization import default_restore_location
-
 
 def torch_persistent_save(*args, **kwargs):
     for i in range(3):
@@ -65,8 +79,6 @@ def load_model_state(filename, model):
     if not os.path.exists(filename):
         return None, [], None
     state = torch.load(filename, map_location=lambda s, l: default_restore_location(s, 'cpu'))
-    state = _upgrade_state_dict(state)
-    model.upgrade_state_dict(state['model'])
 
     # load model parameters
     try:
@@ -76,98 +88,6 @@ def load_model_state(filename, model):
                         'please ensure that the architectures match')
 
     return state['extra_state'], state['optimizer_history'], state['last_optimizer_state']
-
-
-def _upgrade_state_dict(state):
-    """Helper for upgrading old model checkpoints."""
-    # add optimizer_history
-    if 'optimizer_history' not in state:
-        state['optimizer_history'] = [
-            {
-                'criterion_name': 'CrossEntropyCriterion',
-                'best_loss': state['best_loss'],
-            },
-        ]
-        state['last_optimizer_state'] = state['optimizer']
-        del state['optimizer']
-        del state['best_loss']
-    # move extra_state into sub-dictionary
-    if 'epoch' in state and 'extra_state' not in state:
-        state['extra_state'] = {
-            'epoch': state['epoch'],
-            'batch_offset': state['batch_offset'],
-            'val_loss': state['val_loss'],
-        }
-        del state['epoch']
-        del state['batch_offset']
-        del state['val_loss']
-    # reduce optimizer history's memory usage (only keep the last state)
-    if 'optimizer' in state['optimizer_history'][-1]:
-        state['last_optimizer_state'] = state['optimizer_history'][-1]['optimizer']
-        for optim_hist in state['optimizer_history']:
-            del optim_hist['optimizer']
-    # record the optimizer class name
-    if 'optimizer_name' not in state['optimizer_history'][-1]:
-        state['optimizer_history'][-1]['optimizer_name'] = 'FairseqNAG'
-    # move best_loss into lr_scheduler_state
-    if 'lr_scheduler_state' not in state['optimizer_history'][-1]:
-        state['optimizer_history'][-1]['lr_scheduler_state'] = {
-            'best': state['optimizer_history'][-1]['best_loss'],
-        }
-        del state['optimizer_history'][-1]['best_loss']
-    # keep track of number of updates
-    if 'num_updates' not in state['optimizer_history'][-1]:
-        state['optimizer_history'][-1]['num_updates'] = 0
-    # old model checkpoints may not have separate source/target positions
-    if hasattr(state['args'], 'max_positions') and not hasattr(state['args'], 'max_source_positions'):
-        state['args'].max_source_positions = state['args'].max_positions
-        state['args'].max_target_positions = state['args'].max_positions
-    # use stateful training data iterator
-    if 'train_iterator' not in state['extra_state']:
-        state['extra_state']['train_iterator'] = {
-            'epoch': state['extra_state']['epoch'],
-            'iterations_in_epoch': state['extra_state'].get('batch_offset', 0),
-        }
-    return state
-
-
-def load_ensemble_for_inference(filenames, task, model_arg_overrides=None):
-    """Load an ensemble of models for inference.
-
-    model_arg_overrides allows you to pass a dictionary model_arg_overrides --
-    {'arg_name': arg} -- to override model args that were used during model
-    training
-    """
-    # load model architectures and weights
-    states = []
-    for filename in filenames:
-        if not os.path.exists(filename):
-            raise IOError('Model file not found: {}'.format(filename))
-        state = torch.load(filename, map_location=lambda s, l: default_restore_location(s, 'cpu'))
-        state = _upgrade_state_dict(state)
-        states.append(state)
-
-    ensemble = []
-    for state in states:
-        args = state['args']
-        
-        if model_arg_overrides is not None:
-            args = _override_model_args(args, model_arg_overrides)
-
-        # build model for ensemble
-        model = task.build_model(args)
-        model.upgrade_state_dict(state['model'])
-        model.load_state_dict(state['model'], strict=True)
-        ensemble.append(model)
-
-    return ensemble, args
-
-
-def _override_model_args(args, model_arg_overrides):
-    # Uses model_arg_overrides {'arg_name': arg} to override model args
-    for arg_name, arg_val in model_arg_overrides.items():
-        setattr(args, arg_name, arg_val)
-    return args
 
 
 def move_to_cuda(sample):
@@ -308,7 +228,7 @@ def make_positions(tensor, padding_idx, left_pad):
     """
     max_pos = padding_idx + 1 + tensor.size(1)
     if not hasattr(make_positions, 'range_buf'):
-        make_positions.range_buf = tensor.new()
+        make_positions.range_buf = torch.arange(padding_idx + 1, 768, dtype=tensor.dtype, device=tensor.device)
     make_positions.range_buf = make_positions.range_buf.type_as(tensor)
     if make_positions.range_buf.numel() < max_pos:
         torch.arange(padding_idx + 1, max_pos, out=make_positions.range_buf)

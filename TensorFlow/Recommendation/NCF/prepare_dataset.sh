@@ -46,8 +46,10 @@ fi
 rm -f log
 
 if [ ! -f ${ZIP_PATH} ]; then
-    echo 'Dataset not found, downloading...'
-    ./download_dataset.sh ${DATASET_NAME} ${RAW_DATADIR}
+    echo "Dataset not found!"
+    echo "To continue please download the dataset from http://files.grouplens.org/datasets/movielens/ml-20m.zip \\
+ put it in ${ZIP_PATH} and rerun this script"
+    exit 1
 fi
 
 if [ ! -f ${RATINGS_PATH} ]; then

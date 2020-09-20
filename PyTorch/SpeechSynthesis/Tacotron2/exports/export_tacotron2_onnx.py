@@ -297,7 +297,7 @@ def main():
     args, _ = parser.parse_known_args()
 
     tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2,
-                                     amp_run=args.fp16, cpu_run=False)
+                                     fp16_run=args.fp16, cpu_run=False)
 
     opset_version = 10
 

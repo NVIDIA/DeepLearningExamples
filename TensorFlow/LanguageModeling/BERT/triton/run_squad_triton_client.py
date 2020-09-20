@@ -13,7 +13,7 @@
 
 import modeling
 import tokenization
-from tensorrtserver.api import ProtocolType, InferContext, ServerStatusContext, grpc_service_pb2_grpc, grpc_service_pb2, model_config_pb2
+import tritongrpcclient
 from utils.create_squad_data import *
 import grpc
 from run_squad import write_predictions, get_predictions, RawResult
@@ -112,8 +112,8 @@ class UserData:
 # Callback function used for async_run(), it can capture
 # additional information using functools.partial as long as the last
 # two arguments are reserved for InferContext and request id
-def completion_callback(user_data, idx, start_time, inputs, infer_ctx, request_id):
-    user_data._completed_requests.put((infer_ctx, request_id, idx, start_time, inputs))
+def completion_callback(user_data, idx, start_time, inputs, result, error):
+    user_data._completed_requests.put((result, error, idx, start_time, inputs))
 
 def batch(iterable, n=1):
     l = len(iterable)
@@ -159,7 +159,7 @@ def main(_):
             version_2_with_negative=FLAGS.version_2_with_negative, input_data=input_data)
     else:
         raise ValueError("Either predict_file or question+answer need to defined")
-    
+
     # Get Eval Features = Preprocessing
     eval_features = []
     def append_feature(feature):
@@ -176,20 +176,17 @@ def main(_):
 
     protocol_str = 'grpc' # http or grpc
     url = FLAGS.triton_server_url
-    verbose = True
+    verbose = False
     model_name = FLAGS.triton_model_name
-    model_version = FLAGS.triton_model_version
+    model_version = str(FLAGS.triton_model_version)
     batch_size = FLAGS.predict_batch_size
 
-    protocol = ProtocolType.from_str(protocol_str) # or 'grpc'
+    triton_client = tritongrpcclient.InferenceServerClient(url, verbose)
+    model_metadata = triton_client.get_model_metadata(
+        model_name=model_name, model_version=model_version)
+    model_config = triton_client.get_model_config(
+        model_name=model_name, model_version=model_version)
 
-    ctx = InferContext(url, protocol, model_name, model_version, verbose)
-
-    status_ctx = ServerStatusContext(url, protocol, model_name=model_name, verbose=verbose)
-
-    model_config_pb2.ModelConfig()
-
-    status_result = status_ctx.get_server_status()
     user_data = UserData()
 
     max_outstanding = 20
@@ -205,16 +202,14 @@ def main(_):
             return outstanding
 
         # Wait for deferred items from callback functions
-        (infer_ctx, ready_id, idx, start_time, inputs) = user_data._completed_requests.get()
-
-        if (ready_id is None):
-            return outstanding
-
-        # If we are here, we got an id
-        result = ctx.get_async_run_results(ready_id)
-        stop = time.time()
+        (result, error, idx, start_time, inputs) = user_data._completed_requests.get()
 
         if (result is None):
+            return outstanding
+
+        stop = time.time()
+
+        if (error is not None):
             raise ValueError("Context returned null for async id marked as done")
 
         outstanding -= 1
@@ -223,10 +218,13 @@ def main(_):
 
         batch_count = len(inputs[label_id_key])
 
+        start_logits_results = result.as_numpy("start_logits")
+        end_logits_results = result.as_numpy("end_logits")
+
         for i in range(batch_count):
             unique_id = int(inputs[label_id_key][i][0])
-            start_logits = [float(x) for x in result["start_logits"][i].flat]
-            end_logits = [float(x) for x in result["end_logits"][i].flat]
+            start_logits = [float(x) for x in start_logits_results[i].flat]
+            end_logits = [float(x) for x in end_logits_results[i].flat]
             all_results.append(
                 RawResult(
                     unique_id=unique_id,
@@ -247,12 +245,33 @@ def main(_):
 
         present_batch_size = len(inputs_dict[label_id_key])
 
-        outputs_dict = {'start_logits': InferContext.ResultFormat.RAW,
-                        'end_logits': InferContext.ResultFormat.RAW}
+        label_ids_data = np.stack(inputs_dict[label_id_key])
+        input_ids_data = np.stack(inputs_dict['input_ids'])
+        input_mask_data = np.stack(inputs_dict['input_mask'])
+        segment_ids_data = np.stack(inputs_dict['segment_ids'])
+
+        inputs = []
+        inputs.append(tritongrpcclient.InferInput(label_id_key, label_ids_data.shape, "INT32"))
+        inputs[0].set_data_from_numpy(label_ids_data)
+        inputs.append(tritongrpcclient.InferInput('input_ids', input_ids_data.shape, "INT32"))
+        inputs[1].set_data_from_numpy(input_ids_data)
+        inputs.append(tritongrpcclient.InferInput('input_mask', input_mask_data.shape, "INT32"))
+        inputs[2].set_data_from_numpy(input_mask_data)
+        inputs.append(tritongrpcclient.InferInput('segment_ids', segment_ids_data.shape, "INT32"))
+        inputs[3].set_data_from_numpy(segment_ids_data)
+
+        outputs = []
+        outputs.append(tritongrpcclient.InferRequestedOutput('start_logits'))
+        outputs.append(tritongrpcclient.InferRequestedOutput('end_logits'))
 
         start_time = time.time()
-        ctx.async_run(partial(completion_callback, user_data, idx, start_time, inputs_dict),
-        	inputs_dict, outputs_dict, batch_size=present_batch_size)
+        triton_client.async_infer(
+            model_name,
+            inputs,
+            partial(completion_callback, user_data, idx, start_time, inputs_dict),
+            request_id=str(idx),
+            model_version=model_version,
+            outputs=outputs)
         outstanding += 1
         idx += 1
 
@@ -313,7 +332,7 @@ def main(_):
         all_predictions, all_nbest_json, scores_diff_json = get_predictions(
                   eval_examples, eval_features, all_results,
                   FLAGS.n_best_size, FLAGS.max_answer_length,
-                  FLAGS.do_lower_case, FLAGS.version_2_with_negative, 
+                  FLAGS.do_lower_case, FLAGS.version_2_with_negative,
                   FLAGS.verbose_logging)
         print("Context is: %s \n\nQuestion is: %s \n\nPredicted Answer is: %s" %(FLAGS.context, FLAGS.question, all_predictions[0]))
 

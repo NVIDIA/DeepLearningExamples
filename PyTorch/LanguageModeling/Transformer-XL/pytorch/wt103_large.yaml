@@ -118,6 +118,7 @@ dgx1_1gpu_fp32: &dgx1_1gpu_fp32
    train:
       <<: *train
       batch_chunk: 64
+      swap_mem: true
    eval:
       <<: *eval
 
@@ -339,9 +340,11 @@ trainbench: &trainbench
       <<: *train
       log_interval: 1
       max_step: 500
+      max_step_scheduler: 100000
 
 trainbench_multinode: &trainbench_multinode
    train:
       <<: *train_multinode
       log_interval: 1
       max_step: 500
+      max_step_scheduler: 25000

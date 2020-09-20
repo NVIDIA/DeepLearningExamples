@@ -30,8 +30,8 @@ Usage:
         --export_dir="exported_models" \
         --model_checkpoint_path="path/to/checkpoint/model.ckpt-2500" \
         --unet_variant='tinyUNet' \
-        --use_xla \
-        --use_tf_amp
+        --xla \
+        --amp
 """
 
 from __future__ import absolute_import
@@ -98,7 +98,7 @@ def get_export_flags():
 
     _add_bool_argument(
         parser=parser,
-        name="use_tf_amp",
+        name="amp",
         default=False,
         required=False,
         help="Enable Automatic Mixed Precision Computation to maximise performance."
@@ -106,7 +106,7 @@ def get_export_flags():
 
     _add_bool_argument(
         parser=parser,
-        name="use_xla",
+        name="xla",
         default=False,
         required=False,
         help="Enable Tensorflow XLA to maximise performance."
@@ -128,7 +128,7 @@ def get_export_flags():
 
 def export_model(RUNNING_CONFIG):
 
-    if RUNNING_CONFIG.use_tf_amp:
+    if RUNNING_CONFIG.amp:
         os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
 
     model = UNet_v1(
@@ -148,7 +148,7 @@ def export_model(RUNNING_CONFIG):
 
     config_proto.gpu_options.allow_growth = True
 
-    if RUNNING_CONFIG.use_xla:  # Only working on single GPU
+    if RUNNING_CONFIG.xla:  # Only working on single GPU
         LOGGER.log("XLA is activated - Experimental Feature")
         config_proto.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
 

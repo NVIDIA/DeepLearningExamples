@@ -31,77 +31,24 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image
 
-from utils.cmd_util import PARSER, _cmd_params
+from utils.setup import prepare_model_dir, get_logger, build_estimator, set_flags
+from utils.cmd_util import PARSER, parse_args
 from utils.data_loader import Dataset
 from utils.hooks.profiling_hook import ProfilingHook
 from utils.hooks.training_hook import TrainingHook
-from utils.model_fn import unet_fn
-from dllogger.logger import Logger, StdOutBackend, JSONStreamBackend, Verbosity
 
 
 def main(_):
     """
     Starting point of the application
     """
-
-    flags = PARSER.parse_args()
-    params = _cmd_params(flags)
-    np.random.seed(params.seed)
-    tf.compat.v1.random.set_random_seed(params.seed)
-    tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-
-    backends = [StdOutBackend(Verbosity.VERBOSE)]
-    if params.log_dir is not None:
-        backends.append(JSONStreamBackend(Verbosity.VERBOSE, params.log_dir))
-    logger = Logger(backends)
-
-    # Optimization flags
-    os.environ['CUDA_CACHE_DISABLE'] = '0'
-
-    os.environ['HOROVOD_GPU_ALLREDUCE'] = 'NCCL'
-
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
-    os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
-
-    os.environ['TF_USE_CUDNN_BATCHNORM_SPATIAL_PERSISTENT'] = 'data'
-
-    os.environ['TF_ADJUST_HUE_FUSED'] = 'data'
-    os.environ['TF_ADJUST_SATURATION_FUSED'] = 'data'
-    os.environ['TF_ENABLE_WINOGRAD_NONFUSED'] = 'data'
-
-    os.environ['TF_SYNC_ON_FINISH'] = '0'
-    os.environ['TF_AUTOTUNE_THRESHOLD'] = '2'
-
-    if params.use_amp:
-        os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '1'
-    else:
-        os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '0'
     hvd.init()
+    set_flags()
+    params = parse_args(PARSER.parse_args())
+    model_dir = prepare_model_dir(params)
+    logger = get_logger(params)
 
-    # Build run config
-    gpu_options = tf.compat.v1.GPUOptions()
-    config = tf.compat.v1.ConfigProto(gpu_options=gpu_options, allow_soft_placement=True)
-
-    if params.use_xla:
-        config.graph_options.optimizer_options.global_jit_level = tf.compat.v1.OptimizerOptions.ON_1
-
-    config.gpu_options.allow_growth = True
-    config.gpu_options.visible_device_list = str(hvd.local_rank())
-
-    run_config = tf.estimator.RunConfig(
-        save_summary_steps=1,
-        tf_random_seed=None,
-        session_config=config,
-        save_checkpoints_steps=params.max_steps // hvd.size(),
-        keep_checkpoint_max=1)
-
-    # Build the estimator model
-    estimator = tf.estimator.Estimator(
-        model_fn=unet_fn,
-        model_dir=params.model_dir,
-        config=run_config,
-        params=params)
+    estimator = build_estimator(params, model_dir)
 
     dataset = Dataset(data_dir=params.data_dir,
                       batch_size=params.batch_size,

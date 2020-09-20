@@ -94,6 +94,12 @@ if __name__ == "__main__":
             use_static_loss_scaling=FLAGS.use_static_loss_scaling,
             use_cosine_lr=FLAGS.use_cosine_lr,
             is_benchmark=FLAGS.mode == 'training_benchmark',
+            use_final_conv=FLAGS.use_final_conv,
+            quantize=FLAGS.quantize,
+            symmetric=FLAGS.symmetric,
+            quant_delay = FLAGS.quant_delay,
+            use_qdq = FLAGS.use_qdq,
+            finetune_checkpoint = FLAGS.finetune_checkpoint,
         )
 
     if FLAGS.mode in ["train_and_evaluate", 'evaluate', 'inference_benchmark']:
@@ -110,7 +116,11 @@ if __name__ == "__main__":
                 batch_size=FLAGS.batch_size,
                 log_every_n_steps=FLAGS.display_every,
                 is_benchmark=FLAGS.mode == 'inference_benchmark',
-                export_dir=FLAGS.export_dir
+                export_dir=FLAGS.export_dir,
+                quantize=FLAGS.quantize,
+                symmetric=FLAGS.symmetric,
+                use_final_conv=FLAGS.use_final_conv,
+                use_qdq=FLAGS.use_qdq
             )
 
     if FLAGS.mode == 'predict':
@@ -124,4 +134,4 @@ if __name__ == "__main__":
             raise NotImplementedError("Only single GPU inference is implemented.")
 
         elif not hvd_utils.is_using_hvd() or hvd.rank() == 0:
-            runner.predict(FLAGS.to_predict)
+            runner.predict(FLAGS.to_predict, quantize=FLAGS.quantize, symmetric=FLAGS.symmetric, use_qdq=FLAGS.use_qdq, use_final_conv=FLAGS.use_final_conv)

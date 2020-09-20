@@ -27,7 +27,7 @@ vocab_file=${9:-"$BERT_PREP_WORKING_DIR/download/google_pretrained_weights/uncas
 OUT_DIR=${10:-"/workspace/bert/results/SQuAD"}
 mode=${11:-"train eval"}
 CONFIG_FILE=${12:-"/workspace/bert/bert_config.json"}
-max_steps=${13:-"-1"}
+max_steps=${13:-"-1"} 
 
 echo "out dir is $OUT_DIR"
 mkdir -p $OUT_DIR

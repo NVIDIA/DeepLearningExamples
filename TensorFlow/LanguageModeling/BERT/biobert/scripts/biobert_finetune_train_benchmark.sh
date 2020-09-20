@@ -64,20 +64,10 @@ if [ "$task" = "ner_bc5cdr-chem" ] ; then
 
     for seq_length in 128 512; do
         for train_batch_size in 8 32 64; do
-            for precision in fp16 fp32; do
-                res_dir=${OUTPUT_DIR}/bert_${bert_model}_gpu_${num_gpu}_sl_${seq_length}_prec_${precision}_bs_${batch_size}
+            for use_fp16 in "--amp" "--noamp"; do
+                res_dir=${OUTPUT_DIR}/bert_${bert_model}_gpu_${num_gpu}_sl_${seq_length}_prec_${use_fp16}_bs_${batch_size}
                 mkdir -p ${res_dir}
                 tmp_file="${res_dir}/${task}_training_benchmark.log"
-
-                if [ "$precision" = "fp16" ] ; then
-                    echo "fp16 activated!"
-                    use_fp16="--use_fp16"
-                    use_xla_tag="--use_xla"
-                else
-                    echo "fp32 activated!"
-                    use_fp16=""
-                    use_xla_tag=""
-                fi
 
                 $mpi_command python /workspace/bert/run_ner.py \
                   --do_prepare=true \
@@ -93,10 +83,10 @@ if [ "$task" = "ner_bc5cdr-chem" ] ; then
                   --output_dir=$res_dir \
                   --train_batch_size=$train_batch_size \
                   --max_seq_length=$seq_length \
-                  $use_hvd $use_fp16 $use_xla_tag $case_flag |& tee $tmp_file
+                  $use_hvd $use_fp16 --use_xla $case_flag |& tee $tmp_file
 
                 perf=`cat $tmp_file | grep -F 'Throughput Average (sentences/sec) =' | head -1 | awk -F'= ' '{print $2}' | awk -F' sen' '{print $1}'`
-                echo "$precision  $seq_length  $train_batch_size $perf" >> $LOGFILE
+                echo "${use_fp16}  $seq_length  $train_batch_size $perf" >> $LOGFILE
 
             done
         done
@@ -111,20 +101,10 @@ elif [ "$task" = "ner_bc5cdr-disease" ] ; then
 
     for seq_length in 128 512; do
         for train_batch_size in 8 32 64; do
-            for precision in fp16 fp32; do
-                res_dir=${OUTPUT_DIR}/bert_${bert_model}_gpu_${num_gpu}_sl_${seq_length}_prec_${precision}_bs_${batch_size}
+            for use_fp16 in "--amp" "--noamp"; do
+                res_dir=${OUTPUT_DIR}/bert_${bert_model}_gpu_${num_gpu}_sl_${seq_length}_prec_${use_fp16}_bs_${batch_size}
                 mkdir -p ${res_dir}
                 tmp_file="${res_dir}/${task}_training_benchmark.log"
-
-                if [ "$precision" = "fp16" ] ; then
-                    echo "fp16 activated!"
-                    use_fp16="--use_fp16"
-                    use_xla_tag="--use_xla"
-                else
-                    echo "fp32 activated!"
-                    use_fp16=""
-                    use_xla_tag=""
-                fi
 
                 $mpi_command python3 /workspace/bert/run_ner.py \
                 --do_prepare=true \
@@ -140,10 +120,10 @@ elif [ "$task" = "ner_bc5cdr-disease" ] ; then
                 --output_dir=$res_dir \
                 --train_batch_size=$train_batch_size \
                 --max_seq_length=$seq_length \
-                "$use_hvd" "$use_fp16" $use_xla_tag $case_flag  |& tee $tmp_file
+                "$use_hvd" "$use_fp16" --use_xla $case_flag  |& tee $tmp_file
 
                   perf=`cat $tmp_file | grep -F 'Throughput Average (sentences/sec) =' | head -1 | awk -F'= ' '{print $2}' | awk -F' sen' '{print $1}'`
-                echo "$precision  $seq_length  $train_batch_size $perf" >> $LOGFILE
+                echo "${use_fp16}  $seq_length  $train_batch_size $perf" >> $LOGFILE
 
             done
         done
@@ -158,20 +138,10 @@ elif [ "$task" = "rel_chemprot" ] ; then
 
     for seq_length in 128 512; do
         for train_batch_size in 8 32 64; do
-            for precision in fp16 fp32; do
-                res_dir=${OUTPUT_DIR}/bert_${bert_model}_gpu_${num_gpu}_sl_${seq_length}_prec_${precision}_bs_${batch_size}
+            for use_fp16 in "--amp" "--noamp"; do
+                res_dir=${OUTPUT_DIR}/bert_${bert_model}_gpu_${num_gpu}_sl_${seq_length}_prec_${use_fp16}_bs_${batch_size}
                 mkdir -p ${res_dir}
                 tmp_file="${res_dir}/${task}_training_benchmark.log"
-
-                if [ "$precision" = "fp16" ] ; then
-                    echo "fp16 activated!"
-                    use_fp16="--use_fp16"
-                    use_xla_tag="--use_xla"
-                else
-                    echo "fp32 activated!"
-                    use_fp16=""
-                    use_xla_tag=""
-                fi
 
                 $mpi_command python3 /workspace/bert/run_re.py \
                 --do_prepare=true \
@@ -187,10 +157,10 @@ elif [ "$task" = "rel_chemprot" ] ; then
                 --output_dir=$res_dir \
                 --train_batch_size=$train_batch_size \
                 --max_seq_length=$seq_length \
-                "$use_hvd" "$use_fp16" $use_xla_tag $case_flag |& tee $tmp_file
+                "$use_hvd" "$use_fp16" --use_xla $case_flag |& tee $tmp_file
 
                 perf=`cat $tmp_file | grep -F 'Throughput Average (sentences/sec) =' | head -1 | awk -F'= ' '{print $2}' | awk -F' sen' '{print $1}'`
-                echo "$precision  $seq_length  $train_batch_size $perf" >> $LOGFILE
+                echo "${use_fp16}  $seq_length  $train_batch_size $perf" >> $LOGFILE
 
             done
         done

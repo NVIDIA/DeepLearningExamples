@@ -26,8 +26,9 @@ import toml
 import torch
 from apex import amp
 from dataset import AudioToTextDataLayer
-from helpers import process_evaluation_batch, process_evaluation_epoch, add_ctc_labels, AmpOptimizations, print_dict
+from helpers import process_evaluation_batch, process_evaluation_epoch, add_ctc_labels, print_dict
 from model import AudioPreprocessing, GreedyCTCDecoder, JasperEncoderDecoder
+from parts.features import audio_from_file
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Jasper')
@@ -40,9 +41,45 @@ def parse_args():
     parser.add_argument("--val_manifest", type=str, help='relative path to evaluation dataset manifest file')
     parser.add_argument("--cudnn_benchmark", action='store_true', help="enable cudnn benchmark")
     parser.add_argument("--ckpt", default=None, type=str, required=True, help='path to model checkpoint')
-    parser.add_argument("--fp16", action='store_true', help='use half precision')
+    parser.add_argument("--amp", "--fp16", action='store_true', help='use half precision')
     parser.add_argument("--seed", default=42, type=int, help='seed')
+    parser.add_argument("--cpu", action='store_true', help='run inference on CPU')
+    parser.add_argument("--torch_script", action='store_true', help='export model')
+    parser.add_argument("--sample_audio", default="/datasets/LibriSpeech/dev-clean-wav/1272/128104/1272-128104-0000.wav", type=str, help='audio sample path for torchscript, points to one of the files in /datasets/LibriSpeech/dev-clean-wav/ if not defined')
     return parser.parse_args()
+
+def jit_export(
+         audio,
+         audio_len,
+         audio_processor,
+         encoderdecoder,
+         greedy_decoder,
+         args):
+    """applies torchscript
+    Args:
+        audio:
+        audio_len: 
+        audio_processor: data processing module
+        encoderdecoder: acoustic model
+        greedy_decoder: greedy decoder
+        args: script input arguments
+    """
+    # Export just the featurizer
+    print("torchscripting featurizer ...")
+    traced_module_feat = torch.jit.script(audio_processor)
+
+    # Export just the acoustic model
+    print("torchscripting acoustic model ...")
+    inp_postFeat, _ = audio_processor(audio, audio_len)
+    traced_module_acoustic = torch.jit.trace(encoderdecoder, inp_postFeat)
+
+    # Export just the decoder
+    print("torchscripting decoder ...")
+    inp_postAcoustic = encoderdecoder(inp_postFeat)
+    traced_module_decode = torch.jit.script(greedy_decoder, inp_postAcoustic)
+    print("JIT process complete")
+
+    return traced_module_feat, traced_module_acoustic, traced_module_decode
 
 def eval(
         data_layer,
@@ -50,6 +87,7 @@ def eval(
         encoderdecoder,
         greedy_decoder,
         labels,
+        device,
         args):
     """performs evaluation and prints performance statistics
     Args:
@@ -64,6 +102,12 @@ def eval(
     steps=args.steps
     audio_processor.eval()
     encoderdecoder.eval()
+    greedy_decoder.eval()
+
+    if args.torch_script:
+        audio, audio_len = audio_from_file(args.sample_audio, device=device)
+        audio_processor, encoderdecoder, greedy_decoder = jit_export(audio, audio_len, audio_processor, encoderdecoder, greedy_decoder, args)
+
     with torch.no_grad():
         _global_var_dict = {
             'predictions': [],
@@ -78,29 +122,32 @@ def eval(
         durations_dnn = []
         durations_dnn_and_prep = []
         seq_lens = []
+
+        sync = lambda: torch.cuda.synchronize() if device.type == 'cuda' else None
+
         while True:
             ep += 1
             for data in tqdm(data_layer.data_iterator):
                 it += 1
                 if it > steps:
                     break
-                tensors = []
-                dl_device = torch.device("cuda")
-                for d in data:
-                    tensors.append(d.to(dl_device))
+                tensors = [t.to(device) for t in data]
      
                 t_audio_signal_e, t_a_sig_length_e, t_transcript_e, t_transcript_len_e = tensors
-                torch.cuda.synchronize()
+
+                sync()
                 t0 = time.perf_counter()
-                t_processed_signal = audio_processor(t_audio_signal_e, t_a_sig_length_e)
-                torch.cuda.synchronize()
+                features, lens = audio_processor(t_audio_signal_e, t_a_sig_length_e)
+
+                sync()
                 t1 = time.perf_counter()
-                
-                t_log_probs_e, _  = encoderdecoder.infer(t_processed_signal)
+                if isinstance(encoderdecoder, torch.jit.TracedModule):
+                    t_log_probs_e = encoderdecoder(features)
+                else:
+                    t_log_probs_e, _ = encoderdecoder.infer((features, lens))
 
-                torch.cuda.synchronize()
+                sync()
                 stop_time = time.perf_counter()
-
                 time_prep_and_dnn = stop_time - t0
                 time_dnn = stop_time - t1
                 t_predictions_e = greedy_decoder(log_probs=t_log_probs_e)
@@ -113,7 +160,7 @@ def eval(
                 process_evaluation_batch(values_dict, _global_var_dict, labels=labels)
                 durations_dnn.append(time_dnn)
                 durations_dnn_and_prep.append(time_prep_and_dnn)
-                seq_lens.append(t_processed_signal[0].shape[-1])
+                seq_lens.append(features[0].shape[-1])
 
             if it >= steps:
 
@@ -151,15 +198,17 @@ def main(args):
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    torch.backends.cudnn.benchmark = args.cudnn_benchmark
     assert(args.steps is None or args.steps > 5)
-    print("CUDNN BENCHMARK ", args.cudnn_benchmark)
-    assert(torch.cuda.is_available())
 
-    if args.fp16:
-        optim_level = 3
+    if args.cpu:
+        device = torch.device('cpu')
     else:
-        optim_level = 0
+        assert(torch.cuda.is_available())
+        device = torch.device('cuda')
+        torch.backends.cudnn.benchmark = args.cudnn_benchmark
+        print("CUDNN BENCHMARK ", args.cudnn_benchmark)
+
+    optim_level = 3 if args.amp else 0
     batch_size = args.batch_size
 
     jasper_model_definition = toml.load(args.model_toml)
@@ -179,6 +228,11 @@ def main(args):
     
     if featurizer_config['pad_to'] == "max":
         featurizer_config['pad_to'] = -1
+
+    args.use_conv_mask = jasper_model_definition['encoder'].get('convmask', True)
+    if args.use_conv_mask and args.torch_script:
+        print('WARNING: Masked convs currently not supported for TorchScript. Disabling.')
+        jasper_model_definition['encoder']['convmask'] = False
 
     print('model_config')
     print_dict(jasper_model_definition)
@@ -217,18 +271,18 @@ def main(args):
     print('-----------------')
     if args.steps is None:
         print('Have {0} examples to eval on.'.format(N))
-        print('Have {0} steps / (gpu * epoch).'.format(step_per_epoch))
+        print('Have {0} steps / (epoch).'.format(step_per_epoch))
     else:
         print('Have {0} examples to eval on.'.format(args.steps * args.batch_size))
-        print('Have {0} steps / (gpu * epoch).'.format(args.steps))
+        print('Have {0} steps / (epoch).'.format(args.steps))
     print('-----------------')
 
-    audio_preprocessor.cuda()
-    encoderdecoder.cuda()
-    if args.fp16:
+    audio_preprocessor.to(device)
+    encoderdecoder.to(device)
+
+    if args.amp:
         encoderdecoder = amp.initialize(
-            models=encoderdecoder,
-            opt_level=AmpOptimizations[optim_level])
+            models=encoderdecoder, opt_level='O'+str(optim_level))
 
     eval(
         data_layer=data_layer,
@@ -236,6 +290,7 @@ def main(args):
         encoderdecoder=encoderdecoder,
         greedy_decoder=greedy_decoder,
         labels=ctc_vocab,
+        device=device,
         args=args)
 
 if __name__=="__main__":

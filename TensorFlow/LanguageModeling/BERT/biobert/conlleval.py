@@ -22,7 +22,7 @@ ANY_SPACE = '<SPACE>'
 class FormatError(Exception):
     pass
 
-Metrics = namedtuple('Metrics', 'tp fp fn prec rec fscore')
+Metrics = namedtuple('Metrics', 'tp fp fn precision recall f1')
 
 
 class EvalCounts(object):
@@ -197,9 +197,7 @@ def report(counts, out=None):
         out.write('FB1: %6.2f  %d\n' % (100.*m.fscore, c.t_found_guessed[i]))
 
 
-def report_notprint(counts, out=None):
-    if out is None:
-        out = sys.stdout
+def report_notprint(counts):
 
     overall, by_type = metrics(counts)
 

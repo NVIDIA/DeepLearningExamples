@@ -11,8 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM gitlab-master.nvidia.com:5005/dl/dgx/tensorrtserver:master-py3.1164446-client AS trtserver
-# FROM nvcr.io/nvidia/tensorrtserver:20.01-py3-clientsdk AS trtserver
+FROM nvcr.io/nvidia/tritonserver:20.03-py3-clientsdk AS trtserver
 FROM continuumio/miniconda3
 RUN apt-get update && apt-get install -y pbzip2 pv bzip2 cabextract mc iputils-ping wget
 

@@ -66,8 +66,8 @@ class Runner(object):
         loss_fn_name,
 
         #  Runtime HParams
-        use_tf_amp,
-        use_xla,
+        amp,
+        xla,
 
         # Directory Params
         model_dir=None,
@@ -132,9 +132,9 @@ class Runner(object):
 
         # =================================================
 
-        self.use_xla = use_xla
+        self.xla = xla
 
-        if use_tf_amp:
+        if amp:
 
             if not hvd_utils.is_using_hvd() or hvd.rank() == 0:
                 print("TF AMP is activated - Experimental Feature")
@@ -160,7 +160,7 @@ class Runner(object):
             loss_fn_name=loss_fn_name,
 
             # Runtime Params
-            use_tf_amp=use_tf_amp,
+            amp=amp,
 
             # Debug Params
             log_every_n_steps=log_every_n_steps,
@@ -247,7 +247,7 @@ class Runner(object):
             return worker_batch_size
 
     @staticmethod
-    def _get_session_config(mode, use_xla):
+    def _get_session_config(mode, xla):
 
         if mode not in ["train", 'validation', 'benchmark']:
             raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark')" % mode)
@@ -262,7 +262,7 @@ class Runner(object):
         if hvd_utils.is_using_hvd():
             config.gpu_options.visible_device_list = str(hvd.rank())
 
-        if use_xla:
+        if xla:
             if not hvd_utils.is_using_hvd() or hvd.rank() == 0:
                 print("XLA is activated - Experimental Feature")
             config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
@@ -283,7 +283,7 @@ class Runner(object):
         return config
 
     @staticmethod
-    def _get_run_config(mode, model_dir, use_xla, seed=None):
+    def _get_run_config(mode, model_dir, xla, seed=None):
 
         if mode not in ["train", 'validation', 'benchmark']:
             raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark')" % mode)
@@ -302,7 +302,7 @@ class Runner(object):
             save_summary_steps=10 if mode == "train" else 1e9,  # disabled
             save_checkpoints_steps=None,
             save_checkpoints_secs=None,
-            session_config=Runner._get_session_config(mode=mode, use_xla=use_xla),
+            session_config=Runner._get_session_config(mode=mode, xla=xla),
             keep_checkpoint_max=5,
             keep_checkpoint_every_n_hours=1e6,  # disabled
             log_step_count_steps=1e9,
@@ -323,13 +323,13 @@ class Runner(object):
 
         return config
 
-    def _get_estimator(self, mode, run_params, use_xla):
+    def _get_estimator(self, mode, run_params, xla):
 
         if mode not in ["train", 'validation', 'benchmark']:
             raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark')" % mode)
 
         run_config = Runner._get_run_config(
-            mode=mode, model_dir=self.run_hparams.model_dir, use_xla=use_xla, seed=self.run_hparams.seed
+            mode=mode, model_dir=self.run_hparams.model_dir, xla=xla, seed=self.run_hparams.seed
         )
 
         return tf.estimator.Estimator(
@@ -359,7 +359,7 @@ class Runner(object):
         if self.run_hparams.data_dir is None and not is_benchmark:
             raise ValueError('`data_dir` must be specified for training!')
 
-        if self.run_hparams.use_tf_amp:
+        if self.run_hparams.amp:
             if use_auto_loss_scaling:
 
                 if not hvd_utils.is_using_hvd() or hvd.rank() == 0:
@@ -406,24 +406,24 @@ class Runner(object):
 
             print("Starting Model Training ...")
 
-            Logger.log(step=(), data={"Epochs": num_epochs}, verbosity=Logger.Verbosity.DEFAULT)
-            Logger.log(step=(), data={"Total Steps": num_steps}, verbosity=Logger.Verbosity.DEFAULT)
-            Logger.log(step=(), data={"Steps per Epoch": steps_per_epoch}, verbosity=Logger.Verbosity.DEFAULT)
-            Logger.log(step=(), data={"Weight Decay Factor": weight_decay}, verbosity=Logger.Verbosity.DEFAULT)
-            Logger.log(step=(), data={"Learning Rate": learning_rate}, verbosity=Logger.Verbosity.DEFAULT)
-            Logger.log(step=(), data={"Learning Rate Decay Factor": learning_rate_decay_factor}, verbosity=Logger.Verbosity.DEFAULT)
-            Logger.log(step=(), data={"Learning Rate Decay Steps": learning_rate_decay_steps}, verbosity=Logger.Verbosity.DEFAULT)
-            Logger.log(step=(), data={"RMSProp - Decay": rmsprop_decay}, verbosity=Logger.Verbosity.DEFAULT)
-            Logger.log(step=(), data={"RMSProp - Momentum": rmsprop_momentum}, verbosity=Logger.Verbosity.DEFAULT)
-            Logger.log(step=(), data={"Loss Function Name": self.run_hparams.loss_fn_name}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=('PARAMETER'), data={"Epochs": num_epochs}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=('PARAMETER'), data={"Total Steps": num_steps}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=('PARAMETER'), data={"Steps per Epoch": steps_per_epoch}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=('PARAMETER'), data={"Weight Decay Factor": weight_decay}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=('PARAMETER'), data={"Learning Rate": learning_rate}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=('PARAMETER'), data={"Learning Rate Decay Factor": learning_rate_decay_factor}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=('PARAMETER'), data={"Learning Rate Decay Steps": learning_rate_decay_steps}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=('PARAMETER'), data={"RMSProp - Decay": rmsprop_decay}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=('PARAMETER'), data={"RMSProp - Momentum": rmsprop_momentum}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=('PARAMETER'), data={"Loss Function Name": self.run_hparams.loss_fn_name}, verbosity=Logger.Verbosity.DEFAULT)
 
-            if self.run_hparams.use_tf_amp:
-                Logger.log(step=(), data={"Use Auto Loss Scaling": use_auto_loss_scaling}, verbosity=Logger.Verbosity.DEFAULT)
+            if self.run_hparams.amp:
+                Logger.log(step=('PARAMETER'), data={"Use Auto Loss Scaling": use_auto_loss_scaling}, verbosity=Logger.Verbosity.DEFAULT)
 
-            Logger.log(step=(), data={"# GPUs": self.num_gpus}, verbosity=Logger.Verbosity.DEFAULT)
-            Logger.log(step=(), data={"GPU Batch Size": batch_size}, verbosity=Logger.Verbosity.DEFAULT)
-            Logger.log(step=(), data={"Global Batch Size": global_batch_size}, verbosity=Logger.Verbosity.DEFAULT)
-            Logger.log(step=(), data={"Total Files to be Processed": num_steps * global_batch_size}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=('PARAMETER'), data={"# GPUs": self.num_gpus}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=('PARAMETER'), data={"GPU Batch Size": batch_size}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=('PARAMETER'), data={"Global Batch Size": global_batch_size}, verbosity=Logger.Verbosity.DEFAULT)
+            Logger.log(step=('PARAMETER'), data={"Total Files to be Processed": num_steps * global_batch_size}, verbosity=Logger.Verbosity.DEFAULT)
 
             print()  # visual spacing
 
@@ -475,7 +475,7 @@ class Runner(object):
                     seed=self.run_hparams.seed
                 )
 
-        model = self._get_estimator(mode='train', run_params=estimator_params, use_xla=self.use_xla)
+        model = self._get_estimator(mode='train', run_params=estimator_params, xla=self.xla)
 
         try:
             model.train(
@@ -526,11 +526,11 @@ class Runner(object):
 
         print('Starting Model Evaluation ...\n')
 
-        Logger.log(step=(), data={"Epochs": num_epochs}, verbosity=Logger.Verbosity.DEFAULT)
-        Logger.log(step=(), data={"Total Steps": num_steps}, verbosity=Logger.Verbosity.DEFAULT)
-        Logger.log(step=(), data={"Steps per Epoch": steps_per_epoch}, verbosity=Logger.Verbosity.DEFAULT)
-        Logger.log(step=(), data={"GPU Batch Size": batch_size}, verbosity=Logger.Verbosity.DEFAULT)
-        Logger.log(step=(), data={"Total Files to Processed": num_steps * batch_size}, verbosity=Logger.Verbosity.DEFAULT)
+        Logger.log(step=('PARAMETER'), data={"Epochs": num_epochs}, verbosity=Logger.Verbosity.DEFAULT)
+        Logger.log(step=('PARAMETER'), data={"Total Steps": num_steps}, verbosity=Logger.Verbosity.DEFAULT)
+        Logger.log(step=('PARAMETER'), data={"Steps per Epoch": steps_per_epoch}, verbosity=Logger.Verbosity.DEFAULT)
+        Logger.log(step=('PARAMETER'), data={"GPU Batch Size": batch_size}, verbosity=Logger.Verbosity.DEFAULT)
+        Logger.log(step=('PARAMETER'), data={"Total Files to Processed": num_steps * batch_size}, verbosity=Logger.Verbosity.DEFAULT)
 
         print()  # visual spacing
 
@@ -574,7 +574,7 @@ class Runner(object):
                     seed=self.run_hparams.seed
                 )
 
-        model = self._get_estimator(mode='validation', run_params=estimator_params, use_xla=self.use_xla)
+        model = self._get_estimator(mode='validation', run_params=estimator_params, xla=self.xla)
 
         try:
             eval_results = model.evaluate(
@@ -587,16 +587,10 @@ class Runner(object):
 
             print('###################################\n\nEvaluation Results:\n')
 
-            for key, val in sorted(eval_results.items(), key=operator.itemgetter(0)):
-
-                if any(val in key for val in ["loss", "global_step", "Confusion_Matrix"]):
-                    continue
-
-                Logger.log(
-                    step=(),
-                    data={"{prefix}.{key}".format(prefix=Logger._stage, key=key): float(val)},
-                    verbosity=Logger.Verbosity.DEFAULT
-                )
+            data_to_log = {"{prefix}.{key}".format(prefix=Logger._stage, key=key): float(val)
+                           for key, val in sorted(eval_results.items(), key=operator.itemgetter(0))
+                           if not any(val in key for val in ["loss", "global_step", "Confusion_Matrix"])}
+            Logger.log(step=(), data=data_to_log, verbosity=Logger.Verbosity.DEFAULT)
 
             fns = eval_results["Confusion_Matrix_FN"]
             fps = eval_results["Confusion_Matrix_FP"]

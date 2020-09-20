@@ -19,11 +19,6 @@ from enum import Enum
 from metrics import word_error_rate
 
 
-
-
-
-AmpOptimizations = ["O0", "O1", "O2", "O3"]
-
 def print_once(msg):
     if (not torch.distributed.is_initialized() or (torch.distributed.is_initialized() and torch.distributed.get_rank() == 0)):
         print(msg)

@@ -178,7 +178,7 @@ Export Tacotron 2 to TorchScript:
 ```bash
 cd /workspace/tacotron2/
 mkdir -p output
-python exports/export_tacotron2_ts.py --tacotron2 checkpoints/nvidia_tacotron2pyt_fp16_20190427 -o output/model.pt --amp-run
+python exports/export_tacotron2_ts.py --tacotron2 checkpoints/nvidia_tacotron2pyt_fp16_20190427 -o output/model.pt --amp
 ```
 
 To export WaveGlow to TensorRT 7, install ONNX-TRT
@@ -194,7 +194,7 @@ cd /workspace/tacotron2
 Export WaveGlow to ONNX intermediate representation:
 
 ```bash
-python exports/export_waveglow_onnx.py --waveglow checkpoints/nvidia_waveglow256pyt_fp16 --wn-channels 256 --amp-run -o output/
+python exports/export_waveglow_onnx.py --waveglow checkpoints/nvidia_waveglow256pyt_fp16 --wn-channels 256 --fp16 -o output/
 ```
 
 Use the exported ONNX IR to generate TensorRT engine:

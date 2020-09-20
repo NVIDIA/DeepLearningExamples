@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (c) 2017 Elad Hoffer
-# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2018-2020, NVIDIA CORPORATION. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -22,20 +22,24 @@
 # SOFTWARE.
 
 import argparse
-import logging
 import itertools
+import logging
+import os
 import sys
 import warnings
 from itertools import product
 
+import dllogger
+import numpy as np
 import torch
 
 import seq2seq.utils as utils
 from seq2seq.data.dataset import RawTextDataset
+from seq2seq.data.dataset import SyntheticDataset
 from seq2seq.data.tokenizer import Tokenizer
+from seq2seq.inference import tables
 from seq2seq.inference.translator import Translator
 from seq2seq.models.gnmt import GNMT
-from seq2seq.inference import tables
 
 
 def parse_args():
@@ -64,10 +68,19 @@ def parse_args():
     dataset.add_argument('-r', '--reference', default=None,
                          help='full path to the file with reference \
                          translations (for sacrebleu, raw text)')
-    dataset.add_argument('-m', '--model', required=True,
+    dataset.add_argument('-m', '--model', type=str, default=None,
                          help='full path to the model checkpoint file')
 
-    source = dataset.add_mutually_exclusive_group(required=True)
+    dataset.add_argument('--synthetic', action='store_true',
+                         help='use synthetic dataset')
+    dataset.add_argument('--synthetic-batches', type=int, default=64,
+                         help='number of synthetic batches to generate')
+    dataset.add_argument('--synthetic-vocab', type=int, default=32320,
+                         help='size of synthetic vocabulary')
+    dataset.add_argument('--synthetic-len', type=int, default=50,
+                         help='sequence length of synthetic samples')
+
+    source = dataset.add_mutually_exclusive_group(required=False)
     source.add_argument('-i', '--input', required=False,
                         help='full path to the input file (raw text)')
     source.add_argument('-t', '--input-text', nargs='+', required=False,
@@ -93,7 +106,7 @@ def parse_args():
     # general setup
     general = parser.add_argument_group('general setup')
     general.add_argument('--math', nargs='+', default=['fp16'],
-                         choices=['fp16', 'fp32'], help='precision')
+                         choices=['fp16', 'fp32', 'tf32'], help='precision')
 
     exclusive_group(group=general, name='env', default=False,
                     help='print info about execution env')
@@ -116,6 +129,11 @@ def parse_args():
                                     format for RNNs')
     batch_first_parser.set_defaults(batch_first=True)
 
+    general.add_argument('--save-dir', default='gnmt',
+                         help='path to directory with results, it will be \
+                         automatically created if it does not exist')
+    general.add_argument('--dllog-file', type=str, default='eval_log.json',
+                         help='Name of the DLLogger output file')
     general.add_argument('--print-freq', '-p', default=1, type=int,
                          help='print log every PRINT_FREQ batches')
 
@@ -134,7 +152,7 @@ def parse_args():
     benchmark.add_argument('--warmup', default=0, type=int,
                            help='warmup iterations for performance counters')
     benchmark.add_argument('--percentiles', nargs='+', type=int,
-                           default=(50, 90, 95, 99, 100),
+                           default=(90, 95, 99),
                            help='Percentiles for confidence intervals for \
                            throughput/latency benchmarks')
     exclusive_group(group=benchmark, name='tables', default=False,
@@ -143,10 +161,9 @@ def parse_args():
 
     # distributed
     distributed = parser.add_argument_group('distributed setup')
-    distributed.add_argument('--rank', default=0, type=int,
-                             help='global rank of the process, do not set!')
-    distributed.add_argument('--local_rank', default=0, type=int,
-                             help='local rank of the process, do not set!')
+    distributed.add_argument('--local_rank',  type=int,
+                             default=os.getenv('LOCAL_RANK', 0),
+                             help='Used for multi-process training.')
 
     args = parser.parse_args()
 
@@ -156,8 +173,8 @@ def parse_args():
     if args.bleu and args.reference is None:
         parser.error('--bleu requires --reference')
 
-    if 'fp16' in args.math and not args.cuda:
-        parser.error('--math fp16 requires --cuda')
+    if ('fp16' in args.math or 'tf32' in args.math) and not args.cuda:
+        parser.error(f'--math {args.math} requires --cuda')
 
     if len(list(product(args.math, args.batch_size, args.beam_size))) > 1:
         args.target_bleu = None
@@ -180,12 +197,17 @@ def main():
     device = utils.set_device(args.cuda, args.local_rank)
     utils.init_distributed(args.cuda)
     args.rank = utils.get_rank()
+    os.makedirs(args.save_dir, exist_ok=True)
     utils.setup_logging()
+
+    dllog_file = os.path.join(args.save_dir, args.dllog_file)
+    utils.setup_dllogger(enabled=True, filename=dllog_file)
 
     if args.env:
         utils.log_env_info()
 
     logging.info(f'Run arguments: {args}')
+    dllogger.log(step='PARAMETER', data=vars(args))
 
     if not args.cuda and torch.cuda.is_available():
         warnings.warn('cuda is available but not enabled')
@@ -193,16 +215,22 @@ def main():
         torch.backends.cudnn.enabled = False
 
     # load checkpoint and deserialize to CPU (to save GPU memory)
-    checkpoint = torch.load(args.model, map_location={'cuda:0': 'cpu'})
+    if args.model:
+        checkpoint = torch.load(args.model, map_location={'cuda:0': 'cpu'})
 
-    # build GNMT model
-    tokenizer = Tokenizer()
-    tokenizer.set_state(checkpoint['tokenizer'])
-    model_config = checkpoint['model_config']
-    model_config['batch_first'] = args.batch_first
-    model_config['vocab_size'] = tokenizer.vocab_size
-    model = GNMT(**model_config)
-    model.load_state_dict(checkpoint['state_dict'])
+        # build GNMT model
+        tokenizer = Tokenizer()
+        tokenizer.set_state(checkpoint['tokenizer'])
+        model_config = checkpoint['model_config']
+        model_config['batch_first'] = args.batch_first
+        model_config['vocab_size'] = tokenizer.vocab_size
+        model = GNMT(**model_config)
+        model.load_state_dict(checkpoint['state_dict'])
+    elif args.synthetic:
+        model = GNMT(args.synthetic_vocab, batch_first=args.batch_first)
+        tokenizer = None
+    else:
+        raise RuntimeError('Specify model either with --synthetic or with --model flag')
 
     # construct the dataset
     if args.input:
@@ -215,12 +243,18 @@ def main():
                               tokenizer=tokenizer,
                               sort=args.sort,
                               )
+    elif args.synthetic:
+        data = SyntheticDataset(args.synthetic_vocab, args.synthetic_len, args.batch_size[0] * args.synthetic_batches)
 
     latency_table = tables.LatencyTable(args.percentiles)
     throughput_table = tables.ThroughputTable(args.percentiles)
     accuracy_table = tables.AccuracyTable('BLEU')
 
-    dtype = {'fp32': torch.FloatTensor, 'fp16': torch.HalfTensor}
+    dtype = {
+        'fp32': torch.FloatTensor,
+        'tf32': torch.FloatTensor,
+        'fp16': torch.HalfTensor
+    }
 
     for (math, batch_size, beam_size) in product(args.math, args.batch_size,
                                                  args.beam_size):
@@ -263,7 +297,7 @@ def main():
             )
 
         # print translated outputs
-        if not args.output and args.rank == 0:
+        if not args.synthetic and (not args.output and args.rank == 0):
             logging.info(f'Translated output:')
             for out in output:
                 print(out)
@@ -278,20 +312,38 @@ def main():
 
         if 'fp16' in args.math and 'fp32' in args.math:
             relative = 'fp32'
+        elif 'fp16' in args.math and 'tf32' in args.math:
+            relative = 'tf32'
         else:
             relative = None
 
         if 'fp32' in args.math:
             throughput_table.write('Inference throughput', 'fp32')
+        if 'tf32' in args.math:
+            throughput_table.write('Inference throughput', 'tf32')
         if 'fp16' in args.math:
             throughput_table.write('Inference throughput', 'fp16',
                                    relative=relative)
 
         if 'fp32' in args.math:
             latency_table.write('Inference latency', 'fp32')
+        if 'tf32' in args.math:
+            latency_table.write('Inference latency', 'tf32')
         if 'fp16' in args.math:
             latency_table.write('Inference latency', 'fp16',
                                 relative=relative, reverse_speedup=True)
+
+    avg_throughput = np.array(stats['throughputs']).mean()
+    avg_latency = np.array(stats['runtimes']).mean()
+    summary = {
+        'eval_throughput': avg_throughput,
+        'eval_bleu': stats['bleu'],
+        'eval_avg_latency': avg_latency,
+        }
+    for p in args.percentiles:
+        summary[f'eval_{p}%_latency'] = 1000 * np.percentile(stats['runtimes'], p)
+
+    dllogger.log(step=tuple(), data=summary)
 
     passed = utils.benchmark(stats['bleu'], args.target_bleu,
                              stats['tokens_per_sec'], args.target_perf)

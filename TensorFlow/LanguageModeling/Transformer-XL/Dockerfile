@@ -1,4 +1,4 @@
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:19.12-tf1-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.06-tf1-py3
 FROM ${FROM_IMAGE_NAME}
 
 WORKDIR /workspace/transformer-xl/tf

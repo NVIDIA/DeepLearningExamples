@@ -150,6 +150,18 @@ class Dataset():
 
         return (inputs, labels)
 
+    def _preproc_eval_samples(self, inputs, labels):
+        """Preprocess samples and perform random augmentations"""
+        inputs = self._normalize_inputs(inputs)
+        labels = self._normalize_labels(labels)
+
+        # Bring back labels to network's output size and remove interpolation artifacts
+        labels = tf.image.resize_image_with_crop_or_pad(labels, target_width=388, target_height=388)
+        cond = tf.less(labels, 0.5 * tf.ones(tf.shape(labels)))
+        labels = tf.where(cond, tf.zeros(tf.shape(labels)), tf.ones(tf.shape(labels)))
+
+        return (inputs, labels)
+
     def train_fn(self, drop_remainder=False):
         """Input function for training"""
         dataset = tf.data.Dataset.from_tensor_slices(
@@ -169,7 +181,7 @@ class Dataset():
         dataset = tf.data.Dataset.from_tensor_slices(
             (self._val_images, self._val_masks))
         dataset = dataset.repeat(count=count)
-        dataset = dataset.map(self._preproc_samples)
+        dataset = dataset.map(self._preproc_eval_samples)
         dataset = dataset.batch(self._batch_size)
         dataset = dataset.prefetch(self._batch_size)
 

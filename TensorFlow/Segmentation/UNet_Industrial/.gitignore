@@ -109,3 +109,6 @@ venv.bak/
 .idea/
 .vscode/
 *.ckpt
+dlloger_out.json
+
+cudnn_cublas_logs/

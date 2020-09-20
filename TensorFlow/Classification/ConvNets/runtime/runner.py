@@ -337,7 +337,13 @@ class Runner(object):
         mixup=0.0,
         use_cosine_lr=False,
         use_static_loss_scaling=False,
-        is_benchmark=False
+        is_benchmark=False,
+        quantize=False,
+        symmetric=False,
+        quant_delay=0,
+        finetune_checkpoint=None,
+        use_final_conv=False,
+        use_qdq=False
     ):
 
         if iter_unit not in ["epoch", "batch"]:
@@ -433,9 +439,17 @@ class Runner(object):
             'label_smoothing': label_smoothing,
             'mixup': mixup,
             'num_decay_steps': num_decay_steps,
-            'use_cosine_lr': use_cosine_lr
+            'use_cosine_lr': use_cosine_lr,
+            'use_final_conv': use_final_conv,
+            'quantize': quantize,
+            'use_qdq': use_qdq,
+            'symmetric': symmetric,
+            'quant_delay': quant_delay
         }
-
+        
+        if finetune_checkpoint:
+           estimator_params['finetune_checkpoint']=finetune_checkpoint
+        
         image_classifier = self._get_estimator(
             mode='train',
             run_params=estimator_params,
@@ -524,6 +538,10 @@ class Runner(object):
         log_every_n_steps=1,
         is_benchmark=False,
         export_dir=None,
+        quantize=False,
+        symmetric=False,
+        use_qdq=False,
+        use_final_conv=False,
     ):
 
         if iter_unit not in ["epoch", "batch"]:
@@ -535,7 +553,10 @@ class Runner(object):
         if hvd_utils.is_using_hvd() and hvd.rank() != 0:
             raise RuntimeError('Multi-GPU inference is not supported')
 
-        estimator_params = {}
+        estimator_params = {'quantize': quantize,
+                            'symmetric': symmetric,
+                            'use_qdq': use_qdq,
+                            'use_final_conv': use_final_conv}
 
         image_classifier = self._get_estimator(
             mode='validation',
@@ -662,9 +683,9 @@ class Runner(object):
 
         print('Model evaluation finished')
 
-    def predict(self, to_predict):
+    def predict(self, to_predict, quantize=False, symmetric=False, use_qdq=False, use_final_conv=False):
 
-        estimator_params = {}
+        estimator_params = {'quantize': quantize, 'symmetric': symmetric, 'use_qdq': use_qdq, 'use_final_conv': use_final_conv}
 
         if to_predict is not None:
             filenames = runner_utils.parse_inference_input(to_predict)

@@ -12,21 +12,22 @@ This subfolder of the BERT TensorFlow repository, tested and maintained by NVIDI
 - [Setup](#setup)
    * [Requirements](#requirements)
 - [Quick Start Guide](#quick-start-guide)
-  * [(Optional) Trying a different configuration](#optional-trying-a-different-configuration)
+   * [(Optional) Trying a different configuration](#optional-trying-a-different-configuration)
 - [Advanced](#advanced)
    * [Scripts and sample code](#scripts-and-sample-code)
    * [Command-line options](#command-line-options)
    * [TensorRT inference process](#tensorrt-inference-process)
 - [Performance](#performance)
-  * [Benchmarking](#benchmarking)
-       * [TensorRT inference benchmark](#tensorrt-inference-benchmark)
+   * [Benchmarking](#benchmarking)
+      * [TensorRT inference benchmark](#tensorrt-inference-benchmark)
    * [Results](#results)
-      * [Inference performance: NVIDIA T4 (16GB)](#inference-performance-nvidia-t4-16gb)
-        * [BERT Base](#bert-base)
-        * [BERT Large](#bert-large)
-     * [Inference performance: NVIDIA V100 (32GB)](#inference-performance-nvidia-v100-32gb)
-       * [BERT Base](#bert-base)
-       * [BERT Large](#bert-large)
+      * [Inference performance: NVIDIA T4](#inference-performance-nvidia-t4)
+      * [BERT Base](#bert-base)
+      * [BERT Large](#bert-large)
+   * [Inference performance: NVIDIA V100 (32GB)](#inference-performance-nvidia-v100-(32gc))
+      * [BERT Base](#bert-base)
+      * [BERT Large](#bert-large)
+
 
 
 ## Model overview
@@ -237,7 +238,7 @@ Our results were obtained by running the `scripts/inference_benchmark.sh` traini
 
 ##### BERT Base
 
-| Sequence Length | Batch Size | TRT Mixed Precision Latency (ms) ||         | TRT FP32 Latency (ms) |           |         |
+| Sequence Length | Batch Size | TensorRT Mixed Precision Latency (ms) ||         | TensorRT FP32 Latency (ms) |           |         |
 |-----------------|------------|-----------------|-----------------|---------|-----------------|-----------------|---------|
 |                 |            | 95th Percentile | 99th Percentile | Average | 95th Percentile | 99th Percentile | Average |
 | 128 | 1 | 1.97 | 1.97 | 1.93 | 6.47 | 6.51 | 6.12 |
@@ -265,7 +266,7 @@ Our results were obtained by running the `scripts/inference_benchmark.sh` traini
 
 ##### BERT Large
 
-| Sequence Length | Batch Size | TRT Mixed Precision Latency (ms) ||         | TRT FP32 Latency (ms) |           |         |
+| Sequence Length | Batch Size | TensorRT Mixed Precision Latency (ms) ||         | TensorRT FP32 Latency (ms) |           |         |
 |-----------------|------------|-----------------|-----------------|---------|-----------------|-----------------|---------|
 |                 |            | 95th Percentile | 99th Percentile | Average | 95th Percentile | 99th Percentile | Average |
 | 128 | 1 | 5.63 | 5.66 | 5.39 | 21.53 | 22.16 | 20.74 |
@@ -298,7 +299,7 @@ Our results were obtained by running the `scripts/inference_benchmark.sh` traini
 
 ##### BERT Base
 
-| Sequence Length | Batch Size | TRT Mixed Precision Latency (ms) ||         | TRT FP32 Latency (ms) |           |         |
+| Sequence Length | Batch Size | TensorRT Mixed Precision Latency (ms) ||         | TensorRT FP32 Latency (ms) |           |         |
 |-----------------|------------|-----------------|-----------------|---------|-----------------|-----------------|---------|
 |                 |            | 95th Percentile | 99th Percentile | Average | 95th Percentile | 99th Percentile | Average |
 | 128 | 1 | 1.39 | 1.45 | 1.37 | 2.93 | 2.95 | 2.91 |
@@ -326,7 +327,7 @@ Our results were obtained by running the `scripts/inference_benchmark.sh` traini
 
 ##### BERT Large
 
-| Sequence Length | Batch Size | TRT Mixed Precision Latency (ms) ||         | TRT FP32 Latency (ms) |           |         |
+| Sequence Length | Batch Size | TensorRT Mixed Precision Latency (ms) ||         | TensorRT FP32 Latency (ms) |           |         |
 |-----------------|------------|-----------------|-----------------|---------|-----------------|-----------------|---------|
 |                 |            | 95th Percentile | 99th Percentile | Average | 95th Percentile | 99th Percentile | Average |
 | 128 | 1 | 3.4 | 3.46 | 3.38 | 8.83 | 8.85 | 8.76 |

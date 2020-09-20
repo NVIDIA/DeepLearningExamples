@@ -101,7 +101,7 @@ def main(args):
             output_filename = directory_structure['formatted'] + '/wikicorpus_zh_one_article_per_line.txt'
             wiki_formatter = WikicorpusTextFormatting.WikicorpusTextFormatting(wiki_path, output_filename, recursive=True)
             wiki_formatter.merge()
-            
+
             assert os.stat(output_filename).st_size > 0, 'File glob did not pick up extracted wiki files from WikiExtractor.'
 
     elif args.action == 'sharding':
@@ -248,6 +248,7 @@ if __name__ == "__main__":
             'google_pretrained_weights',
             'nvidia_pretrained_weights',
             'mrpc',
+            'sst-2',
             'squad',
             'all'
         }
@@ -277,7 +278,7 @@ if __name__ == "__main__":
         '--fraction_test_set',
         type=float,
         help='Specify the fraction (0..1) of the data to withhold for the test data split (based on number of sequences)',
-        default=0.2
+        default=0.1
     )
 
     parser.add_argument(
