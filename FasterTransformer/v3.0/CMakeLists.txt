@@ -43,6 +43,11 @@ endif()
 list(APPEND CMAKE_MODULE_PATH ${CUDA_PATH}/lib64)
 find_package(CUDA REQUIRED)
 
+if (${CUDA_VERSION} GREATER_EQUAL 11.0)
+  message(STATUS "Add DCUDA11_MODE")
+  add_definitions("-DCUDA11_MODE")
+endif()
+
 # setting compiler flags
 set(CMAKE_C_FLAGS    "${CMAKE_C_FLAGS}")	
 set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS}")

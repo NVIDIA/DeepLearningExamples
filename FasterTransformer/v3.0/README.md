@@ -63,7 +63,7 @@ In FasterTransformer 2.0, we have added a highly optimized decoder and decoding 
 
 In FasterTransformer 2.1, we add some important features. First one is the supporting on PyTorch. Recently, there are more and more PyTorch users. We hope the users of PyTorch can also use the FasterTransformer in their application and researches. The second feature is the supporting of [effective transformer](https://github.com/bytedance/effective_transformer). This idea is proposed by ByteDance. It removes the useless padding of encoder input to reduce the computing cost. Third, in addition to decoding with beam search, we also provide the decoding with sampling module. Finally, we optimize many kernels of encoder, decoder and beam search to improve the speed of FasterTransformer.
 
-In FasterTransformer 3.0, we implemented the INT8 quantization for encoder (supporting [effective transformer](https://github.com/bytedance/effective_transformer)). With INT8 quantization, we can take advantage of the powerful INT8 tensor core in Turing and Ampere GPUs to achieve better inference performance (INT8 quantization in FT 3.0 is only supported on device with SM >= 7.5). We also provide quantization tools of tensorflow. 
+In FasterTransformer 3.0, we implemented the INT8 quantization for encoder (supporting [effective transformer](https://github.com/bytedance/effective_transformer)). With INT8 quantization, we can take advantage of the powerful INT8 tensor core in Turing GPU to achieve better inference performance (INT8 quantization in FT 3.0 is only supported on device with SM >= 7.5). We also provide quantization tools of tensorflow.
 
 The following graph demonstrates the model architecture. 
 
@@ -3197,6 +3197,7 @@ July 2019
 - Cmake 15 or Cmake 16 fail to build this project. Cmake 14 is no problem. 
 - If encounter some problem in the custom environment, try to use the gcc/g++ 4.8 to build the project of TensorFlow op, especially for TensorFlow 1.14. 
 - Effective Transformer's f1-score of SQuAD is slightly worse than normal FasterTransformer is because Effective Transformer set the output of padding to 0, which are not excat 0 in BERT.
+- FasterTransformer 3.0 runs slower in INT8 precision than in FP16 precision on A100, we will solve this issue in future version.
 
 ### TODO
 

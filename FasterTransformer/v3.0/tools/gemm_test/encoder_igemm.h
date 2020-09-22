@@ -21,6 +21,7 @@
 #include <cublasLt.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <vector>
 
 int roundoff(int v, int d)
 {
@@ -108,7 +109,7 @@ const char * const matmulTileName[] = {
 };
 // Utility function to print customMatmulPerf_t structure
 int printPerfStructure(int m, int n, int k, const customMatmulPerf_t &perf, char *outfilename, int hasPrint) {
-    int algoId, tile, swizzle, customOption, numSplitsK, reductionScheme;
+    int algoId, tile, swizzle, customOption, numSplitsK, reductionScheme, stages;
     
     const cublasLtMatmulAlgo_t *matmulAlgo = &perf.algo;
     cublasLtMatmulAlgoConfigGetAttribute( matmulAlgo,  CUBLASLT_ALGO_CONFIG_ID, &algoId, sizeof(algoId), NULL);
@@ -117,12 +118,17 @@ int printPerfStructure(int m, int n, int k, const customMatmulPerf_t &perf, char
     cublasLtMatmulAlgoConfigGetAttribute( matmulAlgo,  CUBLASLT_ALGO_CONFIG_REDUCTION_SCHEME, &reductionScheme, sizeof(reductionScheme), NULL);
     cublasLtMatmulAlgoConfigGetAttribute( matmulAlgo,  CUBLASLT_ALGO_CONFIG_CTA_SWIZZLING, &swizzle, sizeof(swizzle), NULL);
     cublasLtMatmulAlgoConfigGetAttribute( matmulAlgo,  CUBLASLT_ALGO_CONFIG_CUSTOM_OPTION, &customOption, sizeof(customOption), NULL);
+#ifdef CUDA11_MODE
+    cublasLtMatmulAlgoConfigGetAttribute( matmulAlgo,  CUBLASLT_ALGO_CONFIG_STAGES_ID, &stages, sizeof(stages), NULL);
+#else
+    stages=0;
+#endif
 
-    printf("algo={ Id=%d, tileIdx=%d (%s) splitK=%d reduc=%d swizzle=%d custom=%d} status %d "
+    printf("algo={ Id=%d, tileIdx=%d (%s) splitK=%d reduc=%d swizzle=%d custom=%d stages=%d} status %d "
         "time %f workspace=%d mathMode=%d waves=%f\n",       
         algoId, tile, matmulTileName[tile],
         numSplitsK, reductionScheme,
-        swizzle, customOption,
+        swizzle, customOption, stages,
         perf.status,
         perf.time,
         (int)perf.workspaceSize,
@@ -132,7 +138,7 @@ int printPerfStructure(int m, int n, int k, const customMatmulPerf_t &perf, char
     if ((int)perf.workspaceSize == 0 && hasPrint == 0){
       FILE *fout;
       fout = fopen(outfilename, "a+");
-      fprintf(fout, "1 %d %d %d %d %d %d %d %d %d %d\n", m, n, k, algoId, customOption, tile, numSplitsK, swizzle, reductionScheme, (int)perf.workspaceSize);
+      fprintf(fout, "1 %d %d %d %d %d %d %d %d %d %d %d\n", m, n, k, algoId, customOption, tile, numSplitsK, swizzle, reductionScheme, (int)perf.workspaceSize, stages);
       fclose(fout);
       return 1;
     }
@@ -142,7 +148,7 @@ int printPerfStructure(int m, int n, int k, const customMatmulPerf_t &perf, char
 }
 
 int printBatchPerfStructure(int batchCount, int m, int n, int k, const customMatmulPerf_t &perf, char *outfilename, int hasPrint) {
-    int algoId, tile, swizzle, customOption, numSplitsK, reductionScheme;
+    int algoId, tile, swizzle, customOption, numSplitsK, reductionScheme, stages;
     
     const cublasLtMatmulAlgo_t *matmulAlgo = &perf.algo;
     cublasLtMatmulAlgoConfigGetAttribute( matmulAlgo,  CUBLASLT_ALGO_CONFIG_ID, &algoId, sizeof(algoId), NULL);
@@ -151,12 +157,17 @@ int printBatchPerfStructure(int batchCount, int m, int n, int k, const customMat
     cublasLtMatmulAlgoConfigGetAttribute( matmulAlgo,  CUBLASLT_ALGO_CONFIG_REDUCTION_SCHEME, &reductionScheme, sizeof(reductionScheme), NULL);
     cublasLtMatmulAlgoConfigGetAttribute( matmulAlgo,  CUBLASLT_ALGO_CONFIG_CTA_SWIZZLING, &swizzle, sizeof(swizzle), NULL);
     cublasLtMatmulAlgoConfigGetAttribute( matmulAlgo,  CUBLASLT_ALGO_CONFIG_CUSTOM_OPTION, &customOption, sizeof(customOption), NULL);
+#ifdef CUDA11_MODE
+    cublasLtMatmulAlgoConfigGetAttribute( matmulAlgo,  CUBLASLT_ALGO_CONFIG_STAGES_ID, &stages, sizeof(stages), NULL);
+#else
+    stages = 0;
+#endif
 
-    printf("algo={ Id=%d, tileIdx=%d (%s) splitK=%d reduc=%d swizzle=%d custom=%d} status %d "
+    printf("algo={ Id=%d, tileIdx=%d (%s) splitK=%d reduc=%d swizzle=%d custom=%d stages=%d} status %d "
         "time %f workspace=%d mathMode=%d waves=%f\n",       
         algoId, tile, matmulTileName[tile],
         numSplitsK, reductionScheme,
-        swizzle, customOption,
+        swizzle, customOption, stages,
         perf.status,
         perf.time,
         (int)perf.workspaceSize,
@@ -166,7 +177,7 @@ int printBatchPerfStructure(int batchCount, int m, int n, int k, const customMat
     if ((int)perf.workspaceSize == 0 && hasPrint == 0){
       FILE *fout;
       fout = fopen(outfilename, "a+");
-      fprintf(fout, "%d %d %d %d %d %d %d %d %d %d %d\n",batchCount, m, n, k, algoId, customOption, tile, numSplitsK, swizzle, reductionScheme, (int)perf.workspaceSize);
+      fprintf(fout, "%d %d %d %d %d %d %d %d %d %d %d %d\n",batchCount, m, n, k, algoId, customOption, tile, numSplitsK, swizzle, reductionScheme, (int)perf.workspaceSize, stages);
       fclose(fout);
       return 1;
     }
@@ -294,7 +305,12 @@ LtIgemmCustomFind(cublasLtHandle_t ltHandle,
     int nbAlgoIds = 0;
     #define ALGO_IDS 100
     int algoIdA[ALGO_IDS];
-    cudaDataType_t computeType = CUDA_R_32I, scaleType = CUDA_R_32I, Atype = CUDA_R_8I, Btype = CUDA_R_8I, Ctype = CUDA_R_32I;
+    cudaDataType_t scaleType = CUDA_R_32I, Atype = CUDA_R_8I, Btype = CUDA_R_8I, Ctype = CUDA_R_32I;
+#ifdef CUDA11_MODE
+    cublasComputeType_t computeType = CUBLAS_COMPUTE_32I;
+#else
+    cudaDataType_t computeType = CUDA_R_32I;
+#endif
     cublasOperation_t opTranspose = CUBLAS_OP_T;
     cublasLtOrder_t order_COL32 = CUBLASLT_ORDER_COL32;
     cublasLtOrder_t order_COL4_4R2_8C = CUBLASLT_ORDER_COL4_4R2_8C;
@@ -302,8 +318,11 @@ LtIgemmCustomFind(cublasLtHandle_t ltHandle,
     int ldbTransform = 32 * roundoff(n,8);
     int ldcTransform = 32 * m;
 
-
+#ifdef CUDA11_MODE
+    status = cublasLtMatmulDescCreate(&operationDesc, computeType, CUDA_R_32I);
+#else
     status = cublasLtMatmulDescCreate(&operationDesc, CUDA_R_32I);
+#endif
     if (status != CUBLAS_STATUS_SUCCESS) goto CLEANUP;
     cublasLtMatmulDescSetAttribute(operationDesc, CUBLASLT_MATMUL_DESC_TRANSB, &opTranspose, sizeof(cublasOperation_t));    
     
@@ -342,6 +361,17 @@ LtIgemmCustomFind(cublasLtHandle_t ltHandle,
             tileA[0] = CUBLASLT_MATMUL_TILE_UNDEFINED;
             nbTiles = 1;
         }
+#ifdef CUDA11_MODE
+        cublasLtMatmulAlgoCapGetAttribute(&algo, CUBLASLT_ALGO_CAP_STAGES_IDS, NULL, 0, &sizeWritten);
+        int nbStages = int(sizeWritten/sizeof(int));
+        std::vector<int> stagesA(nbStages == 0 ? 1 : nbStages);
+        if (nbStages == 0) {
+            stagesA[0] = CUBLASLT_MATMUL_STAGES_UNDEFINED;
+            nbStages = 1;
+        } else {
+            cublasLtMatmulAlgoCapGetAttribute(&algo, CUBLASLT_ALGO_CAP_STAGES_IDS, stagesA.data(), sizeof(int)*nbStages, &sizeWritten);
+        }
+#endif
         int splitkSupport, redMask, swizzlingMax, customOptionMax;
         // Retrieve Algo Capabilities attributes to be able to setup loop over the different combinations
         cublasLtMatmulAlgoCapGetAttribute(&algo, CUBLASLT_ALGO_CAP_TILE_IDS, tileA, sizeof(int)*nbTiles, &sizeWritten);
@@ -351,6 +381,11 @@ LtIgemmCustomFind(cublasLtHandle_t ltHandle,
         cublasLtMatmulAlgoCapGetAttribute(&algo, CUBLASLT_ALGO_CAP_CUSTOM_OPTION_MAX, &customOptionMax, sizeof(customOptionMax), &sizeWritten);
         /* Loop over the different tiles */        
         for (int tileIdx = 0; tileIdx < nbTiles; tileIdx++) {
+#ifdef CUDA11_MODE
+          /* Loop over different stages count */
+          for (int stagesIdx = 0; stagesIdx < nbStages; stagesIdx++) {
+            cublasLtMatmulAlgoConfigSetAttribute(&algo, CUBLASLT_ALGO_CONFIG_STAGES_ID, &stagesA[stagesIdx], sizeof(stagesA[stagesIdx]));
+#endif
             /* Loop over the different custom option if any */
             for (int customOption = 0; customOption <= customOptionMax; customOption++) {
                cublasLtMatmulAlgoConfigSetAttribute(&algo, CUBLASLT_ALGO_CONFIG_CUSTOM_OPTION, &customOption, sizeof(customOption));
@@ -420,7 +455,10 @@ LtIgemmCustomFind(cublasLtHandle_t ltHandle,
                         }
                     }  // end l
                 }  // end k
-            } //end customOption            
+            } //end customOption           
+#ifdef CUDA11_MODE
+          } // end stagesIdx
+#endif 
         } // end tileIdx
         delete [] tileA;
     } // end idx
@@ -473,7 +511,12 @@ LtBatchIgemmCustomFind(cublasLtHandle_t ltHandle,
     int nbAlgoIds = 0;
     #define ALGO_IDS 100
     int algoIdA[ALGO_IDS];
-    cudaDataType_t computeType = CUDA_R_32I, scaleType = CUDA_R_32I, Atype = CUDA_R_8I, Btype = CUDA_R_8I, Ctype = CUDA_R_32I;
+    cudaDataType_t scaleType = CUDA_R_32I, Atype = CUDA_R_8I, Btype = CUDA_R_8I, Ctype = CUDA_R_32I;
+#ifdef CUDA11_MODE
+    cublasComputeType_t computeType = CUBLAS_COMPUTE_32I; 
+#else
+    cudaDataType_t computeType = CUDA_R_32I;
+#endif
     cublasOperation_t opTranspose = CUBLAS_OP_T;
     cublasLtOrder_t order_COL32 = CUBLASLT_ORDER_COL32;
     cublasLtOrder_t order_COL4_4R2_8C = CUBLASLT_ORDER_COL4_4R2_8C;
@@ -486,7 +529,11 @@ LtBatchIgemmCustomFind(cublasLtHandle_t ltHandle,
     strideb = n*k;
     stridec = m*n;
 
+#ifdef CUDA11_MODE
+    status = cublasLtMatmulDescCreate(&operationDesc, computeType, CUDA_R_32I);
+#else
     status = cublasLtMatmulDescCreate(&operationDesc, CUDA_R_32I);
+#endif
     if (status != CUBLAS_STATUS_SUCCESS) goto CLEANUP;
     cublasLtMatmulDescSetAttribute(operationDesc, CUBLASLT_MATMUL_DESC_TRANSB, &opTranspose, sizeof(cublasOperation_t));    
     
@@ -534,6 +581,17 @@ LtBatchIgemmCustomFind(cublasLtHandle_t ltHandle,
             tileA[0] = CUBLASLT_MATMUL_TILE_UNDEFINED;
             nbTiles = 1;
         }
+#ifdef CUDA11_MODE
+        cublasLtMatmulAlgoCapGetAttribute(&algo, CUBLASLT_ALGO_CAP_STAGES_IDS, NULL, 0, &sizeWritten);
+        int nbStages = int(sizeWritten/sizeof(int));
+        std::vector<int> stagesA(nbStages == 0 ? 1 : nbStages);
+        if (nbStages == 0) {
+            stagesA[0] = CUBLASLT_MATMUL_STAGES_UNDEFINED;
+            nbStages = 1;
+        } else {
+            cublasLtMatmulAlgoCapGetAttribute(&algo, CUBLASLT_ALGO_CAP_STAGES_IDS, stagesA.data(), sizeof(int)*nbStages, &sizeWritten);
+        }
+#endif
         int splitkSupport, redMask, swizzlingMax, customOptionMax;
         // Retrieve Algo Capabilities attributes to be able to setup loop over the different combinations
         cublasLtMatmulAlgoCapGetAttribute(&algo, CUBLASLT_ALGO_CAP_TILE_IDS, tileA, sizeof(int)*nbTiles, &sizeWritten);
@@ -543,6 +601,11 @@ LtBatchIgemmCustomFind(cublasLtHandle_t ltHandle,
         cublasLtMatmulAlgoCapGetAttribute(&algo, CUBLASLT_ALGO_CAP_CUSTOM_OPTION_MAX, &customOptionMax, sizeof(customOptionMax), &sizeWritten);
         /* Loop over the different tiles */        
         for (int tileIdx = 0; tileIdx < nbTiles; tileIdx++) {
+#ifdef CUDA11_MODE
+          /* Loop over different stages count */
+          for (int stagesIdx = 0; stagesIdx < nbStages; stagesIdx++) {
+            cublasLtMatmulAlgoConfigSetAttribute(&algo, CUBLASLT_ALGO_CONFIG_STAGES_ID, &stagesA[stagesIdx], sizeof(stagesA[stagesIdx]));
+#endif
             /* Loop over the different custom option if any */
             for (int customOption = 0; customOption <= customOptionMax; customOption++) {
                cublasLtMatmulAlgoConfigSetAttribute(&algo, CUBLASLT_ALGO_CONFIG_CUSTOM_OPTION, &customOption, sizeof(customOption));
@@ -612,7 +675,10 @@ LtBatchIgemmCustomFind(cublasLtHandle_t ltHandle,
                         }
                     }  // end l
                 }  // end k
-            } //end customOption            
+            } //end customOption           
+#ifdef CUDA11_MODE
+          } // end stagesIdx
+#endif
         } // end tileIdx
         delete [] tileA;
     } // end idx

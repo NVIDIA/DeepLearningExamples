@@ -185,8 +185,8 @@ public:
           printf("igemm_config.in is not found\n");
         else
         {
-          int batchCount2, m2, n2, k2, algoId, customOption, tile, splitK_val, swizzle, reductionScheme, workspaceSize;
-          while(fscanf(fd,"%d %d %d %d %d %d %d %d %d %d %d\n", &batchCount2, &m2, &n2, &k2, &algoId, &customOption, &tile, &splitK_val, &swizzle, &reductionScheme, &workspaceSize)!=EOF){
+          int batchCount2, m2, n2, k2, algoId, customOption, tile, splitK_val, swizzle, reductionScheme, workspaceSize, stages;
+          while(fscanf(fd,"%d %d %d %d %d %d %d %d %d %d %d %d\n", &batchCount2, &m2, &n2, &k2, &algoId, &customOption, &tile, &splitK_val, &swizzle, &reductionScheme, &workspaceSize, &stages)!=EOF){
             char mark[256];
             sprintf(mark, "%d_%d_%d_%d", batchCount2, m2, n2, k2);
             std::string markStr(mark);
@@ -199,6 +199,7 @@ public:
               cublasLtAlgoMap[markStr].swizzle = swizzle;
               cublasLtAlgoMap[markStr].reductionScheme = reductionScheme;
               cublasLtAlgoMap[markStr].workspaceSize = workspaceSize;
+              cublasLtAlgoMap[markStr].stages = stages;
             }
           }
           fclose(fd);
