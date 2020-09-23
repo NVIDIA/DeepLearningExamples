@@ -19,7 +19,7 @@ This repository provides a script and recipe to run the highly optimized transfo
 
 ### FasterTransformer v1
 
-FasterTransformer v1 provides a highly optimized BERT equivalent Transformer layer for inference, including C++ API, TensorFlow op and TensorRT plugin. The experiments show that FasterTransformer v1 can provide 1.3 ~ 2 times speedup on NVIDIA Tesla T4 and NVIDIA Tesla v100 for inference. 
+FasterTransformer v1 provides a highly optimized BERT equivalent Transformer layer for inference, including C++ API, TensorFlow op and TensorRT plugin. The experiments show that FasterTransformer v1 can provide 1.3 ~ 2 times speedup on NVIDIA Tesla T4 and NVIDIA Tesla V100 for inference. 
 
 ### FasterTransformer v2
 
