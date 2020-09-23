@@ -1,4 +1,0 @@
-[submodule "PyTorch/SpeechRecognition/Jasper/external/triton-inference-server"]
-    path = PyTorch/SpeechRecognition/Jasper/external/triton-inference-server   
-    url = https://github.com/NVIDIA/triton-inference-server.git
-    branch = r19.12

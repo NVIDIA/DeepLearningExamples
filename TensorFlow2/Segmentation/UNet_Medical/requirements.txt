@@ -1,3 +1,0 @@
-Pillow
-tf2onnx
-munch
