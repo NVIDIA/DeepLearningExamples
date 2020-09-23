@@ -34,29 +34,36 @@ set(decoding_kernel_files
 )
 
 add_library(cuda_kernels STATIC cuda_kernels.cu)
+set_property(TARGET cuda_kernels PROPERTY POSITION_INDEPENDENT_CODE  ON)
+set_property(TARGET cuda_kernels PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
 target_link_libraries(cuda_kernels PUBLIC -lcublas -lcudart -lcurand)
-set_property(TARGET cuda_kernels PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 add_library(cuda_int8_kernels STATIC cuda_int8_kernels.cu)
+set_property(TARGET cuda_int8_kernels PROPERTY POSITION_INDEPENDENT_CODE  ON)
+set_property(TARGET cuda_int8_kernels PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
 target_link_libraries(cuda_int8_kernels PUBLIC -lcublas -lcudart -lcurand cuda_kernels)
-set_property(TARGET cuda_int8_kernels PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 add_library(encoder STATIC ${encoder_kernel_files})
+set_property(TARGET encoder PROPERTY POSITION_INDEPENDENT_CODE  ON)
+set_property(TARGET encoder PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
 target_link_libraries(encoder PUBLIC -lcublas -lcublasLt -lcudart -lcurand cuda_kernels cuda_int8_kernels)
-set_property(TARGET encoder PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 add_library(decoder STATIC ${decoder_kernel_files})
+set_property(TARGET decoder PROPERTY POSITION_INDEPENDENT_CODE  ON)
+set_property(TARGET decoder PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
 target_link_libraries(decoder PUBLIC -lcublas -lcudart -lcurand)
-set_property(TARGET decoder PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 add_library(online_softmax_beamsearch STATIC ${online_softmax_beamsearch_kernel_files})
+set_property(TARGET online_softmax_beamsearch PROPERTY POSITION_INDEPENDENT_CODE  ON)
+set_property(TARGET online_softmax_beamsearch PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
 target_link_libraries(online_softmax_beamsearch PUBLIC -lcublas -lcudart -lcurand)
-set_property(TARGET online_softmax_beamsearch PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 add_library(topk STATIC ${topk_kernel_files})
+set_property(TARGET topk PROPERTY POSITION_INDEPENDENT_CODE  ON)
+set_property(TARGET topk PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
 target_link_libraries(topk PUBLIC -lcublas -lcudart -lcurand)
-set_property(TARGET topk PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 add_library(decoding STATIC ${decoding_kernel_files})
+set_property(TARGET decoding PROPERTY POSITION_INDEPENDENT_CODE  ON)
+set_property(TARGET decoding PROPERTY CUDA_RESOLVE_DEVICE_SYMBOLS  ON)
 target_link_libraries(decoding PUBLIC -lcublas -lcudart -lcurand topk online_softmax_beamsearch cuda_kernels)
-set_property(TARGET decoding PROPERTY POSITION_INDEPENDENT_CODE ON)

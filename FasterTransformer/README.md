@@ -58,6 +58,7 @@ Sep 2020
 - **Release the FasterTransformer 3.0**
   - Support INT8 quantization of encoder of cpp and TensorFlow op.
   - Add bert-tf-quantization tool.
+  - Fix the issue that Cmake 15 or Cmake 16 fail to build this project.
 
 Aug 2020
 - Fix the bug of trt plugin.

@@ -3135,6 +3135,7 @@ Sep 2020
 - **Release the FasterTransformer 3.0**
   - Support INT8 quantization of encoder of cpp and TensorFlow op.
   - Add bert-tf-quantization tool.
+  - Fix the issue that Cmake 15 or Cmake 16 fail to build this project.
 
 Aug 2020
 - Fix the bug of trt plugin.
@@ -3194,7 +3195,6 @@ July 2019
 - batch_size should be smaller or equal to 1024 in Decoder.
 - batch_size x beam_width should be smaller or equal to 1024 in Decoding.
 - Results of TensorFlow and OP would be different in decoding. This problem is caused by the accumulated log probability, and we do not avoid this problem. 
-- Cmake 15 or Cmake 16 fail to build this project. Cmake 14 is no problem. 
 - If encounter some problem in the custom environment, try to use the gcc/g++ 4.8 to build the project of TensorFlow op, especially for TensorFlow 1.14. 
 - Effective Transformer's f1-score of SQuAD is slightly worse than normal FasterTransformer is because Effective Transformer set the output of padding to 0, which are not excat 0 in BERT.
 - FasterTransformer 3.0 runs slower in INT8 precision than in FP16 precision on A100, we will solve this issue in future version.
