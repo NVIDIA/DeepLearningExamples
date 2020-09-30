@@ -1,7 +1,7 @@
 *~
 *.pyc
 __pycache__
-output
+output*
 LJSpeech-1.1*
 runs*
 pretrained_models

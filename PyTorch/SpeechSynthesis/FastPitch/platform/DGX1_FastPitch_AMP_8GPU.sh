@@ -4,13 +4,12 @@ mkdir -p output
 python -m torch.distributed.launch --nproc_per_node 8 train.py \
     --amp \
     --cuda \
-    --cudnn-enabled \
     -o ./output/ \
     --log-file output/nvlog.json \
     --dataset-path LJSpeech-1.1 \
     --training-files filelists/ljs_mel_dur_pitch_text_train_filelist.txt \
     --validation-files filelists/ljs_mel_dur_pitch_text_test_filelist.txt \
-    --pitch-mean-std LJSpeech-1.1/pitch_char_stats__ljs_audio_text_train_filelist.json \
+    --pitch-mean-std-file LJSpeech-1.1/pitch_char_stats__ljs_audio_text_train_filelist.json \
     --epochs 1500 \
     --epochs-per-checkpoint 100 \
     --warmup-steps 1000 \

@@ -7,13 +7,12 @@
 [ ! -n "$PHRASES" ] && PHRASES="phrases/benchmark_8_128.tsv"
 [ ! -n "$OUTPUT_DIR" ] && OUTPUT_DIR="./output/audio_$(basename ${PHRASES} .tsv)"
 [ "$AMP" == "true" ] && AMP_FLAG="--amp" || AMP=false
-[ "$SET_AFFINITY" == "true" ] && SET_AFFINITY_FLAG="--set-affinity"
 
 for BS in $BS_SEQ ; do
 
   echo -e "\nAMP: ${AMP}, batch size: ${BS}\n"
 
-  python inference.py --cuda \
+  python inference.py --cuda --cudnn-benchmark \
                       -i ${PHRASES} \
                       -o ${OUTPUT_DIR} \
                       --fastpitch ${FASTPITCH_CH} \
@@ -23,5 +22,5 @@ for BS in $BS_SEQ ; do
                       --batch-size ${BS} \
                       --repeats ${REPEATS} \
                       --torchscript \
-                      ${AMP_FLAG} ${SET_AFFINITY_FLAG}
+                      ${AMP_FLAG}
 done

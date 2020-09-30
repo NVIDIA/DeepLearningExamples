@@ -43,8 +43,10 @@ import dllogger as DLLogger
 from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
 
 from common import utils
-from common.log_helper import unique_dllogger_fpath
+from common.tb_dllogger import (init_inference_metadata, stdout_metric_format,
+                                unique_log_fpath)
 from common.text import text_to_sequence
+from pitch_transform import pitch_transform_custom
 from waveglow import model as glow
 from waveglow.denoiser import Denoiser
 
@@ -63,6 +65,8 @@ def parse_args(parser):
                         help='Path to a DLLogger log file')
     parser.add_argument('--cuda', action='store_true',
                         help='Run inference on a GPU using CUDA')
+    parser.add_argument('--cudnn-benchmark', action='store_true',
+                        help='Enable cudnn benchmark mode')
     parser.add_argument('--fastpitch', type=str,
                         help='Full path to the generator checkpoint file (skip to use ground truth mels)')
     parser.add_argument('--waveglow', type=str,
@@ -77,7 +81,7 @@ def parse_args(parser):
                         help='STFT hop length for estimating audio length from mel size')
     parser.add_argument('--amp', action='store_true',
                         help='Inference with AMP')
-    parser.add_argument('--batch-size', type=int, default=64)
+    parser.add_argument('-bs', '--batch-size', type=int, default=64)
     parser.add_argument('--include-warmup', action='store_true',
                         help='Include warmup')
     parser.add_argument('--repeats', type=int, default=1,
@@ -98,10 +102,12 @@ def parse_args(parser):
                            help='Flatten the pitch')
     transform.add_argument('--pitch-transform-invert', action='store_true',
                            help='Invert the pitch wrt mean value')
-    transform.add_argument('--pitch-transform-amplify', action='store_true',
-                           help='Amplify the pitch variability')
+    transform.add_argument('--pitch-transform-amplify', type=float, default=1.0,
+                           help='Amplify pitch variability, typical values are in the range (1.0, 3.0).')
     transform.add_argument('--pitch-transform-shift', type=float, default=0.0,
                            help='Raise/lower the pitch by <hz>')
+    transform.add_argument('--pitch-transform-custom', action='store_true',
+                           help='Apply the transform from pitch_transform.py')
     return parser
 
 
@@ -200,17 +206,25 @@ def prepare_input_sequence(fields, device, batch_size=128, dataset=None,
 
 
 def build_pitch_transformation(args):
+
+    if args.pitch_transform_custom:
+        def custom_(pitch, pitch_lens, mean, std):
+            return (pitch_transform_custom(pitch * std + mean, pitch_lens)
+                    - mean) / std
+        return custom_
+
     fun = 'pitch'
     if args.pitch_transform_flatten:
         fun = f'({fun}) * 0.0'
     if args.pitch_transform_invert:
         fun = f'({fun}) * -1.0'
     if args.pitch_transform_amplify:
-        fun = f'({fun}) * 2.0'
+        ampl = args.pitch_transform_amplify
+        fun = f'({fun}) * {ampl}'
     if args.pitch_transform_shift != 0.0:
         hz = args.pitch_transform_shift
         fun = f'({fun}) + {hz} / std'
-    return eval(f'lambda pitch, mean, std: {fun}')
+    return eval(f'lambda pitch, pitch_lens, mean, std: {fun}')
 
 
 class MeasureTime(list):
@@ -232,26 +246,27 @@ def main():
     Launches text to speech (inference).
     Inference is executed on a single GPU.
     """
-
-    torch.backends.cudnn.benchmark = True
-
     parser = argparse.ArgumentParser(description='PyTorch FastPitch Inference',
                                      allow_abbrev=False)
     parser = parse_args(parser)
     args, unk_args = parser.parse_known_args()
 
+    torch.backends.cudnn.benchmark = args.cudnn_benchmark
+
     if args.output is not None:
         Path(args.output).mkdir(parents=False, exist_ok=True)
 
     log_fpath = args.log_file or str(Path(args.output, 'nvlog_infer.json'))
-    log_fpath = unique_dllogger_fpath(log_fpath)
+    log_fpath = unique_log_fpath(log_fpath)
     DLLogger.init(backends=[JSONStreamBackend(Verbosity.DEFAULT, log_fpath),
-                            StdOutBackend(Verbosity.VERBOSE)])
+                            StdOutBackend(Verbosity.VERBOSE,
+                                          metric_format=stdout_metric_format)])
+    init_inference_metadata()
     [DLLogger.log("PARAMETER", {k:v}) for k,v in vars(args).items()]
 
     device = torch.device('cuda' if args.cuda else 'cpu')
 
-    if args.fastpitch is not None:
+    if args.fastpitch != 'SKIP':
         generator = load_and_setup_model(
             'FastPitch', parser, args.fastpitch, args.amp, device,
             unk_args=unk_args, forward_is_infer=True, ema=args.ema,
@@ -262,7 +277,7 @@ def main():
     else:
         generator = None
 
-    if args.waveglow is not None:
+    if args.waveglow != 'SKIP':
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             waveglow = load_and_setup_model(
@@ -325,7 +340,7 @@ def main():
                 gen_infer_perf = mel.size(0) * mel.size(2) / gen_measures[-1]
                 all_letters += b['text_lens'].sum().item()
                 all_frames += mel.size(0) * mel.size(2)
-                log(rep, {"fastpitch_frames_per_sec": gen_infer_perf})
+                log(rep, {"fastpitch_frames/s": gen_infer_perf})
                 log(rep, {"fastpitch_latency": gen_measures[-1]})
 
             if waveglow is not None:
@@ -340,7 +355,7 @@ def main():
                 waveglow_infer_perf = (
                     audios.size(0) * audios.size(1) / waveglow_measures[-1])
 
-                log(rep, {"waveglow_samples_per_sec": waveglow_infer_perf})
+                log(rep, {"waveglow_samples/s": waveglow_infer_perf})
                 log(rep, {"waveglow_latency": waveglow_measures[-1]})
 
                 if args.output is not None and reps == 1:
@@ -364,32 +379,32 @@ def main():
     if generator is not None:
         gm = np.sort(np.asarray(gen_measures))
         rtf = all_samples / (all_utterances * gm.mean() * args.sampling_rate)
-        log('avg', {"fastpitch letters/s": all_letters / gm.sum()})
-        log('avg', {"fastpitch_frames/s": all_frames / gm.sum()})
-        log('avg', {"fastpitch_latency": gm.mean()})
-        log('avg', {"fastpitch RTF": rtf})
-        log('90%', {"fastpitch_latency": gm.mean() + norm.ppf((1.0 + 0.90) / 2) * gm.std()})
-        log('95%', {"fastpitch_latency": gm.mean() + norm.ppf((1.0 + 0.95) / 2) * gm.std()})
-        log('99%', {"fastpitch_latency": gm.mean() + norm.ppf((1.0 + 0.99) / 2) * gm.std()})
+        log((), {"avg_fastpitch_letters/s": all_letters / gm.sum()})
+        log((), {"avg_fastpitch_frames/s": all_frames / gm.sum()})
+        log((), {"avg_fastpitch_latency": gm.mean()})
+        log((), {"avg_fastpitch_RTF": rtf})
+        log((), {"90%_fastpitch_latency": gm.mean() + norm.ppf((1.0 + 0.90) / 2) * gm.std()})
+        log((), {"95%_fastpitch_latency": gm.mean() + norm.ppf((1.0 + 0.95) / 2) * gm.std()})
+        log((), {"99%_fastpitch_latency": gm.mean() + norm.ppf((1.0 + 0.99) / 2) * gm.std()})
     if waveglow is not None:
         wm = np.sort(np.asarray(waveglow_measures))
         rtf = all_samples / (all_utterances * wm.mean() * args.sampling_rate)
-        log('avg', {"waveglow_samples/s": all_samples / wm.sum()})
-        log('avg', {"waveglow_latency": wm.mean()})
-        log('avg', {"waveglow RTF": rtf})
-        log('90%', {"waveglow_latency": wm.mean() + norm.ppf((1.0 + 0.90) / 2) * wm.std()})
-        log('95%', {"waveglow_latency": wm.mean() + norm.ppf((1.0 + 0.95) / 2) * wm.std()})
-        log('99%', {"waveglow_latency": wm.mean() + norm.ppf((1.0 + 0.99) / 2) * wm.std()})
+        log((), {"avg_waveglow_samples/s": all_samples / wm.sum()})
+        log((), {"avg_waveglow_latency": wm.mean()})
+        log((), {"avg_waveglow_RTF": rtf})
+        log((), {"90%_waveglow_latency": wm.mean() + norm.ppf((1.0 + 0.90) / 2) * wm.std()})
+        log((), {"95%_waveglow_latency": wm.mean() + norm.ppf((1.0 + 0.95) / 2) * wm.std()})
+        log((), {"99%_waveglow_latency": wm.mean() + norm.ppf((1.0 + 0.99) / 2) * wm.std()})
     if generator is not None and waveglow is not None:
         m = gm + wm
         rtf = all_samples / (all_utterances * m.mean() * args.sampling_rate)
-        log('avg', {"samples/s": all_samples / m.sum()})
-        log('avg', {"letters/s": all_letters / m.sum()})
-        log('avg', {"latency": m.mean()})
-        log('avg', {"RTF": rtf})
-        log('90%', {"latency": m.mean() + norm.ppf((1.0 + 0.90) / 2) * m.std()})
-        log('95%', {"latency": m.mean() + norm.ppf((1.0 + 0.95) / 2) * m.std()})
-        log('99%', {"latency": m.mean() + norm.ppf((1.0 + 0.99) / 2) * m.std()})
+        log((), {"avg_samples/s": all_samples / m.sum()})
+        log((), {"avg_letters/s": all_letters / m.sum()})
+        log((), {"avg_latency": m.mean()})
+        log((), {"avg_RTF": rtf})
+        log((), {"90%_latency": m.mean() + norm.ppf((1.0 + 0.90) / 2) * m.std()})
+        log((), {"95%_latency": m.mean() + norm.ppf((1.0 + 0.95) / 2) * m.std()})
+        log((), {"99%_latency": m.mean() + norm.ppf((1.0 + 0.99) / 2) * m.std()})
     DLLogger.flush()
 
 
