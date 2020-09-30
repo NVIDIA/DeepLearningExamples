@@ -114,7 +114,7 @@ To speed-up FastPitch training,
 reference mel-spectrograms, character durations, and pitch cues
 are generated during the pre-processing step and read
 directly from the disk during training. For more information on data pre-processing refer to [Dataset guidelines
-](#dataset-guidelines) and the [paper](#).
+](#dataset-guidelines) and the [paper](https://arxiv.org/abs/2006.06873).
 
 ### Feature support matrix
 
@@ -196,11 +196,11 @@ called `losses`):
         ```
 #### Enabling TF32
 
-TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](#https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs.
 
 TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
 
-For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](#https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
+For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
 
 TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
 
@@ -290,7 +290,7 @@ To train your model using mixed or TF32 precision with Tensor Cores or using FP3
    ```
    The training will produce a FastPitch model capable of generating mel-spectrograms from raw text.
    It will be serialized as a single `.pt` checkpoint file, along with a series of intermediate checkpoints.
-   The script is configured for 8x GPU with at least 16GB of memory. Consult [Training process](#training-process) and [example configs](#-training-performance-benchmark) to adjust to a different configuration or enable Automatic Mixed Precision.
+   The script is configured for 8x GPU with at least 16GB of memory. Consult [Training process](#training-process) and [example configs](#training-performance-benchmark) to adjust to a different configuration or enable Automatic Mixed Precision.
 
 5. Start validation/evaluation.
 
@@ -492,7 +492,7 @@ In a single accumulated step, there are `batch_size x gradient_accumulation_step
     ```
 With automatic mixed precision (AMP), a larger batch size fits in 16GB of memory:
     ```bash
-    NGPU=4 GRAD_ACC=1 BS=64 AMP=true bash scripta/train.sh
+    NGPU=4 GRAD_ACC=1 BS=64 AMP=true bash scripts/train.sh
     ```
 
 ### Inference process

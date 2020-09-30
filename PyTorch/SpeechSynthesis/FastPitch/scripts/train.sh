@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export OMP_NUM_THREADS=1
+
 # Adjust env variables to maintain the global batch size
 #
 #    NGPU x BS x GRAD_ACC = 256.
@@ -19,7 +21,6 @@ echo -e "\nSetup: ${NGPU}x${BS}x${GRAD_ACC} - global batch size ${GBS}\n"
 mkdir -p "$OUTPUT_DIR"
 python -m torch.distributed.launch --nproc_per_node ${NGPU} train.py \
     --cuda \
-    --cudnn-enabled \
     -o "$OUTPUT_DIR/" \
     --log-file "$OUTPUT_DIR/nvlog.json" \
     --dataset-path LJSpeech-1.1 \

@@ -82,6 +82,7 @@ class TextMelAliCollate():
             dur = batch[ids_sorted_decreasing[i]][3]
             dur_padded[i, :dur.shape[0]] = dur
             dur_lens[i] = dur.shape[0]
+            assert dur_lens[i] == input_lengths[i]
 
         # Right zero-pad mel-spec
         num_mels = batch[0][1].size(0)
