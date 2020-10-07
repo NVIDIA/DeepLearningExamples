@@ -166,7 +166,10 @@ def parse_args(parser):
 def reduce_tensor(tensor, num_gpus):
     rt = tensor.clone()
     dist.all_reduce(rt, op=dist.reduce_op.SUM)
-    rt = torch.true_divide(rt, num_gpus)
+    if rt.is_floating_point():
+        rt = rt/num_gpus
+    else:
+        rt = rt//num_gpus
     return rt
 
 
@@ -314,7 +317,7 @@ def validate(model, criterion, valset, epoch, batch_iter, batch_size,
         DLLogger.log(step=(epoch,), data={'val_items_per_sec':
                                          (val_items_per_sec/num_iters if num_iters > 0 else 0.0)})
 
-        return val_loss
+        return val_loss, val_items_per_sec
 
 def adjust_learning_rate(iteration, epoch, optimizer, learning_rate,
                          anneal_steps, anneal_factor, rank):
@@ -522,9 +525,11 @@ def main():
         DLLogger.log(step=(epoch,), data={'train_loss': reduced_loss})
         DLLogger.log(step=(epoch,), data={'train_epoch_time': epoch_time})
 
-        val_loss = validate(model, criterion, valset, epoch, iteration,
-                            args.batch_size, world_size, collate_fn,
-                            distributed_run, local_rank, batch_to_gpu)
+        val_loss, val_items_per_sec = validate(model, criterion, valset, epoch,
+                                               iteration, args.batch_size,
+                                               world_size, collate_fn,
+                                               distributed_run, local_rank,
+                                               batch_to_gpu)
 
         if (epoch % args.epochs_per_checkpoint == 0) and args.bench_class == "":
             save_checkpoint(model, optimizer, epoch, model_config,
@@ -540,6 +545,7 @@ def main():
     DLLogger.log(step=tuple(), data={'val_loss': val_loss})
     DLLogger.log(step=tuple(), data={'train_items_per_sec':
                                      (train_epoch_items_per_sec/num_iters if num_iters > 0 else 0.0)})
+    DLLogger.log(step=tuple(), data={'val_items_per_sec': val_items_per_sec})
 
     if local_rank == 0:
         DLLogger.flush()
