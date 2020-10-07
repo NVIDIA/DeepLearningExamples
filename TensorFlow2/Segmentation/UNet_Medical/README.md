@@ -628,5 +628,6 @@ February 2020
  
 ### Known issues
  
+* Some set-ups suffer from a `ncclCommInitRank failed: unhandled system error`. This is a known issue with NCCL 2.7.5. The issue is solved in NCCL 2.7.8, which can be applied by changing the first line the Dockerfile from `ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.06-tf2-py3` to `ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.08-tf2-py3` and rebuilding the docker image.
 * For TensorFlow 2.0 the training performance using AMP and XLA is around 30% lower than reported here. The issue was solved in TensorFlow 2.1.
 
