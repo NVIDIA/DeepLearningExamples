@@ -27,7 +27,7 @@
 
 import argparse
 
-def parse_waveglow_args(parent, add_help=False):
+def waveglow_parser(parent, add_help=False):
     """
     Parse commandline arguments.
     """

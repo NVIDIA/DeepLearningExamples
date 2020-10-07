@@ -1,5 +1,5 @@
 # *****************************************************************************
-#  Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
+#  Copyright (c) 2019, NVIDIA CORPORATION.  All rights reserved.
 #
 #  Redistribution and use in source and binary forms, with or without
 #  modification, are permitted provided that the following conditions are met:
@@ -25,39 +25,44 @@
 #
 # *****************************************************************************
 
-import sys
-sys.path.append('tacotron2')
 import torch
-from common.layers import STFT
+import argparse
+import sys
+sys.path.append('./')
+from inference import checkpoint_from_distributed, unwrap_distributed, load_and_setup_model
+
+def parse_args(parser):
+    """
+    Parse commandline arguments.
+    """
+    parser.add_argument('--tacotron2', type=str, required=True,
+                        help='full path to the Tacotron2 model checkpoint file')
+
+    parser.add_argument('-o', '--output', type=str, default="trtis_repo/tacotron/1/model.pt",
+                        help='filename for the Tacotron 2 TorchScript model')
+    parser.add_argument('--fp16', action='store_true',
+                        help='inference with mixed precision')
+
+    return parser
 
 
-class Denoiser(torch.nn.Module):
-    """ Removes model bias from audio produced with waveglow """
+def main():
 
-    def __init__(self, waveglow, filter_length=1024, n_overlap=4,
-                 win_length=1024, mode='zeros'):
-        super(Denoiser, self).__init__()
-        device = waveglow.upsample.weight.device
-        dtype = waveglow.upsample.weight.dtype
-        self.stft = STFT(filter_length=filter_length,
-                         hop_length=int(filter_length/n_overlap),
-                         win_length=win_length).to(device)
-        if mode == 'zeros':
-            mel_input = torch.zeros((1, 80, 88), dtype=dtype, device=device)
-        elif mode == 'normal':
-            mel_input = torch.randn((1, 80, 88), dtype=dtype, device=device)
-        else:
-            raise Exception("Mode {} if not supported".format(mode))
+    parser = argparse.ArgumentParser(
+        description='PyTorch Tacotron 2 Inference')
+    parser = parse_args(parser)
+    args = parser.parse_args()
 
-        with torch.no_grad():
-            bias_audio = waveglow.infer(mel_input, sigma=0.0).float()
-            bias_spec, _ = self.stft.transform(bias_audio)
+    tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2,
+                                     fp16_run=args.fp16, cpu_run=False,
+                                     forward_is_infer=True)
+    
+    jitted_tacotron2 = torch.jit.script(tacotron2)
 
-        self.register_buffer('bias_spec', bias_spec[:, :, 0][:, :, None])
+    torch.jit.save(jitted_tacotron2, args.output)
+    
 
-    def forward(self, audio, strength=0.1):
-        audio_spec, audio_angles = self.stft.transform(audio)
-        audio_spec_denoised = audio_spec - self.bias_spec * strength
-        audio_spec_denoised = torch.clamp(audio_spec_denoised, 0.0)
-        audio_denoised = self.stft.inverse(audio_spec_denoised, audio_angles)
-        return audio_denoised
+if __name__ == '__main__':
+    main()
+
+    

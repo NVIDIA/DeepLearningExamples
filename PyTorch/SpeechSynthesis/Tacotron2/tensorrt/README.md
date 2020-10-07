@@ -47,27 +47,27 @@ NVIDIA TensorRT is a platform for high-performance deep learning inference. It i
     dpkg -l | grep TensorRT
     ```
 
-6. Export the models to ONNX intermediate representation (ONNX IR).
-   Export Tacotron 2 to three ONNX parts: Encoder, Decoder, and Postnet:
+6. Convert the models to ONNX intermediate representation (ONNX IR).
+   Convert Tacotron 2 to three ONNX parts: Encoder, Decoder, and Postnet:
 
 	```bash
 	mkdir -p output
-	python exports/export_tacotron2_onnx.py --tacotron2 ./checkpoints/nvidia_tacotron2pyt_fp16_20190427 -o output/ --fp16
+	python tensorrt/convert_tacotron22onnx.py --tacotron2 ./checkpoints/nvidia_tacotron2pyt_fp16_20190427 -o output/ --fp16
 	```
 
-    Export WaveGlow to ONNX IR:
+    Convert WaveGlow to ONNX IR:
 
 	```bash
-	python exports/export_waveglow_onnx.py --waveglow ./checkpoints/nvidia_waveglow256pyt_fp16 --wn-channels 256 -o output/ --fp16
-	```
+	python tensorrt/convert_waveglow2onnx.py --waveglow ./checkpoints/nvidia_waveglow256pyt_fp16 --config-file config.json --wn-channels 256 -o output/ --fp16
+    ```
 
 	After running the above commands, there should be four new ONNX files in `./output/` directory:
     `encoder.onnx`, `decoder_iter.onnx`, `postnet.onnx`, and `waveglow.onnx`.
 
-7. Export the ONNX IRs to TensorRT engines with fp16 mode enabled:
+7. Convert the ONNX IRs to TensorRT engines with fp16 mode enabled:
 
 	```bash
-	python trt/export_onnx2trt.py --encoder output/encoder.onnx --decoder output/decoder_iter.onnx --postnet output/postnet.onnx --waveglow output/waveglow.onnx -o output/ --fp16
+	python tensorrt/convert_onnx2trt.py --encoder output/encoder.onnx --decoder output/decoder_iter.onnx --postnet output/postnet.onnx --waveglow output/waveglow.onnx -o output/ --fp16
 	```
 
 	After running the command, there should be four new engine files in `./output/` directory:
@@ -76,14 +76,14 @@ NVIDIA TensorRT is a platform for high-performance deep learning inference. It i
 8. Run TTS inference pipeline with fp16:
 
 	```bash
-	python trt/inference_trt.py -i phrases/phrase.txt --encoder output/encoder_fp16.engine --decoder output/decoder_iter_fp16.engine --postnet output/postnet_fp16.engine --waveglow output/waveglow_fp16.engine -o output/ --fp16
+	python tensorrt/inference_trt.py -i phrases/phrase.txt --encoder output/encoder_fp16.engine --decoder output/decoder_iter_fp16.engine --postnet output/postnet_fp16.engine --waveglow output/waveglow_fp16.engine -o output/ --fp16
 	```
 
 ## Inference performance: NVIDIA T4
 
-Our results were obtained by running the `./trt/run_latency_tests_trt.sh` script in the PyTorch-19.11-py3 NGC container. Please note that to reproduce the results, you need to provide pretrained checkpoints for Tacotron 2 and WaveGlow. Please edit the script to provide your checkpoint filenames. For all tests in this table, we used WaveGlow with 256 residual channels.
+Our results were obtained by running the `./tensorrt/run_latency_tests_trt.sh` script in the PyTorch-19.11-py3 NGC container. Please note that to reproduce the results, you need to provide pretrained checkpoints for Tacotron 2 and WaveGlow. Please edit the script to provide your checkpoint filenames. For all tests in this table, we used WaveGlow with 256 residual channels.
 
-|Framework|Batch size|Input length|Precision|Avg latency (s)|Latency std (s)|Latency confidence interval 90% (s)|Latency confidence interval 95% (s)|Latency confidence interval 99% (s)|Throughput (samples/sec)|Speed-up PyT+TRT/TRT|Avg mels generated (81 mels=1 sec of speech)|Avg audio length (s)|Avg RTF|
+|Framework|Batch size|Input length|Precision|Avg latency (s)|Latency std (s)|Latency confidence interval 90% (s)|Latency confidence interval 95% (s)|Latency confidence interval 99% (s)|Throughput (samples/sec)|Speed-up PyTorch+TensorRT / TensorRT|Avg mels generated (81 mels=1 sec of speech)|Avg audio length (s)|Avg RTF|
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-|PyT+TRT|1| 128| FP16| 1.02| 0.05| 1.09| 1.10| 1.14| 150,439| 1.59| 602| 6.99| 6.86|
-|PyT    |1| 128| FP16| 1.63| 0.07| 1.71| 1.73| 1.81|  94,758| 1.00| 601| 6.98| 4.30|
+|PyTorch+TensorRT|1| 128| FP16| 1.02| 0.05| 1.09| 1.10| 1.14| 150,439| 1.59| 602| 6.99| 6.86|
+|PyTorch         |1| 128| FP16| 1.63| 0.07| 1.71| 1.73| 1.81|  94,758| 1.00| 601| 6.98| 4.30|
