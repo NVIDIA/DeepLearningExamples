@@ -224,7 +224,7 @@ class WaveGlow(torch.nn.Module):
             audio, log_det_W = self.convinv[k](audio)
             log_det_W_list.append(log_det_W)
 
-            n_half = int(audio.size(1) / 2)
+            n_half = int(audio.size(1) // 2)
             audio_0 = audio[:, :n_half, :]
             audio_1 = audio[:, n_half:, :]
 
