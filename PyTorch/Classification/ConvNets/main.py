@@ -276,7 +276,7 @@ def add_parser_arguments(parser):
     )
 
     parser.add_argument("--checkpoint-filename", default="checkpoint.pth.tar", type=str)
-    
+
     parser.add_argument(
         "--workspace",
         type=str,

@@ -100,6 +100,7 @@ class ResNetBuilder(object):
 
 # ResNetBuilder }}}
 
+
 # BasicBlock {{{
 class BasicBlock(nn.Module):
     def __init__(self, builder, inplanes, planes, expansion, stride=1, downsample=None):
@@ -137,6 +138,7 @@ class BasicBlock(nn.Module):
 
 # BasicBlock }}}
 
+
 # SqueezeAndExcitation {{{
 class SqueezeAndExcitation(nn.Module):
     def __init__(self, planes, squeeze):
@@ -159,6 +161,7 @@ class SqueezeAndExcitation(nn.Module):
 
 # }}}
 
+
 # Bottleneck {{{
 class Bottleneck(nn.Module):
     def __init__(
@@ -171,6 +174,7 @@ class Bottleneck(nn.Module):
         se=False,
         se_squeeze=16,
         downsample=None,
+        fused_se=True,
     ):
         super(Bottleneck, self).__init__()
         self.conv1 = builder.conv1x1(inplanes, planes)
@@ -182,6 +186,8 @@ class Bottleneck(nn.Module):
         self.relu = builder.activation()
         self.downsample = downsample
         self.stride = stride
+
+        self.fused_se = fused_se
         self.squeeze = (
             SqueezeAndExcitation(planes * expansion, se_squeeze) if se else None
         )
@@ -206,14 +212,19 @@ class Bottleneck(nn.Module):
         if self.squeeze is None:
             out += residual
         else:
-            out = torch.addcmul(residual, 1.0, out, self.squeeze(out))
+            if self.fused_se:
+                out = torch.addcmul(residual, out, self.squeeze(out), value=1)
+            else:
+                out = residual + out * self.squeeze(out)
 
         out = self.relu(out)
 
         return out
 
 
-def SEBottleneck(builder, inplanes, planes, expansion, stride=1, downsample=None):
+def SEBottleneck(
+    builder, inplanes, planes, expansion, stride=1, downsample=None, fused_se=True
+):
     return Bottleneck(
         builder,
         inplanes,
@@ -223,15 +234,20 @@ def SEBottleneck(builder, inplanes, planes, expansion, stride=1, downsample=None
         se=True,
         se_squeeze=16,
         downsample=downsample,
+        fused_se=fused_se,
     )
 
 
 # Bottleneck }}}
 
+
 # ResNet {{{
 class ResNet(nn.Module):
-    def __init__(self, builder, block, expansion, layers, widths, num_classes=1000):
+    def __init__(
+        self, builder, block, expansion, layers, widths, num_classes=1000, fused_se=True
+    ):
         self.inplanes = 64
+        self.fused_se = fused_se
         super(ResNet, self).__init__()
         self.conv1 = builder.conv7x7(3, 64, stride=2)
         self.bn1 = builder.batchnorm(64)
@@ -269,11 +285,14 @@ class ResNet(nn.Module):
                 expansion,
                 stride=stride,
                 downsample=downsample,
+                fused_se=self.fused_se,
             )
         )
         self.inplanes = planes * expansion
         for i in range(1, blocks):
-            layers.append(block(builder, self.inplanes, planes, expansion))
+            layers.append(
+                block(builder, self.inplanes, planes, expansion, fused_se=self.fused_se)
+            )
 
         return nn.Sequential(*layers)
 
@@ -384,7 +403,7 @@ resnet_versions = {
 }
 
 
-def build_resnet(version, config, num_classes, verbose=True):
+def build_resnet(version, config, num_classes, verbose=True, fused_se=True):
     version = resnet_versions[version]
     config = resnet_configs[config]
 
@@ -400,6 +419,7 @@ def build_resnet(version, config, num_classes, verbose=True):
         version["layers"],
         version["widths"],
         num_classes,
+        fused_se,
     )
 
     return model
