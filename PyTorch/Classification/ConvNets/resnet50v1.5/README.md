@@ -281,17 +281,21 @@ Example:
 
 ### 6. Start inference
 
-To run inference on ImageNet on a checkpointed model, run:
+You can download pretrained weights from NGC:
 
-`python ./main.py --arch resnet50 --evaluate --epochs 1 --resume <path to checkpoint> -b <batch size> <path to imagenet>`
+```bash
+wget --content-disposition https://api.ngc.nvidia.com/v2/models/nvidia/resnet50_pyt_amp/versions/20.06.0/zip -O resnet50_pyt_amp_20.06.0.zip
 
-To run inference on JPEG image, you have to first extract the model weights from checkpoint:
+unzip resnet50_pyt_amp_20.06.0.zip
+```
 
-`python checkpoint2model.py --checkpoint-path <path to checkpoint> --weight-path <path where weights will be stored>`
+To run inference on ImageNet, run:
 
-Then run classification script:
+`python ./main.py --arch resnet50 --evaluate --epochs 1 --pretrained-weights nvidia_resnet50_200821.pth.tar -b <batch size> <path to imagenet>`
 
-`python classify.py --arch resnet50 -c fanin --weights <path to weights from previous step> --precision AMP|FP32 --image <path to JPEG image>`
+To run inference on JPEG image using pretrained weights:
+
+`python classify.py --arch resnet50 -c fanin --weights nvidia_resnet50_200821.pth.tar  --precision AMP|FP32 --image <path to JPEG image>`
 
 
 ## Advanced
@@ -445,6 +449,19 @@ Metrics gathered through training:
  - `train.data_time` - time spent on waiting on data
  - `train.compute_time` - time spent in forward/backward pass
 
+To restart training from checkpoint use `--resume` option.
+
+To start training from pretrained weights (e.g. downloaded from NGC) use `--pretrained-weights` option.
+
+The difference between those two is that the pretrained weights contain only model weights,
+and checkpoints, apart from model weights, contain optimizer state, LR scheduler state, RNG state.
+
+Checkpoints are suitable for dividing the training into parts, for example in order
+to divide the training job into shorter stages, or restart training after infrastructure fail.
+
+Pretrained weights can be used as a base for finetuning the model to a different dataset,
+or as a backbone to detection models.
+
 ### Inference process
 
 Validation is done every epoch, and can be also run separately on a checkpointed model.
@@ -470,6 +487,27 @@ Then run classification script:
 
 `python classify.py --arch resnet50 -c fanin --weights <path to weights from previous step> --precision AMP|FP32 --image <path to JPEG image>`
 
+You can also run ImageNet validation on pretrained weights:
+
+`python ./main.py --arch resnet50 --evaluate --epochs 1 --pretrained-weights <path to pretrained weights> -b <batch size> <path to imagenet>`
+
+#### NGC Pretrained weights:
+
+Pretrained weights can be downloaded from NGC:
+
+```bash
+wget --content-disposition https://api.ngc.nvidia.com/v2/models/nvidia/resnet50_pyt_amp/versions/20.06.0/zip -O resnet50_pyt_amp_20.06.0.zip
+
+unzip resnet50_pyt_amp_20.06.0.zip
+```
+
+To run inference on ImageNet, run:
+
+`python ./main.py --arch resnet50 --evaluate --epochs 1 --pretrained-weights nvidia_resnet50_200821.pth.tar -b <batch size> <path to imagenet>`
+
+To run inference on JPEG image using pretrained weights:
+
+`python classify.py --arch resnet50 -c fanin --weights nvidia_resnet50_200821.pth.tar  --precision AMP|FP32 --image <path to JPEG image>`
 
 
 ## Performance

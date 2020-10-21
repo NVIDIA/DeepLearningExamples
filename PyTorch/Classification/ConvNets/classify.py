@@ -63,17 +63,16 @@ def main(args):
 
     if args.weights is not None:
         weights = torch.load(args.weights)
-
         #Temporary fix to allow NGC checkpoint loading
-        weights = {k.replace("module.", ""): v for k, v in weights.items()}
-
+        weights = {
+            k.replace("module.", ""): v for k, v in weights.items()
+        }
         model.load_state_dict(weights)
 
     model = model.cuda()
 
     if args.precision in ["AMP", "FP16"]:
-        model = model.half()
-
+        model = network_to_half()
 
     model.eval()
 
