@@ -229,7 +229,7 @@ The following section lists the requirements that you need to meet in order to s
 
 This repository contains Dockerfile which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 -   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
--   [PyTorch 20.06-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
+-   [PyTorch 20.09-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
 or newer
 - supported GPUs:
     - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
@@ -246,7 +246,7 @@ For those unable to use the PyTorch NGC container, to set up the required enviro
 
 ## Quick Start Guide
 
-To train your model using mixed or TF32 precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the FastPitch model on the LJSpeech 1.1 dataset. For the specifics concerning training and inference, see the [Advanced](#advanced) section.
+To train your model using mixed or TF32 precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the FastPitch model on the LJSpeech 1.1 dataset. For the specifics concerning training and inference, see the [Advanced](#advanced) section. Pre-trained FastPitch models are available for download on [NGC](https://ngc.nvidia.com/catalog/models?query=FastPitch&quickFilter=models).
 
 1. Clone the repository.
    ```bash
@@ -501,6 +501,8 @@ You can run inference using the `./inference.py` script. This script takes
 text as input and runs FastPitch and then WaveGlow inference to produce an
 audio file. It requires pre-trained checkpoints of both models
 and input text as a text file, with one phrase per line.
+
+Pre-trained FastPitch models are available for download on [NGC](https://ngc.nvidia.com/catalog/models?query=FastPitch&quickFilter=models).
 
 Having pre-trained models in place, run the sample inference on LJSpeech-1.1 test-set with:
 ```bash

@@ -9,6 +9,8 @@ DATA_DIR="LJSpeech-1.1"
 [ ! -n "$OUTPUT_DIR" ] && OUTPUT_DIR="./output/audio_$(basename ${PHRASES} .tsv)"
 [ "$AMP" == "true" ] && AMP_FLAG="--amp"
 
+mkdir -p "$OUTPUT_DIR"
+
 python inference.py --cuda \
                     -i ${PHRASES} \
                     -o ${OUTPUT_DIR} \
