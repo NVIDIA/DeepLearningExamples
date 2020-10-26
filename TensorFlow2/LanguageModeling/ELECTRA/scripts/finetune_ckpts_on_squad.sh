@@ -1,5 +1,4 @@
-#!/bin/bash
-
+#!/usr/bin/env bash
 # Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,17 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-CMD=${1:-/bin/bash}
-NV_VISIBLE_DEVICES=${2:-"all"}
-DOCKER_BRIDGE=${3:-"host"}
+checkpoints=${checkpoints:-"results/base/checkpoints"}
+for folder in $checkpoints; do
 
-docker run -it --rm \
-  --gpus device=$NV_VISIBLE_DEVICES \
-  --net=$DOCKER_BRIDGE \
-  --shm-size=1g \
-  --ulimit memlock=-1 \
-  --ulimit stack=67108864 \
-  --privileged \
-  -e LD_LIBRARY_PATH='/workspace/install/lib/' \
-  -v $PWD:/workspace/electra \
-  electra $CMD
+    ckpts_dir=${folder}
+    output_dir=${folder}
+
+    for f in $ckpts_dir/*.index; do
+        ckpt=${f%.*}
+        echo "==================================== START $ckpt ===================================="
+        python postprocess_pretrained_ckpt.py --pretrained_checkpoint=$ckpt --output_dir=$output_dir --amp
+        bash scripts/run_squad.sh $output_dir/discriminator;
+        echo "====================================  END $ckpt  ====================================";
+    done
+done
