@@ -22,6 +22,7 @@ import logging
 import os
 from typing import Dict, Optional, Tuple
 
+from utils import log
 from file_utils import CONFIG_NAME, cached_path, hf_bucket_url, is_remote_url
 
 
@@ -110,7 +111,7 @@ class PretrainedConfig(object):
             try:
                 setattr(self, key, value)
             except AttributeError as err:
-                logger.error("Can't set {} with value {} for {}".format(key, value, self))
+                log("Can't set {} with value {} for {}".format(key, value, self))
                 raise err
 
     @property
@@ -142,7 +143,7 @@ class PretrainedConfig(object):
         output_config_file = os.path.join(save_directory, CONFIG_NAME)
 
         self.to_json_file(output_config_file)
-        logger.info("Configuration saved in {}".format(output_config_file))
+        log("Configuration saved in {}".format(output_config_file))
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, **kwargs) -> "PretrainedConfig":
@@ -281,9 +282,9 @@ class PretrainedConfig(object):
             raise EnvironmentError(msg)
 
         if resolved_config_file == config_file:
-            logger.info("loading configuration file {}".format(config_file))
+            log("loading configuration file {}".format(config_file))
         else:
-            logger.info("loading configuration file {} from cache at {}".format(config_file, resolved_config_file))
+            log("loading configuration file {} from cache at {}".format(config_file, resolved_config_file))
 
         return config_dict, kwargs
 
@@ -319,7 +320,7 @@ class PretrainedConfig(object):
         for key in to_remove:
             kwargs.pop(key, None)
 
-        logger.info("Model config %s", str(config))
+        # log("Model config {}".format(str(config)))
         if return_unused_kwargs:
             return config, kwargs
         else:

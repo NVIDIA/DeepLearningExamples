@@ -25,12 +25,9 @@ from tensorflow.python.keras.saving import hdf5_format
 
 from configuration_utils import PretrainedConfig, BertConfig
 from file_utils import DUMMY_INPUTS, TF2_WEIGHTS_NAME, WEIGHTS_NAME, cached_path, hf_bucket_url, is_remote_url
-
 from file_utils import MULTIPLE_CHOICE_DUMMY_INPUTS, add_start_docstrings, add_start_docstrings_to_callable
 from tokenization_utils import BatchEncoding
-
-
-logger = logging.getLogger(__name__)
+from utils import log
 
 
 class TFModelUtilsMixin:
@@ -235,9 +232,10 @@ class TFPreTrainedModel(tf.keras.Model, TFModelUtilsMixin):
         """ Save a model and its configuration file to a directory, so that it
             can be re-loaded using the :func:`~transformers.PreTrainedModel.from_pretrained` class method.
         """
-        assert os.path.isdir(
-            save_directory
-        ), "Saving path should be a directory where the model and configuration can be saved"
+        if os.path.isfile(save_directory):
+            log("Provided path ({}) should be a directory, not a file".format(save_directory))
+            return
+        os.makedirs(save_directory, exist_ok=True)
 
         # Save configuration file
         self.config.save_pretrained(save_directory)
@@ -245,7 +243,12 @@ class TFPreTrainedModel(tf.keras.Model, TFModelUtilsMixin):
         # If we save using the predefined names, we can load using `from_pretrained`
         output_model_file = os.path.join(save_directory, TF2_WEIGHTS_NAME)
         self.save_weights(output_model_file)
-        logger.info("Model weights saved in {}".format(output_model_file))
+
+        with h5py.File(output_model_file, "r") as f:
+            if "layer_names" not in f.attrs and "model_weights" in f:
+                f = f["model_weights"]
+            hdf5_layer_names = set(hdf5_format.load_attributes_from_hdf5_group(f, "layer_names"))
+        log(f"Model weights saved in {output_model_file}: {hdf5_layer_names}")
 
     @classmethod
     def from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
@@ -374,9 +377,9 @@ class TFPreTrainedModel(tf.keras.Model, TFModelUtilsMixin):
                 )
             except EnvironmentError as e:
                 if pretrained_model_name_or_path in cls.pretrained_model_archive_map:
-                    logger.error("Couldn't reach server at '{}' to download pretrained weights.".format(archive_file))
+                    log("Couldn't reach server at '{}' to download pretrained weights.".format(archive_file))
                 else:
-                    logger.error(
+                    log(
                         "Model name '{}' was not found in model name list ({}). "
                         "We assumed '{}' was a path or url but couldn't find any file "
                         "associated to this path or url.".format(
@@ -387,9 +390,9 @@ class TFPreTrainedModel(tf.keras.Model, TFModelUtilsMixin):
                     )
                 raise e
             if resolved_archive_file == archive_file:
-                logger.info("loading weights file {}".format(archive_file))
+                log("loading weights file {}".format(archive_file))
             else:
-                logger.info("loading weights file {} from cache at {}".format(archive_file, resolved_archive_file))
+                log("loading weights file {} from cache at {}".format(archive_file, resolved_archive_file))
         else:
             resolved_archive_file = None
 
@@ -416,7 +419,7 @@ class TFPreTrainedModel(tf.keras.Model, TFModelUtilsMixin):
 
         model(model.dummy_inputs, training=False)  # Make sure restore ops are run
 
-        # Check if the models are the same to output loading informations
+        # Check if the models are the same to output loading information
         with h5py.File(resolved_archive_file, "r") as f:
             if "layer_names" not in f.attrs and "model_weights" in f:
                 f = f["model_weights"]
@@ -426,13 +429,23 @@ class TFPreTrainedModel(tf.keras.Model, TFModelUtilsMixin):
         unexpected_keys = list(hdf5_layer_names - model_layer_names)
         error_msgs = []
 
-        if len(missing_keys) > 0:
-            logger.info(
-                "Layers of {} not initialized from pretrained model: {}".format(model.__class__.__name__, missing_keys)
-            )
         if len(unexpected_keys) > 0:
-            logger.info(
-                "Layers from pretrained model not used in {}: {}".format(model.__class__.__name__, unexpected_keys)
+            log(
+                f"Some weights of the model checkpoint at {pretrained_model_name_or_path} were not used when "
+                f"initializing {model.__class__.__name__}: {unexpected_keys}\n"
+            )
+        else:
+            log(f"All model checkpoint weights were used when initializing {model.__class__.__name__}.\n")
+        if len(missing_keys) > 0:
+            log(
+                f"Some weights of {model.__class__.__name__} were not initialized from the model checkpoint at {pretrained_model_name_or_path} "
+                f"and are newly initialized: {missing_keys}\n"
+            )
+        else:
+            log(
+                f"All the weights of {model.__class__.__name__} were initialized from the model checkpoint at {pretrained_model_name_or_path}.\n"
+                f"If your task is similar to the task the model of the ckeckpoint was trained on, "
+                f"you can already use {model.__class__.__name__} for predictions without further training."
             )
         if len(error_msgs) > 0:
             raise RuntimeError(
@@ -690,7 +703,7 @@ class TFPreTrainedModel(tf.keras.Model, TFModelUtilsMixin):
             attention_mask = tf.ones_like(input_ids)
 
         if pad_token_id is None and eos_token_id is not None:
-            logger.warning(
+            log(
                 "Setting `pad_token_id` to {} (first `eos_token_id`) to generate sequence".format(eos_token_id)
             )
             pad_token_id = eos_token_id
@@ -1868,6 +1881,7 @@ class TFBertSelfAttention(tf.keras.layers.Layer):
         assert config.hidden_size % config.num_attention_heads == 0
         self.attention_head_size = int(config.hidden_size / config.num_attention_heads)
         self.all_head_size = self.num_attention_heads * self.attention_head_size
+        self.amp = config.amp
 
         self.query = tf.keras.layers.Dense(
             self.all_head_size, kernel_initializer=get_initializer(config.initializer_range), name="query"
@@ -1901,8 +1915,8 @@ class TFBertSelfAttention(tf.keras.layers.Layer):
         attention_scores = tf.matmul(
             query_layer, key_layer, transpose_b=True
         )  # (batch size, num_heads, seq_len_q, seq_len_k)
-        dk = tf.cast(shape_list(key_layer)[-1], tf.float32)  # scale attention_scores
-        attention_scores = attention_scores / tf.math.sqrt(dk)
+        dk = tf.cast(shape_list(key_layer)[-1], tf.float32)
+        attention_scores = attention_scores / tf.cast(tf.math.sqrt(dk), tf.float16 if self.amp else tf.float32)
 
         if attention_mask is not None:
             # Apply the attention mask is (precomputed for all layers in TFBertModel call() function)
