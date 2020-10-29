@@ -31,3 +31,4 @@ while [[ ${current_status} != "200" ]] || [[ $($ready_command) != "200" ]]; do
 done
 
 echo "TRITON Server is ready!"
+

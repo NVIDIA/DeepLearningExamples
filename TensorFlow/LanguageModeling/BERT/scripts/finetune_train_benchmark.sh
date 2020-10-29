@@ -19,9 +19,9 @@ num_gpu=${3:-"8"}
 task=${4:-"squad"}
 
 if [ "$bert_model" = "large" ] ; then
-    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16
+    export BERT_DIR=data/download/nvidia_pretrained/bert_tf_pretraining_large_lamb
 else
-    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-12_H-768_A-12
+    export BERT_DIR=data/download/nvidia_pretrained/bert_tf_squad11_base_128
 fi
 
 echo  "BERT directory set as " $BERT_DIR
