@@ -13,6 +13,20 @@
 
 import tensorflow as tf
 import time
+import os
+
+def setup_xla_flags():
+  # causes memory fragmentation for bert leading to OOM
+  if os.environ.get("TF_XLA_FLAGS", None) is not None:
+    try:
+      os.environ["TF_XLA_FLAGS"] += " --tf_xla_enable_lazy_compilation=false"
+    except: #mpi 4.0.2 causes syntax error for =
+      os.environ["TF_XLA_FLAGS"] += " --tf_xla_enable_lazy_compilation false"
+  else:
+    try:
+      os.environ["TF_XLA_FLAGS"] = " --tf_xla_enable_lazy_compilation=false"
+    except:
+      os.environ["TF_XLA_FLAGS"] = " --tf_xla_enable_lazy_compilation false"
 
 # report latency and throughput during eval
 class LogEvalRunHook(tf.estimator.SessionRunHook):

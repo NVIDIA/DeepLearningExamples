@@ -32,10 +32,6 @@ flags = tf.flags
 FLAGS = flags.FLAGS
 
 ## Required parameters
-flags.DEFINE_string(
-    "bert_config_file", None,
-    "The config json file corresponding to the pre-trained BERT model. "
-    "This specifies the model architecture.")
 
 flags.DEFINE_string("vocab_file", None,
                     "The vocabulary file that the BERT model was trained on.")
@@ -86,6 +82,9 @@ flags.DEFINE_bool(
     "verbose_logging", False,
     "If true, all of the warnings related to data processing will be printed. "
     "A number of warnings are expected for a normal SQuAD evaluation.")
+flags.DEFINE_bool(
+    "trt_engine", False,
+    "If true, expects a trt engine defined input/output")
 
 # Triton Specific flags
 flags.DEFINE_string("triton_model_name", "bert", "exports to appropriate directory for Triton")
@@ -127,6 +126,13 @@ def batch(iterable, n=1):
             input_ids_data = input_ids_data+ (np.array(iterable[ndx + i].input_ids, dtype=np.int32),)
             input_mask_data = input_mask_data+ (np.array(iterable[ndx + i].input_mask, dtype=np.int32),)
             segment_ids_data = segment_ids_data+ (np.array(iterable[ndx + i].segment_ids, dtype=np.int32),)
+        if FLAGS.trt_engine and len(label_ids_data) != n: #TRT needs exact batch size. Pad as necessary
+            pad_size = n - len(label_ids_data)
+            label_ids_data = label_ids_data + ((np.array([0], dtype=np.int32),) * pad_size)
+            input_ids_data = input_ids_data + ((np.zeros(FLAGS.max_seq_length, dtype=np.int32),) * pad_size)
+            input_mask_data = input_mask_data + ((np.zeros(FLAGS.max_seq_length, dtype=np.int32),) * pad_size)
+            segment_ids_data = segment_ids_data + ((np.zeros(FLAGS.max_seq_length, dtype=np.int32),) * pad_size)
+
 
         inputs_dict = {label_id_key: label_ids_data,
                        'input_ids': input_ids_data,
@@ -144,19 +150,23 @@ def main(_):
     """
     os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false" #causes memory fragmentation for bert leading to OOM
 
+    tf.compat.v1.logging.info("***** Configuaration *****")
+    for key in FLAGS.__flags.keys():
+      tf.compat.v1.logging.info('  {}: {}'.format(key, getattr(FLAGS, key)))
+    tf.compat.v1.logging.info("**************************")
+
     tokenizer = tokenization.FullTokenizer(vocab_file=FLAGS.vocab_file, do_lower_case=FLAGS.do_lower_case)
 
     # Get the Data
-    if FLAGS.predict_file:
+    if FLAGS.question and FLAGS.context:
+        input_data = [{"paragraphs":[{"context":FLAGS.context,
+                        "qas":[{"id":0, "question":FLAGS.question}]}]}]
+        eval_examples = read_squad_examples(input_file=None, is_training=False,
+            version_2_with_negative=FLAGS.version_2_with_negative, input_data=input_data)
+    elif FLAGS.predict_file:
         eval_examples = read_squad_examples(
             input_file=FLAGS.predict_file, is_training=False,
             version_2_with_negative=FLAGS.version_2_with_negative)
-    elif FLAGS.question and FLAGS.answer:
-        input_data = [{"paragraphs":[{"context":FLAGS.context,
-                        "qas":[{"id":0, "question":FLAGS.question}]}]}]
-
-        eval_examples = read_squad_examples(input_file=None, is_training=False,
-            version_2_with_negative=FLAGS.version_2_with_negative, input_data=input_data)
     else:
         raise ValueError("Either predict_file or question+answer need to defined")
 
@@ -166,7 +176,7 @@ def main(_):
         eval_features.append(feature)
 
     convert_examples_to_features(
-        examples=eval_examples[0:],
+        examples=eval_examples,
         tokenizer=tokenizer,
         max_seq_length=FLAGS.max_seq_length,
         doc_stride=FLAGS.doc_stride,
@@ -217,10 +227,17 @@ def main(_):
         time_list.append(stop - start_time)
 
         batch_count = len(inputs[label_id_key])
-
-        start_logits_results = result.as_numpy("start_logits")
-        end_logits_results = result.as_numpy("end_logits")
-
+        if FLAGS.trt_engine:
+            cls_squad_logits = result.as_numpy("cls_squad_logits")
+            try: #when batch size > 1
+                start_logits_results = np.array(cls_squad_logits.squeeze()[:, :, 0])
+                end_logits_results = np.array(cls_squad_logits.squeeze()[:, :, 1])
+            except:
+                start_logits_results = np.expand_dims(np.array(cls_squad_logits.squeeze()[:, 0]), axis=0)
+                end_logits_results = np.expand_dims(np.array(cls_squad_logits.squeeze()[:, 1]), axis=0)
+        else:
+            start_logits_results = result.as_numpy("start_logits")
+            end_logits_results = result.as_numpy("end_logits")
         for i in range(batch_count):
             unique_id = int(inputs[label_id_key][i][0])
             start_logits = [float(x) for x in start_logits_results[i].flat]
@@ -232,7 +249,7 @@ def main(_):
                     end_logits=end_logits))
 
         recv_prog.update(n=batch_count)
-       	return outstanding
+        return outstanding
 
     all_results = []
     time_list = []
@@ -245,24 +262,29 @@ def main(_):
 
         present_batch_size = len(inputs_dict[label_id_key])
 
-        label_ids_data = np.stack(inputs_dict[label_id_key])
+        if not FLAGS.trt_engine:
+            label_ids_data = np.stack(inputs_dict[label_id_key])
         input_ids_data = np.stack(inputs_dict['input_ids'])
         input_mask_data = np.stack(inputs_dict['input_mask'])
         segment_ids_data = np.stack(inputs_dict['segment_ids'])
 
         inputs = []
-        inputs.append(tritongrpcclient.InferInput(label_id_key, label_ids_data.shape, "INT32"))
-        inputs[0].set_data_from_numpy(label_ids_data)
         inputs.append(tritongrpcclient.InferInput('input_ids', input_ids_data.shape, "INT32"))
-        inputs[1].set_data_from_numpy(input_ids_data)
+        inputs[0].set_data_from_numpy(input_ids_data)
         inputs.append(tritongrpcclient.InferInput('input_mask', input_mask_data.shape, "INT32"))
-        inputs[2].set_data_from_numpy(input_mask_data)
+        inputs[1].set_data_from_numpy(input_mask_data)
         inputs.append(tritongrpcclient.InferInput('segment_ids', segment_ids_data.shape, "INT32"))
-        inputs[3].set_data_from_numpy(segment_ids_data)
+        inputs[2].set_data_from_numpy(segment_ids_data)
+        if not FLAGS.trt_engine:
+            inputs.append(tritongrpcclient.InferInput(label_id_key, label_ids_data.shape, "INT32"))
+            inputs[3].set_data_from_numpy(label_ids_data)
 
         outputs = []
-        outputs.append(tritongrpcclient.InferRequestedOutput('start_logits'))
-        outputs.append(tritongrpcclient.InferRequestedOutput('end_logits'))
+        if FLAGS.trt_engine:
+            outputs.append(tritongrpcclient.InferRequestedOutput('cls_squad_logits'))
+        else:
+            outputs.append(tritongrpcclient.InferRequestedOutput('start_logits'))
+            outputs.append(tritongrpcclient.InferRequestedOutput('end_logits'))
 
         start_time = time.time()
         triton_client.async_infer(
@@ -339,6 +361,5 @@ def main(_):
 
 if __name__ == "__main__":
   flags.mark_flag_as_required("vocab_file")
-  flags.mark_flag_as_required("bert_config_file")
   tf.compat.v1.app.run()
 

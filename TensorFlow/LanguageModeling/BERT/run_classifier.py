@@ -29,7 +29,7 @@ import tokenization
 import tensorflow as tf
 import horovod.tensorflow as hvd
 import time
-from utils.utils import LogEvalRunHook, LogTrainRunHook
+from utils.utils import LogEvalRunHook, LogTrainRunHook, setup_xla_flags
 import utils.dllogger_class
 from dllogger import Verbosity
 from utils.create_glue_data import *
@@ -455,11 +455,8 @@ def input_fn_builder(features, batch_size, seq_length, is_training, drop_remaind
 
 
 def main(_):
-  # causes memory fragmentation for bert leading to OOM
-  if os.environ.get("TF_XLA_FLAGS", None) is not None:
-    os.environ["TF_XLA_FLAGS"] += " --tf_xla_enable_lazy_compilation false"
-  else:
-    os.environ["TF_XLA_FLAGS"] = " --tf_xla_enable_lazy_compilation false"
+
+  setup_xla_flags()
 
   tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
   dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)
@@ -518,7 +515,8 @@ def main(_):
           training_hooks.append(hvd.BroadcastGlobalVariablesHook(0))
   if FLAGS.use_xla:
     config.graph_options.optimizer_options.global_jit_level = tf.compat.v1.OptimizerOptions.ON_1
-    tf.enable_resource_variables()
+    if FLAGS.amp:
+      tf.enable_resource_variables()
 
   run_config = tf.estimator.RunConfig(
       model_dir=FLAGS.output_dir if master_process else None,
@@ -537,7 +535,7 @@ def main(_):
   train_examples = None
   num_train_steps = None
   num_warmup_steps = None
-  training_hooks.append(LogTrainRunHook(global_batch_size, hvd_rank, FLAGS.save_checkpoints_steps, num_steps_ignore_xla=10))
+  training_hooks.append(LogTrainRunHook(global_batch_size, hvd_rank, FLAGS.save_checkpoints_steps, num_steps_ignore_xla=25))
 
   if FLAGS.do_train:
     train_examples = processor.get_train_examples(FLAGS.data_dir)
@@ -597,14 +595,14 @@ def main(_):
     train_time_elapsed = time.time() - train_start_time
     train_time_wo_overhead = training_hooks[-1].total_time
     avg_sentences_per_second = num_train_steps * global_batch_size * 1.0 / train_time_elapsed
-    ss_sentences_per_second = (num_train_steps - training_hooks[-1].skipped) * global_batch_size * 1.0 / train_time_wo_overhead
+    ss_sentences_per_second = (training_hooks[-1].count - training_hooks[-1].skipped) * global_batch_size * 1.0 / train_time_wo_overhead
 
     if master_process:
         tf.compat.v1.logging.info("-----------------------------")
         tf.compat.v1.logging.info("Total Training Time = %0.2f for Sentences = %d", train_time_elapsed,
                         num_train_steps * global_batch_size)
         tf.compat.v1.logging.info("Total Training Time W/O Overhead = %0.2f for Sentences = %d", train_time_wo_overhead,
-                        (num_train_steps - training_hooks[-1].skipped) * global_batch_size)
+                        (training_hooks[-1].count - training_hooks[-1].skipped) * global_batch_size)
         tf.compat.v1.logging.info("Throughput Average (sentences/sec) with overhead = %0.2f", avg_sentences_per_second)
         tf.compat.v1.logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
         tf.compat.v1.logging.info("-----------------------------")

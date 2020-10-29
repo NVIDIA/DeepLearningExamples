@@ -36,7 +36,7 @@ import modeling
 import optimization
 import tokenization
 from utils.create_squad_data import *
-from utils.utils import LogEvalRunHook, LogTrainRunHook
+from utils.utils import LogEvalRunHook, LogTrainRunHook, setup_xla_flags
 import utils.dllogger_class
 from dllogger import Verbosity
 
@@ -375,7 +375,7 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
             optimization.LAMBOptimizer(learning_rate=0.0), loss_scaler)
 
       predictions = {
-          "unique_ids": unique_ids,
+          "unique_ids": tf.identity(unique_ids),
           "start_logits": start_logits,
           "end_logits": end_logits,
       }
@@ -564,7 +564,6 @@ def get_predictions(all_examples, all_features, all_results, n_best_size, max_an
       else:
         final_text = ""
         seen_predictions[final_text] = True
-
       nbest.append(
           _NbestPrediction(
               text=final_text,
@@ -614,7 +613,12 @@ def get_predictions(all_examples, all_features, all_results, n_best_size, max_an
       score_diff = score_null - best_non_null_entry.start_logit - (
           best_non_null_entry.end_logit)
       scores_diff_json[example.qas_id] = score_diff
-      if score_diff > FLAGS.null_score_diff_threshold:
+
+      try:
+        null_score_diff_threshold = FLAGS.null_score_diff_threshold
+      except:
+        null_score_diff_threshold = 0.0
+      if score_diff > null_score_diff_threshold:
         all_predictions[example.qas_id] = ""
       else:
         all_predictions[example.qas_id] = best_non_null_entry.text
@@ -853,6 +857,19 @@ def export_model(estimator, export_dir, init_checkpoint):
     # Now build the config for Triton. Check to make sure we can overwrite it, if it exists
     config_filename = os.path.join(model_folder, "config.pbtxt")
 
+    optimization_str = ""
+    if FLAGS.amp:
+      optimization_str = r"""
+optimization {
+  execution_accelerators
+  {
+    gpu_execution_accelerator :
+    [ {
+      name : "auto_mixed_precision"
+    } ]
+  }
+}"""
+
     if (os.path.exists(config_filename) and not FLAGS.triton_model_overwrite):
         print("ERROR: Could not save Triton model config. Config file already exists. Use '--triton_model_overwrite=True' if you would like to overwrite an existing model config. Model config: {}".format(config_filename))
         return
@@ -861,6 +878,7 @@ def export_model(estimator, export_dir, init_checkpoint):
 name: "{model_name}"
 platform: "tensorflow_savedmodel"
 max_batch_size: {max_batch_size}
+{optimization_str}
 input [
     {{
         name: "unique_ids"
@@ -900,8 +918,6 @@ input [
 instance_group [
     {{
         count: {engine_count}
-        kind: KIND_GPU
-        gpus: [{gpu_list}]
     }}
 ]"""
 
@@ -924,8 +940,8 @@ dynamic_batching {{
         "max_batch_size": max_batch_size,
         "seq_length": FLAGS.max_seq_length,
         "dynamic_batching": batching_str,
-        "gpu_list": ", ".join([x.name.split(":")[-1] for x in device_lib.list_local_devices() if x.device_type == "GPU"]),
-        "engine_count": FLAGS.triton_engine_count
+        "engine_count": FLAGS.triton_engine_count,
+        "optimization_str":optimization_str,
     }
 
     with open(model_folder + "/config.pbtxt", "w") as file:
@@ -934,14 +950,7 @@ dynamic_batching {{
         file.write(final_config_str)
 
 def main(_):
-  # causes memory fragmentation for bert leading to OOM
-  if os.environ.get("TF_XLA_FLAGS", None) is not None:
-    os.environ["TF_XLA_FLAGS"] += " --tf_xla_enable_lazy_compilation false"
-  else:
-    os.environ["TF_XLA_FLAGS"] = " --tf_xla_enable_lazy_compilation false"
-
-  # Enable async_io to speed up multi-gpu training with XLA and Horovod.
-  os.environ["TF_XLA_FLAGS"] += " --tf_xla_async_io_level 1"
+  setup_xla_flags()
 
   tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
   dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)

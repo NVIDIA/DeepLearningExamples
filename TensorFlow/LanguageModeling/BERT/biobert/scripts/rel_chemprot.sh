@@ -2,7 +2,7 @@
 
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
 
-init_checkpoint=${1:-"/results/biobert_tf_uncased_base/model.ckpt-4340"}
+init_checkpoint=${1:-"/results/biobert_tf_uncased_base/model.ckpt"}
 train_batch_size=${2:-8}
 learning_rate=${3:-1.5e-6}
 cased=${4:-false}
