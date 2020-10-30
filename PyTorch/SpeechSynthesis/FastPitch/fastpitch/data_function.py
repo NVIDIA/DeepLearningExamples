@@ -31,6 +31,7 @@ import torch
 
 from common.utils import to_gpu
 from tacotron2.data_function import TextMelLoader
+from common.text.text_processing import TextProcessing
 
 
 class TextMelAliLoader(TextMelLoader):
@@ -38,18 +39,27 @@ class TextMelAliLoader(TextMelLoader):
     """
     def __init__(self, *args):
         super(TextMelAliLoader, self).__init__(*args)
-        if len(self.audiopaths_and_text[0]) != 4:
-            raise ValueError('Expected four columns in audiopaths file')
+        self.tp = TextProcessing(args[-1].symbol_set, args[-1].text_cleaners)
+        self.n_speakers = args[-1].n_speakers
+        if len(self.audiopaths_and_text[0]) != 4 + (args[-1].n_speakers > 1):
+            raise ValueError('Expected four columns in audiopaths file for single speaker model. \n'
+                             'For multispeaker model, the filelist format is '
+                             '<mel>|<dur>|<pitch>|<text>|<speaker_id>')
 
     def __getitem__(self, index):
         # separate filename and text
-        audiopath, durpath, pitchpath, text = self.audiopaths_and_text[index]
+        if self.n_speakers > 1:
+            audiopath, durpath, pitchpath, text, speaker = self.audiopaths_and_text[index]
+            speaker = int(speaker)
+        else:
+            audiopath, durpath, pitchpath, text = self.audiopaths_and_text[index]
+            speaker = None
         len_text = len(text)
         text = self.get_text(text)
         mel = self.get_mel(audiopath)
         dur = torch.load(durpath)
         pitch = torch.load(pitchpath)
-        return (text, mel, len_text, dur, pitch)
+        return (text, mel, len_text, dur, pitch, speaker)
 
 
 class TextMelAliCollate():
@@ -107,16 +117,24 @@ class TextMelAliCollate():
             pitch = batch[ids_sorted_decreasing[i]][4]
             pitch_padded[i, :pitch.shape[0]] = pitch
 
+        if batch[0][5] is not None:
+            speaker = torch.zeros_like(input_lengths)
+            for i in range(len(ids_sorted_decreasing)):
+                speaker[i] = batch[ids_sorted_decreasing[i]][5]
+        else:
+            speaker = None
+
         # count number of items - characters in text
         len_x = [x[2] for x in batch]
         len_x = torch.Tensor(len_x)
-        return (text_padded, input_lengths, mel_padded,
-                output_lengths, len_x, dur_padded, dur_lens, pitch_padded)
+
+        return (text_padded, input_lengths, mel_padded, output_lengths,
+                len_x, dur_padded, dur_lens, pitch_padded, speaker)
 
 
 def batch_to_gpu(batch):
-    text_padded, input_lengths, mel_padded, \
-        output_lengths, len_x, dur_padded, dur_lens, pitch_padded = batch
+    text_padded, input_lengths, mel_padded, output_lengths, \
+        len_x, dur_padded, dur_lens, pitch_padded, speaker = batch
     text_padded = to_gpu(text_padded).long()
     input_lengths = to_gpu(input_lengths).long()
     mel_padded = to_gpu(mel_padded).float()
@@ -124,9 +142,11 @@ def batch_to_gpu(batch):
     dur_padded = to_gpu(dur_padded).long()
     dur_lens = to_gpu(dur_lens).long()
     pitch_padded = to_gpu(pitch_padded).float()
+    if speaker is not None:
+        speaker = to_gpu(speaker).long()
     # Alignments act as both inputs and targets - pass shallow copies
     x = [text_padded, input_lengths, mel_padded, output_lengths,
-         dur_padded, dur_lens, pitch_padded]
+         dur_padded, dur_lens, pitch_padded, speaker]
     y = [mel_padded, dur_padded, dur_lens, pitch_padded]
     len_x = torch.sum(output_lengths)
     return (x, y, len_x)

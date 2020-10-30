@@ -40,6 +40,7 @@ from torch.utils.data import DataLoader
 from common import utils
 from inference import load_and_setup_model
 from tacotron2.data_function import TextMelLoader, TextMelCollate, batch_to_gpu
+from common.text.text_processing import TextProcessing
 
 
 def parse_args(parser):
@@ -59,6 +60,8 @@ def parse_args(parser):
     parser.add_argument('--text-cleaners', nargs='*',
                         default=['english_cleaners'], type=str,
                         help='Type of text cleaners for input text')
+    parser.add_argument('--symbol-set', type=str, default='english_basic',
+                        help='Define symbol set for input text')
     parser.add_argument('--max-wav-value', default=32768.0, type=float,
                         help='Maximum audiowave value')
     parser.add_argument('--sampling-rate', default=22050, type=int,
@@ -98,6 +101,7 @@ def parse_args(parser):
 class FilenamedLoader(TextMelLoader):
     def __init__(self, filenames, *args, **kwargs):
         super(FilenamedLoader, self).__init__(*args, **kwargs)
+        self.tp = TextProcessing(args[-1].symbol_set, args[-1].text_cleaners)
         self.filenames = filenames
 
     def __getitem__(self, index):
@@ -211,6 +215,8 @@ def main():
 
     filenames = [Path(l.split('|')[0]).stem
                  for l in open(args.wav_text_filelist, 'r')]
+    # Compatibility with Tacotron2 Data loader
+    args.n_speakers = 1
     dataset = FilenamedLoader(filenames, args.dataset_path, args.wav_text_filelist,
                               args, load_mel_from_disk=False)
     # TextMelCollate supports only n_frames_per_step=1

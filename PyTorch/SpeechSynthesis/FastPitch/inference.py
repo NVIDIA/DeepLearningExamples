@@ -45,7 +45,7 @@ from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
 from common import utils
 from common.tb_dllogger import (init_inference_metadata, stdout_metric_format,
                                 unique_log_fpath)
-from common.text import text_to_sequence
+from common.text.text_processing import TextProcessing
 from pitch_transform import pitch_transform_custom
 from waveglow import model as glow
 from waveglow.denoiser import Denoiser
@@ -92,9 +92,11 @@ def parse_args(parser):
                         help='Use EMA averaged model (if saved in checkpoints)')
     parser.add_argument('--dataset-path', type=str,
                         help='Path to dataset (for loading extra data fields)')
+    parser.add_argument('--speaker', type=int, default=0,
+                        help='Speaker ID for a multi-speaker model')
 
     transform = parser.add_argument_group('transform')
-    transform.add_argument('--fade-out', type=int, default=5,
+    transform.add_argument('--fade-out', type=int, default=10,
                            help='Number of fadeout frames at the end')
     transform.add_argument('--pace', type=float, default=1.0,
                            help='Adjust the pace of speech')
@@ -108,6 +110,18 @@ def parse_args(parser):
                            help='Raise/lower the pitch by <hz>')
     transform.add_argument('--pitch-transform-custom', action='store_true',
                            help='Apply the transform from pitch_transform.py')
+
+    text_processing = parser.add_argument_group('Text processing parameters')
+    text_processing.add_argument('--text-cleaners', nargs='*',
+                                 default=['english_cleaners'], type=str,
+                                 help='Type of text cleaners for input text')
+    text_processing.add_argument('--symbol-set', type=str, default='english_basic',
+                                 help='Define symbol set for input text')
+
+    cond = parser.add_argument_group('conditioning on additional attributes')
+    cond.add_argument('--n-speakers', type=int, default=1,
+                      help='Number of speakers in the model.')
+
     return parser
 
 
@@ -138,7 +152,7 @@ def load_and_setup_model(model_name, parser, checkpoint, amp, device,
 
             if any(key.startswith('module.') for key in sd):
                 sd = {k.replace('module.', ''): v for k,v in sd.items()}
-            status += ' ' + str(model.load_state_dict(sd, strict=False))
+            status += ' ' + str(model.load_state_dict(sd, strict=True))
         else:
             model = checkpoint_data['model']
         print(f'Loaded {model_name}{status}')
@@ -162,10 +176,13 @@ def load_fields(fpath):
     return {c:f for c, f in zip(columns, fields)}
 
 
-def prepare_input_sequence(fields, device, batch_size=128, dataset=None,
-                           load_mels=False, load_pitch=False):
-    fields['text'] = [torch.LongTensor(text_to_sequence(t, ['english_cleaners']))
-                      for t in fields['text']]
+def prepare_input_sequence(fields, device, symbol_set, text_cleaners,
+                           batch_size=128, dataset=None, load_mels=False,
+                           load_pitch=False):
+    tp = TextProcessing(symbol_set, text_cleaners)
+
+    fields['text'] = [torch.LongTensor(tp.encode_text(text))
+                      for text in fields['text']]
     order = np.argsort([-t.size(0) for t in fields['text']])
 
     fields['text'] = [fields['text'][i] for i in order]
@@ -206,7 +223,6 @@ def prepare_input_sequence(fields, device, batch_size=128, dataset=None,
 
 
 def build_pitch_transformation(args):
-
     if args.pitch_transform_custom:
         def custom_(pitch, pitch_lens, mean, std):
             return (pitch_transform_custom(pitch * std + mean, pitch_lens)
@@ -262,7 +278,7 @@ def main():
                             StdOutBackend(Verbosity.VERBOSE,
                                           metric_format=stdout_metric_format)])
     init_inference_metadata()
-    [DLLogger.log("PARAMETER", {k:v}) for k,v in vars(args).items()]
+    [DLLogger.log("PARAMETER", {k: v}) for k, v in vars(args).items()]
 
     device = torch.device('cuda' if args.cuda else 'cpu')
 
@@ -293,8 +309,8 @@ def main():
 
     fields = load_fields(args.input)
     batches = prepare_input_sequence(
-        fields, device, args.batch_size, args.dataset_path,
-        load_mels=(generator is None))
+        fields, device, args.symbol_set, args.text_cleaners, args.batch_size,
+        args.dataset_path, load_mels=(generator is None))
 
     if args.include_warmup:
         # Use real data rather than synthetic - FastPitch predicts len
@@ -311,11 +327,13 @@ def main():
     waveglow_measures = MeasureTime()
 
     gen_kw = {'pace': args.pace,
+              'speaker': args.speaker,
               'pitch_tgt': None,
               'pitch_transform': build_pitch_transformation(args)}
 
     if args.torchscript:
         gen_kw.pop('pitch_transform')
+        print('NOTE: Pitch transforms are disabled with TorchScript')
 
     all_utterances = 0
     all_samples = 0
@@ -323,11 +341,10 @@ def main():
     all_frames = 0
 
     reps = args.repeats
-    log_enabled = True  # reps == 1
+    log_enabled = reps == 1
     log = lambda s, d: DLLogger.log(step=s, data=d) if log_enabled else None
 
-    # for repeat in (tqdm.tqdm(range(reps)) if reps > 1 else range(reps)):
-    for rep in range(reps):
+    for rep in (tqdm.tqdm(range(reps)) if reps > 1 else range(reps)):
         for b in batches:
             if generator is None:
                 log(rep, {'Synthesizing from ground truth mels'})
@@ -348,7 +365,7 @@ def main():
                     audios = waveglow(mel, sigma=args.sigma_infer)
                     audios = denoiser(audios.float(),
                                       strength=args.denoising_strength
-                                     ).squeeze(1)
+                                      ).squeeze(1)
 
                 all_utterances += len(audios)
                 all_samples += sum(audio.size(0) for audio in audios)
@@ -367,7 +384,7 @@ def main():
                             fade_w = torch.linspace(1.0, 0.0, fade_len)
                             audio[-fade_len:] *= fade_w.to(audio.device)
 
-                        audio = audio/torch.max(torch.abs(audio))
+                        audio = audio / torch.max(torch.abs(audio))
                         fname = b['output'][i] if 'output' in b else f'audio_{i}.wav'
                         audio_path = Path(args.output, fname)
                         write(audio_path, args.sampling_rate, audio.cpu().numpy())

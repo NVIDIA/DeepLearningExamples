@@ -19,7 +19,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from common.utils import mask_from_lens
-from common.text.symbols import pad_idx, symbols
 
 
 class NoOp(nn.Module):
@@ -255,20 +254,20 @@ class TransformerLayer(nn.Module):
 
 
 class FFTransformer(nn.Module):
-    pad_idx = 0  # XXX
-
     def __init__(self, n_layer, n_head, d_model, d_head, d_inner, kernel_size,
-                 dropout, dropatt, dropemb=0.0, embed_input=True, d_embed=None,
-                 pre_lnorm=False):
+                 dropout, dropatt, dropemb=0.0, embed_input=True,
+                 n_embed=None, d_embed=None, padding_idx=0, pre_lnorm=False):
         super(FFTransformer, self).__init__()
         self.d_model = d_model
         self.n_head = n_head
         self.d_head = d_head
+        self.padding_idx = padding_idx
+        self.n_embed = n_embed
 
         self.embed_input = embed_input
         if embed_input:
-            self.word_emb = nn.Embedding(len(symbols), d_embed or d_model,
-                                         padding_idx=FFTransformer.pad_idx)
+            self.word_emb = nn.Embedding(n_embed, d_embed or d_model,
+                                         padding_idx=self.padding_idx)
         else:
             self.word_emb = NoOp()
 
@@ -283,19 +282,23 @@ class FFTransformer(nn.Module):
                     dropatt=dropatt, pre_lnorm=pre_lnorm)
             )
 
-    def forward(self, dec_inp, seq_lens: Optional[torch.Tensor] = None):
-        if self.embed_input:
-            inp = self.word_emb(dec_inp)
-            # [bsz x L x 1]
-            # mask = (dec_inp != FFTransformer.pad_idx).unsqueeze(2)
-            mask = (dec_inp != 0).unsqueeze(2)
-        else:
+    def forward(self, dec_inp, seq_lens: Optional[torch.Tensor] = None,
+                conditioning: Optional[torch.Tensor] = None):
+        if not self.embed_input:
             inp = dec_inp
             assert seq_lens is not None
             mask = mask_from_lens(seq_lens).unsqueeze(2)
+        else:
+            inp = self.word_emb(dec_inp)
+            # [bsz x L x 1]
+            mask = (dec_inp != self.padding_idx).unsqueeze(2)
+
         pos_seq = torch.arange(inp.size(1), device=inp.device, dtype=inp.dtype)
         pos_emb = self.pos_emb(pos_seq) * mask
-        out = self.drop(inp + pos_emb)
+        if conditioning is not None:
+            out = self.drop(inp + pos_emb + conditioning)
+        else:
+            out = self.drop(inp + pos_emb)
 
         for layer in self.layers:
             out = layer(out, mask=mask)

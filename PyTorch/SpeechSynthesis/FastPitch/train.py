@@ -108,14 +108,20 @@ def parse_args(parser):
 
     dataset = parser.add_argument_group('dataset parameters')
     dataset.add_argument('--training-files', type=str, required=True,
-                         help='Path to training filelist')
+                         help='Path to training filelist. Separate multiple paths with commas.')
     dataset.add_argument('--validation-files', type=str, required=True,
-                         help='Path to validation filelist')
+                         help='Path to validation filelist. Separate multiple paths with commas.')
     dataset.add_argument('--pitch-mean-std-file', type=str, default=None,
                          help='Path to pitch stats to be stored in the model')
     dataset.add_argument('--text-cleaners', nargs='*',
                          default=['english_cleaners'], type=str,
                          help='Type of text cleaners for input text')
+    dataset.add_argument('--symbol-set', type=str, default='english_basic',
+                         help='Define symbol set for input text')
+
+    cond = parser.add_argument_group('conditioning on additional attributes')
+    cond.add_argument('--n-speakers', type=int, default=1,
+                      help='Condition on speaker, value > 1 enables trainable speaker embeddings.')
 
     distributed = parser.add_argument_group('distributed setup')
     distributed.add_argument('--local_rank', type=int, default=os.getenv('LOCAL_RANK', 0),
@@ -316,8 +322,6 @@ def main():
     model = models.get_model('FastPitch', model_config, device)
 
     # Store pitch mean/std as params to translate from Hz during inference
-    fpath = common.utils.stats_filename(
-        args.dataset_path, args.training_files, 'pitch_char')
     with open(args.pitch_mean_std_file, 'r') as f:
         stats = json.load(f)
     model.pitch_mean[0] = stats['mean']
@@ -529,6 +533,13 @@ def main():
     )
     validate(model, None, total_iter, criterion, valset, args.batch_size,
              collate_fn, distributed_run, batch_to_gpu, use_gt_durations=True)
+
+    if (epoch > 0 and args.epochs_per_checkpoint > 0 and
+        (epoch % args.epochs_per_checkpoint != 0) and args.local_rank == 0):
+        checkpoint_path = os.path.join(
+            args.output, f"FastPitch_checkpoint_{epoch}.pt")
+        save_checkpoint(args.local_rank, model, ema_model, optimizer, epoch,
+                        total_iter, model_config, args.amp, checkpoint_path)
 
 
 if __name__ == '__main__':
