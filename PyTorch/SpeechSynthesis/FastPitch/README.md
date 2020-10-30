@@ -488,11 +488,11 @@ The `scripts/train.sh` script is configured for 8x GPU with at least 16GB of mem
     ```
 In a single accumulated step, there are `batch_size x gradient_accumulation_steps x GPUs = 256` examples being processed in parallel. With a smaller number of GPUs, increase `--gradient_accumulation_steps` to keep this relation satisfied, e.g., through env variables
     ```bash
-    NGPU=4 GRAD_ACC=2 bash scripts/train.sh
+    NUM_GPUS=4 GRAD_ACCUMULATION=2 bash scripts/train.sh
     ```
 With automatic mixed precision (AMP), a larger batch size fits in 16GB of memory:
     ```bash
-    NGPU=4 GRAD_ACC=1 BS=64 AMP=true bash scripts/train.sh
+    NUM_GPUS=4 GRAD_ACCUMULATION=1 BS=64 AMP=true bash scripts/train.sh
     ```
 
 ### Inference process
@@ -545,18 +545,18 @@ To benchmark the training performance on a specific batch size, run:
 
 * NVIDIA DGX A100 (8x A100 40GB)
     ```bash
-        AMP=true NGPU=1 BS=128 GRAD_ACC=2 EPOCHS=10 bash scripts/train.sh
-        AMP=true NGPU=8 BS=32 GRAD_ACC=1 EPOCHS=10 bash scripts/train.sh
-        NGPU=1 BS=128 GRAD_ACC=2 EPOCHS=10 bash scripts/train.sh
-        NGPU=8 BS=32 GRAD_ACC=1 EPOCHS=10 bash scripts/train.sh
+        AMP=true NUM_GPUS=1 BS=128 GRAD_ACCUMULATION=2 EPOCHS=10 bash scripts/train.sh
+        AMP=true NUM_GPUS=8 BS=32 GRAD_ACCUMULATION=1 EPOCHS=10 bash scripts/train.sh
+        NUM_GPUS=1 BS=128 GRAD_ACCUMULATION=2 EPOCHS=10 bash scripts/train.sh
+        NUM_GPUS=8 BS=32 GRAD_ACCUMULATION=1 EPOCHS=10 bash scripts/train.sh
     ```
 
 * NVIDIA DGX-1 (8x V100 16GB)
     ```bash
-        AMP=true NGPU=1 BS=64 GRAD_ACC=4 EPOCHS=10 bash scripts/train.sh
-        AMP=true NGPU=8 BS=32 GRAD_ACC=1 EPOCHS=10 bash scripts/train.sh
-        NGPU=1 BS=32 GRAD_ACC=8 EPOCHS=10 bash scripts/train.sh
-        NGPU=8 BS=32 GRAD_ACC=1 EPOCHS=10 bash scripts/train.sh
+        AMP=true NUM_GPUS=1 BS=64 GRAD_ACCUMULATION=4 EPOCHS=10 bash scripts/train.sh
+        AMP=true NUM_GPUS=8 BS=32 GRAD_ACCUMULATION=1 EPOCHS=10 bash scripts/train.sh
+        NUM_GPUS=1 BS=32 GRAD_ACCUMULATION=8 EPOCHS=10 bash scripts/train.sh
+        NUM_GPUS=8 BS=32 GRAD_ACCUMULATION=1 EPOCHS=10 bash scripts/train.sh
     ```
 
 Each of these scripts runs for 10 epochs and for each epoch measures the
@@ -569,12 +569,12 @@ To benchmark the inference performance on a specific batch size, run:
 
 * For FP16
     ```bash
-    AMP=true BS_SEQ=”1 4 8” REPEATS=100 bash scripts/inference_benchmark.sh
+    AMP=true BS_SEQUENCE=”1 4 8” REPEATS=100 bash scripts/inference_benchmark.sh
     ```
 
 * For FP32 or TF32
     ```bash
-    BS_SEQ=”1 4 8” REPEATS=100 bash scripts/inference_benchmark.sh
+    BS_SEQUENCE=”1 4 8” REPEATS=100 bash scripts/inference_benchmark.sh
     ```
 
 The output log files will contain performance numbers for the FastPitch model
@@ -725,6 +725,10 @@ The input utterance has 128 characters, synthesized audio has 8.05 s.
 ## Release notes
 
 ### Changelog
+
+October 2020
+- Added multispeaker capabilities
+- Updated text processing module
 
 June 2020
 - Updated performance tables to include A100 results

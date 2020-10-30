@@ -2,19 +2,26 @@
 
 set -e
 
-MODEL_DIR=${MODEL_DIR:-"pretrained_models"}
-WAVEG="waveglow_1076430_14000_amp"
-WAVEG_URL="https://api.ngc.nvidia.com/v2/models/nvidia/waveglow256pyt_fp16/versions/2/zip"
+: ${MODEL_DIR:="pretrained_models/waveglow"}
+MODEL="nvidia_waveglow256pyt_fp16"
+MODEL_ZIP="waveglow_ckpt_amp_256_20.01.0.zip"
+MODEL_URL="https://api.ngc.nvidia.com/v2/models/nvidia/waveglow_ckpt_amp_256/versions/20.01.0/zip"
 
-mkdir -p "$MODEL_DIR"/waveglow
+mkdir -p "$MODEL_DIR"
 
-if [ ! -f "${MODEL_DIR}/waveglow/${WAVEG}.zip" ]; then
-  echo "Downloading ${WAVEG}.zip ..."
-  wget -qO "${MODEL_DIR}/waveglow/${WAVEG}.zip" ${WAVEG_URL}
+if [ ! -f "${MODEL_DIR}/${MODEL_ZIP}" ]; then
+  echo "Downloading ${MODEL_ZIP} ..."
+  wget --content-disposition -qO ${MODEL_DIR}/${MODEL_ZIP} ${MODEL_URL} \
+       || echo "ERROR: Failed to download ${MODEL_ZIP} from NGC" && exit 1
 fi
 
-if [ ! -f "${MODEL_DIR}/waveglow/${WAVEG}.pt" ]; then
-  echo "Extracting ${WAVEG} ..."
-  unzip -qo "${MODEL_DIR}/waveglow/${WAVEG}.zip" -d ${MODEL_DIR}/waveglow/
-  mv "${MODEL_DIR}/waveglow/${WAVEG}" "${MODEL_DIR}/waveglow/${WAVEG}.pt"
+if [ ! -f "${MODEL_DIR}/${MODEL}.pt" ]; then
+  echo "Extracting ${MODEL} ..."
+  unzip -qo ${MODEL_DIR}/${MODEL_ZIP} -d ${MODEL_DIR} \
+        || echo "ERROR: Failed to extract ${MODEL_ZIP}" && exit 1
+
+  echo "OK"
+
+else
+  echo "${MODEL}.pt already downloaded."
 fi
