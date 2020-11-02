@@ -1,7 +1,7 @@
 # Path
 dataset_path: "/workspace/fastspeech/LJSpeech-1.1"
 tacotron2_path: "/workspace/fastspeech/tacotron2_statedict.pt"
-waveglow_path: "/workspace/fastspeech/waveglow_256channels.pt"
+waveglow_path: "/workspace/fastspeech/nvidia_waveglow256pyt_fp16"
 mels_path: "/workspace/fastspeech/mels_ljspeech1.1"
 aligns_path: "/workspace/fastspeech/aligns_ljspeech1.1"
 log_path: "/workspace/fastspeech/logs"

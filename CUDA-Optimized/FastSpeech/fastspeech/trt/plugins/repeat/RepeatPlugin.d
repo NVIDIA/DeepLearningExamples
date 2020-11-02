@@ -143,6 +143,8 @@ RepeatPlugin.o : RepeatPlugin.cu \
     /usr/local/cuda/include/sm_61_intrinsics.hpp \
     /usr/local/cuda/include/crt/sm_70_rt.h \
     /usr/local/cuda/include/crt/sm_70_rt.hpp \
+    /usr/local/cuda/include/crt/sm_80_rt.h \
+    /usr/local/cuda/include/crt/sm_80_rt.hpp \
     /usr/local/cuda/include/surface_functions.h \
     /usr/local/cuda/include/texture_fetch_functions.h \
     /usr/local/cuda/include/texture_indirect_functions.h \
@@ -274,75 +276,68 @@ RepeatPlugin.o : RepeatPlugin.cu \
     /usr/include/c++/7/bits/atomic_base.h \
     /usr/include/c++/7/bits/atomic_lockfree_defines.h \
     /usr/include/c++/7/backward/auto_ptr.h \
-    ../../../../cub/cub/cub.cuh \
-    ../../../../cub/cub/block/block_histogram.cuh \
-    ../../../../cub/cub/block/specializations/block_histogram_sort.cuh \
-    ../../../../cub/cub/block/specializations/../../block/block_radix_sort.cuh \
-    ../../../../cub/cub/block/specializations/../../block/block_exchange.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../util_ptx.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../util_type.cuh \
+    /usr/local/cuda/include/cub/cub.cuh \
+    /usr/local/cuda/include/cub/config.cuh \
+    /usr/local/cuda/include/cub/util_arch.cuh \
+    /usr/local/cuda/include/cub/util_cpp_dialect.cuh \
+    /usr/local/cuda/include/cub/util_compiler.cuh \
+    /usr/local/cuda/include/cub/util_namespace.cuh \
+    /usr/local/cuda/include/cub/version.cuh \
+    /usr/local/cuda/include/cub/util_macro.cuh \
+    /usr/local/cuda/include/cub/util_deprecated.cuh \
+    /usr/local/cuda/include/cub/block/block_histogram.cuh \
+    /usr/local/cuda/include/cub/block/specializations/block_histogram_sort.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/block_radix_sort.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/block_exchange.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/../util_ptx.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/../util_type.cuh \
     /usr/include/c++/7/cfloat \
     /usr/lib/gcc/x86_64-linux-gnu/7/include/float.h \
-    ../../../../cub/cub/block/specializations/../../block/../util_macro.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../util_namespace.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../util_arch.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../util_debug.cuh \
-    ../../../../cub/cub/block/specializations/../../block/block_radix_rank.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../thread/thread_reduce.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../thread/../thread/thread_operators.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../thread/thread_scan.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../block/block_scan.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../block/specializations/block_scan_raking.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../block/specializations/../../block/block_raking_layout.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../block/specializations/../../warp/warp_scan.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../block/specializations/../../warp/specializations/warp_scan_shfl.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../block/specializations/../../warp/specializations/warp_scan_smem.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../block/specializations/../../warp/specializations/../../thread/thread_load.cuh \
-    /usr/local/cuda/include/cuda.h \
+    /usr/local/cuda/include/cub/block/specializations/../../block/../util_debug.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/block_radix_rank.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/../thread/thread_reduce.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/../thread/../thread/thread_operators.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/../thread/thread_scan.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/../block/block_scan.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/../block/specializations/block_scan_raking.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/../block/specializations/../../block/block_raking_layout.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/../block/specializations/../../warp/warp_scan.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/../block/specializations/../../warp/specializations/warp_scan_shfl.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/../block/specializations/../../warp/specializations/warp_scan_smem.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/../block/specializations/../../warp/specializations/../../thread/thread_load.cuh \
     /usr/include/c++/7/iterator \
     /usr/include/c++/7/bits/stream_iterator.h \
-    ../../../../cub/cub/block/specializations/../../block/../block/specializations/../../warp/specializations/../../thread/thread_store.cuh \
-    ../../../../cub/cub/block/specializations/../../block/../block/specializations/block_scan_warp_scans.cuh \
-    ../../../../cub/cub/block/specializations/../../block/block_discontinuity.cuh \
-    ../../../../cub/cub/block/specializations/block_histogram_atomic.cuh \
-    ../../../../cub/cub/block/block_load.cuh \
-    ../../../../cub/cub/block/../iterator/cache_modified_input_iterator.cuh \
-    ../../../../cub/cub/block/../iterator/../util_device.cuh \
-    ../../../../cub/cub/block/block_reduce.cuh \
-    ../../../../cub/cub/block/specializations/block_reduce_raking.cuh \
-    ../../../../cub/cub/block/specializations/../../warp/warp_reduce.cuh \
-    ../../../../cub/cub/block/specializations/../../warp/specializations/warp_reduce_shfl.cuh \
-    ../../../../cub/cub/block/specializations/../../warp/specializations/warp_reduce_smem.cuh \
-    ../../../../cub/cub/block/specializations/block_reduce_raking_commutative_only.cuh \
-    ../../../../cub/cub/block/specializations/block_reduce_warp_reductions.cuh \
-    ../../../../cub/cub/block/block_store.cuh \
-    ../../../../cub/cub/device/device_histogram.cuh \
-    ../../../../cub/cub/device/dispatch/dispatch_histogram.cuh \
-    ../../../../cub/cub/device/dispatch/../../agent/agent_histogram.cuh \
-    ../../../../cub/cub/device/dispatch/../../agent/../grid/grid_queue.cuh \
-    ../../../../cub/cub/device/dispatch/../../thread/thread_search.cuh \
-    ../../../../cub/cub/device/device_partition.cuh \
-    ../../../../cub/cub/device/dispatch/dispatch_select_if.cuh \
-    ../../../../cub/cub/device/dispatch/dispatch_scan.cuh \
-    ../../../../cub/cub/device/dispatch/../../agent/agent_scan.cuh \
-    ../../../../cub/cub/device/dispatch/../../agent/single_pass_scan_operators.cuh \
-    ../../../../cub/cub/device/dispatch/../../agent/agent_select_if.cuh \
-    ../../../../cub/cub/device/device_radix_sort.cuh \
-    ../../../../cub/cub/device/dispatch/dispatch_radix_sort.cuh \
-    ../../../../cub/cub/device/dispatch/../../agent/agent_radix_sort_upsweep.cuh \
-    ../../../../cub/cub/device/dispatch/../../agent/agent_radix_sort_downsweep.cuh \
-    ../../../../cub/cub/device/dispatch/../../grid/grid_even_share.cuh \
-    ../../../../cub/cub/device/dispatch/../../grid/grid_mapping.cuh \
-    ../../../../cub/cub/device/device_reduce.cuh \
-    ../../../../cub/cub/device/../iterator/arg_index_input_iterator.cuh \
-    /usr/local/cuda/include/thrust/version.h \
-    /usr/local/cuda/include/thrust/iterator/iterator_facade.h \
+    /usr/local/cuda/include/cub/block/specializations/../../block/../block/specializations/../../warp/specializations/../../thread/thread_store.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/../block/specializations/block_scan_warp_scans.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/block_discontinuity.cuh \
+    /usr/local/cuda/include/cub/block/specializations/block_histogram_atomic.cuh \
+    /usr/local/cuda/include/cub/block/block_load.cuh \
+    /usr/local/cuda/include/cub/block/../iterator/cache_modified_input_iterator.cuh \
+    /usr/local/cuda/include/cub/block/../iterator/../util_device.cuh \
+    /usr/include/c++/7/atomic \
+    /usr/include/c++/7/cassert \
+    /usr/local/cuda/include/cub/block/block_reduce.cuh \
+    /usr/local/cuda/include/cub/block/specializations/block_reduce_raking.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../warp/warp_reduce.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../warp/specializations/warp_reduce_shfl.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../warp/specializations/warp_reduce_smem.cuh \
+    /usr/local/cuda/include/cub/block/specializations/block_reduce_raking_commutative_only.cuh \
+    /usr/local/cuda/include/cub/block/specializations/block_reduce_warp_reductions.cuh \
+    /usr/local/cuda/include/cub/block/block_store.cuh \
+    /usr/local/cuda/include/cub/device/device_histogram.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/dispatch_histogram.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_histogram.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../grid/grid_queue.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../thread/thread_search.cuh \
+    /usr/local/cuda/include/thrust/system/cuda/detail/core/triple_chevron_launch.h \
     /usr/local/cuda/include/thrust/detail/config.h \
+    /usr/local/cuda/include/thrust/version.h \
     /usr/local/cuda/include/thrust/detail/config/config.h \
     /usr/local/cuda/include/thrust/detail/config/simple_defines.h \
     /usr/local/cuda/include/thrust/detail/config/compiler.h \
     /usr/local/cuda/include/thrust/detail/config/cpp_dialect.h \
     /usr/local/cuda/include/thrust/detail/config/cpp_compatibility.h \
+    /usr/local/cuda/include/thrust/detail/config/deprecated.h \
     /usr/local/cuda/include/thrust/detail/config/host_system.h \
     /usr/local/cuda/include/thrust/detail/config/device_system.h \
     /usr/local/cuda/include/thrust/detail/config/host_device.h \
@@ -350,9 +345,11 @@ RepeatPlugin.o : RepeatPlugin.cu \
     /usr/local/cuda/include/thrust/detail/config/forceinline.h \
     /usr/local/cuda/include/thrust/detail/config/exec_check_disable.h \
     /usr/local/cuda/include/thrust/detail/config/global_workarounds.h \
-    /usr/local/cuda/include/thrust/detail/type_traits.h \
-    /usr/local/cuda/include/thrust/detail/type_traits/has_trivial_assign.h \
-    /usr/local/cuda/include/thrust/iterator/detail/iterator_facade_category.h \
+    /usr/local/cuda/include/thrust/system/cuda/detail/core/alignment.h \
+    /usr/local/cuda/include/thrust/system/cuda/detail/util.h \
+    /usr/local/cuda/include/thrust/iterator/iterator_traits.h \
+    /usr/local/cuda/include/thrust/type_traits/void_t.h \
+    /usr/local/cuda/include/thrust/iterator/detail/iterator_traversal_tags.h \
     /usr/local/cuda/include/thrust/iterator/detail/host_system_tag.h \
     /usr/local/cuda/include/thrust/system/cpp/detail/execution_policy.h \
     /usr/local/cuda/include/thrust/system/detail/sequential/execution_policy.h \
@@ -363,6 +360,8 @@ RepeatPlugin.o : RepeatPlugin.cu \
     /usr/local/cuda/include/thrust/system/cuda/config.h \
     /usr/local/cuda/include/thrust/detail/allocator_aware_execution_policy.h \
     /usr/local/cuda/include/thrust/detail/execute_with_allocator_fwd.h \
+    /usr/local/cuda/include/thrust/detail/type_traits.h \
+    /usr/local/cuda/include/thrust/detail/type_traits/has_trivial_assign.h \
     /usr/local/cuda/include/thrust/detail/execute_with_dependencies.h \
     /usr/local/cuda/include/thrust/detail/cpp11_required.h \
     /usr/local/cuda/include/thrust/detail/type_deduction.h \
@@ -370,35 +369,98 @@ RepeatPlugin.o : RepeatPlugin.cu \
     /usr/local/cuda/include/thrust/type_traits/remove_cvref.h \
     /usr/local/cuda/include/thrust/detail/alignment.h \
     /usr/local/cuda/include/thrust/detail/dependencies_aware_execution_policy.h \
+    /usr/local/cuda/include/thrust/iterator/detail/iterator_traits.inl \
     /usr/local/cuda/include/thrust/iterator/iterator_categories.h \
     /usr/local/cuda/include/thrust/iterator/detail/iterator_category_with_system_and_traversal.h \
-    /usr/local/cuda/include/thrust/iterator/detail/iterator_traversal_tags.h \
     /usr/local/cuda/include/thrust/iterator/detail/universal_categories.h \
-    /usr/local/cuda/include/thrust/iterator/detail/is_iterator_category.h \
     /usr/local/cuda/include/thrust/iterator/detail/iterator_category_to_traversal.h \
     /usr/local/cuda/include/thrust/iterator/detail/iterator_category_to_system.h \
+    /usr/local/cuda/include/thrust/system_error.h \
+    /usr/local/cuda/include/thrust/system/error_code.h \
+    /usr/local/cuda/include/thrust/system/detail/errno.h \
+    /usr/local/cuda/include/thrust/system/detail/error_category.inl \
+    /usr/local/cuda/include/thrust/functional.h \
+    /usr/include/c++/7/functional \
+    /usr/include/c++/7/bits/std_function.h \
+    /usr/local/cuda/include/thrust/detail/functional/placeholder.h \
+    /usr/local/cuda/include/thrust/detail/functional/actor.h \
+    /usr/local/cuda/include/thrust/tuple.h \
+    /usr/local/cuda/include/thrust/detail/tuple.inl \
+    /usr/local/cuda/include/thrust/detail/swap.h \
+    /usr/local/cuda/include/thrust/pair.h \
+    /usr/local/cuda/include/thrust/detail/pair.inl \
+    /usr/local/cuda/include/thrust/detail/functional/value.h \
+    /usr/local/cuda/include/thrust/detail/functional/composite.h \
+    /usr/local/cuda/include/thrust/detail/functional/operators/assignment_operator.h \
+    /usr/local/cuda/include/thrust/detail/functional/operators/operator_adaptors.h \
+    /usr/local/cuda/include/thrust/detail/type_traits/result_of_adaptable_function.h \
+    /usr/local/cuda/include/thrust/detail/type_traits/function_traits.h \
+    /usr/local/cuda/include/thrust/detail/type_traits/has_nested_type.h \
+    /usr/local/cuda/include/thrust/detail/functional/actor.inl \
+    /usr/local/cuda/include/thrust/detail/functional/argument.h \
+    /usr/local/cuda/include/thrust/detail/functional.inl \
+    /usr/local/cuda/include/thrust/detail/functional/operators.h \
+    /usr/local/cuda/include/thrust/detail/functional/operators/arithmetic_operators.h \
+    /usr/local/cuda/include/thrust/detail/functional/operators/relational_operators.h \
+    /usr/local/cuda/include/thrust/detail/functional/operators/logical_operators.h \
+    /usr/local/cuda/include/thrust/detail/functional/operators/bitwise_operators.h \
+    /usr/local/cuda/include/thrust/detail/functional/operators/compound_assignment_operators.h \
+    /usr/local/cuda/include/thrust/system/detail/error_code.inl \
+    /usr/local/cuda/include/thrust/system/detail/error_condition.inl \
+    /usr/local/cuda/include/thrust/system/system_error.h \
+    /usr/local/cuda/include/thrust/system/detail/system_error.inl \
+    /usr/local/cuda/include/thrust/system/cuda/error.h \
+    /usr/local/cuda/include/thrust/system/cuda/detail/guarded_driver_types.h \
+    /usr/local/cuda/include/thrust/system/cuda/detail/error.inl \
+    /usr/local/cuda/include/thrust/system/cuda/detail/guarded_cuda_runtime_api.h \
+    /usr/local/cuda/include/cub/device/device_partition.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/dispatch_select_if.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/dispatch_scan.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_scan.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/single_pass_scan_operators.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_select_if.cuh \
+    /usr/local/cuda/include/cub/device/device_radix_sort.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/dispatch_radix_sort.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_radix_sort_upsweep.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_radix_sort_downsweep.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../grid/grid_even_share.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../grid/grid_mapping.cuh \
+    /usr/local/cuda/include/cub/device/device_reduce.cuh \
+    /usr/local/cuda/include/cub/device/../iterator/arg_index_input_iterator.cuh \
+    /usr/local/cuda/include/thrust/iterator/iterator_facade.h \
+    /usr/local/cuda/include/thrust/iterator/detail/iterator_facade_category.h \
+    /usr/local/cuda/include/thrust/iterator/detail/is_iterator_category.h \
     /usr/local/cuda/include/thrust/iterator/detail/distance_from_result.h \
-    /usr/local/cuda/include/thrust/iterator/iterator_traits.h \
-    /usr/local/cuda/include/thrust/type_traits/void_t.h \
-    /usr/local/cuda/include/thrust/iterator/detail/iterator_traits.inl \
-    ../../../../cub/cub/device/dispatch/dispatch_reduce.cuh \
-    ../../../../cub/cub/device/dispatch/../../agent/agent_reduce.cuh \
-    ../../../../cub/cub/device/dispatch/dispatch_reduce_by_key.cuh \
-    ../../../../cub/cub/device/dispatch/../../agent/agent_reduce_by_key.cuh \
-    ../../../../cub/cub/device/dispatch/../../agent/../iterator/constant_input_iterator.cuh \
-    ../../../../cub/cub/device/device_run_length_encode.cuh \
-    ../../../../cub/cub/device/dispatch/dispatch_rle.cuh \
-    ../../../../cub/cub/device/dispatch/../../agent/agent_rle.cuh \
-    ../../../../cub/cub/device/device_scan.cuh \
-    ../../../../cub/cub/device/device_segmented_radix_sort.cuh \
-    ../../../../cub/cub/device/device_segmented_reduce.cuh \
-    ../../../../cub/cub/device/device_select.cuh \
-    ../../../../cub/cub/device/device_spmv.cuh \
-    ../../../../cub/cub/device/dispatch/dispatch_spmv_orig.cuh \
-    ../../../../cub/cub/device/dispatch/../../agent/agent_segment_fixup.cuh \
-    ../../../../cub/cub/device/dispatch/../../agent/agent_spmv_orig.cuh \
-    ../../../../cub/cub/device/dispatch/../../agent/../iterator/counting_input_iterator.cuh \
-    ../../../../cub/cub/device/dispatch/../../agent/../iterator/tex_ref_input_iterator.cuh \
-    ../../../../cub/cub/iterator/cache_modified_output_iterator.cuh \
-    ../../../../cub/cub/iterator/tex_obj_input_iterator.cuh \
-    ../../../../cub/cub/iterator/transform_input_iterator.cuh
+    /usr/local/cuda/include/cub/device/dispatch/dispatch_reduce.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_reduce.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/dispatch_reduce_by_key.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_reduce_by_key.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../iterator/constant_input_iterator.cuh \
+    /usr/local/cuda/include/cub/device/device_run_length_encode.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/dispatch_rle.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_rle.cuh \
+    /usr/local/cuda/include/cub/device/device_scan.cuh \
+    /usr/local/cuda/include/cub/device/device_segmented_radix_sort.cuh \
+    /usr/local/cuda/include/cub/device/device_segmented_reduce.cuh \
+    /usr/local/cuda/include/cub/device/device_select.cuh \
+    /usr/local/cuda/include/cub/device/device_spmv.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/dispatch_spmv_orig.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_segment_fixup.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_spmv_orig.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../iterator/counting_input_iterator.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../iterator/tex_ref_input_iterator.cuh \
+    /usr/local/cuda/include/cub/iterator/cache_modified_output_iterator.cuh \
+    /usr/local/cuda/include/cub/iterator/discard_output_iterator.cuh \
+    /usr/local/cuda/include/cub/iterator/tex_obj_input_iterator.cuh \
+    /usr/local/cuda/include/cub/iterator/transform_input_iterator.cuh \
+    /usr/local/cuda/include/cub/util_allocator.cuh \
+    /usr/include/c++/7/set \
+    /usr/include/c++/7/bits/stl_tree.h \
+    /usr/include/c++/7/bits/stl_set.h \
+    /usr/include/c++/7/bits/stl_multiset.h \
+    /usr/include/c++/7/map \
+    /usr/include/c++/7/bits/stl_map.h \
+    /usr/include/c++/7/bits/stl_multimap.h \
+    /usr/local/cuda/include/cub/host/mutex.cuh \
+    /usr/include/c++/7/mutex \
+    /usr/include/c++/7/bits/std_mutex.h

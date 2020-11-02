@@ -22,6 +22,10 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+ARCH = "sm_70"  # Volta
+# ARCH = "sm_75"  # Turing
+# ARCH = "sm_80"  # Ampere
+
 CUDA_PATH  =/usr/local/cuda
 
 CUDA_INC_PATH = $(CUDA_PATH)/include
@@ -30,7 +34,7 @@ CUDA_COM_PATH = $(CUDA_PATH)/samples/common/inc
 GCC = g++
 NVCC = $(CUDA_PATH)/bin/nvcc
 CCFLAGS = -w -std=c++11 -DNDEBUG
-INCLUDES := -I. -I$(CUDA_COM_PATH) -I$(CUDA_INC_PATH) -I/usr/include
+INCLUDES := -I$(CUDA_COM_PATH) -I$(CUDA_INC_PATH) -I/usr/include
 
 CUDA_LIB_PATH  = $(CUDA_PATH)/lib64
 LDFLAGS := -L$(CUDA_LIB_PATH) 
@@ -56,7 +60,7 @@ clean:
 
 %.o: %.cu
 	$(NVCC) $(CCFLAGS) -M -MT $@ $(INCLUDES) -o $(@:.o=.d) $<
-	$(NVCC) $(CCFLAGS) $(INCLUDES) -Xcompiler -fPIC -arch=sm_70 -o $@ -c $<
+	$(NVCC) $(CCFLAGS) $(INCLUDES) -Xcompiler -fPIC -arch=$(ARCH) -o $@ -c $<
 
 $(SO):
 	$(GCC) $(CCFLAGS) -shared -o $@ $+ $(LDFLAGS)

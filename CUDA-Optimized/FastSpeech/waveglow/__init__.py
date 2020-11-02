@@ -21,28 +21,3 @@
 # ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-
-from setuptools import setup, find_packages
-
-
-def get_requirements(filename='requirements.txt'):
-    deps = []
-    with open(filename, 'r') as f:
-        for pkg in f.readlines():
-            if pkg.strip():
-                deps.append(pkg)
-    return deps
-
-
-setup(
-    name='fastspeech',
-    version='0.2.2',
-    description='FastSpeech training and inference in PyTorch and TensorRT',
-    author='Dabi Ahn',
-    keywords='tts',
-    packages=find_packages(),
-    install_requires=get_requirements(),
-    python_requires='>=3',
-    include_package_data=True
-)

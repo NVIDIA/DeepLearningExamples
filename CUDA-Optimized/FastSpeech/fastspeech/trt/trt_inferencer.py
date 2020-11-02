@@ -70,7 +70,7 @@ class TRTInferencer(object):
             # load checkpoint
             self.load(ckpt_file)
 
-        self.build_engine()
+        self.engine = self.build_engine()
 
     def __enter__(self):
         self.context = self.engine.create_execution_context()
