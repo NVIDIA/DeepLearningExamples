@@ -220,7 +220,7 @@ For the specifics concerning training and inference, see the [Advanced](#advance
     # make a directory for results, for example ./results
     mkdir <path/to/results/directory>
     # start the container with nvidia-docker
-    nvidia-docker run -it --rm \
+    nvidia-docker run -it --rm --gpus all \
         --shm-size=2g --ulimit memlock=-1 --ulimit stack=67108864 \
         -v <path/to/dataset/directory>:/data/ \
         -v <path/to/result/directory>:/results \
