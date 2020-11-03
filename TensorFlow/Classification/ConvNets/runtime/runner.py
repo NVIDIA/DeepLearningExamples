@@ -95,7 +95,7 @@ class Runner(object):
         #os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
         os.environ['TF_GPU_THREAD_MODE'] = 'gpu_private'
-        os.environ['TF_GPU_THREAD_COUNT'] = '1' if not hvd_utils.is_using_hvd() else str(hvd.size())
+        os.environ['TF_GPU_THREAD_COUNT'] = '2'
 
         os.environ['TF_USE_CUDNN_BATCHNORM_SPATIAL_PERSISTENT'] = '1'
 
@@ -246,11 +246,7 @@ class Runner(object):
 
         if mode == 'train':
             config.intra_op_parallelism_threads = 1  # Avoid pool of Eigen threads
-
-            if hvd_utils.is_using_hvd():
-                config.inter_op_parallelism_threads = max(2, (multiprocessing.cpu_count() // hvd.size()) - 2)
-            else:
-                config.inter_op_parallelism_threads = 4
+            config.inter_op_parallelism_threads = max(2, (multiprocessing.cpu_count() // max(hvd.size(), 8) - 2))
 
         return config
 
@@ -407,7 +403,7 @@ class Runner(object):
 
             if is_benchmark:
                 self.training_logging_hook = hooks.BenchmarkLoggingHook(
-                    global_batch_size=global_batch_size, warmup_steps=warmup_steps
+                    global_batch_size=global_batch_size, warmup_steps=warmup_steps, logging_steps=log_every_n_steps
                 )
             else:
                 self.training_logging_hook = hooks.TrainingLoggingHook(
@@ -415,7 +411,8 @@ class Runner(object):
                     num_steps=num_steps,
                     num_samples=num_samples,
                     num_epochs=num_epochs,
-                    steps_per_epoch=steps_per_epoch
+                    steps_per_epoch=steps_per_epoch,
+                    logging_steps=log_every_n_steps
                 )
             training_hooks.append(self.training_logging_hook)
 
@@ -446,10 +443,10 @@ class Runner(object):
             'symmetric': symmetric,
             'quant_delay': quant_delay
         }
-        
+
         if finetune_checkpoint:
-           estimator_params['finetune_checkpoint']=finetune_checkpoint
-        
+            estimator_params['finetune_checkpoint'] = finetune_checkpoint
+
         image_classifier = self._get_estimator(
             mode='train',
             run_params=estimator_params,
@@ -589,7 +586,9 @@ class Runner(object):
         eval_hooks = []
 
         if hvd.rank() == 0:
-            self.eval_logging_hook = hooks.BenchmarkLoggingHook(global_batch_size=batch_size, warmup_steps=warmup_steps)
+            self.eval_logging_hook = hooks.BenchmarkLoggingHook(
+                global_batch_size=batch_size, warmup_steps=warmup_steps, logging_steps=log_every_n_steps
+            )
             eval_hooks.append(self.eval_logging_hook)
 
             print('Starting Model Evaluation...')
