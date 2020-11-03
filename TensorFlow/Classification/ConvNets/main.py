@@ -99,7 +99,7 @@ if __name__ == "__main__":
             symmetric=FLAGS.symmetric,
             quant_delay = FLAGS.quant_delay,
             use_qdq = FLAGS.use_qdq,
-            finetune_checkpoint = FLAGS.finetune_checkpoint,
+            finetune_checkpoint=FLAGS.finetune_checkpoint,
         )
 
     if FLAGS.mode in ["train_and_evaluate", 'evaluate', 'inference_benchmark']:

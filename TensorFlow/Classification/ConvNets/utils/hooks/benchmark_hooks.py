@@ -22,19 +22,19 @@ import dllogger
 
 from .training_hooks import MeanAccumulator
 
-
 __all__ = ['BenchmarkLoggingHook']
 
 
 class BenchmarkLoggingHook(tf.train.SessionRunHook):
 
-    def __init__(self, global_batch_size, warmup_steps=20):
+    def __init__(self, global_batch_size, warmup_steps=20, logging_steps=1):
         self.latencies = []
         self.warmup_steps = warmup_steps
         self.global_batch_size = global_batch_size
         self.current_step = 0
         self.t0 = None
         self.mean_throughput = MeanAccumulator()
+        self.logging_steps = logging_steps
 
     def before_run(self, run_context):
         self.t0 = time.time()
@@ -46,7 +46,7 @@ class BenchmarkLoggingHook(tf.train.SessionRunHook):
             self.latencies.append(batch_time)
             self.mean_throughput.consume(ips)
 
-            dllogger.log(data={"total_ips" : ips},
-                         step=(0, self.current_step))
+            if (self.current_step % self.logging_steps) == 0:
+                dllogger.log(data={"total_ips": ips}, step=(0, self.current_step))
 
         self.current_step += 1

@@ -191,6 +191,9 @@ class ResnetModel(object):
             if mode!=tf.estimator.ModeKeys.PREDICT:
                 logits = tf.squeeze(logits)
 
+            if mode!=tf.estimator.ModeKeys.PREDICT:
+                logits = tf.squeeze(logits)
+
             y_preds = tf.argmax(logits, axis=1, output_type=tf.int32)
 
             # Check the output dtype, shall be FP32 in training
@@ -201,7 +204,7 @@ class ResnetModel(object):
             tf.identity(logits, name="logits_ref")
             tf.identity(probs, name="probs_ref")
             tf.identity(y_preds, name="y_preds_ref")
-            
+
             if mode == tf.estimator.ModeKeys.TRAIN and params['quantize']:
                 dllogger.log(data={"QUANTIZATION AWARE TRAINING ENABLED": True}, step=tuple())
                 if params['symmetric']:
@@ -219,7 +222,7 @@ class ResnetModel(object):
                     train_var_dict[var.op.name] = var
                 dllogger.log(data={"Restoring variables from checkpoint": params['finetune_checkpoint']}, step=tuple())
                 tf.train.init_from_checkpoint(params['finetune_checkpoint'], train_var_dict)
-                
+
         if mode == tf.estimator.ModeKeys.PREDICT:
 
             predictions = {'classes': y_preds, 'probabilities': probs}
@@ -458,7 +461,7 @@ class ResnetModel(object):
 
                 if logits.dtype != tf.float32:
                     logits = tf.cast(logits, tf.float32)
-                    
+
                 axis = 3 if self.model_hparams.compute_format=="NHWC" and use_final_conv else 1
                 probs = layers.softmax(logits, name="softmax", axis=axis)
 
