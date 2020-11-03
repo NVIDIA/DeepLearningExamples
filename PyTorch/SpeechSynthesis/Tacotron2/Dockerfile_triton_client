@@ -1,0 +1,43 @@
+# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+FROM nvcr.io/nvidia/tritonserver:20.06-py3-clientsdk AS triton
+FROM continuumio/miniconda3
+RUN apt-get update && apt-get install -y pbzip2 pv bzip2 cabextract mc iputils-ping wget
+
+WORKDIR /workspace/speech_ai_demo_TTS/
+
+# Copy the perf_client over
+COPY --from=triton /workspace/install/ /workspace/install/
+ENV LD_LIBRARY_PATH /workspace/install/lib:${LD_LIBRARY_PATH}
+
+# set up env variables
+ENV PATH="$PATH:/opt/conda/bin"
+RUN cd /workspace/speech_ai_demo_TTS/
+
+# jupyter lab extensions
+RUN conda install -c conda-forge jupyterlab ipywidgets nodejs python-sounddevice librosa unidecode inflect
+RUN pip install /workspace/install/python/triton*.whl
+
+# Copy the python wheel and install with pip
+COPY --from=triton /workspace/install/python/triton*.whl /tmp/
+RUN pip install /tmp/triton*.whl && rm /tmp/triton*.whl
+
+RUN cd /workspace/speech_ai_demo_TTS/
+COPY ./notebooks/triton/ .
+RUN mkdir /workspace/speech_ai_demo_TTS/tacotron2/
+COPY ./tacotron2/text /workspace/speech_ai_demo_TTS/tacotron2/text
+RUN chmod a+x /workspace/speech_ai_demo_TTS/run_this.sh
+
+RUN conda install nodejs
+RUN jupyter labextension install @jupyter-widgets/jupyterlab-manager

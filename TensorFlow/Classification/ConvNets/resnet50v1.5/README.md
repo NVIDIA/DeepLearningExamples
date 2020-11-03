@@ -20,6 +20,8 @@ This repository provides a script and recipe to train the ResNet-50 v1.5 model t
     * [Parameters](#parameters)
         * [The `main.py` script](#the-mainpy-script)
     * [Quantization Aware training](#quantization-aware-training)
+        * [Post process checkpoint](#post-process-checkpoint)
+        * [Exporting Frozen graphs](#exporting-frozen-graphs)
     * [Inference process](#inference-process)
 * [Performance](#performance)
     * [Benchmarking](#benchmarking)
@@ -194,13 +196,22 @@ To train your model using mixed precision or TF32 with Tensor Cores or FP32, per
 1. Clone the repository.
 ```
 git clone https://github.com/NVIDIA/DeepLearningExamples
-cd DeepLearningExamples/TensorFlow/Classification/RN50v1.5
+cd DeepLearningExamples/TensorFlow/Classification/ConvNets
 ```
 
 2. Download and preprocess the dataset.
 The ResNet50 v1.5 script operates on ImageNet 1k, a widely popular image classification dataset from the ILSVRC challenge.
 
-To download and preprocess the dataset, use the [Generate ImageNet for TensorFlow](https://github.com/tensorflow/models/blob/master/research/inception/inception/data/download_and_preprocess_imagenet.sh) script. The dataset will be downloaded to a directory specified as the first parameter of the script.
+* [Download the images](http://image-net.org/download-images)
+* Extract the training and validation data:
+```bash
+mkdir train && mv ILSVRC2012_img_train.tar train/ && cd train
+tar -xvf ILSVRC2012_img_train.tar && rm -f ILSVRC2012_img_train.tar
+find . -name "*.tar" | while read NAME ; do mkdir -p "${NAME%.tar}"; tar -xvf "${NAME}" -C "${NAME%.tar}"; rm -f "${NAME}"; done
+cd ..
+mkdir val && mv ILSVRC2012_img_val.tar val/ && cd val && tar -xvf ILSVRC2012_img_val.tar
+```
+* Preprocess dataset to TFRecord form using [script](https://github.com/tensorflow/models/blob/archive/research/inception/inception/data/build_imagenet_data.py). Additional metadata from [autors repository](https://github.com/tensorflow/models/tree/archive/research/inception/inception/data) might be required.
 
 3. Build the ResNet-50 v1.5 TensorFlow NGC container.
 ```bash
@@ -400,7 +411,7 @@ operations for `tf.contrib.quantize.experimental_create_training_graph` has been
      * `--output` : Name of the new checkpoint file which has the FC layer weights reshaped into 1x1 conv layer weights.
      * `--dense_layer` : Name of the FC layer
 
-### Exporting Frozen graphs
+#### Exporting Frozen graphs
 To export frozen graphs (which can be used for inference with <a href="https://developer.nvidia.com/tensorrt">TensorRT</a>), use:
 
 `python export_frozen_graph.py --checkpoint <path_to_checkpoint> --quantize --use_final_conv --use_qdq --symmetric --input_format NCHW --compute_format NCHW --output_file=<output_file_name>`
@@ -452,9 +463,8 @@ To benchmark the training performance on a specific batch size, run:
 Each of these scripts runs 200 warm-up iterations and measures the first epoch.
 
 To control warmup and benchmark length, use the `--warmup_steps`, `--num_iter` and `--iter_unit` flags. Features like XLA or DALI can be controlled
-with `--use_xla` and `--use_dali` flags.
+with `--use_xla` and `--use_dali` flags. If no `--data_dir=<path to imagenet>` flag is specified then the benchmarks will use a synthetic dataset.
 Suggested batch sizes for training are 256 for mixed precision training and 128 for single precision training per single V100 16 GB.
-
 
 #### Inference performance benchmark
 
@@ -469,7 +479,8 @@ To benchmark the inference performance on a specific batch size, run:
 `python ./main.py --mode=inference_benchmark --use_tf_amp --warmup_steps 20 --num_iter 100 --iter_unit batch --batch_size <batch size> --data_dir=<path to imagenet> --results_dir=<path to results directory>`
 
 By default, each of these scripts runs 20 warm-up iterations and measures the next 80 iterations.
-To control warm-up and benchmark length, use the `--warmup_steps`, `--num_iter` and `--iter_unit` flags.
+To control warm-up and benchmark length, use the `--warmup_steps`, `--num_iter` and `--iter_unit` flags. 
+If no `--data_dir=<path to imagenet>` flag is specified then the benchmarks will use a synthetic dataset.
 
 The benchmark can be automated with the `inference_benchmark.sh` script provided in `resnet50v1.5`, by simply running:
 `bash ./resnet50v1.5/inference_benchmark.sh <data dir> <data idx dir>`
@@ -518,8 +529,8 @@ on NVIDIA DGX A100 (8x A100 40GB) GPUs. Performance numbers (in images per secon
 
 | GPUs | Batch Size / GPU | Throughput - TF32 + XLA | Throughput - mixed precision + XLA | Throughput speedup (TF32 - mixed precision) | Weak scaling - TF32 + XLA | Weak scaling - mixed precision + XLA |
 |----|---------------|---------------|------------------------|-----------------|-----------|-------------------|
-| 1  | 256 | 808 img/s  | 1770 img/s    | 2.20x           | 1.00x     | 1.00x             |
-| 8  | 256 | 6300 img/s | 16400 img/s   | 2.60x           | 7.79x     | 9.26x             |
+| 1  | 256 | 909 img/s  | 2375 img/s    | 2.60x           | 1.00x     | 1.00x             |
+| 8  | 256 | 7000 img/s | 17400 img/s   | 2.48x           | 7.70x     | 7.32x             |
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 16G)
 Our results were obtained by running the `resnet50v1.5/training/training_perf.sh` benchmark script in the 

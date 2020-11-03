@@ -1,4 +1,5 @@
 # Copyright 2019 The TensorFlow Authors. All Rights Reserved.
+# Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,11 +18,13 @@
 import re
 import collections
 import tensorflow as tf
+import tensorflow_addons.optimizers as tfa_optimizers
 
 from tensorflow.python.ops import control_flow_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import state_ops
 from tensorflow.python.training import training_ops
+from utils import log
 
 
 class WarmUp(tf.keras.optimizers.schedules.LearningRateSchedule):
@@ -46,7 +49,7 @@ class WarmUp(tf.keras.optimizers.schedules.LearningRateSchedule):
             return tf.cond(
                 global_step_float < warmup_steps_float,
                 lambda: warmup_learning_rate,
-                lambda: self.decay_schedule_fn(step),
+                lambda: self.decay_schedule_fn(step - self.warmup_steps),
                 name=name,
             )
 
@@ -61,11 +64,12 @@ class WarmUp(tf.keras.optimizers.schedules.LearningRateSchedule):
 
 
 def create_optimizer(init_lr, num_train_steps, num_warmup_steps, weight_decay_rate=0.01,
-                     layerwise_lr_decay=-1, n_transformer_layers=None, clip_norm=1.0):
+                     layerwise_lr_decay=-1, n_transformer_layers=None, clip_norm=1.0,
+                     optimizer="adam", skip_adaptive=False, power=1.0, beta_1=0.9, beta_2=0.999, end_lr=0.0):
     """Creates an optimizer with learning rate schedule."""
     # Implements linear decay of the learning rate.
     learning_rate_fn = tf.keras.optimizers.schedules.PolynomialDecay(
-        initial_learning_rate=init_lr, decay_steps=num_train_steps, end_learning_rate=0.0
+        initial_learning_rate=init_lr, decay_steps=num_train_steps - num_warmup_steps, end_learning_rate=end_lr, power=power
     )
     if num_warmup_steps:
         learning_rate_fn = WarmUp(
@@ -75,16 +79,34 @@ def create_optimizer(init_lr, num_train_steps, num_warmup_steps, weight_decay_ra
     if layerwise_lr_decay > 0 and n_transformer_layers is not None:
         layer_decay = _get_layer_decay(layerwise_lr_decay, n_transformer_layers)
 
-    optimizer = AdamWeightDecay(
-        learning_rate=learning_rate_fn,
-        weight_decay_rate=weight_decay_rate,  # TODO (yy): update this as flag
-        layer_decay=layer_decay,
-        beta_1=0.9,
-        beta_2=0.999,
-        epsilon=1e-6,
-        exclude_from_weight_decay=["layer_norm", "bias"],
-        clip_norm=clip_norm,
-    )
+    if optimizer == "adam":
+        optimizer = AdamWeightDecay(
+            learning_rate=learning_rate_fn,
+            weight_decay_rate=weight_decay_rate,
+            layer_decay=layer_decay,
+            beta_1=beta_1,
+            beta_2=beta_2,
+            epsilon=1e-6,
+            exclude_from_weight_decay=["layer_norm", "bias", "LayerNorm"],
+            clip_norm=clip_norm,
+        )
+    else:
+        if skip_adaptive:
+            skip_list = ["layer_norm", "bias", "LayerNorm"]
+        else:
+            skip_list = ["None"]
+        log("Skip list for LAMB {}".format(skip_list))
+        
+        optimizer = tfa_optimizers.LAMB(
+            learning_rate=learning_rate_fn,
+            weight_decay_rate=weight_decay_rate,
+            beta_1=beta_1,
+            beta_2=beta_2,
+            epsilon=1e-6,
+            exclude_from_weight_decay=["layer_norm", "bias", "LayerNorm"],
+            exclude_from_layer_adaptation=skip_list,
+        )
+
     return optimizer
 
 
@@ -142,7 +164,8 @@ class AdamWeightDecay(tf.keras.optimizers.Adam):
 
     def apply_gradients(self, grads_and_vars, name=None, experimental_aggregate_gradients=True):
         grads, tvars = list(zip(*grads_and_vars))
-        (grads, _) = tf.clip_by_global_norm(grads, clip_norm=self.clip_norm)
+        # Being done in train_step
+        ##(grads, _) = tf.clip_by_global_norm(grads, clip_norm=self.clip_norm)
         return super().apply_gradients(zip(grads, tvars), name=name,
                                        experimental_aggregate_gradients=experimental_aggregate_gradients)
 

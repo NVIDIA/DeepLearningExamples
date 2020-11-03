@@ -31,31 +31,67 @@ import argparse
 import numpy as np
 import json
 import time
+import os
+import sys
 
-from inference import checkpoint_from_distributed, unwrap_distributed, load_and_setup_model, MeasureTime
+from inference import checkpoint_from_distributed, unwrap_distributed, load_and_setup_model, MeasureTime, prepare_input_sequence
 
 import dllogger as DLLogger
 from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
-
-from apex import amp
 
 def parse_args(parser):
     """
     Parse commandline arguments.
     """
-    parser.add_argument('-m', '--model-name', type=str, default='', required=True,
-                        help='Model to train')
+    parser.add_argument('-m', '--model-name', type=str, default='',
+                        required=True, help='Model to train')
+    parser.add_argument('--model', type=str, default='',
+                        help='Full path to the model checkpoint file')
     parser.add_argument('-sr', '--sampling-rate', default=22050, type=int,
                         help='Sampling rate')
-    parser.add_argument('--amp-run', action='store_true',
+    parser.add_argument('--fp16', action='store_true',
                         help='inference with AMP')
     parser.add_argument('-bs', '--batch-size', type=int, default=1)
     parser.add_argument('-o', '--output', type=str, required=True,
                         help='Directory to save results')
     parser.add_argument('--log-file', type=str, default='nvlog.json',
                         help='Filename for logging')
-
+    parser.add_argument('--synth-data', action='store_true',
+                        help='Test with synthetic data')
     return parser
+
+
+def gen_text(use_synthetic_data):
+    batch_size = 1
+    text_len = 140
+
+    if use_synthetic_data:
+        text_padded = torch.randint(low=0, high=148,
+                                    size=(batch_size, text_len),
+                                    dtype=torch.long).cuda()
+        input_lengths = torch.IntTensor([text_padded.size(1)]*
+                                        batch_size).cuda().long()
+    else:
+        texts = ['The forms of printed letters should be beautiful, and that their arrangement on the page should be reasonable and a help to the shapeliness of the letters themselves.']
+        texts = texts[:][:text_len]
+        text_padded, input_lengths = prepare_input_sequence(texts)
+
+    return (text_padded, input_lengths)
+
+
+def gen_mel(use_synthetic_data, n_mel_channels, fp16):
+    if use_synthetic_data:
+        batch_size = 1
+        num_mels = 895
+        mel_padded = torch.zeros(batch_size, n_mel_channels,
+                                 num_mels).normal_(-5.62, 1.98).cuda()
+    else:
+        mel_padded = torch.load("data/mel.pt")
+
+    if fp16:
+        mel_padded = mel_padded.half()
+
+    return mel_padded
 
 
 def main():
@@ -68,17 +104,24 @@ def main():
     parser = parse_args(parser)
     args, _ = parser.parse_known_args()
 
-    log_file = args.log_file
+    log_file = os.path.join(args.output, args.log_file)
 
-    DLLogger.init(backends=[JSONStreamBackend(Verbosity.DEFAULT,
-                                              args.output+'/'+args.log_file),
+    DLLogger.init(backends=[JSONStreamBackend(Verbosity.DEFAULT, log_file),
                             StdOutBackend(Verbosity.VERBOSE)])
     for k,v in vars(args).items():
         DLLogger.log(step="PARAMETER", data={k:v})
     DLLogger.log(step="PARAMETER", data={'model_name':'Tacotron2_PyT'})
 
-    model = load_and_setup_model(args.model_name, parser, None, args.amp_run,
-                                 forward_is_infer=True)
+    if args.synth_data:
+        model = load_and_setup_model(args.model_name, parser, None, args.fp16,
+                                     cpu_run=False, forward_is_infer=True)
+    else:
+        if not os.path.isfile(args.model):
+            print(f"File {args.model} does not exist!")
+            sys.exit(1)
+        model = load_and_setup_model(args.model_name, parser, args.model,
+                                     args.fp16, cpu_run=False,
+                                     forward_is_infer=True)
 
     if args.model_name == "Tacotron2":
         model = torch.jit.script(model)
@@ -91,20 +134,16 @@ def main():
         measurements = {}
 
         if args.model_name == 'Tacotron2':
-            text_padded = torch.randint(low=0, high=148, size=(args.batch_size, 140),
-                                        dtype=torch.long).cuda()
-            input_lengths = torch.IntTensor([text_padded.size(1)]*args.batch_size).cuda().long()
+            text_padded, input_lengths = gen_text(args.synth_data)
+
             with torch.no_grad(), MeasureTime(measurements, "inference_time"):
                 mels, _, _ = model(text_padded, input_lengths)
             num_items = mels.size(0)*mels.size(2)
 
         if args.model_name == 'WaveGlow':
+
             n_mel_channels = model.upsample.in_channels
-            num_mels = 895
-            mel_padded = torch.zeros(args.batch_size, n_mel_channels,
-                                     num_mels).normal_(-5.62, 1.98).cuda()
-            if args.amp_run:
-                mel_padded = mel_padded.half()
+            mel_padded = gen_mel(args.synth_data, n_mel_channels, args.fp16)
 
             with torch.no_grad(), MeasureTime(measurements, "inference_time"):
                 audios = model(mel_padded)

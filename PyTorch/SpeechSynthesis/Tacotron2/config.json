@@ -1,0 +1,11 @@
+{
+    "audio": {
+	"max-wav-value": 32768.0,
+	"sampling-rate": 22050,
+	"filter-length": 1024,
+	"hop-length": 256,
+	"win-length": 1024,
+	"mel-fmin": 0.0,
+	"mel-fmax": 7000.0
+    }
+}

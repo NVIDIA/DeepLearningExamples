@@ -25,7 +25,6 @@
 #
 # *****************************************************************************
 
-import os
 from pathlib import Path
 from typing import Optional
 
@@ -48,14 +47,20 @@ def load_wav_to_torch(full_path):
     return torch.FloatTensor(data.astype(np.float32)), sampling_rate
 
 
-def load_filepaths_and_text(dataset_path, filename, split="|"):
+def load_filepaths_and_text(dataset_path, fnames, has_speakers=False, split="|"):
     def split_line(root, line):
         parts = line.strip().split(split)
-        paths, text = parts[:-1], parts[-1]
-        return tuple(os.path.join(root, p) for p in paths) + (text,)
-    with open(filename, encoding='utf-8') as f:
-        filepaths_and_text = [split_line(dataset_path, line) for line in f]
-    return filepaths_and_text
+        if has_speakers:
+            paths, non_paths = parts[:-2], parts[-2:]
+        else:
+            paths, non_paths = parts[:-1], parts[-1:]
+        return tuple(str(Path(root, p)) for p in paths) + tuple(non_paths)
+
+    fpaths_and_text = []
+    for fname in fnames.split(','):
+        with open(fname, encoding='utf-8') as f:
+            fpaths_and_text += [split_line(dataset_path, line) for line in f]
+    return fpaths_and_text
 
 
 def stats_filename(dataset_path, filelist_path, feature_name):

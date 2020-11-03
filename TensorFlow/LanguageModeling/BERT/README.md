@@ -85,7 +85,7 @@ Other publicly available implementations of BERT include:
 1. [NVIDIA PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/LanguageModeling/BERT)
 2. [Hugging Face](https://github.com/huggingface/pytorch-pretrained-BERT)
 3. [codertimo](https://github.com/codertimo/BERT-pytorch)
-4. [gluon-nlp](https://github.com/dmlc/gluon-nlp/tree/master/scripts/bert)
+4. [gluon-nlp](https://github.com/dmlc/gluon-nlp/tree/v0.10.x/scripts/bert)
 5. [Google's official implementation](https://github.com/google-research/bert)
 
 This model is trained with mixed precision using Tensor Cores on NVIDIA Volta, Ampere and Turing GPUs. Therefore, researchers can get results up to 4x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
@@ -273,7 +273,7 @@ Note: Not using BookCorpus can potentially change final accuracy on a few downst
 
 4. Download the pretrained models from NGC.
 
-We have uploaded checkpoints that have been [fine tuned](https://ngc.nvidia.com/catalog/models/nvidia:bert_tf_v1_1_large_fp32_384) and [pre-trained](https://ngc.nvidia.com/catalog/models/nvidia:bert_tf_pretraining_lamb_16n) for various configurations on the NGC Model Registry. You can browse and download the relevant checkpoints directly from the [NGC model catalog](https://ngc.nvidia.com/catalog/models). Download them to the `results/models/` to easily access them in your scripts. 
+We have uploaded checkpoints that have been [fine tuned](https://ngc.nvidia.com/catalog/models/nvidia:bert_tf_v1_1_large_fp16_384) and [pre-trained](https://ngc.nvidia.com/catalog/models/nvidia:bert_tf_pretraining_lamb_16n) for various configurations on the NGC Model Registry. Our data download scripts, by default download some of them but you can browse and download the relevant checkpoints directly from the [NGC model catalog](https://ngc.nvidia.com/catalog/models). Download them to the `data/download/nvidia_pretrained/` to easily access them in your scripts. 
 
 5. Start an interactive session in the NGC container to run training/inference.
 

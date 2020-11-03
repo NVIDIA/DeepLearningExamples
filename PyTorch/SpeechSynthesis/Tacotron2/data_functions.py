@@ -33,7 +33,7 @@ from tacotron2.data_function import batch_to_gpu as batch_to_gpu_tacotron2
 from waveglow.data_function import batch_to_gpu as batch_to_gpu_waveglow
 
 
-def get_collate_function(model_name, n_frames_per_step):
+def get_collate_function(model_name, n_frames_per_step=1):
     if model_name == 'Tacotron2':
         collate_fn = TextMelCollate(n_frames_per_step)
     elif model_name == 'WaveGlow':

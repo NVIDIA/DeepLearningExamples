@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 task=${1:-"ner_bc5cdr-chem"}
-init_checkpoint=${2:-"/results/biobert_tf_uncased_base/model.ckpt-4340"}
+init_checkpoint=${2:-"/results/biobert_tf_uncased_base/model.ckpt"}
 bert_model=${3:-"base"}
 cased=${4:-"false"}
 precision=${5:-"fp16"}

@@ -114,7 +114,7 @@ To speed-up FastPitch training,
 reference mel-spectrograms, character durations, and pitch cues
 are generated during the pre-processing step and read
 directly from the disk during training. For more information on data pre-processing refer to [Dataset guidelines
-](#dataset-guidelines) and the [paper](#).
+](#dataset-guidelines) and the [paper](https://arxiv.org/abs/2006.06873).
 
 ### Feature support matrix
 
@@ -196,11 +196,11 @@ called `losses`):
         ```
 #### Enabling TF32
 
-TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](#https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs.
 
 TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
 
-For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](#https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
+For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
 
 TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
 
@@ -229,7 +229,7 @@ The following section lists the requirements that you need to meet in order to s
 
 This repository contains Dockerfile which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 -   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
--   [PyTorch 20.06-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
+-   [PyTorch 20.09-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
 or newer
 - supported GPUs:
     - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
@@ -246,7 +246,7 @@ For those unable to use the PyTorch NGC container, to set up the required enviro
 
 ## Quick Start Guide
 
-To train your model using mixed or TF32 precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the FastPitch model on the LJSpeech 1.1 dataset. For the specifics concerning training and inference, see the [Advanced](#advanced) section.
+To train your model using mixed or TF32 precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the FastPitch model on the LJSpeech 1.1 dataset. For the specifics concerning training and inference, see the [Advanced](#advanced) section. Pre-trained FastPitch models are available for download on [NGC](https://ngc.nvidia.com/catalog/models?query=FastPitch&quickFilter=models).
 
 1. Clone the repository.
    ```bash
@@ -290,7 +290,7 @@ To train your model using mixed or TF32 precision with Tensor Cores or using FP3
    ```
    The training will produce a FastPitch model capable of generating mel-spectrograms from raw text.
    It will be serialized as a single `.pt` checkpoint file, along with a series of intermediate checkpoints.
-   The script is configured for 8x GPU with at least 16GB of memory. Consult [Training process](#training-process) and [example configs](#-training-performance-benchmark) to adjust to a different configuration or enable Automatic Mixed Precision.
+   The script is configured for 8x GPU with at least 16GB of memory. Consult [Training process](#training-process) and [example configs](#training-performance-benchmark) to adjust to a different configuration or enable Automatic Mixed Precision.
 
 5. Start validation/evaluation.
 
@@ -488,11 +488,11 @@ The `scripts/train.sh` script is configured for 8x GPU with at least 16GB of mem
     ```
 In a single accumulated step, there are `batch_size x gradient_accumulation_steps x GPUs = 256` examples being processed in parallel. With a smaller number of GPUs, increase `--gradient_accumulation_steps` to keep this relation satisfied, e.g., through env variables
     ```bash
-    NGPU=4 GRAD_ACC=2 bash scripts/train.sh
+    NUM_GPUS=4 GRAD_ACCUMULATION=2 bash scripts/train.sh
     ```
 With automatic mixed precision (AMP), a larger batch size fits in 16GB of memory:
     ```bash
-    NGPU=4 GRAD_ACC=1 BS=64 AMP=true bash scripta/train.sh
+    NUM_GPUS=4 GRAD_ACCUMULATION=1 BS=64 AMP=true bash scripts/train.sh
     ```
 
 ### Inference process
@@ -501,6 +501,8 @@ You can run inference using the `./inference.py` script. This script takes
 text as input and runs FastPitch and then WaveGlow inference to produce an
 audio file. It requires pre-trained checkpoints of both models
 and input text as a text file, with one phrase per line.
+
+Pre-trained FastPitch models are available for download on [NGC](https://ngc.nvidia.com/catalog/models?query=FastPitch&quickFilter=models).
 
 Having pre-trained models in place, run the sample inference on LJSpeech-1.1 test-set with:
 ```bash
@@ -543,18 +545,18 @@ To benchmark the training performance on a specific batch size, run:
 
 * NVIDIA DGX A100 (8x A100 40GB)
     ```bash
-        AMP=true NGPU=1 BS=128 GRAD_ACC=2 EPOCHS=10 bash scripts/train.sh
-        AMP=true NGPU=8 BS=32 GRAD_ACC=1 EPOCHS=10 bash scripts/train.sh
-        NGPU=1 BS=128 GRAD_ACC=2 EPOCHS=10 bash scripts/train.sh
-        NGPU=8 BS=32 GRAD_ACC=1 EPOCHS=10 bash scripts/train.sh
+        AMP=true NUM_GPUS=1 BS=128 GRAD_ACCUMULATION=2 EPOCHS=10 bash scripts/train.sh
+        AMP=true NUM_GPUS=8 BS=32 GRAD_ACCUMULATION=1 EPOCHS=10 bash scripts/train.sh
+        NUM_GPUS=1 BS=128 GRAD_ACCUMULATION=2 EPOCHS=10 bash scripts/train.sh
+        NUM_GPUS=8 BS=32 GRAD_ACCUMULATION=1 EPOCHS=10 bash scripts/train.sh
     ```
 
 * NVIDIA DGX-1 (8x V100 16GB)
     ```bash
-        AMP=true NGPU=1 BS=64 GRAD_ACC=4 EPOCHS=10 bash scripts/train.sh
-        AMP=true NGPU=8 BS=32 GRAD_ACC=1 EPOCHS=10 bash scripts/train.sh
-        NGPU=1 BS=32 GRAD_ACC=8 EPOCHS=10 bash scripts/train.sh
-        NGPU=8 BS=32 GRAD_ACC=1 EPOCHS=10 bash scripts/train.sh
+        AMP=true NUM_GPUS=1 BS=64 GRAD_ACCUMULATION=4 EPOCHS=10 bash scripts/train.sh
+        AMP=true NUM_GPUS=8 BS=32 GRAD_ACCUMULATION=1 EPOCHS=10 bash scripts/train.sh
+        NUM_GPUS=1 BS=32 GRAD_ACCUMULATION=8 EPOCHS=10 bash scripts/train.sh
+        NUM_GPUS=8 BS=32 GRAD_ACCUMULATION=1 EPOCHS=10 bash scripts/train.sh
     ```
 
 Each of these scripts runs for 10 epochs and for each epoch measures the
@@ -567,12 +569,12 @@ To benchmark the inference performance on a specific batch size, run:
 
 * For FP16
     ```bash
-    AMP=true BS_SEQ=”1 4 8” REPEATS=100 bash scripts/inference_benchmark.sh
+    AMP=true BS_SEQUENCE=”1 4 8” REPEATS=100 bash scripts/inference_benchmark.sh
     ```
 
 * For FP32 or TF32
     ```bash
-    BS_SEQ=”1 4 8” REPEATS=100 bash scripts/inference_benchmark.sh
+    BS_SEQUENCE=”1 4 8” REPEATS=100 bash scripts/inference_benchmark.sh
     ```
 
 The output log files will contain performance numbers for the FastPitch model
@@ -723,6 +725,10 @@ The input utterance has 128 characters, synthesized audio has 8.05 s.
 ## Release notes
 
 ### Changelog
+
+October 2020
+- Added multispeaker capabilities
+- Updated text processing module
 
 June 2020
 - Updated performance tables to include A100 results

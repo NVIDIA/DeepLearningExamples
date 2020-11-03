@@ -137,11 +137,11 @@ This implementation exploits the TensorFlow Automatic Mixed Precision feature. T
  
 #### Enabling TF32
 
-TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](#https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
 
 TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
 
-For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](#https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
+For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
 
 TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
 
@@ -628,5 +628,6 @@ February 2020
  
 ### Known issues
  
+* Some set-ups suffer from a `ncclCommInitRank failed: unhandled system error`. This is a known issue with NCCL 2.7.5. The issue is solved in NCCL 2.7.8, which can be applied by changing the first line the Dockerfile from `ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.06-tf2-py3` to `ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.08-tf2-py3` and rebuilding the docker image.
 * For TensorFlow 2.0 the training performance using AMP and XLA is around 30% lower than reported here. The issue was solved in TensorFlow 2.1.
 

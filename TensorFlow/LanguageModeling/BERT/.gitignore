@@ -4,6 +4,12 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.png
+.idea/
+*swp
+data/
+checkpoints/
+data_dl/
 
 # C extensions
 *.so

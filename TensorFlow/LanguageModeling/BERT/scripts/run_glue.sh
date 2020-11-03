@@ -26,7 +26,7 @@ doc_stride=${8:-"64"}
 bert_model=${9:-"large"}
 
 if [ "$bert_model" = "large" ] ; then
-    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16
+    export BERT_DIR=data/download/nvidia_pretrained/bert_tf_pretraining_large_lamb
 else
     export BERT_DIR=data/download/google_pretrained_weights/uncased_L-12_H-768_A-12
 fi
@@ -35,7 +35,7 @@ export GLUE_DIR=data/download
 
 epochs=${10:-"3.0"}
 ws=${11:-"0.1"}
-init_checkpoint=${12:-"$BERT_DIR/bert_model.ckpt"}
+init_checkpoint=${12:-"$BERT_DIR/model.ckpt"}
 
 echo "GLUE directory set as " $GLUE_DIR " BERT directory set as " $BERT_DIR
 

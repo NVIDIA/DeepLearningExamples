@@ -55,6 +55,12 @@ default:
    eval:
       <<: *eval
 
+manual_eval:
+   train:
+      <<: *train
+   eval:
+      <<: *eval
+      manual_config: '{"n_token": 267735, "n_layer": 18, "n_head": 16, "d_model": 1024, "d_head": 64, "d_inner": 4096, "dropout": 0.2, "dropatt": 0.2, "dtype": null, "tie_weight": true, "d_embed": 1024, "div_val": 4, "tie_projs": [false, true, true, true], "pre_lnorm": false, "tgt_len": 384, "ext_len": 0, "mem_len": 384, "cutoffs": [19997, 39997, 199997], "same_length": false, "attn_type": 0, "clamp_len": -1, "sample_softmax": -1}'
 
 # Full training configs for NVIDIA DGX-1 (8x NVIDIA V100 16GB GPU)
 dgx1_8gpu_fp16: &dgx1_8gpu_fp16
@@ -118,6 +124,7 @@ dgx1_1gpu_fp32: &dgx1_1gpu_fp32
    train:
       <<: *train
       batch_chunk: 64
+      swap_mem: true
    eval:
       <<: *eval
 
@@ -339,9 +346,11 @@ trainbench: &trainbench
       <<: *train
       log_interval: 1
       max_step: 500
+      max_step_scheduler: 100000
 
 trainbench_multinode: &trainbench_multinode
    train:
       <<: *train_multinode
       log_interval: 1
       max_step: 500
+      max_step_scheduler: 25000

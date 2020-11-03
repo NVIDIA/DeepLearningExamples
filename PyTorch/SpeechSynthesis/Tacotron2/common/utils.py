@@ -30,6 +30,22 @@ from scipy.io.wavfile import read
 import torch
 import os
 
+import argparse
+import json
+
+class ParseFromConfigFile(argparse.Action):
+
+    def __init__(self, option_strings, type, dest, help=None, required=False):
+        super(ParseFromConfigFile, self).__init__(option_strings=option_strings, type=type, dest=dest, help=help, required=required)
+
+    def __call__(self, parser, namespace, values, option_string):
+        with open(values, 'r') as f:
+            data = json.load(f)
+
+        for group in data.keys():
+            for k,v in data[group].items():
+                underscore_k = k.replace('-', '_')
+                setattr(namespace, underscore_k, v)
 
 def get_mask_from_lengths(lengths):
     max_len = torch.max(lengths).item()

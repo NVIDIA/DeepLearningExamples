@@ -127,7 +127,7 @@ class MetricLogger(object):
             header = ''
         print_str = header
         for name, meter in self.meters.items():
-            print_str += F"  {name}: {meter}"
+            print_str += f"  {name}: {meter}"
         print(print_str)
 
 
@@ -282,13 +282,13 @@ def roc_auc_score(y_true, y_score):
     y_true.squeeze_()
     y_score.squeeze_()
     if y_true.shape != y_score.shape:
-        raise TypeError(F"Shape of y_true and y_score must match. Got {y_true.shape()} and {y_score.shape()}.")
+        raise TypeError(f"Shape of y_true and y_score must match. Got {y_true.shape()} and {y_score.shape()}.")
 
     desc_score_indices = torch.argsort(y_score, descending=True)
     y_score = y_score[desc_score_indices]
     y_true = y_true[desc_score_indices]
 
-    distinct_value_indices = torch.nonzero(y_score[1:] - y_score[:-1]).squeeze()
+    distinct_value_indices = torch.nonzero(y_score[1:] - y_score[:-1], as_tuple=False).squeeze()
     threshold_idxs = torch.cat([distinct_value_indices, torch.tensor([y_true.numel() - 1], device=device)])
 
     tps = torch.cumsum(y_true, dim=0)[threshold_idxs]

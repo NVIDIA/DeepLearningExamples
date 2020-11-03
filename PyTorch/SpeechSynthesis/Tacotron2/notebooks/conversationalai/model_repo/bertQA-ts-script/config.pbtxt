@@ -1,0 +1,44 @@
+name: "bertQA-ts-script"
+platform: "pytorch_libtorch"
+max_batch_size: 8
+input [
+{
+    name: "input__0"
+    data_type: TYPE_INT64
+    dims: [384]
+},
+{
+    name: "input__1"
+    data_type: TYPE_INT64
+    dims: [384]
+},
+{
+    name: "input__2"
+    data_type: TYPE_INT64
+    dims: [384]
+}
+]
+output [
+{
+    name: "output__0"
+    data_type: TYPE_FP16
+    dims: [384]
+}, 
+{
+    name: "output__1"
+    data_type: TYPE_FP16
+    dims: [384]
+}
+]
+optimization {
+  cuda {
+    graphs: 0
+  }
+}
+instance_group [
+    {
+        count: 1
+        kind: KIND_GPU
+        gpus: [ 0 ]
+    }
+]

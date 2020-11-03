@@ -32,9 +32,9 @@ max_pred_per_seq=${13:-80}
 DATA_DIR=data/tfrecord/lower_case_1_seq_len_${seq_len}_max_pred_${max_pred_per_seq}_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5_shard_1472_test_split_10/books_wiki_en_corpus
 
 if [ "$bert_model" = "large" ] ; then
-    export BERT_CONFIG=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/bert_config.json
+    export BERT_DIR=data/download/nvidia_pretrained/bert_tf_pretraining_large_lamb
 else
-    export BERT_CONFIG=data/download/google_pretrained_weights/uncased_L-12_H-768_A-12/bert_config.json
+    export BERT_DIR=data/download/nvidia_pretrained/bert_tf_squad11_base_128
 fi
 
 PREC=""

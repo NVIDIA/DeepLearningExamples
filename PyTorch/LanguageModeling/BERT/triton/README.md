@@ -2,7 +2,7 @@
 
 ## Solution overview
 
-The [NVIDIA Triton Inference Server](https://github.com/NVIDIA/trtis-inference-server) provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server. 
+The [NVIDIA Triton Inference Server](https://github.com/NVIDIA/triton-inference-server) provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server. 
 This folder contains detailed performance analysis as well as scripts to run SQuAD fine-tuning on BERT model using Triton Inference Server. 
 
 ## Setup
@@ -102,7 +102,7 @@ To make the machine wait until the server is initialized, and the model is ready
 
 ## Performance
 
-The numbers below are averages, measured on Triton, with [static batching](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-guide/docs/model_configuration.html#scheduling-and-batching). 
+The numbers below are averages, measured on Triton on V100 32G GPU, with [static batching](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-guide/docs/model_configuration.html#scheduling-and-batching). 
 
 | Format | GPUs | Batch size | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (mixed precision/FP32)  |
 |--------|------|------------|-----------------|----------------------------------|---------------------------------------------|--------------------------------------------|

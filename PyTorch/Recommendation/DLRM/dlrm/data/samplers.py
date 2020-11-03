@@ -30,7 +30,7 @@ class RandomDistributedSampler(RandomSampler):
         to other rank by writing to disk
         """
         if get_local_rank() == 0:
-            np.save(self._SAMPLE_FILE, np.array(super().__iter__()))
+            np.save(self._SAMPLE_FILE, np.array(list(super().__iter__())))
         torch.distributed.barrier()
 
         sample = np.load(self._SAMPLE_FILE)
