@@ -1,4 +1,3 @@
-# torch == 1.5
 librosa >= 0.7.0
 tensorboardX
 matplotlib
@@ -11,3 +10,4 @@ opencv-python
 pyyaml
 tqdm
 data
+pycuda

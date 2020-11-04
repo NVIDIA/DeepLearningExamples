@@ -41,6 +41,7 @@ from fastspeech.utils.fp16 import cast_model_to_half
 
 import torch.cuda.profiler as profiler
 from fastspeech.utils.logging import tprint
+from fastspeech.utils.time import TimeElapsed
 
 plt.switch_backend('Agg')
 
@@ -136,12 +137,15 @@ class Trainer(object):
 
                     if self.nvprof_iter_start and i == self.nvprof_iter_start:
                         profiler.start()
+                        timer = TimeElapsed(name="Training time during profiling", format=":.6f")
+                        timer.start()
 
                     with Nvtx("step #{}".format(self.step)):
                         loss, meta = self.do_step()
 
                     if self.nvprof_iter_end and i == self.nvprof_iter_end:
                         profiler.stop()
+                        timer.end()
         
                     if self.lr_scheduler:
                         for param_group in self.optimizer.param_groups:

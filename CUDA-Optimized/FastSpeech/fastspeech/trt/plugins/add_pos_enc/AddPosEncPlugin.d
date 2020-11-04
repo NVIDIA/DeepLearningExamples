@@ -143,6 +143,8 @@ AddPosEncPlugin.o : AddPosEncPlugin.cu \
     /usr/local/cuda/include/sm_61_intrinsics.hpp \
     /usr/local/cuda/include/crt/sm_70_rt.h \
     /usr/local/cuda/include/crt/sm_70_rt.hpp \
+    /usr/local/cuda/include/crt/sm_80_rt.h \
+    /usr/local/cuda/include/crt/sm_80_rt.hpp \
     /usr/local/cuda/include/surface_functions.h \
     /usr/local/cuda/include/texture_fetch_functions.h \
     /usr/local/cuda/include/texture_indirect_functions.h \
@@ -280,6 +282,7 @@ AddPosEncPlugin.o : AddPosEncPlugin.cu \
     /usr/local/cuda/include/thrust/detail/config/compiler.h \
     /usr/local/cuda/include/thrust/detail/config/cpp_dialect.h \
     /usr/local/cuda/include/thrust/detail/config/cpp_compatibility.h \
+    /usr/local/cuda/include/thrust/detail/config/deprecated.h \
     /usr/local/cuda/include/thrust/detail/config/host_system.h \
     /usr/local/cuda/include/thrust/detail/config/device_system.h \
     /usr/local/cuda/include/thrust/detail/config/host_device.h \
@@ -301,6 +304,8 @@ AddPosEncPlugin.o : AddPosEncPlugin.cu \
     /usr/local/cuda/include/thrust/system/cuda/detail/execution_policy.h \
     /usr/local/cuda/include/thrust/iterator/detail/any_system_tag.h \
     /usr/local/cuda/include/thrust/system/cuda/config.h \
+    /usr/local/cuda/include/cub/util_namespace.cuh \
+    /usr/local/cuda/include/cub/version.cuh \
     /usr/local/cuda/include/thrust/detail/allocator_aware_execution_policy.h \
     /usr/local/cuda/include/thrust/detail/execute_with_allocator_fwd.h \
     /usr/local/cuda/include/thrust/detail/type_traits.h \
@@ -379,8 +384,10 @@ AddPosEncPlugin.o : AddPosEncPlugin.cu \
     /usr/local/cuda/include/thrust/system/cpp/detail/for_each.h \
     /usr/local/cuda/include/thrust/system/cuda/detail/for_each.h \
     /usr/local/cuda/include/thrust/system/cuda/detail/util.h \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/util_arch.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/util_namespace.cuh \
+    /usr/local/cuda/include/cub/util_arch.cuh \
+    /usr/local/cuda/include/cub/util_cpp_dialect.cuh \
+    /usr/local/cuda/include/cub/util_compiler.cuh \
+    /usr/local/cuda/include/cub/util_macro.cuh \
     /usr/local/cuda/include/thrust/system_error.h \
     /usr/local/cuda/include/thrust/system/error_code.h \
     /usr/local/cuda/include/thrust/system/detail/errno.h \
@@ -404,35 +411,37 @@ AddPosEncPlugin.o : AddPosEncPlugin.cu \
     /usr/local/cuda/include/thrust/system/cuda/detail/core/util.h \
     /usr/local/cuda/include/cuda_occupancy.h \
     /usr/local/cuda/include/thrust/type_traits/is_contiguous_iterator.h \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/block_load.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/block_exchange.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/../util_ptx.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/../util_type.cuh \
+    /usr/local/cuda/include/cub/block/block_load.cuh \
+    /usr/local/cuda/include/cub/block/block_exchange.cuh \
+    /usr/local/cuda/include/cub/block/../config.cuh \
+    /usr/local/cuda/include/cub/block/../util_deprecated.cuh \
+    /usr/local/cuda/include/cub/block/../util_ptx.cuh \
+    /usr/local/cuda/include/cub/block/../util_type.cuh \
     /usr/include/c++/7/cfloat \
     /usr/lib/gcc/x86_64-linux-gnu/7/include/float.h \
     /usr/local/cuda/include/cuda_fp16.h \
     /usr/local/cuda/include/cuda_fp16.hpp \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/../util_macro.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/../util_debug.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/../iterator/cache_modified_input_iterator.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/../iterator/../thread/thread_load.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/../iterator/../thread/thread_store.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/../iterator/../util_device.cuh \
+    /usr/local/cuda/include/cub/block/../util_debug.cuh \
+    /usr/local/cuda/include/cub/block/../iterator/cache_modified_input_iterator.cuh \
+    /usr/local/cuda/include/cub/block/../iterator/../thread/thread_load.cuh \
+    /usr/local/cuda/include/cub/block/../iterator/../thread/thread_store.cuh \
+    /usr/local/cuda/include/cub/block/../iterator/../util_device.cuh \
+    /usr/include/c++/7/atomic \
     /usr/local/cuda/include/thrust/iterator/iterator_facade.h \
     /usr/local/cuda/include/thrust/iterator/detail/iterator_facade_category.h \
     /usr/local/cuda/include/thrust/iterator/detail/is_iterator_category.h \
     /usr/local/cuda/include/thrust/iterator/detail/distance_from_result.h \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/block_store.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/block_scan.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/specializations/block_scan_raking.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/specializations/../../block/block_raking_layout.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/specializations/../../thread/thread_reduce.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/specializations/../../thread/../thread/thread_operators.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/specializations/../../thread/thread_scan.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/specializations/../../warp/warp_scan.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/specializations/../../warp/specializations/warp_scan_shfl.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/specializations/../../warp/specializations/warp_scan_smem.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/specializations/block_scan_warp_scans.cuh \
+    /usr/local/cuda/include/cub/block/block_store.cuh \
+    /usr/local/cuda/include/cub/block/block_scan.cuh \
+    /usr/local/cuda/include/cub/block/specializations/block_scan_raking.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../block/block_raking_layout.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../thread/thread_reduce.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../thread/../thread/thread_operators.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../thread/thread_scan.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../warp/warp_scan.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../warp/specializations/warp_scan_shfl.cuh \
+    /usr/local/cuda/include/cub/block/specializations/../../warp/specializations/warp_scan_smem.cuh \
+    /usr/local/cuda/include/cub/block/specializations/block_scan_warp_scans.cuh \
     /usr/local/cuda/include/thrust/distance.h \
     /usr/local/cuda/include/thrust/detail/distance.inl \
     /usr/local/cuda/include/thrust/advance.h \
@@ -446,6 +455,7 @@ AddPosEncPlugin.o : AddPosEncPlugin.cu \
     /usr/local/cuda/include/thrust/iterator/detail/minimum_category.h \
     /usr/local/cuda/include/thrust/iterator/detail/zip_iterator.inl \
     /usr/local/cuda/include/thrust/detail/internal_functional.h \
+    /usr/local/cuda/include/thrust/detail/memory_wrapper.h \
     /usr/local/cuda/include/thrust/system/detail/adl/transform.h \
     /usr/local/cuda/include/thrust/system/detail/sequential/transform.h \
     /usr/local/cuda/include/thrust/system/cpp/detail/transform.h \
@@ -568,14 +578,15 @@ AddPosEncPlugin.o : AddPosEncPlugin.cu \
     /usr/local/cuda/include/thrust/system/cpp/detail/scan.h \
     /usr/local/cuda/include/thrust/system/cuda/detail/scan.h \
     /usr/local/cuda/include/thrust/detail/cstdint.h \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/device_scan.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/dispatch_scan.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/agent_scan.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/single_pass_scan_operators.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/../warp/warp_reduce.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/../warp/specializations/warp_reduce_shfl.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/../warp/specializations/warp_reduce_smem.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/../grid/grid_queue.cuh \
+    /usr/local/cuda/include/cub/device/device_scan.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/dispatch_scan.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_scan.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/single_pass_scan_operators.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../warp/warp_reduce.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../warp/specializations/warp_reduce_shfl.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../warp/specializations/warp_reduce_smem.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../grid/grid_queue.cuh \
+    /usr/local/cuda/include/thrust/system/cuda/detail/dispatch.h \
     /usr/local/cuda/include/thrust/detail/mpl/math.h \
     /usr/local/cuda/include/thrust/detail/minmax.h \
     /usr/local/cuda/include/thrust/system/detail/adl/scan_by_key.h \
@@ -584,11 +595,11 @@ AddPosEncPlugin.o : AddPosEncPlugin.cu \
     /usr/local/cuda/include/thrust/system/cuda/detail/scan_by_key.h \
     /usr/local/cuda/include/thrust/system/cuda/execution_policy.h \
     /usr/local/cuda/include/thrust/system/cuda/detail/adjacent_difference.h \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/device_select.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/dispatch_select_if.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/agent_select_if.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/../block/block_discontinuity.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/block/block_adjacent_difference.cuh \
+    /usr/local/cuda/include/cub/device/device_select.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/dispatch_select_if.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_select_if.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../block/block_discontinuity.cuh \
+    /usr/local/cuda/include/cub/block/block_adjacent_difference.cuh \
     /usr/local/cuda/include/thrust/adjacent_difference.h \
     /usr/local/cuda/include/thrust/detail/adjacent_difference.inl \
     /usr/local/cuda/include/thrust/system/detail/generic/adjacent_difference.h \
@@ -616,19 +627,20 @@ AddPosEncPlugin.o : AddPosEncPlugin.cu \
     /usr/local/cuda/include/thrust/system/cpp/detail/copy_if.h \
     /usr/local/cuda/include/thrust/system/cuda/detail/count.h \
     /usr/local/cuda/include/thrust/system/cuda/detail/reduce.h \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/device_reduce.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/../iterator/arg_index_input_iterator.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/dispatch_reduce.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/agent_reduce.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/../block/block_reduce.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/../block/specializations/block_reduce_raking.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/../block/specializations/block_reduce_raking_commutative_only.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/../block/specializations/block_reduce_warp_reductions.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/../grid/grid_mapping.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/../grid/grid_even_share.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/dispatch_reduce_by_key.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/agent_reduce_by_key.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/../iterator/constant_input_iterator.cuh \
+    /usr/local/cuda/include/cub/device/device_reduce.cuh \
+    /usr/local/cuda/include/cub/device/../iterator/arg_index_input_iterator.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/dispatch_reduce.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_reduce.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../block/block_reduce.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../block/specializations/block_reduce_raking.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../block/specializations/block_reduce_raking_commutative_only.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../block/specializations/block_reduce_warp_reductions.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../grid/grid_mapping.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../grid/grid_even_share.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/dispatch_reduce_by_key.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_reduce_by_key.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../iterator/constant_input_iterator.cuh \
+    /usr/local/cuda/include/thrust/system/cuda/detail/make_unsigned_special.h \
     /usr/local/cuda/include/thrust/reduce.h \
     /usr/local/cuda/include/thrust/detail/reduce.inl \
     /usr/local/cuda/include/thrust/system/detail/generic/reduce.h \
@@ -717,7 +729,7 @@ AddPosEncPlugin.o : AddPosEncPlugin.cu \
     /usr/local/cuda/include/thrust/system/cuda/detail/gather.h \
     /usr/local/cuda/include/thrust/system/cuda/detail/inner_product.h \
     /usr/local/cuda/include/thrust/system/cuda/detail/partition.h \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/device_partition.cuh \
+    /usr/local/cuda/include/cub/device/device_partition.cuh \
     /usr/local/cuda/include/thrust/partition.h \
     /usr/local/cuda/include/thrust/detail/partition.inl \
     /usr/local/cuda/include/thrust/system/detail/generic/partition.h \
@@ -745,12 +757,12 @@ AddPosEncPlugin.o : AddPosEncPlugin.cu \
     /usr/local/cuda/include/thrust/system/detail/adl/find.h \
     /usr/local/cuda/include/thrust/system/detail/adl/sort.h \
     /usr/local/cuda/include/thrust/system/cuda/detail/sort.h \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/device_radix_sort.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/dispatch_radix_sort.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/agent_radix_sort_upsweep.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/agent_radix_sort_downsweep.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../agent/../block/block_radix_rank.cuh \
-    /usr/local/cuda/include/thrust/system/cuda/detail/cub/device/dispatch/../../block/block_radix_sort.cuh \
+    /usr/local/cuda/include/cub/device/device_radix_sort.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/dispatch_radix_sort.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_radix_sort_upsweep.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/agent_radix_sort_downsweep.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../agent/../block/block_radix_rank.cuh \
+    /usr/local/cuda/include/cub/device/dispatch/../../block/block_radix_sort.cuh \
     /usr/local/cuda/include/thrust/detail/trivial_sequence.h \
     /usr/local/cuda/include/thrust/sequence.h \
     /usr/local/cuda/include/thrust/detail/sequence.inl \
