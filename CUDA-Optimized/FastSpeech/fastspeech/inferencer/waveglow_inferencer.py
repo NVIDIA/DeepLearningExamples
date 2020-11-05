@@ -30,6 +30,21 @@ from fastspeech.utils.logging import tprint
 from fastspeech.utils.pytorch import to_cpu_numpy, to_device_async
 from fastspeech.inferencer.denoiser import Denoiser
 
+from waveglow.model import WaveGlow
+import argparse
+
+def unwrap_distributed(state_dict):
+    """
+    Unwraps model from DistributedDataParallel.
+    DDP wraps model in additional "module.", it needs to be removed for single
+    GPU inference.
+    :param state_dict: model's state dict
+    """
+    new_state_dict = {}
+    for key, value in state_dict.items():
+        new_key = key.replace('module.', '')
+        new_state_dict[new_key] = value
+    return new_state_dict
 
 class WaveGlowInferencer(object):
 
@@ -40,11 +55,36 @@ class WaveGlowInferencer(object):
         self.use_denoiser = use_denoiser
 
         # model
-        sys.path.append('waveglow')
-        self.model = torch.load(self.ckpt_file, map_location=self.device)['model']
-        self.model = self.model.remove_weightnorm(self.model)
-        self.model.eval()
+        # sys.path.append('waveglow')
+
+        from waveglow.arg_parser import parse_waveglow_args
+        parser = parser = argparse.ArgumentParser()
+        model_parser= parse_waveglow_args(parser)
+        args, _ = model_parser.parse_known_args()
+        model_config = dict(
+            n_mel_channels=args.n_mel_channels,
+            n_flows=args.flows,
+            n_group=args.groups,
+            n_early_every=args.early_every,
+            n_early_size=args.early_size,
+            WN_config=dict(
+                n_layers=args.wn_layers,
+                kernel_size=args.wn_kernel_size,
+                n_channels=args.wn_channels
+            )
+        )        
+        self.model = WaveGlow(**model_config)
+
+        state_dict = torch.load(self.ckpt_file, map_location=self.device)['state_dict']
+        state_dict = unwrap_distributed(state_dict)
+        self.model.load_state_dict(state_dict)
+
         self.model = to_device_async(self.model, self.device)
+
+        self.model = self.model.remove_weightnorm(self.model)
+
+        self.model.eval()
+
         if self.use_fp16:
             self.model = self.model.half()
         self.model = self.model
