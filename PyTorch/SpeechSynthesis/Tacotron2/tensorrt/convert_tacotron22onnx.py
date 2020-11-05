@@ -58,6 +58,7 @@ def encoder_infer(self, x, input_lengths):
 
     x = x.transpose(1, 2)
 
+    input_lengths = input_lengths.cpu()
     x = nn.utils.rnn.pack_padded_sequence(
         x, input_lengths, batch_first=True)
 
