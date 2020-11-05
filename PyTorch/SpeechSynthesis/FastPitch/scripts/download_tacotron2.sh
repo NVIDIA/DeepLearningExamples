@@ -11,9 +11,9 @@ mkdir -p "$MODEL_DIR"
 if [ ! -f "${MODEL_DIR}/${MODEL}" ]; then
   echo "Downloading ${MODEL} ..."
   wget --content-disposition -qO ${MODEL_DIR}/${MODEL} ${MODEL_URL} \
-       || echo "ERROR: Failed to download ${MODEL} from NGC" && exit 1
+       || { echo "ERROR: Failed to download ${MODEL} from NGC"; exit 1; }
   echo "OK"
 
 else
-  echo "${MODEL}.pt already downloaded."
+  echo "${MODEL} already downloaded."
 fi

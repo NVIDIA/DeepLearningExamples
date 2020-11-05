@@ -18,6 +18,11 @@
 #include <cstring>
 #include <iomanip>
 #include <numeric>
+#include <sstream>
+
+#include "lat/kaldi-lattice.h"
+#include "lat/lattice-functions.h"
+#include "util/kaldi-table.h"
 
 #define FAIL_IF_ERR(X, MSG)                                        \
   {                                                                \
@@ -31,11 +36,12 @@
 void TRTISASRClient::CreateClientContext() {
   contextes_.emplace_back();
   ClientContext& client = contextes_.back();
-  FAIL_IF_ERR(nic::InferGrpcStreamContext::Create(
-                  &client.trtis_context, /*corr_id*/ -1, url_, model_name_,
-                  /*model_version*/ -1,
-                  /*verbose*/ false),
-              "unable to create context");
+  FAIL_IF_ERR(
+      nic::InferGrpcStreamContext::Create(&client.trtis_context,
+                                          /*corr_id*/ -1, url_, model_name_,
+                                          /*model_version*/ -1,
+                                          /*verbose*/ false),
+      "unable to create context");
 }
 
 void TRTISASRClient::SendChunk(ni::CorrelationID corr_id,
@@ -59,6 +65,8 @@ void TRTISASRClient::SendChunk(ni::CorrelationID corr_id,
     options->SetFlag(ni::InferRequestHeader::FLAG_SEQUENCE_END,
                      end_of_sequence);
     for (const auto& output : context.Outputs()) {
+      if (output->Name() == "TEXT" && !print_results_)
+        continue;  // no need for text output if not printing
       options->AddRawResult(output);
     }
   }
@@ -89,27 +97,33 @@ void TRTISASRClient::SendChunk(ni::CorrelationID corr_id,
   total_audio_ += (static_cast<double>(nsamples) / 16000.);  // TODO freq
   double start = gettime_monotonic();
   FAIL_IF_ERR(context.AsyncRun([corr_id, end_of_sequence, start, this](
-                  nic::InferContext* ctx,
-                  const std::shared_ptr<nic::InferContext::Request>& request) {
+                                   nic::InferContext* ctx,
+                                   const std::shared_ptr<
+                                       nic::InferContext::Request>& request) {
     if (end_of_sequence) {
       double elapsed = gettime_monotonic() - start;
-      std::string out;
       std::map<std::string, std::unique_ptr<nic::InferContext::Result>> results;
       ctx->GetAsyncRunResults(request, &results);
 
-      if (results.size() != 1) {
-        std::cerr << "Warning: Could not read output for corr_id " << corr_id
-                  << std::endl;
+      if (results.empty()) {
+        std::cerr << "Warning: Could not read "
+                     "output for corr_id "
+                  << corr_id << std::endl;
       } else {
-        FAIL_IF_ERR(results["TEXT"]->GetRawAtCursor(0, &out),
-                    "unable to get TEXT output");
         if (print_results_) {
+	  std::string text;
+	  FAIL_IF_ERR(results["TEXT"]->GetRawAtCursor(0, &text),
+			  "unable to get TEXT output");
           std::lock_guard<std::mutex> lk(stdout_m_);
-          std::cout << "CORR_ID " << corr_id << "\t\t" << out << std::endl;
+          std::cout << "CORR_ID " << corr_id << "\t\t" << text << std::endl;
         }
+
+        std::string lattice_bytes;
+        FAIL_IF_ERR(results["RAW_LATTICE"]->GetRawAtCursor(0, &lattice_bytes),
+                    "unable to get RAW_LATTICE output");
         {
           std::lock_guard<std::mutex> lk(results_m_);
-          results_.insert({corr_id, {std::move(out), elapsed}});
+          results_.insert({corr_id, {std::move(lattice_bytes), elapsed}});
         }
       }
       n_in_flight_.fetch_sub(1, std::memory_order_relaxed);
@@ -125,7 +139,7 @@ void TRTISASRClient::WaitForCallbacks() {
   }
 }
 
-void TRTISASRClient::PrintStats() {
+void TRTISASRClient::PrintStats(bool print_latency_stats) {
   double now = gettime_monotonic();
   double diff = now - started_at_;
   double rtf = total_audio_ / diff;
@@ -150,9 +164,16 @@ void TRTISASRClient::PrintStats() {
                latencies.size();
 
   std::cout << std::setprecision(3);
-  std::cout << "Latencies:\t90\t\t95\t\t99\t\tAvg\n";
-  std::cout << "\t\t" << lat_90 << "\t\t" << lat_95 << "\t\t" << lat_99
-            << "\t\t" << avg << std::endl;
+  std::cout << "Latencies:\t90%\t\t95%\t\t99%\t\tAvg\n";
+  if (print_latency_stats) {
+    std::cout << "\t\t" << lat_90 << "\t\t" << lat_95 << "\t\t" << lat_99
+              << "\t\t" << avg << std::endl;
+  } else {
+    std::cout << "\t\tN/A\t\tN/A\t\tN/A\t\tN/A" << std::endl;
+    std::cout << "Latency statistics are printed only when the "
+                 "online option is set (-o)."
+              << std::endl;
+  }
 }
 
 TRTISASRClient::TRTISASRClient(const std::string& url,
@@ -174,4 +195,31 @@ TRTISASRClient::TRTISASRClient(const std::string& url,
   n_in_flight_.store(0);
   started_at_ = gettime_monotonic();
   total_audio_ = 0;
+}
+
+void TRTISASRClient::WriteLatticesToFile(
+    const std::string& clat_wspecifier,
+    const std::unordered_map<ni::CorrelationID, std::string>&
+        corr_id_and_keys) {
+  kaldi::CompactLatticeWriter clat_writer;
+  clat_writer.Open(clat_wspecifier);
+  std::lock_guard<std::mutex> lk(results_m_);
+  for (auto& p : corr_id_and_keys) {
+    ni::CorrelationID corr_id = p.first;
+    const std::string& key = p.second;
+    auto it = results_.find(corr_id);
+    if(it == results_.end()) {
+	    std::cerr << "Cannot find lattice for corr_id " << corr_id << std::endl;
+	    continue;
+    }
+    const std::string& raw_lattice = it->second.raw_lattice;
+    // We could in theory write directly the binary hold in raw_lattice (it is
+    // in the kaldi lattice format) However getting back to a CompactLattice
+    // object allows us to us CompactLatticeWriter
+    std::istringstream iss(raw_lattice);
+    kaldi::CompactLattice* clat = NULL;
+    kaldi::ReadCompactLattice(iss, true, &clat);
+    clat_writer.Write(key, *clat);
+  }
+  clat_writer.Close();
 }

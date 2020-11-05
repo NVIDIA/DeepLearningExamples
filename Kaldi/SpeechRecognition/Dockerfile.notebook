@@ -1,5 +1,3 @@
-#!/bin/bash
-
 # Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,10 +11,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-docker run --rm -it \
-    --net=host \
-    --shm-size=1g \
-    --ulimit memlock=-1 \
-    --ulimit stack=67108864 \
-    -v $PWD/data:/data \
-    trtis_kaldi_client /workspace/scripts/docker/run_client.sh $@
+FROM nvcr.io/nvidia/tritonserver:20.03-py3-clientsdk
+
+# Kaldi dependencies
+RUN apt-get update && apt-get install -y jupyter \
+                   python3-pyaudio \
+                   python-pyaudio \
+                   libasound-dev \
+                   portaudio19-dev \
+                   libportaudio2 \
+                   libportaudiocpp0 \
+                   libsndfile1 \
+                   alsa-base \
+                   alsa-utils \
+                   vim
+
+RUN python3 -m pip uninstall -y pip
+RUN apt install python3-pip --reinstall
+RUN pip3 install matplotlib soundfile librosa sounddevice

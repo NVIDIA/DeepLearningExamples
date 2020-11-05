@@ -10,7 +10,7 @@
 
 [ "$AMP" = true ] && AMP_FLAG="--amp"
 
-mkdir -o "$OUTPUT_DIR"
+mkdir -p "$OUTPUT_DIR"
 
 for BS in $BS_SEQUENCE ; do
 
