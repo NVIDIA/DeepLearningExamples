@@ -273,7 +273,7 @@ Note: Not using BookCorpus can potentially change final accuracy on a few downst
 
 4. Download the pretrained models from NGC.
 
-We have uploaded checkpoints that have been [fine tuned](https://ngc.nvidia.com/catalog/models/nvidia:bert_tf_v1_1_large_fp16_384) and [pre-trained](https://ngc.nvidia.com/catalog/models/nvidia:bert_tf_pretraining_lamb_16n) for various configurations on the NGC Model Registry. Our data download scripts, by default download some of them but you can browse and download the relevant checkpoints directly from the [NGC model catalog](https://ngc.nvidia.com/catalog/models). Download them to the `data/download/nvidia_pretrained/` to easily access them in your scripts.
+We have uploaded checkpoints that have been fine tuned and pre-trained for various configurations on the NGC Model Registry. Our data download scripts, by default download some of them but you can browse and download the relevant checkpoints directly from the [NGC model catalog](https://ngc.nvidia.com/catalog/models). Download them to the `data/download/nvidia_pretrained/` to easily access them in your scripts.
 
 5. Start an interactive session in the NGC container to run training/inference.
 
