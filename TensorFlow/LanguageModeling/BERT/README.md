@@ -273,7 +273,7 @@ Note: Not using BookCorpus can potentially change final accuracy on a few downst
 
 4. Download the pretrained models from NGC.
 
-We have uploaded checkpoints that have been [fine tuned](https://ngc.nvidia.com/catalog/models/nvidia:bert_tf_v1_1_large_fp16_384) and [pre-trained](https://ngc.nvidia.com/catalog/models/nvidia:bert_tf_pretraining_lamb_16n) for various configurations on the NGC Model Registry. Our data download scripts, by default download some of them but you can browse and download the relevant checkpoints directly from the [NGC model catalog](https://ngc.nvidia.com/catalog/models). Download them to the `data/download/nvidia_pretrained/` to easily access them in your scripts. 
+We have uploaded checkpoints that have been [fine tuned](https://ngc.nvidia.com/catalog/models/nvidia:bert_tf_v1_1_large_fp16_384) and [pre-trained](https://ngc.nvidia.com/catalog/models/nvidia:bert_tf_pretraining_lamb_16n) for various configurations on the NGC Model Registry. Our data download scripts, by default download some of them but you can browse and download the relevant checkpoints directly from the [NGC model catalog](https://ngc.nvidia.com/catalog/models). Download them to the `data/download/nvidia_pretrained/` to easily access them in your scripts.
 
 5. Start an interactive session in the NGC container to run training/inference.
 
@@ -839,9 +839,9 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 
 | **GPUs** | **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
 |----------|---------------------------------------------|----------------------------------|-----------------------|--------------------------------------------------|-------------------------|------------------------------------|
-|        1 | 24, 10                                      |                            51.02 |                 31.33 |                                             1.63 |                    1.00 |                               1.00 |
-|        4 | 24, 10                                      |                           181.37 |                 94.19 |                                             1.93 |                    3.55 |                               3.01 |
-|        8 | 24, 10                                      |                            314.6 |                155.53 |                                             2.02 |                    6.17 |                               4.96 |
+|        1 | 24, 10                                      |                            51.02 |                 10.42 |                                             4.90 |                    1.00 |                               1.00 |
+|        4 | 24, 10                                      |                           181.37 |                 39.77 |                                             4.56 |                    3.55 |                               3.82 |
+|        8 | 24, 10                                      |                            314.6 |                 79.37 |                                             3.96 |                    6.17 |                               7.62 |
 
 Note: The respective values for FP32 runs that use a batch size of 24 are not available due to out of memory errors that arise.
 
@@ -889,10 +889,10 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 
 | **GPUs** | **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
 |----------|---------------------------------------------|----------------------------------|-----------------------|--------------------------------------------------|-------------------------|------------------------------------|
-|        1 | 24, 10                                      |                            55.28 |                 32.72 |                                             1.69 |                    1.00 |                               1.00 |
-|        4 | 24, 10                                      |                           199.53 |                100.73 |                                             1.98 |                    3.61 |                               3.08 |
-|        8 | 24, 10                                      |                           341.55 |                168.92 |                                             2.02 |                    6.18 |                               5.16 |
-|       16 | 24, 10                                      |                           683.37 |                249.54 |                                             2.74 |                   12.36 |                               7.63 |
+|        1 | 24, 10                                      |                            55.28 |                 11.15 |                                             4.96 |                    1.00 |                               1.00 |
+|        4 | 24, 10                                      |                           199.53 |                 42.91 |                                             4.65 |                    3.61 |                               3.85 |
+|        8 | 24, 10                                      |                           341.55 |                 85.08 |                                             4.01 |                    6.18 |                               7.63 |
+|       16 | 24, 10                                      |                           683.37 |                156.29 |                                             4.37 |                   12.36 |                              14.02 |
 
 Note: The respective values for FP32 runs that use a batch size of 24 are not available due to out of memory errors that arise.
 
