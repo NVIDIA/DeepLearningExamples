@@ -114,8 +114,8 @@ public:
     int finished_buf_size = args_.batch_size_ * args_.beam_width_; //type bool
     int finished_count_size = (int)(ceil(1 / 32.)) * 32; // type int
 
-    int topk_ids_buf_size = args_.batch_size_ * args_.beam_width_ * (ceil)((args_.beam_width_ * args_.vocab_size_ * 1.0) / 1024.0); // type int
-    int topk_val_buf_size = args_.batch_size_ * args_.beam_width_ * args_.beam_width_;  // type float
+    int topk_ids_buf_size = args_.batch_size_ * args_.beam_width_ * (ceil)((args_.beam_width_ * args_.vocab_size_ * 1.0) / 1024.0) * 8; // type int
+    int topk_val_buf_size = args_.batch_size_ * args_.beam_width_ * args_.beam_width_ * 8;  // type float
     int storage_size_per_beam = 2 * args_.beam_width_ + SMALL_TOP_K_SOFTMAX_MAX_VOC_PARTS * (2 * MAX_K + 2);
     args_.temp_storage_size_ = args_.batch_size_ * args_.beam_width_ * storage_size_per_beam;  // type float
 
