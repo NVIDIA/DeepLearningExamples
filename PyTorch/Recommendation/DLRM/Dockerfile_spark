@@ -17,7 +17,7 @@ FROM ${FROM_IMAGE_NAME}
 
 RUN apt update && \
     apt install -y openjdk-8-jdk && \
-    curl https://downloads.apache.org/spark/spark-3.0.0/spark-3.0.0-bin-hadoop3.2.tgz -o /opt/spark-3.0.0-bin-hadoop3.2.tgz && \
+    curl https://archive.apache.org/dist/spark/spark-3.0.0/spark-3.0.0-bin-hadoop3.2.tgz -o /opt/spark-3.0.0-bin-hadoop3.2.tgz && \
     tar zxf /opt/spark-3.0.0-bin-hadoop3.2.tgz -C /opt/ && \
     rm /opt/spark-3.0.0-bin-hadoop3.2.tgz && \
     curl https://repo1.maven.org/maven2/ai/rapids/cudf/0.14/cudf-0.14-cuda10-2.jar -o /opt/cudf-0.14-cuda10-2.jar && \
