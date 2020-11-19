@@ -165,7 +165,7 @@ We use the following heuristic for dividing the work between the GPUs:
 
 ### Preprocessing on GPU with Spark 3
 
-Please refer to [the "Preprocessing with Spark" section](preprocess-with-spark) for detailed description of the Spark 3 GPU functionality 
+Please refer to [the "Preprocessing with Spark" section](#preprocess-with-spark) for detailed description of the Spark 3 GPU functionality 
  
 ## Setup
 
