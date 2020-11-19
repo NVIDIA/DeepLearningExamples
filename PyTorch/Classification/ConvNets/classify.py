@@ -72,7 +72,7 @@ def main(args):
     model = model.cuda()
 
     if args.precision in ["AMP", "FP16"]:
-        model = network_to_half()
+        model = network_to_half(model)
 
     model.eval()
 
