@@ -21,6 +21,6 @@ fi
 cd "$2" &&
 python /opt/mxnet/tools/im2rec.py --list --recursive train "$1/train" &&
 python /opt/mxnet/tools/im2rec.py --list --recursive val "$1/val" &&
-python /opt/mxnet/tools/im2rec.py --pass-through --num-thread 40 train "$1/train" &&
-python /opt/mxnet/tools/im2rec.py --pass-through --num-thread 40 val "$1/val" &&
+python /opt/mxnet/tools/im2rec.py --pass-through --num-thread 40 train.lst "$1/train" &&
+python /opt/mxnet/tools/im2rec.py --pass-through --num-thread 40 val.lst "$1/val" &&
 echo "Dataset was prepared succesfully!"
