@@ -49,7 +49,7 @@ PARSER.add_argument('--learning_rate',
                     default=0.0001,
                     help="""Learning rate coefficient for AdamOptimizer""")
 
-PARSER.add_argument('--crossvalidation_idx',
+PARSER.add_argument('--fold',
                     type=int,
                     default=None,
                     help="""Chosen fold for cross-validation. Use None to disable cross-validation""")
@@ -68,6 +68,11 @@ PARSER.add_argument('--log_every',
                     type=int,
                     default=100,
                     help="""Log performance every n steps""")
+
+PARSER.add_argument('--evaluate_every',
+                    type=int,
+                    default=0,
+                    help="""Evaluate every n steps""")
 
 PARSER.add_argument('--warmup_steps',
                     type=int,
@@ -110,10 +115,11 @@ def parse_args(flags):
         'log_dir': flags.log_dir,
         'batch_size': flags.batch_size,
         'learning_rate': flags.learning_rate,
-        'crossvalidation_idx': flags.crossvalidation_idx,
+        'fold': flags.fold,
         'max_steps': flags.max_steps,
         'weight_decay': flags.weight_decay,
         'log_every': flags.log_every,
+        'evaluate_every': flags.evaluate_every,
         'warmup_steps': flags.warmup_steps,
         'augment': flags.augment,
         'benchmark': flags.benchmark,

@@ -16,9 +16,9 @@
 # Usage:
 # bash unet_TRAIN_FP32_8GPU.sh <path to dataset> <path to results directory> <batch size>
 
-horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size $3 --exec_mode train_and_evaluate --crossvalidation_idx 0 --augment --xla > $2/log_FP32_8GPU_fold0.txt
-horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size $3 --exec_mode train_and_evaluate --crossvalidation_idx 1 --augment --xla > $2/log_FP32_8GPU_fold1.txt
-horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size $3 --exec_mode train_and_evaluate --crossvalidation_idx 2 --augment --xla > $2/log_FP32_8GPU_fold2.txt
-horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size $3 --exec_mode train_and_evaluate --crossvalidation_idx 3 --augment --xla > $2/log_FP32_8GPU_fold3.txt
-horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size $3 --exec_mode train_and_evaluate --crossvalidation_idx 4 --augment --xla > $2/log_FP32_8GPU_fold4.txt
+horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size $3 --exec_mode train_and_evaluate --fold 0 --augment --xla > $2/log_FP32_8GPU_fold0.txt
+horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size $3 --exec_mode train_and_evaluate --fold 1 --augment --xla > $2/log_FP32_8GPU_fold1.txt
+horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size $3 --exec_mode train_and_evaluate --fold 2 --augment --xla > $2/log_FP32_8GPU_fold2.txt
+horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size $3 --exec_mode train_and_evaluate --fold 3 --augment --xla > $2/log_FP32_8GPU_fold3.txt
+horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size $3 --exec_mode train_and_evaluate --fold 4 --augment --xla > $2/log_FP32_8GPU_fold4.txt
 python utils/parse_results.py --model_dir $2 --exec_mode convergence --env FP32_8GPU

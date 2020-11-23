@@ -17,21 +17,21 @@ import numpy as np
 import argparse
 
 
-def process_performance_stats(timestamps, params):
-    warmup_steps = params['warmup_steps']
-    batch_size = params['batch_size']
-    timestamps_ms = 1000 * timestamps[warmup_steps:]
-    timestamps_ms = timestamps_ms[timestamps_ms > 0]
-    latency_ms = timestamps_ms.mean()
-    std = timestamps_ms.std()
-    n = np.sqrt(len(timestamps_ms))
-    throughput_imgps = (1000.0 * batch_size / timestamps_ms).mean()
+def process_performance_stats(timestamps, batch_size, mode):
+    """ Get confidence intervals
 
-    stats = [("Throughput Avg", str(throughput_imgps)),
-             ('Latency Avg:', str(latency_ms))]
-    for ci, lvl in zip(["90%:", "95%:", "99%:"],
-                       [1.645, 1.960, 2.576]):
-        stats.append(("Latency_"+ci, str(latency_ms + lvl * std / n)))
+    :param timestamps: Collection of timestamps
+    :param batch_size: Number of samples per batch
+    :param mode: Estimator's execution mode
+    :return: Stats
+    """
+    timestamps_ms = 1000 * timestamps
+    throughput_imgps = (1000.0 * batch_size / timestamps_ms).mean()
+    stats = {f"throughput_{mode}": throughput_imgps,
+             f"latency_{mode}_mean": timestamps_ms.mean()}
+    for level in [90, 95, 99]:
+        stats.update({f"latency_{mode}_{level}": np.percentile(timestamps_ms, level)})
+
     return stats
 
 

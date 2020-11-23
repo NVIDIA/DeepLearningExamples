@@ -19,8 +19,8 @@ from PIL import Image
 import horovod.tensorflow as hvd
 import tensorflow as tf
 
-from utils.losses import partial_losses
-from utils.parse_results import process_performance_stats
+from runtime.losses import partial_losses
+from runtime.parse_results import process_performance_stats
 
 
 def train(params, model, dataset, logger):
@@ -35,7 +35,7 @@ def train(params, model, dataset, logger):
     ce_loss = tf.keras.metrics.Mean(name='ce_loss')
     f1_loss = tf.keras.metrics.Mean(name='dice_loss')
     checkpoint = tf.train.Checkpoint(optimizer=optimizer, model=model)
-    if params.resume_training:
+    if params.resume_training and params.model_dir:
         checkpoint.restore(tf.train.latest_checkpoint(params.model_dir))
 
     @tf.function
@@ -69,26 +69,30 @@ def train(params, model, dataset, logger):
     if params.benchmark:
         assert max_steps * hvd.size() > params.warmup_steps, \
             "max_steps value has to be greater than warmup_steps"
-        timestamps = np.zeros((hvd.size(), max_steps * hvd.size() + 1), dtype=np.float32)
+        timestamps = []
         for iteration, (images, labels) in enumerate(dataset.train_fn(drop_remainder=True)):
-            t0 = time()
             loss = train_step(images, labels, warmup_batch=iteration == 0).numpy()
-            timestamps[hvd.rank(), iteration] = time() - t0
+            if iteration > params.warmup_steps:
+                timestamps.append(time())
             if iteration >= max_steps * hvd.size():
                 break
-        timestamps = np.mean(timestamps, axis=0)
+
         if hvd.rank() == 0:
-            stats = process_performance_stats(timestamps, params)
-            logger.log(step=(),
-                       data={metric: value for (metric, value) in stats})
+            deltas = np.array([timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)])
+            stats = process_performance_stats(deltas, hvd.size() * params.batch_size, mode="train")
+            logger.log(step=(), data=stats)
     else:
         for iteration, (images, labels) in enumerate(dataset.train_fn()):
             train_step(images, labels, warmup_batch=iteration == 0)
-            if (hvd.rank() == 0) and (iteration % params.log_every == 0):
-                logger.log(step=(iteration, max_steps),
-                           data={"train_ce_loss": float(ce_loss.result()),
-                                 "train_dice_loss": float(f1_loss.result()),
-                                 "train_total_loss": float(f1_loss.result() + ce_loss.result())})
+            if hvd.rank() == 0:
+                if iteration % params.log_every == 0:
+                    logger.log(step=(iteration, max_steps),
+                               data={"train_ce_loss": float(ce_loss.result()),
+                                     "train_dice_loss": float(f1_loss.result()),
+                                     "train_total_loss": float(f1_loss.result() + ce_loss.result())})
+
+                if (params.evaluate_every > 0) and (iteration % params.evaluate_every == 0):
+                    evaluate(params, model, dataset, logger, restore_checkpoint=False)
 
                 f1_loss.reset_states()
                 ce_loss.reset_states()
@@ -101,13 +105,15 @@ def train(params, model, dataset, logger):
     logger.flush()
 
 
-def evaluate(params, model, dataset, logger):
+def evaluate(params, model, dataset, logger, restore_checkpoint=True):
+    if params.fold is None:
+        print("No fold specified for evaluation. Please use --fold [int] to select a fold.")
     ce_loss = tf.keras.metrics.Mean(name='ce_loss')
     f1_loss = tf.keras.metrics.Mean(name='dice_loss')
     checkpoint = tf.train.Checkpoint(model=model)
-    checkpoint.restore(tf.train.latest_checkpoint(params.model_dir)).expect_partial()
+    if params.model_dir and restore_checkpoint:
+        checkpoint.restore(tf.train.latest_checkpoint(params.model_dir)).expect_partial()
 
-    @tf.function
     def validation_step(features, labels):
         output_map = model(features, training=False)
         crossentropy_loss, dice_loss = partial_losses(output_map, labels)
@@ -130,7 +136,8 @@ def evaluate(params, model, dataset, logger):
 
 def predict(params, model, dataset, logger):
     checkpoint = tf.train.Checkpoint(model=model)
-    checkpoint.restore(tf.train.latest_checkpoint(params.model_dir)).expect_partial()
+    if params.model_dir:
+        checkpoint.restore(tf.train.latest_checkpoint(params.model_dir)).expect_partial()
 
     @tf.function
     def prediction_step(features):
@@ -139,16 +146,16 @@ def predict(params, model, dataset, logger):
     if params.benchmark:
         assert params.max_steps > params.warmup_steps, \
             "max_steps value has to be greater than warmup_steps"
-        timestamps = np.zeros(params.max_steps + 1, dtype=np.float32)
+        timestamps = []
         for iteration, images in enumerate(dataset.test_fn(count=None, drop_remainder=True)):
-            t0 = time()
             prediction_step(images)
-            timestamps[iteration] = time() - t0
+            timestamps.append(time())
             if iteration >= params.max_steps:
                 break
-        stats = process_performance_stats(timestamps, params)
-        logger.log(step=(),
-                   data={metric: value for (metric, value) in stats})
+
+        deltas = np.array([timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)])
+        stats = process_performance_stats(deltas, params.batch_size, mode="test")
+        logger.log(step=(), data=stats)
     else:
         predictions = np.concatenate([prediction_step(images).numpy()
                                       for images in dataset.test_fn(count=1)], axis=0)
@@ -163,4 +170,6 @@ def predict(params, model, dataset, logger):
                               compression="tiff_deflate",
                               save_all=True,
                               append_images=multipage_tif[1:])
+
+        print("Predictions saved at {}".format(output_dir))
     logger.flush()
