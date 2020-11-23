@@ -26,10 +26,10 @@ Example:
 import horovod.tensorflow as hvd
 
 from model.unet import Unet
-from run import train, evaluate, predict
-from utils.setup import get_logger, set_flags, prepare_model_dir
-from utils.cmd_util import PARSER, parse_args
-from utils.data_loader import Dataset
+from runtime.run import train, evaluate, predict
+from runtime.setup import get_logger, set_flags, prepare_model_dir
+from runtime.arguments import PARSER, parse_args
+from data_loading.data_loader import Dataset
 
 
 def main():
@@ -47,7 +47,7 @@ def main():
 
     dataset = Dataset(data_dir=params.data_dir,
                       batch_size=params.batch_size,
-                      fold=params.crossvalidation_idx,
+                      fold=params.fold,
                       augment=params.augment,
                       gpu_id=hvd.rank(),
                       num_gpus=hvd.size(),

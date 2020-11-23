@@ -231,20 +231,20 @@ For the specifics concerning training and inference, see the [Advanced](#advance
   
    This script will launch a training on a single fold and store the model’s checkpoint in the <path/to/checkpoint> directory. 
   
-   The script can be run directly by modifying flags if necessary, especially the number of GPUs, which is defined after the `-np` flag. Since the test volume does not have labels, 20% of the training data is used for validation in 5-fold cross-validation manner. The number of fold can be changed using `--crossvalidation_idx` with an integer in range 0-4. For example, to run with 4 GPUs using fold 1 use:
+   The script can be run directly by modifying flags if necessary, especially the number of GPUs, which is defined after the `-np` flag. Since the test volume does not have labels, 20% of the training data is used for validation in 5-fold cross-validation manner. The number of fold can be changed using `--fold` with an integer in range 0-4. For example, to run with 4 GPUs using fold 1 use:
   
    ```bash
-   horovodrun -np 4 python main.py --data_dir /data --model_dir /results --batch_size 1 --exec_mode train --crossvalidation_idx 1 --xla --amp
+   horovodrun -np 4 python main.py --data_dir /data --model_dir /results --batch_size 1 --exec_mode train --fold 1 --xla --amp
    ```
   
    Training will result in a checkpoint file being written to `./results` on the host machine.
  
 6. Start validation/evaluation.
   
-   The trained model can be evaluated by passing the `--exec_mode evaluate` flag. Since evaluation is carried out on a validation dataset, the `--crossvalidation_idx` parameter should be filled. For example:
+   The trained model can be evaluated by passing the `--exec_mode evaluate` flag. Since evaluation is carried out on a validation dataset, the `--fold` parameter should be filled. For example:
   
    ```bash
-   python main.py --data_dir /data --model_dir /results --batch_size 1 --exec_mode evaluate --crossvalidation_idx 0 --xla --amp
+   python main.py --data_dir /data --model_dir /results --batch_size 1 --exec_mode evaluate --fold 0 --xla --amp
    ```
   
    Evaluation can also be triggered jointly after training by passing the `--exec_mode train_and_evaluate` flag.
@@ -291,19 +291,20 @@ Other folders included in the root directory are:
 The complete list of the available parameters for the `main.py` script contains:
 * `--exec_mode`: Select the execution mode to run the model (default: `train`). Modes available:
   * `train` - trains model from scratch.
-  * `evaluate` - loads checkpoint (if available) and performs evaluation on validation subset (requires `--crossvalidation_idx` other than `None`).
-  * `train_and_evaluate` - trains model from scratch and performs validation at the end (requires `--crossvalidation_idx` other than `None`).
+  * `evaluate` - loads checkpoint (if available) and performs evaluation on validation subset (requires `--fold` other than `None`).
+  * `train_and_evaluate` - trains model from scratch and performs validation at the end (requires `--fold` other than `None`).
   * `predict` - loads checkpoint (if available) and runs inference on the test set. Stores the results in `--model_dir` directory.
   * `train_and_predict` - trains model from scratch and performs inference.
 * `--model_dir`: Set the output directory for information related to the model (default: `/results`).
 * `--log_dir`: Set the output directory for logs (default: None).
 * `--data_dir`: Set the input directory containing the dataset (default: `None`).
 * `--batch_size`: Size of each minibatch per GPU (default: `1`).
-* `--crossvalidation_idx`: Selected fold for cross-validation (default: `None`).
+* `--fold`: Selected fold for cross-validation (default: `None`).
 * `--max_steps`: Maximum number of steps (batches) for training (default: `1000`).
 * `--seed`: Set random seed for reproducibility (default: `0`).
 * `--weight_decay`: Weight decay coefficient (default: `0.0005`).
 * `--log_every`: Log performance every n steps (default: `100`).
+* `--evaluate_every`: Evaluate every n steps (default: `0` - evaluate once at the end).
 * `--learning_rate`: Model’s learning rate (default: `0.0001`).
 * `--augment`: Enable data augmentation (default: `False`).
 * `--benchmark`: Enable performance benchmarking (default: `False`). If the flag is set, the script runs in a benchmark mode - each iteration is timed and the performance result (in images per second) is printed at the end. Works for both `train` and `predict` execution modes.
@@ -324,8 +325,8 @@ usage: main.py [-h]
               [--exec_mode {train,train_and_predict,predict,evaluate,train_and_evaluate}]
               [--model_dir MODEL_DIR] --data_dir DATA_DIR [--log_dir LOG_DIR]
               [--batch_size BATCH_SIZE] [--learning_rate LEARNING_RATE]
-              [--crossvalidation_idx CROSSVALIDATION_IDX]
-              [--max_steps MAX_STEPS] [--weight_decay WEIGHT_DECAY]
+              [--fold FOLD] [--max_steps MAX_STEPS]
+              [--evaluate_every EVALUATE_EVERY] [--weight_decay WEIGHT_DECAY]
               [--log_every LOG_EVERY] [--warmup_steps WARMUP_STEPS]
               [--seed SEED] [--augment] [--benchmark]
               [--amp] [--xla]
@@ -333,34 +334,39 @@ usage: main.py [-h]
 UNet-medical
  
 optional arguments:
- -h, --help            show this help message and exit
- --exec_mode {train,train_and_predict,predict,evaluate,train_and_evaluate}
-                       Execution mode of running the model
- --model_dir MODEL_DIR
-                       Output directory for information related to the model
- --data_dir DATA_DIR   Input directory containing the dataset for training
-                       the model
- --log_dir LOG_DIR     Output directory for training logs
- --batch_size BATCH_SIZE
-                       Size of each minibatch per GPU
- --learning_rate LEARNING_RATE
-                       Learning rate coefficient for AdamOptimizer
- --crossvalidation_idx CROSSVALIDATION_IDX
-                       Chosen fold for cross-validation. Use None to disable
-                       cross-validation
- --max_steps MAX_STEPS
-                       Maximum number of steps (batches) used for training
- --weight_decay WEIGHT_DECAY
-                       Weight decay coefficient
- --log_every LOG_EVERY
-                       Log performance every n steps
- --warmup_steps WARMUP_STEPS
-                       Number of warmup steps
- --seed SEED           Random seed
- --augment             Perform data augmentation during training
- --benchmark           Collect performance metrics during training
- --amp                 Train using TF-AMP
- --xla                 Train using XLA
+  -h, --help            show this help message and exit
+  --exec_mode {train,train_and_predict,predict,evaluate,train_and_evaluate}
+                        Execution mode of running the model
+  --model_dir MODEL_DIR
+                        Output directory for information related to the model
+  --data_dir DATA_DIR   Input directory containing the dataset for training
+                        the model
+  --log_dir LOG_DIR     Output directory for training logs
+  --batch_size BATCH_SIZE
+                        Size of each minibatch per GPU
+  --learning_rate LEARNING_RATE
+                        Learning rate coefficient for AdamOptimizer
+  --fold FOLD           Chosen fold for cross-validation. Use None to disable
+                        cross-validation
+  --max_steps MAX_STEPS
+                        Maximum number of steps (batches) used for training
+  --weight_decay WEIGHT_DECAY
+                        Weight decay coefficient
+  --log_every LOG_EVERY
+                        Log performance every n steps
+  --evaluate_every EVALUATE_EVERY
+                        Evaluate every n steps
+  --warmup_steps WARMUP_STEPS
+                        Number of warmup steps
+  --seed SEED           Random seed
+  --augment             Perform data augmentation during training
+  --no-augment
+  --benchmark           Collect performance metrics during training
+  --no-benchmark
+  --use_amp, --amp      Train using TF-AMP
+  --use_xla, --xla      Train using XLA
+  --use_trt             Use TF-TRT
+  --resume_training     Resume training from a checkpoint
 ```
  
  
@@ -420,7 +426,7 @@ horovodrun -np <number/of/gpus> python main.py --data_dir /data [other parameter
 The main result of the training are checkpoints stored by default in `./results/` on the host machine, and in the `/results` in the container. This location can be controlled
 by the `--model_dir` command-line argument, if a different location was mounted while starting the container. In the case when the training is run in `train_and_predict` mode, the inference will take place after the training is finished, and inference results will be stored to the `/results` directory.
  
-If the `--exec_mode train_and_evaluate` parameter was used, and if `--crossvalidation_idx` parameter is set to an integer value of {0, 1, 2, 3, 4}, the evaluation of the validation set takes place after the training is completed. The results of the evaluation will be printed to the console.
+If the `--exec_mode train_and_evaluate` parameter was used, and if `--fold` parameter is set to an integer value of {0, 1, 2, 3, 4}, the evaluation of the validation set takes place after the training is completed. The results of the evaluation will be printed to the console.
 
 ### Inference process
  

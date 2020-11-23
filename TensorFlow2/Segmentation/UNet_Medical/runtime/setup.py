@@ -13,11 +13,13 @@
 # limitations under the License.
 
 import os
+import multiprocessing
+
 import numpy as np
 import tensorflow as tf
+import horovod.tensorflow as hvd
 
 import dllogger as logger
-import horovod.tensorflow as hvd
 from dllogger import StdOutBackend, Verbosity, JSONStreamBackend
 
 
@@ -32,6 +34,7 @@ def set_flags(params):
     os.environ['TF_ENABLE_WINOGRAD_NONFUSED'] = '1'
     os.environ['TF_SYNC_ON_FINISH'] = '0'
     os.environ['TF_AUTOTUNE_THRESHOLD'] = '2'
+    os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '0'
 
     np.random.seed(params.seed)
     tf.random.set_seed(params.seed)
@@ -45,10 +48,11 @@ def set_flags(params):
     if gpus:
         tf.config.experimental.set_visible_devices(gpus[hvd.local_rank()], 'GPU')
 
+    tf.config.threading.set_intra_op_parallelism_threads(1)
+    tf.config.threading.set_inter_op_parallelism_threads(max(2, (multiprocessing.cpu_count() // hvd.size()) - 2))
+
     if params.use_amp:
         tf.keras.mixed_precision.experimental.set_policy('mixed_float16')
-    else:
-        os.environ['TF_ENABLE_AUTO_MIXED_PRECISION'] = '0'
 
 
 def prepare_model_dir(params):
