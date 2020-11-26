@@ -52,7 +52,7 @@ The differences between this Wide & Deep Recommender Model and the model from th
 
 The model enables you to train a recommender model that combines the memorization of the Wide part and generalization of the Deep part of the network.
 
-This model is trained with mixed precision using Tensor Cores on NVIDIA Volta, Turing and the NVIDIA Ampere GPU architectures. Therefore, researchers can get results 1.43 times faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
+This model is trained with mixed precision using Tensor Cores on NVIDIA Volta, Turing and the NVIDIA Ampere GPU architectures. Therefore, researchers can get results 1.49 times faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
 
 ### Model architecture
 
@@ -168,7 +168,7 @@ The following section lists the requirements that you need to meet in order to s
 
 This repository contains Dockerfile which extends the TensorFlow NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 -   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
--   [20.06-tf1-py3](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container
+-   [20.10-tf1-py3](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container
 -   Supported GPUs:
 	- [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
 	- [NVIDIA Turing architecture](https://www.nvidia.com/en-us/geforce/turing/)
@@ -283,9 +283,8 @@ These are the important parameters in the `trainer/task.py` script:
 --linear_l1_regularization: L1 regularization for the wide part of the model
 --linear_l2_regularization: L2 regularization for the wide part of the model
 --deep_learning_rate: Learning rate for the deep part of the model
---deep_l1_regularization: L1 regularization for the deep part of the model
---deep_l2_regularization: L2 regularization for the deep part of the model
 --deep_dropout: Dropout probability for deep model
+--deep_warmup_epochs: Number of epochs with linear learning rate warmup
 --predict: Perform only the prediction on the validation set, do not train
 --evaluate: Perform only the evaluation on the validation set, do not train
 --gpu: Run computations on GPU
@@ -321,7 +320,7 @@ The original data is stored in several separate files:
 - `promoted_content.csv` - metadata about the ads
 - `document_meta.csv`, `document_topics.csv`, `document_entities.csv`, `document_categories.csv` - metadata about the documents
  
-During the preprocessing stage the data is transformed into 55M rows tabular data of 54 features and eventually saved in pre-batched TFRecord format.
+During the preprocessing stage the data is transformed into 59M rows tabular data of 54 features and eventually saved in pre-batched TFRecord format.
 
 
 #### Spark preprocessing
@@ -357,7 +356,7 @@ For more information about Spark, please refer to the
 ### Training process
 
 The training can be started by running the `trainer/task.py` script. By default the script is in train mode. Other training related 
-configs are also present in the `trainer/task.py` and can be seen using the command `python -m trainer.task --help`. Training happens for `--num_epochs` epochs with a custom estimator for the model. The model has a wide linear part and a deep feed forward network, and the networks are built according to the default configuration.
+configs are also present in the `trainer/task.py` and can be seen using the command `python -m trainer.task --help`. Training happens for `--num_epochs` epochs with a DNNLinearCombinedClassifier estimator for the model. The model has a wide linear part and a deep feed forward network, and the networks are built according to the default configuration.
 
 Two separate optimizers are used to optimize the wide and the deep part of the network:
     
@@ -401,23 +400,23 @@ accuracy in training.
 
 ##### Training accuracy: NVIDIA DGX A100 (8x A100 40GB)
 
-Our results were obtained by running the benchmark scripts from the `scripts` directory in the TensorFlow NGC container on NVIDIA DGX A100 with (8x A100 40GB) GPUs.
+Our results were obtained by running the `trainer/task.py` training script in the TensorFlow NGC container on NVIDIA DGX A100 with (8x A100 40GB) GPUs.
 
-|**GPUs**|**Batch size / GPU**|**Accuracy - TF32 (MAP@12)**|**Accuracy - mixed precision (MAP@12)**|**Time to train - TF32 (minutes)**|**Time to train - mixed precision (minutes)**|**Time to train speedup (FP32 to mixed precision)**|
+|**GPUs**|**Batch size / GPU**|**Accuracy - TF32 (MAP@12)**|**Accuracy - mixed precision (MAP@12)**|**Time to train - TF32 (minutes)**|**Time to train - mixed precision (minutes)**|**Time to train speedup (TF32 to mixed precision)**|
 |-------:|-------------------:|----------------------------:|---------------------------------------:|-----------------------------------------------:|----------------------:|---------------------------------:|
-| 1 | 131,072 | 0.67683 | 0.67632  | 312 | 325 | [-](#known-issues) |
-| 8 | 16,384 | 0.67709 | 0.67721  | 178 | 188 | [-](#known-issues) |
+| 1 | 131,072 | 0.67683 | 0.67632  | 341 | 359 | [-](#known-issues) |
+| 8 | 16,384 | 0.67709 | 0.67721  | 93 | 107 | [-](#known-issues) |
 
 To achieve the same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
 
-Our results were obtained by running the benchmark scripts from the `scripts` directory in the TensorFlow NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs.
+Our results were obtained by running the `trainer/task.py` training script in the TensorFlow NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs.
 
 |**GPUs**|**Batch size / GPU**|**Accuracy - FP32 (MAP@12)**|**Accuracy - mixed precision (MAP@12)**|**Time to train - FP32 (minutes)**|**Time to train - mixed precision (minutes)**|**Time to train speedup (FP32 to mixed precision)**|
 |-------:|-------------------:|----------------------------:|---------------------------------------:|-----------------------------------------------:|----------------------:|---------------------------------:|
-| 1 | 131,072 | 0.67648 | 0.67744 | 609 | 426 | 1.429 |
-| 8 | 16,384 | 0.67692 | 0.67725  | 233 | 232 |  [-](#known-issues) |
+| 1 | 131,072 | 0.67648 | 0.67744 | 654 | 440 | 1.49 |
+| 8 | 16,384 | 0.67692 | 0.67725  | 190 | 185 |  1.03 |
 
 To achieve the same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -430,7 +429,7 @@ Models trained with FP32, TF32 and Automatic Mixed Precision (AMP) achieve simil
 ##### Training stability test
 
 The Wide and Deep model was trained for 54,713 training steps, starting
-from 6 different initial random seeds for each setup. The training was performed in the 20.06-tf1-py3 NGC container on
+from 6 different initial random seeds for each setup. The training was performed in the 20.10-tf1-py3 NGC container on
 NVIDIA DGX A100 40GB and DGX-1 16GB machines with and without mixed precision enabled.
 After training, the models were evaluated on the validation set. The following
 table summarizes the final MAP@12 score on the validation set.
@@ -448,31 +447,28 @@ table summarizes the final MAP@12 score on the validation set.
 
 ##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
 
-Our results were obtained by running the `trainer/task.py` training script in the TensorFlow NGC container on NVIDIA DGX A100 with (8x A100 40GB) GPUs. Performance numbers (in samples per second) were averaged over 50 training iterations. Improving model scaling for multi-GPU is [under development](#known-issues).
+Our results were obtained by running the benchmark scripts from the `scripts` directory in the TensorFlow NGC container on NVIDIA DGX A100 with (8x A100 40GB) GPUs. Improving model scaling for multi-GPU is [under development](#known-issues).
 
-To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
-
-|**GPUs**|**Batch size / GPU**|**Throughput - TF32 (samples/s)**|**Throughput - mixed precision (samples/s)**|**Strong scaling - FP32**|**Strong scaling - mixed precision**|
+|**GPUs**|**Batch size / GPU**|**Throughput - TF32 (samples/s)**|**Throughput - mixed precision (samples/s)**|**Strong scaling - TF32**|**Strong scaling - mixed precision**|
 |-------:|-------------------:|----------------------------:|---------------------------------------:|----------------------:|---------------------------------:|
-| 1 | 131,072 | 352,904 | 338,356 | 1.00 | 1.00 |
-| 8 | 16,384 | 617,910 | 584,688 | 1.75 | 1.73 |
-
+| 1 | 131,072 | 349,879 | 332,529 | 1.00 | 1.00 |
+| 8 | 16,384 | 1,283,457 | 1,111,976 | 3.67 | 3.34 |
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
 
-Our results were obtained by running the `trainer/task.py` training script in the TensorFlow NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs. Performance numbers (in samples per second) were averaged over 50 training iterations. Improving model scaling for multi-GPU is planned, see [known issues](#known-issues).
-
-To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+Our results were obtained by running the benchmark scripts from the `scripts` directory in the TensorFlow NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs. Improving model scaling for multi-GPU is [under development](#known-issues).
 
 |**GPUs**|**Batch size / GPU**|**Throughput - FP32 (samples/s)**|**Throughput - mixed precision (samples/s)**|**Throughput speedup (FP32 to mixed precision)**|**Strong scaling - FP32**|**Strong scaling - mixed precision**|
 |-------:|-------------------:|----------------------------:|---------------------------------------:|-----------------------------------------------:|----------------------:|---------------------------------:|
-| 1 | 131,072 | 180,561 | 257,995 | 1.429 | 1.00 | 1.00 |
-| 8 | 16,384 | 472,143 | 473,195 | 1.002 | 2.61 | 1.83 |
-
+| 1 | 131,072 | 182,510 | 271,366 | 1.49 | 1.00 | 1.00 |
+| 8 | 16,384 | 626,301 | 643,334 | 1.03 | 3.43 | 2.37 |
 
 ## Release notes
 
 ### Changelog
+
+November 2020
+- Updated performance tables to include numbers from 20.10-tf1-py3 NGC container
 
 June 2020
 - Updated performance tables to include A100 results

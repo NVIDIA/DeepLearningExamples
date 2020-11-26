@@ -24,6 +24,7 @@ import numpy as np
 import os
 import tensorflow as tf
 import tensorflow_transform as tft
+from tensorflow.core.protobuf import rewriter_config_pb2
 from trainer import features
 from utils.dataloader import separate_input_fn
 from utils.hooks.benchmark_hooks import BenchmarkLoggingHook
@@ -311,10 +312,21 @@ def main(FLAGS):
             json.dump(vars(FLAGS), f, indent=4)
 
     if FLAGS.gpu:
-        session_config = tf.compat.v1.ConfigProto(log_device_placement=FLAGS.log_device_placement)
+        if FLAGS.amp:
+            rewrite_options = rewriter_config_pb2.RewriterConfig(auto_mixed_precision=True)
+            session_config = tf.compat.v1.ConfigProto(
+                graph_options=tf.compat.v1.GraphOptions(rewrite_options=rewrite_options),
+                log_device_placement=FLAGS.log_device_placement
+            )
+        else:
+            session_config = tf.compat.v1.ConfigProto(
+                log_device_placement=FLAGS.log_device_placement
+            )
     else:
-        session_config = tf.compat.v1.ConfigProto(device_count={'GPU': 0},
-                                                  log_device_placement=FLAGS.log_device_placement)
+        session_config = tf.compat.v1.ConfigProto(
+            device_count={'GPU': 0},
+            log_device_placement=FLAGS.log_device_placement
+        )
 
     if FLAGS.hvd:
         session_config.gpu_options.visible_device_list = str(hvd.local_rank())
@@ -332,9 +344,15 @@ def main(FLAGS):
     print('Steps per epoch: {}'.format(steps_per_epoch))
     max_steps = int(FLAGS.num_epochs * steps_per_epoch)
 
+    save_checkpoints_steps = FLAGS.benchmark_steps + 1 if FLAGS.benchmark else \
+        int(FLAGS.eval_epoch_interval * steps_per_epoch)
+    count_steps = FLAGS.benchmark_steps + 1 if FLAGS.benchmark else 100
+
     run_config = tf.estimator.RunConfig(model_dir=model_dir) \
         .replace(session_config=session_config,
-                 save_checkpoints_steps=int(FLAGS.eval_epoch_interval * steps_per_epoch),
+                 save_checkpoints_steps=save_checkpoints_steps,
+                 save_summary_steps=count_steps,
+                 log_step_count_steps=count_steps,
                  keep_checkpoint_max=1)
 
     def wide_optimizer():
@@ -345,7 +363,8 @@ def main(FLAGS):
         if FLAGS.hvd:
             opt = hvd.DistributedOptimizer(opt)
         if FLAGS.amp:
-            opt = tf.train.experimental.enable_mixed_precision_graph_rewrite(opt)
+            loss_scale = tf.train.experimental.DynamicLossScale()
+            opt = tf.compat.v1.train.experimental.MixedPrecisionLossScaleOptimizer(opt, loss_scale)
         return opt
 
     def deep_optimizer():
@@ -362,7 +381,8 @@ def main(FLAGS):
         if FLAGS.hvd:
             opt = hvd.DistributedOptimizer(opt)
         if FLAGS.amp:
-            opt = tf.train.experimental.enable_mixed_precision_graph_rewrite(opt)
+            loss_scale = tf.train.experimental.DynamicLossScale()
+            opt = tf.compat.v1.train.experimental.MixedPrecisionLossScaleOptimizer(opt, loss_scale)
         return opt
 
     # input functions to read data from disk
