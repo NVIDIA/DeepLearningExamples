@@ -2,7 +2,7 @@
 
 Giving voice commands to an interactive virtual assistant, converting audio to subtitles on a video online, and transcribing customer interactions into text for archiving at a call center are all use cases for Automatic Speech Recognition (ASR) systems. With deep learning, the latest speech-to-text models are capable of recognition and translation of audio into text in real time! Good models can perform well in noisy environments, are robust to accents and have low word error rates (WERs). 
 
-![](images/8_speech-to-text-figure-1.png)
+![](img/8_speech-to-text-figure-1.png)
 
 In this collection, we will cover:
 - How does speech-to-text work?
@@ -12,7 +12,7 @@ In this collection, we will cover:
 ---
 ## How does speech-to-text work?
 
-![](images/8_speech-to-text-figure-2.png)
+![](img/8_speech-to-text-figure-2.png)
 
 Source: https://developer.nvidia.com/blog/how-to-build-domain-specific-automatic-speech-recognition-models-on-gpus/
 
@@ -25,7 +25,7 @@ Initially we resample the raw analog audio signals into convert into the discret
 
 Acoustic models can be of various types and with different loss functions but the most used in literature and production are Connectionist Temporal Classification (CTC) based model that considers spectrogram (X) as input and produces the log probability scores (P) of all different vocabulary tokens for each time step. For example, NVIDIA’s Jasper and QuartzNet.
 
-![](images/8_speech-to-text-figure-3.png)
+![](img/8_speech-to-text-figure-3.png)
 
 ### Language Modeling:
 
