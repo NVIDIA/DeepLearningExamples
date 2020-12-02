@@ -17,7 +17,7 @@ In this collection, we will cover:
 Image segmentation is a computer vision process by which a digital image is divided into various categories or segments. We use this method to understand what is depicted using a pixel-wise classification of the image. It is very much distinct from image classification, which allots labels to an entire image; object detection identifies and locates objects within an image by drawing bounding boxes around them. Image segmentation presents more pixel-level knowledge about the image content.
 
 Consider a road side scenario with pedestrians, cars and lights:
-![](images/3_image-segmentation-figure-1.png)
+![](img/3_image-segmentation-figure-1.png)
 
 This photo is made up of an immense number of individual pixels, and image segmentation aims to assign each of those pixels to the object to which it belongs. Segmentation of an image enables us to segregate the foreground from the background, identify a road or a car's precise location, and mark the margins that separate a pedestrian from a car or road.
 
@@ -39,7 +39,7 @@ Machine learning moves towards image segmentation train models to recognize whic
 
 Although deep neural networks architectures for image segmentation may differ in implementation, most follows similar basis structure:
 
-![](images/3_image-segmentation-figure-2.png)
+![](img/3_image-segmentation-figure-2.png)
 
 Source - [SegNet Paper](https://arxiv.org/pdf/1511.00561.pdf)
 
@@ -62,7 +62,7 @@ If you’ve been driving for a long time, noticing and reacting to this environm
 
 Even though the field of autonomous machines/automobiles is much more complex than performing segmentation, this pixel-level understanding is a essential ingredient in a step towards reality. 
 
-![](images/3_image-segmentation-figure-3.png)
+![](img/3_image-segmentation-figure-3.png)
 
 ### Medical imaging and diagnostics:
 
@@ -70,13 +70,13 @@ In the initial steps of a diagnostic and treatment pipeline for many conditions 
 
 Essentially, segmentation can effectively distinguish and separate homogeneous areas that may include particularly important pixels of organs, lesions, etc. However, there are significant challenges, including low contrast, noise, and various other imaging ambiguities.
 
-![](images/3_image-segmentation-figure-4.png)
+![](img/3_image-segmentation-figure-4.png)
 
 ### Virtual try-on:
 
 Virtual try on clothes is quite a fascinating feature which was available in stores using specialized hardware which creates a 3d model. But interestingly with deep learning and image segmentation the same can be obtained using just a 2d image.
 
-![](images/3_image-segmentation-figure-5.png)
+![](img/3_image-segmentation-figure-5.png)
 ---
 ## Where to get started
 NVIDIA provides Deep Learning Examples for Image Segmentation on its GitHub repository. These examples provide you with easy to consume and highly optimized scripts for both training and inferencing. The quick start guide at our GitHub repository will help you in setting up the environment using NGC Docker Images, download pre-trained models from NGC and adapt the model training and inference for your application/use-case. 
