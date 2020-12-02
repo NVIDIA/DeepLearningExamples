@@ -83,15 +83,15 @@ NVIDIA provides Deep Learning Examples for Image Segmentation on its GitHub repo
 Here are the examples relevant for image segmentation, directly from [Deep Learning Examples](https://github.com/NVIDIA/DeepLearningExamples):
 
 1. 3D UNet for Medical Image Segmentation using Tensorflow 1.x
-1.1 [Git repository](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_3D_Medical)
-1.2 Uses TensorFlow 20.06-tf1-py3 [NGC container](https://ngc.nvidia.com/registry/nvidia-tensorflow)
+- [Git repository](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_3D_Medical)
+- Uses TensorFlow 20.06-tf1-py3 [NGC container](https://ngc.nvidia.com/registry/nvidia-tensorflow)
 
 
 2. 2D UNet for Industrial Defect Segmentation using Tensorflow 1.x
-2.1 [Git repository](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Industrial)
-2.2 Uses TensorFlow 20.06-tf1-py3 [NGC container](https://ngc.nvidia.com/registry/nvidia-tensorflow)
+- [Git repository](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Industrial)
+- Uses TensorFlow 20.06-tf1-py3 [NGC container](https://ngc.nvidia.com/registry/nvidia-tensorflow)
 
 
 3. MaskRCNN for Common Objects Segmentation using PyTorch
-3.1 [Git repository](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Segmentation/MaskRCNN)
-3.2 Uses PyTorch 20.06-py3 [NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
+- [Git repository](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Segmentation/MaskRCNN)
+- Uses PyTorch 20.06-py3 [NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
