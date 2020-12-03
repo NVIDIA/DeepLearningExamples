@@ -187,7 +187,7 @@ Performance numbers for BERT Large, sequence length=384 are obtained from [exper
 
 ![](../data/images/bert_trt_throughput_vs_latency.png?raw=true)
 
-The plot above shows that throughput gains taper off from increasing batch size above 12. There is minimal gain in throughput going from batch size 12 to 128. However, running inference with a single large batch might be faster than running several small inference requests. Therefore, we choose to maximize batch size for Dynamic Batching with a maximum acceptable queuing delay of 50ms and maximum acceptable inference latency of 100ms.
+The plot above shows that throughput gains taper off from increasing batch size above 12. There is minimal gain in throughput going from batch size 12 to 128. However, running inference with a single large batch might be faster than running several small inference requests. Therefore, we choose to maximize batch size for Dynamic Batching with a maximum acceptable queuing delay of 1ms and maximum acceptable inference latency of 100ms.
 
 ### Dynamic Batching Support
 
