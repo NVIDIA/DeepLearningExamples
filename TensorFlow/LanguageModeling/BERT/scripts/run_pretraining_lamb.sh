@@ -26,7 +26,7 @@ num_gpus=${8:-8}
 warmup_steps_phase1=${9:-"2000"}
 warmup_steps_phase2=${10:-"200"}
 train_steps=${11:-7820}
-save_checkpoints_steps=${12:-100}
+save_checkpoints_steps=${12:-5000}
 num_accumulation_steps_phase1=${13:-128}
 num_accumulation_steps_phase2=${14:-512}
 bert_model=${15:-"large"}
@@ -57,4 +57,4 @@ printf -v SCRIPT_ARGS "%d %d %d %e %e %s %s %d %d %d %d %d %d %d %s %s" \
 bash scripts/run_pretraining_lamb_phase1.sh $SCRIPT_ARGS |& tee -a $LOGFILE
 
 # RUN PHASE 2
-bash scripts/run_pretraining_lamb_phase2.sh $SCRIPT_ARGS |& tee -a $LOGFILE
+# bash scripts/run_pretraining_lamb_phase2.sh $SCRIPT_ARGS |& tee -a $LOGFILE
