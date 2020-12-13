@@ -14,12 +14,16 @@
 import torch
 import torch.distributed as dist
 
+from pathlib import Path
+
+
 def get_rank():
     if not dist.is_available():
         return 0
     if not dist.is_initialized():
         return 0
     return dist.get_rank()
+
 
 def get_world_size():
     if not dist.is_available():
@@ -28,8 +32,15 @@ def get_world_size():
         return 1
     return dist.get_world_size()
 
+
 def is_main_process():
     return get_rank() == 0
+
+
+def barrier():
+    if dist.is_available() and dist.is_initialized():
+        dist.barrier()
+
 
 def format_step(step):
     if isinstance(step, str):
@@ -42,3 +53,13 @@ def format_step(step):
     if len(step) > 2:
         s += "Validation Iteration: {} ".format(step[2])
     return s
+
+
+def mkdir(path):
+    Path(path).mkdir(parents=True, exist_ok=True)
+
+
+def mkdir_by_main_process(path):
+    if is_main_process():
+        mkdir(path)
+    barrier()

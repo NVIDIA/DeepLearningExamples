@@ -33,8 +33,6 @@ import torch.utils.data
 
 import common.layers as layers
 from common.utils import load_wav_to_torch, load_filepaths_and_text, to_gpu
-from common.text import text_to_sequence
-
 
 class TextMelLoader(torch.utils.data.Dataset):
     """
@@ -43,8 +41,9 @@ class TextMelLoader(torch.utils.data.Dataset):
         3) computes mel-spectrograms from audio files.
     """
     def __init__(self, dataset_path, audiopaths_and_text, args, load_mel_from_disk=True):
-        self.audiopaths_and_text = load_filepaths_and_text(dataset_path, audiopaths_and_text)
-        self.text_cleaners = args.text_cleaners
+        self.audiopaths_and_text = load_filepaths_and_text(
+            dataset_path, audiopaths_and_text,
+            has_speakers=(args.n_speakers > 1))
         self.load_mel_from_disk = load_mel_from_disk
         if not load_mel_from_disk:
             self.max_wav_value = args.max_wav_value
@@ -74,14 +73,14 @@ class TextMelLoader(torch.utils.data.Dataset):
         return melspec
 
     def get_text(self, text):
-        text_norm = torch.IntTensor(text_to_sequence(text, self.text_cleaners))
-        return text_norm
+        text_encoded = torch.IntTensor(self.tp.encode_text(text))
+        return text_encoded
 
     def __getitem__(self, index):
         # separate filename and text
         audiopath, text = self.audiopaths_and_text[index]
-        len_text = len(text)
         text = self.get_text(text)
+        len_text = len(text)
         mel = self.get_mel(audiopath)
         return (text, mel, len_text)
 

@@ -203,13 +203,22 @@ To train your model using mixed precision or TF32 with Tensor Cores or FP32, per
 1. Clone the repository.
 ```
 git clone https://github.com/NVIDIA/DeepLearningExamples
-cd DeepLearningExamples/TensorFlow/Classification/RN50v1.5
+cd DeepLearningExamples/TensorFlow/Classification/ConvNets
 ```
 
 2. Download and preprocess the dataset.
 The ResNext101-32x4d script operates on ImageNet 1k, a widely popular image classification dataset from the ILSVRC challenge.
 
-To download and preprocess the dataset, use the [Generate ImageNet for TensorFlow](https://github.com/tensorflow/models/blob/master/research/inception/inception/data/download_and_preprocess_imagenet.sh) script. The dataset will be downloaded to a directory specified as the first parameter of the script.
+* [Download the images](http://image-net.org/download-images)
+* Extract the training and validation data:
+```bash
+mkdir train && mv ILSVRC2012_img_train.tar train/ && cd train
+tar -xvf ILSVRC2012_img_train.tar && rm -f ILSVRC2012_img_train.tar
+find . -name "*.tar" | while read NAME ; do mkdir -p "${NAME%.tar}"; tar -xvf "${NAME}" -C "${NAME%.tar}"; rm -f "${NAME}"; done
+cd ..
+mkdir val && mv ILSVRC2012_img_val.tar val/ && cd val && tar -xvf ILSVRC2012_img_val.tar
+```
+* Preprocess dataset to TFRecord form using [script](https://github.com/tensorflow/models/blob/archive/research/inception/inception/data/build_imagenet_data.py). Additional metadata from [autors repository](https://github.com/tensorflow/models/tree/archive/research/inception/inception/data) might be required.
 
 3. Build the ResNext101-32x4d TensorFlow NGC container.
 ```bash
@@ -420,7 +429,7 @@ To benchmark the training performance on a specific batch size, run:
 Each of these scripts runs 200 warm-up iterations and measures the first epoch.
 
 To control warmup and benchmark length, use the `--warmup_steps`, `--num_iter` and `--iter_unit` flags. Features like XLA or DALI can be controlled
-with `--use_xla` and `--use_dali` flags.
+with `--use_xla` and `--use_dali` flags. If no `--data_dir=<path to imagenet>` flag is specified then the benchmarks will use a synthetic dataset.
 Suggested batch sizes for training are 128 for mixed precision training and 64 for single precision training per single V100 16 GB.
 
 
@@ -438,6 +447,7 @@ To benchmark the inference performance on a specific batch size, run:
 
 By default, each of these scripts runs 20 warm-up iterations and measures the next 80 iterations.
 To control warm-up and benchmark length, use the `--warmup_steps`, `--num_iter` and `--iter_unit` flags.
+If no `--data_dir=<path to imagenet>` flag is specified then the benchmarks will use a synthetic dataset.
 
 The benchmark can be automated with the `inference_benchmark.sh` script provided in `resnext101-32x4d`, by simply running:
 `bash ./resnext101-32x4d/inference_benchmark.sh <data dir> <data idx dir>`
@@ -486,8 +496,8 @@ on NVIDIA DGX A100 (8x A100 40GB) GPUs. Performance numbers (in images per secon
 
 | GPUs | Batch Size / GPU | Throughput - TF32 + XLA | Throughput - mixed precision + XLA | Throughput speedup (TF32 - mixed precision) | Weak scaling - TF32 + XLA| Weak scaling - mixed precision + XLA |
 |----|---------------|---------------|------------------------|-----------------|-----------|-------------------|
-| 1  | 128 (TF) / 256 (AMP) | 340 img/s  | 905 img/s    | 2.66x           | 1.00x     | 1.00x             |
-| 8  | 128 (TF) / 256 (AMP) | 2630 img/s | 8000 img/s   | 3.05x           | 7.73x     | 8.84x             |
+| 1  | 128 (TF) / 256 (AMP) | 371 img/s  | 1132 img/s    | 3.05x           | 1.00x     | 1.00x             |
+| 8  | 128 (TF) / 256 (AMP) | 2854 img/s | 8500 img/s   | 2.98x           | 7.69x     | 7.51x             |
 
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 16G)

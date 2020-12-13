@@ -15,12 +15,11 @@
 
 MODEL_NAME=${1:-"bert"}
 MODEL_VERSION=${2:-1}
-precision=${3:-"fp16"}
-BATCH_SIZE=${4:-1}
-MAX_LATENCY=${5:-500}
-MAX_CLIENT_THREADS=${6:-10}
-MAX_CONCURRENCY=${7:-50}
-SERVER_HOSTNAME=${8:-"localhost"}
+BATCH_SIZE=${3:-1}
+MAX_LATENCY=${4:-100}
+MAX_CLIENT_THREADS=${5:-10}
+MAX_CONCURRENCY=${6:-50}
+SERVER_HOSTNAME=${7:-"localhost"}
 
 if [[ $SERVER_HOSTNAME == *":"* ]]; then
   echo "ERROR! Do not include the port when passing the Server Hostname. These scripts require that the TRITON HTTP endpoint is on Port 8000 and the gRPC endpoint is on Port 8001. Exiting..."
@@ -58,9 +57,9 @@ ARGS="\
    --max-threads ${MAX_CLIENT_THREADS} \
    -m ${MODEL_NAME} \
    -x ${MODEL_VERSION} \
-   -p 3000 \
+   -p 200000 \
    -d \
-   -v \
+   -v -z \
    -i gRPC \
    -u ${SERVER_HOSTNAME}:8001 \
    -b ${BATCH_SIZE} \

@@ -26,7 +26,7 @@ import modeling
 import optimization
 import tensorflow as tf
 import glob
-from utils.utils import LogEvalRunHook
+from utils.utils import LogEvalRunHook, setup_xla_flags
 import utils.dllogger_class
 from dllogger import Verbosity
 
@@ -94,7 +94,7 @@ flags.DEFINE_integer("num_warmup_steps", 10000, "Number of warmup steps.")
 
 flags.DEFINE_integer("save_checkpoints_steps", 1000,
                      "How often to save the model checkpoint.")
-flags.DEFINE_integer("display_loss_steps", 10,
+flags.DEFINE_integer("display_loss_steps", 1,
                      "How often to print loss")
 
 flags.DEFINE_integer("iterations_per_loop", 1000,
@@ -544,7 +544,7 @@ def _decode_record(record, name_to_features):
 
 
 def main(_):
-  os.environ["TF_XLA_FLAGS"] = "--tf_xla_enable_lazy_compilation=false" #causes memory fragmentation for bert leading to OOM
+  setup_xla_flags()
 
   tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.INFO)
   dllogging = utils.dllogger_class.dllogger_class(FLAGS.dllog_path)

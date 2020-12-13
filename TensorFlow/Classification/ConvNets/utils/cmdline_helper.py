@@ -183,7 +183,7 @@ def parse_cmdline(available_arch):
 
     p.add_argument(
         '--display_every',
-        default=10,
+        default=1,
         type=int,
         required=False,
         help="""How often (in batches) to print out running information."""

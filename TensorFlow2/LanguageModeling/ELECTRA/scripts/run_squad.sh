@@ -18,11 +18,11 @@ echo "Container nvidia build = " $NVIDIA_BUILD_ID
 electra_model=${1:-"google/electra-base-discriminator"}
 epochs=${2:-"2"}
 batch_size=${3:-"16"}
-infer_batch_size=${4:-"$batch_size"}
+infer_batch_size=${4:-"128"}
 learning_rate=${5:-"4e-4"}
 precision=${6:-"amp"}
 num_gpu=${7:-"8"}
-seed=${8:-"1"}
+seed=${8:-"$RANDOM"}
 SQUAD_VERSION=${9:-"1.1"}
 squad_dir=${10:-"/workspace/electra/data/download/squad/v$SQUAD_VERSION"}
 OUT_DIR=${11:-"results/"}
@@ -71,17 +71,17 @@ if [ "$mode" = "train" ] ; then
   CMD+="--train_batch_size=$batch_size "
 elif [ "$mode" = "eval" ] ; then
   CMD+="--do_predict "
-  CMD+="--predict_batch_size=$batch_size "
+  CMD+="--predict_batch_size=$infer_batch_size "
   CMD+="--eval_script=$squad_dir/evaluate-v$SQUAD_VERSION.py "
   CMD+="--do_eval "
 elif [ "$mode" = "prediction" ] ; then
   CMD+="--do_predict "
-  CMD+="--predict_batch_size=$batch_size "
+  CMD+="--predict_batch_size=$infer_batch_size "
 else
   CMD+=" --do_train "
   CMD+=" --train_batch_size=$batch_size "
   CMD+="--do_predict "
-  CMD+="--predict_batch_size=$batch_size "
+  CMD+="--predict_batch_size=$infer_batch_size "
   CMD+="--eval_script=$squad_dir/evaluate-v$SQUAD_VERSION.py "
   CMD+="--do_eval "
 fi
@@ -98,13 +98,14 @@ CMD+=" --seed=$seed "
 CMD+=" --num_train_epochs=$epochs "
 CMD+=" --max_seq_length=384 "
 CMD+=" --doc_stride=128 "
-CMD+=" --beam_size 4 "
+CMD+=" --beam_size 5 "
 CMD+=" --joint_head True "
 CMD+=" --null_score_diff_threshold -5.6 "
 CMD+=" --output_dir=$OUT_DIR "
 CMD+=" $use_fp16"
 CMD+=" --cache_dir=$cache_dir "
 CMD+=" --max_steps=$max_steps "
+CMD+=" --vocab_file=/workspace/electra/vocab/vocab.txt "
 
 LOGFILE=$OUT_DIR/logfile.txt
 echo "$CMD |& tee $LOGFILE"

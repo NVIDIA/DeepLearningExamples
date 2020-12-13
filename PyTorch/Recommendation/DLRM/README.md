@@ -6,8 +6,6 @@ This repository provides a script and recipe to train the Deep Learning Recommen
 
 ## Table Of Contents	
 
-
-  * [Table Of Contents](#table-of-contents)
   * [Model overview](#model-overview)
      * [Model architecture](#model-architecture)
      * [Default configuration](#default-configuration)
@@ -16,6 +14,9 @@ This repository provides a script and recipe to train the Deep Learning Recommen
      * [Mixed precision training](#mixed-precision-training)
         * [Enabling mixed precision](#enabling-mixed-precision)
         * [Enabling TF32](#enabling-tf32)
+     * [Hybrid-parallel multiGPU with all-2-all communication](#hybrid-parallel-multigpu-with-all-2-all-communication)
+        * [Embedding table placement and load balancing](#embedding-table-placement-and-load-balancing)
+     * [Preprocessing on GPU with Spark 3](#preprocessing-on-gpu-with-spark-3)
   * [Setup](#setup)
      * [Requirements](#requirements)
   * [Quick Start Guide](#quick-start-guide)
@@ -36,7 +37,7 @@ This repository provides a script and recipe to train the Deep Learning Recommen
         * [Inference performance benchmark](#inference-performance-benchmark)
      * [Results](#results)
         * [Training accuracy results](#training-accuracy-results)
-           * [Training accuracy: NVIDIA DGX A100 (8x A100 40GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-40gb)  
+           * [Training accuracy: NVIDIA DGX A100 (8x A100 40GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-40gb)
            * [Training accuracy: NVIDIA DGX-1 (8x V100 32GB)](#training-accuracy-nvidia-dgx-1-8x-v100-32gb)
            * [Training stability test](#training-stability-test)
         * [Training performance results](#training-performance-results)
@@ -54,6 +55,8 @@ make use of both categorical and numerical inputs. It was first described in
 [Deep Learning Recommendation Model for Personalization and Recommendation Systems](https://arxiv.org/abs/1906.00091).
 This repository provides a reimplementation of the codebase provided originally [here](https://github.com/facebookresearch/dlrm).
 The scripts provided enable you to train DLRM on the [Criteo Terabyte Dataset](https://labs.criteo.com/2013/12/download-terabyte-click-logs/). 
+
+Using the scripts provided here, you can efficiently train models that are too large to fit into a single GPU. This is because we use a hybrid-parallel approach, which combines model parallelism for the embedding tables with data parallelism for the Top MLP. This is explained in details in [next sections](#hybrid-parallel-multigpu-with-all-2-all-communication)
 
 This model uses a slightly different preprocessing procedure than the one found in the original implementation. You can find a detailed description of the preprocessing steps in the [Dataset guidelines](#dataset-guidelines) section.
 
@@ -85,8 +88,9 @@ Figure 1. The architecture of DLRM.
 The following features were implemented in this model:
 - general
 	- static loss scaling for Tensor Cores (mixed precision) training
+	- hybrid-parallel multiGPU training
 - preprocessing
-    - dataset preprocessing using Spark 
+    - dataset preprocessing using Spark 3 on GPUs 
     
 ### Feature support matrix
 
@@ -95,7 +99,8 @@ The following features are supported by this model:
 | Feature               | DLRM                
 |----------------------|--------------------------
 |Automatic mixed precision (AMP)   | yes
-|PyTorch Multi-GPU (NCCL)   | yes
+|Hybrid-parallel multiGPU with all-2-all| yes
+|Preprocessing on GPU with Spark 3| yes
          
 #### Features
 
@@ -132,7 +137,36 @@ For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates A
 
 TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
 
+### Hybrid-parallel multiGPU with all-2-all communication
 
+Many recommendation models contain very large embedding tables. As a result the model is often too large to fit onto a single device. This could be easily solved by training in a model-parallel way, using either the CPU or other GPUs as "memory donors". However, this approach is suboptimal as the "memory donor" devices' compute is not utilized. In this repository we use the model-parallel approach for the bottom part of the model (Embedding Tables + Bottom MLP) while using a usual data parallel approach for the top part of the model (Dot Interaction + Top MLP). This way we can train models much larger than what would normally fit into a single GPU while at the same time making the training faster by using multiple GPUs. We call this approach hybrid-parallel.
+
+The transition from model-parallel to data-parallel in the middle of the neural net needs a specific multiGPU communication pattern called [all-2-all](https://en.wikipedia.org/wiki/All-to-all_\(parallel_pattern\)) which is available in our [PyTorch 20.06-py3] NGC docker container. In the [original DLRM whitepaper](https://arxiv.org/abs/1906.00091) this has been also referred to as "butterlfy shuffle". 
+
+<p align="center">
+  <img width="100%" src="./img/hybrid_parallel.png" />
+  <br>
+</p>
+
+
+In the example shown in this repository we train models of two sizes: "small" (~15 GB) and "large" (~82 GB). We use the hybrid-parallel approach only for the "large" model while the "small" one supports only singleGPU training for now.
+
+#### Embedding table placement and load balancing
+
+We use the following heuristic for dividing the work between the GPUs:
+- The Bottom MLP is placed on GPU-0 and no embedding tables are placed on this device.
+- The tables are sorted from the largest to the smallest
+- Set `max_tables_per_gpu := ceil(number_of_embedding_tables / number_of_available_gpus)`
+- Repeat until all embedding tables have an assigned device:
+    - Out of all the available GPUs find the one with largest amount of unallocated memory
+    - Place the largest unassigned embedding table on this GPU. Raise an exception if it does not fit.
+    - If the number of embedding tables on this GPU is now equal to `max_tables_per_gpu` remove this GPU from the list of available GPUs, so that no more embedding tables will placed on this GPU. This ensures the all2all communication is well balanced between all devices.
+
+
+### Preprocessing on GPU with Spark 3
+
+Please refer to [the "Preprocessing with Spark" section](#preprocess-with-spark) for detailed description of the Spark 3 GPU functionality 
+ 
 ## Setup
 
 The following section lists the requirements for training DLRM.
@@ -169,37 +203,61 @@ cd DeepLearningExamples/PyTorch/Recommendation/DLRM
 
 2. Build a DLRM Docker container
 ```bash
-docker build . -t nvidia_dlrm_pyt
+docker build -t nvidia_dlrm_pyt .
+docker build -t nvidia_dlrm_spark -f Dockerfile_spark . 
 ```
 
-3. Start an interactive session in the NGC container to run preprocessing/training and inference.
+3. Start an interactive session in the NGC container to run preprocessing.
 The NCF PyTorch container can be launched with:
 ```bash
 mkdir -p data
-docker run --runtime=nvidia -it --rm --ipc=host  -v ${PWD}/data:/data nvidia_dlrm_pyt bash
+docker run --runtime=nvidia -it --rm --ipc=host  -v ${PWD}/data:/data nvidia_dlrm_spark bash
 ```
 
 4.  Download and preprocess the dataset.
+
 You can download the data by following the instructions at: http://labs.criteo.com/2013/12/download-terabyte-click-logs/.
 When you have successfully downloaded it, put it in the `/data/dlrm/criteo/` directory in the container (`$PWD/data/dlrm/criteo` in the host system).
-You can then run the preprocessing with the commands below. Note
-that this will require about 4TB of disk storage.
-```
+
+Here are a few examples of different preprocessing commands. For the details on how those scripts work and detailed description of all the parameters please consult the [preprocess with spark section](#preprocess-with-spark).
+ 
+```bash
 cd preproc
-./prepare_dataset.sh
-cd -
+
+# to run on a DGX2 with a frequency limit of 3 (will need 8xV100-32GB to fit the model in GPU memory)
+./prepare_dataset.sh DGX2 3
+
+# to run on a DGX2 with a frequency limit of 15 (should fit on a single V100-32GB):
+./prepare_dataset.sh DGX2 15
+#
+# to run on CPU with a frequency limit of 15:
+./prepare_dataset.sh CPU 15
 ```
 
 5. Start training.
 
-- single-GPU:
+- First start the docker container:
+```bash
+docker run --runtime=nvidia -it --rm --ipc=host  -v ${PWD}/data:/data nvidia_dlrm_pyt bash
 ```
+
+- single-GPU:
+```bash
 python -m dlrm.scripts.main --mode train --dataset /data/dlrm/binary_dataset/
 ```
 
-- multi-GPU:
+- multi-GPU for DGX A100:
+```bash
+python -m torch.distributed.launch --no_python --use_env --nproc_per_node 8 \
+          bash  -c './bind.sh --cpu=dgxa100_ccx.sh --mem=dgxa100_ccx.sh python -m dlrm.scripts.dist_main \
+          --dataset /data/dlrm/binary_dataset/--seed 0 --epochs 1 --amp'
 ```
-python -u -m torch.distributed.launch --use_env --nproc_per_node 8 -m dlrm.scripts.dist_main --mode train --dataset /data/dlrm/binary_dataset
+
+- multi-GPU for DGX1 and DGX2:
+```bash
+python -m torch.distributed.launch --no_python --use_env --nproc_per_node 8 \
+          bash  -c './bind.sh  --cpu=exclusive -- python -m dlrm.scripts.dist_main \
+          --dataset /data/dlrm/binary_dataset/--seed 0 --epochs 1 --amp'
 ```
 
 6. Start validation/evaluation.
@@ -392,7 +450,34 @@ Our preprocessing scripts are designed for the Criteo Terabyte Dataset and shoul
 
 #### Preprocess with Spark
 
-The script `spark_data_utils.py` is a PySpark application, which is used to preprocess the Criteo Terabyte Dataset. In the Docker image, we have installed Spark 2.4.5, which will start a standalone cluster of Spark. The script `run-spark.sh` starts the Spark, then runs several PySpark jobs with `spark_data_utils.py`. 
+The preprocessing scripts provided in this repository support running both on CPU and on DGX-2 using [Apache Spark 3.0](https://www.nvidia.com/en-us/deep-learning-ai/solutions/data-science/apache-spark-3/).
+It should be possible to change the values in `preproc/dgx2_config.sh`
+so that they'll work on also on other hardware platforms such as DGX-1.
+
+Please note that the preprocessing will require about 4TB of disk storage.
+
+The syntax for the preprocessing script is as follows:
+```bash
+cd preproc
+./prepare_dataset.sh <DGX2|CPU> <frequency_threshold>
+```
+
+The first argument is the hardware platform to use (either DGX2 or pure-CPU). The second argument means the frequency 
+threshold to apply to the categorical variables. For a frequency threshold `T`, the categorical values that occur less 
+often than `T` will be replaced with a special embedding. Thus, a larger value of `T` will require smaller embedding tables 
+and will substantially reduce the overall size of the model.
+
+For the Criteo Terabyte dataset we recommend a frequency threshold of `T=3` if you intend to run the hybrid-parallel mode
+on multiple GPUs. If you want to make the model fit into a single NVIDIA Tesla V100-32GB, you can set `T=15`. 
+
+The preprocessing scripts makes use of the following environment variables to configure the data directory paths:
+- `download_dir` – this directory should contain the original Criteo Terabyte CSV files
+- `spark_output_path` – directory to which the parquet data will be written
+- `conversion_intermediate_dir` – directory used for storing intermediate data used to convert from parquet to train-ready format
+- `final_output_dir` – directory to store the final results of the preprocessing which can then be used to train DLRM 
+
+
+The script `spark_data_utils.py` is a PySpark application, which is used to preprocess the Criteo Terabyte Dataset. In the Docker image, we have installed Spark 3.0.0, which will start a standalone cluster of Spark. The scripts `run_spark_cpu.sh` and `run_spark_gpu.sh` start Spark, then run several PySpark jobs with `spark_data_utils.py`. 
 Generate the dictionary
 Transform train dataset
 Transform test dataset
@@ -432,7 +517,6 @@ USE_FREQUENCY_LIMIT=15
 ```
 The frequency limit is used to filter out the categorical values which appear less than n times in the whole dataset, and make them be 0. Change this variable to 1 to enable it. The default frequency limit is 15 in the script. You also can change the number as you want by changing  the line of `OPTS="--frequency_limit 8"`.
 
-After the above configuration, you can run `run-spark.sh` if you already downloaded the dataset or run through `prepare_dataset.sh`, which includes verifying the downloaded dataset and running the job to preprocess the dataset.
 
 ### Training process
 
@@ -463,11 +547,9 @@ The following section shows how to run benchmarks measuring the model performanc
 
 #### Training performance benchmark
 
-To benchmark the training performance on a specific batch size, run:
-
-```
-python -m dlrm.scripts.main --mode train --max_steps 1000 --benchmark_warmup_steps 500 --dataset /data
-```
+To benchmark the training performance on a specific batch size, please follow the instructions
+in the [Quick Start Guide](#quick-start-guide). You can also add the `--max_steps 1000 --benchmark_warmup_steps 500`
+if you want to get a reliable throughput measurement without running the entire training. 
 
 You can also pass the `--dataset_type synthetic_disk` flag if you haven't yet downloaded the dataset.
 
@@ -500,7 +582,7 @@ Our results were obtained by running training scripts as described in the Quick 
 
 | GPUs    | Model size    | Batch size / GPU    | Accuracy (AUC) - TF32  | Accuracy (AUC) - mixed precision  |   Time to train - TF32 [minutes]  |  Time to train - mixed precision [minutes] | Time to train speedup (TF32 to mixed precision)        
 |----:|----|----|----:|----:|---:|---:|---:|
-| 8 | large | 64k | 0.8027 | 0.8027 | 8.79 | 6.16 | 1.43 |
+| 8 | large | 64k | 0.8027 | 0.8027 | 7.72 | 4.9 | 1.58 |
 | 1 | small | 32k | 0.8036 | 0.8036 | 28.20 | 17.45 | 1.62 |
 
 
@@ -512,9 +594,8 @@ Our results were obtained by running training scripts as described in the Quick 
 
 | GPUs    | Model size    | Batch size / GPU    | Accuracy (AUC) - FP32  | Accuracy (AUC) - mixed precision  |   Time to train - FP32  [minutes] |  Time to train - mixed precision  [minutes] | Time to train speedup (FP32 to mixed precision)        
 |----:|----|----|----:|----:|---:|---:|---:|
-| 8 | large | 64k | 0.8027 | 0.8027 | 46.29 | 22.72 | 2.04 |
+| 8 | large | 64k | 0.8027 | 0.8027 | 43.13 | 21.16 | 2.03 |
 | 1 | small | 32k | 0.8035 | 0.8035 | 105.98 | 31.12 | 3.40 |
-
 
 
 ##### Training stability test
@@ -561,12 +642,12 @@ python -m dlrm.scripts.main --mode train --dataset /data [--amp]
 python -u -m torch.distributed.launch --use_env --nproc_per_node 8 -m dlrm.scripts.dist_main --mode train --dataset /data/ [--amp]
 ```
 
-in the DLRM Docker container on NVIDIA DGX A100 (8x A100 40GB) GPUs. Performance numbers (in items/images per second) were averaged over an entire training epoch.
+in the DLRM Docker container on NVIDIA DGX A100 (8x A100 40GB) GPUs. Performance numbers (in items per second) were averaged over an entire training epoch.
 
 | GPUs   | Model size    | Batch size / GPU   | Throughput - TF32    | Throughput - mixed precision    | Throughput speedup (TF32 - mixed precision)      
 |----:|----|----|---:|---:|---:|
-| 8 | large | 64k | 8252438.74 | 11771969.56 | 1.43 |
-| 1 | small | 32k | 2498002.39 | 4081969.37 | 1.63 |
+| 8 | large | 64k | 9,056,775 | 14,230,793 | 1.57 |
+| 1 | small | 32k | 2,498,002 | 4,081,969 | 1.63 |
 
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
@@ -588,8 +669,8 @@ python -u -m torch.distributed.launch --use_env --nproc_per_node 8 -m dlrm.scrip
 
 | GPUs   | Model size    | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)   |     
 |----:|----|----|---:|---:|---:|
-| 8 | large | 64k | 1538759.56 | 3257414.75 | 2.12 |
-| 1 | small | 32k | 670238.82 | 2281278.45 | 3.40 |
+| 8 | large | 64k | 1,620,421 | 3,305,045 | 2.04 |
+| 1 | small | 32k | 670,239 | 2,281,278 | 3.40 |
 
 
 We used throughput in items processed per second as the performance metric.
@@ -610,9 +691,9 @@ python -u -m torch.distributed.launch --use_env --nproc_per_node 16 -m dlrm.scri
 
 | GPUs   | Model size   | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)     
 |----:|----|---|---:|---:|---:|
-| 16 | large | 64k | 4343127.59 | 9454627.44 | 2.18 |
-| 8 | large | 64k | 2948808.82 | 7057842.56 | 2.39 |
-| 1 | small | 32k | 706933.08 | 2417584.57 | 3.42 |
+| 16 | large | 64k | 4,567,478 | 11,208,483 | 2.45 |
+| 8 | large | 64k | 3,169,146 | 8,315,534 | 2.62 |
+| 1 | small | 32k | 706,933 | 2,417,585 | 3.42 |
 
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
@@ -630,6 +711,14 @@ May 2020
 
 June 2020
 - Updated performance tables to include A100 results and multi-GPU setup
+- Multi-GPU optimizations
+
+August 2020
+- Preprocessing with Spark 3 on GPU
+- Multiple performance optimizations
+- Automatic placement and load balancing of embedding tables
+- Improved README
+
 
 ### Known issues
 

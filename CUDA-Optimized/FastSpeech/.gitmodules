@@ -1,6 +1,0 @@
-[submodule "waveglow"]
-	path = waveglow
-	url = https://github.com/NVIDIA/waveglow.git
-[submodule "cub"]
-	path = cub
-	url = https://github.com/NVlabs/cub.git

@@ -15,4 +15,4 @@
 # This script launches U-Net run in FP32 on 1 GPU for inference batch_size 1. Usage:
 # bash unet_INFER_FP32.sh <path to this repository> <path to dataset> <path to results directory>
 
-horovodrun -np 1 python main.py --data_dir $1 --model_dir $2 --batch_size 1 --exec_mode predict --xla
+horovodrun -np 1 python main.py --data_dir $1 --model_dir $2 --batch_size 1 --exec_mode predict --xla --fold 0

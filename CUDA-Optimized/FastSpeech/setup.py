@@ -37,7 +37,7 @@ def get_requirements(filename='requirements.txt'):
 
 setup(
     name='fastspeech',
-    version='0.2.1',
+    version='0.2.2',
     description='FastSpeech training and inference in PyTorch and TensorRT',
     author='Dabi Ahn',
     keywords='tts',

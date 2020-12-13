@@ -23,6 +23,7 @@ import tensorflow as tf
 
 import horovod.tensorflow as hvd
 from horovod.tensorflow.compression import Compression
+from gpu_affinity import set_affinity
 
 if sys.version_info[0] == 2:
     import cPickle as pickle
@@ -31,22 +32,13 @@ else:
 
 from tqdm import tqdm
 import dllogger
-from utils import is_main_process, format_step, get_rank, get_world_size
+from utils import is_main_process, format_step, get_rank, get_world_size, log
 from configuration import ElectraConfig
 from modeling import TFElectraForQuestionAnswering
 from tokenization import ElectraTokenizer
 from optimization import create_optimizer
 from squad_utils import SquadV1Processor, SquadV2Processor, squad_convert_examples_to_features, \
     SquadResult, RawResult, get_answers
-
-# create logger
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
-formatter = logging.Formatter('%(message)s')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
 
 
 TF_ELECTRA_PRETRAINED_MODEL_ARCHIVE_LIST = [
@@ -72,7 +64,6 @@ def parse_args():
     parser.add_argument("--init_checkpoint",
                         default=None,
                         type=str,
-                        #                    required=True,
                         help="The checkpoint file from pretraining")
 
     # Other parameters
@@ -108,6 +99,9 @@ def parse_args():
     parser.add_argument("--max_query_length", default=64, type=int,
                         help="The maximum number of tokens for the question. Questions longer than this will "
                              "be truncated to this length.")
+    parser.add_argument("--vocab_file", default=None, type=str,
+                        help="Path to vocabulary file use for tokenization")
+
     parser.add_argument(
         "--joint_head",
         default=True,
@@ -233,7 +227,7 @@ def get_dataset_from_features(features, batch_size, drop_remainder=True, ngpu=8,
 
 
 @tf.function
-def train_step(model, inputs, loss, amp, opt, init, v2=False, loss_class=None, fp16=False):
+def train_step(model, inputs, loss, amp, opt, init, v2=False, loss_class=None, fp16=False, clip_norm=1.0):
     with tf.GradientTape() as tape:
         [input_ids, input_mask, segment_ids, start_positions, end_positions, cls_index, p_mask, is_impossible] = inputs
 
@@ -241,7 +235,6 @@ def train_step(model, inputs, loss, amp, opt, init, v2=False, loss_class=None, f
             is_impossible = None
 
         start_logits, end_logits, cls_logits = model(input_ids,
-                                                     # input_ids=input_ids,
                                                      attention_mask=input_mask,
                                                      token_type_ids=segment_ids,
                                                      start_positions=start_positions,
@@ -268,12 +261,12 @@ def train_step(model, inputs, loss, amp, opt, init, v2=False, loss_class=None, f
         start_positions = tf.clip_by_value(start_positions, 0, ignored_index, name="clip_start_positions")
         end_positions = tf.clip_by_value(end_positions, 0, ignored_index, name="clip_end_positions")
 
-        start_loss = loss(y_true=start_positions, y_pred=start_logits)
-        end_loss = loss(y_true=end_positions, y_pred=end_logits)
+        start_loss = loss(y_true=start_positions, y_pred=tf.cast(start_logits, tf.float32))
+        end_loss = loss(y_true=end_positions, y_pred=tf.cast(end_logits, tf.float32))
         loss_value = (start_loss + end_loss) / 2
 
         if v2:
-            cls_loss_value = loss_class(y_true=is_impossible, y_pred=cls_logits)
+            cls_loss_value = loss_class(y_true=is_impossible, y_pred=tf.cast(cls_logits, tf.float32))
             loss_value += cls_loss_value * 0.5
 
         unscaled_loss = tf.stop_gradient(loss_value)
@@ -285,6 +278,7 @@ def train_step(model, inputs, loss, amp, opt, init, v2=False, loss_class=None, f
     gradients = tape.gradient(loss_value, model.trainable_variables)
     if amp:
         gradients = opt.get_unscaled_gradients(gradients)
+    (gradients, _) = tf.clip_by_global_norm(gradients, clip_norm=clip_norm)
     opt.apply_gradients(zip(gradients, model.trainable_variables))  # , clip_norm=1.0)
 
     if init:
@@ -321,9 +315,11 @@ def main():
     args = parse_args()
 
     hvd.init()
+    set_affinity(hvd.local_rank())
+
     if is_main_process():
-        print("Running total processes: {}".format(get_world_size()))
-    print("Starting process: {}".format(get_rank()))
+        log("Running total processes: {}".format(get_world_size()))
+    log("Starting process: {}".format(get_rank()))
 
     if is_main_process():
         dllogger.init(backends=[dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE,
@@ -343,7 +339,7 @@ def main():
 
     if not args.do_train:
         EPOCHS = args.num_train_epochs = 1
-        print("Since running inference only, setting args.num_train_epochs to 1")
+        log("Since running inference only, setting args.num_train_epochs to 1")
 
     if not os.path.exists(args.output_dir) and is_main_process():
         os.makedirs(args.output_dir)
@@ -355,34 +351,46 @@ def main():
             tf.config.experimental.set_memory_growth(gpu, True)
         tf.config.experimental.set_visible_devices(gpus[hvd.local_rank()], 'GPU')
     tf.config.optimizer.set_jit(USE_XLA)
-    tf.config.optimizer.set_experimental_options({"auto_mixed_precision": USE_AMP})
+    #tf.config.optimizer.set_experimental_options({"auto_mixed_precision": USE_AMP})
+    
+    if args.amp:
+        policy = tf.keras.mixed_precision.experimental.Policy("mixed_float16", loss_scale="dynamic")
+        tf.keras.mixed_precision.experimental.set_policy(policy)
+        print('Compute dtype: %s' % policy.compute_dtype)  # Compute dtype: float16
+        print('Variable dtype: %s' % policy.variable_dtype)  # Variable dtype: float32
 
     if is_main_process():
-        logger.info("***** Loading tokenizer and model *****")
+        log("***** Loading tokenizer and model *****")
     # Load tokenizer and model from pretrained model/vocabulary. Specify the number of labels to classify (2+: classification, 1: regression)
     electra_model = args.electra_model
     config = ElectraConfig.from_pretrained(electra_model, cache_dir=args.cache_dir)
     config.update({"amp": args.amp})
-    tokenizer = ElectraTokenizer.from_pretrained(electra_model, cache_dir=args.cache_dir)
+    if args.vocab_file is None:
+        tokenizer = ElectraTokenizer.from_pretrained(electra_model, cache_dir=args.cache_dir)
+    else:
+        tokenizer = ElectraTokenizer(
+            vocab_file=args.vocab_file,
+            do_lower_case=args.do_lower_case)
+
     model = TFElectraForQuestionAnswering.from_pretrained(electra_model, config=config, cache_dir=args.cache_dir, args=args)
 
     if is_main_process():
-        logger.info("***** Loading dataset *****")
+        log("***** Loading dataset *****")
     # Load data
     processor = SquadV2Processor() if args.version_2_with_negative else SquadV1Processor()
     train_examples = processor.get_train_examples(args.data_dir) if args.do_train else None
     dev_examples = processor.get_dev_examples(args.data_dir) if args.do_predict else None
 
     if is_main_process():
-        logger.info("***** Loading features *****")
+        log("***** Loading features *****")
     # Load cached features
     squad_version = '2.0' if args.version_2_with_negative else '1.1'
     if args.cache_dir is None:
         args.cache_dir = args.data_dir
-    cached_train_features_file = args.cache_dir.rstrip('/') + '/' + 'TF2_train-v{4}.json_{0}_{1}_{2}_{3}'.format(
+    cached_train_features_file = args.cache_dir.rstrip('/') + '/' + 'TF2_train-v{4}.json_{1}_{2}_{3}'.format(
         electra_model.split("/")[1], str(args.max_seq_length), str(args.doc_stride),
         str(args.max_query_length), squad_version)
-    cached_dev_features_file = args.cache_dir.rstrip('/') + '/' + 'TF2_dev-v{4}.json_{0}_{1}_{2}_{3}'.format(
+    cached_dev_features_file = args.cache_dir.rstrip('/') + '/' + 'TF2_dev-v{4}.json_{1}_{2}_{3}'.format(
         electra_model.split("/")[1], str(args.max_seq_length), str(args.doc_stride),
         str(args.max_query_length), squad_version)
 
@@ -421,11 +429,11 @@ def main():
         # Dump Cached features
         if not args.skip_cache and is_main_process():
             if args.do_train:
-                print("***** Building Cache Files: {} *****".format(cached_train_features_file))
+                log("***** Building Cache Files: {} *****".format(cached_train_features_file))
                 with open(cached_train_features_file, "wb") as writer:
                     pickle.dump(train_features, writer)
             if args.do_predict:
-                print("***** Building Cache Files: {} *****".format(cached_dev_features_file))
+                log("***** Building Cache Files: {} *****".format(cached_dev_features_file))
                 with open(cached_dev_features_file, "wb") as writer:
                     pickle.dump(dev_features, writer)
 
@@ -460,16 +468,16 @@ def main():
     train_loss_results = []
 
     if args.do_train and is_main_process():
-        logger.info("***** Running training *****")
-        logger.info("  Num examples = %d", len_train_features)
-        logger.info("  Num Epochs = %d", args.num_train_epochs)
-        logger.info("  Instantaneous batch size per GPU = %d", args.train_batch_size)
-        logger.info(
-            "  Total train batch size (w. parallel, distributed & accumulation) = %d",
+        log("***** Running training *****")
+        log("  Num examples = ", len_train_features)
+        log("  Num Epochs = ", args.num_train_epochs)
+        log("  Instantaneous batch size per GPU = ", args.train_batch_size)
+        log(
+            "  Total train batch size (w. parallel, distributed & accumulation) = ",
             args.train_batch_size
             * get_world_size(),
         )
-        logger.info("  Total optimization steps = %d", total_train_steps)
+        log("  Total optimization steps =", total_train_steps)
 
     total_train_time = 0
     latency = []
@@ -490,10 +498,11 @@ def main():
                 loss_value = train_step(model, inputs, loss, USE_AMP, opt, (iter == 0 and epoch == 0),
                                         v2=args.version_2_with_negative, loss_class=loss_class, fp16=USE_AMP)
                 epoch_perf_avg.update_state(1. * BATCH_SIZE / (time.time() - iter_start))
-                if iter % 100 == 0:
+                if iter % args.log_freq == 0:
                     if is_main_process():
-                        print("Epoch: {:03d}, Step:{:6d}, Loss:{:12.8f}, Perf:{:5.0f}".format(epoch, iter, loss_value,
-                                                                                              epoch_perf_avg.result() * get_world_size()))
+                        log("\nEpoch: {:03d}, Step:{:6d}, Loss:{:12.8f}, Perf:{:5.0f}, loss_scale:{}, opt_step:{}".format(epoch, iter, loss_value,
+                                                                                              epoch_perf_avg.result() * get_world_size(), opt.loss_scale if config.amp else 1,
+                                                                                              int(opt.iterations)))
                     dllogger.log(step=(epoch, iter,), data={"step_loss": float(loss_value.numpy()),
                                                             "train_perf": float( epoch_perf_avg.result().numpy() * get_world_size())})
 
@@ -505,9 +514,6 @@ def main():
             total_train_time += float(time.time() - epoch_start)
             # Summarize and save checkpoint at the end of each epoch
             if is_main_process():
-                # print(
-                #    "**TRAIN SUMMARY** - Epoch {:03d}, Train_Loss: {:12.8f}, Train_Perf: {:5.0f} seq/s, Train_Time: {:5.0f} s"
-                #    .format(epoch, epoch_loss_avg.result(), epoch_perf_avg.result() * get_world_size(), total_train_time))
 
                 dllogger.log(step=tuple(), data={"e2e_train_time": total_train_time,
                                                  "training_sequences_per_second": float(
@@ -515,8 +521,6 @@ def main():
                                                  "final_loss": float(epoch_loss_avg.result().numpy())})
 
             if not args.skip_checkpoint:
-                # checkpoint_name = "/workspace/electra/checkpoints/electra_base_qa_v2_{}_joint_head_{}_seed_{}_lr_{}_ckpt_{}".format(
-                #     args.version_2_with_negative, args.joint_head, args.seed, args.learning_rate, epoch + 1)
                 checkpoint_name = "checkpoints/electra_base_qa_v2_{}_epoch_{}_ckpt".format(args.version_2_with_negative, epoch + 1)
                 if is_main_process():
                     model.save_weights(checkpoint_name)
@@ -524,15 +528,15 @@ def main():
 
         if args.do_predict and (args.evaluate_during_training or epoch == args.num_train_epochs - 1):
             if not args.do_train:
-                logger.info("***** Loading checkpoint: {} *****".format(args.init_checkpoint))
+                log("***** Loading checkpoint: {} *****".format(args.init_checkpoint))
                 model.load_weights(args.init_checkpoint).expect_partial()
 
             current_feature_id = 0
             all_results = []
             if is_main_process():
-                logger.info("***** Running evaluation *****")
-                logger.info("  Num examples = %d", total_dev_steps)
-                logger.info("  Batch size = %d", args.predict_batch_size)
+                log("***** Running evaluation *****")
+                log("  Num Batches = ", total_dev_steps)
+                log("  Batch size = ", args.predict_batch_size)
 
             raw_infer_start = time.time()
             if is_main_process():
@@ -550,17 +554,23 @@ def main():
                                                                           attention_mask=input_mask,
                                                                           token_type_ids=segment_ids,
                                                                           )[:2]
+                        #Synchronize with GPU to compute time
+                        _ = batch_start_logits.numpy()
+                                                            
                     else:
+                        
                         outputs = infer_step(model, input_ids,
                                              attention_mask=input_mask,
                                              token_type_ids=segment_ids,
                                              cls_index=cls_index,
                                              p_mask=p_mask,
                                              )
+                        #Synchronize with GPU to compute time
+                        _ = outputs[0].numpy()
 
                     infer_time = (time.time() - iter_start)
                     infer_perf_avg.update_state(1. * EVAL_BATCH_SIZE / infer_time)
-                    latency.append(1. * infer_time / EVAL_BATCH_SIZE)
+                    latency.append(infer_time)
 
                     for iter_ in range(input_ids.shape[0]):
 
@@ -618,7 +628,7 @@ def main():
 
                     eval_out = subprocess.check_output([sys.executable, args.eval_script,
                                                         args.data_dir + "/" + dev_file, output_prediction_file])
-                    print(eval_out.decode('UTF-8'))
+                    log(eval_out.decode('UTF-8'))
                     scores = str(eval_out).strip()
                     exact_match = float(scores.split(":")[1].split(",")[0])
                     if args.version_2_with_negative:
@@ -626,12 +636,12 @@ def main():
                     else:
                         f1 = float(scores.split(":")[2].split("}")[0])
 
-                    logger.info("Epoch: {:03d} Results: {}".format(epoch, eval_out.decode('UTF-8')))
-                    print("**EVAL SUMMARY** - Epoch: {:03d},  EM: {:6.3f}, F1: {:6.3f}, Infer_Perf: {:4.0f} seq/s"
+                    log("Epoch: {:03d} Results: {}".format(epoch, eval_out.decode('UTF-8')))
+                    log("**EVAL SUMMARY** - Epoch: {:03d},  EM: {:6.3f}, F1: {:6.3f}, Infer_Perf: {:4.0f} seq/s"
                           .format(epoch, exact_match, f1, infer_perf_avg.result()))
 
                 latency_all = sorted(latency)[:-2]
-                print(
+                log(
                     "**LATENCY SUMMARY** - Epoch: {:03d},  Ave: {:6.3f} ms, 90%: {:6.3f} ms, 95%: {:6.3f} ms, 99%: {:6.3f} ms"
                     .format(epoch, sum(latency_all) / len(latency_all) * 1000,
                             sum(latency_all[:int(len(latency_all) * 0.9)]) / int(len(latency_all) * 0.9) * 1000,
@@ -643,7 +653,7 @@ def main():
                                    "e2e_inference_time": e2e_infer_time})
 
     if is_main_process() and args.do_train and args.do_eval:
-        print(
+        log(
             "**RESULTS SUMMARY** - EM: {:6.3f}, F1: {:6.3f}, Train_Time: {:4.0f} s, Train_Perf: {:4.0f} seq/s, Infer_Perf: {:4.0f} seq/s"
             .format(exact_match, f1, total_train_time, epoch_perf_avg.result() * get_world_size(),
                     infer_perf_avg.result()))

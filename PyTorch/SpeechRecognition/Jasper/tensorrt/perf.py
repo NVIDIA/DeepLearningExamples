@@ -18,7 +18,7 @@ import argparse
 import sys, os
 # Get local modules in parent directory and current directory (assuming this was called from root of repository)
 sys.path.append("./")
-sys.path.append("./trt")
+sys.path.append("./tensorrt")
 import perfutils
 import trtutils
 import perfprocedures
@@ -116,7 +116,7 @@ def parse_args():
     parser.add_argument("--pyt_fp16", action="store_true", default=False, help="If set, will construct pytorch model with fp16 weights")
     parser.add_argument("--make_onnx", action="store_true", default=False, help="If set, will create an ONNX model and store it at the path specified by --onnx_path")
     parser.add_argument("--csv_path", type=str, default=None, help="File to append csv info about inference time")
-    parser.add_argument("--trt_prediction_path", type=str, default=None, help="File to write predictions inferred with trt")
+    parser.add_argument("--trt_prediction_path", type=str, default=None, help="File to write predictions inferred with tensorrt")
     parser.add_argument("--pyt_prediction_path", type=str, default=None, help="File to write predictions inferred with pytorch")
     parser.add_argument("--verbose", action="store_true", default=False, help="If set, will verbosely describe TRT engine building and deserialization as well as TRT inference")
     parser.add_argument("--wav", type=str, help='absolute path to .wav file (16KHz)')

@@ -11,8 +11,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvcr.io/nvidia/kaldi:19.12-online-beta-py3 as kb
-FROM nvcr.io/nvidia/tensorrtserver:19.12-py3-clientsdk
+FROM nvcr.io/nvidia/kaldi:20.03-py3 as kb
+FROM nvcr.io/nvidia/tritonserver:20.03-py3-clientsdk
 
 # Kaldi dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -23,8 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gawk \
         libatlas3-base \
         libtool \
-        python$PYVER \
-        python$PYVER-dev \
+        python3.6 \
+        python3.6-dev \
         sox \
         subversion \
         unzip \
@@ -35,6 +35,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Moving Kaldi to container
 COPY --from=kb /opt/kaldi /opt/kaldi
 ENV LD_LIBRARY_PATH /opt/kaldi/src/lib/:$LD_LIBRARY_PATH
+
+COPY scripts /workspace/scripts
 
 COPY kaldi-asr-client /workspace/src/clients/c++/kaldi-asr-client
 RUN echo "add_subdirectory(kaldi-asr-client)" >> "/workspace/src/clients/c++/CMakeLists.txt"

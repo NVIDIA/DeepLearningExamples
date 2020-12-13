@@ -1,6 +1,5 @@
-# coding=utf-8
-# Copyright 2018 The Google AI Language Team Authors and The HuggingFace Inc. team.
-# Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
+# Copyright 2020 The Google AI Team, Stanford University and The HuggingFace Inc. team.
+# Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,12 +18,11 @@ import logging
 import tensorflow as tf
 
 from configuration import ElectraConfig
-
 from file_utils import add_start_docstrings, add_start_docstrings_to_callable
 from modeling_utils import ACT2FN, TFBertEncoder, TFBertPreTrainedModel
 from modeling_utils import get_initializer, shape_list
 from tokenization_utils import BatchEncoding
-
+import pretrain_utils, collections
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +64,7 @@ class TFElectraEmbeddings(tf.keras.layers.Layer):
         # any TensorFlow checkpoint file
         self.LayerNorm = tf.keras.layers.LayerNormalization(epsilon=config.layer_norm_eps, name="LayerNorm")
         self.dropout = tf.keras.layers.Dropout(config.hidden_dropout_prob)
+        self.amp = config.amp
 
     def build(self, input_shape):
         """Build shared word embedding layer """
@@ -120,7 +119,10 @@ class TFElectraEmbeddings(tf.keras.layers.Layer):
             inputs_embeds = tf.gather(self.word_embeddings, input_ids)
         position_embeddings = self.position_embeddings(position_ids)
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
-        embeddings = inputs_embeds + position_embeddings + token_type_embeddings
+        if self.amp:
+            embeddings = inputs_embeds + tf.cast(position_embeddings, tf.float16) + tf.cast(token_type_embeddings, tf.float16)
+        else:
+            embeddings = inputs_embeds + position_embeddings + token_type_embeddings
         embeddings = self.LayerNorm(embeddings)
         embeddings = self.dropout(embeddings, training=training)
         return embeddings
@@ -145,14 +147,16 @@ class TFElectraDiscriminatorPredictions(tf.keras.layers.Layer):
     def __init__(self, config, **kwargs):
         super().__init__(**kwargs)
 
-        self.dense = tf.keras.layers.Dense(config.hidden_size, name="dense")
-        self.dense_prediction = tf.keras.layers.Dense(1, name="dense_prediction")
+        self.dense = tf.keras.layers.Dense(
+            config.hidden_size, kernel_initializer=get_initializer(config.initializer_range), name="dense")
+        self.dense_prediction = tf.keras.layers.Dense(
+            1, kernel_initializer=get_initializer(config.initializer_range), name="dense_prediction")
         self.config = config
 
     def call(self, discriminator_hidden_states, training=False):
         hidden_states = self.dense(discriminator_hidden_states)
         hidden_states = ACT2FN[self.config.hidden_act](hidden_states)
-        logits = tf.squeeze(self.dense_prediction(hidden_states))
+        logits = tf.squeeze(self.dense_prediction(hidden_states), axis=-1)
 
         return logits
 
@@ -162,7 +166,8 @@ class TFElectraGeneratorPredictions(tf.keras.layers.Layer):
         super().__init__(**kwargs)
 
         self.LayerNorm = tf.keras.layers.LayerNormalization(epsilon=config.layer_norm_eps, name="LayerNorm")
-        self.dense = tf.keras.layers.Dense(config.embedding_size, name="dense")
+        self.dense = tf.keras.layers.Dense(
+            config.embedding_size, kernel_initializer=get_initializer(config.initializer_range), name="dense")
 
     def call(self, generator_hidden_states, training=False):
         hidden_states = self.dense(generator_hidden_states)
@@ -213,12 +218,19 @@ class TFElectraMainLayer(TFElectraPreTrainedModel):
 
     config_class = ElectraConfig
 
-    def __init__(self, config, **kwargs):
+    def __init__(self, config, shared_embeddings=False, input_embeddings=None, **kwargs):
         super().__init__(config, **kwargs)
-        self.embeddings = TFElectraEmbeddings(config, name="embeddings")
+
+        if shared_embeddings and input_embeddings is not None:
+            self.embeddings = input_embeddings
+        else:
+            self.embeddings = TFElectraEmbeddings(config, name="embeddings")
 
         if config.embedding_size != config.hidden_size:
-            self.embeddings_project = tf.keras.layers.Dense(config.hidden_size, name="embeddings_project")
+            self.embeddings_project = tf.keras.layers.Dense(
+                config.hidden_size,
+                kernel_initializer=get_initializer(config.initializer_range),
+                name="embeddings_project")
         self.encoder = TFBertEncoder(config, name="encoder")
         self.config = config
 
@@ -495,11 +507,14 @@ the only model of the two to have been trained for the masked language modeling 
     ELECTRA_START_DOCSTRING,
 )
 class TFElectraForMaskedLM(TFElectraPreTrainedModel):
-    def __init__(self, config, **kwargs):
+    def __init__(self, config, shared_embeddings=False, input_embeddings=None, **kwargs):
         super().__init__(config, **kwargs)
 
         self.vocab_size = config.vocab_size
-        self.electra = TFElectraMainLayer(config, name="electra")
+        self.electra = TFElectraMainLayer(config,
+                                          shared_embeddings=shared_embeddings,
+                                          input_embeddings=input_embeddings,
+                                          name="electra")
         self.generator_predictions = TFElectraGeneratorPredictions(config, name="generator_predictions")
         if isinstance(config.hidden_act, str):
             self.activation = ACT2FN[config.hidden_act]
@@ -564,6 +579,187 @@ class TFElectraForMaskedLM(TFElectraPreTrainedModel):
 
         return output  # (masked_lm_loss), prediction_scores, (hidden_states), (attentions)
 
+def get_generator_config(config, bert_config):
+    """Get model config for the generator network."""
+    gen_config = ElectraConfig.from_dict(bert_config.to_dict())
+    gen_config.hidden_size = int(round(
+        bert_config.hidden_size * config.generator_hidden_size))
+    #To keep hidden size divisble by 64 - attention head size
+    if gen_config.hidden_size % 64 != 0:
+        gen_config.hidden_size += 64 - (gen_config.hidden_size % 64)
+    gen_config.num_hidden_layers = int(round(
+        bert_config.num_hidden_layers * config.generator_layers))
+    gen_config.intermediate_size = 4 * gen_config.hidden_size
+    gen_config.num_attention_heads = max(1, gen_config.hidden_size // 64)
+    return gen_config
+
+class PretrainingModel(tf.keras.Model):
+    """Transformer pre-training using the replaced-token-detection task."""
+
+    def __init__(self, config, **kwargs):
+        super().__init__(**kwargs)
+        # Set up model config
+        self._config = config
+        self.disc_config = ElectraConfig(vocab_size=config.vocab_size,
+                                         embedding_size=config.embedding_size,
+                                         hidden_size=config.hidden_size,
+                                         num_hidden_layers=config.num_hidden_layers,
+                                         num_attention_heads=config.num_attention_heads,
+                                         intermediate_size=4*config.hidden_size,
+                                         hidden_act=config.act_func,
+                                         hidden_dropout_prob=config.hidden_dropout_prob,
+                                         attention_probs_dropout_prob=config.attention_probs_dropout_prob, )
+        self.disc_config.update({"amp": config.amp})
+
+        # Set up discriminator
+        self.discriminator = TFElectraForPreTraining(self.disc_config)
+
+        # Set up generator
+        gen_config = get_generator_config(config, self.disc_config)
+        gen_config.update({"amp": config.amp})
+        if config.electra_objective:
+            if config.shared_embeddings:
+                self.generator = TFElectraForMaskedLM(
+                    gen_config, shared_embeddings=True,
+                    input_embeddings=self.discriminator.get_input_embeddings())
+            else:
+                self.generator = TFElectraForMaskedLM(gen_config)
+        else:
+            self.generator = TFElectraForMaskedLM(self.disc_config)
+
+    def call(self, features, is_training):
+        config = self._config
+
+        # Mask the input
+        masked_inputs = pretrain_utils.mask(
+            config, pretrain_utils.features_to_inputs(features), config.mask_prob)
+
+        # Generator
+        if config.uniform_generator:
+            mlm_output = self._get_masked_lm_output(masked_inputs, None, is_training=is_training)
+        else:
+            mlm_output = self._get_masked_lm_output(
+                masked_inputs, self.generator, is_training=is_training)
+        fake_data = self._get_fake_data(masked_inputs, mlm_output.logits)
+        total_loss = config.gen_weight * mlm_output.loss
+
+        # Discriminator
+        disc_output = None
+        if config.electra_objective:
+            disc_output = self._get_discriminator_output(
+                fake_data.inputs, self.discriminator, fake_data.is_fake_tokens,
+                is_training=is_training)
+            total_loss += config.disc_weight * disc_output.loss
+
+        # Evaluation inputs
+        eval_fn_inputs = {
+            "input_ids": masked_inputs.input_ids,
+            "masked_lm_preds": mlm_output.preds,
+            "mlm_loss": mlm_output.per_example_loss,
+            "masked_lm_ids": masked_inputs.masked_lm_ids,
+            "masked_lm_weights": masked_inputs.masked_lm_weights,
+            "input_mask": masked_inputs.input_mask
+        }
+        if config.electra_objective:
+            eval_fn_inputs.update({
+                "disc_loss": disc_output.per_example_loss,
+                "disc_labels": disc_output.labels,
+                "disc_probs": disc_output.probs,
+                "disc_preds": disc_output.preds,
+                "sampled_tokids": tf.argmax(fake_data.sampled_tokens, -1,
+                                            output_type=tf.int32)
+            })
+
+        return total_loss, eval_fn_inputs
+
+    def _get_masked_lm_output(self, inputs, generator, is_training=False):
+        """Masked language modeling softmax layer."""
+        masked_lm_weights = inputs.masked_lm_weights
+
+        if self._config.uniform_generator:
+            logits = tf.zeros(self.disc_config.vocab_size)
+            logits_tiled = tf.zeros(
+                pretrain_utils.get_shape_list(inputs.masked_lm_ids) +
+                [self.disc_config.vocab_size])
+            logits_tiled += tf.reshape(logits, [1, 1, self.disc_config.vocab_size])
+            logits = logits_tiled
+        else:
+            outputs = generator(
+                input_ids=inputs.input_ids,
+                attention_mask=inputs.input_mask,
+                token_type_ids=inputs.segment_ids,
+                training=is_training)
+            logits = outputs[0]
+            logits = pretrain_utils.gather_positions(
+                logits, inputs.masked_lm_positions)
+
+        oh_labels = tf.one_hot(
+            inputs.masked_lm_ids, depth=self.disc_config.vocab_size,
+            dtype=tf.float32)
+
+        probs = tf.cast(tf.nn.softmax(logits), tf.float32)
+        log_probs = tf.cast(tf.nn.log_softmax(logits), tf.float32)
+        label_log_probs = -tf.reduce_sum(log_probs * oh_labels, axis=-1)
+
+        numerator = tf.reduce_sum(masked_lm_weights * label_log_probs)
+        denominator = tf.reduce_sum(masked_lm_weights) + 1e-6
+        loss = numerator / denominator
+        preds = tf.argmax(log_probs, axis=-1, output_type=tf.int32)
+
+        MLMOutput = collections.namedtuple(
+            "MLMOutput", ["logits", "probs", "loss", "per_example_loss", "preds"])
+        return MLMOutput(
+            logits=logits, probs=probs, per_example_loss=label_log_probs,
+            loss=loss, preds=preds)
+
+    def _get_discriminator_output(self, inputs, discriminator, labels, is_training=False):
+        """Discriminator binary classifier."""
+
+        outputs = discriminator(
+            input_ids=inputs.input_ids,
+            attention_mask=inputs.input_mask,
+            token_type_ids=inputs.segment_ids,
+            training=is_training,
+        )
+        logits = outputs[0]
+        weights = tf.cast(inputs.input_mask, tf.float32)
+        labelsf = tf.cast(labels, tf.float32)
+        logits = tf.cast(logits, tf.float32)
+        losses = tf.nn.sigmoid_cross_entropy_with_logits(
+            logits=logits, labels=labelsf) * weights
+        per_example_loss = (tf.reduce_sum(losses, axis=-1) /
+                            (1e-6 + tf.reduce_sum(weights, axis=-1)))
+        loss = tf.reduce_sum(losses) / (1e-6 + tf.reduce_sum(weights))
+        probs = tf.nn.sigmoid(logits)
+        preds = tf.cast(tf.round((tf.sign(logits) + 1) / 2), tf.int32)
+        DiscOutput = collections.namedtuple(
+            "DiscOutput", ["loss", "per_example_loss", "probs", "preds",
+                           "labels"])
+        return DiscOutput(
+            loss=loss, per_example_loss=per_example_loss, probs=probs,
+            preds=preds, labels=labels,
+        )
+
+    def _get_fake_data(self, inputs, mlm_logits):
+        """Sample from the generator to create corrupted input."""
+        inputs = pretrain_utils.unmask(inputs)
+        disallow = tf.one_hot(
+            inputs.masked_lm_ids, depth=self.disc_config.vocab_size,
+            dtype=tf.float32) if self._config.disallow_correct else None
+        sampled_tokens = tf.stop_gradient(pretrain_utils.sample_from_softmax(
+            mlm_logits / self._config.temperature, disallow=disallow))
+        sampled_tokids = tf.argmax(sampled_tokens, -1, output_type=tf.int32)
+        updated_input_ids, masked = pretrain_utils.scatter_update(
+            inputs.input_ids, sampled_tokids, inputs.masked_lm_positions)
+        labels = masked * (1 - tf.cast(
+            tf.equal(updated_input_ids, inputs.input_ids), tf.int32))
+        updated_inputs = pretrain_utils.get_updated_inputs(
+            inputs, input_ids=updated_input_ids)
+        FakedData = collections.namedtuple("FakedData", [
+            "inputs", "is_fake_tokens", "sampled_tokens"])
+        return FakedData(inputs=updated_inputs, is_fake_tokens=labels,
+                         sampled_tokens=sampled_tokens)
+
 
 @add_start_docstrings(
     """
@@ -578,7 +774,8 @@ class TFElectraForTokenClassification(TFElectraPreTrainedModel):
 
         self.electra = TFElectraMainLayer(config, name="electra")
         self.dropout = tf.keras.layers.Dropout(config.hidden_dropout_prob)
-        self.classifier = tf.keras.layers.Dense(config.num_labels, name="classifier")
+        self.classifier = tf.keras.layers.Dense(
+            config.num_labels, kernel_initializer=get_initializer(config.initializer_range), name="classifier")
 
     @add_start_docstrings_to_callable(ELECTRA_INPUTS_DOCSTRING)
     def call(
@@ -650,10 +847,7 @@ class TFPoolerStartLogits(tf.keras.Model):
                        name="squeeze_start_logit_pooler")
 
         if p_mask is not None:
-            if self.dense.dtype == tf.float16:
-                x = x * (1 - p_mask) - 65500 * p_mask
-            else:
-                x = x * (1 - p_mask) - 1e30 * p_mask
+            x = tf.cast(x, tf.float32) * (1 - p_mask) - 1e30 * p_mask
 
         return x
 
@@ -712,10 +906,7 @@ class TFPoolerEndLogits(tf.keras.Model):
             x = tf.squeeze(self.dense_1(x), axis=-1)
 
         if p_mask is not None:
-            if next_layer_dtype == tf.float16:
-                x = x * (1 - p_mask) - 65500 * p_mask
-            else:
-                x = x * (1 - p_mask) - 1e30 * p_mask
+            x = tf.cast(x, tf.float32) * (1 - p_mask) - 1e30 * p_mask
 
         return x
 
@@ -878,7 +1069,7 @@ class TFElectraForQuestionAnswering(TFElectraPreTrainedModel):
             if self.v2:  # cls_index is not None:
                 start_p = tf.nn.softmax(start_logits, axis=-1, name="start_softmax")
                 start_states = tf.einsum(
-                    "blh,bl->bh", discriminator_sequence_output, start_p
+                    "blh,bl->bh", discriminator_sequence_output, tf.cast(start_p, tf.float16) if self.amp else start_p
                 )  # get the representation of START as weighted sum of hidden states
                 # explicitly setting cls_index to None
                 cls_logits = self.answer_class(

@@ -1,0 +1,39 @@
+name: "tacotron2-ts-script"
+platform: "pytorch_libtorch"
+max_batch_size: 1
+input [
+{
+    name: "input__0"
+    data_type: TYPE_INT64
+    dims: [-1]
+},
+{
+    name: "input__1"
+    data_type: TYPE_INT64
+    dims: [1]
+    reshape: { shape: [ ] }
+}
+]
+output [
+{
+    name: "output__0"
+    data_type: TYPE_FP16
+    dims: [80, -1]
+},
+{
+    name: "output__1"
+    data_type: TYPE_INT32
+    dims: [1]
+    reshape: { shape: [ ] }
+},
+{
+    name: "output__2"
+    data_type: TYPE_FP16
+    dims: [-1, -1]
+}
+]
+optimization {
+  cuda {
+    graphs: 1
+  }
+}

@@ -42,6 +42,7 @@ from fastspeech.utils.pytorch import to_device_async, to_cpu_numpy
 from fastspeech.infer import get_inferencer
 from fastspeech.inferencer.waveglow_inferencer import WaveGlowInferencer
 
+MAX_FILESIZE=128
 
 # TODO test with different speeds
 def generate(hparam='infer.yaml',
@@ -156,7 +157,7 @@ def generate(hparam='infer.yaml',
                     wav_len = mel_lens[i] * hp.hop_len
                     wav = wav[:wav_len]
 
-                    path = os.path.join(results_path, text + ".wav")
+                    path = os.path.join(results_path, text[:MAX_FILESIZE] + ".wav")
                     librosa.output.write_wav(path, wav, hp.sr)
 
         except StopIteration:

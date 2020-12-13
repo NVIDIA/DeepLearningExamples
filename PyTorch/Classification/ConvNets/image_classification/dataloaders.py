@@ -200,7 +200,7 @@ class DALIWrapper(object):
 
     def __iter__(self):
         return DALIWrapper.gen_wrapper(
-                self.dalipipeline, self.num_classes, self.one_hot, self.memory_format
+            self.dalipipeline, self.num_classes, self.one_hot, self.memory_format
         )
 
 
@@ -472,7 +472,10 @@ class SynteticDataLoader(object):
         memory_format=torch.contiguous_format,
     ):
         input_data = (
-            torch.empty(batch_size, num_channels, height, width).contiguous(memory_format=memory_format).cuda().normal_(0, 1.0)
+            torch.empty(batch_size, num_channels, height, width)
+            .contiguous(memory_format=memory_format)
+            .cuda()
+            .normal_(0, 1.0)
         )
         if one_hot:
             input_target = torch.empty(batch_size, num_classes).cuda()
@@ -502,4 +505,16 @@ def get_syntetic_loader(
     fp16=False,
     memory_format=torch.contiguous_format,
 ):
-    return SynteticDataLoader(fp16, batch_size, num_classes, 3, 224, 224, one_hot, memory_format=memory_format), -1
+    return (
+        SynteticDataLoader(
+            fp16,
+            batch_size,
+            num_classes,
+            3,
+            224,
+            224,
+            one_hot,
+            memory_format=memory_format,
+        ),
+        -1,
+    )

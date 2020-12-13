@@ -85,7 +85,7 @@ class DlrmBottom(nn.Module):
         Returns:
             Tensor: Concatenated bottom mlp and embedding output in shape [batch, 1 + #embedding, embedding_dim]
         """
-        batch_size = categorical_inputs.size()[0]
+        batch_size = len(numerical_input) if numerical_input is not None else len(categorical_inputs)
         bottom_output = []
         bottom_mlp_output = None
 
@@ -97,7 +97,8 @@ class DlrmBottom(nn.Module):
             # reshape bottom mlp to concatenate with embeddings
             bottom_output.append(bottom_mlp_output.view(batch_size, 1, -1))
 
-        bottom_output += self.embeddings(categorical_inputs)
+        if self.num_categorical_features > 0:
+            bottom_output += self.embeddings(categorical_inputs)
 
         if self._fp16:
             bottom_output = [x.half() if x.dtype != torch.half else x for x in bottom_output]

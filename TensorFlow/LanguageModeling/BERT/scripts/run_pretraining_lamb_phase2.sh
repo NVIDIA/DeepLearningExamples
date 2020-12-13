@@ -36,9 +36,9 @@ DATA_DIR=${DATA_DIR:-data}
 RESULTS_DIR=${RESULTS_DIR:-/results}
 
 if [ "$bert_model" = "large" ] ; then
-    export BERT_CONFIG=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/bert_config.json
+    export BERT_CONFIG=data/download/nvidia_pretrained/bert_tf_pretraining_large_lamb/bert_config.json
 else
-    export BERT_CONFIG=data/download/google_pretrained_weights/uncased_L-12_H-768_A-12/bert_config.json
+    export BERT_CONFIG=data/download/nvidia_pretrained/bert_tf_squad11_base_128/bert_config.json
 fi
 
 echo "Container nvidia build = " $NVIDIA_BUILD_ID

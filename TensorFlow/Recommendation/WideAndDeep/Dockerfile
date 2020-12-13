@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.06-tf1-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.10-tf1-py3
 
 FROM ${FROM_IMAGE_NAME}
 
@@ -40,7 +40,7 @@ ENV PYTHONPATH $SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.7-src.zip
 ENV SPARK_OPTS --driver-java-options=-Xms1024M --driver-java-options=-Xmx4096M --driver-java-options=-Dlog4j.logLevel=info
 
 RUN pip install pyspark==2.3.1
-RUN pip install --no-deps tensorflow-transform apache-beam==2.14 tensorflow-metadata==0.14.0 pydot dill
+RUN pip install --no-deps tensorflow-transform==0.24.1 apache-beam==2.14 tensorflow-metadata==0.14.0 pydot dill
 RUN pip install ipdb
 RUN pip install -e git://github.com/NVIDIA/dllogger#egg=dllogger
 

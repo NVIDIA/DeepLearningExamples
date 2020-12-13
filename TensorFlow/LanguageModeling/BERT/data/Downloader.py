@@ -53,13 +53,15 @@ class Downloader:
         elif self.dataset_name == 'nvidia_pretrained_weights':
             self.download_nvidia_pretrained_weights()
 
-        elif self.dataset_name == 'MRPC':
+        elif self.dataset_name == 'mrpc':
             self.download_glue(self.dataset_name)
 
-        elif self.dataset_name == 'MNLI':
+        elif self.dataset_name == 'mnli':
             self.download_glue(self.dataset_name)
 
-        elif self.dataset_name == 'CoLA':
+        elif self.dataset_name == 'cola':
+            self.download_glue(self.dataset_name)
+        elif self.dataset_name == 'sst-2':
             self.download_glue(self.dataset_name)
 
         elif self.dataset_name == 'squad':
@@ -75,9 +77,10 @@ class Downloader:
             self.download_pubmed('open_access')
             self.download_google_pretrained_weights()
             self.download_nvidia_pretrained_weights()
-            self.download_glue("CoLA")
-            self.download_glue("MNLI")
-            self.download_glue("MRPC")
+            self.download_glue("cola")
+            self.download_glue("mnli")
+            self.download_glue("mrpc")
+            self.download_glue("sst-2")
             self.download_squad()
 
         else:
@@ -111,8 +114,8 @@ class Downloader:
 
 
     def download_glue(self, glue_task_name):
-        downloader = GLUEDownloader(glue_task_name, self.save_path)
-        downloader.download()
+        downloader = GLUEDownloader(self.save_path)
+        downloader.download(glue_task_name)
 
 
     def download_squad(self):

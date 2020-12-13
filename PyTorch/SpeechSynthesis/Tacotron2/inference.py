@@ -29,6 +29,7 @@ from tacotron2.text import text_to_sequence
 import models
 import torch
 import argparse
+import os
 import numpy as np
 from scipy.io.wavfile import write
 import matplotlib
@@ -106,8 +107,9 @@ def unwrap_distributed(state_dict):
 
 
 def load_and_setup_model(model_name, parser, checkpoint, fp16_run, cpu_run, forward_is_infer=False):
-    model_parser = models.parse_model_args(model_name, parser, add_help=False)
+    model_parser = models.model_parser(model_name, parser, add_help=False)
     model_args, _ = model_parser.parse_known_args()
+
     model_config = models.get_model_config(model_name, model_args)
     model = models.get_model(model_name, model_config, cpu_run=cpu_run,
                              forward_is_infer=forward_is_infer)
@@ -195,8 +197,8 @@ def main():
     parser = parse_args(parser)
     args, _ = parser.parse_known_args()
 
-    DLLogger.init(backends=[JSONStreamBackend(Verbosity.DEFAULT,
-                                              args.output+'/'+args.log_file),
+    log_file = os.path.join(args.output, args.log_file)
+    DLLogger.init(backends=[JSONStreamBackend(Verbosity.DEFAULT, log_file),
                             StdOutBackend(Verbosity.VERBOSE)])
     for k,v in vars(args).items():
         DLLogger.log(step="PARAMETER", data={k:v})
@@ -245,8 +247,7 @@ def main():
         audios = denoiser(audios, strength=args.denoising_strength).squeeze(1)
 
     print("Stopping after",mel.size(2),"decoder steps")
-
-    tacotron2_infer_perf = mel.size(0)*mel.size(2)/measurements['tacotron2_time']   
+    tacotron2_infer_perf = mel.size(0)*mel.size(2)/measurements['tacotron2_time']
     waveglow_infer_perf = audios.size(0)*audios.size(1)/measurements['waveglow_time']
 
     DLLogger.log(step=0, data={"tacotron2_items_per_sec": tacotron2_infer_perf})
@@ -259,12 +260,12 @@ def main():
     for i, audio in enumerate(audios):
 
         plt.imshow(alignments[i].float().data.cpu().numpy().T, aspect="auto", origin="lower")
-        figure_path = args.output+"alignment_"+str(i)+"_"+args.suffix+".png"
+        figure_path = os.path.join(args.output,"alignment_"+str(i)+args.suffix+".png")
         plt.savefig(figure_path)
 
         audio = audio[:mel_lengths[i]*args.stft_hop_length]
         audio = audio/torch.max(torch.abs(audio))
-        audio_path = args.output+"audio_"+str(i)+"_"+args.suffix+".wav"
+        audio_path = os.path.join(args.output,"audio_"+str(i)+args.suffix+".wav")
         write(audio_path, args.sampling_rate, audio.cpu().numpy())
 
     DLLogger.flush()

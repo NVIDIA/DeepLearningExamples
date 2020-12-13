@@ -11,12 +11,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvcr.io/nvidia/kaldi:19.12-online-beta-py3 as kb
+FROM nvcr.io/nvidia/kaldi:20.03-py3 as kb
+FROM nvcr.io/nvidia/tritonserver:20.03-py3
 ENV DEBIAN_FRONTEND=noninteractive
-
-ARG PYVER=3.6
-
-FROM nvcr.io/nvidia/tensorrtserver:19.12-py3
 
 # Kaldi dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -27,8 +24,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gawk \
         libatlas3-base \
         libtool \
-        python$PYVER \
-        python$PYVER-dev \
+        python3.6 \
+        python3.6-dev \
         sox \
         subversion \
         unzip \

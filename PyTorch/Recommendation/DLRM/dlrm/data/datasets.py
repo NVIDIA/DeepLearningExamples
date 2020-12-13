@@ -144,7 +144,8 @@ class SplitCriteoDataset(Dataset):
         numerical_features: bool = False,
         categorical_features: Optional[Sequence[int]] = None,
         categorical_feature_sizes: Optional[Sequence[int]] = None,
-        prefetch_depth: int = 10
+        prefetch_depth: int = 10,
+        drop_last_batch: bool = False,
     ):
         self._label_bytes_per_batch = np.dtype(np.bool).itemsize * batch_size
         self._numerical_bytes_per_batch = 13 * np.dtype(np.float16).itemsize * batch_size if numerical_features else 0
@@ -156,25 +157,31 @@ class SplitCriteoDataset(Dataset):
         ]
         self._categorical_features = categorical_features
         self._batch_size = batch_size
-        self._label_file = os.open(os.path.join(data_path, F"label.bin"), os.O_RDONLY)
-        self._num_entries = int(math.ceil(os.fstat(self._label_file).st_size / self._label_bytes_per_batch))
+        self._label_file = os.open(os.path.join(data_path, f"label.bin"), os.O_RDONLY)
+        self._num_entries = int(math.ceil(os.fstat(self._label_file).st_size
+                                          / self._label_bytes_per_batch)) if not drop_last_batch \
+                            else int(math.floor(os.fstat(self._label_file).st_size / self._label_bytes_per_batch))
 
         if numerical_features:
             self._numerical_features_file = os.open(os.path.join(data_path, "numerical.bin"), os.O_RDONLY)
-            if math.ceil(os.fstat(self._numerical_features_file).st_size /
-                         self._numerical_bytes_per_batch) != self._num_entries:
-                raise ValueError("Size miss match in data files")
+            number_of_numerical_batches = math.ceil(os.fstat(self._numerical_features_file).st_size
+                                                    / self._numerical_bytes_per_batch) if not drop_last_batch \
+                                          else math.floor(os.fstat(self._numerical_features_file).st_size
+                                                          / self._numerical_bytes_per_batch)
+            if number_of_numerical_batches != self._num_entries:
+                raise ValueError("Size mismatch in data files")
         else:
             self._numerical_features_file = None
 
         if categorical_features:
             self._categorical_features_files = []
             for cat_id in categorical_features:
-                cat_file = os.open(os.path.join(data_path, F"cat_{cat_id}.bin"), os.O_RDONLY)
+                cat_file = os.open(os.path.join(data_path, f"cat_{cat_id}.bin"), os.O_RDONLY)
                 cat_bytes = self._categorical_bytes_per_batch[cat_id]
-                if math.ceil(
-                        os.fstat(cat_file).st_size / cat_bytes) != self._num_entries:
-                    raise ValueError("Size miss match in data files")
+                number_of_categorical_batches = math.ceil(os.fstat(cat_file).st_size / cat_bytes) if not drop_last_batch \
+                                                else math.floor(os.fstat(cat_file).st_size / cat_bytes)
+                if number_of_categorical_batches != self._num_entries:
+                    raise ValueError("Size mismatch in data files")
                 self._categorical_features_files.append(cat_file)
         else:
             self._categorical_features_files = None
@@ -236,7 +243,10 @@ class SplitCriteoDataset(Dataset):
         return torch.cat(categorical_features, dim=1)
 
     def __del__(self):
-        data_files = [self._label_file, self._numerical_features_file] + self._categorical_features_files
+        data_files = [self._label_file, self._numerical_features_file]
+        if self._categorical_features_files is not None:
+            data_files += self._categorical_features_files
+
         for data_file in data_files:
             if data_file is not None:
                 os.close(data_file)

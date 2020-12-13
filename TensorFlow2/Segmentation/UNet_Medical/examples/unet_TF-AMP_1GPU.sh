@@ -15,4 +15,4 @@
 # This script launches U-Net run in FP16 on 1 GPU and trains for 6400 iterations batch_size 8. Usage:
 # bash unet_TF-AMP_1GPU.sh <path to dataset> <path to results directory>
 
-horovodrun -np 1 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size 8 --exec_mode train_and_evaluate --crossvalidation_idx 0 --augment --xla --amp --log_dir $2/log.json
+horovodrun -np 1 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size 8 --exec_mode train_and_evaluate --fold 0 --augment --xla --amp --log_dir $2/log.json

@@ -20,6 +20,7 @@
 #include <sstream>
 #include "cudadecoder/batched-threaded-nnet3-cuda-online-pipeline.h"
 #include "fstext/fstext-lib.h"
+#include "lat/kaldi-lattice.h"
 #include "lat/lattice-functions.h"
 #include "nnet3/am-nnet-simple.h"
 #include "nnet3/nnet-utils.h"
@@ -62,8 +63,13 @@ class Context {
                        const kaldi::BaseFloat** wave_buffer,
                        std::vector<uint8_t>* input_buffer);
 
-  int SetOutputTensor(const std::string& output, CustomGetOutputFn_t output_fn,
-                      CustomPayload payload);
+  int SetOutputs(kaldi::CompactLattice& clat,
+                      CustomGetOutputFn_t output_fn, CustomPayload payload);
+
+  int SetOutputByName(const char* output_name,
+                             const std::string& out_bytes,
+                             CustomGetOutputFn_t output_fn,
+                             CustomPayload payload);
 
   bool CheckPayloadError(const CustomPayload& payload);
   int FlushBatch();
@@ -88,6 +94,7 @@ class Context {
   int num_worker_threads_;
   std::vector<CorrelationID> batch_corr_ids_;
   std::vector<kaldi::SubVector<kaldi::BaseFloat>> batch_wave_samples_;
+  std::vector<bool> batch_is_first_chunk_;
   std::vector<bool> batch_is_last_chunk_;
 
   BaseFloat sample_freq_, seconds_per_chunk_;
@@ -113,7 +120,7 @@ class Context {
   std::vector<std::vector<uint8_t>> wave_byte_buffers_;
 };
 
-}  // kaldi
-}  // custom
-}  // inferenceserver
-}  // nvidia
+}  // namespace kaldi_cbe
+}  // namespace custom
+}  // namespace inferenceserver
+}  // namespace nvidia

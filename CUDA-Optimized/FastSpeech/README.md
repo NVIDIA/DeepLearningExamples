@@ -95,9 +95,9 @@ and encapsulates some dependencies. Aside from these dependencies, ensure you
 have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 20.03-py3+ NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
+* [PyTorch 20.10-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
 or newer
-* [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
+* [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/), [Turing](https://www.nvidia.com/en-us/geforce/turing/)<!--, or [Ampere](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/) based GPU-->
 
 For more information about how to get started with NGC containers, see the
 following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning
@@ -120,11 +120,6 @@ To train your model using mixed precision with Tensor Cores or using FP32, perfo
 	git clone https://github.com/NVIDIA/DeepLearningExamples.git
 	cd DeepLearningExamples/CUDA-Optimized/FastSpeech
    ```
-   and pull submodules.
-   ```
-   git submodule init
-   git submodule update
-	```
 
 2.  Download and preprocess the dataset. Data is downloaded to the ./LJSpeech-1.1 directory (on the host). The ./LJSpeech-1.1 directory is mounted to the /workspace/fastspeech/LJSpeech-1.1 location in the NGC container.
     ```
@@ -146,7 +141,15 @@ To train your model using mixed precision with Tensor Cores or using FP32, perfo
    python fastspeech/dataset/ljspeech_dataset.py --dataset_path="./LJSpeech-1.1" --mels_path="./mels_ljspeech1.1"
    ```
 
-   The preprocessed mel-spectrograms are stored in the ./mels_ljspeech1.1 directory. Also, the preprocessed alignments are prepared in ./aligns_ljspeech1.1 directory. For more information, refer to the [training process section](#training-process).
+   The preprocessed mel-spectrograms are stored in the ./mels_ljspeech1.1 directory. 
+
+   Next, preprocess the alignments on LJSpeech dataset with feed-forwards to the teacher model. Download the Nvidia [pretrained Tacotron2 checkpoint](https://drive.google.com/file/d/1c5ZTuT7J08wLUoVZ2KkUs_VdZuJ86ZqA/view) to get a pretrained teacher model. And set --tacotron2_path to the Tacotron2 checkpoint file path and the result alignments are stored in --aligns_path.
+   ```
+   python fastspeech/align_tacotron2.py --dataset_path="./LJSpeech-1.1" --tacotron2_path="tacotron2_statedict.pt" --aligns_path="aligns_ljspeech1.1"
+   ```
+
+   The preprocessed alignments are stored in the ./aligns_ljspeech1.1 directory. For more information, refer to the [training process section](#training-process).
+
    
    Finally, run the training script:
 
@@ -161,23 +164,23 @@ To train your model using mixed precision with Tensor Cores or using FP32, perfo
    python fastspeech/train.py --dataset_path="./LJSpeech-1.1" --mels_path="./mels_ljspeech1.1" --aligns_path="./aligns_ljspeech1.1" --log_path="./logs" --checkpoint_path="./checkpoints" --use_amp
    ```
 
-6. Start generation. To generate waveforms with WaveGlow Vocoder, Get [pretrained WaveGlow model](https://drive.google.com/open?id=1rpK8CzAAirq9sWZhe9nlfvxMF1dRgFbF) in the home directory, for example, ./waveglow_256channels.pt.
+6. Start generation. To generate waveforms with WaveGlow Vocoder, Get [pretrained WaveGlow model](https://ngc.nvidia.com/catalog/models/nvidia:waveglow_ckpt_amp_256/files?version=19.10.0) from NGC into the home directory, for example, ./nvidia_waveglow256pyt_fp16.
 
    After you have trained the FastSpeech model, you can perform generation using the checkpoint stored in ./checkpoints. Then run:
    ```
-   python generate.py --waveglow_path="./waveglow_256channels.pt" --checkpoint_path="./checkpoints" --text="./test_sentences.txt"
+   python generate.py --waveglow_path="./nvidia_waveglow256pyt_fp16" --checkpoint_path="./checkpoints" --text="./test_sentences.txt"
    ```
 
    The script loads automatically the latest checkpoint (if any exists), or you can pass a checkpoint file through --ckpt_file. And it loads input texts in ./test_sentences.txt and stores the result in ./results directory. You can also set the result directory path with --results_path.
 
    You can also run with a sample text:
    ```
-   python generate.py  --waveglow_path="./waveglow_256channels.pt" --checkpoint_path="./checkpoints" --text="The more you buy, the more you save."
+   python generate.py  --waveglow_path="./nvidia_waveglow256pyt_fp16" --checkpoint_path="./checkpoints" --text="The more you buy, the more you save."
    ```
 
-7. Accelerate generation(inferencing of FastSpeech and WaveGlow) with TensorRT. Set parameters config file with --hparam=trt.yaml to enable TensorRT inference mode. To prepare for running WaveGlow on TensorRT, first extract a TensorRT engine file via [DeepLearningExamples/PyTorch/SpeechSynthesis/Tacotron2/trt](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2/trt) and copy this in the home directory, for example, ./waveglow.fp16.trt. Then run with --waveglow_engine_path:
+7. Accelerate generation(inferencing of FastSpeech and WaveGlow) with TensorRT. Set parameters config file with --hparam=trt.yaml to enable TensorRT inference mode. To prepare for running WaveGlow on TensorRT, first get an ONNX file via [DeepLearningExamples/PyTorch/SpeechSynthesis/Tacotron2/tensorrt](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2/tensorrt), convert it to an TensorRT engine using scripts/waveglow/convert_onnx2trt.py, and copy this in the home directory, for example, ./waveglow.fp16.trt. Then run with --waveglow_engine_path:
    ```
-   python generate.py --hparam=trt.yaml --waveglow_path="./waveglow_256channels.pt" --checkpoint_path="./checkpoints" --text="./test_sentences.txt" --waveglow_engine_path="waveglow.fp16.trt"
+   python generate.py --hparam=trt.yaml --waveglow_path="./nvidia_waveglow256pyt_fp16" --checkpoint_path="./checkpoints" --text="./test_sentences.txt" --waveglow_engine_path="waveglow.fp16.trt"
    ```
 
 ## Advanced
@@ -285,33 +288,29 @@ For more details, refer to [accelerating inference with TensorRT](fastspeech/trt
 
 #### Generation
 
-To generate waveforms with WaveGlow Vocoder, 1) Make sure to pull [Nvidia WaveGlow](https://github.com/NVIDIA/waveglow) through git submodule, 2) get [pretrained WaveGlow model](https://drive.google.com/open?id=1rpK8CzAAirq9sWZhe9nlfvxMF1dRgFbF) in the home directory, for example, ./waveglow_256channels.pt.
-   ```
-   git submodule init
-   git submodule update
-   ```
+To generate waveforms with WaveGlow Vocoder, get [pretrained WaveGlow model](https://ngc.nvidia.com/catalog/models/nvidia:waveglow_ckpt_amp_256/files?version=19.10.0) from NGC into the home directory, for example, ./nvidia_waveglow256pyt_fp16.
 
 Run generate.py with:
   * --text - an input text or the text file path.
   * --results_path - result waveforms directory path. (default=./results).
   * --ckpt_file - checkpoint file path. (default checkpoint file is the latest file in --checkpoint_path)
    ```
-   python generate.py --waveglow_path="./waveglow_256channels.pt" --text="The more you buy, the more you save."
+   python generate.py --waveglow_path="./nvidia_waveglow256pyt_fp16" --text="The more you buy, the more you save."
    ```
    or
    ```
-   python generate.py --waveglow_path="./waveglow_256channels.pt" --text=test_sentences.txt
+   python generate.py --waveglow_path="./nvidia_waveglow256pyt_fp16" --text=test_sentences.txt
    ```
 
-Sample result waveforms are [here](https://gitlab-master.nvidia.com/dahn/fastspeech/tree/master/samples).
+Sample result waveforms are [here](samples).
 
-To generate waveforms with the whole pipeline of FastSpeech and WaveGlow with TensorRT, extract a WaveGlow TRT engine file through https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2/trt and run generate.py with --hparam=trt.yaml and --waveglow_engine_path.
+To generate waveforms with the whole pipeline of FastSpeech and WaveGlow with TensorRT, extract a WaveGlow TRT engine file through https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2/tensorrt and run generate.py with --hparam=trt.yaml and --waveglow_engine_path.
 
 ```
-python generate.py --hparam=trt.yaml --waveglow_path="./waveglow_256channels.pt" --waveglow_engine_path="waveglow.fp16.trt" --text="The more you buy, the more you save."
+python generate.py --hparam=trt.yaml --waveglow_path="./nvidia_waveglow256pyt_fp16" --waveglow_engine_path="waveglow.fp16.trt" --text="The more you buy, the more you save."
 ```
 
-Sample result waveforms are [FP32](https://gitlab-master.nvidia.com/dahn/fastspeech/-/tree/master/fastspeech/trt/samples) and [FP16](https://gitlab-master.nvidia.com/dahn/fastspeech/-/tree/master/fastspeech/trt/samples_fp16).
+Sample result waveforms are [FP32](fastspeech/trt/samples) and [FP16](fastspeech/trt/samples_fp16).
 
 
 ## Performance
@@ -383,7 +382,17 @@ The following sections provide details on how we achieved our performance and ac
 
 #### Training performance results
 
-Our results were obtained by running the script in [training performance benchmark](#training-performance-benchmark) in the PyTorch-20.03-py3 NGC container on NVIDIA DGX-1 with 8x V100 16G GPUs. Performance numbers (in number of mels per second) were averaged over an entire training epoch.
+Our results were obtained by running the script in [training performance benchmark](#training-performance-benchmark) on <!--NVIDIA DGX A100 with 8x A100 40G GPUs and -->NVIDIA DGX-1 with 8x V100 16G GPUs. Performance numbers (in number of mels per second) were averaged over an entire training epoch.
+
+<!-- ##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
+
+| GPUs   | Batch size / GPU   | Throughput(mels/s) - FP32    | Throughput(mels/s) - mixed precision    | Throughput speedup (FP32 - mixed precision)   | Multi-GPU Weak scaling - FP32    | Multi-GPU Weak scaling - mixed precision        
+|---|----|--------|--------|------|-----|------|
+| 1 | 32 |   |   |  |  |  1 |
+| 4 | 32 |  |  |  | |  |
+| 8 | 32 |  |  |  | |  | -->
+
+##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
 
 | GPUs   | Batch size / GPU   | Throughput(mels/s) - FP32    | Throughput(mels/s) - mixed precision    | Throughput speedup (FP32 - mixed precision)   | Multi-GPU Weak scaling - FP32    | Multi-GPU Weak scaling - mixed precision        
 |---|----|--------|--------|------|-----|------|
@@ -393,7 +402,7 @@ Our results were obtained by running the script in [training performance benchma
 
 #### Inference performance results
 
-Our results were obtained by running the script in [inference performance benchmark](#inference-performance-benchmark) in the PyTorch-20.03-py3 NGC container on NVIDIA DGX-1 with 1x V100 16GB GPU and a NVIDIA T4. The following tables show inference statistics for the FastSpeech and WaveGlow text-to-speech system on PyTorch and comparisons by framework with batch size 1 in FP16, gathered from 1000 inference runs. Latency is measured from the start of FastSpeech inference to the end of WaveGlow inference. The tables include average latency, latency standard deviation, and latency confidence intervals. Throughput is measured as the number of generated audio samples per second. RTF is the real-time factor which tells how many seconds of speech are generated in 1 second of compute. The used WaveGlow model is a 256-channel model. The numbers reported below were taken with a moderate length of 128 characters.
+Our results were obtained by running the script in [inference performance benchmark](#inference-performance-benchmark) on NVIDIA DGX-1 with 1x V100 16GB GPU and a NVIDIA T4. The following tables show inference statistics for the FastSpeech and WaveGlow text-to-speech system on PyTorch and comparisons by framework with batch size 1 in FP16, gathered from 1000 inference runs. Latency is measured from the start of FastSpeech inference to the end of WaveGlow inference. The tables include average latency, latency standard deviation, and latency confidence intervals. Throughput is measured as the number of generated audio samples per second. RTF is the real-time factor which tells how many seconds of speech are generated in 1 second of compute. The used WaveGlow model is a 256-channel model. The numbers reported below were taken with a moderate length of 128 characters.
 
 ##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
 
@@ -434,6 +443,9 @@ Our results were obtained by running the script in [inference performance benchm
 ## Release notes
 
 ### Changelog
+Oct 2020
+- PyTorch 1.7, TensorRT 7.2 support <!--and Nvidia Ampere architecture support-->
+
 July 2020
 - Initial release
 

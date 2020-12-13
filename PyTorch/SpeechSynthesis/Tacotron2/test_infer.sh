@@ -78,7 +78,7 @@ TMP_LOGFILE=tmp_log_${LOG_SUFFIX}.log
 LOGFILE=log_${LOG_SUFFIX}.log
 
 
-if [ "$TEST_PROGRAM" = "trt/test_infer_trt.py" ]
+if [ "$TEST_PROGRAM" = "tensorrt/test_infer_trt.py" ]
 then
     TACOTRON2_PARAMS="--encoder $ENCODER_CKPT --decoder $DECODER_CKPT --postnet $POSTNET_CKPT"
 else

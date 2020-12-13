@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
 
-DATA_DIR="LJSpeech-1.1"
+: ${WAVEGLOW:="pretrained_models/waveglow/nvidia_waveglow256pyt_fp16.pt"}
+: ${FASTPITCH:="output/FastPitch_checkpoint_1500.pt"}
+: ${BS:=32}
+: ${PHRASES:="phrases/devset10.tsv"}
+: ${OUTPUT_DIR:="./output/audio_$(basename ${PHRASES} .tsv)"}
+: ${AMP:=false}
 
-[ ! -n "$WAVEG_CH" ] && WAVEG_CH="pretrained_models/waveglow/waveglow_1076430_14000_amp.pt"
-[ ! -n "$FASTPITCH_CH" ] && FASTPITCH_CH="output/FastPitch_checkpoint_1500.pt"
-[ ! -n "$BS" ] && BS=32
-[ ! -n "$PHRASES" ] && PHRASES="phrases/devset10.tsv"
-[ ! -n "$OUTPUT_DIR" ] && OUTPUT_DIR="./output/audio_$(basename ${PHRASES} .tsv)"
-[ "$AMP" == "true" ] && AMP_FLAG="--amp"
+[ "$AMP" = true ] && AMP_FLAG="--amp"
+
+mkdir -p "$OUTPUT_DIR"
 
 python inference.py --cuda \
                     -i ${PHRASES} \
                     -o ${OUTPUT_DIR} \
-                    --dataset-path ${DATA_DIR} \
-                    --fastpitch ${FASTPITCH_CH} \
-                    --waveglow ${WAVEG_CH} \
+                    --fastpitch ${FASTPITCH} \
+                    --waveglow ${WAVEGLOW} \
 		    --wn-channels 256 \
                     --batch-size ${BS} \
                     ${AMP_FLAG}

@@ -18,14 +18,13 @@ seq_length=${2:-"384"}
 doc_stride=${3:-"128"}
 triton_version_name=${4:-"1"}
 triton_model_name=${5:-"bert"}
-BERT_DIR=${6:-"data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16"}
+BERT_DIR=${6:-"data/download/nvidia_pretrained/bert_tf_pretraining_large_lamb"}
 
 bash scripts/docker/launch.sh \
    "python triton/run_squad_triton_client.py \
       --triton_model_name=$triton_model_name \
       --triton_model_version=$triton_version_name \
       --vocab_file=$BERT_DIR/vocab.txt \
-      --bert_config_file=$BERT_DIR/bert_config.json \
       --predict_batch_size=$batch_size \
       --max_seq_length=${seq_length} \
       --doc_stride=${doc_stride} \

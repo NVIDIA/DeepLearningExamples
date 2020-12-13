@@ -12,14 +12,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-init_checkpoint=${1:-"/results/models/bert_large_fp16_384_v1/model.ckpt-5474"}
+init_checkpoint=${1:-"data/download/nvidia_pretrained/bert_tf_squad11_large_384/model.ckpt"}
 batch_size=${2:-"8"}
 precision=${3:-"fp16"}
 use_xla=${4:-"true"}
 seq_length=${5:-"384"}
 doc_stride=${6:-"128"}
-BERT_DIR=${7:-"data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16"}
+BERT_DIR=${7:-"data/download/nvidia_pretrained/bert_tf_pretraining_large_lamb"}
 triton_model_version=${8:-1}
 triton_model_name=${9:-"bert"}
 triton_dyn_batching_delay=${10:-0}
