@@ -1,0 +1,206 @@
+# Copyright (c) 2018-2019, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+#1 DGX1 phase1
+bert--DGX1:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX1
+  variables:
+    <<: *DGX1_VARS
+    NNODES: "1"
+    BATCHSIZE: "8"
+    LEARNING_RATE: "7.5e-4"
+    NUM_ACCUMULATION_STEPS: "1024"
+    PHASE: "1"
+
+#4 DGX1 phase1
+bert--DGX1_n4:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX1
+  variables:
+    <<: *DGX1_VARS
+    NNODES: "4"
+    BATCHSIZE: "8"
+    LEARNING_RATE: "1.875e-4"
+    NUM_ACCUMULATION_STEPS: "256"
+    PHASE: "1"
+
+#16 DGX1 phase1
+bert--DGX1_n16:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX1
+  variables:
+    <<: *DGX1_VARS
+    NNODES: "16"
+    BATCHSIZE: "8"
+    LEARNING_RATE: "4.6875e-5"
+    NUM_ACCUMULATION_STEPS: "64"
+    PHASE: "1"
+
+#32 DGX1 phase1
+bert--DGX1_n32:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX1
+  variables:
+    <<: *DGX1_VARS
+    NNODES: "32"
+    BATCHSIZE: "8"
+    LEARNING_RATE: "2.34375e-5"
+    NUM_ACCUMULATION_STEPS: "32"
+    PHASE: "1"
+
+#1 DGX2 phase1
+bert--DGX2:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX2
+  variables:
+    <<: *DGX2_VARS
+    NNODES: "1"
+    BATCHSIZE: "32"
+    LEARNING_RATE: "3.75e-4"
+    NUM_ACCUMULATION_STEPS: "128"
+    PHASE: "1"
+
+#4 DGX2 phase1
+bert--DGX2_n4:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX2
+  variables:
+    <<: *DGX2_VARS
+    NNODES: "4"
+    BATCHSIZE: "32"
+    LEARNING_RATE: "9.375e-5"
+    NUM_ACCUMULATION_STEPS: "32"
+    PHASE: "1"
+
+#16 DGX2 phase1
+bert--DGX2_n16:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX2
+  variables:
+    <<: *DGX2_VARS
+    NNODES: "16"
+    BATCHSIZE: "256"
+    LEARNING_RATE: "3.75e-4"
+    NUM_ACCUMULATION_STEPS: "4"
+    PHASE: "1"
+
+#32 DGX2 phase1
+bert--DGX2_n32:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX2
+  variables:
+    <<: *DGX2_VARS
+    NNODES: "32"
+    BATCHSIZE: "32"
+    LEARNING_RATE: "2.34375e-5"
+    NUM_ACCUMULATION_STEPS: "8"
+    PHASE: "1"
+
+#1 DGX1 phase2
+bert--DGX1_n1p2:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX1
+  variables:
+    <<: *DGX1_VARS
+    NNODES: "1"
+    BATCHSIZE: "2"
+    LEARNING_RATE: "5e-4"
+    NUM_ACCUMULATION_STEPS: "4096"
+    PHASE: "2"
+
+#4 DGX1 phase2
+bert--DGX1_n4p2:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX1
+  variables:
+    <<: *DGX1_VARS
+    NNODES: "4"
+    BATCHSIZE: "2"
+    LEARNING_RATE: "1.25e-4"
+    NUM_ACCUMULATION_STEPS: "512"
+    PHASE: "2"
+
+#16 DGX1 phase2
+bert--DGX1_n16p2:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX1
+  variables:
+    <<: *DGX1_VARS
+    NNODES: "16"
+    BATCHSIZE: "2"
+    LEARNING_RATE: "1.5625e-5"
+    NUM_ACCUMULATION_STEPS: "128"
+    PHASE: "2"
+
+#32 DGX1 phase2
+bert--DGX1_n32p2:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX1
+  variables:
+    <<: *DGX1_VARS
+    NNODES: "32"
+    BATCHSIZE: "2"
+    LEARNING_RATE: "1.5625e-5"
+    NUM_ACCUMULATION_STEPS: "64"
+    PHASE: "2"
+
+#1 DGX2 phase2
+bert--DGX2_n1p2:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX2
+  variables:
+    <<: *DGX2_VARS
+    NNODES: "1"
+    BATCHSIZE: "8"
+    LEARNING_RATE: "2.5e-5"
+    NUM_ACCUMULATION_STEPS: "256"
+    PHASE: "2"
+
+#4 DGX2 phase2
+bert--DGX2_n4p2:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX2
+  variables:
+    <<: *DGX2_VARS
+    NNODES: "4"
+    BATCHSIZE: "8"
+    LEARNING_RATE: "6.25e-5"
+    NUM_ACCUMULATION_STEPS: "64"
+    PHASE: "2"
+
+#16 DGX2 phase2
+bert--DGX2_n16p2:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX2
+  variables:
+    <<: *DGX2_VARS
+    NNODES: "16"
+    BATCHSIZE: "8"
+    LEARNING_RATE: "1.5625e-5"
+    NUM_ACCUMULATION_STEPS: "16"
+    PHASE: "2"
+
+#32 DGX2 phase2
+bert--DGX2_n32p2:
+  <<: *BERT_ON_CLUSTER
+  <<: *DGX2
+  variables:
+    <<: *DGX2_VARS
+    NNODES: "32"
+    BATCHSIZE: "8"
+    LEARNING_RATE: "7.8125e-6"
+    NUM_ACCUMULATION_STEPS: "8"
+    PHASE: "2"
+
