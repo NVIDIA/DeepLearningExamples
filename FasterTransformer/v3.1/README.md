@@ -32,7 +32,6 @@ This repository provides a script and recipe to run the highly optimized transfo
   - [Release notes](#release-notes)
     - [Changelog](#changelog)
     - [Known issues](#known-issues)
-    - [TODO](#todo)
 
 ## Model overview
 
@@ -1025,8 +1024,3 @@ July 2019
 - batch_size x beam_width should be smaller or equal to 1024 in Decoding.
 - Results of TensorFlow and OP would be different in decoding. This problem is caused by the accumulated log probability, and we do not avoid this problem. 
 - If encounter some problem in the custom environment, try to use the gcc/g++ 4.8 to build the project of TensorFlow op, especially for TensorFlow 1.14. 
-
-### TODO
-
-- Refactor the codes
-- Split the initialization of top k and top p sampling
