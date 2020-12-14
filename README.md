@@ -75,6 +75,33 @@ These examples, along with our NVIDIA deep learning software stack, are provided
 ## NVIDIA support
 In each of the network READMEs, we indicate the level of support that will be provided. The range is from ongoing updates and improvements to a point-in-time release for thought leadership.
 
+## Glossary
+ 
+**Multinode Training**  
+Supported on a pyxis/enroot Slurm cluster.
+
+**Deep Learning Compiler (DLC)**  
+TensorFlow XLA and PyTorch JIT and/or TorchScript
+
+**Accelerated Linear Algebra (XLA)**  
+XLA is a domain-specific compiler for linear algebra that can accelerate TensorFlow models with potentially no source code changes. The results are improvements in speed and memory usage.
+
+**PyTorch JIT and/or TorchScript**  
+orchScript is a way to create serializable and optimizable models from PyTorch code. TorchScript, an intermediate representation of a PyTorch model (subclass of nn.Module) that can then be run in a high-performance environment such as C++.
+
+**Automatic Mixed Precision (AMP)**  
+Automatic Mixed Precision (AMP) enables mixed precision training on Volta, Turing, and NVIDIA Ampere GPU architectures automatically. The TensorFlow framework code makes all necessary model changes internally. This implementation exploits the TensorFlow Automatic Mixed Precision feature [TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp) To enable AMP, you simply need to supply the `--amp` flag to `run_pretraining.py` or `run_tf_squad.py` script.
+
+**TensorFloat-32 (TF32)**  
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
+
+**TensorFloat-32 (TF32)**  
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs.
+
+**Jupyter Notebooks (NB)**  
+The Jupyter Notebook is an open-source web application that allows you to create and share documents that contain live code, equations, visualizations and narrative text.
+
+
 ## Feedback / Contributions
 We're posting these examples on GitHub to better support the community, facilitate feedback, as well as collect and implement contributions using GitHub Issues and pull requests. We welcome all contributions!
 
