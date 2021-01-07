@@ -1,9 +1,9 @@
-pandas==0.24.2
-tqdm==4.31.1
+tqdm==4.53.0
 ascii-graph==1.5.1
 wrapt==1.10.11
-librosa
-toml
+librosa==0.8.0
 soundfile
 ipdb
-sox
+sox==1.4.1
+pyyaml
+pycuda==2020.1

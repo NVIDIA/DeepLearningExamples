@@ -15,13 +15,13 @@
 
 # This will run all the necessary scripts to generate ALL needed output
 
+if [ -f /.dockerenv ]; then # inside docker
+    echo "The script \"$0\" script should be run from outside the container. Exiting."
+    exit 1
+fi
 
 #### input arguments
-ARCH=${ARCH:-75}
-CHECKPOINT_DIR=${CHECKPOINT_DIR}
 RESULT_DIR=${RESULT_DIR}
-CHECKPOINT=${CHECKPOINT:-"jasper_fp16.pt"}
-MAX_SEQUENCE_LENGTH_FOR_ENGINE=${MAX_SEQUENCE_LENGTH_FOR_ENGINE:-1792}
 ####
 
 for dir in $CHECKPOINT_DIR $RESULT_DIR; do
@@ -38,65 +38,40 @@ for dir in $CHECKPOINT_DIR $RESULT_DIR; do
     fi
 done
 
-REGENERATE_ENGINES=${REGENERATE_ENGINES:-"yes"}
-PRECISION_TESTS=${PRECISION_TESTS:-"fp16 fp32"}
 export GPU=${GPU:-}
 
 SCRIPT_DIR=$(cd $(dirname $0); pwd)
 PROJECT_DIR=${SCRIPT_DIR}/../..
-MODEL_REPO=${MODEL_REPO:-"${PROJECT_DIR}/triton/model_repo"}
+MODEL_REPO=${MODEL_REPO:-"${PROJECT_DIR}/triton/deploy/model_repo"}
 
-# We need to make sure TRTIS uses only one GPU, same as export does
-# for TRTIS
+# We need to make sure TRITON uses only one GPU, same as export does
+# for TRITON
 export NVIDIA_VISIBLE_DEVICES=${GPU}
-
-export TRTIS_CLIENT_CONTAINER_TAG=tensorrtserver_client
+export TRITON_CLIENT_CONTAINER_TAG=jasper:triton
 
 trap "exit" INT
 
 
-SCRIPT=${SCRIPT_DIR}/generate_perf_results.sh
-
 function run_for_length () {
-    TRTIS_CLIENT_CONTAINER_TAG=tensorrtserver_client AUDIO_LENGTH=$1 BATCH_SIZE=$2 RESULT_DIR=${RESULT_DIR} PRECISION=${PRECISION} ${SCRIPT} 
+    TRITON_CLIENT_CONTAINER_TAG=jasper:triton \
+			       AUDIO_LENGTH=$1 \
+			       BATCH_SIZE=$2 \
+			       RESULT_DIR=${RESULT_DIR} \
+			       PRECISION=${PRECISION} \
+			       ${SCRIPT_DIR}/generate_perf_results.sh
 }
 
+PRECISION_TESTS=${PRECISION_TESTS:-"fp16 fp32"}
+BATCH_SIZES=${BATCH_SIZES:-"1" "2" "4" "8"}
+SEQ_LENS=${SEQ_LENS:-"32000" "112000" "267200"} # i.e. ,7, 2, and 16.7 seconds
 
 for PRECISION in ${PRECISION_TESTS};
 do
-
-    if [ "${REGENERATE_ENGINES}" == "yes" ]; then
-        echo "REGENERATE_ENGINES==yes, forcing re-export"
-    else	
-        if [ -f ${MODEL_REPO}/jasper-onnx/1/jasper.onnx ]; then
-            echo "Found ${MODEL_REPO}/jasper-onnx/1/jasper.onnx, skipping model export. Set REGENERATE_ENGINES=yes to force re-export"
-        else
-            REGENERATE_ENGINES=yes
-            echo "${MODEL_REPO}/jasper-onnx/1/jasper.onnx not found, forcing re-export"
-        fi
-    fi
-  
-    if [ "${REGENERATE_ENGINES}" == "yes" ]; then
-        ARCH=${ARCH} CHECKPOINT_DIR=${CHECKPOINT_DIR} CHECKPOINT=${CHECKPOINT} PRECISION=${PRECISION} MAX_SEQUENCE_LENGTH_FOR_ENGINE=${MAX_SEQUENCE_LENGTH_FOR_ENGINE} \
-        ${PROJECT_DIR}/triton/scripts/export_model.sh || exit 1
-    fi
-  
-    for BATCH_SIZE in 1 2 4 8 16 32 64;
+    for BATCH_SIZE in ${BATCH_SIZES};
     do
-        
-        # 7 Seconds
-        run_for_length 112000 $BATCH_SIZE
-
-        # 2 seconds
-        run_for_length 32000 $BATCH_SIZE
-
-        # 16.7 Seconds
-        run_for_length 267200 $BATCH_SIZE
-
+	for LENGTH in ${SEQ_LENS};
+	do
+            run_for_length $LENGTH $BATCH_SIZE
+	done
     done
-    # prepare for FP32 run
-    REGENERATE_ENGINES=yes
 done
-
-
-

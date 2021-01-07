@@ -16,14 +16,11 @@
 SCRIPT_DIR=$(cd $(dirname $0); pwd)
 PROJECT_DIR=${SCRIPT_DIR}/../..
 
-
-MODEL_TYPE=${1:-"pyt"}
+MODEL_TYPE=${1:-"ts-trace"}
 DATA_DIR=${2} # folder with data
 FILE=${3} # json manifest file, OR single wav file
 
-
-
-JASPER_CONTAINER_TAG=${JASPER_CONTAINER_TAG:-jasper:trtis}
+JASPER_CONTAINER_TAG=${JASPER_CONTAINER_TAG:-jasper:triton}
 
 if [ "$#" -ge 1 ] && [ "${FILE: -4}" == ".wav" ]; then 
   CMD="python /jasper/triton/jasper-client.py --data_dir /data --audio_filename ${FILE} --model_platform ${MODEL_TYPE}"
@@ -47,6 +44,6 @@ nvidia-docker run --rm -it \
    --ulimit memlock=-1 \
    --ulimit stack=67108864 \
    -v ${PROJECT_DIR}:/jasper \
-   --name=trtis-client \
+   --name=jasper-triton-client \
    ${ARGS} ${JASPER_CONTAINER_TAG} ${CMD}
 set +x
