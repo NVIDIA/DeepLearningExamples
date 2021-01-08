@@ -25,7 +25,7 @@ The very first step of deployment is to acquire trained checkpoint and model con
 checkpoint. Default model configuration are stored inside `dlrm/config` directory.
 
 **Currently, our implementation only supports TorchScript deployment for models that fit into the memory of a single GPU.**
-You can read more about training DLRM models on different dataset configurations based on frequency threshold in the preprocessing step in [README](https://gitlab-master.nvidia.com/dl/JoC/dlrm_pyt#preprocess-with-spark).
+You can read more about training DLRM models on different dataset configurations based on frequency threshold in the preprocessing step in [README](https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/Recommendation/DLRM/README.md#preprocess-with-spark).
 
 #### Inference container
 
