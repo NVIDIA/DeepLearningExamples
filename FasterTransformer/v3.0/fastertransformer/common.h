@@ -193,6 +193,11 @@ void cublasLtMM_withAlgo(int *res, int batchCount, int m, int n, int k,
                  res,
                  CtransformDesc,
                  (findAlgo == 1 ? (&algo) : NULL), NULL, 0, stream);
+
+  cublasLtMatmulDescDestroy(matmulDesc);
+  cublasLtMatrixLayoutDestroy(AtransformDesc);
+  cublasLtMatrixLayoutDestroy(BtransformDesc);
+  cublasLtMatrixLayoutDestroy(CtransformDesc);
 }
 
 //for int8 IO cublasLtMM with algo
@@ -281,6 +286,11 @@ void cublasLtMM_withAlgo_int8IO(int8_t *res, int batchCount, int m, int n, int k
                  res,
                  CtransformDesc,
                  (findAlgo == 1 ? (&algo) : NULL), NULL, 0, stream);
+
+  cublasLtMatmulDescDestroy(matmulDesc);
+  cublasLtMatrixLayoutDestroy(AtransformDesc);
+  cublasLtMatrixLayoutDestroy(BtransformDesc);
+  cublasLtMatrixLayoutDestroy(CtransformDesc);
 }
 
 template <typename T>
