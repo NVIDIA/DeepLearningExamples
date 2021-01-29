@@ -33,11 +33,10 @@ This repository provides a script and recipe to train the nnU-Net model to achie
         * [Training accuracy results](#training-accuracy-results)             
             * [Training accuracy: NVIDIA DGX-1 (8x V100 16GB)](#training-accuracy-nvidia-dgx-1-8x-v100-16gb)
         * [Training performance results](#training-performance-results)
-            * [Training performance: NVIDIA DGX A100 (8x A100 40GB)](#training-performance-nvidia-dgx-a100-8x-a100-40gb) 
+            * [Training performance: NVIDIA DGX A100 80G](#training-performance-nvidia-dgx-a100-80G) 
             * [Training performance: NVIDIA DGX-1 (8x V100 16GB)](#training-performance-nvidia-dgx-1-8x-v100-16gb)
-            * [Training performance: NVIDIA DGX-2 (16x V100 32GB)](#training-performance-nvidia-dgx-2-16x-v100-32gb)
         * [Inference performance results](#inference-performance-results)
-            * [Inference performance: NVIDIA DGX A100 (1x A100 40GB)](#inference-performance-nvidia-dgx-a100-1x-a100-40gb)
+            * [Inference performance: NVIDIA DGX A100 80G](#inference-performance-nvidia-dgx-a100-80G)
             * [Inference performance: NVIDIA DGX-1 (1x V100 16GB)](#inference-performance-nvidia-dgx-1-1x-v100-16gb)
 - [Release notes](#release-notes)
     * [Changelog](#changelog)
@@ -563,7 +562,7 @@ The following sections provide details on how to achieve the same performance an
 
 #### Training accuracy results
 
-##### Training accuracy: NVIDIA DGX-1 (8x A100 16GB)
+##### Training accuracy: NVIDIA DGX A100 80G
 
 Our results were obtained by running the `python scripts/train.py --gpus {1,8} --fold {0,1,2,3,4} --dim {2,3} --batch_size <bsize> [--amp]` training scripts and averaging results in the PyTorch 20.12 NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs.
 
@@ -587,9 +586,9 @@ Our results were obtained by running the `python scripts/train.py --gpus {1,8} -
 
 #### Training performance results
 
-##### Training performance: NVIDIA DGX-2 A100 (8x A100 80GB)
+##### Training performance: NVIDIA DGX A100 80G
 
-Our results were obtained by running the `python scripts/benchmark.py --mode train --gpus {1,8} --dim {2,3} --batch_size <bsize> [--amp]` training script in the NGC container on NVIDIA DGX-2 A100 (8x A100 80GB) GPUs. Performance numbers (in volumes per second) were averaged over an entire training epoch.
+Our results were obtained by running the `python scripts/benchmark.py --mode train --gpus {1,8} --dim {2,3} --batch_size <bsize> [--amp]` training script in the NGC container on NVIDIA DGX A100 80G GPUs. Performance numbers (in volumes per second) were averaged over an entire training epoch.
 
 | Dimension | GPUs | Batch size / GPU  | Throughput - mixed precision [img/s] | Throughput - TF32 [img/s] | Throughput speedup (TF32 - mixed precision) | Weak scaling - mixed precision | Weak scaling - TF32 |
 |:-:|:-:|:--:|:------:|:------:|:-----:|:-----:|:-----:|
@@ -633,9 +632,9 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 #### Inference performance results
 
-##### Inference performance: NVIDIA DGX-2 A100 (1x A100 80GB)
+##### Inference performance: NVIDIA DGX A100 80G
 
-Our results were obtained by running the `python scripts/benchmark.py --mode predict --dim {2,3} --batch_size <bsize> [--amp]` inferencing benchmarking script in the PyTorch 20.10 NGC container on NVIDIA DGX-2 A100 (1x A100 80GB) GPU.
+Our results were obtained by running the `python scripts/benchmark.py --mode predict --dim {2,3} --batch_size <bsize> [--amp]` inferencing benchmarking script in the PyTorch 20.10 NGC container on NVIDIA DGX A100 80G GPU.
 
 
 FP16
