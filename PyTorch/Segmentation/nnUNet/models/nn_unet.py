@@ -1,6 +1,19 @@
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
 
-import apex
 import numpy as np
 import pytorch_lightning as pl
 import torch
@@ -48,12 +61,16 @@ class NNUnet(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         img, lbl = batch["image"], batch["label"]
+        if self.args.dim == 2 and len(lbl.shape) == 3:
+            lbl = lbl.unsqueeze(1)
         pred = self.model(img)
         loss = self.compute_loss(pred, lbl)
         return loss
 
     def validation_step(self, batch, batch_idx):
         img, lbl = batch["image"], batch["label"]
+        if self.args.dim == 2 and len(lbl.shape) == 3:
+            lbl = lbl.unsqueeze(1)
         pred = self.forward(img)
         loss = self.loss(pred, lbl)
         dice = self.dice(pred, lbl[:, 0])
@@ -125,6 +142,8 @@ class NNUnet(pl.LightningModule):
 
     def do_inference(self, image):
         if self.args.dim == 2:
+            if self.args.data2d_dim == 2:
+                return self.model(image)
             if self.args.exec_mode == "predict" and not self.args.benchmark:
                 return self.inference2d_test(image)
             return self.inference2d(image)
@@ -215,9 +234,6 @@ class NNUnet(pl.LightningModule):
             "adam": torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=self.args.weight_decay),
             "adamw": torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=self.args.weight_decay),
             "radam": optim.RAdam(self.parameters(), lr=self.learning_rate, weight_decay=self.args.weight_decay),
-            "fused_adam": apex.optimizers.FusedAdam(
-                self.parameters(), lr=self.learning_rate, weight_decay=self.args.weight_decay
-            ),
         }[self.args.optimizer.lower()]
 
         scheduler = {

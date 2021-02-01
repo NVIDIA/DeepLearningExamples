@@ -1,3 +1,17 @@
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
 import pickle
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
@@ -59,7 +73,7 @@ def float_0_1(value):
     return ivalue
 
 
-def get_main_args():
+def get_main_args(strings=None):
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter)
     parser.add_argument(
         "--exec_mode",
@@ -141,6 +155,14 @@ def get_main_args():
         help="type of CPU affinity",
     )
     parser.add_argument(
+        "--data2d_dim",
+        choices=[2, 3],
+        type=int,
+        default=3,
+        help="Input data dimension for 2d model",
+    )
+
+    parser.add_argument(
         "--scheduler",
         type=str,
         default="none",
@@ -173,5 +195,14 @@ def get_main_args():
         default=0,
         help="Limit number of batches for inference (used for benchmarking mode only)",
     )
-    args = parser.parse_args()
+    if strings is not None:
+        parser.add_argument(
+            "strings",
+            metavar="STRING",
+            nargs="*",
+            help="String for searching",
+        )
+        args = parser.parse_args(strings.split())
+    else:
+        args = parser.parse_args()
     return args
