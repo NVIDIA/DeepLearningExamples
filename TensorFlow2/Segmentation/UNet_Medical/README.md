@@ -526,7 +526,7 @@ This command will launch a script which will run 5-fold cross-validation trainin
 **Learning curves**
 
 The following image show the training loss as a function of iteration for training using DGX A100 (TF32 and TF-AMP) and DGX-1 V100 (FP32 and TF-AMP).
-![LearningCurves](images/UNetMed_TF2_conv.png)
+![LearningCurves](images/U-NetMed_TF2_conv.png)
 
 
 #### Training performance results

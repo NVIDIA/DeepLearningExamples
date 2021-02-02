@@ -21,4 +21,4 @@ horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --log_every 100 --m
 horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size $3 --exec_mode train_and_evaluate --fold 2 --augment --xla --amp > $2/log_TF-AMP_8GPU_fold2.txt
 horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size $3 --exec_mode train_and_evaluate --fold 3 --augment --xla --amp > $2/log_TF-AMP_8GPU_fold3.txt
 horovodrun -np 8 python main.py --data_dir $1 --model_dir $2 --log_every 100 --max_steps 6400 --batch_size $3 --exec_mode train_and_evaluate --fold 4 --augment --xla --amp > $2/log_TF-AMP_8GPU_fold4.txt
-python utils/parse_results.py --model_dir $2 --exec_mode convergence --env TF-AMP_8GPU
+python runtime/parse_results.py --model_dir $2 --exec_mode convergence --env TF-AMP_8GPU
