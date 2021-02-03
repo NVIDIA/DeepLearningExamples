@@ -36,6 +36,7 @@ import tokenization
 import time
 import horovod.tensorflow as hvd
 from utils.utils import LogEvalRunHook, LogTrainRunHook, setup_xla_flags
+from utils.gpu_affinity import set_affinity
 import utils.dllogger_class
 from dllogger import Verbosity
 

@@ -30,6 +30,7 @@ import tensorflow as tf
 import horovod.tensorflow as hvd
 import time
 from utils.utils import LogEvalRunHook, LogTrainRunHook, setup_xla_flags
+from utils.gpu_affinity import set_affinity
 import utils.dllogger_class
 from dllogger import Verbosity
 from utils.create_glue_data import *
@@ -511,6 +512,7 @@ def main(_):
       master_process = (hvd.rank() == 0)
       hvd_rank = hvd.rank()
       config.gpu_options.visible_device_list = str(hvd.local_rank())
+      set_affinity(hvd.local_rank())
       if hvd.size() > 1:
           training_hooks.append(hvd.BroadcastGlobalVariablesHook(0))
   if FLAGS.use_xla:

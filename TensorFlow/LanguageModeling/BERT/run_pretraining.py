@@ -28,6 +28,7 @@ import tensorflow as tf
 import glob
 from utils.utils import LogEvalRunHook, setup_xla_flags
 import utils.dllogger_class
+from utils.gpu_affinity import set_affinity
 from dllogger import Verbosity
 
 from tensorflow.core.protobuf import rewriter_config_pb2
@@ -573,6 +574,7 @@ def main(_):
   config = tf.compat.v1.ConfigProto()
   if FLAGS.horovod:
     config.gpu_options.visible_device_list = str(hvd.local_rank())
+    set_affinity(hvd.local_rank())
     if hvd.rank() == 0:
       tf.compat.v1.logging.info("***** Configuaration *****")
       for key in FLAGS.__flags.keys():
