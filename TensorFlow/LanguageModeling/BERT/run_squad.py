@@ -994,11 +994,14 @@ def main(_):
     if FLAGS.amp:
         tf.enable_resource_variables()
 
+  save_checkpoints_steps = FLAGS.save_checkpoints_steps if master_process and FLAGS.save_checkpoints_steps else None
+
   run_config = tf.estimator.RunConfig(
       model_dir=FLAGS.output_dir if master_process else None,
       session_config=config,
-      save_checkpoints_steps=FLAGS.save_checkpoints_steps if master_process else None,
-      save_summary_steps=FLAGS.save_checkpoints_steps if master_process else None,
+      save_checkpoints_steps=save_checkpoints_steps,
+      save_checkpoints_secs =None,
+      save_summary_steps=save_checkpoints_steps,
       log_step_count_steps=FLAGS.display_loss_steps,
       keep_checkpoint_max=1)
 
