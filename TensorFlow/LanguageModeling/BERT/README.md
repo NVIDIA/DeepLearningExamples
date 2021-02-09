@@ -939,8 +939,8 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 | **GPUs** | **Batch size / GPU: mixed precision, TF32** | **Throughput - mixed precision** | **Throughput - TF32** | **Throughput speedup (TF32 to mixed precision)** | **Weak scaling - TF32** | **Weak scaling - mixed precision** |
 |----------|---------------------------------------------|----------------------------------|-----------------------|--------------------------------------------------|-------------------------|------------------------------------|
 |        1 | 32, 16                                      |                           102.26 |                61.364 |                                             1.67 |                    1.00 |                               1.00 |
-|        4 | 32, 16                                      |                          366.353 |               223.187 |                                             1.64 |                    3.58 |                               3.64 |
-|        8 | 32, 16                                      |                          518.898 |                440.47 |                                             1.18 |                    5.07 |                               7.18 |
+|        4 | 32, 16                                      |                          366.353 |               223.187 |                                             1.64 |                    3.64 |                               3.58 |
+|        8 | 32, 16                                      |                          767.071 |                440.47 |                                             1.74 |                    7.18 |                               7.50 |
 
 Note: The respective values for TF32 runs that use a batch size of 32 are not available due to out of memory errors that arise.
 
