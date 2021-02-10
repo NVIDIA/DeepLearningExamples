@@ -1,0 +1,144 @@
+# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: "Jasper"
+labels: [" ", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+         "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "'"]
+
+input_val:
+  audio_dataset: &val_dataset
+    sample_rate: &sample_rate 16000
+    trim_silence: true
+    normalize_transcripts: true
+
+  filterbank_features: &val_features
+    normalize: per_feature
+    sample_rate: *sample_rate
+    window_size: 0.02
+    window_stride: 0.01
+    window: hann
+    n_filt: &n_filt 64
+    n_fft: 512
+    frame_splicing: &frame_splicing 1
+    dither: 0.00001
+    pad_align: 16
+
+# For training we keep samples < 16.7s and apply augmentation
+input_train:
+  audio_dataset:
+    <<: *val_dataset
+    max_duration: 16.7
+    ignore_offline_speed_perturbation: true
+
+    speed_perturbation:
+      discrete: true
+      min_rate: 0.9
+      max_rate: 1.1
+
+  filterbank_features:
+    <<: *val_features
+    max_duration: 16.7
+
+    spec_augment:
+      freq_masks: 0
+      max_freq: 20
+      time_masks: 0
+      max_time: 75
+
+jasper:
+  encoder:
+    init: xavier_uniform
+    in_feats: *n_filt
+    frame_splicing: *frame_splicing
+    activation: relu
+    use_conv_masks: true
+    blocks:
+    - &Conv1
+      filters: 256
+      repeat: 1
+      kernel_size: [11]
+      stride: [2]
+      dilation: [1]
+      dropout: 0.2
+      residual: false
+    - &B1
+      filters: 256
+      repeat: 5
+      kernel_size: [11]
+      stride: [1]
+      dilation: [1]
+      dropout: 0.2
+      residual: true
+      residual_dense: true
+    - *B1
+    - &B2
+      filters: 384
+      repeat: 5
+      kernel_size: [13]
+      stride: [1]
+      dilation: [1]
+      dropout: 0.2
+      residual: true
+      residual_dense: true
+    - *B2
+    - &B3
+      filters: 512
+      repeat: 5
+      kernel_size: [17]
+      stride: [1]
+      dilation: [1]
+      dropout: 0.2
+      residual: true
+      residual_dense: true
+    - *B3
+    - &B4
+      filters: 640
+      repeat: 5
+      kernel_size: [21]
+      stride: [1]
+      dilation: [1]
+      dropout: 0.3
+      residual: true
+      residual_dense: true
+    - *B4
+    - &B5
+      filters: 768
+      repeat: 5
+      kernel_size: [25]
+      stride: [1]
+      dilation: [1]
+      dropout: 0.3
+      residual: true
+      residual_dense: true
+    - *B5
+    - &Conv2
+      filters: 896
+      repeat: 1
+      kernel_size: [29]
+      stride: [1]
+      dilation: [2]
+      dropout: 0.4
+      residual: false
+    - &Conv3
+      filters: &enc_feats 1024
+      repeat: 1
+      kernel_size: [1]
+      stride: [1]
+      dilation: [1]
+      dropout: 0.4
+      residual: false
+
+  decoder:
+    in_feats: *enc_feats
+    init: xavier_uniform

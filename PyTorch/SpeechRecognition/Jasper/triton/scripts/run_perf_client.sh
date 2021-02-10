@@ -19,12 +19,13 @@ trap "exit" INT
 SCRIPT_DIR=$(cd $(dirname $0); pwd)
 PROJECT_DIR=${SCRIPT_DIR}/../..
 
-TRTIS_CLIENT_CONTAINER_TAG=${TRTIS_CLIENT_CONTAINER_TAG:-tensorrtserver_client}
+TRITON_CLIENT_CONTAINER_TAG=${TRITON_CLIENT_CONTAINER_TAG:-jasper:triton}
 
 SERVER_HOSTNAME=${SERVER_HOSTNAME:-localhost}
-MODEL_NAME=${MODEL_NAME:-jasper-pyt-ensemble}
+MODEL_NAME=${MODEL_NAME:-jasper-tensorrt-ensemble}
 MODEL_VERSION=${MODEL_VERSION:-1}
 BATCH_SIZE=${BATCH_SIZE:-1}
+AUDIO_LENGTH=${AUDIO_LENGTH:-32000}
 RESULT_DIR=${RESULT_DIR:-${PROJECT_DIR}/results}
 MAX_LATENCY=${MAX_LATENCY:-500}
 MAX_CONCURRENCY=${MAX_CONCURRENCY:-64}
@@ -37,7 +38,7 @@ RESULT_DIR_H="${RESULT_DIR}/perf_client/${MODEL_NAME}"
 
 # Set the output folder using the first argument or pick a default
 if [ -z ${1+x} ]; then
-   RESULT_DIR_H=${RESULT_DIR_H}/batch_$BATCH_SIZE
+   RESULT_DIR_H=${RESULT_DIR_H}/batch_${BATCH_SIZE}_len_${AUDIO_LENGTH}
 else
    RESULT_DIR_H=${RESULT_DIR_H}/"$1"
    shift
@@ -67,15 +68,19 @@ ARGS="\
 curl -s "http://${SERVER_HOSTNAME}:8000/api/status/${MODEL_NAME}" | grep ready_state | grep SERVER_READY || (echo "Model ${MODEL_NAME} is not ready, perf_client skipped..." && exit 1)
 
 echo "=== STARTING: perf client ${ARGS} --concurrency-range 1:4:1 ==="
-docker run  -e DISPLAY=${DISPLAY}  --gpus all --rm \
+set -x
+docker run  -e DISPLAY=${DISPLAY}  --runtime nvidia --rm \
 	      --privileged --net=host \
 	      -v ${RESULT_DIR_H}:/results --name jasper-perf-client \
-	      ${TRTIS_CLIENT_CONTAINER_TAG}  perf_client $ARGS -f /results/${OUTPUT_FILE_CSV}_p1 --concurrency-range 1:4:1 2>&1 | tee -a $LOGNAME
+	      ${TRITON_CLIENT_CONTAINER_TAG}  perf_client $ARGS -f /results/${OUTPUT_FILE_CSV}_p1 --shape AUDIO_SIGNAL:${AUDIO_LENGTH} --concurrency-range 1:4:1 2>&1 | tee -a $LOGNAME
+set +x
 
 echo "=== STARTING: perf client ${ARGS} --concurrency-range 8:${MAX_CONCURRENCY}:8 ==="
-docker run  -e DISPLAY=${DISPLAY}  --gpus all --rm \
+set -x
+docker run  -e DISPLAY=${DISPLAY}  --runtime nvidia --rm \
 	      --privileged --net=host \
 	      -v ${RESULT_DIR_H}:/results --name jasper-perf-client \
-	      ${TRTIS_CLIENT_CONTAINER_TAG}  perf_client $ARGS -f /results/${OUTPUT_FILE_CSV}_p2 --concurrency-range 8:${MAX_CONCURRENCY}:8 2>&1 | tee -a $LOGNAME
+	      ${TRITON_CLIENT_CONTAINER_TAG}  perf_client $ARGS -f /results/${OUTPUT_FILE_CSV}_p2 --shape AUDIO_SIGNAL:${AUDIO_LENGTH} --concurrency-range 8:${MAX_CONCURRENCY}:8 2>&1 | tee -a $LOGNAME
+set +x
 
 cat ${RESULT_DIR_H}/${OUTPUT_FILE_CSV}_p1 ${RESULT_DIR_H}/${OUTPUT_FILE_CSV}_p2 > ${RESULT_DIR_H}/${OUTPUT_FILE_CSV}
