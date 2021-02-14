@@ -32,9 +32,10 @@ import torch
 
 
 def main():
-    argslist = list(sys.argv)[1:]
-    print(argslist)
-    return
+    # NOTE(zach): this dumb hack will let us invoke train_multiproc.py while
+    # satisfying the Sagemaker SDK, since Sagemaker doesn't give us full
+    # control over the command which invokes the training script.
+    argslist = ["train.py"] + (list(sys.argv)[1:])
     world_size = torch.cuda.device_count()
 
     if '--world-size' in argslist:
