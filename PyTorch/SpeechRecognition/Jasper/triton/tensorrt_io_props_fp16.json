@@ -1,0 +1,1 @@
+{"input_shapes": [[-1, 64, -1]], "output_shapes": [[-1, -1, 29]], "input_types": ["TYPE_FP16"], "output_types": ["TYPE_FP16"], "input_names": ["input__0"], "output_names": ["output__0"], "dynamic_axes": {"input__0": [0, 2], "output__0": [0, 1]}, "min_shapes": [[1, 64, 200]], "opt_shapes": [[8, 64, 704]], "max_shapes": [[8, 64, 1680]]}

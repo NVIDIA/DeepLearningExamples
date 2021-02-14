@@ -1,0 +1,63 @@
+name: "jasper-tensorrt-ensemble"
+platform: "ensemble"
+max_batch_size: 8#MAX_BATCH
+input {
+    name: "AUDIO_SIGNAL"
+    data_type: TYPE_FP16
+    dims: -1#AUDIO_LENGTH
+}
+input {
+    name: "NUM_SAMPLES"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+}
+output {
+    name: "TRANSCRIPT"
+    data_type: TYPE_INT32
+    dims: [-1]
+}
+ensemble_scheduling {
+    step {
+	model_name: "feature-extractor-ts-trace"
+	model_version: -1
+	input_map {
+	    key: "input__0"
+	    value: "AUDIO_SIGNAL"
+	}
+	input_map {
+	    key: "input__1"
+	    value: "NUM_SAMPLES"
+	}
+	output_map {
+	    key: "output__0"
+	    value: "AUDIO_FEATURES"
+	}    
+    }
+    step {
+	model_name: "jasper-tensorrt"
+	model_version: -1
+	input_map {
+	    key: "input__0"
+	    value: "AUDIO_FEATURES"
+
+	}
+	output_map {
+	    key: "output__0"
+	    value: "CHARACTER_PROBABILITIES"
+
+	}
+
+    }
+    step {
+	model_name: "decoder-ts-script"
+	model_version: -1
+	input_map {
+	    key: "input__0"
+	    value: "CHARACTER_PROBABILITIES"
+	}
+	output_map {
+	    key: "output__0"
+	    value: "TRANSCRIPT"
+	}
+    }
+}

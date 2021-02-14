@@ -1,0 +1,32 @@
+name: "jasper-ts-trace"
+platform: "pytorch_libtorch"
+default_model_filename: "model.pt"
+
+max_batch_size: 8#MAX_BATCH
+
+input [
+  {
+    name: "input__0"
+    data_type: TYPE_FP16
+    dims: [64, -1]
+  }
+]
+
+output [
+  {
+    name: "output__0"
+    data_type: TYPE_FP16
+    dims: [-1, 29]
+  }
+]
+
+instance_group {
+  count: 1#NUM_ENGINES
+  gpus: 0
+  kind: KIND_GPU
+}
+
+#db#dynamic_batching {
+#db#    preferred_batch_size: 8#MAX_BATCH
+#db#    max_queue_delay_microseconds: #MAX_QUEUE
+#db#}

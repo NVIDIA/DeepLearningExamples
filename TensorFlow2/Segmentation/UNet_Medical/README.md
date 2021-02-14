@@ -526,7 +526,7 @@ This command will launch a script which will run 5-fold cross-validation trainin
 **Learning curves**
 
 The following image show the training loss as a function of iteration for training using DGX A100 (TF32 and TF-AMP) and DGX-1 V100 (FP32 and TF-AMP).
-![LearningCurves](images/UNetMed_TF2_conv.png)
+![LearningCurves](images/U-NetMed_TF2_conv.png)
 
 
 #### Training performance results
@@ -634,6 +634,5 @@ February 2020
  
 ### Known issues
  
-* Some set-ups suffer from a `ncclCommInitRank failed: unhandled system error`. This is a known issue with NCCL 2.7.5. The issue is solved in NCCL 2.7.8, which can be applied by changing the first line the Dockerfile from `ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.06-tf2-py3` to `ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.08-tf2-py3` and rebuilding the docker image.
 * For TensorFlow 2.0 the training performance using AMP and XLA is around 30% lower than reported here. The issue was solved in TensorFlow 2.1.
 
