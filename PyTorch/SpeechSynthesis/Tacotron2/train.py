@@ -255,7 +255,8 @@ def load_checkpoint(model, optimizer, epoch, config, amp_run, filepath, local_ra
     elif 'random_rng_state' in checkpoint:
         torch.random.set_rng_state(checkpoint['random_rng_state'])
     else:
-        raise Exception("Model checkpoint must have either 'random_rng_state' or 'random_rng_states_all' key.")
+        print("Loading model checkpoint even though rng states were not loaded!")
+        # raise Exception("Model checkpoint must have either 'random_rng_state' or 'random_rng_states_all' key.")
     config = checkpoint['config']
     model.load_state_dict(checkpoint['state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer'])
