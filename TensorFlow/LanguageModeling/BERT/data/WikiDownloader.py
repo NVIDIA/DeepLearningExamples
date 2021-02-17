@@ -26,8 +26,8 @@ class WikiDownloader:
 
         self.language = language
         self.download_urls = {
-            'en' : 'https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2',
-            'zh' : 'https://dumps.wikimedia.org/zhwiki/latest/zhwiki-latest-pages-articles.xml.bz2'
+            'en' : 'https://dumps.wikimedia.your.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2',
+            'zh' : 'https://dumps.wikimedia.your.org/zhwiki/latest/zhwiki-latest-pages-articles.xml.bz2'
         }
 
         self.output_files = {
@@ -45,9 +45,11 @@ class WikiDownloader:
             if os.path.isfile(self.save_path + '/' + filename):
                 print('** Download file already exists, skipping download')
             else:
-                response = urllib.request.urlopen(url)
-                with open(self.save_path + '/' + filename, "wb") as handle:
-                    handle.write(response.read())
+                cmd = ['wget', url, '--output-document={}'.format(self.save_path + '/' + filename)]
+                print('Running:', cmd)
+                status = subprocess.run(cmd)
+                if status.returncode != 0:
+                    raise RuntimeError('Wiki download not successful')
 
             # Always unzipping since this is relatively fast and will overwrite
             print('Unzipping:', self.output_files[self.language])
