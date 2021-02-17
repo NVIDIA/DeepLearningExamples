@@ -1,7 +1,7 @@
 ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:19.03-py3
 FROM ${FROM_IMAGE_NAME}
 
-RUN apt-get update && apt-get install -y pbzip2 pv bzip2 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y pbzip2 pv bzip2
 
 RUN pip install toposort networkx pytest nltk tqdm html2text progressbar
 
