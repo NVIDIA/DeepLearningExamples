@@ -97,6 +97,7 @@ def parse_args(parser):
                           help='Run cudnn benchmark')
     training.add_argument('--disable-uniform-initialize-bn-weight', action='store_true',
                           help='disable uniform initialization of batchnorm layer weight')
+    training.add_argument('--freeze-encoder', action='store_true', default=False)
 
     optimization = parser.add_argument_group('optimization setup')
     optimization.add_argument(
@@ -450,6 +451,9 @@ def main():
     num_iters = 0
 
     model.train()
+    if args.freeze_encoder:
+        for param in model.encoder.parameters():
+            param.requires_grad = False
 
     for epoch in range(start_epoch, args.epochs):
         torch.cuda.synchronize()
