@@ -26,6 +26,7 @@ class WikiDownloader:
             os.makedirs(self.save_path)
 
         self.language = language
+        # Use a mirror from https://dumps.wikimedia.org/mirrors.html if the below links do not work
         self.download_urls = {
             'en' : 'https://dumps.wikimedia.your.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2',
             'zh' : 'https://dumps.wikimedia.your.org/zhwiki/latest/zhwiki-latest-pages-articles.xml.bz2'
