@@ -662,7 +662,7 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 The following table shows the expected training time for convergence for 1500 epochs:
 
-|Number of GPUs|Batch size per GPU|Time to train with mixed precision (Hrs)|Time to train with TF32 (Hrs)|Speed-up with mixed precision|
+|Number of GPUs|Batch size per GPU|Time to train with mixed precision (Hrs)|Time to train with FP32 (Hrs)|Speed-up with mixed precision|
 |---:|-----------------:|-----:|-----:|-----:|
 |  1 | 64@AMP,  32@FP32 | 27.6 | 72.7 | 2.63 |
 |  4 | 64@AMP,  32@FP32 |  8.2 | 20.3 | 2.48 |
