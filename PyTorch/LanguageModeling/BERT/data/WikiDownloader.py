@@ -47,7 +47,7 @@ class WikiDownloader:
             if os.path.isfile(self.save_path + '/' + filename):
                 print('** Download file already exists, skipping download')
             else:
-                cmd = ['wget', url, '--no-check-certificate', '--output-document={}'.format(self.save_path + '/' + filename)]
+                cmd = ['wget', url, '--output-document={}'.format(self.save_path + '/' + filename)]
                 print('Running:', cmd)
                 status = subprocess.run(cmd)
                 if status.returncode != 0:

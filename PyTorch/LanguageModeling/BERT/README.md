@@ -280,7 +280,7 @@ The pretraining dataset is 170GB+ and takes 15+ hours to download. The BookCorpu
 Users are welcome to download BookCorpus from other sources to match our accuracy, or repeatedly try our script until the required number of files are downloaded by running the following:
 `/workspace/bert/data/create_datasets_from_start.sh wiki_books`
 
-Note: Not using BookCorpus can potentially change final accuracy on a few downstream tasks.
+Note: Ensure a complete Wikipedia download. If in any case, the download breaks, remove the output file `wikicorpus_en.xml.bz2` and start again. If a partially downloaded file exists, the script assumes successful download which causes the extraction to fail. Not using BookCorpus can potentially change final accuracy on a few downstream tasks.
 
 6. Start pretraining.
  
