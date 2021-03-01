@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +13,6 @@
 # limitations under the License.
 
 # This script launches U-Net run in FP32 on 1 GPU for inference benchmarking. Usage:
-# bash unet_INFER_BENCHMARK_FP32.sh <path to dataset> <path to results directory> <batch size>
+# bash unet_INFER_BENCHMARK.sh <path to dataset> <path to results directory> <batch size>
 
 horovodrun -np 1 python main.py --data_dir $1 --model_dir $2 --batch_size $3 --exec_mode predict --benchmark --warmup_steps 200 --max_steps 600 --xla --fold 0

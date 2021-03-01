@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ def train(params, model, dataset, logger):
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=params.learning_rate)
     if params.use_amp:
-        optimizer = tf.keras.mixed_precision.experimental.LossScaleOptimizer(optimizer, "dynamic")
+        optimizer = tf.keras.mixed_precision.LossScaleOptimizer(optimizer, dynamic=True)
 
     ce_loss = tf.keras.metrics.Mean(name='ce_loss')
     f1_loss = tf.keras.metrics.Mean(name='dice_loss')
@@ -149,7 +149,8 @@ def predict(params, model, dataset, logger):
         timestamps = []
         for iteration, images in enumerate(dataset.test_fn(count=None, drop_remainder=True)):
             prediction_step(images)
-            timestamps.append(time())
+            if iteration > params.warmup_steps:
+                timestamps.append(time())
             if iteration >= params.max_steps:
                 break
 
