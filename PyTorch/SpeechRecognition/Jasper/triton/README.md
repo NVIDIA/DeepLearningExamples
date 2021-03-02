@@ -374,6 +374,9 @@ The following table shows the throughput benchmark results for all 3 model backe
 
 ### Changelog
 
+March 2021
+* Updated ONNX runtime information
+
 February 2021
 * Updated Triton scripts for compatibility with Triton Inference Server version 2
 * Updated Quick Start Guide
