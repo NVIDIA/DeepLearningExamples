@@ -808,6 +808,9 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 ## Release notes
 
 ### Changelog
+March 2021
+* Updated ONNX runtime information
+
 February 2021
 * Added DALI data-processing pipeline for on-the-fly data processing and augmentation on CPU or GPU
 * Revised training recipe: ~10% relative improvement in Word Error Rate (WER)
