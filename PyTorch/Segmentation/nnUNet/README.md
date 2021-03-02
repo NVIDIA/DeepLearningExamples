@@ -636,11 +636,13 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 ### Changelog
 
+March 2021
+- Container updated to 21.02
+- Change data format from tfrecord to npy and data loading for 2D 
+
 January 2021
 - Initial release
 - Add notebook with custom dataset loading
-February 2021
-- Change data format from tfrecord to npy and data loading for 2D 
 
 ### Known issues
 
