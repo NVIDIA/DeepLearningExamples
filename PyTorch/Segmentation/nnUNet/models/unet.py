@@ -14,7 +14,7 @@
 
 import torch.nn as nn
 
-from models.layers import ConvBlock, OutputBlock, UpsampleBlock
+from models.layers import ConvBlock, OutputBlock, ResidBlock, UpsampleBlock
 
 
 class UNet(nn.Module):
@@ -27,36 +27,44 @@ class UNet(nn.Module):
         normalization_layer,
         negative_slope,
         deep_supervision,
+        attention,
+        drop_block,
+        residual,
         dimension,
     ):
         super(UNet, self).__init__()
         self.dim = dimension
         self.n_class = n_class
+        self.attention = attention
+        self.residual = residual
         self.negative_slope = negative_slope
         self.deep_supervision = deep_supervision
         self.norm = normalization_layer + f"norm{dimension}d"
-        self.filters = [min(2 ** (5 + i), 320) for i in range(len(strides))]
+        self.filters = [min(2 ** (5 + i), 320 if dimension == 3 else 512) for i in range(len(strides))]
 
+        down_block = ResidBlock if self.residual else ConvBlock
         self.input_block = self.get_conv_block(
-            conv_block=ConvBlock,
+            conv_block=down_block,
             in_channels=in_channels,
             out_channels=self.filters[0],
             kernel_size=kernels[0],
             stride=strides[0],
         )
         self.downsamples = self.get_module_list(
-            conv_block=ConvBlock,
+            conv_block=down_block,
             in_channels=self.filters[:-1],
             out_channels=self.filters[1:],
             kernels=kernels[1:-1],
             strides=strides[1:-1],
+            drop_block=drop_block,
         )
         self.bottleneck = self.get_conv_block(
-            conv_block=ConvBlock,
+            conv_block=down_block,
             in_channels=self.filters[-2],
             out_channels=self.filters[-1],
             kernel_size=kernels[-1],
             stride=strides[-1],
+            drop_block=drop_block,
         )
         self.upsamples = self.get_module_list(
             conv_block=UpsampleBlock,
@@ -87,15 +95,17 @@ class UNet(nn.Module):
                 out.append(self.deep_supervision_heads[i](decoder_out))
         return out
 
-    def get_conv_block(self, conv_block, in_channels, out_channels, kernel_size, stride):
+    def get_conv_block(self, conv_block, in_channels, out_channels, kernel_size, stride, drop_block=False):
         return conv_block(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            kernel_size=kernel_size,
+            dim=self.dim,
             stride=stride,
             norm=self.norm,
+            drop_block=drop_block,
+            kernel_size=kernel_size,
+            in_channels=in_channels,
+            attention=self.attention,
+            out_channels=out_channels,
             negative_slope=self.negative_slope,
-            dim=self.dim,
         )
 
     def get_output_block(self, decoder_level):
@@ -104,10 +114,11 @@ class UNet(nn.Module):
     def get_deep_supervision_heads(self):
         return nn.ModuleList([self.get_output_block(i + 1) for i in range(len(self.upsamples) - 1)])
 
-    def get_module_list(self, in_channels, out_channels, kernels, strides, conv_block):
+    def get_module_list(self, in_channels, out_channels, kernels, strides, conv_block, drop_block=False):
         layers = []
-        for in_channel, out_channel, kernel, stride in zip(in_channels, out_channels, kernels, strides):
-            conv_layer = self.get_conv_block(conv_block, in_channel, out_channel, kernel, stride)
+        for i, (in_channel, out_channel, kernel, stride) in enumerate(zip(in_channels, out_channels, kernels, strides)):
+            use_drop_block = drop_block and len(in_channels) - i <= 2
+            conv_layer = self.get_conv_block(conv_block, in_channel, out_channel, kernel, stride, use_drop_block)
             layers.append(conv_layer)
         return nn.ModuleList(layers)
 
@@ -115,5 +126,3 @@ class UNet(nn.Module):
         name = module.__class__.__name__.lower()
         if name in ["conv2d", "conv3d"]:
             nn.init.kaiming_normal_(module.weight, a=self.negative_slope)
-        elif name in ["convtranspose2d", "convtranspose3d"]:
-            nn.init.kaiming_normal_(module.weight, a=1.0)

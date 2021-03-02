@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 import itertools
 import json
 import math
@@ -23,11 +22,11 @@ import monai.transforms as transforms
 import nibabel
 import numpy as np
 from joblib import Parallel, delayed
+from skimage.morphology import dilation, erosion, square
 from skimage.transform import resize
 from utils.utils import get_task_code, make_empty_dir
 
-from data_preprocessing.configs import (ct_max, ct_mean, ct_min, ct_std,
-                                        patch_size, spacings, task)
+from data_preprocessing.configs import ct_max, ct_mean, ct_min, ct_std, patch_size, spacings, task
 
 
 class Preprocessor:
@@ -45,11 +44,17 @@ class Preprocessor:
         self.data_path = os.path.join(args.data, task[args.task])
         self.results = os.path.join(args.results, self.task_code)
         if not self.training:
-            self.results = os.path.join(self.results, "test")
-        self.metadata = json.load(open(os.path.join(self.data_path, "dataset.json"), "r"))
-        self.modality = self.metadata["modality"]["0"]
+            self.results = os.path.join(self.results, self.args.exec_mode)
         self.crop_foreg = transforms.CropForegroundd(keys=["image", "label"], source_key="image")
-        self.normalize_intensity = transforms.NormalizeIntensity(nonzero=True, channel_wise=True)
+        self.normalize_intensity = transforms.NormalizeIntensity(nonzero=False, channel_wise=True)
+        metadata_path = os.path.join(self.data_path, "dataset.json")
+        if self.args.exec_mode == "val":
+            dataset_json = json.load(open(metadata_path, "r"))
+            dataset_json["val"] = dataset_json["training"]
+            with open(metadata_path, "w") as outfile:
+                json.dump(dataset_json, outfile)
+        self.metadata = json.load(open(metadata_path, "r"))
+        self.modality = self.metadata["modality"]["0"]
 
     def run(self):
         make_empty_dir(self.results)
@@ -87,19 +92,31 @@ class Preprocessor:
         )
 
     def preprocess_pair(self, pair):
-        fname = os.path.basename(pair["image"] if self.training else pair)
+        fname = os.path.basename(pair["image"] if isinstance(pair, dict) else pair)
         image, label, image_spacings = self.load_pair(pair)
         if self.training:
             data = self.crop_foreg({"image": image, "label": label})
             image, label = data["image"], data["label"]
+            test_metadata = None
+        else:
+            bbox = transforms.utils.generate_spatial_bounding_box(image)
+            test_metadata = np.vstack([bbox, image.shape[1:]])
+            image = transforms.SpatialCrop(roi_start=bbox[0], roi_end=bbox[1])(image)
+            if label is not None:
+                label = transforms.SpatialCrop(roi_start=bbox[0], roi_end=bbox[1])(label)
         if self.args.dim == 3:
             image, label = self.resample(image, label, image_spacings)
         if self.modality == "CT":
             image = np.clip(image, self.ct_min, self.ct_max)
+        image = self.normalize(image)
         if self.training:
             image, label = self.standardize(image, label)
-        image = self.normalize(image)
-        self.save(image, label, fname)
+            if self.args.dilation:
+                new_lbl = np.zeros(label.shape, dtype=np.uint8)
+                for depth in range(label.shape[1]):
+                    new_lbl[0, depth] = erosion(dilation(label[0, depth], square(3)), square(3))
+                label = new_lbl
+        self.save(image, label, fname, test_metadata)
 
     def resample(self, image, label, image_spacings):
         if self.target_spacing != image_spacings:
@@ -108,9 +125,9 @@ class Preprocessor:
 
     def standardize(self, image, label):
         pad_shape = self.calculate_pad_shape(image)
-        img_shape = image.shape[1:]
-        if pad_shape != img_shape:
-            paddings = [(pad_sh - img_sh) / 2 for (pad_sh, img_sh) in zip(pad_shape, img_shape)]
+        image_shape = image.shape[1:]
+        if pad_shape != image_shape:
+            paddings = [(pad_sh - image_sh) / 2 for (pad_sh, image_sh) in zip(pad_shape, image_shape)]
             image = self.pad(image, paddings)
             label = self.pad(label, paddings)
         if self.args.dim == 2:  # Center cropping 2D images.
@@ -126,21 +143,26 @@ class Preprocessor:
             return (image - self.ct_mean) / self.ct_std
         return self.normalize_intensity(image)
 
-    def save(self, image, label, fname):
+    def save(self, image, label, fname, test_metadata):
         mean, std = np.round(np.mean(image, (1, 2, 3)), 2), np.round(np.std(image, (1, 2, 3)), 2)
         print(f"Saving {fname} shape {image.shape} mean {mean} std {std}")
-        self.save_3d(image, label, fname)
+        self.save_npy(image, fname, "_x.npy")
+        if label is not None:
+            self.save_npy(label, fname, "_y.npy")
+        if test_metadata is not None:
+            self.save_npy(test_metadata, fname, "_meta.npy")
 
     def load_pair(self, pair):
-        image = self.load_nifty(pair["image"] if self.training else pair)
+        image = self.load_nifty(pair["image"] if isinstance(pair, dict) else pair)
         image_spacing = self.load_spacing(image)
         image = image.get_fdata().astype(np.float32)
         image = self.standardize_layout(image)
 
-        label = None
         if self.training:
             label = self.load_nifty(pair["label"]).get_fdata().astype(np.uint8)
             label = self.standardize_layout(label)
+        else:
+            label = None
 
         return image, label, image_spacing
 
@@ -148,23 +170,23 @@ class Preprocessor:
         shape = self.calculate_new_shape(spacing, image.shape[1:])
         if self.check_anisotrophy(spacing):
             image = self.resample_anisotrophic_image(image, shape)
-            if self.training:
+            if label is not None:
                 label = self.resample_anisotrophic_label(label, shape)
         else:
             image = self.resample_regular_image(image, shape)
-            if self.training:
+            if label is not None:
                 label = self.resample_regular_label(label, shape)
         image = image.astype(np.float32)
-        if self.training:
+        if label is not None:
             label = label.astype(np.uint8)
         return image, label
 
     def calculate_pad_shape(self, image):
         min_shape = self.patch_size[:]
-        img_shape = image.shape[1:]
+        image_shape = image.shape[1:]
         if len(min_shape) == 2:  # In 2D case we don't want to pad depth axis.
-            min_shape.insert(0, img_shape[0])
-        pad_shape = [max(mshape, ishape) for mshape, ishape in zip(min_shape, img_shape)]
+            min_shape.insert(0, image_shape[0])
+        pad_shape = [max(mshape, ishape) for mshape, ishape in zip(min_shape, image_shape)]
         return pad_shape
 
     def get_intensities(self, pair):
@@ -205,13 +227,8 @@ class Preprocessor:
         new_shape = (spacing_ratio * np.array(shape)).astype(int).tolist()
         return new_shape
 
-    def save_3d(self, image, label, fname):
-        self.save_npy(image, fname, "_x.npy")
-        if self.training:
-            self.save_npy(label, fname, "_y.npy")
-
-    def save_npy(self, img, fname, suffix):
-        np.save(os.path.join(self.results, fname.replace(".nii.gz", suffix)), img, allow_pickle=False)
+    def save_npy(self, image, fname, suffix):
+        np.save(os.path.join(self.results, fname.replace(".nii.gz", suffix)), image, allow_pickle=False)
 
     def run_parallel(self, func, exec_mode):
         return Parallel(n_jobs=self.args.n_jobs)(delayed(func)(pair) for pair in self.metadata[exec_mode])
