@@ -32,6 +32,7 @@ import os
 import shutil
 import time
 import random
+import signal
 
 import numpy as np
 import torch
@@ -45,15 +46,7 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-
-try:
-    from apex.parallel import DistributedDataParallel as DDP
-    from apex.fp16_utils import *
-    from apex import amp
-except ImportError:
-    raise ImportError(
-        "Please install apex from https://www.github.com/nvidia/apex to run this example."
-    )
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 import image_classification.resnet as models
 import image_classification.logger as log
@@ -224,12 +217,11 @@ def add_parser_arguments(parser):
         help="load weights from here",
     )
 
-    parser.add_argument("--fp16", action="store_true", help="Run model fp16 mode.")
     parser.add_argument(
         "--static-loss-scale",
         type=float,
         default=1,
-        help="Static loss scale, positive power of 2 values can improve fp16 convergence.",
+        help="Static loss scale, positive power of 2 values can improve amp convergence.",
     )
     parser.add_argument(
         "--dynamic-loss-scale",
@@ -312,10 +304,6 @@ def main(args):
         dist.init_process_group(backend="nccl", init_method="env://")
         args.world_size = torch.distributed.get_world_size()
 
-    if args.amp and args.fp16:
-        print("Please use only one of the --fp16/--amp flags")
-        exit(1)
-
     if args.seed is not None:
         print("Using seed = {}".format(args.seed))
         torch.manual_seed(args.seed + args.local_rank)
@@ -324,22 +312,25 @@ def main(args):
         random.seed(args.seed + args.local_rank)
 
         def _worker_init_fn(id):
+            def handler(signum, frame):
+                print(f"Worker {id} received signal {signum}")
+
+            signal.signal(signal.SIGTERM, handler)
+
             np.random.seed(seed=args.seed + args.local_rank + id)
             random.seed(args.seed + args.local_rank + id)
 
     else:
 
         def _worker_init_fn(id):
-            pass
+            def handler(signum, frame):
+                print(f"Worker {id} received signal {signum}")
 
-    if args.fp16:
-        assert (
-            torch.backends.cudnn.enabled
-        ), "fp16 mode requires cudnn backend to be enabled."
+            signal.signal(signal.SIGTERM, handler)
 
     if args.static_loss_scale != 1.0:
-        if not args.fp16:
-            print("Warning:  if --fp16 is not used, static_loss_scale will be ignored.")
+        if not args.amp:
+            print("Warning: if --amp is not used, static_loss_scale will be ignored.")
 
     if args.optimizer_batch_size < 0:
         batch_size_multiplier = 1
@@ -387,6 +378,11 @@ def main(args):
                     args.resume, checkpoint["epoch"]
                 )
             )
+            if start_epoch >= args.epochs:
+                print(
+                    f"Launched training for {args.epochs}, checkpoint already run {start_epoch}"
+                )
+                exit(1)
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
             model_state = None
@@ -410,7 +406,6 @@ def main(args):
         loss,
         pretrained_weights=pretrained_weights,
         cuda=True,
-        fp16=args.fp16,
         memory_format=memory_format,
     )
 
@@ -427,6 +422,9 @@ def main(args):
     elif args.data_backend == "syntetic":
         get_val_loader = get_syntetic_loader
         get_train_loader = get_syntetic_loader
+    else:
+        print("Bad databackend picked")
+        exit(1)
 
     train_loader, train_loader_len = get_train_loader(
         args.data,
@@ -435,7 +433,6 @@ def main(args):
         args.mixup > 0.0,
         start_epoch=start_epoch,
         workers=args.workers,
-        fp16=args.fp16,
         memory_format=memory_format,
     )
     if args.mixup != 0.0:
@@ -447,7 +444,6 @@ def main(args):
         args.num_classes,
         False,
         workers=args.workers,
-        fp16=args.fp16,
         memory_format=memory_format,
     )
 
@@ -473,15 +469,12 @@ def main(args):
 
     optimizer = get_optimizer(
         list(model_and_loss.model.named_parameters()),
-        args.fp16,
         args.lr,
         args.momentum,
         args.weight_decay,
         nesterov=args.nesterov,
         bn_weight_decay=args.bn_weight_decay,
         state=optimizer_state,
-        static_loss_scale=args.static_loss_scale,
-        dynamic_loss_scale=args.dynamic_loss_scale,
     )
 
     if args.lr_schedule == "step":
@@ -493,26 +486,26 @@ def main(args):
     elif args.lr_schedule == "linear":
         lr_policy = lr_linear_policy(args.lr, args.warmup, args.epochs, logger=logger)
 
-    if args.amp:
-        model_and_loss, optimizer = amp.initialize(
-            model_and_loss,
-            optimizer,
-            opt_level="O1",
-            loss_scale="dynamic" if args.dynamic_loss_scale else args.static_loss_scale,
-        )
+    scaler = torch.cuda.amp.GradScaler(
+        init_scale=args.static_loss_scale,
+        growth_factor=2,
+        backoff_factor=0.5,
+        growth_interval=100 if args.dynamic_loss_scale else 1000000000,
+        enabled=args.amp,
+    )
 
     if args.distributed:
-        model_and_loss.distributed()
+        model_and_loss.distributed(args.gpu)
 
     model_and_loss.load_model_state(model_state)
 
     train_loop(
         model_and_loss,
         optimizer,
+        scaler,
         lr_policy,
         train_loader,
         val_loader,
-        args.fp16,
         logger,
         should_backup_checkpoint(args),
         use_amp=args.amp,

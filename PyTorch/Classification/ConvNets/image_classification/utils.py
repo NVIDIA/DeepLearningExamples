@@ -31,6 +31,7 @@ import os
 import numpy as np
 import torch
 import shutil
+import signal
 import torch.distributed as dist
 
 
@@ -106,3 +107,45 @@ def reduce_tensor(tensor):
 def first_n(n, generator):
     for i, d in zip(range(n), generator):
         yield d
+
+
+class TimeoutHandler:
+    def __init__(self, sig=signal.SIGTERM):
+        self.sig = sig
+        rank = dist.get_rank() if dist.is_initialized() else 0
+        self.device = f'cuda:{rank}'
+    @property
+    def interrupted(self):
+        if not dist.is_initialized():
+            return self._interrupted
+
+        interrupted = torch.tensor(self._interrupted).int().to(self.device)
+        dist.broadcast(interrupted, 0)
+        interrupted = bool(interrupted.item())
+        return interrupted
+    def __enter__(self):
+        self._interrupted = False
+        self.released = False
+        self.original_handler = signal.getsignal(self.sig)
+        def master_handler(signum, frame):
+            self.release()
+            self._interrupted = True
+            print(f'Received SIGTERM')
+        def ignorind_handler(signum, frame):
+            self.release()
+            print('Received SIGTERM, ignoring')
+
+        rank = dist.get_rank() if dist.is_initialized() else 0
+        if rank == 0:
+            signal.signal(self.sig, master_handler)
+        else:
+            signal.signal(self.sig, ignorind_handler)
+        return self
+    def __exit__(self, type, value, tb):
+        self.release()
+    def release(self):
+        if self.released:
+            return False
+        signal.signal(self.sig, self.original_handler)
+        self.released = True
+        return True

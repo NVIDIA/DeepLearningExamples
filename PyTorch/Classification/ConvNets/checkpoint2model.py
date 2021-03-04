@@ -30,7 +30,7 @@ if __name__ == "__main__":
     add_parser_arguments(parser)
     args = parser.parse_args()
 
-    checkpoint = torch.load(args.checkpoint_path)
+    checkpoint = torch.load(args.checkpoint_path, map_location=torch.device('cpu'))
 
     model_state_dict = {
         k[len("module.") :] if "module." in k else k: v
@@ -39,4 +39,4 @@ if __name__ == "__main__":
 
     print(f"Loaded {checkpoint['arch']} : {checkpoint['best_prec1']}")
 
-    torch.save(model_state_dict, args.weight_path)
+    torch.save(model_state_dict, args.weight_path.format(arch=checkpoint['arch'][0], acc = checkpoint['best_prec1']))
