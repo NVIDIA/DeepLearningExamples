@@ -212,8 +212,11 @@ def main():
 
     # dataset
     if args.transcribe_wav or args.transcribe_filelist:
-        assert not use_dali, "DALI is not supported for a single audio"
-        assert not args.transcribe_filelist
+
+        if use_dali:
+            print("DALI supported only with input .json files; disabling")
+            use_dali = False
+
         assert not args.pad_to_max_duration
         assert not (args.transcribe_wav and args.transcribe_filelist)
 
