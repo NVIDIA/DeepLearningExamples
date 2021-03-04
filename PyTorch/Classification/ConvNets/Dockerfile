@@ -1,4 +1,4 @@
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.07-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.12-py3
 FROM ${FROM_IMAGE_NAME}
 
 ADD requirements.txt /workspace/

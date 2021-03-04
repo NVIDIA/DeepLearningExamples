@@ -16,18 +16,11 @@ import argparse
 import numpy as np
 import json
 import torch
+from torch.cuda.amp import autocast
 import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 import image_classification.resnet as models
 from image_classification.dataloaders import load_jpeg_from_file
-
-try:
-    from apex.fp16_utils import *
-    from apex import amp
-except ImportError:
-    raise ImportError(
-        "Please install apex from https://www.github.com/nvidia/apex to run this example."
-    )
 
 
 def add_parser_arguments(parser):
@@ -52,7 +45,7 @@ def add_parser_arguments(parser):
     )
     parser.add_argument("--weights", metavar="<path>", help="file with model weights")
     parser.add_argument(
-        "--precision", metavar="PREC", default="FP16", choices=["AMP", "FP16", "FP32"]
+        "--precision", metavar="PREC", default="AMP", choices=["AMP", "FP32"]
     )
     parser.add_argument("--image", metavar="<path>", help="path to classified image")
 
@@ -63,30 +56,28 @@ def main(args):
 
     if args.weights is not None:
         weights = torch.load(args.weights)
-        #Temporary fix to allow NGC checkpoint loading
+        # Temporary fix to allow NGC checkpoint loading
         weights = {
             k.replace("module.", ""): v for k, v in weights.items()
         }
         model.load_state_dict(weights)
 
     model = model.cuda()
-
-    if args.precision in ["AMP", "FP16"]:
-        model = network_to_half()
-
     model.eval()
 
-    with torch.no_grad():
-        input = load_jpeg_from_file(
-            args.image, cuda=True, fp16=args.precision != "FP32"
-        )
+    input = load_jpeg_from_file(
+        args.image, cuda=True
+    )
 
-        output = torch.nn.functional.softmax(model(input), dim=1).cpu().view(-1).numpy()
-        top5 = np.argsort(output)[-5:][::-1]
+    with torch.no_grad(), autocast(enabled = args.precision == "AMP"):
+        output = torch.nn.functional.softmax(model(input), dim=1)
 
-        print(args.image)
-        for c, v in zip(imgnet_classes[top5], output[top5]):
-            print(f"{c}: {100*v:.1f}%")
+    output = output.float().cpu().view(-1).numpy()
+    top5 = np.argsort(output)[-5:][::-1]
+
+    print(args.image)
+    for c, v in zip(imgnet_classes[top5], output[top5]):
+        print(f"{c}: {100*v:.1f}%")
 
 
 if __name__ == "__main__":

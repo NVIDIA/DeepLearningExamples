@@ -38,14 +38,8 @@ from . import resnet as models
 from . import utils
 import dllogger
 
-try:
-    from apex.parallel import DistributedDataParallel as DDP
-    from apex.fp16_utils import *
-    from apex import amp
-except ImportError:
-    raise ImportError(
-        "Please install apex from https://www.github.com/nvidia/apex to run this example."
-    )
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.cuda.amp import autocast
 
 ACC_METADATA = {"unit": "%", "format": ":.2f"}
 IPS_METADATA = {"unit": "img/s", "format": ":.2f"}
@@ -60,7 +54,6 @@ class ModelAndLoss(nn.Module):
         loss,
         pretrained_weights=None,
         cuda=True,
-        fp16=False,
         memory_format=torch.contiguous_format,
     ):
         super(ModelAndLoss, self).__init__()
@@ -74,8 +67,6 @@ class ModelAndLoss(nn.Module):
 
         if cuda:
             model = model.cuda().to(memory_format=memory_format)
-        if fp16:
-            model = network_to_half(model)
 
         # define loss function (criterion) and optimizer
         criterion = loss()
@@ -92,8 +83,8 @@ class ModelAndLoss(nn.Module):
 
         return loss, output
 
-    def distributed(self):
-        self.model = DDP(self.model)
+    def distributed(self, gpu_id):
+        self.model = DDP(self.model, device_ids=[gpu_id], output_device=gpu_id)
 
     def load_model_state(self, state):
         if not state is None:
@@ -102,14 +93,11 @@ class ModelAndLoss(nn.Module):
 
 def get_optimizer(
     parameters,
-    fp16,
     lr,
     momentum,
     weight_decay,
     nesterov=False,
     state=None,
-    static_loss_scale=1.0,
-    dynamic_loss_scale=False,
     bn_weight_decay=False,
 ):
 
@@ -137,13 +125,6 @@ def get_optimizer(
             momentum=momentum,
             weight_decay=weight_decay,
             nesterov=nesterov,
-        )
-    if fp16:
-        optimizer = FP16_Optimizer(
-            optimizer,
-            static_loss_scale=static_loss_scale,
-            dynamic_loss_scale=dynamic_loss_scale,
-            verbose=False,
         )
 
     if not state is None:
@@ -227,36 +208,25 @@ def lr_exponential_policy(
 
 
 def get_train_step(
-    model_and_loss, optimizer, fp16, use_amp=False, batch_size_multiplier=1
+    model_and_loss, optimizer, scaler, use_amp=False, batch_size_multiplier=1
 ):
     def _step(input, target, optimizer_step=True):
         input_var = Variable(input)
         target_var = Variable(target)
-        loss, output = model_and_loss(input_var, target_var)
-        if torch.distributed.is_initialized():
-            reduced_loss = utils.reduce_tensor(loss.data)
-        else:
-            reduced_loss = loss.data
 
-        if fp16:
-            optimizer.backward(loss)
-        elif use_amp:
-            with amp.scale_loss(loss, optimizer) as scaled_loss:
-                scaled_loss.backward()
-        else:
-            loss.backward()
+        with autocast(enabled=use_amp):
+            loss, output = model_and_loss(input_var, target_var)
+            loss /= batch_size_multiplier
+            if torch.distributed.is_initialized():
+                reduced_loss = utils.reduce_tensor(loss.data)
+            else:
+                reduced_loss = loss.data
+
+        scaler.scale(loss).backward()
 
         if optimizer_step:
-            opt = (
-                optimizer.optimizer
-                if isinstance(optimizer, FP16_Optimizer)
-                else optimizer
-            )
-            for param_group in opt.param_groups:
-                for param in param_group["params"]:
-                    param.grad /= batch_size_multiplier
-
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
             optimizer.zero_grad()
 
         torch.cuda.synchronize()
@@ -270,10 +240,11 @@ def train(
     train_loader,
     model_and_loss,
     optimizer,
+    scaler,
     lr_scheduler,
-    fp16,
     logger,
     epoch,
+    timeout_handler,
     use_amp=False,
     prof=-1,
     batch_size_multiplier=1,
@@ -315,7 +286,7 @@ def train(
     step = get_train_step(
         model_and_loss,
         optimizer,
-        fp16,
+        scaler=scaler,
         use_amp=use_amp,
         batch_size_multiplier=batch_size_multiplier,
     )
@@ -342,31 +313,33 @@ def train(
         it_time = time.time() - end
 
         if logger is not None:
-            logger.log_metric("train.loss", to_python_float(loss), bs)
+            logger.log_metric("train.loss", loss.item(), bs)
             logger.log_metric("train.compute_ips", calc_ips(bs, it_time - data_time))
             logger.log_metric("train.total_ips", calc_ips(bs, it_time))
             logger.log_metric("train.data_time", data_time)
             logger.log_metric("train.compute_time", it_time - data_time)
 
         end = time.time()
+        if timeout_handler.interrupted:
+            break
 
 
-def get_val_step(model_and_loss):
+def get_val_step(model_and_loss, use_amp=False):
     def _step(input, target):
         input_var = Variable(input)
         target_var = Variable(target)
 
-        with torch.no_grad():
+        with torch.no_grad(), autocast(enabled=use_amp):
             loss, output = model_and_loss(input_var, target_var)
 
-        prec1, prec5 = utils.accuracy(output.data, target, topk=(1, 5))
+            prec1, prec5 = utils.accuracy(output.data, target, topk=(1, 5))
 
-        if torch.distributed.is_initialized():
-            reduced_loss = utils.reduce_tensor(loss.data)
-            prec1 = utils.reduce_tensor(prec1)
-            prec5 = utils.reduce_tensor(prec5)
-        else:
-            reduced_loss = loss.data
+            if torch.distributed.is_initialized():
+                reduced_loss = utils.reduce_tensor(loss.data)
+                prec1 = utils.reduce_tensor(prec1)
+                prec5 = utils.reduce_tensor(prec5)
+            else:
+                reduced_loss = loss.data
 
         torch.cuda.synchronize()
 
@@ -376,7 +349,13 @@ def get_val_step(model_and_loss):
 
 
 def validate(
-    val_loader, model_and_loss, fp16, logger, epoch, prof=-1, register_metrics=True
+    val_loader,
+    model_and_loss,
+    logger,
+    epoch,
+    use_amp=False,
+    prof=-1,
+    register_metrics=True,
 ):
     if register_metrics and logger is not None:
         logger.register_metric(
@@ -440,7 +419,7 @@ def validate(
             metadata=TIME_METADATA,
         )
 
-    step = get_val_step(model_and_loss)
+    step = get_val_step(model_and_loss, use_amp=use_amp)
 
     top1 = log.AverageMeter()
     # switch to evaluate mode
@@ -462,11 +441,11 @@ def validate(
 
         it_time = time.time() - end
 
-        top1.record(to_python_float(prec1), bs)
+        top1.record(prec1.item(), bs)
         if logger is not None:
-            logger.log_metric("val.top1", to_python_float(prec1), bs)
-            logger.log_metric("val.top5", to_python_float(prec5), bs)
-            logger.log_metric("val.loss", to_python_float(loss), bs)
+            logger.log_metric("val.top1", prec1.item(), bs)
+            logger.log_metric("val.top5", prec5.item(), bs)
+            logger.log_metric("val.loss", loss.item(), bs)
             logger.log_metric("val.compute_ips", calc_ips(bs, it_time - data_time))
             logger.log_metric("val.total_ips", calc_ips(bs, it_time))
             logger.log_metric("val.data_time", data_time)
@@ -492,10 +471,10 @@ def calc_ips(batch_size, time):
 def train_loop(
     model_and_loss,
     optimizer,
+    scaler,
     lr_scheduler,
     train_loader,
     val_loader,
-    fp16,
     logger,
     should_backup_checkpoint,
     use_amp=False,
@@ -510,70 +489,77 @@ def train_loop(
     checkpoint_dir="./",
     checkpoint_filename="checkpoint.pth.tar",
 ):
-
     prec1 = -1
 
     print(f"RUNNING EPOCHS FROM {start_epoch} TO {end_epoch}")
-    for epoch in range(start_epoch, end_epoch):
-        if logger is not None:
-            logger.start_epoch()
-        if not skip_training:
-            train(
-                train_loader,
-                model_and_loss,
-                optimizer,
-                lr_scheduler,
-                fp16,
-                logger,
-                epoch,
-                use_amp=use_amp,
-                prof=prof,
-                register_metrics=epoch == start_epoch,
-                batch_size_multiplier=batch_size_multiplier,
-            )
-
-        if not skip_validation:
-            prec1, nimg = validate(
-                val_loader,
-                model_and_loss,
-                fp16,
-                logger,
-                epoch,
-                prof=prof,
-                register_metrics=epoch == start_epoch,
-            )
-        if logger is not None:
-            logger.end_epoch()
-
-        if save_checkpoints and (
-            not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0
-        ):
-            if not skip_validation:
-                is_best = logger.metrics["val.top1"]["meter"].get_epoch() > best_prec1
-                best_prec1 = max(
-                    logger.metrics["val.top1"]["meter"].get_epoch(), best_prec1
+    with utils.TimeoutHandler() as timeout_handler:
+        for epoch in range(start_epoch, end_epoch):
+            if logger is not None:
+                logger.start_epoch()
+            if not skip_training:
+                train(
+                    train_loader,
+                    model_and_loss,
+                    optimizer,
+                    scaler,
+                    lr_scheduler,
+                    logger,
+                    epoch,
+                    timeout_handler,
+                    use_amp=use_amp,
+                    prof=prof,
+                    register_metrics=epoch == start_epoch,
+                    batch_size_multiplier=batch_size_multiplier,
                 )
-            else:
-                is_best = False
-                best_prec1 = 0
 
-            if should_backup_checkpoint(epoch):
-                backup_filename = "checkpoint-{}.pth.tar".format(epoch + 1)
-            else:
-                backup_filename = None
-            utils.save_checkpoint(
-                {
-                    "epoch": epoch + 1,
-                    "arch": model_and_loss.arch,
-                    "state_dict": model_and_loss.model.state_dict(),
-                    "best_prec1": best_prec1,
-                    "optimizer": optimizer.state_dict(),
-                },
-                is_best,
-                checkpoint_dir=checkpoint_dir,
-                backup_filename=backup_filename,
-                filename=checkpoint_filename,
-            )
+            if not skip_validation:
+                prec1, nimg = validate(
+                    val_loader,
+                    model_and_loss,
+                    logger,
+                    epoch,
+                    use_amp=use_amp,
+                    prof=prof,
+                    register_metrics=epoch == start_epoch,
+                )
+            if logger is not None:
+                logger.end_epoch()
+
+            if save_checkpoints and (
+                not torch.distributed.is_initialized()
+                or torch.distributed.get_rank() == 0
+            ):
+                if not skip_validation:
+                    is_best = (
+                        logger.metrics["val.top1"]["meter"].get_epoch() > best_prec1
+                    )
+                    best_prec1 = max(
+                        logger.metrics["val.top1"]["meter"].get_epoch(), best_prec1
+                    )
+                else:
+                    is_best = False
+                    best_prec1 = 0
+
+                if should_backup_checkpoint(epoch):
+                    backup_filename = "checkpoint-{}.pth.tar".format(epoch + 1)
+                else:
+                    backup_filename = None
+                utils.save_checkpoint(
+                    {
+                        "epoch": epoch + 1,
+                        "arch": model_and_loss.arch,
+                        "state_dict": model_and_loss.model.state_dict(),
+                        "best_prec1": best_prec1,
+                        "optimizer": optimizer.state_dict(),
+                    },
+                    is_best,
+                    checkpoint_dir=checkpoint_dir,
+                    backup_filename=backup_filename,
+                    filename=checkpoint_filename,
+                )
+            if timeout_handler.interrupted:
+                break
+
 
 
 # }}}
