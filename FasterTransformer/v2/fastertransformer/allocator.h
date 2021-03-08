@@ -104,7 +104,7 @@ public:
 
     auto flat = buf.flat<uint8>();
     void *ptr = (void *)flat.data();
-    cudaMemset(ptr, 0, size);
+    cudaMemset(ptr, 0, buf_size);
     return ptr;
   }
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -56,4 +56,4 @@ class Unet(tf.keras.Model):
             out = up_block(out, skip_connections.pop())
 
         out = self.output_block(out, skip_connections.pop())
-        return tf.keras.activations.softmax(out, axis=-1)
+        return out

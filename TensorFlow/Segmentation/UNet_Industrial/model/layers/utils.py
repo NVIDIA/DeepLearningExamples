@@ -19,8 +19,6 @@
 #
 # ==============================================================================
 
-from dllogger.logger import LOGGER
-
 import horovod.tensorflow as hvd
 
 from utils import hvd_utils
@@ -37,5 +35,5 @@ def _log_hparams(classname, layername, **kwargs):
 
     log_msg += "\n"
 
-    if not hvd_utils.is_using_hvd() or hvd.local_rank() == 0:
-        LOGGER.log(log_msg)
+    if not hvd_utils.is_using_hvd() or hvd.rank() == 0:
+        print(log_msg)

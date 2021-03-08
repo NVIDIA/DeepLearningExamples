@@ -2,7 +2,7 @@
 
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
 
-init_checkpoint=${1:-"/results/biobert_tf_uncased_base/model.ckpt-4340"}
+init_checkpoint=${1:-"/results/biobert_tf_uncased_base/model.ckpt"}
 train_batch_size=${2:-8}
 learning_rate=${3:-3.125e-6}
 cased=${4:-false}
@@ -42,15 +42,18 @@ mkdir -p ${OUTPUT_DIR}
 
 use_fp16=""
 if [ "$precision" = "fp16" ] ; then
-        echo "fp16 activated!"
-        use_fp16="--use_fp16"
+    echo "fp16 activated!"
+    use_fp16="--amp"
+else
+    echo "fp32/tf32 activated!"
+    use_fp16="--noamp"
 fi
 
 if [ "$use_xla" = "true" ] ; then
     use_xla_tag="--use_xla"
     echo "XLA activated"
 else
-    use_xla_tag=""
+    use_xla_tag="--nouse_xla"
 fi
 
 if [ $num_gpu -gt 1 ] ; then

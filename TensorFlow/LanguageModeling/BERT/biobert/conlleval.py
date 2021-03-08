@@ -197,9 +197,7 @@ def report(counts, out=None):
         out.write('FB1: %6.2f  %d\n' % (100.*m.fscore, c.t_found_guessed[i]))
 
 
-def report_notprint(counts, out=None):
-    if out is None:
-        out = sys.stdout
+def report_notprint(counts):
 
     overall, by_type = metrics(counts)
 

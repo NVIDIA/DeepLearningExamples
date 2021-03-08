@@ -1,38 +1,30 @@
 #!/bin/bash
+
 SCRIPT_DIR=$(cd $(dirname $0); pwd)
-JASPER_REPO=${JASPER_REPO:-"${SCRIPT_DIR}/../.."}
+: ${JASPER_REPO:="$SCRIPT_DIR/../.."}
 
-# Launch TRT JASPER container.
+: ${DATA_DIR:=${1:-"$JASPER_REPO/datasets"}}
+: ${CHECKPOINT_DIR:=${2:-"$JASPER_REPO/checkpoints"}}
+: ${OUTPUT_DIR:=${3:-"$JASPER_REPO/results"}}
+: ${SCRIPT:=${4:-}}
 
-DATA_DIR=${DATA_DIR:-"/datasets"}
-CHECKPOINT_DIR=${CHECKPOINT_DIR:-"/checkpoints"}
-RESULT_DIR=${RESULT_DIR:-"/results"}
-PROGRAM_PATH=${PROGRAM_PATH}
-    
+mkdir -p $DATA_DIR
+mkdir -p $CHECKPOINT_DIR
+mkdir -p $OUTPUT_DIR
 
 MOUNTS=""
-if [ ! -z "$DATA_DIR" ]; 
-then
-    MOUNTS="$MOUNTS -v $DATA_DIR:/datasets "
-fi
-
-if [ ! -z "$CHECKPOINT_DIR" ]; 
-then
-    MOUNTS="$MOUNTS -v $CHECKPOINT_DIR:/checkpoints "
-fi
-
-if [ ! -z "$RESULT_DIR" ]; 
-then
-    MOUNTS="$MOUNTS -v $RESULT_DIR:/results "
-fi
+MOUNTS+=" -v $DATA_DIR:/datasets"
+MOUNTS+=" -v $CHECKPOINT_DIR:/checkpoints"
+MOUNTS+=" -v $OUTPUT_DIR:/results"
+MOUNTS+=" -v $JASPER_REPO:/workspace/jasper"
 
 echo $MOUNTS
-nvidia-docker run -it --rm \
-  --runtime=nvidia \
+docker run -it --rm --gpus all \
+  --env PYTHONDONTWRITEBYTECODE=1 \
   --shm-size=4g \
   --ulimit memlock=-1 \
   --ulimit stack=67108864 \
-  ${MOUNTS} \
-  -v ${JASPER_REPO}:/jasper \
-  ${EXTRA_JASPER_ENV} \
-  jasper:latest bash $PROGRAM_PATH
+  $MOUNTS \
+  $EXTRA_JASPER_ENV \
+  -w /workspace/jasper \
+  jasper:latest bash $SCRIPT

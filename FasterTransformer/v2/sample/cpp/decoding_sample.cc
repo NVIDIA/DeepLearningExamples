@@ -96,6 +96,7 @@ void decoding_sample(int batch_size,
                     int memory_hidden_units)
 {
   const int max_seq_len = seq_len;
+  const int memory_seq_len = seq_len; 
   const int start_id = 1;
   const int end_id = 2;
   const int hidden_units = head_num * size_per_head;
@@ -123,7 +124,7 @@ void decoding_sample(int batch_size,
     T *d_self_gamma, *d_self_beta;
     T *d_cross_gamma, *d_cross_beta;
     T *d_ffn_gamma, *d_ffn_beta;
-
+    
     device_malloc(&d_self_Q_kernel, sizeof(T) * hidden_units * hidden_units);
     device_malloc(&d_self_K_kernel, sizeof(T) * hidden_units * hidden_units);
     device_malloc(&d_self_V_kernel, sizeof(T) * hidden_units * hidden_units);
@@ -194,15 +195,18 @@ void decoding_sample(int batch_size,
   int* d_parent_ids;
   int* d_sequence_lengths;
   int* d_memory_sequence_lengths;
+  T *d_gamma, *d_beta;    
 
   device_malloc(&d_memory_tensor, sizeof(T) * hidden_units * seq_len * batch_size * beam_width);
   device_malloc(&d_embedding_table, sizeof(T) * hidden_units * vocab_size);
   device_malloc(&d_embedding_kernel, sizeof(T) * vocab_size * hidden_units);
   check_cuda_error(cudaMalloc((void**)&d_embedding_bias, sizeof(float) * vocab_size));
-  check_cuda_error(cudaMalloc((void**)&d_output_ids, sizeof(int) * (max_seq_len + 1) * batch_size * beam_width));
-  check_cuda_error(cudaMalloc((void**)&d_parent_ids, sizeof(int) * (max_seq_len + 1) * batch_size * beam_width));
+  check_cuda_error(cudaMalloc((void**)&d_output_ids, sizeof(int) * (max_seq_len) * batch_size * beam_width));
+  check_cuda_error(cudaMalloc((void**)&d_parent_ids, sizeof(int) * (max_seq_len) * batch_size * beam_width));
   check_cuda_error(cudaMalloc((void**)&d_sequence_lengths, sizeof(int) * batch_size * beam_width));
   check_cuda_error(cudaMalloc((void**)&d_memory_sequence_lengths, sizeof(int) * batch_size * beam_width));
+  device_malloc(&d_gamma, sizeof(T) * hidden_units);
+  device_malloc(&d_beta, sizeof(T) * hidden_units);
 
   int *h_memory_sequence_lengths = new int[batch_size * beam_width];
   for(int i = 0; i < batch_size * beam_width; i++) h_memory_sequence_lengths[i] = seq_len;
@@ -218,6 +222,8 @@ void decoding_sample(int batch_size,
   decoding_params.parent_ids = d_parent_ids;
   decoding_params.sequence_length = d_sequence_lengths;
   decoding_params.memory_sequence_length = d_memory_sequence_lengths;
+  decoding_params.layernorm.gamma = d_gamma;
+  decoding_params.layernorm.beta = d_beta;
 
   const fastertransformer::OperationType type = sizeof(T) == sizeof(float) ? OperationType::FP32 : OperationType::FP16;
   
@@ -225,7 +231,8 @@ void decoding_sample(int batch_size,
     DecodingOpenNMT<type>(allocator, batch_size, beam_width,
                                          max_seq_len, head_num, size_per_head, 
                                          vocab_size, decoder_layers,
-                                         memory_hidden_units, start_id, end_id);
+                                         memory_hidden_units, memory_seq_len, 
+                                         start_id, end_id);
  
   //warm up
   int ite = 100;

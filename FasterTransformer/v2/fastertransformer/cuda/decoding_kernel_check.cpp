@@ -310,7 +310,8 @@ void topK_kernel_check(const float *log_probs, int *ids, const int batch_size, c
 void update_kernel_check(float *log_probs, float *cum_log_probs, int *ids, bool *finished, int *parent_ids, int *sequence_length,
                          int *word_ids, int *output_ids,
                          const int batch_size, const int beam_width,
-                         const int vocab_size, cudaStream_t stream)
+                         const int vocab_size, cudaStream_t stream,
+                         const int end_id, int* finished_count)
 {
 
     printf("[INFO] decoding update check. \n");
@@ -346,7 +347,7 @@ void update_kernel_check(float *log_probs, float *cum_log_probs, int *ids, bool 
 
     // compute on GPU and copy to GPU output
     update(log_probs, cum_log_probs, ids, finished, parent_ids, sequence_length, word_ids, output_ids,
-           batch_size, beam_width, vocab_size, stream);
+           batch_size, beam_width, vocab_size, stream, end_id, finished_count);
     cudaDeviceSynchronize();
     check_cuda_error(cudaGetLastError());
 

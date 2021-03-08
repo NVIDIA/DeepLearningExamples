@@ -46,7 +46,7 @@ string_value:"40"
 {
 key: "max_execution_batch_size"
 value: { 
-string_value:"512"
+string_value:"400"
 }
 }]
 parameters: {
@@ -115,7 +115,7 @@ max_sequence_idle_microseconds:5000000
   ]
 oldest {
 max_candidate_sequences:2200
-preferred_batch_size:[256,512]
+preferred_batch_size:[400]
 max_queue_delay_microseconds:1000
 }
 },
@@ -133,6 +133,11 @@ input [
   }
 ]
 output [
+  {
+    name: "RAW_LATTICE"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  },
   {
     name: "TEXT"
     data_type: TYPE_STRING

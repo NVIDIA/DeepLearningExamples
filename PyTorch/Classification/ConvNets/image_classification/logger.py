@@ -56,6 +56,7 @@ LAT_100 = lambda: Meter(QuantileMeter(1), QuantileMeter(1), QuantileMeter(1))
 LAT_99 = lambda: Meter(QuantileMeter(0.99), QuantileMeter(0.99), QuantileMeter(0.99))
 LAT_95 = lambda: Meter(QuantileMeter(0.95), QuantileMeter(0.95), QuantileMeter(0.95))
 
+
 class Meter(object):
     def __init__(self, iteration_aggregator, epoch_aggregator, run_aggregator):
         self.run_aggregator = run_aggregator
@@ -113,7 +114,7 @@ class QuantileMeter(object):
     def get_val(self):
         if not self.vals:
             return None, self.n
-        return np.quantile(self.vals, self.q, interpolation='nearest'), self.n
+        return np.quantile(self.vals, self.q, interpolation="nearest"), self.n
 
     def get_data(self):
         return self.vals, self.n
@@ -206,8 +207,8 @@ class AverageMeter(object):
 
 
 class Logger(object):
-    def __init__(self, print_interval, backends, verbose=False):
-        self.epoch = -1
+    def __init__(self, print_interval, backends, start_epoch=-1, verbose=False):
+        self.epoch = start_epoch
         self.iteration = -1
         self.val_iteration = -1
         self.metrics = OrderedDict()
@@ -222,11 +223,11 @@ class Logger(object):
     def register_metric(self, metric_name, meter, verbosity=0, metadata={}):
         if self.verbose:
             print("Registering metric: {}".format(metric_name))
-        self.metrics[metric_name] = {'meter': meter, 'level': verbosity}
+        self.metrics[metric_name] = {"meter": meter, "level": verbosity}
         dllogger.metadata(metric_name, metadata)
 
     def log_metric(self, metric_name, val, n=1):
-        self.metrics[metric_name]['meter'].record(val, n=n)
+        self.metrics[metric_name]["meter"].record(val, n=n)
 
     def start_iteration(self, val=False):
         if val:
@@ -236,29 +237,28 @@ class Logger(object):
 
     def end_iteration(self, val=False):
         it = self.val_iteration if val else self.iteration
-        if (it % self.print_interval == 0):
+        if it % self.print_interval == 0:
             metrics = {
-                n: m
-                for n, m in self.metrics.items() if n.startswith('val') == val
+                n: m for n, m in self.metrics.items() if n.startswith("val") == val
             }
-            step = (self.epoch,
-                    self.iteration) if not val else (self.epoch,
-                                                     self.iteration,
-                                                     self.val_iteration)
+            step = (
+                (self.epoch, self.iteration)
+                if not val
+                else (self.epoch, self.iteration, self.val_iteration)
+            )
 
-            verbositys = {m['level'] for _, m in metrics.items()}
+            verbositys = {m["level"] for _, m in metrics.items()}
             for ll in verbositys:
-                llm = {n: m for n, m in metrics.items() if m['level'] == ll}
+                llm = {n: m for n, m in metrics.items() if m["level"] == ll}
 
-                dllogger.log(step=step,
-                         data={
-                             n: m['meter'].get_iteration()
-                             for n, m in llm.items()
-                         },
-                         verbosity=ll)
+                dllogger.log(
+                    step=step,
+                    data={n: m["meter"].get_iteration() for n, m in llm.items()},
+                    verbosity=ll,
+                )
 
             for n, m in metrics.items():
-                m['meter'].reset_iteration()
+                m["meter"].reset_iteration()
 
             dllogger.flush()
 
@@ -268,32 +268,33 @@ class Logger(object):
         self.val_iteration = 0
 
         for n, m in self.metrics.items():
-            m['meter'].reset_epoch()
+            m["meter"].reset_epoch()
 
     def end_epoch(self):
         for n, m in self.metrics.items():
-            m['meter'].reset_iteration()
+            m["meter"].reset_iteration()
 
-        verbositys = {m['level'] for _, m in self.metrics.items()}
+        verbositys = {m["level"] for _, m in self.metrics.items()}
         for ll in verbositys:
-            llm = {n: m for n, m in self.metrics.items() if m['level'] == ll}
-            dllogger.log(step=(self.epoch, ),
-                     data={n: m['meter'].get_epoch()
-                           for n, m in llm.items()})
+            llm = {n: m for n, m in self.metrics.items() if m["level"] == ll}
+            dllogger.log(
+                step=(self.epoch,),
+                data={n: m["meter"].get_epoch() for n, m in llm.items()},
+            )
 
     def end(self):
         for n, m in self.metrics.items():
-            m['meter'].reset_epoch()
+            m["meter"].reset_epoch()
 
-        verbositys = {m['level'] for _, m in self.metrics.items()}
+        verbositys = {m["level"] for _, m in self.metrics.items()}
         for ll in verbositys:
-            llm = {n: m for n, m in self.metrics.items() if m['level'] == ll}
-            dllogger.log(step=tuple(),
-                     data={n: m['meter'].get_run()
-                           for n, m in llm.items()})
+            llm = {n: m for n, m in self.metrics.items() if m["level"] == ll}
+            dllogger.log(
+                step=tuple(), data={n: m["meter"].get_run() for n, m in llm.items()}
+            )
 
         for n, m in self.metrics.items():
-            m['meter'].reset_epoch()
+            m["meter"].reset_epoch()
 
         dllogger.flush()
 

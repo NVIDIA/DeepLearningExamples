@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
   std::cout << "Number of iterations\t\t: " << niterations << std::endl;
   std::cout << "Number of parallel channels\t: " << nchannels << std::endl;
   std::cout << "Server URL\t\t\t: " << url << std::endl;
-  std::cout << "Print results\t\t\t: " << (print_results ? "Yes" : "No")
+  std::cout << "Print text outputs\t\t: " << (print_results ? "Yes" : "No")
             << std::endl;
   std::cout << "Online - Realtime I/O\t\t: " << (online ? "Yes" : "No")
             << std::endl;
@@ -124,13 +124,11 @@ int main(int argc, char** argv) {
   // need to read wav files
   SequentialTableReader<WaveHolder> wav_reader(wav_rspecifier);
 
-  std::atomic<uint64_t> correlation_id;
-  correlation_id.store(1);  // 0 = no correlation
-
   double total_audio = 0;
   // pre-loading data
   // we don't want to measure I/O
   std::vector<std::shared_ptr<WaveData>> all_wav;
+  std::vector<std::string> all_wav_keys;
   {
     std::cout << "Loading eval dataset..." << std::flush;
     for (; !wav_reader.Done(); wav_reader.Next()) {
@@ -138,6 +136,7 @@ int main(int argc, char** argv) {
       std::shared_ptr<WaveData> wave_data = std::make_shared<WaveData>();
       wave_data->Swap(&wav_reader.Value());
       all_wav.push_back(wave_data);
+      all_wav_keys.push_back(utt);
       total_audio += wave_data->Duration();
     }
     std::cout << "done" << std::endl;
@@ -164,55 +163,67 @@ int main(int argc, char** argv) {
   next_tasks.reserve(nchannels);
   size_t all_wav_i = 0;
   size_t all_wav_max = all_wav.size() * niterations;
+
   while (true) {
-      while (curr_tasks.size() < nchannels && all_wav_i < all_wav_max) {
-        // Creating new tasks
-        uint64_t corr_id = correlation_id.fetch_add(1);
-        std::unique_ptr<Stream> ptr(new Stream(all_wav[all_wav_i%(all_wav.size())], corr_id));
-        curr_tasks.emplace_back(std::move(ptr));
-        ++all_wav_i;
+    while (curr_tasks.size() < nchannels && all_wav_i < all_wav_max) {
+      // Creating new tasks
+      uint64_t corr_id = static_cast<uint64_t>(all_wav_i) + 1;
+
+      std::unique_ptr<Stream> ptr(
+          new Stream(all_wav[all_wav_i % (all_wav.size())], corr_id));
+      curr_tasks.emplace_back(std::move(ptr));
+      ++all_wav_i;
+    }
+    // If still empty, done
+    if (curr_tasks.empty()) break;
+
+    for (size_t itask = 0; itask < curr_tasks.size(); ++itask) {
+      Stream& task = *(curr_tasks[itask]);
+
+      SubVector<BaseFloat> data(task.wav->Data(), 0);
+      int32 samp_offset = task.offset;
+      int32 nsamp = data.Dim();
+      int32 samp_remaining = nsamp - samp_offset;
+      int32 num_samp =
+          chunk_length < samp_remaining ? chunk_length : samp_remaining;
+      bool is_last_chunk = (chunk_length >= samp_remaining);
+      SubVector<BaseFloat> wave_part(data, samp_offset, num_samp);
+      bool is_first_chunk = (samp_offset == 0);
+      if (online) {
+        double now = gettime_monotonic();
+        double wait_for = task.send_next_chunk_at - now;
+        if (wait_for > 0) usleep(wait_for * 1e6);
       }
-      // If still empty, done
-      if (curr_tasks.empty()) break;
+      asr_client.SendChunk(task.corr_id, is_first_chunk, is_last_chunk,
+                           wave_part.Data(), wave_part.SizeInBytes());
+      task.send_next_chunk_at += chunk_seconds;
+      if (verbose)
+        std::cout << "Sending correlation_id=" << task.corr_id
+                  << " chunk offset=" << num_samp << std::endl;
 
-      for (size_t itask = 0; itask < curr_tasks.size(); ++itask) {
-        Stream& task = *(curr_tasks[itask]);
+      task.offset += num_samp;
+      if (!is_last_chunk) next_tasks.push_back(std::move(curr_tasks[itask]));
+    }
 
-        SubVector<BaseFloat> data(task.wav->Data(), 0);
-        int32 samp_offset = task.offset;
-        int32 nsamp = data.Dim();
-        int32 samp_remaining = nsamp - samp_offset;
-        int32 num_samp =
-            chunk_length < samp_remaining ? chunk_length : samp_remaining;
-        bool is_last_chunk = (chunk_length >= samp_remaining);
-        SubVector<BaseFloat> wave_part(data, samp_offset, num_samp);
-        bool is_first_chunk = (samp_offset == 0);
-        if (online) {
-          double now = gettime_monotonic();
-          double wait_for = task.send_next_chunk_at - now;
-          if (wait_for > 0) usleep(wait_for * 1e6);
-        }
-        asr_client.SendChunk(task.corr_id, is_first_chunk, is_last_chunk,
-                             wave_part.Data(), wave_part.SizeInBytes());
-        task.send_next_chunk_at += chunk_seconds;
-        if (verbose)
-          std::cout << "Sending correlation_id=" << task.corr_id
-                    << " chunk offset=" << num_samp << std::endl;
-
-        task.offset += num_samp;
-        if (!is_last_chunk) next_tasks.push_back(std::move(curr_tasks[itask]));
-      }
-
-      curr_tasks.swap(next_tasks);
-      next_tasks.clear();
-      // Showing activity if necessary
-      if (!print_results && !verbose) std::cout << "." << std::flush;
+    curr_tasks.swap(next_tasks);
+    next_tasks.clear();
+    // Showing activity if necessary
+    if (!print_results && !verbose) std::cout << "." << std::flush;
   }
   std::cout << "done" << std::endl;
   std::cout << "Waiting for all results..." << std::flush;
   asr_client.WaitForCallbacks();
   std::cout << "done" << std::endl;
-  asr_client.PrintStats();
+
+  asr_client.PrintStats(online);
+
+  std::unordered_map<ni::CorrelationID, std::string> corr_id_and_keys;
+  for (size_t all_wav_i = 0; all_wav_i < all_wav.size(); ++all_wav_i) {
+    ni::CorrelationID corr_id = static_cast<ni::CorrelationID>(all_wav_i) + 1;
+    corr_id_and_keys.insert({corr_id, all_wav_keys[all_wav_i]});
+  }
+  asr_client.WriteLatticesToFile("ark:|gzip -c > /data/results/lat.cuda-asr.gz",
+                                 corr_id_and_keys);
 
   return 0;
 }

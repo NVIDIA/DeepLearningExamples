@@ -14,6 +14,7 @@ achieve state of the art accuracy, and is tested and maintained by NVIDIA.
     * [Features](#features)
   * [Mixed precision training](#mixed-precision-training)
     * [Enabling mixed precision](#enabling-mixed-precision)
+    * [Enabling TF32](#enabling-tf32)
 * [Setup](#setup)
   * [Requirements](#requirements)
 * [Quick Start Guide](#quick-start-guide)
@@ -31,18 +32,23 @@ achieve state of the art accuracy, and is tested and maintained by NVIDIA.
     * [Inference performance benchmark](#inference-performance-benchmark)
   * [Results](#results)
     * [Training accuracy results](#training-accuracy-results)
-      * [Training accuracy: NVIDIA DGX-1 (8x V100 16G)](#training-accuracy-nvidia-dgx-1-8x-v100-16g)
-      * [Training accuracy: NVIDIA DGX-2 (16x V100 32G)](#training-accuracy-nvidia-dgx-2-16x-v100-32g)
+      * [Training accuracy: NVIDIA DGX A100 (8x A100 40GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-40gb)
+      * [Training accuracy: NVIDIA DGX-1 (8x V100 16GB)](#training-accuracy-nvidia-dgx-1-8x-v100-16gb)
+      * [Training accuracy: NVIDIA DGX-2H (16x V100 32GB)](#training-accuracy-nvidia-dgx-2h-16x-v100-32gb)
       * [Training stability test](#training-stability-test)
     * [Training throughput results](#training-throughput-results)
-      * [Training throughput: NVIDIA DGX-1 (8x V100 16G)](#training-throughput-nvidia-dgx-1-8x-v100-16g)
-      * [Training throughput: NVIDIA DGX-2 (16x V100 32G)](#training-throughput-nvidia-dgx-2-16x-v100-32g)
+      * [Training throughput: NVIDIA DGX A100 (8x A100 40GB)](#training-throughput-nvidia-dgx-a100-8x-a100-40gb)
+      * [Training throughput: NVIDIA DGX-1 (8x V100 16GB)](#training-throughput-nvidia-dgx-1-8x-v100-16gb)
+      * [Training throughput: NVIDIA DGX-2H (16x V100 32GB)](#training-throughput-nvidia-dgx-2h-16x-v100-32gb)
     * [Inference accuracy results](#inference-accuracy-results)
-      * [Inference accuracy: NVIDIA Tesla V100 16G](#inference-accuracy-nvidia-tesla-v100-16g)
+      * [Inference accuracy: NVIDIA A100 40GB](#inference-accuracy-nvidia-a100-40gb)
+      * [Inference accuracy: NVIDIA Tesla V100 16GB](#inference-accuracy-nvidia-tesla-v100-16gb)
       * [Inference accuracy: NVIDIA T4](#inference-accuracy-nvidia-t4)
     * [Inference throughput results](#inference-throughput-results)
+      * [Inference throughput: NVIDIA A100 40GB](#inference-throughput-nvidia-a100-40gb)
       * [Inference throughput: NVIDIA T4](#inference-throughput-nvidia-t4)
     * [Inference latency results](#inference-latency-results)
+      * [Inference latency: NVIDIA A100 40GB](#inference-latency-nvidia-a100-40gb)
       * [Inference latency: NVIDIA T4](#inference-latency-nvidia-t4)
 * [Release notes](#release-notes)
   * [Changelog](#changelog)
@@ -67,7 +73,7 @@ Tutorial](https://github.com/tensorflow/nmt) and [NVIDIA OpenSeq2Seq
 Toolkit](https://github.com/NVIDIA/OpenSeq2Seq).
 
 ### Model architecture
-![TrainingLoss](./img/diagram.png)
+![ModelArchitecture](./img/diagram.png)
 
 ### Default configuration
 
@@ -126,7 +132,7 @@ Code from this repository can be used to train a larger, 8-layer GNMT v2 model.
 Our experiments show that a 4-layer model is significantly faster to train and
 yields comparable accuracy on the public [WMT16
 English-German](http://www.statmt.org/wmt16/translation-task.html) dataset. The
-number of LSTM layers is controlled by the `--num_layers` parameter in the
+number of LSTM layers is controlled by the `--num-layers` parameter in the
 `train.py` training script.
 
 ### Feature support matrix
@@ -159,11 +165,11 @@ computational method.
 computational speedup by performing operations in half-precision format, while
 storing minimal information in single-precision to retain as much information
 as possible in critical parts of the network. Since the introduction of [Tensor
-Cores](https://developer.nvidia.com/tensor-cores) in the Volta and Turing
-architectures, significant training speedups are experienced by switching to
-mixed precision -- up to 3x overall speedup on the most arithmetically intense
-model architectures. Using mixed precision training previously required two
-steps:
+Cores](https://developer.nvidia.com/tensor-cores) in Volta, and following with
+both the Turing and Ampere architectures, significant training speedups are
+experienced by switching to mixed precision -- up to 3x overall speedup on the
+most arithmetically intense model architectures. Using mixed precision training
+previously required two steps:
 
 1. Porting the model to use the FP16 data type where appropriate.
 2. Manually adding loss scaling to preserve small gradient values.
@@ -188,11 +194,6 @@ For information about:
   .
 
 #### Enabling mixed precision
-By default, the `train.py` training script will launch mixed precision training
-with Tensor Cores. You can change this behavior and execute the training in
-single precision by setting the `--math fp32` flag for the `train.py` training
-script.
-
 Mixed precision is enabled in PyTorch by using the Automatic Mixed Precision
 (AMP), library from [APEX](https://github.com/NVIDIA/apex) that casts variables
 to half-precision upon retrieval, while storing variables in single-precision
@@ -208,7 +209,7 @@ For an in-depth walk through on AMP, check out sample usage
 [here](https://nvidia.github.io/apex/amp.html#).
 [APEX](https://github.com/NVIDIA/apex) is a PyTorch extension that contains
 utility libraries, such as AMP, which require minimal network code changes to
-leverage tensor cores performance.
+leverage Tensor Cores performance.
 
 The following steps were needed to enable mixed precision training in GNMT:
 
@@ -246,6 +247,25 @@ if self.grad_clip != float('inf'):
     clip_grad_norm_(amp.master_params(optimizer), self.grad_clip)
 ```
 
+#### Enabling TF32
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA
+A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the
+matrix math also called tensor operations. TF32 running on Tensor Cores in A100
+GPUs can provide up to 10x speedups compared to single-precision floating-point
+math (FP32) on Volta GPUs.
+
+TF32 Tensor Cores can speed up networks using FP32, typically with no loss of
+accuracy. It is more robust than FP16 for models which require high dynamic
+range for weights or activations.
+
+For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates
+AI Training, HPC up to
+20x](https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/)
+blog post.
+
+TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by
+default.
+
 ## Setup
 
 The following section lists the requirements in order to start training the
@@ -254,13 +274,14 @@ GNMT v2 model.
 ### Requirements
 
 This repository contains `Dockerfile` which extends the PyTorch NGC container
-and encapsulates some dependencies.  Aside from these dependencies, ensure you
+and encapsulates some dependencies. Aside from these dependencies, ensure you
 have the following components:
-
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 19.05-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
-* [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
-  or [Turing](https://www.nvidia.com/pl-pl/geforce/turing/) based GPU
+* [PyTorch 20.06-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
+* GPU architecture:
+  * [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
+  * [NVIDIA Turing](https://www.nvidia.com/en-us/geforce/turing/)
+  * [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
 
 For more information about how to get started with NGC containers, see the
 following sections from the NVIDIA GPU Cloud Documentation and the Deep
@@ -277,10 +298,10 @@ Matrix](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.htm
 
 
 ## Quick Start Guide
-To train your model using mixed precision with Tensor Cores or using FP32,
-perform the following steps using the default parameters of the GNMT v2 model
-on the WMT16 English German dataset. For the specifics concerning training
-and inference, see the [Advanced](#advanced) section.
+To train your model using mixed or TF32 precision with Tensor Cores or using
+FP32, perform the following steps using the default parameters of the GNMT v2
+model on the WMT16 English German dataset. For the specifics concerning
+training and inference, see the [Advanced](#advanced) section.
 
 **1. Clone the repository.**
 
@@ -313,24 +334,28 @@ bash scripts/wmt16_en_de.sh
 
 **5. Start training.**
 
-By default, the `train.py` training script will use all available GPUs. The
-training script saves only one checkpoint with the lowest value of the loss
+The training script saves only one checkpoint with the lowest value of the loss
 function on the validation dataset. All results and logs are saved to the
-`results` directory (on the host) or to the `/workspace/gnmt/results` directory
+`gnmt` directory (on the host) or to the `/workspace/gnmt/gnmt` directory
 (in the container). By default, the `train.py` script will launch mixed
-precision training with Tensor Cores. You can change this behavior by setting
-the `--math fp32` flag for the `train.py` training script.
+precision training with Tensor Cores. You can change this behavior by setting:
+* the `--math fp32` flag to launch single precision training (for NVIDIA Volta
+  and NVIDIA Turing architectures) or
+* the `--math tf32` flag to launch TF32 training with Tensor Cores (for NVIDIA
+  Ampere architecture) 
+
+for the `train.py` training script.
 
 To launch mixed precision training on 1, 4 or 8 GPUs, run:
 
 ```
-python3 -m launch train.py --seed 2 --train-global-batch-size 1024
+python3 -m torch.distributed.launch --nproc_per_node=<#GPUs> train.py --seed 2 --train-global-batch-size 1024
 ```
 
 To launch mixed precision training on 16 GPUs, run:
 
 ```
-python3 -m launch train.py --seed 2 --train-global-batch-size 2048
+python3 -m torch.distributed.launch --nproc_per_node=16 train.py --seed 2 --train-global-batch-size 2048
 ```
 
 By default, the training script will launch training with batch size 128 per
@@ -348,14 +373,14 @@ after each training epoch. Additionally, after the training is done, you can
 manually run inference on the test dataset with the checkpoint saved during the
 training.
 
-To launch mixed precision inference on the `newstest2014.en` test set, run:
+To launch FP16 inference on the `newstest2014.en` test set, run:
 
 ```
 python3 translate.py \
   --input data/wmt16_de_en/newstest2014.en \
   --reference data/wmt16_de_en/newstest2014.de \
   --output /tmp/output \
-  --model results/gnmt/model_best.pth
+  --model gnmt/model_best.pth
 ```
 
 The script will load the checkpoint specified by the `--model` option, then it
@@ -370,7 +395,7 @@ Additionally, one can pass the input text directly from the command-line:
 ```
 python3 translate.py \
   --input-text "The quick brown fox jumps over the lazy dog" \
-  --model results/gnmt/model_best.pth
+  --model gnmt/model_best.pth
 ```
 
 Translated output will be printed to the console:
@@ -381,9 +406,14 @@ Translated output will be printed to the console:
 Der schnelle braune Fuchs springt über den faulen Hund
 ```
 
-By default, the `translate.py` script will launch mixed precision inference
-with Tensor Cores. You can change this behavior by setting the `--math fp32`
-flag for the `translate.py` inference script.
+By default, the `translate.py` script will launch FP16 inference with Tensor
+Cores. You can change this behavior by setting:
+* the `--math fp32` flag to launch single precision inference (for NVIDIA Volta
+  and NVIDIA Turing architectures) or
+* the `--math tf32` flag to launch TF32 inference with Tensor Cores (for NVIDIA
+  Ampere architecture)
+
+for the `translate.py` inference script.
 
 ## Advanced
 The following sections provide greater details of the dataset, running training
@@ -475,12 +505,9 @@ dataset setup:
                         entire dataset (default: None)
 
 results setup:
-  --results-dir RESULTS_DIR
-                        path to directory with results, it will be
+  --save-dir SAVE_DIR   path to directory with results, it will be
                         automatically created if it does not exist (default:
-                        results)
-  --save-dir SAVE_DIR   defines subdirectory within RESULTS_DIR for results
-                        from this training run (default: gnmt)
+                        gnmt)
   --print-freq PRINT_FREQ
                         print log every PRINT_FREQ batches (default: 10)
 
@@ -499,13 +526,16 @@ model setup:
                         with label smoothing loss (default: 0.1)
 
 general setup:
-  --math {fp16,fp32,manual_fp16}
+  --math {fp16,fp32,tf32,manual_fp16}
                         precision (default: fp16)
   --seed SEED           master seed for random number generators, if "seed" is
                         undefined then the master seed will be sampled from
                         random.SystemRandom() (default: None)
   --prealloc-mode {off,once,always}
                         controls preallocation (default: always)
+  --dllog-file DLLOG_FILE
+                        Name of the DLLogger output file (default:
+                        train_log.json)
   --eval                run validation and test after every epoch (use '--no-
                         eval' to disable) (default: True)
   --env                 print info about execution env (use '--no-env' to
@@ -554,7 +584,7 @@ training setup:
 
 optimizer setup:
   --optimizer OPTIMIZER
-                        training optimizer (default: SparseAdam)
+                        training optimizer (default: Adam)
   --lr LR               learning rate (default: 0.002)
   --optimizer-extra OPTIMIZER_EXTRA
                         extra options for the optimizer (default: {})
@@ -654,6 +684,13 @@ data setup:
                         sacrebleu, raw text) (default: None)
   -m MODEL, --model MODEL
                         full path to the model checkpoint file (default: None)
+  --synthetic           use synthetic dataset (default: False)
+  --synthetic-batches SYNTHETIC_BATCHES
+                        number of synthetic batches to generate (default: 64)
+  --synthetic-vocab SYNTHETIC_VOCAB
+                        size of synthetic vocabulary (default: 32320)
+  --synthetic-len SYNTHETIC_LEN
+                        sequence length of synthetic samples (default: 50)
   -i INPUT, --input INPUT
                         full path to the input file (raw text) (default: None)
   -t INPUT_TEXT [INPUT_TEXT ...], --input-text INPUT_TEXT [INPUT_TEXT ...]
@@ -676,8 +713,8 @@ inference setup:
                         length normalization constant (default: 5.0)
 
 general setup:
-  --math {fp16,fp32} [{fp16,fp32} ...]
-                        arithmetic type (default: ['fp16'])
+  --math {fp16,fp32,tf32} [{fp16,fp32,tf32} ...]
+                        precision (default: ['fp16'])
   --env                 print info about execution env (use '--no-env' to
                         disable) (default: False)
   --bleu                compares with reference translation and computes BLEU
@@ -690,6 +727,12 @@ general setup:
                         (default: True)
   --seq-first           uses (seq, batch, feature) data format for RNNs
                         (default: True)
+  --save-dir SAVE_DIR   path to directory with results, it will be
+                        automatically created if it does not exist (default:
+                        gnmt)
+  --dllog-file DLLOG_FILE
+                        Name of the DLLogger output file (default:
+                        eval_log.json)
   --print-freq PRINT_FREQ, -p PRINT_FREQ
                         print log every PRINT_FREQ batches (default: 1)
 
@@ -707,8 +750,7 @@ benchmark setup:
                         0)
   --percentiles PERCENTILES [PERCENTILES ...]
                         Percentiles for confidence intervals for
-                        throughput/latency benchmarks (default: (50, 90, 95,
-                        99, 100))
+                        throughput/latency benchmarks (default: (90, 95, 99))
   --tables              print accuracy, throughput and latency results in
                         tables (use '--no-tables' to disable) (default: False)
 ```
@@ -724,13 +766,13 @@ usage: train.py [-h] [--dataset-dir DATASET_DIR] [--src-lang SRC_LANG]
                 [--tgt-lang TGT_LANG] [--vocab VOCAB] [-bpe BPE_CODES]
                 [--train-src TRAIN_SRC] [--train-tgt TRAIN_TGT]
                 [--val-src VAL_SRC] [--val-tgt VAL_TGT] [--test-src TEST_SRC]
-                [--test-tgt TEST_TGT] [--results-dir RESULTS_DIR]
-                [--save-dir SAVE_DIR] [--print-freq PRINT_FREQ]
-                [--hidden-size HIDDEN_SIZE] [--num-layers NUM_LAYERS]
-                [--dropout DROPOUT] [--share-embedding]
-                [--smoothing SMOOTHING] [--math {fp16,fp32,manual_fp16}]
-                [--seed SEED] [--prealloc-mode {off,once,always}] [--eval]
-                [--env] [--cuda] [--cudnn] [--log-all-ranks]
+                [--test-tgt TEST_TGT] [--save-dir SAVE_DIR]
+                [--print-freq PRINT_FREQ] [--hidden-size HIDDEN_SIZE]
+                [--num-layers NUM_LAYERS] [--dropout DROPOUT]
+                [--share-embedding] [--smoothing SMOOTHING]
+                [--math {fp16,fp32,tf32,manual_fp16}] [--seed SEED]
+                [--prealloc-mode {off,once,always}] [--dllog-file DLLOG_FILE]
+                [--eval] [--env] [--cuda] [--cudnn] [--log-all-ranks]
                 [--train-max-size TRAIN_MAX_SIZE]
                 [--train-batch-size TRAIN_BATCH_SIZE]
                 [--train-global-batch-size TRAIN_GLOBAL_BATCH_SIZE]
@@ -760,28 +802,32 @@ usage: train.py [-h] [--dataset-dir DATASET_DIR] [--src-lang SRC_LANG]
                 [--start-epoch START_EPOCH] [--resume PATH] [--save-all]
                 [--save-freq SAVE_FREQ] [--keep-checkpoints KEEP_CHECKPOINTS]
                 [--target-perf TARGET_PERF] [--target-bleu TARGET_BLEU]
-                [--rank RANK] [--local_rank LOCAL_RANK]
+                [--local_rank LOCAL_RANK]
 ```
 For example, for inference:
 
 ```
 python3 translate.py --help
 
-usage: translate.py [-h] [-o OUTPUT] [-r REFERENCE] -m MODEL
-                    (-i INPUT | -t INPUT_TEXT [INPUT_TEXT ...]) [--sort]
+usage: translate.py [-h] [-o OUTPUT] [-r REFERENCE] [-m MODEL] [--synthetic]
+                    [--synthetic-batches SYNTHETIC_BATCHES]
+                    [--synthetic-vocab SYNTHETIC_VOCAB]
+                    [--synthetic-len SYNTHETIC_LEN]
+                    [-i INPUT | -t INPUT_TEXT [INPUT_TEXT ...]] [--sort]
                     [--batch-size BATCH_SIZE [BATCH_SIZE ...]]
                     [--beam-size BEAM_SIZE [BEAM_SIZE ...]]
                     [--max-seq-len MAX_SEQ_LEN]
                     [--len-norm-factor LEN_NORM_FACTOR]
                     [--cov-penalty-factor COV_PENALTY_FACTOR]
                     [--len-norm-const LEN_NORM_CONST]
-                    [--math {fp16,fp32} [{fp16,fp32} ...]] [--env] [--bleu]
-                    [--cuda] [--cudnn] [--batch-first | --seq-first]
+                    [--math {fp16,fp32,tf32} [{fp16,fp32,tf32} ...]] [--env]
+                    [--bleu] [--cuda] [--cudnn] [--batch-first | --seq-first]
+                    [--save-dir SAVE_DIR] [--dllog-file DLLOG_FILE]
                     [--print-freq PRINT_FREQ] [--target-perf TARGET_PERF]
                     [--target-bleu TARGET_BLEU] [--repeat REPEAT [REPEAT ...]]
                     [--warmup WARMUP]
                     [--percentiles PERCENTILES [PERCENTILES ...]] [--tables]
-                    [--rank RANK] [--local_rank LOCAL_RANK]
+                    [--local_rank LOCAL_RANK]
 ```
 
 ### Getting the data
@@ -838,7 +884,7 @@ The default training configuration can be launched by running the `train.py`
 training script. By default, the training script saves only one checkpoint with
 the lowest value of the loss function on the validation dataset. An evaluation
 is then performed after each training epoch. Results are stored in the
-`results/gnmt` directory.
+`gnmt` directory.
 
 The training script launches data-parallel training with batch size 128 per GPU
 on all available GPUs. We have tested reliance on up to 16 GPUs on a single
@@ -846,7 +892,7 @@ node.
 After each training epoch, the script runs an evaluation on the validation
 dataset and outputs a BLEU score on the test dataset (newstest2014). BLEU is
 computed by the [SacreBLEU](https://github.com/mjpost/sacreBLEU) package. Logs
-from the training and evaluation are saved to the `results` directory.
+from the training and evaluation are saved to the `gnmt` directory.
 
 The summary after each training epoch is printed in the following format:
 
@@ -861,15 +907,14 @@ the test dataset. Performance is reported in total tokens per second. The
 result is averaged over an entire training epoch and summed over all GPUs
 participating in the training.
 
-Even though the training script uses all available GPUs, you can change this
-behavior by setting the `CUDA_VISIBLE_DEVICES` variable in your environment or
-by setting the `NV_GPU` variable at the Docker container launch ([see section
-"GPU
-isolation"](https://github.com/NVIDIA/nvidia-docker/wiki/nvidia-docker#gpu-isolation)).
-
 By default, the `train.py` script will launch mixed precision training with
-Tensor Cores. You can change this behavior by setting the `--math fp32` flag
-for the `train.py` script.
+Tensor Cores. You can change this behavior by setting:
+* the `--math fp32` flag to launch single precision training (for NVIDIA Volta
+  and NVIDIA Turing architectures) or
+* the `--math tf32` flag to launch TF32 training with Tensor Cores (for NVIDIA
+  Ampere architecture)
+
+for the `train.py` training script.
 
 To view all available options for training, run `python3 train.py --help`.
 
@@ -904,15 +949,17 @@ The following commands will launch one epoch of training:
 
 To launch mixed precision training on 1, 4 or 8 GPUs, run:
 ```
-python3 -m launch train.py --seed 2 --train-global-batch-size 1024 --epochs 1 --math fp16
+python3 -m torch.distributed.launch --nproc_per_node=<#GPUs> train.py --seed 2 --train-global-batch-size 1024 --epochs 1 --math fp16
 ```
 
 To launch mixed precision training on 16 GPUs, run:
 ```
-python3 -m launch train.py --seed 2 --train-global-batch-size 2048 --epochs 1 --math fp16
+python3 -m torch.distributed.launch --nproc_per_node=16 train.py --seed 2 --train-global-batch-size 2048 --epochs 1 --math fp16
 ```
 
-Change `--math fp16` to `--math fp32` to launch a single precision training.
+Change `--math fp16` to `--math fp32` to launch single precision training (for
+NVIDIA Volta and NVIDIA Turing architectures) or to `--math tf32` to launch
+TF32 training with Tensor Cores (for NVIDIA Ampere architecture).
 
 After the training is completed, the `train.py` script prints a summary to
 standard output. Performance results are printed in the following format:
@@ -930,11 +977,12 @@ training epoch and summed over all GPUs participating in the training.
 The inference performance and accuracy benchmarks require a checkpoint from a
 fully trained model.
 
-Command to launch the inference accuracy benchmark:
+Command to launch the inference accuracy benchmark on NVIDIA Volta or on NVIDIA
+Turing architectures:
 
 ```
 python3 translate.py \
-  --model results/gnmt/model_best.pth \
+  --model gnmt/model_best.pth \
   --input data/wmt16_de_en/newstest2014.en \
   --reference data/wmt16_de_en/newstest2014.de \
   --output /tmp/output \
@@ -944,15 +992,47 @@ python3 translate.py \
   --tables
 ```
 
-Command to launch the inference throughput and latency benchmarks:
+Command to launch the inference accuracy benchmark on NVIDIA Ampere architecture:
 
 ```
 python3 translate.py \
-  --model results/gnmt/model_best.pth \
+  --model gnmt/model_best.pth \
+  --input data/wmt16_de_en/newstest2014.en \
+  --reference data/wmt16_de_en/newstest2014.de \
+  --output /tmp/output \
+  --math fp16 tf32 \
+  --batch-size 128 \
+  --beam-size 1 2 5 \
+  --tables
+```
+
+Command to launch the inference throughput and latency benchmarks on NVIDIA
+Volta or NVIDIA Turing architectures:
+
+```
+python3 translate.py \
+  --model gnmt/model_best.pth \
   --input data/wmt16_de_en/newstest2014.en \
   --reference data/wmt16_de_en/newstest2014.de \
   --output /tmp/output \
   --math fp16 fp32 \
+  --batch-size 1 2 4 8 32 128 512 \
+  --repeat 1 1 1 1 2 8 16 \
+  --beam-size 1 2 5 \
+  --warmup 5 \
+  --tables
+```
+
+Command to launch the inference throughput and latency benchmarks on NVIDIA
+Ampere architecture:
+
+```
+python3 translate.py \
+  --model gnmt/model_best.pth \
+  --input data/wmt16_de_en/newstest2014.en \
+  --reference data/wmt16_de_en/newstest2014.de \
+  --output /tmp/output \
+  --math fp16 tf32 \
   --batch-size 1 2 4 8 32 128 512 \
   --repeat 1 1 1 1 2 8 16 \
   --beam-size 1 2 5 \
@@ -966,53 +1046,63 @@ accuracy in training and inference.
 
 #### Training accuracy results
 
-##### Training accuracy: NVIDIA DGX-1 (8x V100 16G)
+##### Training accuracy: NVIDIA DGX A100 (8x A100 40GB)
 Our results were obtained by running the `train.py` script with the default
-batch size = 128 per GPU in the pytorch-19.05-py3 NGC container on NVIDIA DGX-1
-with (8x V100 16G) GPUs.
+batch size = 128 per GPU in the pytorch-20.06-py3 NGC container on NVIDIA DGX
+A100 with 8x A100 40GB GPUs.
 
 Command to launch the training:
 
 ```
-python3 -m launch train.py --seed 2 --train-global-batch-size 1024 --math fp16
+python3 -m torch.distributed.launch --nproc_per_node=<#GPUs> train.py --seed 2 --train-global-batch-size 1024 --math fp16
 ```
 
-Change `--math fp16` to `--math fp32` to launch a single precision training.
+Change `--math fp16` to `--math tf32` to launch TF32 training with Tensor Cores.
 
-| **GPUs** | **Batch Size / GPU** | **Accuracy - FP32 (BLEU)** | **Accuracy - Mixed precision (BLEU)** | **Time to Train - FP32 (minutes)** | **Time to Train - Mixed precision (minutes)** | **Time to Train Speedup (FP32 to Mixed precision)** |
+| **GPUs** | **Batch Size / GPU** | **Accuracy - TF32 (BLEU)** | **Accuracy - Mixed precision (BLEU)** | **Time to Train - TF32 (minutes)** | **Time to Train - Mixed precision (minutes)** | **Time to Train Speedup (TF32 to Mixed precision)** |
 | --- | --- | ----- | ----- | ----- | ------ | ---- |
-|  1  | 128 | 24.41 | 24.41 | 821.2 | 256.0  | 3.21 |
-|  4  | 128 | 24.43 | 24.51 | 232.3 | 79.0   | 2.94 |
-|  8  | 128 | 24.45 | 24.48 | 118.1 | 42.5   | 2.78 |
+| 8   | 128 | 24.46 | 24.60 | 34.7  | 22.7   | 1.53 |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide)
 outlined above.
 
-##### Training accuracy: NVIDIA DGX-2 (16x V100 32G)
+##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
 Our results were obtained by running the `train.py` script with the default
-batch size = 128 per GPU in the pytorch-19.05-py3 NGC container on NVIDIA DGX-2
-with (16x V100 32G) GPUs.
+batch size = 128 per GPU in the pytorch-20.06-py3 NGC container on NVIDIA DGX-1
+with 8x V100 16GB GPUs.
 
-Commands to launch the training:
+Command to launch the training:
 
-To launch mixed precision training on 1, 4 or 8 GPUs, run:
 ```
-python3 -m launch train.py --seed 2 --train-global-batch-size 1024 --math fp16
+python3 -m torch.distributed.launch --nproc_per_node=<#GPUs> train.py --seed 2 --train-global-batch-size 1024 --math fp16
 ```
+
+Change `--math fp16` to `--math fp32` to launch single precision training.
+
+| **GPUs** | **Batch Size / GPU** | **Accuracy - FP32 (BLEU)** | **Accuracy - Mixed precision (BLEU)** | **Time to Train - FP32 (minutes)** | **Time to Train - Mixed precision (minutes)** | **Time to Train Speedup (FP32 to Mixed precision)** |
+| --- | --- | ----- | ----- | ----- | ------ | ---- |
+| 1   | 128 | 24.41 | 24.42 | 810.0 | 224.0  | 3.62 |
+| 4   | 128 | 24.40 | 24.33 | 218.2 | 69.5   | 3.14 |
+| 8   | 128 | 24.45 | 24.38 | 112.0 | 38.6   | 2.90 |
+
+To achieve these same results, follow the [Quick Start Guide](#quick-start-guide)
+outlined above.
+
+##### Training accuracy: NVIDIA DGX-2H (16x V100 32GB)
+Our results were obtained by running the `train.py` script with the default
+batch size = 128 per GPU in the pytorch-20.06-py3 NGC container on NVIDIA DGX-2H
+with 16x V100 32GB GPUs.
 
 To launch mixed precision training on 16 GPUs, run:
 ```
-python3 -m launch train.py --seed 2 --train-global-batch-size 2048 --math fp16
+python3 -m torch.distributed.launch --nproc_per_node=16 train.py --seed 2 --train-global-batch-size 2048 --math fp16
 ```
 
-Change `--math fp16` to `--math fp32` to launch a single precision training.
+Change `--math fp16` to `--math fp32` to launch single precision training.
 
 | **GPUs** | **Batch Size / GPU** | **Accuracy - FP32 (BLEU)** | **Accuracy - Mixed precision (BLEU)** | **Time to Train - FP32 (minutes)** | **Time to Train - Mixed precision (minutes)** | **Time to Train Speedup (FP32 to Mixed precision)** |
 | --- | --- | ----- | ----- | ------ | ----- | ---- |
-| 1   | 128 | 24.41 | 24.41 | 831.4  | 240.8 | 3.45 |
-| 4   | 128 | 24.43 | 24.45 | 219.2  | 74.5  | 2.94 |
-| 8   | 128 | 24.72 | 24.56 | 114.6  | 42.4  | 2.70 |
-| 16  | 128 | 23.98 | 24.08 | 59.1   | 23.3  | 2.54 |
+| 16  | 128 | 24.41 | 24.38 | 52.1   | 19.4  | 2.69 |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide)
 outlined above.
@@ -1020,66 +1110,89 @@ outlined above.
 ![TrainingLoss](./img/training_loss.png)
 
 ##### Training stability test
-The GNMT v2 model was trained for 6 epochs, starting from 50 different initial
+The GNMT v2 model was trained for 6 epochs, starting from 32 different initial
 random seeds. After each training epoch, the model was evaluated on the test
 dataset and the BLEU score was recorded. The training was performed in the
-pytorch-19.05-py3 Docker container on NVIDIA DGX-1 with 8 Tesla V100 16G GPUs.
+pytorch-20.06-py3 Docker container on NVIDIA DGX A100 with 8x A100 40GB GPUs.
 The following table summarizes the results of the stability test.
-
-![TrainingAccuracy](./img/training_accuracy.png)
 
 In the following table, the BLEU scores after each training epoch for different
 initial random seeds are displayed.
 
 | **Epoch** | **Average** | **Standard deviation** | **Minimum** | **Maximum** | **Median** |
 | --- | ------ | ----- | ------ | ------ | ------ |
-|  1  | 19.960 | 0.347 | 18.460 | 20.510 | 19.975 |
-|  2  | 21.778 | 0.248 | 21.190 | 22.170 | 21.790 |
-|  3  | 22.501 | 0.210 | 21.890 | 22.870 | 22.475 |
-|  4  | 23.148 | 0.169 | 22.660 | 23.480 | 23.165 |
-|  5  | 24.158 | 0.140 | 23.910 | 24.460 | 24.155 |
-|  6  | 24.378 | 0.165 | 24.010 | 24.690 | 24.395 |
-
-
+| 1   | 19.959 | 0.238 | 19.410 | 20.390 | 19.970 |
+| 2   | 21.772 | 0.293 | 20.960 | 22.280 | 21.820 |
+| 3   | 22.435 | 0.264 | 21.740 | 22.870 | 22.465 |
+| 4   | 23.167 | 0.166 | 22.870 | 23.620 | 23.195 |
+| 5   | 24.233 | 0.149 | 23.820 | 24.530 | 24.235 |
+| 6   | 24.416 | 0.131 | 24.140 | 24.660 | 24.390 |
 
 #### Training throughput results
 
-##### Training throughput: NVIDIA DGX-1 (8x V100 16G)
+##### Training throughput: NVIDIA DGX A100 (8x A100 40GB)
 Our results were obtained by running the `train.py` training script in the
-pytorch-19.05-py3 NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs.
+pytorch-20.06-py3 NGC container on NVIDIA DGX A100 with 8x A100 40GB GPUs.
+Throughput performance numbers (in tokens per second) were averaged over an
+entire training epoch.
+
+| **GPUs** | **Batch size / GPU** | **Throughput - TF32 (tok/s)** | **Throughput - Mixed precision (tok/s)** | **Throughput speedup (TF32 to Mixed precision)** | **Strong Scaling - TF32** | **Strong Scaling - Mixed precision** |
+| --- | --- | ------ | ------ | ----- | ----- | ----- |
+| 1   | 128 | 83214  | 140909 | 1.693 | 1.000 | 1.000 |
+| 4   | 128 | 278576 | 463144 | 1.663 | 3.348 | 3.287 |
+| 8   | 128 | 519952 | 822024 | 1.581 | 6.248 | 5.834 |
+
+To achieve these same results, follow the [Quick Start Guide](#quick-start-guide)
+outlined above.
+
+##### Training throughput: NVIDIA DGX-1 (8x V100 16GB)
+Our results were obtained by running the `train.py` training script in the
+pytorch-20.06-py3 NGC container on NVIDIA DGX-1 with 8x V100 16GB GPUs.
 Throughput performance numbers (in tokens per second) were averaged over an
 entire training epoch.
 
 | **GPUs** | **Batch size / GPU** | **Throughput - FP32 (tok/s)** | **Throughput - Mixed precision (tok/s)** | **Throughput speedup (FP32 to Mixed precision)** | **Strong Scaling - FP32** | **Strong Scaling - Mixed precision** |
 | --- | --- | ------ | ------ | ----- | ----- | ----- |
-|  1  | 128 | 21424  | 68312  | 3.189 | 1.000 | 1.000 |
-|  4  | 128 | 75658  | 221308 | 2.925 | 3.531 | 3.240 |
-|  8  | 128 | 149552 | 419075 | 2.802 | 6.981 | 6.135 |
+| 1   | 128 | 21860  | 76438  | 3.497 | 1.000 | 1.000 |
+| 4   | 128 | 80224  | 249168 | 3.106 | 3.670 | 3.260 |
+| 8   | 128 | 154168 | 447832 | 2.905 | 7.053 | 5.859 |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide)
 outlined above.
 
-##### Training throughput: NVIDIA DGX-2 (16x V100 32G)
+##### Training throughput: NVIDIA DGX-2H (16x V100 32GB)
 Our results were obtained by running the `train.py` training script in the
-pytorch-19.05-py3 NGC container on NVIDIA DGX-2 with (16x V100 32G) GPUs.
+pytorch-20.06-py3 NGC container on NVIDIA DGX-2H with 16x V100 32GB GPUs.
 Throughput performance numbers (in tokens per second) were averaged over an
 entire training epoch.
 
 | **GPUs** | **Batch size / GPU** | **Throughput - FP32 (tok/s)** | **Throughput - Mixed precision (tok/s)** | **Throughput speedup (FP32 to Mixed precision)** | **Strong Scaling - FP32** | **Strong Scaling - Mixed precision** |
 | --- | --- | ------ | ------ | ----- | ------ | ------ |
-|  1  | 128 | 22742  | 72684  | 3.196 | 1.000  | 1.000  |
-|  4  | 128 | 80395  | 237616 | 2.956 | 3.535  | 3.269  |
-|  8  | 128 | 155297 | 430377 | 2.771 | 6.829  | 5.921  |
-| 16  | 128 | 312426 | 852550 | 2.729 | 13.738 | 11.730 |
+| 1  | 128 | 25583  | 87829   | 3.433 | 1.000  | 1.000  |
+| 4  | 128 | 91400  | 290640  | 3.180 | 3.573  | 3.309  |
+| 8  | 128 | 176616 | 522008  | 2.956 | 6.904  | 5.943  |
+| 16 | 128 | 351792 | 1010880 | 2.874 | 13.751 | 11.510 |
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide)
 outlined above.
 
 #### Inference accuracy results
 
-##### Inference accuracy: NVIDIA Tesla V100 16G
+##### Inference accuracy: NVIDIA A100 40GB
 Our results were obtained by running the `translate.py` script in the
-pytorch-19.05-py3 NGC Docker container with NVIDIA Tesla V100 16G GPUs. Full
+pytorch-20.06-py3 NGC Docker container with NVIDIA A100 40GB GPU. Full
+command to launch the inference accuracy benchmark was provided in the
+[Inference performance benchmark](#inference-performance-benchmark) section.
+
+| **Batch Size** | **Beam Size** | **Accuracy - TF32 (BLEU)** | **Accuracy - FP16 (BLEU)** |
+| -------------: | ------------: | -------------------------: | -------------------------: |
+| 128            | 1             | 23.07                      | 23.07                      |
+| 128            | 2             | 23.81                      | 23.81                      |
+| 128            | 5             | 24.41                      | 24.43                      |
+
+##### Inference accuracy: NVIDIA Tesla V100 16GB
+Our results were obtained by running the `translate.py` script in the
+pytorch-20.06-py3 NGC Docker container with NVIDIA Tesla V100 16GB GPU. Full
 command to launch the inference accuracy benchmark was provided in the
 [Inference performance benchmark](#inference-performance-benchmark) section.
 
@@ -1091,7 +1204,7 @@ command to launch the inference accuracy benchmark was provided in the
 
 ##### Inference accuracy: NVIDIA T4
 Our results were obtained by running the `translate.py` script in the
-pytorch-19.05-py3 NGC Docker container with NVIDIA Tesla T4. Full command to
+pytorch-20.06-py3 NGC Docker container with NVIDIA Tesla T4. Full command to
 launch the inference accuracy benchmark was provided in the [Inference
 performance benchmark](#inference-performance-benchmark) section.
 
@@ -1109,39 +1222,72 @@ Tables presented in this section show the average inference throughput (columns
 **Avg (tok/s)**) and inference throughput for various confidence intervals
 (columns **N% (ms)**, where `N` denotes the confidence interval). Inference
 throughput is measured in tokens per second. Speedups reported in FP16
-subsections are relative to FP32 numbers for corresponding configuration.
+subsections are relative to FP32 (for NVIDIA Volta and NVIDIA Turing) and
+relative to TF32 (for NVIDIA Ampere) numbers for corresponding configuration.
 
-##### Inference throughput: NVIDIA T4
+##### Inference throughput: NVIDIA A100 40GB
 Our results were obtained by running the `translate.py` script in the
-pytorch-19.05-py3 NGC Docker container with NVIDIA T4.
+pytorch-20.06-py3 NGC Docker container with NVIDIA A100 40GB.
 Full command to launch the inference throughput benchmark was provided in the
 [Inference performance benchmark](#inference-performance-benchmark) section.
 
 **FP16**
 
-| **Batch Size** | **Beam Size** | **Avg (tok/s)** | **Speedup** | **50% (tok/s)** | **Speedup** | **90% (tok/s)** | **Speedup** | **95% (tok/s)** | **Speedup** | **99% (tok/s)** | **Speedup** | **100% (tok/s)** | **Speedup** |
-| -------------: | ------------: | --------------: | ----------: | --------------: | ----------: | --------------: | ----------: | --------------: | ----------: | --------------: | ----------: | ---------------: | ----------: |
-| 1              | 1             | 987.6           | 1.221       | 985.5           | 1.221       | 921.6           | 1.208       | 898.6           | 1.203       | 855.8           | 1.195       | 665.2            | 1.127       |
-| 1              | 2             | 664.4           | 1.239       | 667.5           | 1.239       | 608.4           | 1.234       | 582.4           | 1.233       | 529.8           | 1.225       | 412.1            | 1.218       |
-| 1              | 5             | 633.1           | 1.373       | 639.7           | 1.371       | 566.0           | 1.369       | 537.0           | 1.371       | 481.0           | 1.356       | 292.2            | 1.344       |
-| 2              | 1             | 1530.2          | 1.301       | 1538.6          | 1.304       | 1281.3          | 1.288       | 1225.7          | 1.285       | 1127.6          | 1.261       | 1032.9           | 1.241       |
-| 2              | 2             | 1085.3          | 1.325       | 1090.3          | 1.323       | 898.5           | 1.286       | 852.2           | 1.279       | 780.1           | 1.260       | 692.1            | 1.277       |
-| 2              | 5             | 1041.4          | 1.381       | 1041.8          | 1.380       | 855.2           | 1.382       | 819.1           | 1.375       | 760.0           | 1.402       | 636.4            | 1.364       |
-| 4              | 1             | 2545.2          | 1.392       | 2538.4          | 1.387       | 2104.4          | 1.358       | 1985.7          | 1.347       | 1801.2          | 1.332       | 1607.0           | 1.304       |
-| 4              | 2             | 1820.8          | 1.348       | 1815.3          | 1.347       | 1508.7          | 1.328       | 1421.1          | 1.308       | 1278.3          | 1.309       | 1052.9           | 1.273       |
-| 4              | 5             | 1702.1          | 1.339       | 1694.6          | 1.336       | 1395.9          | 1.347       | 1314.0          | 1.349       | 1181.0          | 1.333       | 1000.0           | 1.346       |
-| 8              | 1             | 4361.0          | 1.453       | 4372.8          | 1.460       | 3636.9          | 1.425       | 3388.2          | 1.401       | 2945.2          | 1.342       | 2650.7           | 1.351       |
-| 8              | 2             | 3087.6          | 1.337       | 3094.6          | 1.339       | 2555.4          | 1.322       | 2411.7          | 1.333       | 2173.2          | 1.348       | 1928.6           | 1.329       |
-| 8              | 5             | 2927.4          | 1.623       | 2934.8          | 1.619       | 2456.4          | 1.588       | 2304.5          | 1.578       | 2018.4          | 1.512       | 1976.1           | 1.577       |
-| 32             | 1             | 12564.5         | 1.621       | 12615.6         | 1.632       | 10924.6         | 1.632       | 10252.5         | 1.602       | 9577.1          | 1.653       | 8987.6           | 1.594       |
-| 32             | 2             | 8652.0          | 1.753       | 8765.0          | 1.761       | 7460.1          | 1.762       | 6903.1          | 1.690       | 6531.2          | 1.739       | 6413.8           | 1.746       |
-| 32             | 5             | 6750.6          | 2.455       | 6774.2          | 2.455       | 5842.7          | 2.347       | 5640.9          | 2.342       | 5239.2          | 2.325       | 5185.2           | 2.401       |
-| 128            | 1             | 29255.3         | 2.602       | 29157.9         | 2.578       | 26514.6         | 2.622       | 23953.9         | 2.540       | 23105.5         | 2.541       | 22825.4          | 2.543       |
-| 128            | 2             | 17823.4         | 2.640       | 17788.7         | 2.633       | 16089.4         | 2.641       | 14960.7         | 2.521       | 14573.0         | 2.677       | 14440.7          | 2.671       |
-| 128            | 5             | 10106.9         | 3.128       | 10116.9         | 3.109       | 9111.7          | 3.087       | 8798.0          | 3.014       | 8273.3          | 3.133       | 8207.6           | 3.141       |
-| 512            | 1             | 40817.8         | 3.381       | 41080.7         | 3.391       | 36490.2         | 3.418       | 36296.2         | 3.416       | 36133.0         | 3.416       | 36066.3          | 3.412       |
-| 512            | 2             | 23112.0         | 3.238       | 23174.9         | 3.240       | 20655.0         | 3.262       | 20540.2         | 3.250       | 20430.7         | 3.243       | 20429.4          | 3.245       |
-| 512            | 5             | 10836.4         | 3.460       | 10888.2         | 3.467       | 9598.3          | 3.432       | 9573.4          | 3.434       | 9527.9          | 3.424       | 9498.1           | 3.416       |
+|**Batch Size**|**Beam Size**|**Avg (tok/s)**|**Speedup**|**90% (tok/s)**|**Speedup**|**95% (tok/s)**|**Speedup**|**99% (tok/s)**|**Speedup**|
+|-------------:|------------:|--------------:|----------:|--------------:|----------:|--------------:|----------:|--------------:|----------:|
+|             1|            1|         1291.6|      1.031|         1195.7|      1.029|         1165.8|      1.029|         1104.7|      1.030|
+|             1|            2|          882.7|      1.019|          803.4|      1.015|          769.2|      1.015|          696.7|      1.017|
+|             1|            5|          848.3|      1.042|          753.0|      1.037|          715.0|      1.043|          636.4|      1.033|
+|             2|            1|         2060.5|      1.034|         1700.8|      1.032|         1621.8|      1.032|         1487.4|      1.022|
+|             2|            2|         1445.7|      1.026|         1197.6|      1.024|         1132.5|      1.023|         1043.7|      1.033|
+|             2|            5|         1402.3|      1.063|         1152.4|      1.056|         1100.5|      1.053|          992.9|      1.053|
+|             4|            1|         3465.6|      1.046|         2838.3|      1.040|         2672.7|      1.043|         2392.8|      1.043|
+|             4|            2|         2425.4|      1.041|         2002.5|      1.028|         1898.3|      1.033|         1690.2|      1.028|
+|             4|            5|         2364.4|      1.075|         1930.0|      1.067|         1822.0|      1.065|         1626.1|      1.058|
+|             8|            1|         6151.1|      1.099|         5078.0|      1.087|         4786.5|      1.096|         4206.9|      1.090|
+|             8|            2|         4241.9|      1.075|         3494.1|      1.066|         3293.6|      1.066|         2970.9|      1.064|
+|             8|            5|         4117.7|      1.118|         3430.9|      1.103|         3224.5|      1.104|         2833.5|      1.110|
+|            32|            1|        18830.4|      1.147|        16210.0|      1.152|        15563.9|      1.138|        13973.2|      1.135|
+|            32|            2|        12698.2|      1.133|        10812.3|      1.114|        10256.1|      1.145|         9330.2|      1.101|
+|            32|            5|        11802.6|      1.355|         9998.8|      1.318|         9671.6|      1.329|         9058.4|      1.335|
+|           128|            1|        53394.5|      1.350|        48867.6|      1.342|        46898.5|      1.414|        40670.6|      1.305|
+|           128|            2|        34876.4|      1.483|        31687.4|      1.491|        30025.4|      1.505|        27677.1|      1.421|
+|           128|            5|        28201.3|      1.986|        25660.5|      1.997|        24306.0|      1.967|        23326.2|      2.007|
+|           512|            1|       119675.3|      1.904|       112400.5|      1.971|       109694.8|      1.927|       108781.3|      1.919|
+|           512|            2|        74514.7|      2.126|        69578.9|      2.209|        69348.1|      2.210|        69253.7|      2.212|
+|           512|            5|        47003.2|      2.760|        43348.2|      2.893|        43080.3|      2.884|        42878.4|      2.881|
+
+##### Inference throughput: NVIDIA T4
+Our results were obtained by running the `translate.py` script in the
+pytorch-20.06-py3 NGC Docker container with NVIDIA T4.
+Full command to launch the inference throughput benchmark was provided in the
+[Inference performance benchmark](#inference-performance-benchmark) section.
+
+**FP16**
+
+|**Batch Size**|**Beam Size**|**Avg (tok/s)**|**Speedup**|**90% (tok/s)**|**Speedup**|**95% (tok/s)**|**Speedup**|**99% (tok/s)**|**Speedup**|
+|-------------:|------------:|--------------:|----------:|--------------:|----------:|--------------:|----------:|--------------:|----------:|
+|             1|            1|         1133.8|      1.266|         1059.1|      1.253|         1036.6|      1.251|          989.5|      1.242|
+|             1|            2|          793.9|      1.169|          728.3|      1.165|          698.1|      1.163|          637.1|      1.157|
+|             1|            5|          766.8|      1.343|          685.6|      1.335|          649.3|      1.335|          584.1|      1.318|
+|             2|            1|         1759.8|      1.233|         1461.6|      1.239|         1402.3|      1.242|         1302.1|      1.242|
+|             2|            2|         1313.3|      1.186|         1088.7|      1.185|         1031.6|      1.180|          953.2|      1.178|
+|             2|            5|         1257.2|      1.301|         1034.1|      1.316|          990.3|      1.313|          886.3|      1.265|
+|             4|            1|         2974.0|      1.261|         2440.3|      1.255|         2294.6|      1.257|         2087.7|      1.261|
+|             4|            2|         2204.7|      1.320|         1826.3|      1.283|         1718.9|      1.260|         1548.4|      1.260|
+|             4|            5|         2106.1|      1.340|         1727.8|      1.345|         1625.7|      1.353|         1467.7|      1.346|
+|             8|            1|         5076.6|      1.423|         4207.9|      1.367|         3904.4|      1.360|         3475.3|      1.355|
+|             8|            2|         3761.7|      1.311|         3108.1|      1.285|         2931.6|      1.300|         2628.7|      1.300|
+|             8|            5|         3578.2|      1.660|         2998.2|      1.614|         2812.1|      1.609|         2447.6|      1.523|
+|            32|            1|        14637.8|      1.636|        12702.5|      1.644|        12070.3|      1.634|        11036.9|      1.647|
+|            32|            2|        10627.3|      1.818|         9198.3|      1.818|         8431.6|      1.725|         8000.0|      1.773|
+|            32|            5|         8205.7|      2.598|         7117.6|      2.476|         6825.2|      2.497|         6293.2|      2.437|
+|           128|            1|        33800.5|      2.755|        30824.5|      2.816|        27685.2|      2.661|        26580.9|      2.694|
+|           128|            2|        20829.4|      2.795|        18665.2|      2.778|        17372.1|      2.639|        16820.5|      2.821|
+|           128|            5|        11753.9|      3.309|        10658.1|      3.273|        10308.7|      3.205|         9630.7|      3.328|
+|           512|            1|        44474.6|      3.327|        40108.1|      3.394|        39816.6|      3.378|        39708.0|      3.381|
+|           512|            2|        26057.9|      3.295|        23197.3|      3.294|        23019.8|      3.284|        22951.4|      3.284|
+|           512|            5|        12161.5|      3.428|        10777.5|      3.418|        10733.1|      3.414|        10710.5|      3.420|
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide)
 outlined above.
@@ -1151,64 +1297,101 @@ Tables presented in this section show the average inference latency (columns **A
 (ms)**) and inference latency for various confidence intervals (columns **N%
 (ms)**, where `N` denotes the confidence interval). Inference latency is
 measured in milliseconds. Speedups reported in FP16 subsections are relative to
-FP32 numbers for corresponding configuration.
+FP32 (for NVIDIA Volta and NVIDIA Turing) and relative to TF32 (for NVIDIA
+Ampere) numbers for corresponding configuration.
 
-##### Inference latency: NVIDIA T4
+##### Inference latency: NVIDIA A100 40GB
 Our results were obtained by running the `translate.py` script in the
-pytorch-19.05-py3 NGC Docker container with NVIDIA T4.
+pytorch-20.06-py3 NGC Docker container with NVIDIA A100 40GB.
 Full command to launch the inference latency benchmark was provided in the
 [Inference performance benchmark](#inference-performance-benchmark) section.
 
 **FP16**
 
-| **Batch Size** | **Beam Size** | **Avg (ms)** | **Speedup** | **50% (ms)** | **Speedup** | **90% (ms)** | **Speedup** | **95% (ms)** | **Speedup** | **99% (ms)** | **Speedup** | **100% (ms)** | **Speedup** |
-| -------------: | ------------: | -----------: | ----------: | -----------: | ----------: | -----------: | ----------: | -----------: | ----------: | -----------: | ----------: | ------------: | ----------: |
-| 1              | 1             | 58.35        | 1.217       | 53.92        | 1.214       | 96.43        | 1.208       | 110.4        | 1.202       | 129.7        | 1.211       | 161.2         | 1.227       |
-| 1              | 2             | 86.04        | 1.238       | 79.70        | 1.232       | 139.58       | 1.241       | 158.2        | 1.241       | 187.3        | 1.242       | 231.9         | 1.252       |
-| 1              | 5             | 89.92        | 1.373       | 83.20        | 1.369       | 144.67       | 1.379       | 165.1        | 1.372       | 193.9        | 1.387       | 249.0         | 1.307       |
-| 2              | 1             | 76.07        | 1.298       | 72.06        | 1.299       | 115.35       | 1.292       | 124.8        | 1.287       | 146.7        | 1.284       | 169.7         | 1.305       |
-| 2              | 2             | 107.00       | 1.319       | 101.46       | 1.323       | 159.65       | 1.312       | 171.4        | 1.314       | 199.8        | 1.310       | 236.5         | 1.278       |
-| 2              | 5             | 111.24       | 1.383       | 105.79       | 1.384       | 165.88       | 1.379       | 178.8        | 1.392       | 210.3        | 1.410       | 235.0         | 1.465       |
-| 4              | 1             | 91.62        | 1.385       | 89.44        | 1.387       | 126.05       | 1.375       | 136.9        | 1.358       | 155.5        | 1.395       | 173.4         | 1.393       |
-| 4              | 2             | 127.74       | 1.346       | 125.35       | 1.349       | 173.20       | 1.348       | 186.6        | 1.344       | 216.4        | 1.350       | 237.0         | 1.419       |
-| 4              | 5             | 136.62       | 1.349       | 134.64       | 1.335       | 185.34       | 1.386       | 198.6        | 1.396       | 237.0        | 1.405       | 250.0         | 1.492       |
-| 8              | 1             | 106.57       | 1.450       | 106.08       | 1.452       | 137.45       | 1.440       | 147.0        | 1.452       | 166.0        | 1.463       | 175.8         | 1.455       |
-| 8              | 2             | 150.30       | 1.341       | 150.59       | 1.340       | 190.34       | 1.347       | 203.0        | 1.361       | 232.7        | 1.386       | 245.5         | 1.417       |
-| 8              | 5             | 158.51       | 1.628       | 157.91       | 1.614       | 200.90       | 1.665       | 217.3        | 1.683       | 244.2        | 1.706       | 269.5         | 1.633       |
-| 32             | 1             | 147.38       | 1.626       | 148.19       | 1.597       | 177.61       | 1.686       | 184.7        | 1.685       | 192.5        | 1.694       | 197.6         | 1.725       |
-| 32             | 2             | 214.38       | 1.756       | 211.63       | 1.773       | 259.40       | 1.816       | 273.0        | 1.780       | 286.3        | 1.787       | 293.8         | 1.825       |
-| 32             | 5             | 274.72       | 2.455       | 273.77       | 2.461       | 337.34       | 2.443       | 351.2        | 2.498       | 363.2        | 2.518       | 375.0         | 2.530       |
-| 128            | 1             | 252.24       | 2.601       | 253.45       | 2.609       | 276.06       | 2.663       | 281.8        | 2.661       | 309.7        | 2.647       | 312.4         | 2.658       |
-| 128            | 2             | 414.53       | 2.642       | 415.38       | 2.648       | 458.75       | 2.675       | 474.4        | 2.665       | 501.5        | 2.719       | 509.1         | 2.721       |
-| 128            | 5             | 730.79       | 3.129       | 738.87       | 3.118       | 820.11       | 3.141       | 843.1        | 3.137       | 895.4        | 3.150       | 915.7         | 3.141       |
-| 512            | 1             | 722.77       | 3.382       | 710.66       | 3.377       | 823.14       | 3.414       | 826.9        | 3.419       | 831.8        | 3.412       | 840.0         | 3.395       |
-| 512            | 2             | 1278.33      | 3.239       | 1264.85      | 3.227       | 1453.04      | 3.252       | 1467.6       | 3.251       | 1478.1       | 3.250       | 1485.9        | 3.245       |
-| 512            | 5             | 2726.34      | 3.458       | 2700.51      | 3.467       | 3107.75      | 3.432       | 3146.0       | 3.433       | 3172.9       | 3.422       | 3180.1        | 3.443       |
+|**Batch Size**|**Beam Size**|**Avg (ms)**|**Speedup**|**90% (ms)**|**Speedup**|**95% (ms)**|**Speedup**|**99% (ms)**|**Speedup**|
+|-------------:|------------:|-----------:|----------:|-----------:|----------:|-----------:|----------:|-----------:|----------:|
+|             1|            1|       44.69|      1.032|       74.04|      1.035|       84.61|      1.034|       99.14|      1.042|
+|             1|            2|       64.76|      1.020|      105.18|      1.018|      118.92|      1.019|      139.42|      1.023|
+|             1|            5|       67.06|      1.043|      107.56|      1.049|      121.82|      1.054|      143.85|      1.054|
+|             2|            1|       56.57|      1.034|       85.59|      1.037|       92.55|      1.038|      107.59|      1.046|
+|             2|            2|       80.22|      1.027|      119.22|      1.027|      128.43|      1.030|      150.06|      1.028|
+|             2|            5|       82.54|      1.063|      121.37|      1.067|      132.35|      1.069|      156.34|      1.059|
+|             4|            1|       67.29|      1.047|       92.69|      1.048|      100.08|      1.056|      112.63|      1.064|
+|             4|            2|       95.86|      1.041|      129.83|      1.040|      139.48|      1.044|      162.34|      1.045|
+|             4|            5|       98.34|      1.075|      133.83|      1.076|      142.70|      1.068|      168.30|      1.075|
+|             8|            1|       75.60|      1.099|       97.87|      1.103|      104.13|      1.099|      117.40|      1.102|
+|             8|            2|      109.38|      1.074|      137.71|      1.079|      147.69|      1.069|      168.79|      1.065|
+|             8|            5|      112.71|      1.116|      143.50|      1.104|      153.17|      1.118|      172.60|      1.113|
+|            32|            1|       98.40|      1.146|      117.02|      1.153|      123.42|      1.150|      129.01|      1.128|
+|            32|            2|      145.87|      1.133|      171.71|      1.159|      184.01|      1.127|      188.64|      1.141|
+|            32|            5|      156.82|      1.357|      189.10|      1.374|      194.95|      1.392|      196.65|      1.419|
+|           128|            1|      137.97|      1.350|      150.04|      1.348|      151.52|      1.349|      154.52|      1.434|
+|           128|            2|      211.58|      1.484|      232.96|      1.490|      237.46|      1.505|      239.86|      1.567|
+|           128|            5|      261.44|      1.990|      288.54|      2.017|      291.63|      2.052|      298.73|      2.136|
+|           512|            1|      245.93|      1.906|      262.51|      1.998|      264.24|      1.999|      265.23|      2.000|
+|           512|            2|      395.61|      2.129|      428.54|      2.219|      431.58|      2.224|      433.86|      2.227|
+|           512|            5|      627.21|      2.767|      691.72|      2.878|      696.01|      2.895|      702.13|      2.887|
+
+##### Inference latency: NVIDIA T4
+Our results were obtained by running the `translate.py` script in the
+pytorch-20.06-py3 NGC Docker container with NVIDIA T4.
+Full command to launch the inference latency benchmark was provided in the
+[Inference performance benchmark](#inference-performance-benchmark) section.
+
+**FP16**
+
+|**Batch Size**|**Beam Size**|**Avg (ms)**|**Speedup**|**90% (ms)**|**Speedup**|**95% (ms)**|**Speedup**|**99% (ms)**|**Speedup**|
+|-------------:|------------:|-----------:|----------:|-----------:|----------:|-----------:|----------:|-----------:|----------:|
+|             1|            1|       51.08|      1.261|       84.82|      1.254|       97.45|      1.251|       114.6|      1.257|
+|             1|            2|       72.05|      1.168|      117.41|      1.165|      132.33|      1.170|       155.8|      1.174|
+|             1|            5|       74.20|      1.345|      119.45|      1.352|      135.07|      1.354|       160.3|      1.354|
+|             2|            1|       66.31|      1.232|      100.90|      1.232|      108.52|      1.235|       126.9|      1.238|
+|             2|            2|       88.35|      1.185|      131.47|      1.188|      141.46|      1.185|       164.7|      1.191|
+|             2|            5|       92.12|      1.305|      136.30|      1.310|      148.66|      1.309|       174.8|      1.320|
+|             4|            1|       78.54|      1.260|      108.53|      1.256|      117.19|      1.259|       133.7|      1.259|
+|             4|            2|      105.54|      1.315|      142.74|      1.317|      154.36|      1.307|       178.7|      1.303|
+|             4|            5|      110.43|      1.351|      150.62|      1.388|      161.61|      1.397|       191.2|      1.427|
+|             8|            1|       91.65|      1.418|      117.92|      1.421|      126.60|      1.405|       144.0|      1.411|
+|             8|            2|      123.39|      1.315|      156.00|      1.337|      167.34|      1.347|       193.4|      1.340|
+|             8|            5|      129.69|      1.666|      165.01|      1.705|      178.18|      1.723|       200.3|      1.765|
+|            32|            1|      126.53|      1.641|      153.23|      1.689|      159.58|      1.692|       167.0|      1.700|
+|            32|            2|      174.37|      1.822|      209.04|      1.899|      219.59|      1.877|       228.6|      1.878|
+|            32|            5|      226.15|      2.598|      277.38|      2.636|      290.27|      2.648|       299.4|      2.664|
+|           128|            1|      218.29|      2.755|      238.94|      2.826|      243.18|      2.843|       267.1|      2.828|
+|           128|            2|      354.83|      2.796|      396.63|      2.832|      410.53|      2.803|       433.2|      2.866|
+|           128|            5|      628.32|      3.311|      699.57|      3.353|      723.98|      3.323|       771.0|      3.337|
+|           512|            1|      663.07|      3.330|      748.62|      3.388|      753.20|      3.388|       758.0|      3.378|
+|           512|            2|     1134.04|      3.295|     1297.85|      3.283|     1302.25|      3.304|      1306.9|      3.308|
+|           512|            5|     2428.82|      3.428|     2771.72|      3.415|     2801.32|      3.427|      2817.6|      3.422|
 
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide)
 outlined above.
 
 ## Release notes
 ### Changelog
-1. Aug 7, 2018
-  * Initial release
-2. Dec 4, 2018
-  * Added exponential warm-up and step learning rate decay
-  * Multi-GPU (distributed) inference and validation
-  * Default container updated to NGC PyTorch 18.11-py3
-  * General performance improvements
-3. Feb 14, 2019
+* July 2020
+  * Added support for NVIDIA DGX A100
+  * Default container updated to NGC PyTorch 20.06-py3
+* June 2019
+  * Default container updated to NGC PyTorch 19.05-py3
+  * Mixed precision training implemented using APEX AMP
+  * Added inference throughput and latency results on NVIDIA T4 and NVIDIA
+    Tesla V100 16GB
+  * Added option to run inference on user-provided raw input text from command
+    line
+* February 2019
   * Different batching algorithm (bucketing with 5 equal-width buckets)
   * Additional dropouts before first LSTM layer in encoder and in decoder
   * Weight initialization changed to uniform (-0.1,0.1)
   * Switched order of dropout and concatenation with attention in decoder
   * Default container updated to NGC PyTorch 19.01-py3
-4. Jun 25, 2019
-  * Default container updated to NGC PyTorch 19.05-py3
-  * Mixed precision training implemented using APEX AMP
-  * Added inference throughput and latency results on NVIDIA T4 and NVIDIA Tesla V100 16G
-  * Added option to run inference on user-provided raw input text from command
-    line
+* December 2018
+  * Added exponential warm-up and step learning rate decay
+  * Multi-GPU (distributed) inference and validation
+  * Default container updated to NGC PyTorch 18.11-py3
+  * General performance improvements
+* August 2018
+  * Initial release
 
 ### Known issues
 There are no known issues in this release.

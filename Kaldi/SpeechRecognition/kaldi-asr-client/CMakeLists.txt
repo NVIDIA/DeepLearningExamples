@@ -32,6 +32,7 @@ target_include_directories(
   /opt/kaldi/src/
 )
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w") # openfst yields many warnings
 target_include_directories(
   kaldi_asr_parallel_client 
   PRIVATE
@@ -58,6 +59,10 @@ target_link_libraries(
   PRIVATE /opt/kaldi/src/lib/libkaldi-base.so
 )
 
+target_link_libraries(
+  kaldi_asr_parallel_client
+  PRIVATE /opt/kaldi/src/lat/libkaldi-lat.so
+)
 
 install(
   TARGETS kaldi_asr_parallel_client

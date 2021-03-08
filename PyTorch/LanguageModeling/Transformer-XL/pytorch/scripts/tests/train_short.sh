@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,34 +25,18 @@ if [[ ${MATH} != "fp16" && ${MATH} != "fp32" ]]; then
    exit 1
 fi
 
-if [[ ${MATH} == 'fp16' ]]; then
-   MATH_OPT='--fp16'
-elif [[ ${MATH} == 'fp32' ]]; then
-   MATH_OPT=''
-fi
-
 PERF_TOLERANCE=0.9
-GLOBAL_BATCH_SIZE=256
 
 GPU_NAME=$(nvidia-smi --query-gpu=gpu_name --format=csv,noheader |uniq)
 echo 'GPU_NAME:' "${GPU_NAME}"
 GPU_COUNT=$(nvidia-smi --query-gpu=gpu_name --format=csv,noheader |wc -l)
 echo 'GPU_COUNT:' "${GPU_COUNT}"
-GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader |head -n 1 |cut -f 1 -d " ")
-echo 'GPU_MEM:' "${GPU_MEM}"
 
-if (( GPU_MEM > 16500 )); then
-   LOCAL_BATCH_SIZE=32
+if (( GPU_COUNT == 16 )); then
+   SYSTEM=dgx2
 else
-   if [[ ${MATH} == 'fp16' ]]; then
-      LOCAL_BATCH_SIZE=32
-   elif [[ ${MATH} == 'fp32' ]]; then
-      LOCAL_BATCH_SIZE=16
-   fi
+   SYSTEM=dgx1
 fi
-
-BATCH_CHUNK=$((GLOBAL_BATCH_SIZE / (GPU_COUNT * LOCAL_BATCH_SIZE)))
-BATCH_CHUNK=$((BATCH_CHUNK < 1 ? 1 : BATCH_CHUNK))
 
 REFERENCE_PERF=$(grep "${MATH},${GPU_COUNT},${GPU_NAME}" \
    ${REFERENCE_FILE} | \cut -f 4 -d ',')
@@ -68,13 +52,10 @@ fi
 cd $REPO_DIR
 
 bash run_wt103_base.sh train "${GPU_COUNT}" \
+   --config ${SYSTEM}_${GPU_COUNT}gpu_${MATH} \
    --debug \
    --max_step 5000 \
    --max_step_scheduler 40000 \
    --target_perplexity 43.5 \
-   --batch_chunk "${BATCH_CHUNK}" \
    --log_interval 1 \
-   --adaptive \
-   --vocab word \
-   "${MATH_OPT}" \
-   "${TARGET_PERF}"
+   ${TARGET_PERF}

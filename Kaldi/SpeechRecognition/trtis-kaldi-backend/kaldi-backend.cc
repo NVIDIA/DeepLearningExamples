@@ -104,6 +104,7 @@ int Context::ReadModelParameters() {
 int Context::InitializeKaldiPipeline() {
   batch_corr_ids_.reserve(max_batch_size_);
   batch_wave_samples_.reserve(max_batch_size_);
+  batch_is_first_chunk_.reserve(max_batch_size_);
   batch_is_last_chunk_.reserve(max_batch_size_);
   wave_byte_buffers_.resize(max_batch_size_);
   output_shape_ = {1, 1};
@@ -181,10 +182,17 @@ int Context::Execute(const uint32_t payload_cnt, CustomPayload* payloads,
 
     kaldi::SubVector<BaseFloat> wave_part(wave_buffer, dim);
     // Initialize corr_id if first chunk
-    if (start) cuda_pipeline_->InitCorrID(corr_id);
+    if (start) {
+      if (!cuda_pipeline_->TryInitCorrID(corr_id)) {
+        printf("ERR %i \n", __LINE__);
+        // TODO add error code
+        continue;
+      }
+    }
     // Add to batch
     batch_corr_ids_.push_back(corr_id);
     batch_wave_samples_.push_back(wave_part);
+    batch_is_first_chunk_.push_back(start);
     batch_is_last_chunk_.push_back(end);
 
     if (end) {
@@ -192,9 +200,7 @@ int Context::Execute(const uint32_t payload_cnt, CustomPayload* payloads,
       cuda_pipeline_->SetLatticeCallback(
           corr_id, [this, &output_fn, &payloads, pidx,
                     corr_id](kaldi::CompactLattice& clat) {
-            std::string output;
-            LatticeToString(*word_syms_, clat, &output);
-            SetOutputTensor(output, output_fn, payloads[pidx]);
+            SetOutputs(clat, output_fn, payloads[pidx]);
           });
     }
   }
@@ -206,9 +212,10 @@ int Context::Execute(const uint32_t payload_cnt, CustomPayload* payloads,
 int Context::FlushBatch() {
   if (!batch_corr_ids_.empty()) {
     cuda_pipeline_->DecodeBatch(batch_corr_ids_, batch_wave_samples_,
-                                batch_is_last_chunk_);
+                                batch_is_first_chunk_, batch_is_last_chunk_);
     batch_corr_ids_.clear();
     batch_wave_samples_.clear();
+    batch_is_first_chunk_.clear();
     batch_is_last_chunk_.clear();
   }
 }
@@ -254,19 +261,20 @@ int Context::InputOutputSanityCheck() {
     return kInputName;
   }
 
-  if (model_config_.output_size() != 1) {
-    return kInputOutput;
+  if (model_config_.output_size() != 2) return kInputOutput;
+
+  for (int ioutput = 0; ioutput < 2; ++ioutput) {
+    if ((model_config_.output(ioutput).dims().size() != 1) ||
+        (model_config_.output(ioutput).dims(0) != 1)) {
+      return kInputOutput;
+    }
+    if (model_config_.output(ioutput).data_type() != DataType::TYPE_STRING) {
+      return kInputOutputDataType;
+    }
   }
-  if ((model_config_.output(0).dims().size() != 1) ||
-      (model_config_.output(0).dims(0) != 1)) {
-    return kInputOutput;
-  }
-  if (model_config_.output(0).data_type() != DataType::TYPE_STRING) {
-    return kInputOutputDataType;
-  }
-  if (model_config_.output(0).name() != "TEXT") {
-    return kOutputName;
-  }
+
+  if (model_config_.output(0).name() != "RAW_LATTICE") return kOutputName;
+  if (model_config_.output(1).name() != "TEXT") return kOutputName;
 
   return kSuccess;
 }
@@ -316,34 +324,48 @@ int Context::GetSequenceInput(CustomGetNextInputFn_t& input_fn,
   return kSuccess;
 }
 
-int Context::SetOutputTensor(const std::string& output,
-                             CustomGetOutputFn_t output_fn,
-                             CustomPayload payload) {
-  uint32_t byte_size_with_size_int = output.size() + sizeof(int32);
-
-  // std::cout << output << std::endl;
-
-  // copy output from best_path to output buffer
-  if ((payload.error_code == 0) && (payload.output_cnt > 0)) {
-    const char* output_name = payload.required_output_names[0];
-    // output buffer
-    void* obuffer;
-    if (!output_fn(payload.output_context, output_name, output_shape_.size(),
-                   &output_shape_[0], byte_size_with_size_int, &obuffer)) {
-      payload.error_code = kOutputBuffer;
-      return payload.error_code;
-    }
-
-    // If no error but the 'obuffer' is returned as nullptr, then
-    // skip writing this output.
-    if (obuffer != nullptr) {
-      // std::cout << "writing " << output << std::endl;
-      int32* buffer_as_int = reinterpret_cast<int32*>(obuffer);
-      buffer_as_int[0] = output.size();
-      memcpy(&buffer_as_int[1], output.data(), output.size());
+int Context::SetOutputs(kaldi::CompactLattice& clat,
+                        CustomGetOutputFn_t output_fn, CustomPayload payload) {
+	int status = kSuccess;
+  if (payload.error_code != kSuccess) return payload.error_code;
+  for (int ioutput = 0; ioutput < payload.output_cnt; ++ioutput) {
+    const char* output_name = payload.required_output_names[ioutput];
+    if (!strcmp(output_name, "RAW_LATTICE")) {
+      std::ostringstream oss;
+      kaldi::WriteCompactLattice(oss, true, clat);
+      status = SetOutputByName(output_name, oss.str(), output_fn, payload);
+      if(status != kSuccess) return status;
+    } else if (!strcmp(output_name, "TEXT")) {
+      std::string output;
+      LatticeToString(*word_syms_, clat, &output);
+      status = SetOutputByName(output_name, output, output_fn, payload);
+      if(status != kSuccess) return status;
     }
   }
+
+  return status;
 }
+
+int Context::SetOutputByName(const char* output_name,
+                             const std::string& out_bytes,
+                             CustomGetOutputFn_t output_fn,
+                             CustomPayload payload) {
+  uint32_t byte_size_with_size_int = out_bytes.size() + sizeof(int32);
+  void* obuffer;  // output buffer
+  if (!output_fn(payload.output_context, output_name, output_shape_.size(),
+                 &output_shape_[0], byte_size_with_size_int, &obuffer)) {
+    payload.error_code = kOutputBuffer;
+    return payload.error_code;
+  }
+  if (obuffer == nullptr) return kOutputBuffer;
+
+  int32* buffer_as_int = reinterpret_cast<int32*>(obuffer);
+  buffer_as_int[0] = out_bytes.size();
+  memcpy(&buffer_as_int[1], out_bytes.data(), out_bytes.size());
+
+  return kSuccess;
+}
+
 /////////////
 
 extern "C" {
@@ -395,7 +417,7 @@ int CustomExecute(void* custom_context, const uint32_t payload_cnt,
 }
 
 }  // extern "C"
-}
-}
-}
-}  // namespace nvidia::inferenceserver::custom::kaldi_cbe
+}  // namespace kaldi_cbe
+}  // namespace custom
+}  // namespace inferenceserver
+}  // namespace nvidia

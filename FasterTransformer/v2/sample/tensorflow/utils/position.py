@@ -17,7 +17,6 @@ import abc
 import tensorflow as tf
 from reducer import SumReducer
 
-
 class PositionEncoder(tf.keras.layers.Layer):
     """Base class for position encoders."""
 
@@ -43,14 +42,14 @@ class PositionEncoder(tf.keras.layers.Layer):
         """
         batch_size = tf.shape(inputs)[0]
         timesteps = tf.shape(inputs)[1]
-        input_dim = inputs.shape[-1]
+        input_dim = inputs.get_shape().as_list()[-1] # return int 
         positions = tf.range(timesteps) + 1 if position is None else [position]
-        position_encoding = self._encode([positions], input_dim)
+        position_encoding = self._encode([positions], input_dim, dtype=inputs.dtype)
         position_encoding = tf.tile(position_encoding, [batch_size, 1, 1])
         return self.reducer([inputs, position_encoding])
 
     @abc.abstractmethod
-    def _encode(self, positions, depth):
+    def _encode(self, positions, depth, dtype):
         """Creates position encodings.
         Args:
           positions: The positions to encode of shape :math:`[B, ...]`.
@@ -66,7 +65,7 @@ class SinusoidalPositionEncoder(PositionEncoder):
     https://arxiv.org/abs/1706.03762.
     """
 
-    def _encode(self, positions, depth):
+    def _encode(self, positions, depth, dtype):
         if depth % 2 != 0:
             raise ValueError("SinusoidalPositionEncoder expects the depth to be divisble "
                              "by 2 but got %d" % depth)
@@ -74,13 +73,13 @@ class SinusoidalPositionEncoder(PositionEncoder):
         batch_size = tf.shape(positions)[0]
         positions = tf.cast(positions, tf.float32)
 
-        log_timescale_increment = math.log(10000) / ((int)(depth / 2 - 1))
+        log_timescale_increment = math.log(10000) / (depth / 2 - 1)
         inv_timescales = tf.exp(
-            tf.cast(tf.range(depth / 2), tf.float32) * -log_timescale_increment)
+            tf.cast(tf.range(depth / 2), dtype=tf.float32) * -log_timescale_increment)
         inv_timescales = tf.reshape(
             tf.tile(inv_timescales, [batch_size]), [batch_size, -1])
         scaled_time = tf.expand_dims(
             positions, -1) * tf.expand_dims(inv_timescales, 1)
         encoding = tf.concat(
             [tf.sin(scaled_time), tf.cos(scaled_time)], axis=2)
-        return tf.cast(encoding, self.dtype)
+        return tf.cast(encoding, dtype)

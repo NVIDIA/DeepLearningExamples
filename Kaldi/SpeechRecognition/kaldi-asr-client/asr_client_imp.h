@@ -15,6 +15,7 @@
 #include <queue>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include "request_grpc.h"
 
@@ -52,7 +53,7 @@ class TRTISASRClient {
   std::mutex stdout_m_;
 
   struct Result {
-    std::string text;
+    std::string raw_lattice;
     double latency;
   };
 
@@ -64,7 +65,8 @@ class TRTISASRClient {
   void SendChunk(uint64_t corr_id, bool start_of_sequence, bool end_of_sequence,
                  float* chunk, int chunk_byte_size);
   void WaitForCallbacks();
-  void PrintStats();
+  void PrintStats(bool print_latency_stats);
+  void WriteLatticesToFile(const std::string &clat_wspecifier, const std::unordered_map<ni::CorrelationID, std::string> &corr_id_and_keys);
 
   TRTISASRClient(const std::string& url, const std::string& model_name,
                  const int ncontextes, bool print_results);

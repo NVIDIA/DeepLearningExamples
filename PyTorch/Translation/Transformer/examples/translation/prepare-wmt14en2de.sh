@@ -144,7 +144,7 @@ if [ "$1" == "--scaling18" ]; then
         rm -f $tmp/valid.$l
         cat $orig/$dev.$l | \
             perl $NORM_PUNC $l | \
-            perl $REM_NON_PRINT_CHAR | \
+            perl $REM_NON_PRINT_CHAR | tee -a $tmp/valid.raw.$l | \
             perl $TOKENIZER -threads 8 -a -l $l >> $tmp/valid.$l
     done
 else

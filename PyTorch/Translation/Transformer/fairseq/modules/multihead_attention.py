@@ -20,8 +20,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import Dict, Optional
+
 import torch
-from torch import nn
+from torch import nn, Tensor
 from torch.nn import Parameter
 import torch.nn.functional as F
 from torch.autograd.variable  import Variable
@@ -49,7 +51,6 @@ class QueryLinear(torch.autograd.Function) :
         weights_q_grad = torch.addmm(weights_q, input, q_grad, beta=0.0, alpha=s[0])
         return q, weights_q_grad, None
 
-query_linear = QueryLinear.apply
 
 class KeyValueLinears(torch.autograd.Function) :
     @staticmethod
@@ -74,7 +75,6 @@ class KeyValueLinears(torch.autograd.Function) :
         weights_v_grad = torch.mm(input, v_grad)
         return v, weights_k_grad, weights_v_grad
 
-key_value_linears = KeyValueLinears.apply
 
 class SelfAttentionLinears(torch.autograd.Function) :
     @staticmethod
@@ -105,7 +105,6 @@ class SelfAttentionLinears(torch.autograd.Function) :
         weights_v_grad = torch.mm(input, v_grad)
         return v, weights_q_grad, weights_k_grad, weights_v_grad, None
 
-self_attn_linears = SelfAttentionLinears.apply
 
 class StridedBmm1Func(torch.autograd.Function) :
     @staticmethod
@@ -132,7 +131,6 @@ class StridedBmm1Func(torch.autograd.Function) :
             grad_input2 = torch.bmm(grad_output.transpose(1,2), input1, out=grad_input2).transpose(1,2)
         return grad_input1,grad_input2
 
-strided_bmm1 = StridedBmm1Func.apply
 
 class StridedBmm2Func(torch.autograd.Function) :
      @staticmethod
@@ -158,7 +156,49 @@ class StridedBmm2Func(torch.autograd.Function) :
              grad_input2 = torch.bmm(input1.transpose(1,2), grad_output, out=grad_input2)
          return grad_input1,grad_input2
 
-strided_bmm2 = StridedBmm2Func.apply
+
+def query_linear(input: Tensor, weights_q: Tensor, scale: float):
+    if not torch.jit.is_scripting():
+        return QueryLinear.apply(input, weights_q, scale)
+    else:
+        q = scale * torch.einsum('ij,jk->ik', input.view(input.size(0)*input.size(1), -1), weights_q)
+        q = q.view(input.shape)
+        return q
+
+def key_value_linears(input: Tensor, weights_k: Tensor, weights_v: Tensor):
+    if not torch.jit.is_scripting():
+        return KeyValueLinears.apply(input, weights_k, weights_v)
+    else:
+        k = torch.einsum('ij,jk->ik', input.view(input.size(0)*input.size(1), -1), weights_k)
+        k = k.view(input.shape)
+        v = torch.einsum('ij,jk->ik', input.view(input.size(0)*input.size(1), -1), weights_v)
+        v = v.view(input.shape)
+        return k, v
+
+def self_attn_linears(input: Tensor, weights_q: Tensor, weights_k: Tensor, weights_v: Tensor, scale:float):
+    if not torch.jit.is_scripting():
+        return SelfAttentionLinears.apply(input, weights_q, weights_k, weights_v, scale)
+    else:
+        q = scale * torch.einsum('ij,jk->ik', input.view(input.size(0)*input.size(1), -1), weights_q)
+        q = q.view(input.shape)
+        k = torch.einsum('ij,jk->ik', input.view(input.size(0)*input.size(1), -1), weights_k)
+        k = k.view(input.shape)
+        v = torch.einsum('ij,jk->ik', input.view(input.size(0)*input.size(1), -1), weights_v)
+        v = v.view(input.shape)
+        return q, k, v
+
+def strided_bmm1(input1: Tensor, input2: Tensor):
+    if not torch.jit.is_scripting():
+        return StridedBmm1Func.apply(input1, input2)
+    else:
+        return  torch.einsum('ijk,ikn->ijn', input1, input2)
+
+def strided_bmm2(input1: Tensor, input2: Tensor):
+    if not torch.jit.is_scripting():
+        return StridedBmm2Func.apply(input1, input2)
+    else:
+        return torch.einsum('ijk,ikn->ijn', input1, input2)
+
 
 class MultiheadAttention(nn.Module):
     """Multi-headed attention.
@@ -173,7 +213,7 @@ class MultiheadAttention(nn.Module):
         self.head_dim = embed_dim // num_heads
         assert self.head_dim * num_heads == self.embed_dim, "embed_dim must be divisible by num_heads"
         self.scaling = self.head_dim**-0.5
-        self._mask = None
+        self._mask = torch.empty(0)
 #        self.in_proj_weight = Parameter(torch.Tensor(3*embed_dim, embed_dim))
         self.in_proj_weight_q = Parameter(torch.Tensor(embed_dim, embed_dim))
         self.in_proj_weight_k = Parameter(torch.Tensor(embed_dim, embed_dim))
@@ -190,6 +230,7 @@ class MultiheadAttention(nn.Module):
             self.register_parameter('in_proj_bias_v', None)
 
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
+        self.cache_id = str(id(self))
 
         self.reset_parameters()
 
@@ -206,9 +247,12 @@ class MultiheadAttention(nn.Module):
             nn.init.constant_(self.in_proj_bias_v, 0.)
             nn.init.constant_(self.out_proj.bias, 0.)
 
-    def forward(self, query, key, value, mask_future_timesteps=False,
-                key_padding_mask=None, incremental_state=None,
-                need_weights=True, static_kv=False):
+    def forward(self, query: Tensor, key: Tensor, value: Tensor,
+                mask_future_timesteps: bool,
+                key_padding_mask: Optional[Tensor],
+                incremental_state: Optional[Dict[str, Dict[str, Tensor]]],
+                need_weights: bool,
+                static_kv: bool):
         """Input shape: Time x Batch x Channel
 
         Self-attention can be implemented by passing in the same arguments for
@@ -218,22 +262,21 @@ class MultiheadAttention(nn.Module):
         batch x src_len, where padding elements are indicated by 1s.
         """
 
-        qkv_same = query.data_ptr() == key.data_ptr() == value.data_ptr()
-        kv_same = key.data_ptr() == value.data_ptr()
+        if torch.jit.is_scripting():
+            kv_same = torch.equal(key, value)
+            qkv_same = torch.equal(query, value) and kv_same
+        else:
+            qkv_same, kv_same = self._fast_same_check(query, key, value)
+
 
         tgt_len, bsz, embed_dim = query.size()
         assert embed_dim == self.embed_dim
         assert list(query.size()) == [tgt_len, bsz, embed_dim]
         assert key.size() == value.size()
 
+        k = v = query.new_empty(0)
         if incremental_state is not None:
             saved_state = self._get_input_buffer(incremental_state)
-            if 'prev_key' in saved_state:
-                # previous time steps are cached - no need to recompute
-                # key and value if they are static
-                if static_kv:
-                    assert kv_same and not qkv_same
-                    key = value = None
         else:
             saved_state = None
 
@@ -243,22 +286,11 @@ class MultiheadAttention(nn.Module):
         elif kv_same:
             # encoder-decoder attention
             q = query_linear(query,self.in_proj_weight_q, self.scaling)
-            if key is None:
-                assert value is None
-                # this will allow us to concat it with previous value and get
-                # just get the previous value
-                k = v = q.new(0)
-            else:
+            if not(saved_state is not None and 'prev_key' in saved_state and static_kv):
                 k, v = key_value_linears(key ,self.in_proj_weight_k, self.in_proj_weight_v)
         else:
-
             q = torch.addmm(query.view(query.size(0)*query.size(1), query.size(2)), query.view(query.size(0) * query.size(1), query.size(2)), self.in_proj_weight_q, beta=0.0, alpha=self.scaling)
-            if key is None:
-                assert value is None
-                # this will allow us to concat it with previous value and get
-                # just get the previous value
-                k = v = q.new(0)
-            else:
+            if not(saved_state is not None and 'prev_key' in saved_state and static_kv):
                 k = F.linear(key, self.in_proj_weight_k, self.in_proj_bias_k)
                 v = F.linear(value, self.in_proj_weight_v, self.in_proj_bias_v)
 
@@ -309,7 +341,7 @@ class MultiheadAttention(nn.Module):
             attn_weights = attn_weights.view(bsz, self.num_heads, tgt_len, src_len)
             attn_weights = attn_weights.sum(dim=1) / self.num_heads
         else:
-            attn_weights = None
+            attn_weights = attn_weights.new_empty(0) #Can't set to None because jit script reasons
 
         return attn, attn_weights
 
@@ -343,8 +375,9 @@ class MultiheadAttention(nn.Module):
 
     def buffered_mask(self, tensor):
         dim = tensor.size(-1)
-        if self._mask is None:
-            self._mask = torch.triu(utils.fill_with_neg_inf(tensor.new(dim, dim)), 1)
+        if self._mask.size(0) == 0:
+            #TODO: try torch.new_full instead
+            self._mask = torch.triu(utils.fill_with_neg_inf(tensor.new_empty(dim, dim)), 1)
         if self._mask.size(0) < dim:
             self._mask = torch.triu(utils.fill_with_neg_inf(self._mask.resize_(dim, dim)), 1)
         return self._mask[:dim, :dim]
@@ -357,17 +390,18 @@ class MultiheadAttention(nn.Module):
                 input_buffer[k] = input_buffer[k].index_select(1, new_order)
             self._set_input_buffer(incremental_state, input_buffer)
 
-    def _get_input_buffer(self, incremental_state):
-        return utils.get_incremental_state(
-            self,
-            incremental_state,
-            'attn_state',
-        ) or {}
+    def _get_input_buffer(self, incremental_state: Optional[Dict[str, Dict[str,Tensor]]]):
+        if incremental_state is None or self.cache_id not in incremental_state:
+            return {}
+        return incremental_state[self.cache_id]
 
-    def _set_input_buffer(self, incremental_state, buffer):
-        utils.set_incremental_state(
-            self,
-            incremental_state,
-            'attn_state',
-            buffer,
-        )
+    def _set_input_buffer(self, incremental_state: Optional[Dict[str, Dict[str,Tensor]]], buffer: Dict[str,Tensor]):
+        if incremental_state is not None:
+            incremental_state[self.cache_id] = buffer
+
+    @torch.jit.unused
+    def _fast_same_check(self, q,k,v):
+        qkv_same = q.data_ptr() == k.data_ptr() == v.data_ptr()
+        kv_same = k.data_ptr() == v.data_ptr()
+        return qkv_same, kv_same
+

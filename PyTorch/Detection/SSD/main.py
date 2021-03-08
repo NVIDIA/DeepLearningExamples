@@ -27,6 +27,9 @@ from src.evaluate import evaluate
 from src.train import train_loop, tencent_trick, load_checkpoint, benchmark_train_loop, benchmark_inference_loop
 from src.data import get_train_loader, get_val_dataset, get_val_dataloader, get_coco_ground_truth
 
+import dllogger as DLLogger
+
+
 # Apex imports
 try:
     from apex.parallel.LARC import LARC
@@ -72,8 +75,8 @@ def make_parser():
                         help='manually set random seed for torch')
     parser.add_argument('--checkpoint', type=str, default=None,
                         help='path to model checkpoint file')
-    parser.add_argument('--save', action='store_true',
-                        help='save model checkpoints')
+    parser.add_argument('--save', type=str, default=None,
+                        help='save model checkpoints in the specified directory')
     parser.add_argument('--mode', type=str, default='training',
                         choices=['training', 'evaluation', 'benchmark-training', 'benchmark-inference'])
     parser.add_argument('--evaluation', nargs='*', type=int, default=[21, 31, 37, 42, 48, 53, 59, 64],
@@ -89,7 +92,6 @@ def make_parser():
     parser.add_argument('--weight-decay', '--wd', type=float, default=0.0005,
                         help='momentum argument for SGD optimizer')
 
-    parser.add_argument('--profile', type=int, default=None)
     parser.add_argument('--warmup', type=int, default=None)
     parser.add_argument('--benchmark-iterations', type=int, default=20, metavar='N',
                         help='Run N iterations while benchmarking (ignored when training and validation)')
@@ -104,10 +106,14 @@ def make_parser():
                              ' When it is not provided, pretrained model from torchvision'
                              ' will be downloaded.')
     parser.add_argument('--num-workers', type=int, default=4)
-    parser.add_argument('--amp', action='store_true')
+    parser.add_argument('--amp', action='store_true',
+                        help='Whether to enable AMP ops. When false, uses TF32 on A100 and FP32 on V100 GPUS.')
+    parser.add_argument('--json-summary', type=str, default=None,
+                        help='If provided, the json summary will be written to'
+                             'the specified file.')
 
     # Distributed
-    parser.add_argument('--local_rank', default=0, type=int,
+    parser.add_argument('--local_rank', default=os.getenv('LOCAL_RANK',0), type=int,
                         help='Used for multi-process training. Can either be manually set ' +
                              'or automatically set by using \'python -m multiproc\'.')
 
@@ -222,29 +228,61 @@ def train(train_loop_func, logger, args):
                 obj['model'] = ssd300.module.state_dict()
             else:
                 obj['model'] = ssd300.state_dict()
-            torch.save(obj, './models/epoch_{}.pt'.format(epoch))
+            save_path = os.path.join(args.save, f'epoch_{epoch}.pt')
+            torch.save(obj, save_path)
+            logger.log('model path', save_path)
         train_loader.reset()
-    print('total training time: {}'.format(total_time))
+    DLLogger.log((), { 'total time': total_time })
+    logger.log_summary()
 
+
+def log_params(logger, args):
+    logger.log_params({
+        "dataset path": args.data,
+        "epochs": args.epochs,
+        "batch size": args.batch_size,
+        "eval batch size": args.eval_batch_size,
+        "no cuda": args.no_cuda,
+        "seed": args.seed,
+        "checkpoint path": args.checkpoint,
+        "mode": args.mode,
+        "eval on epochs": args.evaluation,
+        "lr decay epochs": args.multistep,
+        "learning rate": args.learning_rate,
+        "momentum": args.momentum,
+        "weight decay": args.weight_decay,
+        "lr warmup": args.warmup,
+        "backbone": args.backbone,
+        "backbone path": args.backbone_path,
+        "num workers": args.num_workers,
+        "AMP": args.amp,
+        "precision": 'amp' if args.amp else 'fp32',
+    })
 
 if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
+    args.local_rank = int(os.environ.get('LOCAL_RANK', args.local_rank))
     if args.local_rank == 0:
         os.makedirs('./models', exist_ok=True)
 
     torch.backends.cudnn.benchmark = True
 
+    # write json only on the main thread
+    args.json_summary = args.json_summary if args.local_rank == 0 else None
+
     if args.mode == 'benchmark-training':
         train_loop_func = benchmark_train_loop
-        logger = BenchLogger('Training benchmark')
+        logger = BenchLogger('Training benchmark', json_output=args.json_summary)
         args.epochs = 1
     elif args.mode == 'benchmark-inference':
         train_loop_func = benchmark_inference_loop
-        logger = BenchLogger('Inference benchmark')
+        logger = BenchLogger('Inference benchmark', json_output=args.json_summary)
         args.epochs = 1
     else:
         train_loop_func = train_loop
-        logger = Logger('Training logger', print_freq=1)
+        logger = Logger('Training logger', print_freq=1, json_output=args.json_summary)
+
+    log_params(logger, args)
 
     train(train_loop_func, logger, args)

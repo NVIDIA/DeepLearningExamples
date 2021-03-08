@@ -1,4 +1,0 @@
-tensorflow==1.13.1
-jupyter
-numpy
-pycuda

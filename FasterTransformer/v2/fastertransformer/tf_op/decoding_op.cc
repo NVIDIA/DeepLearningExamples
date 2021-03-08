@@ -58,6 +58,8 @@ REGISTER_OP("Decoding")
     .Input("ffn_kernel2: T")
     .Input("ffn_bias2: T")
     .Input("embedding_table: T")
+    .Input("decoding_beta: T")
+    .Input("decoding_gamma: T")
     .Input("embedding_kernel: T")
     .Input("embedding_bias: float32")
     .Output("output_ids: int32")
@@ -79,8 +81,8 @@ REGISTER_OP("Decoding")
       c->GetAttr("batch_size", &batch_size);
       c->GetAttr("beam_width", &beam_width);
       c->GetAttr("max_seq_len", &max_seq_len);
-      c->set_output(0, c->MakeShape({batch_size * beam_width * (max_seq_len + 1)}));
-      c->set_output(1, c->MakeShape({batch_size * beam_width * (max_seq_len + 1)}));
+      c->set_output(0, c->MakeShape({batch_size * beam_width * max_seq_len}));
+      c->set_output(1, c->MakeShape({batch_size * beam_width * max_seq_len}));
       c->set_output(2, c->MakeShape({batch_size * beam_width}));
       return Status::OK();
     });
@@ -96,7 +98,6 @@ public:
     OP_REQUIRES_OK(context, context->GetAttr("head_num", &head_num_));
     OP_REQUIRES_OK(context, context->GetAttr("size_per_head", &size_per_head_));
     OP_REQUIRES_OK(context, context->GetAttr("num_layer", &num_layer_));
-    OP_REQUIRES_OK(context, context->GetAttr("memory_hidden_dim", &memory_hidden_dim_));
     OP_REQUIRES_OK(context, context->GetAttr("vocab_size", &vocab_size_));
     OP_REQUIRES_OK(context, context->GetAttr("start_id", &start_id_));
     OP_REQUIRES_OK(context, context->GetAttr("end_id", &end_id_));
@@ -104,17 +105,22 @@ public:
 
   void Compute(OpKernelContext *context) override
   {
+    // input(0): memory_tensor: [batch_size * beam_width, memory_max_seq_len, memory_hidden_dim]
+    assert((int)(context->input(0).dims()) == 3);
+    const int memory_max_seq_len = (int)context->input(0).dim_size(1);
+    const int memory_hidden_dim_ = (int)context->input(0).dim_size(2);
+
     DecodingInitParam<DataType_> decoding_params;
     decoding_params.cublas_handle = this->get_cublas_handler();
     Tensor *output_ids = nullptr;
     OP_REQUIRES_OK(
         context,
-        context->allocate_output(0, {max_seq_len_ + 1, batch_size_ * beam_width_}, &output_ids));
+        context->allocate_output(0, {max_seq_len_, batch_size_ * beam_width_}, &output_ids));
 
     Tensor *parent_ids = nullptr;
     OP_REQUIRES_OK(
         context,
-        context->allocate_output(1, {max_seq_len_ + 1, batch_size_ * beam_width_}, &parent_ids));
+        context->allocate_output(1, {max_seq_len_, batch_size_ * beam_width_}, &parent_ids));
 
     Tensor *sequence_length = nullptr;
     OP_REQUIRES_OK(
@@ -125,8 +131,8 @@ public:
     decoding_params.parent_ids = reinterpret_cast<int *>(parent_ids->flat<int>().data());
     decoding_params.sequence_length = reinterpret_cast<int *>(sequence_length->flat<int>().data());
 
-    check_cuda_error(cudaMemset(decoding_params.output_ids, 0, sizeof(int) * (max_seq_len_ + 1) * batch_size_ * beam_width_));
-    check_cuda_error(cudaMemset(decoding_params.parent_ids, 0, sizeof(int) * (max_seq_len_ + 1) * batch_size_ * beam_width_));
+    check_cuda_error(cudaMemset(decoding_params.output_ids, 0, sizeof(int) * max_seq_len_ * batch_size_ * beam_width_));
+    check_cuda_error(cudaMemset(decoding_params.parent_ids, 0, sizeof(int) * max_seq_len_ * batch_size_ * beam_width_));
     check_cuda_error(cudaMemset(decoding_params.sequence_length, 0, sizeof(int) * batch_size_ * beam_width_));
 
     typedef DecoderTransformerTraits<traits_::OpType> DecodingTraits_;
@@ -138,7 +144,7 @@ public:
           allocator_, batch_size_, beam_width_,
           max_seq_len_, head_num_, size_per_head_,
           vocab_size_, num_layer_,
-          memory_hidden_dim_,
+          memory_hidden_dim_, memory_max_seq_len,
           start_id_, end_id_);
     }
     catch (std::runtime_error &error)
@@ -146,7 +152,7 @@ public:
       OP_REQUIRES(context, false, errors::Internal(error.what()));
     }
 
-    OP_REQUIRES(context, context->num_inputs() == 31, errors::InvalidArgument("[ERROR] Less or more input arguments"));
+    OP_REQUIRES(context, context->num_inputs() == 33, errors::InvalidArgument("[ERROR] Less or more input arguments"));
 
     this->get_tensor(context, 0, &decoding_params.memory_tensor);
     decoding_params.memory_sequence_length = reinterpret_cast<const int *>(context->input(1).flat<int>().data());
@@ -185,10 +191,12 @@ public:
       this->get_tensor(context, 27, &params[i].ffn.output_weight.bias, i * hidden_unit);
     }
 
-    this->get_tensor(context, 28, &decoding_params.embedding_table);
-    this->get_tensor(context, 29, &decoding_params.embedding_kernel);
+    this->get_tensor(context, 28, &decoding_params.layernorm.beta);
+    this->get_tensor(context, 29, &decoding_params.layernorm.gamma);
+    this->get_tensor(context, 30, &decoding_params.embedding_table);
+    this->get_tensor(context, 31, &decoding_params.embedding_kernel);
 
-    decoding_params.embedding_bias = reinterpret_cast<const float *>(context->input(30).flat<float>().data());
+    decoding_params.embedding_bias = reinterpret_cast<const float *>(context->input(32).flat<float>().data());
     OP_REQUIRES(context, decoding_params.embedding_bias != nullptr, errors::InvalidArgument("memory_sequence_length"));
 
     OP_REQUIRES_OK(

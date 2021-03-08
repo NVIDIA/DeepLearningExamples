@@ -34,13 +34,13 @@ from waveglow.model import WaveGlow
 import torch
 
 
-def parse_model_args(model_name, parser, add_help=False):
+def model_parser(model_name, parser, add_help=False):
     if model_name == 'Tacotron2':
-        from tacotron2.arg_parser import parse_tacotron2_args
-        return parse_tacotron2_args(parser, add_help)
+        from tacotron2.arg_parser import tacotron2_parser
+        return tacotron2_parser(parser, add_help)
     if model_name == 'WaveGlow':
-        from waveglow.arg_parser import parse_waveglow_args
-        return parse_waveglow_args(parser, add_help)
+        from waveglow.arg_parser import waveglow_parser
+        return waveglow_parser(parser, add_help)
     else:
         raise NotImplementedError(model_name)
 
@@ -62,7 +62,7 @@ def init_bn(module):
         init_bn(child)
 
 
-def get_model(model_name, model_config, to_cuda,
+def get_model(model_name, model_config, cpu_run,
               uniform_initialize_bn_weight=False, forward_is_infer=False):
     """ Code chooses a model based on name"""
     model = None
@@ -88,7 +88,7 @@ def get_model(model_name, model_config, to_cuda,
     if uniform_initialize_bn_weight:
         init_bn(model)
 
-    if to_cuda:
+    if not cpu_run:
         model = model.cuda()
     return model
 

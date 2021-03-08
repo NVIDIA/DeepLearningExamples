@@ -40,7 +40,9 @@ void BeamSearch_OpenNMT(
     int *output_ids,
     const int batch_size, const int beam_width,
     const int vocab_size, const int hidden_dim, const int step,
-    const int cache_size, const int decoder_layers, cudaStream_t stream)
+    const int cache_size, const int decoder_layers, cudaStream_t stream,
+    const int end_id, 
+    int *finished_count)
 {
 #ifdef NDEBUG
   /* adding cum_log_probs to log_probs */
@@ -75,11 +77,15 @@ void BeamSearch_OpenNMT(
 #endif
 
 #ifdef NDEBUG
-  update(log_probs, cum_log_probs, ids, finished, parent_ids, sequence_length, word_ids, output_ids,
-         batch_size, beam_width, vocab_size, stream);
+  update(log_probs, cum_log_probs, ids, finished, 
+        parent_ids, sequence_length, word_ids, output_ids,
+        batch_size, beam_width, vocab_size, stream, 
+        end_id, finished_count);
 #else
-  update(log_probs, cum_log_probs, ids, finished, parent_ids, sequence_length, word_ids, output_ids,
-         batch_size, beam_width, vocab_size, stream);
+  update(log_probs, cum_log_probs, ids, finished, 
+        parent_ids, sequence_length, word_ids, output_ids,
+        batch_size, beam_width, vocab_size, stream, 
+        end_id, finished_count);
   cudaDeviceSynchronize();
   check_cuda_error(cudaGetLastError());
 
@@ -89,13 +95,17 @@ void BeamSearch_OpenNMT(
     Note that update_kernel_check contains update and uses do not need to call it again. 
   */
   // update_kernel_check(log_probs, cum_log_probs, ids, finished, parent_ids, sequence_length, word_ids, output_ids,
-  //                     batch_size, beam_width, vocab_size, stream);
+  //                     batch_size, beam_width, vocab_size, stream, end_id, finished_count);
 #endif
 
 #ifdef NDEBUG
-  update_KV_cache<T>(key_cache, value_cache, parent_ids, batch_size, beam_width, hidden_dim, step, cache_size, decoder_layers, stream);
+  update_KV_cache<T>(key_cache, value_cache, parent_ids, batch_size, 
+                    beam_width, hidden_dim, step, cache_size, 
+                    decoder_layers, stream);
 #else
-  update_KV_cache<T>(key_cache, value_cache, parent_ids, batch_size, beam_width, hidden_dim, step, cache_size, decoder_layers, stream);
+  update_KV_cache<T>(key_cache, value_cache, parent_ids, batch_size, 
+                    beam_width, hidden_dim, step, cache_size, 
+                    decoder_layers, stream);
   cudaDeviceSynchronize();
   check_cuda_error(cudaGetLastError());
 

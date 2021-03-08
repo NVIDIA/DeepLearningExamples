@@ -1,4 +1,4 @@
-# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,8 +24,8 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
     out_projs: List[Optional[torch.Tensor]]
 
     def __init__(self, n_token, d_embed, d_proj, cutoffs, div_val=1,
-                 tie_projs=None, out_layers_weights=None, out_projs=None,
-                 keep_order=False):
+                 dtype=None, tie_projs=None, out_layers_weights=None,
+                 out_projs=None, keep_order=False):
         super().__init__()
 
         self.n_token = n_token
@@ -43,8 +43,20 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
         self.tie_projs = tie_projs
 
         if self.n_clusters > 0:
-            self.cluster_weight = nn.Parameter(torch.zeros(self.n_clusters, self.d_embed))
-            self.cluster_bias = nn.Parameter(torch.zeros(self.n_clusters))
+            self.cluster_weight = nn.Parameter(
+                torch.zeros(
+                    self.n_clusters, self.d_embed,
+                    dtype=dtype,
+                    device=torch.device('cuda'),
+                    )
+                )
+            self.cluster_bias = nn.Parameter(
+                torch.zeros(
+                    self.n_clusters,
+                    dtype=dtype,
+                    device=torch.device('cuda'),
+                    )
+                )
 
         if not out_layers_weights:
             self.out_layers_weights = []
@@ -61,7 +73,13 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
                     if tie_proj:
                         self.out_projs.append(out_projs[0])
                     else:
-                        self.out_projs.append(torch.zeros(d_proj, d_embed))
+                        self.out_projs.append(
+                            torch.zeros(
+                                d_proj, d_embed,
+                                dtype=dtype,
+                                device=torch.device('cuda'),
+                                )
+                            )
             else:
                 for i, tie_proj in enumerate(tie_projs):
                     self.out_projs.append(None)
@@ -71,15 +89,31 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
                 if tie_proj:
                     self.out_projs.append(out_projs[i])
                 else:
-                    self.out_projs.append(torch.zeros(d_proj, d_emb_i))
+                    self.out_projs.append(
+                        torch.zeros(
+                            d_proj, d_emb_i,
+                            dtype=dtype,
+                            device=torch.device('cuda'),
+                            )
+                        )
 
         if div_val == 1:
             self.out_layers_biases.append(
-                (torch.zeros(n_token))
+                torch.zeros(
+                    n_token,
+                    dtype=dtype,
+                    device=torch.device('cuda'),
+                    )
                 )
             if not out_layers_weights:
                 self.out_layers_weights.append(
-                    nn.Parameter(torch.zeros(n_token, d_embed))
+                    nn.Parameter(
+                        torch.zeros(
+                            n_token, d_embed,
+                            dtype=dtype,
+                            device=torch.device('cuda'),
+                            )
+                        )
                     )
         else:
             for i in range(len(self.cutoffs)):
@@ -87,11 +121,23 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
                 d_emb_i = d_embed // (div_val ** i)
 
                 self.out_layers_biases.append(
-                    nn.Parameter(torch.zeros(r_idx - l_idx))
+                    nn.Parameter(
+                        torch.zeros(
+                            r_idx - l_idx,
+                            dtype=dtype,
+                            device=torch.device('cuda'),
+                            )
+                        )
                     )
                 if not out_layers_weights:
                     self.out_layers_weights.append(
-                        nn.Parameter(torch.zeros(r_idx - l_idx, d_emb_i))
+                        nn.Parameter(
+                            torch.zeros(
+                                r_idx - l_idx, d_emb_i,
+                                dtype=dtype,
+                                device=torch.device('cuda'),
+                                )
+                            )
                         )
 
         self.keep_order = keep_order
@@ -146,7 +192,11 @@ class ProjectedAdaptiveLogSoftmax(nn.Module):
             head_logit = self._compute_logit(hidden, head_weight, head_bias, head_proj)
             head_logprob = F.log_softmax(head_logit, dim=1)
 
-            nll = torch.zeros_like(target, layout=torch.strided, dtype=hidden.dtype, device=hidden.device)
+            nll = torch.zeros_like(target,
+                                   layout=torch.strided,
+                                   dtype=hidden.dtype,
+                                   device=hidden.device,
+                                   )
 
             offset = 0
             cutoff_values = [0] + self.cutoffs

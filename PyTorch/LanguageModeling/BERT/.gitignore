@@ -15,6 +15,10 @@ checkpoints/
 results
 results/*
 
+#Editor
+.idea
+.idea/*
+
 # Distribution / packaging
 .Python
 build/

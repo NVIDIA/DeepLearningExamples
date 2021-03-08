@@ -30,6 +30,7 @@ import torch
 from . import FairseqDataset
 import fairseq.data.batch_C
 import sys
+from .dictionary import Dictionary
 
 
 def infer_language_pair(path):
@@ -41,6 +42,25 @@ def infer_language_pair(path):
             return parts[1].split('-')
     return src, dst
 
+def load_dictionaries(args):
+    if args.source_lang is None or args.target_lang is None:
+        args.source_lang, args.target_lang = infer_language_pair(args.data)
+    if args.source_lang is None or args.target_lang is None:
+        raise Exception('Could not infer language pair, please provide it explicitly')
+
+    # load dictionaries
+    src_dict = Dictionary.load(os.path.join(args.data, 'dict.{}.txt'.format(args.source_lang)))
+    tgt_dict = Dictionary.load(os.path.join(args.data, 'dict.{}.txt'.format(args.target_lang)))
+    assert src_dict.pad() == tgt_dict.pad()
+    assert src_dict.eos() == tgt_dict.eos()
+    assert src_dict.unk() == tgt_dict.unk()
+    args.src_vocab_size = len(src_dict)
+    args.tgt_vocab_size = len(tgt_dict)
+    args.padding_idx = src_dict.pad()
+    print('| [{}] dictionary: {} types'.format(args.source_lang, len(src_dict)))
+    print('| [{}] dictionary: {} types'.format(args.target_lang, len(tgt_dict)))
+
+    return src_dict, tgt_dict
 
 class ShardedIterator(object):
     """A sharded wrapper around an iterable (padded to length)."""
@@ -122,6 +142,69 @@ def collate_tokens(values, pad_idx, eos_idx, left_pad, move_eos_to_beginning=Fal
         copy_tensor(v, res[i][size - len(v):] if left_pad else res[i][:len(v)])
     return res
 
+def collate(samples, pad_idx, eos_idx, left_pad_source=True, left_pad_target=False, pad_sequence=1):
+    if len(samples) == 0:
+        return {}
+
+    def merge(key, left_pad, move_eos_to_beginning=False):
+        return collate_tokens(
+            [s[key] for s in samples],
+            pad_idx, eos_idx, left_pad, move_eos_to_beginning,
+            pad_sequence,
+        )
+
+    id = torch.LongTensor([s['id'] for s in samples])
+    src_tokens = merge('source', left_pad=left_pad_source)
+    # sort by descending source length
+    src_lengths = torch.LongTensor([s['source'].numel() for s in samples])
+    src_lengths, sort_order = src_lengths.sort(descending=True)
+    id = id.index_select(0, sort_order)
+    src_tokens = src_tokens.index_select(0, sort_order)
+
+    prev_output_tokens = None
+    target = None
+    if samples[0].get('target', None) is not None:
+        target = merge('target', left_pad=left_pad_target)
+        # we create a shifted version of targets for feeding the
+        # previous output token(s) into the next decoder step
+        prev_output_tokens = merge(
+            'target',
+            left_pad=left_pad_target,
+            move_eos_to_beginning=True,
+        )
+        prev_output_tokens = prev_output_tokens.index_select(0, sort_order)
+        target = target.index_select(0, sort_order)
+        ntokens = sum(len(s['target']) for s in samples)
+    else:
+        ntokens = sum(len(s['source']) for s in samples)
+
+    return {
+        'id': id,
+        'ntokens': ntokens,
+        'net_input': {
+            'src_tokens': src_tokens,
+            'src_lengths': src_lengths,
+            'prev_output_tokens': prev_output_tokens,
+        },
+        'target': target,
+    }
+
+def get_dummy_batch(num_tokens, src_dict, tgt_dict, src_len=128, tgt_len=128,
+        left_pad_source=True, left_pad_target=False, pad_sequence=1):
+    bsz = num_tokens // max(src_len, tgt_len)
+    dummy_samples = [
+        {
+            'id': i,
+            'source': src_dict.dummy_sentence(src_len),
+            'target': tgt_dict.dummy_sentence(tgt_len) if tgt_dict is not None else None,
+        }
+        for i in range(bsz)
+    ]
+    return collate(
+        dummy_samples, pad_idx=src_dict.pad(), eos_idx=src_dict.eos(),
+        left_pad_source=left_pad_source, left_pad_target=left_pad_target,
+        pad_sequence=pad_sequence,
+    )
 
 class EpochBatchIterator(object):
     """Iterate over a FairseqDataset and yield batches bucketed by size.
@@ -162,8 +245,6 @@ class EpochBatchIterator(object):
         self._next_epoch_itr = None
 
         with numpy_seed(self.seed):
-            import time
-            start = time.time()
             indices = self.dataset.ordered_indices(self.seed, self.epoch)
 #need integer, rather than float('Inf') values
             max_sentences = max_sentences if max_sentences is not None else sys.maxsize
@@ -174,7 +255,6 @@ class EpochBatchIterator(object):
             batches = fairseq.data.batch_C.make_batches(self.dataset.src_sizes, tgt_sizes, indices, max_tokens, max_sentences, self.bsz_mult, max_positions_num)
             self.frozen_batches = tuple(batches) 
 #            self.frozen_batches = tuple(self._batch_generator())
-            print("generated batches in ", time.time() - start, "s")
 
     def __len__(self):
         return len(self.frozen_batches)

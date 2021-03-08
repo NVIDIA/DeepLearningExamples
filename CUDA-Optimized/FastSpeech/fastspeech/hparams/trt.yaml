@@ -1,0 +1,17 @@
+parent_yaml: 'infer.yaml'
+
+# Inference
+batch_size: 1                 # Batch size.
+use_trt: True                 # Usage of TensorRT. Must be True to enable TensorRT.
+use_fp16: True                # Usage of FP16. Set to True to enable half precision for the engine.
+
+# TRT
+trt_file_path: "/workspace/fastspeech/fastspeech.fp16.b1.trt"  # Built TensorRT engine file path.
+trt_max_input_seq_len: 128    # Max input sequence length. 
+trt_max_output_seq_len: 1024  # Max output sequence length.
+trt_max_ws_size: 8            # Max workspace size in GB avaiable for TensorRT engine build.
+trt_multi_engine: False       # Usage of multi-engines.
+trt_force_build: False        # Force build mode. If True, an engine is forcely built and overwritten to trt_file_path.
+
+# WaveGlow Engine
+waveglow_engine_path: "/workspace/fastspeech/waveglow.fp16.trt"

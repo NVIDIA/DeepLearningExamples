@@ -1,4 +1,4 @@
-# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -209,7 +209,7 @@ class RelMultiHeadAttn(nn.Module):
 
         x_padded = x_padded.view(x.size(0), x.size(1), x.size(3) + 1, x.size(2))
 
-        x = x_padded[:, :, 1:].view_as(x)
+        x = x_padded.narrow(2, 1, x_padded.size(2) - 1).view_as(x)
 
         if zero_triu:
             ones = torch.ones((x.size(2), x.size(3)))
@@ -470,13 +470,13 @@ class AdaptiveEmbedding(nn.Module):
                 nn.Embedding(n_token, d_embed, sparse=(sample_softmax > 0))
             )
             if d_proj != d_embed:
-                self.emb_projs.append(nn.Parameter(torch.Tensor(d_proj, d_embed)))
+                self.emb_projs.append(nn.Parameter(torch.Tensor(d_proj, d_embed).zero_()))
         else:
             for i in range(len(self.cutoffs)):
                 l_idx, r_idx = self.cutoff_ends[i], self.cutoff_ends[i+1]
                 d_emb_i = d_embed // (div_val ** i)
                 self.emb_layers.append(nn.Embedding(r_idx-l_idx, d_emb_i))
-                self.emb_projs.append(nn.Parameter(torch.Tensor(d_proj, d_emb_i)))
+                self.emb_projs.append(nn.Parameter(torch.Tensor(d_proj, d_emb_i).zero_()))
 
     def forward(self, inp):
         if self.div_val == 1:
@@ -492,14 +492,14 @@ class AdaptiveEmbedding(nn.Module):
                 l_idx, r_idx = self.cutoff_ends[i], self.cutoff_ends[i + 1]
 
                 mask_i = (inp_flat >= l_idx) & (inp_flat < r_idx)
-                indices_i = mask_i.nonzero().squeeze()
+                indices_i = mask_i.nonzero(as_tuple=False).squeeze()
 
                 if indices_i.numel() == 0:
                     continue
 
                 inp_i = inp_flat.index_select(0, indices_i) - l_idx
                 emb_i = self.emb_layers[i](inp_i)
-                emb_i = F.linear(emb_i, self.emb_projs[i])
+                emb_i = F.linear(emb_i, self.emb_projs[i]).to(emb_flat.dtype)
 
                 emb_flat.index_copy_(0, indices_i, emb_i)
 
@@ -608,23 +608,23 @@ class MemTransformerLM(nn.Module):
         # default attention
         if self.attn_type == 0:
             self.pos_emb = PositionalEmbedding(self.d_model)
-            self.r_w_bias = nn.Parameter(torch.Tensor(self.n_head, self.d_head))
-            self.r_r_bias = nn.Parameter(torch.Tensor(self.n_head, self.d_head))
+            self.r_w_bias = nn.Parameter(torch.Tensor(self.n_head, self.d_head).zero_())
+            self.r_r_bias = nn.Parameter(torch.Tensor(self.n_head, self.d_head).zero_())
         # learnable
         elif self.attn_type == 1:
             self.r_emb = nn.Parameter(torch.Tensor(
-                    self.n_layer, self.max_klen, self.n_head, self.d_head))
+                    self.n_layer, self.max_klen, self.n_head, self.d_head).zero_())
             self.r_w_bias = nn.Parameter(torch.Tensor(
-                    self.n_layer, self.n_head, self.d_head))
+                    self.n_layer, self.n_head, self.d_head).zero_())
             self.r_bias = nn.Parameter(torch.Tensor(
-                    self.n_layer, self.max_klen, self.n_head))
+                    self.n_layer, self.max_klen, self.n_head).zero_())
         # absolute standard
         elif self.attn_type == 2:
             self.pos_emb = PositionalEmbedding(self.d_model)
         # absolute deeper SA
         elif self.attn_type == 3:
             self.r_emb = nn.Parameter(torch.Tensor(
-                    self.n_layer, self.max_klen, self.d_model))
+                    self.n_layer, self.max_klen, self.d_model).zero_())
 
     def reset_length(self, tgt_len, ext_len, mem_len):
         self.tgt_len = tgt_len
@@ -633,12 +633,9 @@ class MemTransformerLM(nn.Module):
 
     def init_mems(self):
         if self.mem_len > 0:
-            mems = []
             param = next(self.parameters())
-            for i in range(self.n_layer+1):
-                empty = torch.empty(0, dtype=param.dtype, device=param.device)
-                mems.append(empty)
-
+            mems = torch.empty(self.n_layer + 1, 0, dtype=param.dtype,
+                               device=param.device)
             return mems
         else:
             return None
@@ -657,13 +654,14 @@ class MemTransformerLM(nn.Module):
         # the tokens from `mlen + qlen - self.ext_len - self.mem_len`
         # to `mlen + qlen - self.ext_len`.
         with torch.no_grad():
-            new_mems = []
             end_idx = mlen + max(0, qlen - 0 - self.ext_len)
             beg_idx = max(0, end_idx - self.mem_len)
-            for i in range(len(hids)):
-
-                cat = torch.cat([mems[i], hids[i]], dim=0)
-                new_mems.append(cat[beg_idx:end_idx].detach())
+            stacked = torch.stack(hids)
+            if mems.numel():
+                cat = torch.cat([mems, stacked], dim=1)
+            else:
+                cat = stacked
+            new_mems = cat[:, beg_idx:end_idx].detach()
 
         return new_mems
 
@@ -699,17 +697,17 @@ class MemTransformerLM(nn.Module):
             core_out = self.drop(word_emb)
             pos_emb = self.drop(pos_emb)
 
-            hids.append(core_out)
+            hids.append(core_out.detach())
             for i, layer in enumerate(self.layers):
                 mems_i = None if mems is None else mems[i]
                 core_out = layer(core_out, pos_emb, self.r_w_bias,
                                  self.r_r_bias, dec_attn_mask=dec_attn_mask,
                                  mems=mems_i)
-                hids.append(core_out)
+                hids.append(core_out.detach())
         # learnable
         elif self.attn_type == 1:
             core_out = self.drop(word_emb)
-            hids.append(core_out)
+            hids.append(core_out.detach())
             for i, layer in enumerate(self.layers):
                 if self.clamp_len > 0:
                     r_emb = self.r_emb[i][-self.clamp_len:]
@@ -720,7 +718,7 @@ class MemTransformerLM(nn.Module):
                 mems_i = None if mems is None else mems[i]
                 core_out = layer(core_out, r_emb, self.r_w_bias[i],
                                  r_bias, dec_attn_mask=dec_attn_mask, mems=mems_i)
-                hids.append(core_out)
+                hids.append(core_out.detach())
         # absolute
         elif self.attn_type == 2:
             pos_seq = torch.arange(klen - 1, -1, -1.0, device=word_emb.device,
@@ -731,18 +729,18 @@ class MemTransformerLM(nn.Module):
 
             core_out = self.drop(word_emb + pos_emb[-qlen:])
 
-            hids.append(core_out)
+            hids.append(core_out.detach())
             for i, layer in enumerate(self.layers):
                 mems_i = None if mems is None else mems[i]
                 if mems_i is not None and len(mems_i) and i == 0:
                     mems_i += pos_emb[:mlen]
                 core_out = layer(core_out, dec_attn_mask=dec_attn_mask,
                                  mems=mems_i)
-                hids.append(core_out)
+                hids.append(core_out.detach())
         elif self.attn_type == 3:
             core_out = self.drop(word_emb)
 
-            hids.append(core_out)
+            hids.append(core_out.detach())
             for i, layer in enumerate(self.layers):
                 mems_i = None if mems is None else mems[i]
                 if mems_i is not None and len(mems_i) and mlen > 0:
@@ -758,7 +756,7 @@ class MemTransformerLM(nn.Module):
 
                 core_out = layer(core_out, dec_attn_mask=dec_attn_mask,
                                  mems=mems_i)
-                hids.append(core_out)
+                hids.append(core_out.detach())
 
         core_out = self.drop(core_out)
 

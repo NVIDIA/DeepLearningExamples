@@ -15,7 +15,7 @@
 
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
 task_name=${1:-"MRPC"}
-init_checkpoint=${2:-"$BERT_DIR/bert_model.ckpt"}
+init_checkpoint=${2:-"$BERT_DIR/model.ckpt"}
 batch_size=${3:-"32"}
 precision=${4:-"fp16"}
 use_xla=${5:-"true"}
@@ -24,9 +24,9 @@ doc_stride=${7:-"64"}
 bert_model=${8:-"large"}
 
 if [ "$bert_model" = "large" ] ; then
-    BERT_DIR=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16
+    export BERT_DIR=data/download/nvidia_pretrained/bert_tf_pretraining_large_lamb
 else
-    BERT_DIR=data/download/google_pretrained_weights/uncased_L-12_H-768_A-12
+    export BERT_DIR=data/download/nvidia_pretrained/bert_tf_squad11_base_128
 fi
 GLUE_DIR=data/download
 
@@ -34,15 +34,18 @@ echo "GLUE directory set as " $GLUE_DIR " BERT directory set as " $BERT_DIR
 
 use_fp16=""
 if [ "$precision" = "fp16" ] ; then
-        echo "fp16 activated!"
-        use_fp16="--use_fp16"
+    echo "fp16 activated!"
+    use_fp16="--amp"
+else
+    echo "fp32/tf32 activated!"
+    use_fp16="--noamp"
 fi
 
 if [ "$use_xla" = "true" ] ; then
     use_xla_tag="--use_xla"
     echo "XLA activated"
 else
-    use_xla_tag=""
+    use_xla_tag="--nouse_xla"
 fi
 
 num_gpu=1

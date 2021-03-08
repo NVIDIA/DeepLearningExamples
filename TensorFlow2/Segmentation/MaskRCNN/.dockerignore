@@ -1,0 +1,32 @@
+.DS_Store
+.ipynb_checkpoints
+node_modules
+/.bazelrc
+/.tf_configure.bazelrc
+/bazel-*
+/bazel_pip
+/third_party/eigen3/mkl_include
+/third_party/mkl/*
+/tools/python_bin_path.sh
+/tools/git/gen
+/pip_test
+/_python_build
+*.pyc
+__pycache__
+*.swp
+.vscode/
+\.idea/
+\.git/
+core
+core/
+weights/mask-rcnn/
+profiling/
+venv/
+nsys/
+results/
+
+# Git Directories
+tf-models/
+
+# Data Directories
+data_dir/

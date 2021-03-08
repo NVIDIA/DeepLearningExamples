@@ -1,4 +1,4 @@
-    #!/usr/bin/env python3 -u
+#!/usr/bin/env python3 -u
 # Copyright (c) 2017-present, Facebook, Inc.
 # All rights reserved.
 #
@@ -28,21 +28,25 @@ import math
 import torch
 import time
 import ctypes
-import sys
 
 from copy import deepcopy
-from functools import reduce
 
-from fairseq import data, distributed_utils, options, progress_bar, tasks, utils, bleu, tokenizer
-from fairseq.fp16_trainer import FP16Trainer
-from fairseq.trainer import Trainer
-from fairseq.meters import AverageMeter, StopwatchMeter, TimeMeter
+from fairseq import data, distributed_utils, options, utils, tokenizer
+from fairseq.ddp_trainer import DDPTrainer
+from fairseq.meters import StopwatchMeter, TimeMeter
 from fairseq.sequence_generator import SequenceGenerator
-from fairseq.data import dictionary
+from fairseq.data import dictionary, data_utils, load_dataset_splits
+from fairseq.models import build_model
 
 import sacrebleu
+import dllogger as DLLogger
+from fairseq.log_helper import AggregatorBackend, setup_logger
 
 def main(args):
+
+    print(args)
+    setup_logger(args)
+
     if not torch.cuda.is_available():
         raise NotImplementedError('Training on CPU is not supported')
     torch.cuda.set_device(args.device_id)
@@ -52,33 +56,24 @@ def main(args):
         torch.cuda.synchronize()
     if args.max_tokens is None:
         args.max_tokens = 6000
-    print(args)
     pValue = ctypes.cast((ctypes.c_int * 1)(), ctypes.POINTER(ctypes.c_int))
-    result = torch.cuda.cudart().cudaDeviceSetLimit(ctypes.c_int(0x05), ctypes.c_int(128))
-    result = torch.cuda.cudart().cudaDeviceGetLimit(pValue, ctypes.c_int(0x05))
+    ctypes.CDLL('libcudart.so').cudaDeviceSetLimit(ctypes.c_int(0x05), ctypes.c_int(128))
+    ctypes.CDLL('libcudart.so').cudaDeviceGetLimit(pValue, ctypes.c_int(0x05))
     torch.manual_seed(args.seed)
 
-    # Setup task, e.g., translation, language modeling, etc.
-    task = tasks.setup_task(args)
+    src_dict, tgt_dict = data_utils.load_dictionaries(args)
+    add_extra_items_to_checkpoint({'src_dict': src_dict, 'tgt_dict': tgt_dict})
+    datasets = load_dataset_splits(args, ['train', 'valid', 'test'], src_dict, tgt_dict)
 
-    # Load dataset splits
-    load_dataset_splits(task, ['train', 'valid'])
-
-    # Build model and criterion
-    model = task.build_model(args)
-    criterion = task.build_criterion(args)
-    print('| model {}, criterion {}'.format(args.arch, criterion.__class__.__name__))
+    model = build_model(args)
     print('| num. model params: {}'.format(sum(p.numel() for p in model.parameters())))
 
     # Build trainer
-    if args.fp16 and not args.amp:
-        trainer = FP16Trainer(args, task, model, criterion)
-    elif args.fp16 and args.amp:
-        raise ValueError('Cannot use AMP and fp16 simultaneously')
-    else:
-        if torch.cuda.get_device_capability(0)[0] >= 7 and not args.amp:
-            print('| NOTICE: your device may support faster training with --fp16')
-        trainer = Trainer(args, task, model, criterion)
+    if torch.cuda.get_device_capability(0)[0] >= 7 and not args.amp:
+        print('| NOTICE: your device may support faster training with --amp')
+    trainer = DDPTrainer(args, model)
+    print('| model {}, criterion {}'.format(args.arch, trainer.criterion.__class__.__name__))
+
     if (args.online_eval or args.target_bleu) and not args.remove_bpe:
         args.remove_bpe='@@ '
     print('| training on {} GPUs'.format(args.distributed_world_size))
@@ -86,12 +81,12 @@ def main(args):
         args.max_tokens,
         args.max_sentences,
     ))
-    max_positions = trainer.get_model().max_positions()
+
     epoch_itr = data.EpochBatchIterator(
-        dataset=task.dataset(args.train_subset),
+        dataset=datasets[args.train_subset],
         max_tokens=args.max_tokens,
         max_sentences=args.max_sentences_valid,
-        max_positions=max_positions,
+        max_positions=args.max_positions,
         ignore_invalid_inputs=True,
         required_batch_size_multiple=8,
         seed=args.seed,
@@ -102,34 +97,65 @@ def main(args):
     load_checkpoint(args, trainer, epoch_itr)
 
     # Send a dummy batch to warm the caching allocator
-    dummy_batch = task.dataset('train').get_dummy_batch(args.max_tokens, max_positions)
+    dummy_batch = data_utils.get_dummy_batch(args.max_tokens, src_dict, tgt_dict)
     trainer.dummy_train_step(dummy_batch)
+
+    # Sanity check
+    if args.do_sanity_check:
+        print('Performing sanity check...')
+        sanity_score = score(args, trainer, datasets['test'], src_dict, tgt_dict, 'test.raw.de')
+        DLLogger.log(step='SANITY_CHECK', data={'sanity_check_score': sanity_score}, verbosity=1)
 
     # Train until the learning rate gets too small or model reaches target score
     max_epoch = args.max_epoch or math.inf
     max_update = args.max_update or math.inf
     tgt_bleu = args.target_bleu or math.inf
     current_bleu = 0.0
-    best_bleu = 0.0
+    best_bleu = -1.0
     lr = trainer.get_lr()
     train_meter = StopwatchMeter()
     train_meter.start()
     valid_losses = [None]
     valid_subsets = args.valid_subset.split(',')
-
+    run_summary = {'loss': float('inf'),
+                   'val_loss': float('inf'),
+                   'speed': 0,
+                   'accuracy': 0}
 
     while lr >= args.min_lr and epoch_itr.epoch < max_epoch and trainer.get_num_updates() < max_update and current_bleu < tgt_bleu:
+        DLLogger.log(step=trainer.get_num_updates(), data={'epoch': epoch_itr.epoch}, verbosity=0)
         # train for one epoch
-        train(args, trainer, task, epoch_itr)
+        with torch.autograd.profiler.profile(enabled=args.profile, use_cuda=True) as prof:
+            train(args, trainer, datasets, epoch_itr)
+        if args.profile:
+            print(prof.key_averages().table(sort_by="cuda_time_total"))
+            if args.profiler_file:
+                with open(os.path.join(args.save_dir, args.profiler_file),'w') as f:
+                    f.write(prof.key_averages().table(sort_by="cuda_time_total"))
+            exit(0)
+
         if epoch_itr.epoch % args.validate_interval == 0:
-            valid_losses = validate(args, trainer, task, epoch_itr, valid_subsets)
+            valid_losses = validate(args, trainer, datasets, valid_subsets)
+            valid_bleu = score(args, trainer, datasets[valid_subsets[0]], src_dict, tgt_dict, 'valid.raw.de')
+            DLLogger.log(step=trainer.get_num_updates(), data={'val_loss': valid_losses[0], 'val_bleu': valid_bleu}, verbosity=1)
 
         # Eval BLEU score
         if args.online_eval or (not tgt_bleu is math.inf):
-            current_bleu, current_sc_bleu = score(args, trainer, task, epoch_itr, args.gen_subset)
+            current_bleu = score(args, trainer, datasets[args.gen_subset], src_dict, tgt_dict, 'test.raw.de')
+            DLLogger.log(step=trainer.get_num_updates(), data={'test_bleu': current_bleu}, verbosity=1)
             if current_bleu > best_bleu:
                 best_bleu = current_bleu
+                DLLogger.log(step='RUN', data={'BLEU':best_bleu}, verbosity=0)
                 save_checkpoint(args, trainer, epoch_itr, valid_losses[0])
+
+        if valid_losses[0] < run_summary['val_loss']:
+            run_summary['val_loss'] = valid_losses[0]
+            if best_bleu < 0:
+                run_summary['accuracy'] = valid_bleu
+            else:
+                run_summary['accuracy'] = best_bleu
+        run_summary['loss'] = valid_losses[0]
+        run_summary['speed'] = trainer.throughput_meter.u_avg
 
         # Only use first validation loss to update the learning rate
         lr = trainer.lr_step(epoch_itr.epoch, valid_losses[0])
@@ -139,14 +165,15 @@ def main(args):
             save_checkpoint(args, trainer, epoch_itr, valid_losses[0])
 
     train_meter.stop()
+    DLLogger.log(step=[], data=run_summary, verbosity=0)
+    DLLogger.log(step='RUN', data={'walltime': train_meter.sum}, verbosity=0)
     print('| done training in {:.1f} seconds'.format(train_meter.sum))
 
-def train(args, trainer, task, epoch_itr):
+def train(args, trainer, datasets, epoch_itr):
     """Train the model for one epoch."""
 
     # Initialize data iterator
     itr = epoch_itr.next_epoch_itr()
-    progress = progress_bar.build_progress_bar(args, itr, epoch_itr.epoch, no_progress_bar='simple')
 
     # update parameters every N batches
     if epoch_itr.epoch <= len(args.update_freq):
@@ -157,151 +184,106 @@ def train(args, trainer, task, epoch_itr):
     if args.enable_parallel_backward_allred_opt and update_freq > 1:
         raise RuntimeError('--enable-parallel-backward-allred-opt is incompatible with --update-freq > 1')
 
-    extra_meters = collections.defaultdict(lambda: AverageMeter())
     first_valid = args.valid_subset.split(',')[0]
     max_update = args.max_update or math.inf
     num_batches = len(epoch_itr)
     begin = time.time()
-    #inside = 0
-    for i, sample in enumerate(progress, start=epoch_itr.iterations_in_epoch):
+
+    # reset meters
+    DLLogger.flush()
+    trainer.get_throughput_meter().reset()
+
+    for i, sample in enumerate(itr):
 
         if i < num_batches - 1 and (i + 1) % update_freq > 0:
             # buffer updates according to --update-freq
             trainer.train_step(sample, update_params=False, last_step=(i == len(itr)-1))
             continue
         else:
-            log_output = trainer.train_step(sample, update_params=True, last_step=(i == len(itr)-1))
-
-        # log mid-epoch stats
-        stats = get_training_stats(trainer)
-        for k, v in log_output.items():
-            if k in ['loss', 'nll_loss', 'sample_size']:
-                continue  # these are already logged above
-            if 'loss' in k:
-                extra_meters[k].update(v, log_output['sample_size'])
-            else:
-                extra_meters[k].update(v)
-            stats[k] = extra_meters[k].avg
-        progress.log(stats)
+            trainer.train_step(sample, update_params=True, last_step=(i == len(itr)-1))
 
         # ignore the first mini-batch in words-per-second calculation
         if i == 0:
-            trainer.get_meter('wps').reset()
+            trainer.get_throughput_meter().reset()
+            for backend in DLLogger.GLOBAL_LOGGER.backends:
+                if isinstance(backend, AggregatorBackend):
+                    backend._reset_perf_meter('tokens')
+                    backend._reset_perf_meter('updates')
+                    break
 
-        if args.profile is not None and i == args.profile:
-            import sys
-            sys.exit()
-
+        # Mid epoch checkpoint
         num_updates = trainer.get_num_updates()
         if args.save_interval_updates > 0 and num_updates % args.save_interval_updates == 0:
-            valid_losses = validate(args, trainer, task, epoch_itr, [first_valid])
+            valid_losses = validate(args, trainer, datasets, [first_valid])
             save_checkpoint(args, trainer, epoch_itr, valid_losses[0])
+
+        if (i+1) % args.log_interval == 0:
+            DLLogger.flush()
 
         if num_updates >= max_update:
             break
 
     print('Epoch time:', time.time() - begin)
-    # log end-of-epoch stats
-    stats = get_training_stats(trainer)
-    for k, meter in extra_meters.items():
-        stats[k] = meter.avg
-    progress.print(stats)
 
-    # reset training meters
-    for k in ['train_loss', 'train_nll_loss', 'wps', 'ups', 'wpb', 'bsz', 'clip']:
-        meter = trainer.get_meter(k)
-        if meter is not None:
-            meter.reset()
+    # Print epoch stats and reset training meters
+    DLLogger.log(step=trainer.get_num_updates(), data={'speed': trainer.get_throughput_meter().avg}, verbosity=0) 
+    DLLogger.flush()
 
-
-def get_training_stats(trainer):
-    stats = collections.OrderedDict()
-    stats['loss'] = '{:.3f}'.format(trainer.get_meter('train_loss').avg)
-    if trainer.get_meter('train_nll_loss').count > 0:
-        nll_loss = trainer.get_meter('train_nll_loss').avg
-        stats['nll_loss'] = '{:.3f}'.format(nll_loss)
-    else:
-        nll_loss = trainer.get_meter('train_loss').avg
-    stats['ppl'] = get_perplexity(nll_loss)
-    stats['wps'] = round(trainer.get_meter('wps').avg)
-    stats['ups'] = '{:.1f}'.format(trainer.get_meter('ups').avg)
-    stats['wpb'] = round(trainer.get_meter('wpb').avg)
-    stats['bsz'] = round(trainer.get_meter('bsz').avg)
-    stats['num_updates'] = trainer.get_num_updates()
-    stats['lr'] = trainer.get_lr()
-    stats['gnorm'] = '{:.3f}'.format(trainer.get_meter('gnorm').avg)
-    stats['clip'] = '{:.0%}'.format(trainer.get_meter('clip').avg)
-    stats['oom'] = trainer.get_meter('oom').avg
-    if trainer.get_meter('loss_scale') is not None:
-        stats['loss_scale'] = '{:.3f}'.format(trainer.get_meter('loss_scale').avg)
-    stats['wall'] = round(trainer.get_meter('wall').elapsed_time)
-    return stats
-
-
-def validate(args, trainer, task, epoch_itr, subsets):
+def validate(args, trainer, datasets, subsets):
     """Evaluate the model on the validation set(s) and return the losses."""
+    # Reset value iterations counter
+    trainer._num_val_iterations = 0
+
     valid_losses = []
     for subset in subsets:
+
+        if len(subsets) > 1:
+            print('Validating on \'{}\' subset'.format(subset))
+
         # Initialize data iterator
         itr = data.EpochBatchIterator(
-            dataset=task.dataset(subset),
+            dataset=datasets[subset],
             max_tokens=args.max_tokens,
             max_sentences=args.max_sentences_valid,
-            max_positions=trainer.get_model().max_positions(),
+            max_positions=args.max_positions,
             ignore_invalid_inputs=args.skip_invalid_size_inputs_valid_test,
             required_batch_size_multiple=8,
             seed=args.seed,
             num_shards=args.distributed_world_size,
             shard_id=args.distributed_rank,
         ).next_epoch_itr(shuffle=False)
-        progress = progress_bar.build_progress_bar(
-            args, itr, epoch_itr.epoch,
-            prefix='valid on \'{}\' subset'.format(subset),
-            no_progress_bar='simple'
-        )
 
         # reset validation loss meters
-        for k in ['valid_loss', 'valid_nll_loss']:
-            meter = trainer.get_meter(k)
-            if meter is not None:
-                meter.reset()
-        extra_meters = collections.defaultdict(lambda: AverageMeter())
+        DLLogger.flush()
 
-        for sample in progress:
-            log_output = trainer.valid_step(sample)
+        subset_losses = []
+        for sample in itr:
+            loss = trainer.valid_step(sample)
+            subset_losses.append(loss)
+        subset_loss = sum(subset_losses)/len(subset_losses)
 
-            for k, v in log_output.items():
-                if k in ['loss', 'nll_loss', 'sample_size']:
-                    continue
-                extra_meters[k].update(v)
+        DLLogger.flush()
 
-        # log validation stats
-        stats = get_valid_stats(trainer)
-        for k, meter in extra_meters.items():
-            stats[k] = meter.avg
-        progress.print(stats)
+        valid_losses.append(subset_loss)
+        print(f'Validation loss on subset {subset}: {subset_loss}')
 
-        valid_losses.append(stats['valid_loss'])
     return valid_losses
 
-def score(args, trainer, task, epoch_itr, subset):
+def score(args, trainer, dataset, src_dict, tgt_dict, ref_file):
 
     begin = time.time()
 
-    if not subset in task.datasets.keys():
-        task.load_dataset(subset)
-
-    src_dict = deepcopy(task.source_dictionary) # This is necessary, generation of translations
-    tgt_dict = deepcopy(task.target_dictionary) # alters target dictionary messing up with the rest of training
+    src_dict = deepcopy(src_dict) # This is necessary, generation of translations
+    tgt_dict = deepcopy(tgt_dict) # alters target dictionary messing up with the rest of training
 
     model = trainer.get_model()
 
     # Initialize data iterator
     itr = data.EpochBatchIterator(
-        dataset=task.dataset(subset),
+        dataset=dataset,
         max_tokens=None,
         max_sentences=max(8,min(math.ceil(1024/args.distributed_world_size),128)),
-        max_positions=model.max_positions(),
+        max_positions=args.max_positions,
         ignore_invalid_inputs=args.skip_invalid_size_inputs_valid_test,
         required_batch_size_multiple=8,
         num_shards=args.distributed_world_size,
@@ -311,82 +293,83 @@ def score(args, trainer, task, epoch_itr, subset):
     # Initialize generator
     gen_timer = StopwatchMeter()
     translator = SequenceGenerator(
-	[model], tgt_dict, beam_size=args.beam,
+	[model],
+        tgt_dict.get_metadata(),
+        maxlen=args.max_target_positions - 1, #do not include EOS token
+        beam_size=args.beam,
 	stop_early=(not args.no_early_stop), normalize_scores=(not args.unnormalized),
 	len_penalty=args.lenpen, unk_penalty=args.unkpen,
 	sampling=args.sampling, sampling_topk=args.sampling_topk, minlen=args.min_len,
         )
     # Generate and compute BLEU
     dict = dictionary.Dictionary()
-    scorer = bleu.Scorer(dict.pad(), dict.eos(), dict.unk())
     num_sentences = 0
-    has_target = True
     predictions = []
-    with progress_bar.build_progress_bar(args, itr) as progress:
-        translations = translator.generate_batched_itr(
-                progress, maxlen_a=args.max_len_a, maxlen_b=args.max_len_b,
-                cuda=True, timer=gen_timer, prefix_size=args.prefix_size,
-                )
+    translations = translator.generate_batched_itr(
+            itr, maxlen_a=args.max_len_a, maxlen_b=args.max_len_b,
+            cuda=True, timer=gen_timer, prefix_size=args.prefix_size,
+            )
 
-        wps_meter = TimeMeter()
-        for sample_id, src_tokens, target_tokens, hypos in translations:
-            # Process input and grount truth
-            has_target = target_tokens is not None
-            target_tokens = target_tokens.int().cpu() if has_target else None
+    for sample_id, src_tokens, target_tokens, hypos in translations:
+        # Process input and grount truth
+        target_tokens = target_tokens.int().cpu()
 
-            src_str = src_dict.string(src_tokens, args.remove_bpe)
-            if has_target:
-                target_str = tgt_dict.string(target_tokens, args.remove_bpe, escape_unk=True)
+        src_str = src_dict.string(src_tokens, args.remove_bpe)
+        target_str = tgt_dict.string(target_tokens, args.remove_bpe, escape_unk=True)
 
-            # Process top predictions
-            for i, hypo in enumerate(hypos[:min(len(hypos), args.nbest)]):
-                hypo_tokens, hypo_str, alignment = utils.post_process_prediction(
-                        hypo_tokens=hypo['tokens'].int().cpu(),
-                        src_str=src_str,
-                        alignment=hypo['alignment'].int().cpu() if hypo['alignment'] is not None else None,
-                        align_dict = None,
-                        tgt_dict=tgt_dict,
-                        remove_bpe=args.remove_bpe
-                        )
+        # Process top predictions
+        for i, hypo in enumerate(hypos[:min(len(hypos), args.nbest)]):
+            hypo_tokens, hypo_str, alignment = utils.post_process_prediction(
+                    hypo_tokens=hypo['tokens'].int().cpu(),
+                    src_str=src_str,
+                    alignment=hypo['alignment'].int().cpu() if hypo['alignment'] is not None else None,
+                    align_dict = None,
+                    tgt_dict=tgt_dict,
+                    remove_bpe=args.remove_bpe
+                    )
 
-                # Score only the top hypothesis
-                if has_target and i==0:
-                    if args.sentencepiece:
-                        hypo_str = hypo_str.replace(' ', '').replace('▁', ' ')
-                        target_str = target_str.replace(' ', '').replace('▁', ' ')
-                    sys_tok = tokenizer.Tokenizer.tokenize((hypo_str.lower() if args.ignore_case else hypo_str), dict)
-                    ref_tok = tokenizer.Tokenizer.tokenize((target_str.lower() if args.ignore_case else target_str), dict)
-                    scorer.add(ref_tok, sys_tok)
-                    if not args.sentencepiece:
-                        hypo_str = tokenizer.Tokenizer.detokenize(hypo_str, 'de')
-                    predictions.append('{}\t{}'.format(sample_id, hypo_str))
+            # Score only the top hypothesis
+            if i==0:
+                if args.sentencepiece:
+                    hypo_str = hypo_str.replace(' ', '').replace('▁', ' ')
+                    target_str = target_str.replace(' ', '').replace('▁', ' ')
+                sys_tok = tokenizer.Tokenizer.tokenize((hypo_str.lower() if not args.test_cased_bleu else hypo_str), dict)
+                ref_tok = tokenizer.Tokenizer.tokenize((target_str.lower() if not args.test_cased_bleu else target_str), dict)
+                if not args.sentencepiece:
+                    hypo_str = tokenizer.Tokenizer.detokenize(hypo_str, 'de')
+                predictions.append('{}\t{}'.format(sample_id, hypo_str))
 
-            wps_meter.update(src_tokens.size(0))
-            progress.log({'wps':round(wps_meter.avg)})
-            num_sentences += 1
+        num_sentences += 1
 
     if args.distributed_world_size > 1:
-        _all_gather_bleu_scorer(scorer)
         predictions = _all_gather_predictions(predictions)
 
-    with open(os.path.join(args.data, 'sacrebleu_reference.de'), 'r') as reference:
+    with open(os.path.join(args.data, ref_file), 'r') as reference:
         refs = [reference.readlines()]
     #reducing indexed predictions as strings is more memory efficient than reducing tuples
     predictions = [tuple(item.split('\t')) for item in predictions]
     predictions = [(int(item[0]), item[1]) for item in predictions]
     predictions.sort(key=lambda tup: tup[0])
-    predictions = [hypo[1] + ('\n' if hypo[1][-1]!='\n' else '')  for hypo in predictions]
-    sacrebleu_score = sacrebleu.corpus_bleu(predictions, refs, lowercase=args.ignore_case)
-    print(f'|Detokenized {sacrebleu_score}')
+    predictions = [hypo[1] + ('\n' if hypo[1][-1] != '\n' else '')  for hypo in predictions]
+    sacrebleu_score = sacrebleu.corpus_bleu(predictions, refs, lowercase=not args.test_cased_bleu).score
+    if args.save_predictions:
+        os.makedirs(os.path.join(args.save_dir, 'predictions'), exist_ok=True)
+        with open(os.path.join(args.save_dir, 'predictions', ref_file + '.pred.update_{}'.format(trainer._num_updates)), 'w') as f:
+            f.write(''.join(predictions))
+
+    DLLogger.log(step=trainer.get_num_updates(),
+            data={
+                'inference tokens/s': float(args.distributed_world_size)/gen_timer.avg
+                }, 
+            verbosity=0)
+    DLLogger.flush()
     if gen_timer.sum != 0:
         print('| Translated {} sentences ({} tokens) in {:.1f}s ({:.2f} sentences/s, {:.2f} tokens/s)'.format(
-            num_sentences, gen_timer.n, gen_timer.sum, num_sentences / gen_timer.sum, 1./gen_timer.avg))
-    if has_target:
-        print('| Generate {} with beam={}: {}'.format(subset, args.beam, scorer.result_string()))
+            len(predictions), gen_timer.n, gen_timer.sum, len(predictions) / gen_timer.sum, float(args.distributed_world_size)/gen_timer.avg))
 
-    print('| Eval completed in: {:.2f}s'.format(time.time()-begin))
+    print('| Eval completed in: {:.2f}s | {}CASED BLEU {:.2f}'.format(time.time()-begin, '' if args.test_cased_bleu else 'UN', sacrebleu_score))
 
-    return scorer.score(order=4), sacrebleu_score.score
+    return sacrebleu_score
 
 def _all_gather_predictions(predictions):
     ready = False
@@ -417,42 +400,6 @@ def _all_gather_predictions(predictions):
     reduced_predictions = [item for sublist in reduced_predictions for item in sublist]
 
     return reduced_predictions
-
-def _all_gather_bleu_scorer(scorer):
-    stats = distributed_utils.all_gather_list(scorer.stat)
-    bleu_stat = bleu.BleuStat()
-    bleu_stat.reflen  = reduce(lambda x,y: x+y, [s.reflen for s in stats])
-    bleu_stat.predlen = reduce(lambda x,y: x+y, [s.predlen for s in stats])
-    bleu_stat.match1  = reduce(lambda x,y: x+y, [s.match1 for s in stats])
-    bleu_stat.count1  = reduce(lambda x,y: x+y, [s.count1 for s in stats])
-    bleu_stat.match2  = reduce(lambda x,y: x+y, [s.match2 for s in stats])
-    bleu_stat.count2  = reduce(lambda x,y: x+y, [s.count2 for s in stats])
-    bleu_stat.match3  = reduce(lambda x,y: x+y, [s.match3 for s in stats])
-    bleu_stat.count3  = reduce(lambda x,y: x+y, [s.count3 for s in stats])
-    bleu_stat.match4  = reduce(lambda x,y: x+y, [s.match4 for s in stats])
-    bleu_stat.count4  = reduce(lambda x,y: x+y, [s.count4 for s in stats])
-    scorer.stat = bleu_stat
-
-def get_valid_stats(trainer):
-    stats = collections.OrderedDict()
-    stats['valid_loss'] = trainer.get_meter('valid_loss').avg
-    if trainer.get_meter('valid_nll_loss').count > 0:
-        nll_loss = trainer.get_meter('valid_nll_loss').avg
-        stats['valid_nll_loss'] = nll_loss
-    else:
-        nll_loss = trainer.get_meter('valid_loss').avg
-    stats['valid_ppl'] = get_perplexity(nll_loss)
-    stats['num_updates'] = trainer.get_num_updates()
-    if hasattr(save_checkpoint, 'best'):
-        stats['best'] = min(save_checkpoint.best, stats['valid_loss'])
-    return stats
-
-
-def get_perplexity(loss):
-    try:
-        return '{:.2f}'.format(math.pow(2, loss))
-    except OverflowError:
-        return float('inf')
 
 
 def save_checkpoint(args, trainer, epoch_itr, val_loss):
@@ -485,23 +432,29 @@ def save_checkpoint(args, trainer, epoch_itr, val_loss):
         'train_iterator': epoch_itr.state_dict(),
         'val_loss': val_loss,
     }
+    extra_state.update(save_checkpoint.extra_items)
 
-    checkpoints = [os.path.join(args.save_dir, fn) for fn, cond in checkpoint_conds.items() if cond]
+    checkpoints = [os.path.join(args.save_dir, 'checkpoints', fn) for fn, cond in checkpoint_conds.items() if cond]
     if len(checkpoints) > 0:
         for cp in checkpoints:
             trainer.save_checkpoint(cp, extra_state)
 
     if not end_of_epoch and args.keep_interval_updates > 0:
         # remove old checkpoints; checkpoints are sorted in descending order
-        checkpoints = utils.checkpoint_paths(args.save_dir, pattern=r'checkpoint_\d+_(\d+)\.pt')
+        checkpoints = utils.checkpoint_paths(os.path.join(args.save_dir, 'checkpoints'), pattern=r'checkpoint_\d+_(\d+)\.pt')
         for old_chk in checkpoints[args.keep_interval_updates:]:
             os.remove(old_chk)
 
 
+def add_extra_items_to_checkpoint(dict):
+    if not hasattr(save_checkpoint, 'extra_items'):
+        save_checkpoint.extra_items = {}
+    save_checkpoint.extra_items.update(dict)
+
 def load_checkpoint(args, trainer, epoch_itr):
     """Load a checkpoint and replay dataloader to match."""
-    os.makedirs(args.save_dir, exist_ok=True)
-    checkpoint_path = os.path.join(args.save_dir, args.restore_file)
+    os.makedirs(os.path.join(args.save_dir, 'checkpoints'), exist_ok=True)
+    checkpoint_path = os.path.join(args.save_dir, 'checkpoints', args.restore_file)
     if os.path.isfile(checkpoint_path):
         extra_state = trainer.load_checkpoint(checkpoint_path)
         if extra_state is not None:
@@ -517,32 +470,13 @@ def load_checkpoint(args, trainer, epoch_itr):
                 save_checkpoint.best = extra_state['best']
 
 
-def load_dataset_splits(task, splits):
-    for split in splits:
-        if split == 'train':
-            task.load_dataset(split, combine=True)
-        else:
-            for k in itertools.count():
-                split_k = split + (str(k) if k > 0 else '')
-                try:
-                    task.load_dataset(split_k, combine=False)
-                except FileNotFoundError as e:
-                    if k > 0:
-                        break
-                    raise e
-
-
 if __name__ == '__main__':
     parser = options.get_training_parser()
-    args = options.parse_args_and_arch(parser)
+    ARGS = options.parse_args_and_arch(parser)
 
-    if args.distributed_port > 0 or args.distributed_init_method is not None:
+    if ARGS.distributed_port > 0 or ARGS.distributed_init_method is not None:
         from distributed_train import main as distributed_main
 
-        distributed_main(args)
-    elif args.distributed_world_size > 1:
-        from multiprocessing_train import main as multiprocessing_main
-
-        multiprocessing_main(args)
+        distributed_main(ARGS)
     else:
-        main(args)
+        main(ARGS)

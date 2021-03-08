@@ -1,3 +1,4 @@
+*.pt
 results/
 *__pycache__
 checkpoints/

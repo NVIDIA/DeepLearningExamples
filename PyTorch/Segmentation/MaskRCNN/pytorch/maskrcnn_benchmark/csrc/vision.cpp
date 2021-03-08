@@ -38,6 +38,6 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("box_encode", &box_encode, "box_encode");
   m.def("match_proposals", &match_proposals, "match_proposals");
 #ifdef WITH_CUDA
-  m.def("GeneratePreNMSUprightBoxes", &GeneratePreNMSUprightBoxes, "RPN Proposal Generation");
+  m.def("GeneratePreNMSUprightBoxes", &rpn::GeneratePreNMSUprightBoxes, "RPN Proposal Generation");
 #endif
 }

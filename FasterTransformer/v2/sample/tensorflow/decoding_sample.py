@@ -121,7 +121,7 @@ if __name__ == "__main__":
     with tf.Session(config=config) as sess:
         sess.run(tf.global_variables_initializer())
         sess.run(tf.tables_initializer())
-
+        
         if args.cross_check == 1:
             finalized_tf_output_ids_result, tf_output_ids_result, tf_parent_ids_result, \
                 tf_sequence_lengths_result = sess.run(
@@ -130,15 +130,15 @@ if __name__ == "__main__":
                 op_sequence_lengths_result = sess.run(
                     [finalized_op_output_ids, op_output_ids, op_parent_ids, op_sequence_lengths])
 
-            int_result_cross_check("Output ids",
-                                   tf_output_ids_result, op_output_ids_result, shape=[1 + max_seq_len, batch_size * beam_width])
-            int_result_cross_check("Parent ids",
-                                   tf_parent_ids_result, op_parent_ids_result, shape=[1 + max_seq_len, batch_size * beam_width])
-            int_result_cross_check("Sequence lengths",
-                                   tf_sequence_lengths_result, op_sequence_lengths_result, shape=[1, batch_size * beam_width])
-            int_result_cross_check("Finalized output ids",
-                                   finalized_tf_output_ids_result.T, finalized_op_output_ids_result.T,
-                                   shape=[1 + max_seq_len, batch_size * beam_width])
+            int_result_cross_check("Output ids", tf_output_ids_result, op_output_ids_result, 
+                                   shape=[max_seq_len, batch_size * beam_width])
+            int_result_cross_check("Parent ids", tf_parent_ids_result, op_parent_ids_result, 
+                                   shape=[max_seq_len, batch_size * beam_width])
+            int_result_cross_check("Sequence lengths", tf_sequence_lengths_result, 
+                                   op_sequence_lengths_result, shape=[1, batch_size * beam_width])
+            int_result_cross_check("Finalized output ids", finalized_tf_output_ids_result.T, 
+                                   finalized_op_output_ids_result.T,
+                                   shape=[max_seq_len, batch_size * beam_width])
 
         if args.test_time == 1 or args.test_tf_time == 1 or args.test_op_time == 1:
             if args.test_time == 1 or args.test_tf_time == 1:

@@ -1,0 +1,11 @@
+parent_yaml: 'trt_multi_engine.yaml'
+
+use_fp16: True
+
+# TRT
+trt_file_path_list: [
+  "/fastspeech/preprocessed/v0.2.0/fastspeech.fp16.i32.o256.trt",
+  "/fastspeech/preprocessed/v0.2.0/fastspeech.fp16.i64.o512.trt",
+  "/fastspeech/preprocessed/v0.2.0/fastspeech.fp16.i96.o768.trt",
+  "/fastspeech/preprocessed/v0.2.0/fastspeech.fp16.i128.o1024.trt",
+  ]

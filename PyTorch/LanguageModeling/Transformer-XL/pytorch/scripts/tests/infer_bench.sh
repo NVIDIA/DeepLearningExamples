@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2019-2020, NVIDIA CORPORATION. All rights reserved.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,11 +44,10 @@ GPU_NAME=$(nvidia-smi --query-gpu=gpu_name --format=csv,noheader |uniq)
 echo 'GPU_NAME:' "${GPU_NAME}"
 GPU_COUNT=$(nvidia-smi --query-gpu=gpu_name --format=csv,noheader |wc -l)
 echo 'GPU_COUNT:' "${GPU_COUNT}"
-GPU_MEM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader |head -n 1 |cut -f 1 -d " ")
-echo 'GPU_MEM:' "${GPU_MEM}"
 
-REFERENCE_PERF=$(grep "${MATH},${BATCH_SIZE},${GPU_NAME}" \
-   ${REFERENCE_FILE} | \cut -f 4 -d ',')
+REFERENCE_PERF=$(grep "${MATH},${BATCH_SIZE},${TYPE},${GPU_NAME}" \
+   ${REFERENCE_FILE} | \cut -f 5 -d ',')
+
 
 if [ -z "${REFERENCE_PERF}" ]; then
    echo "WARNING: COULD NOT FIND REFERENCE PERFORMANCE FOR EXECUTED CONFIG"
@@ -67,5 +66,5 @@ bash run_wt103_base.sh eval 1 \
    --target_perplexity 23.4 \
    --batch_size "${BATCH_SIZE}" \
    --type "${TYPE}" \
-   "${MATH_OPT}" \
-   "${TARGET_PERF}"
+   ${MATH_OPT} \
+   ${TARGET_PERF}

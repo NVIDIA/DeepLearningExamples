@@ -2,13 +2,13 @@ import argparse
 
 import tensorflow as tf
 
-from tf_exports.tf_export import to_savedmodel, to_tf_trt, to_onnx
+from dlexport.tensorflow import to_savedmodel, to_onnx, to_tensorrt
 from utils.data_loader import Dataset
 from utils.model_fn import unet_fn
 
 PARSER = argparse.ArgumentParser(description="U-Net medical")
 
-PARSER.add_argument('--to', dest='to', choices=['savedmodel', 'tftrt', 'onnx'], required=True)
+PARSER.add_argument('--to', dest='to', choices=['savedmodel', 'tensorrt', 'onnx'], required=True)
 
 PARSER.add_argument('--use_amp', dest='use_amp', action='store_true', default=False)
 PARSER.add_argument('--use_xla', dest='use_xla', action='store_true', default=False)
@@ -46,14 +46,14 @@ def main():
     if flags.to == 'savedmodel':
         to_savedmodel(input_shape=flags.input_shape,
                       model_fn=unet_fn,
-                      checkpoint_dir=flags.checkpoint_dir,
-                      output_dir='./saved_model',
+                      src_dir=flags.checkpoint_dir,
+                      dst_dir='./saved_model',
                       input_names=['IteratorGetNext'],
                       output_names=['total_loss_ref'],
                       use_amp=flags.use_amp,
                       use_xla=flags.use_xla,
                       compress=flags.compress)
-    if flags.to == 'tftrt':
+    if flags.to == 'tensorrt':
         ds = Dataset(data_dir=flags.data_dir,
                      batch_size=1,
                      augment=False,
@@ -68,16 +68,16 @@ def main():
         def input_data():
             return {'input_tensor:0': sess.run(features)}
 
-        to_tf_trt(savedmodel_dir=flags.savedmodel_dir,
-                  output_dir='./tf_trt_model',
+        to_tensorrt(src_dir=flags.savedmodel_dir,
+                  dst_dir='./tf_trt_model',
                   precision=flags.precision,
                   feed_dict_fn=input_data,
                   num_runs=1,
                   output_tensor_names=['Softmax:0'],
                   compress=flags.compress)
     if flags.to == 'onnx':
-        to_onnx(input_dir=flags.savedmodel_dir,
-                output_dir='./onnx_model',
+        to_onnx(src_dir=flags.savedmodel_dir,
+                dst_dir='./onnx_model',
                 compress=flags.compress)
 
 

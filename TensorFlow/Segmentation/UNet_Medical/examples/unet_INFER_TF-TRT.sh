@@ -15,4 +15,4 @@
 # This script launches U-Net inference in TF-AMP on 1 GPUs
 # Usage ./unet_INFER_FP32.sh <path to this repository> <path to dataset> <path to results directory> <batch size>
 
-python $1/main.py --data_dir $2 --model_dir $3 --batch_size $4 --exec_mode predict --use_trt --use_xla
+python $1/main.py --data_dir $2 --model_dir $3 --batch_size $4 --exec_mode predict --use_trt --xla

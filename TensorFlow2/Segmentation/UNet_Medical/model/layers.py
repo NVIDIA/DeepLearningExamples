@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -179,7 +179,7 @@ class OutputBlock(tf.keras.Model):
                                                 activation=tf.nn.relu)
             self.conv3 = tf.keras.layers.Conv2D(filters=n_classes,
                                                 kernel_size=(1, 1),
-                                                activation=tf.nn.relu)
+                                                activation=None)
 
     def call(self, inputs, residual_input):
         out = _crop_and_concat(inputs, residual_input)

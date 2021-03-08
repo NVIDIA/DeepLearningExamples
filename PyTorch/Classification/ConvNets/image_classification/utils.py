@@ -31,6 +31,7 @@ import os
 import numpy as np
 import torch
 import shutil
+import signal
 import torch.distributed as dist
 
 
@@ -41,22 +42,23 @@ def should_backup_checkpoint(args):
     return _sbc
 
 
-def save_checkpoint(state,
-                    is_best,
-                    filename='checkpoint.pth.tar',
-                    checkpoint_dir='./',
-                    backup_filename=None):
-    if (not torch.distributed.is_initialized()
-        ) or torch.distributed.get_rank() == 0:
+def save_checkpoint(
+    state,
+    is_best,
+    filename="checkpoint.pth.tar",
+    checkpoint_dir="./",
+    backup_filename=None,
+):
+    if (not torch.distributed.is_initialized()) or torch.distributed.get_rank() == 0:
         filename = os.path.join(checkpoint_dir, filename)
         print("SAVING {}".format(filename))
         torch.save(state, filename)
         if is_best:
-            shutil.copyfile(filename,
-                            os.path.join(checkpoint_dir, 'model_best.pth.tar'))
+            shutil.copyfile(
+                filename, os.path.join(checkpoint_dir, "model_best.pth.tar")
+            )
         if backup_filename is not None:
-            shutil.copyfile(filename,
-                            os.path.join(checkpoint_dir, backup_filename))
+            shutil.copyfile(filename, os.path.join(checkpoint_dir, backup_filename))
 
 
 def timed_generator(gen):
@@ -77,7 +79,7 @@ def timed_function(f):
     return _timed_function
 
 
-def accuracy(output, target, topk=(1, )):
+def accuracy(output, target, topk=(1,)):
     """Computes the precision@k for the specified values of k"""
     maxk = max(topk)
     batch_size = target.size(0)
@@ -88,7 +90,7 @@ def accuracy(output, target, topk=(1, )):
 
     res = []
     for k in topk:
-        correct_k = correct[:k].view(-1).float().sum(0, keepdim=True)
+        correct_k = correct[:k].float().sum()
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
@@ -96,11 +98,54 @@ def accuracy(output, target, topk=(1, )):
 def reduce_tensor(tensor):
     rt = tensor.clone()
     dist.all_reduce(rt, op=dist.ReduceOp.SUM)
-    rt /= torch.distributed.get_world_size(
-    ) if torch.distributed.is_initialized() else 1
+    rt /= (
+        torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
+    )
     return rt
 
 
 def first_n(n, generator):
     for i, d in zip(range(n), generator):
         yield d
+
+
+class TimeoutHandler:
+    def __init__(self, sig=signal.SIGTERM):
+        self.sig = sig
+        rank = dist.get_rank() if dist.is_initialized() else 0
+        self.device = f'cuda:{rank}'
+    @property
+    def interrupted(self):
+        if not dist.is_initialized():
+            return self._interrupted
+
+        interrupted = torch.tensor(self._interrupted).int().to(self.device)
+        dist.broadcast(interrupted, 0)
+        interrupted = bool(interrupted.item())
+        return interrupted
+    def __enter__(self):
+        self._interrupted = False
+        self.released = False
+        self.original_handler = signal.getsignal(self.sig)
+        def master_handler(signum, frame):
+            self.release()
+            self._interrupted = True
+            print(f'Received SIGTERM')
+        def ignorind_handler(signum, frame):
+            self.release()
+            print('Received SIGTERM, ignoring')
+
+        rank = dist.get_rank() if dist.is_initialized() else 0
+        if rank == 0:
+            signal.signal(self.sig, master_handler)
+        else:
+            signal.signal(self.sig, ignorind_handler)
+        return self
+    def __exit__(self, type, value, tb):
+        self.release()
+    def release(self):
+        if self.released:
+            return False
+        signal.signal(self.sig, self.original_handler)
+        self.released = True
+        return True

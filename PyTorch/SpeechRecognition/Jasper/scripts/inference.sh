@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,93 +14,48 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+: ${DATA_DIR:=${1:-"/datasets/LibriSpeech"}}
+: ${MODEL_CONFIG:=${2:-"configs/jasper10x5dr_speedp-online_speca.yaml"}}
+: ${OUTPUT_DIR:=${3:-"/results"}}
+: ${CHECKPOINT:=${4:-"/checkpoints/jasper_fp16.pt"}}
+: ${DATASET:="test-other"}
+: ${LOG_FILE:=""}
+: ${CUDNN_BENCHMARK:=false}
+: ${MAX_DURATION:=""}
+: ${PAD_TO_MAX_DURATION:=false}
+: ${NUM_GPUS:=1}
+: ${NUM_STEPS:=0}
+: ${NUM_WARMUP_STEPS:=0}
+: ${AMP:=false}
+: ${BATCH_SIZE:=64}
+: ${EMA:=true}
+: ${SEED:=0}
+: ${DALI_DEVICE:="gpu"}
+: ${CPU:=false}
+: ${LOGITS_FILE:=}
+: ${PREDICTION_FILE:="${OUTPUT_DIR}/${DATASET}.predictions"}
 
-#!/bin/bash
-echo "Container nvidia build = " $NVIDIA_BUILD_ID
+mkdir -p "$OUTPUT_DIR"
 
+ARGS="--dataset_dir=$DATA_DIR"
+ARGS+=" --val_manifest=$DATA_DIR/librispeech-${DATASET}-wav.json"
+ARGS+=" --model_config=$MODEL_CONFIG"
+ARGS+=" --output_dir=$OUTPUT_DIR"
+ARGS+=" --batch_size=$BATCH_SIZE"
+ARGS+=" --seed=$SEED"
+ARGS+=" --dali_device=$DALI_DEVICE"
+ARGS+=" --steps $NUM_STEPS"
+ARGS+=" --warmup_steps $NUM_WARMUP_STEPS"
 
-DATA_DIR=${1-"/datasets/LibriSpeech"}
-DATASET=${2:-"dev-clean"}
-MODEL_CONFIG=${3:-"configs/jasper10x5dr_sp_offline_specaugment.toml"}
-RESULT_DIR=${4:-"/results"}
-CHECKPOINT=${5:-"/checkpoints/jasper_fp16.pt"}
-CREATE_LOGFILE=${6:-"true"}
-CUDNN_BENCHMARK=${7:-"false"}
-PRECISION=${8:-"fp32"}
-NUM_STEPS=${9:-"-1"}
-SEED=${10:-0}
-BATCH_SIZE=${11:-64}
-MODELOUTPUT_FILE=${12:-"none"}
-PREDICTION_FILE=${13:-"$RESULT_DIR/${DATASET}.predictions"}
+[ "$AMP" = true ] &&                 ARGS+=" --amp"
+[ "$EMA" = true ] &&                 ARGS+=" --ema"
+[ "$CUDNN_BENCHMARK" = true ] &&     ARGS+=" --cudnn_benchmark"
+[ -n "$CHECKPOINT" ] &&              ARGS+=" --ckpt=${CHECKPOINT}"
+[ -n "$LOG_FILE" ] &&                ARGS+=" --log_file $LOG_FILE"
+[ -n "$PREDICTION_FILE" ] &&         ARGS+=" --save_prediction $PREDICTION_FILE"
+[ -n "$LOGITS_FILE" ] &&             ARGS+=" --logits_save_to $LOGITS_FILE"
+[ "$CPU" == "true" ] &&              ARGS+=" --cpu"
+[ -n "$MAX_DURATION" ] &&            ARGS+=" --max_duration $MAX_DURATION"
+[ "$PAD_TO_MAX_DURATION" = true ] && ARGS+=" --pad_to_max_duration"
 
-if [ "$CREATE_LOGFILE" = "true" ] ; then
-    export GBS=$(expr $BATCH_SIZE)
-    printf -v TAG "jasper_inference_${DATASET}_%s_gbs%d" "$PRECISION" $GBS
-    DATESTAMP=`date +'%y%m%d%H%M%S'`
-    LOGFILE="${RESULT_DIR}/${TAG}.${DATESTAMP}.log"
-    printf "Logs written to %s\n" "$LOGFILE"
-fi
-
-
-
-PREC=""
-if [ "$PRECISION" = "fp16" ] ; then
-    PREC="--fp16"
-elif [ "$PRECISION" = "fp32" ] ; then
-    PREC=""
-else
-    echo "Unknown <precision> argument"
-    exit -2
-fi
-
-PRED=""
-if [ "$PREDICTION_FILE" = "none" ] ; then
-    PRED=""
-else
-    PRED=" --save_prediction $PREDICTION_FILE"
-fi
-
-OUTPUT=""
-if [ "$MODELOUTPUT_FILE" = "none" ] ; then
-    OUTPUT=" "
-else
-    OUTPUT=" --logits_save_to $MODELOUTPUT_FILE"
-fi
-
-
-if [ "$CUDNN_BENCHMARK" = "true" ]; then
-    CUDNN_BENCHMARK=" --cudnn_benchmark"
-else
-    CUDNN_BENCHMARK=""
-fi
-
-STEPS=""
-if [ "$NUM_STEPS" -gt 0 ] ; then
-    STEPS=" --steps $NUM_STEPS"
-fi
-
-CMD=" python inference.py "
-CMD+=" --batch_size $BATCH_SIZE "
-CMD+=" --dataset_dir $DATA_DIR "
-CMD+=" --val_manifest $DATA_DIR/librispeech-${DATASET}-wav.json "
-CMD+=" --model_toml $MODEL_CONFIG  "
-CMD+=" --seed $SEED "
-CMD+=" --ckpt $CHECKPOINT "
-CMD+=" $CUDNN_BENCHMARK"
-CMD+=" $PRED "
-CMD+=" $OUTPUT "
-CMD+=" $PREC "
-CMD+=" $STEPS "
-
-
-set -x
-if [ -z "$LOGFILE" ] ; then
-   $CMD
-else
-   (
-     $CMD
-   ) |& tee "$LOGFILE"
-fi
-set +x
-echo "MODELOUTPUT_FILE: ${MODELOUTPUT_FILE}"
-echo "PREDICTION_FILE: ${PREDICTION_FILE}"
+python -m torch.distributed.launch --nproc_per_node=$NUM_GPUS inference.py $ARGS

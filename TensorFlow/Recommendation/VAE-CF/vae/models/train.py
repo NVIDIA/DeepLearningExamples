@@ -340,27 +340,21 @@ class VAE:
         # Therefore we're using the nan-aware mean from numpy to ignore users with no items to be predicted. 
         return {name: np.nanmean(scores) for name, scores in metrics_scores.items()}
 
-    def query(self, input_data: np.ndarray):
+    def query(self, indices: np.ndarray):
         """
         inference for batch size 1
 
         :param input_data:
         :return:
         """
-        query_start = time.time()
-        indices = np.stack([np.zeros(len(input_data)), input_data], axis=1)
-        values = np.ones(shape=(1, len(input_data)))
+        values = np.ones(shape=(1, len(indices)))
         values = normalize(values)
         values = values.reshape(-1)
 
-        sess_run_start = time.time()
         res = self.session.run(
             self.top_k_query,
             feed_dict={self.inputs_query: (indices,
                                            values)})
-        query_end_time = time.time()
-        LOG.info('query time: {}'.format(query_end_time - query_start))
-        LOG.info('sess run time: {}'.format(query_end_time - sess_run_start))
         return res
 
     def _increment_global_step(self):

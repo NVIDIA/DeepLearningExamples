@@ -32,32 +32,43 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-__all__ = ['ResNet', 'build_resnet', 'resnet_versions', 'resnet_configs']
+__all__ = ["ResNet", "build_resnet", "resnet_versions", "resnet_configs"]
 
 # ResNetBuilder {{{
 
+
 class ResNetBuilder(object):
     def __init__(self, version, config):
-        self.conv3x3_cardinality = 1 if 'cardinality' not in version.keys() else version['cardinality']
+        self.conv3x3_cardinality = (
+            1 if "cardinality" not in version.keys() else version["cardinality"]
+        )
         self.config = config
 
     def conv(self, kernel_size, in_planes, out_planes, groups=1, stride=1):
         conv = nn.Conv2d(
-                in_planes, out_planes,
-                kernel_size=kernel_size, groups=groups,
-                stride=stride, padding=int((kernel_size - 1)/2),
-                bias=False)
+            in_planes,
+            out_planes,
+            kernel_size=kernel_size,
+            groups=groups,
+            stride=stride,
+            padding=int((kernel_size - 1) / 2),
+            bias=False,
+        )
 
-        if self.config['nonlinearity'] == 'relu': 
-            nn.init.kaiming_normal_(conv.weight,
-                    mode=self.config['conv_init'],
-                    nonlinearity=self.config['nonlinearity'])
+        if self.config["nonlinearity"] == "relu":
+            nn.init.kaiming_normal_(
+                conv.weight,
+                mode=self.config["conv_init"],
+                nonlinearity=self.config["nonlinearity"],
+            )
 
         return conv
 
     def conv3x3(self, in_planes, out_planes, stride=1):
         """3x3 convolution with padding"""
-        c = self.conv(3, in_planes, out_planes, groups=self.conv3x3_cardinality, stride=stride)
+        c = self.conv(
+            3, in_planes, out_planes, groups=self.conv3x3_cardinality, stride=stride
+        )
         return c
 
     def conv1x1(self, in_planes, out_planes, stride=1):
@@ -77,16 +88,18 @@ class ResNetBuilder(object):
 
     def batchnorm(self, planes, last_bn=False):
         bn = nn.BatchNorm2d(planes)
-        gamma_init_val = 0 if last_bn and self.config['last_bn_0_init'] else 1
+        gamma_init_val = 0 if last_bn and self.config["last_bn_0_init"] else 1
         nn.init.constant_(bn.weight, gamma_init_val)
         nn.init.constant_(bn.bias, 0)
 
         return bn
 
     def activation(self):
-        return self.config['activation']()
+        return self.config["activation"]()
+
 
 # ResNetBuilder }}}
+
 
 # BasicBlock {{{
 class BasicBlock(nn.Module):
@@ -95,8 +108,8 @@ class BasicBlock(nn.Module):
         self.conv1 = builder.conv3x3(inplanes, planes, stride)
         self.bn1 = builder.batchnorm(planes)
         self.relu = builder.activation()
-        self.conv2 = builder.conv3x3(planes, planes*expansion)
-        self.bn2 = builder.batchnorm(planes*expansion, last_bn=True)
+        self.conv2 = builder.conv3x3(planes, planes * expansion)
+        self.bn2 = builder.batchnorm(planes * expansion, last_bn=True)
         self.downsample = downsample
         self.stride = stride
 
@@ -121,7 +134,10 @@ class BasicBlock(nn.Module):
         out = self.relu(out)
 
         return out
+
+
 # BasicBlock }}}
+
 
 # SqueezeAndExcitation {{{
 class SqueezeAndExcitation(nn.Module):
@@ -142,11 +158,24 @@ class SqueezeAndExcitation(nn.Module):
 
         return out
 
+
 # }}}
+
 
 # Bottleneck {{{
 class Bottleneck(nn.Module):
-    def __init__(self, builder, inplanes, planes, expansion, stride=1, se=False, se_squeeze=16, downsample=None):
+    def __init__(
+        self,
+        builder,
+        inplanes,
+        planes,
+        expansion,
+        stride=1,
+        se=False,
+        se_squeeze=16,
+        downsample=None,
+        fused_se=True,
+    ):
         super(Bottleneck, self).__init__()
         self.conv1 = builder.conv1x1(inplanes, planes)
         self.bn1 = builder.batchnorm(planes)
@@ -157,7 +186,11 @@ class Bottleneck(nn.Module):
         self.relu = builder.activation()
         self.downsample = downsample
         self.stride = stride
-        self.squeeze = SqueezeAndExcitation(planes*expansion, se_squeeze) if se else None
+
+        self.fused_se = fused_se
+        self.squeeze = (
+            SqueezeAndExcitation(planes * expansion, se_squeeze) if se else None
+        )
 
     def forward(self, x):
         residual = x
@@ -179,37 +212,64 @@ class Bottleneck(nn.Module):
         if self.squeeze is None:
             out += residual
         else:
-            out = torch.addcmul(residual, 1.0, out, self.squeeze(out))
+            if self.fused_se:
+                out = torch.addcmul(residual, out, self.squeeze(out), value=1)
+            else:
+                out = residual + out * self.squeeze(out)
 
         out = self.relu(out)
 
         return out
 
-def SEBottleneck(builder, inplanes, planes, expansion, stride=1, downsample=None):
-    return Bottleneck(builder, inplanes, planes, expansion, stride=stride, se=True, se_squeeze=16, downsample=downsample)
+
+def SEBottleneck(
+    builder, inplanes, planes, expansion, stride=1, downsample=None, fused_se=True
+):
+    return Bottleneck(
+        builder,
+        inplanes,
+        planes,
+        expansion,
+        stride=stride,
+        se=True,
+        se_squeeze=16,
+        downsample=downsample,
+        fused_se=fused_se,
+    )
+
+
 # Bottleneck }}}
+
 
 # ResNet {{{
 class ResNet(nn.Module):
-    def __init__(self, builder, block, expansion, layers, widths, num_classes=1000):
+    def __init__(
+        self, builder, block, expansion, layers, widths, num_classes=1000, fused_se=True
+    ):
         self.inplanes = 64
+        self.fused_se = fused_se
         super(ResNet, self).__init__()
         self.conv1 = builder.conv7x7(3, 64, stride=2)
         self.bn1 = builder.batchnorm(64)
         self.relu = builder.activation()
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(builder, block, expansion, widths[0], layers[0])
-        self.layer2 = self._make_layer(builder, block, expansion, widths[1], layers[1], stride=2)
-        self.layer3 = self._make_layer(builder, block, expansion, widths[2], layers[2], stride=2)
-        self.layer4 = self._make_layer(builder, block, expansion, widths[3], layers[3], stride=2)
+        self.layer2 = self._make_layer(
+            builder, block, expansion, widths[1], layers[1], stride=2
+        )
+        self.layer3 = self._make_layer(
+            builder, block, expansion, widths[2], layers[2], stride=2
+        )
+        self.layer4 = self._make_layer(
+            builder, block, expansion, widths[3], layers[3], stride=2
+        )
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Linear(widths[3] * expansion, num_classes)
 
     def _make_layer(self, builder, block, expansion, planes, blocks, stride=1):
         downsample = None
         if stride != 1 or self.inplanes != planes * expansion:
-            dconv = builder.conv1x1(self.inplanes, planes * expansion,
-                                    stride=stride)
+            dconv = builder.conv1x1(self.inplanes, planes * expansion, stride=stride)
             dbn = builder.batchnorm(planes * expansion)
             if dbn is not None:
                 downsample = nn.Sequential(dconv, dbn)
@@ -217,10 +277,22 @@ class ResNet(nn.Module):
                 downsample = dconv
 
         layers = []
-        layers.append(block(builder, self.inplanes, planes, expansion, stride=stride, downsample=downsample))
+        layers.append(
+            block(
+                builder,
+                self.inplanes,
+                planes,
+                expansion,
+                stride=stride,
+                downsample=downsample,
+                fused_se=self.fused_se,
+            )
+        )
         self.inplanes = planes * expansion
         for i in range(1, blocks):
-            layers.append(block(builder, self.inplanes, planes, expansion))
+            layers.append(
+                block(builder, self.inplanes, planes, expansion, fused_se=self.fused_se)
+            )
 
         return nn.Sequential(*layers)
 
@@ -241,102 +313,97 @@ class ResNet(nn.Module):
         x = self.fc(x)
 
         return x
+
+
 # ResNet }}}
 
 resnet_configs = {
-        'classic' : {
-            'conv' : nn.Conv2d,
-            'conv_init' : 'fan_out',
-            'nonlinearity' : 'relu',
-            'last_bn_0_init' : False,
-            'activation' : lambda: nn.ReLU(inplace=True),
-            },
-        'fanin' : {
-            'conv' : nn.Conv2d,
-            'conv_init' : 'fan_in',
-            'nonlinearity' : 'relu',
-            'last_bn_0_init' : False,
-            'activation' : lambda: nn.ReLU(inplace=True),
-            },
-        'grp-fanin' : {
-            'conv' : nn.Conv2d,
-            'conv_init' : 'fan_in',
-            'nonlinearity' : 'relu',
-            'last_bn_0_init' : False,
-            'activation' : lambda: nn.ReLU(inplace=True),
-            },
-        'grp-fanout' : {
-            'conv' : nn.Conv2d,
-            'conv_init' : 'fan_out',
-            'nonlinearity' : 'relu',
-            'last_bn_0_init' : False,
-            'activation' : lambda: nn.ReLU(inplace=True),
-            },
-        }
+    "classic": {
+        "conv": nn.Conv2d,
+        "conv_init": "fan_out",
+        "nonlinearity": "relu",
+        "last_bn_0_init": False,
+        "activation": lambda: nn.ReLU(inplace=True),
+    },
+    "fanin": {
+        "conv": nn.Conv2d,
+        "conv_init": "fan_in",
+        "nonlinearity": "relu",
+        "last_bn_0_init": False,
+        "activation": lambda: nn.ReLU(inplace=True),
+    },
+    "grp-fanin": {
+        "conv": nn.Conv2d,
+        "conv_init": "fan_in",
+        "nonlinearity": "relu",
+        "last_bn_0_init": False,
+        "activation": lambda: nn.ReLU(inplace=True),
+    },
+    "grp-fanout": {
+        "conv": nn.Conv2d,
+        "conv_init": "fan_out",
+        "nonlinearity": "relu",
+        "last_bn_0_init": False,
+        "activation": lambda: nn.ReLU(inplace=True),
+    },
+}
 
 resnet_versions = {
-        'resnet18' : {
-            'net' : ResNet,
-            'block' : BasicBlock,
-            'layers' : [2, 2, 2, 2],
-            'widths' : [64, 128, 256, 512],
-            'expansion' : 1,
-            'num_classes' : 1000,
-            },
-         'resnet34' : {
-            'net' : ResNet,
-            'block' : BasicBlock,
-            'layers' : [3, 4, 6, 3],
-            'widths' : [64, 128, 256, 512],
-            'expansion' : 1,
-            'num_classes' : 1000,
-            },
-         'resnet50' : {
-            'net' : ResNet,
-            'block' : Bottleneck,
-            'layers' : [3, 4, 6, 3],
-            'widths' : [64, 128, 256, 512],
-            'expansion' : 4,
-            'num_classes' : 1000,
-            },
-        'resnet101' : {
-            'net' : ResNet,
-            'block' : Bottleneck,
-            'layers' : [3, 4, 23, 3],
-            'widths' : [64, 128, 256, 512],
-            'expansion' : 4,
-            'num_classes' : 1000,
-            },
-        'resnet152' : {
-            'net' : ResNet,
-            'block' : Bottleneck,
-            'layers' : [3, 8, 36, 3],
-            'widths' : [64, 128, 256, 512],
-            'expansion' : 4,
-            'num_classes' : 1000,
-            },
-        'resnext101-32x4d' : {
-            'net' : ResNet,
-            'block' : Bottleneck,
-            'cardinality' : 32,
-            'layers' : [3, 4, 23, 3],
-            'widths' : [128, 256, 512, 1024],
-            'expansion' : 2,
-            'num_classes' : 1000,
-            },
-        'se-resnext101-32x4d' : {
-            'net' : ResNet,
-            'block' : SEBottleneck,
-            'cardinality' : 32,
-            'layers' : [3, 4, 23, 3],
-            'widths' : [128, 256, 512, 1024],
-            'expansion' : 2,
-            'num_classes' : 1000,
-            },
-        }
+    "resnet18": {
+        "net": ResNet,
+        "block": BasicBlock,
+        "layers": [2, 2, 2, 2],
+        "widths": [64, 128, 256, 512],
+        "expansion": 1,
+    },
+    "resnet34": {
+        "net": ResNet,
+        "block": BasicBlock,
+        "layers": [3, 4, 6, 3],
+        "widths": [64, 128, 256, 512],
+        "expansion": 1,
+    },
+    "resnet50": {
+        "net": ResNet,
+        "block": Bottleneck,
+        "layers": [3, 4, 6, 3],
+        "widths": [64, 128, 256, 512],
+        "expansion": 4,
+    },
+    "resnet101": {
+        "net": ResNet,
+        "block": Bottleneck,
+        "layers": [3, 4, 23, 3],
+        "widths": [64, 128, 256, 512],
+        "expansion": 4,
+    },
+    "resnet152": {
+        "net": ResNet,
+        "block": Bottleneck,
+        "layers": [3, 8, 36, 3],
+        "widths": [64, 128, 256, 512],
+        "expansion": 4,
+    },
+    "resnext101-32x4d": {
+        "net": ResNet,
+        "block": Bottleneck,
+        "cardinality": 32,
+        "layers": [3, 4, 23, 3],
+        "widths": [128, 256, 512, 1024],
+        "expansion": 2,
+    },
+    "se-resnext101-32x4d": {
+        "net": ResNet,
+        "block": SEBottleneck,
+        "cardinality": 32,
+        "layers": [3, 4, 23, 3],
+        "widths": [128, 256, 512, 1024],
+        "expansion": 2,
+    },
+}
 
 
-def build_resnet(version, config, verbose=True):
+def build_resnet(version, config, num_classes, verbose=True, fused_se=True):
     version = resnet_versions[version]
     config = resnet_configs[config]
 
@@ -344,11 +411,15 @@ def build_resnet(version, config, verbose=True):
     if verbose:
         print("Version: {}".format(version))
         print("Config: {}".format(config))
-    model = version['net'](builder,
-                           version['block'],
-                           version['expansion'],
-                           version['layers'],
-                           version['widths'],
-                           version['num_classes'])
+        print("Num classes: {}".format(num_classes))
+    model = version["net"](
+        builder,
+        version["block"],
+        version["expansion"],
+        version["layers"],
+        version["widths"],
+        num_classes,
+        fused_se,
+    )
 
     return model

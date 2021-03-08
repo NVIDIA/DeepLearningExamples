@@ -42,6 +42,7 @@ then evaluation (in multi-class mode) can be invoked as follows:
 from collections import OrderedDict
 import copy
 import time
+import dllogger
 import numpy as np
 
 from pycocotools import coco
@@ -251,6 +252,8 @@ class COCOEvalWrapper(cocoeval.COCOeval):
         ('Recall/AR@100 (medium)', self.stats[10]),
         ('Recall/AR@100 (large)', self.stats[11])
     ])
+    dllogger.log(step=tuple(), data=summary_metrics)
+
     if not include_metrics_per_category:
       return summary_metrics, {}
     if not hasattr(self, 'category_stats'):

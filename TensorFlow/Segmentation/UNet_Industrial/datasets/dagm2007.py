@@ -37,7 +37,7 @@ from datasets.core import BaseDataset
 
 from utils import hvd_utils
 
-from dllogger.logger import LOGGER
+from dllogger import Logger
 
 __all__ = ['DAGM2007_Dataset']
 
@@ -109,7 +109,21 @@ class DAGM2007_Dataset(BaseDataset):
 
         shuffle_buffer_size = 10000
 
-        def decode_csv(line):
+        image_dir, csv_file = self._get_data_dirs(training=training)
+
+        mask_image_dir = os.path.join(image_dir, "Label")
+
+        dataset = tf.data.TextLineDataset(csv_file)
+
+        dataset = dataset.skip(1)  # Skip CSV Header
+
+        if only_defective_images:
+            dataset = dataset.filter(lambda line: tf.not_equal(tf.strings.substr(line, -1, 1), "0"))
+
+        if hvd_utils.is_using_hvd() and training:
+            dataset = dataset.shard(hvd.size(), hvd.rank())
+
+        def _load_dagm_data(line):
 
             input_image_name, image_mask_name, label = tf.decode_csv(
                 line, record_defaults=[[""], [""], [0]], field_delim=','
@@ -156,10 +170,33 @@ class DAGM2007_Dataset(BaseDataset):
                 ),
             )
 
+            label = tf.cast(label, tf.int32)
+
+            return tf.data.Dataset.from_tensor_slices(([input_image], [mask_image], [label]))
+
+        dataset = dataset.apply(
+            tf.data.experimental.parallel_interleave(
+                _load_dagm_data,
+                cycle_length=batch_size*8,
+                block_length=4,
+                buffer_output_elements=batch_size*8
+            )
+        )
+
+        dataset = dataset.cache()
+
+        if training:
+            dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=shuffle_buffer_size, seed=seed))
+
+        else:
+            dataset = dataset.repeat()
+
+        def _augment_data(input_image, mask_image, label):
+
             if augment_data:
 
-                if not hvd_utils.is_using_hvd() or hvd.local_rank() == 0:
-                    LOGGER.log("Using data augmentation ...")
+                if not hvd_utils.is_using_hvd() or hvd.rank() == 0:
+                    print("Using data augmentation ...")
 
                 #input_image = tf.image.per_image_standardization(input_image)
 
@@ -173,36 +210,11 @@ class DAGM2007_Dataset(BaseDataset):
                 input_image = tf.image.rot90(input_image, k=n_rots)
                 mask_image = tf.image.rot90(mask_image, k=n_rots)
 
-            label = tf.cast(label, tf.int32)
-
             return (input_image, mask_image), label
-
-        image_dir, csv_file = self._get_data_dirs(training=training)
-
-        mask_image_dir = os.path.join(image_dir, "Label")
-
-        dataset = tf.data.TextLineDataset(csv_file)
-
-        dataset = dataset.skip(1)  # Skip CSV Header
-
-        if only_defective_images:
-            dataset = dataset.filter(lambda line: tf.not_equal(tf.strings.substr(line, -1, 1), "0"))
-
-        dataset = dataset.cache()
-
-        if training:
-
-            dataset = dataset.apply(tf.data.experimental.shuffle_and_repeat(buffer_size=shuffle_buffer_size, seed=seed))
-
-            if hvd_utils.is_using_hvd():
-                dataset = dataset.shard(hvd.size(), hvd.rank())
-
-        else:
-            dataset = dataset.repeat()
 
         dataset = dataset.apply(
             tf.data.experimental.map_and_batch(
-                map_func=decode_csv,
+                map_func=_augment_data,
                 num_parallel_calls=num_threads,
                 batch_size=batch_size,
                 drop_remainder=True,
@@ -212,7 +224,7 @@ class DAGM2007_Dataset(BaseDataset):
         dataset = dataset.prefetch(buffer_size=tf.contrib.data.AUTOTUNE)
 
         if use_gpu_prefetch:
-            dataset.apply(tf.data.experimental.prefetch_to_device(device="/gpu:0", buffer_size=batch_size * 8))
+            dataset.apply(tf.data.experimental.prefetch_to_device(device="/gpu:0", buffer_size=4))
 
         return dataset
 

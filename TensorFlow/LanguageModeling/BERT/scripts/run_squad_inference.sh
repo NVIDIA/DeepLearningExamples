@@ -15,7 +15,7 @@
 
 echo "Container nvidia build = " $NVIDIA_BUILD_ID
 
-init_checkpoint=${1:-"/results/model.ckpt"}
+init_checkpoint=${1:-"data/download/nvidia_pretrained/bert_tf_squad11_large_384/model.ckpt"}
 batch_size=${2:-"8"}
 precision=${3:-"fp16"}
 use_xla=${4:-"true"}
@@ -25,9 +25,9 @@ bert_model=${7:-"large"}
 squad_version=${8:-"1.1"}
 
 if [ "$bert_model" = "large" ] ; then
-    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-24_H-1024_A-16
+    export BERT_DIR=data/download/nvidia_pretrained/bert_tf_pretraining_large_lamb
 else
-    export BERT_DIR=data/download/google_pretrained_weights/uncased_L-12_H-768_A-12
+    export BERT_DIR=data/download/nvidia_pretrained/bert_tf_squad11_base_128
 fi
 
 export SQUAD_DIR=data/download/squad/v${squad_version}
@@ -43,15 +43,18 @@ echo "Results directory set as " $RESULTS_DIR
 
 use_fp16=""
 if [ "$precision" = "fp16" ] ; then
-        echo "fp16 activated!"
-        use_fp16="--use_fp16"
+    echo "fp16 activated!"
+    use_fp16="--amp"
+else
+    echo "fp32/tf32 activated!"
+    use_fp16="--noamp"
 fi
 
 if [ "$use_xla" = "true" ] ; then
     use_xla_tag="--use_xla"
     echo "XLA activated"
 else
-    use_xla_tag=""
+    use_xla_tag="--nouse_xla"
 fi
 
 ckpt_str=${init_checkpoint//\//-}
@@ -76,12 +79,10 @@ python run_squad.py \
 --init_checkpoint=$init_checkpoint \
 --do_predict=True \
 --predict_file=$SQUAD_DIR/dev-v${squad_version}.json \
+--eval_script=$SQUAD_DIR/evaluate-v${squad_version}.py \
 --predict_batch_size=$batch_size \
 --max_seq_length=$seq_length \
 --doc_stride=$doc_stride \
---predict_batch_size=$batch_size \
 --output_dir=$RESULTS_DIR \
 "$use_fp16" \
 $use_xla_tag --version_2_with_negative=${version_2_with_negative}
-
-python $SQUAD_DIR/evaluate-v${squad_version}.py $SQUAD_DIR/dev-v${squad_version}.json $RESULTS_DIR/predictions.json

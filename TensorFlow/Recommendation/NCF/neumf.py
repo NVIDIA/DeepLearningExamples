@@ -161,7 +161,7 @@ def ncf_model_ops(users,
     beta_2 = params['beta_2']
     epsilon = params['epsilon']
     # Model params
-    fp16 = params['fp16']
+    fp16 = False
     nb_users = params['num_users']
     nb_items = params['num_items']
     mf_dim = params['num_factors']

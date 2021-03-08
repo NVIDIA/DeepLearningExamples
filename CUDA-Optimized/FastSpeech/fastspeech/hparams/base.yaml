@@ -1,0 +1,38 @@
+# Path
+dataset_path: "/workspace/fastspeech/LJSpeech-1.1"
+tacotron2_path: "/workspace/fastspeech/tacotron2_statedict.pt"
+waveglow_path: "/workspace/fastspeech/nvidia_waveglow256pyt_fp16"
+mels_path: "/workspace/fastspeech/mels_ljspeech1.1"
+aligns_path: "/workspace/fastspeech/aligns_ljspeech1.1"
+log_path: "/workspace/fastspeech/logs"
+checkpoint_path: "/workspace/fastspeech/checkpoints"
+
+# Audio
+sr: 22050
+n_fft: 1024
+win_len: 1024
+hop_len: 256
+num_mels: 80
+mel_fmin: 0.0
+mel_fmax: 8000.0
+
+# Text
+text_cleaners: ['english_cleaners']
+
+# Model
+d_model: 384
+phoneme_side_n_layer: 6
+phoneme_side_head: 2
+phoneme_side_conv1d_filter_size: 1536
+max_seq_len: 2048  # 23s
+phoneme_side_output_size: 384
+mel_side_n_layer: 6
+mel_side_head: 2
+mel_side_conv1d_filter_size: 1536
+mel_side_output_size: 384
+fft_conv1d_kernel: 3
+fft_conv1d_padding: 1
+duration_predictor_filter_size: 256
+duration_predictor_kernel_size: 3
+dropout: 0.1
+fused_layernorm: False

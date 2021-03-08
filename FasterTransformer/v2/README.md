@@ -4,33 +4,34 @@ This repository provides a script and recipe to run the highly optimized transfo
 
 ## Table Of Contents
 
-- [Model overview](#model-overview)
-  * [Configuration support matrix](#configuration-support-matrix)
-  * [Model architecture](#model-architecture)
-    * [Encoder](#encoder)
-    * [Decoder](#decoder)
-    * [Decoding](#decoding)
-    * [Decoder and Decoding](#decoder-and-decoding)
-- [Setup](#setup)
-  * [Requirements](#requirements)
-- [Quick Start Guide](#quick-start-guide)
-  * [Build the FasterTransformer](#build-the-fastertransformer)
-  * [Execute the encoder demos](#execute-the-encoder-demos)
-  * [Execute the decoding demos](#execute-the-decoding-demos)
-- [Advanced](#advanced)
-  * [Scripts and sample codes](#scripts-and-sample-codes)
-  * [Command-line options](#command-line-options)
-  * [Inference process](#inference-process)
-    * [Encoder process](#encoder-process)
-    * [Decoder and Decoding process](#decoder-and-decoding-process)
-- [Performance](#performance)
-  * [Encoder performance](#encoder-performance)
-  * [Decoder performance on T4](#decoder-performance-on-t4)
-  * [Decoding performance on T4](#decoding-performance-on-t4)
-  * [Decoding performance on V100](#decoding-performance-on-v100)
-- [Release notes](#release-notes)
-  * [Changelog](#changelog)
-  * [Known issues](#known-issues)
+  - [Model overview](#model-overview)
+    - [Configuration support matrix](#configuration-support-matrix)
+    - [Model architecture](#model-architecture)
+      - [Encoder](#encoder)
+      - [Decoder](#decoder)
+      - [Decoding](#decoding)
+      - [Decoder and Decoding](#decoder-and-decoding)
+  - [Setup](#setup)
+    - [Requirements](#requirements)
+  - [Quick Start Guide](#quick-start-guide)
+    - [Build the FasterTransformer](#build-the-fastertransformer)
+    - [Execute the encoder demos](#execute-the-encoder-demos)
+    - [Execute the decoding demos](#execute-the-decoding-demos)
+  - [Advanced](#advanced)
+    - [Scripts and sample codes](#scripts-and-sample-codes)
+    - [Command-line options](#command-line-options)
+    - [Inference process](#inference-process)
+      - [Encoder process](#encoder-process)
+      - [Decoder and decoding process](#decoder-and-decoding-process)
+      - [Translation process](#translation-process)
+  - [Performance](#performance)
+    - [Encoder performance](#encoder-performance)
+    - [Decoder performance on T4](#decoder-performance-on-t4)
+    - [Decoding performance on T4](#decoding-performance-on-t4)
+    - [Decoding performance on V100](#decoding-performance-on-v100)
+  - [Release notes](#release-notes)
+    - [Changelog](#changelog)
+    - [Known issues](#known-issues)
 
 ## Model overview
 
@@ -51,7 +52,7 @@ FasterTransformer is built on top of CUDA and cuBLAS, providing the C++ API and 
 
 The following configurations are supported in the FasterTransformer encoder. 
 - Batch size (B<sub>1</sub>): smaller or equal to 512
-- Sequence length (S): smaller or equal to 128 
+- Sequence length (S): larger than 3 and smaller or equal to 1024 
 - Head number (H) and size per head (N): 
   - 12 heads * 64 per heads
   - 4 heads * 32 per heads
@@ -60,7 +61,7 @@ The following configurations are supported in the FasterTransformer encoder.
 
 The following configurations are supported in the FasterTransformer decoder and decoding.
 - Batch size (B<sub>1</sub>) * beam width (B<sub>2</sub>): smaller than 1024
-- Sequence length (S): smaller or equal to 128
+- Sequence length (S): smaller than 1024
 - Head number (H): 8 and 12
 - Size per head (N): 64
 - Vocabulary size (V): from 64 to 30000
@@ -124,7 +125,9 @@ The following section lists the requirements in order to use FasterTransformer.
 - CUDA 10.1
 - Python 2.7
 - Tensorflow 1.14
-These components are readily available within the NGC TensorFlow Docker image below.
+- TensorRT 5.1.5.0
+
+These components are readily available within the NGC TensorFlow Docker image below, except TensorRT.
 
 Ensure you have the following components:
 - [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
@@ -154,10 +157,9 @@ nvidia-docker run -ti nvcr.io/nvidia/tensorflow:19.07-py2 bash
 
 ```bash
 git clone https://github.com/NVIDIA/DeepLearningExamples
-cd DeepLearningExamples
+cd DeepLearningExamples/FasterTransformer/v2
 git submodule init
 git submodule update
-cd FasterTransformer
 ```
 
 3. Build the project.
@@ -169,17 +171,21 @@ cd build
 cmake -DSM=xx -DCMAKE_BUILD_TYPE=Release .. # C++ only
 cmake -DSM=xx -DCMAKE_BUILD_TYPE=Debug .. # C++ debug only
 cmake -DSM=xx -DCMAKE_BUILD_TYPE=Release -DBUILD_TF=ON -DTF_PATH=/usr/local/lib/python2.7/dist-packages/tensorflow .. # Tensorflow mode
+cmake -DSM=xx -DCMAKE_BUILD_TYPE=Release -DBUILD_TRT=ON -DTRT_PATH=/usr/include/x86_64-linux-gnu .. # TensorRT mode
+cmake -DSM=xx -DCMAKE_BUILD_TYPE=Release -DBUILD_TRT=ON -DTRT_PATH=<TensorRT_dir> .. # TensorRT mode if you put TensorRT in <TensorRT_dir>
 make
 ```
 
 Note: `xx` is the compute capability of your GPU. For example, 60 (P40) or 61 (P4) or 70 (V100) or 75(T4).
+
+Note: If you use the image we recommand, then the tensorrt related libraries are in the `/usr/include/x86_64-linux-gnu`. 
 
 ### Execute the encoder demos
 
 1. Generate the `gemm_config.in` file. 
 
 ```bash
- ./bin/encoder_gemm <batch_size> <sequence_length> <head_number> <size_per_head> <is_use_fp16>
+./bin/encoder_gemm <batch_size> <sequence_length> <head_number> <size_per_head> <is_use_fp16>
 ./bin/encoder_gemm 1 32 12 64 0
 ``` 
 
@@ -222,29 +228,108 @@ python encoder_sample.py \
         --test_time 1
 ```
 
-3. Run the FasterTransformer in BERT.
-
-The following script demonstrates how to integrate the FasterTransformer into a BERT model. 
-
-a.	Download the BERT model.
+d. Run the encoder in TensorRT by tensorrt sample.
 
 ```bash
+./bin/encoder_gemm 1 32 12 64 0
+./bin/transformer_trt <batch_size> <num_layerse> <seq_len> <head_num> <size_per_head> fp16(fp32)
+./bin/transformer_trt 1 12 32 12 64 fp32
+```
+
+3. Run the FasterTransformer in BERT.
+
+The following script demonstrates how to integrate the FasterTransformer into a BERT model. This requires the repo of [BERT](https://github.com/google-research/bert).
+
+a.	Prepare the BERT codes, Download the BERT pretrained model.
+
+```bash
+cd tensorflow_bert
+git clone https://github.com/google-research/bert.git
 wget https://storage.googleapis.com/bert_models/2018_10_18/uncased_L-12_H-768_A-12.zip
 unzip uncased_L-12_H-768_A-12.zip
 ```
 
-b.	Run the FasterTransformer on BERT. 
+b. Download the GLUE MRPC dataset. Note that the file `download_glue_data.py` can only executed under python3. 
 
 ```bash
-export BERT_BASE_DIR=./uncased_L-12_H-768_A-12
-./bin/encoder_gemm 8 128 12 64 0
-python tensorflow_bert/profile_transformer_inference.py \
-        --init_checkpoint=$BERT_BASE_DIR/bert_model.ckpt \
-        --tf_profile=false \
-        --output_dir=mrpc_output \
-        --profiling_output_file=time_elapsed \
-        --xla=false \
-        --floatx=float32
+wget https://gist.githubusercontent.com/W4ngatang/60c2bdb54d156a41194446737ce03e2e/raw/17b8dd0d724281ed7c3b2aeeda662b92809aadd5/download_glue_data.py
+python download_glue_data.py --tasks MRPC
+```
+
+c. Finetune the pretrained model on MRPC datasets. This takes some minutes. The accuracy would be better or worse because the MRPC dataset is very small. 
+
+```bash
+export BERT_BASE_DIR=${PWD}/uncased_L-12_H-768_A-12
+export GLUE_DIR=${PWD}/glue_data/
+
+python bert/run_classifier.py \
+  --task_name=MRPC \
+  --do_train=true \
+  --do_eval=true \
+  --data_dir=$GLUE_DIR/MRPC \
+  --vocab_file=$BERT_BASE_DIR/vocab.txt \
+  --bert_config_file=$BERT_BASE_DIR/bert_config.json \
+  --init_checkpoint=$BERT_BASE_DIR/bert_model.ckpt \
+  --max_seq_length=128 \
+  --train_batch_size=32 \
+  --learning_rate=2e-5 \
+  --num_train_epochs=3.0 \
+  --output_dir=mrpc_output/
+```
+
+The results would be like: 
+```bash
+I0403 08:52:49.721482 140547349206848 estimator.py:2039] Saving dict for global step 343: eval_accuracy = 0.87009805, eval_loss = 0.44462326, global_step = 343, loss = 0.44462326
+I0403 08:52:50.128525 140547349206848 estimator.py:2099] Saving 'checkpoint_path' summary for global step 343: mrpc_output/model.ckpt-343
+I0403 08:52:50.129132 140547349206848 error_handling.py:96] evaluation_loop marked as finished
+I0403 08:52:50.129281 140547349206848 run_classifier.py:923] ***** Eval results *****
+I0403 08:52:50.129338 140547349206848 run_classifier.py:925]   eval_accuracy = 0.87009805
+I0403 08:52:50.129695 140547349206848 run_classifier.py:925]   eval_loss = 0.44462326
+I0403 08:52:50.129786 140547349206848 run_classifier.py:925]   global_step = 343
+I0403 08:52:50.129833 140547349206848 run_classifier.py:925]   loss = 0.44462326
+```
+
+d. Conver the finetuned checkpoint to FP16, check the accuracy of Fastertransformer under FP16. 
+
+```bash
+python ckpt_type_convert.py --init_checkpoint=mrpc_output/model.ckpt-343 --fp16_checkpoint=mrpc_output/fp16_model.ckpt
+python run_classifier_wrap.py   --floatx=float16   --task_name=MRPC   --do_eval=true   --data_dir=$GLUE_DIR/MRPC   --vocab_file=$BERT_BASE_DIR/vocab.txt   --bert_config_file=$BERT_BASE_DIR/bert_config.json   --init_checkpoint=mrpc_output/fp16_model.ckpt   --max_seq_length=128   --eval_batch_size=8   --output_dir=mrpc_output
+```
+
+Because we do not generate the `gemm_config.ini` file, you can see many warning messages like:
+
+```bash
+gemm_config.in is not found
+loading GEMM algorithms error, using default GEMM algorithms
+gemm_config.in is not found
+loading GEMM algorithms error, using default GEMM algorithms!
+I0403 08:55:07.053885 140260684429120 evaluation.py:275] Finished evaluation at 2020-04-03-08:55:07
+I0403 08:55:07.054126 140260684429120 estimator.py:2039] Saving dict for global step 343: eval_accuracy = 0.86764705, eval_loss = 0.45615184, global_step = 343, loss = 0.4561844
+I0403 08:55:07.422543 140260684429120 estimator.py:2099] Saving 'checkpoint_path' summary for global step 343: mrpc_output/fp16_model.ckpt
+I0403 08:55:07.423089 140260684429120 error_handling.py:96] evaluation_loop marked as finished
+I0403 08:55:07.423257 140260684429120 run_classifier.py:923] ***** Eval results *****
+I0403 08:55:07.423315 140260684429120 run_classifier.py:925]   eval_accuracy = 0.86764705
+I0403 08:55:07.423553 140260684429120 run_classifier.py:925]   eval_loss = 0.45615184
+I0403 08:55:07.423635 140260684429120 run_classifier.py:925]   global_step = 343
+I0403 08:55:07.423686 140260684429120 run_classifier.py:925]   loss = 0.4561844
+```
+
+This shows that we use the FasterTransformer to run the inference successfully. In this case, using FP16 to do inference will reduce the accuracy with about 0.3%.
+
+e. Compare the speed of BERT of TensorFlow and FasterTransformer under both FP32 and FP16.
+
+```bash
+../bin/encoder_gemm 1 32 12 64 0
+python profile_transformer_inference.py --init_checkpoint=mrpc_output/model.ckpt-343 --tf_profile=false --output_dir=mrpc_output --profiling_output_file=time_elapsed --xla=false --floatx=float32
+../bin/encoder_gemm 1 32 12 64 1
+python profile_transformer_inference.py --init_checkpoint=mrpc_output/fp16_model.ckpt --tf_profile=false --output_dir=mrpc_output --profiling_output_file=time_elapsed --xla=false --floatx=float16
+```
+
+The results of FP16 under V100 would be like:
+
+```bash
+average time (seconds) elasped original tensorflow: 0.011663460731506347
+average time (seconds) elasped fast transformer: 0.007064676284790039
 ```
 
 ### Execute the decoding demos
@@ -252,7 +337,7 @@ python tensorflow_bert/profile_transformer_inference.py \
 1. Generate the `decoding_gemm_config.in` file. 
 
 ```bash
-./bin/decoding_gemm <batch_size> <beam_width> <head_number> <size_per_head> <sequence_length> <encoder_hidden_dim> <is_use_fp16>
+./bin/decoding_gemm <batch_size> <beam_width> <head_number> <size_per_head> <vocab_size> <sequence_length> <encoder_hidden_dim> <is_use_fp16>
 ./bin/decoding_gemm 32 4 8 64 30000 32 768 0
 ```
 
@@ -261,7 +346,7 @@ python tensorflow_bert/profile_transformer_inference.py \
 a.	Run the decoding in C++ by running the following script: 
 
 ```bash
-./bin/decoding_sample <batch_size> <beam_width> <head_number> <size_per_head> <sequence_length> <num_layers> <encoder_hidden_dim> <is_use_fp16>
+./bin/decoding_sample <batch_size> <beam_width> <head_number> <size_per_head> <vocab_size> <sequence_length> <num_layers> <encoder_hidden_dim> <is_use_fp16>
 ./bin/decoding_sample 32 4 8 64 30000 32 6 768 0
 ```
 
@@ -356,6 +441,8 @@ The `sample/` folder contains useful sample codes for FasterTransformer:
 * `sample/tensorflow/decoding_sample.py` - TensorFlow decoding sample codes 
 * `sample/tensorflow/encoder_decoder_sample.py` - TensorFlow `encoder_decoder` sample codes 
 * `sample/tensorflow/encoder_decoding_sample.py` - TensorFlow `encoder_decoding` sample codes 
+* `sample/tensorflow/translate_sample.py` - TensorFlow translation sample codes
+* `sample/tensorRT/transformer_trt.cc` - Transformer layer tensorRT sample codes
 
 ### Command-line options
 
@@ -367,6 +454,7 @@ python decoder_sample.py --help
 python decoding_sample.py --help
 python encoder_decoder_sample.py --help
 python encoder_decoding_sample.py --help
+python translate_sample.py --help
 ```
 
 ### Inference process
@@ -476,7 +564,7 @@ python encoder_sample.py \
 `./bin/decoding_gemm` can generate the best GEMM configuration. The arguments of `decoding_gemm` are:
 
 ```bash
-./bin/decoding_gemm <batch_size> <beam_width> <head_number> <size_per_head> <sequence_length> <encoder_hidden_dim> <is_use_fp16>
+./bin/decoding_gemm <batch_size> <beam_width> <head_number> <size_per_head> <vocab_size> <sequence_length> <encoder_hidden_dim> <is_use_fp16>
 ```
 
 Assume the settings of decoding are as follows.
@@ -505,7 +593,7 @@ a.	Run the decoding in C++ by running the following script:
 `./bin/decoding_sample` runs the decoding in the `cpp`. The arguments of `encoder_sample` is:
 
 ```bash
-./bin/decoding_sample <batch_size> <beam_width> <head_number> <size_per_head> <sequence_length> <num_layers> <encoder_hidden_dim> <is_use_fp16>
+./bin/decoding_sample <batch_size> <beam_width> <head_number> <size_per_head> <vocab_size> <sequence_length> <num_layers> <encoder_hidden_dim> <is_use_fp16>
 ```
 
 Then the following scripts can run the decoding under the above settings. 
@@ -540,14 +628,16 @@ python decoder_sample.py \
 The outputs should be similar to the following:
 
 ```bash 
-[[INFO][PYTHON] step:][1][max diff: ][9.77516174e-06][True]
-[[INFO][PYTHON] step:][2][max diff: ][1.04904175e-05][True]
+[[INFO][PYTHON] step:][0][max diff: ][5.00679e-06][ op val: ][2.3735888][ tf val: ][2.37359381][True]
+[[INFO][PYTHON] step:][1][max diff: ][4.64916229e-06][ op val: ][-0.588810563][ tf val: ][-0.588815212][True]
+[[INFO][PYTHON] step:][2][max diff: ][5.36441803e-06][ op val: ][-1.46514082][ tf val: ][-1.46514618][True]
 ...
-[[INFO][PYTHON] step:][31][max diff: ][1.21593475e-05][True]
-[[INFO][PYTHON] step:][32][max diff: ][1.04382634e-05][True]
+[[INFO][PYTHON] step:][29][max diff: ][4.529953e-06][ op val: ][2.88768935][ tf val: ][2.88769388][True]
+[[INFO][PYTHON] step:][30][max diff: ][4.17232513e-06][ op val: ][-1.28717053][ tf val: ][-1.2871747][True]
+[[INFO][PYTHON] step:][31][max diff: ][4.05311584e-06][ op val: ][-1.01830876][ tf val: ][-1.01831281][True]
 ```
 
-The results show that the differences between the decoder of TensorFlow and decoder are smaller than threshold.
+The results show that the differences between the decoder of TensorFlow and decoder are smaller than threshold. Note that the differences are absolute differences, so the differences may be large when the op val is large. In this case, the differences are larger than the threshold and the checking will return "False", but it may be not affect the final results.
 
 The option `decoder_type` decides to use the decoder of TensorFlow or decoder of FasterTransformer. `decoder_type 2` uses both decoders and compares their results. 
 
@@ -606,15 +696,13 @@ python decoding_sample.py \
 The outputs should be similar to the following:
 
 ```bash
-[INFO] Before finalize: 
-       result before finalize cross-check: True
+       Output ids cross-check: True
  
        Parent ids cross-check: True
  
-       sequence lengths cross-check: True
+       Sequence lengths cross-check: True
  
-[INFO] After finalize: 
-       result after cross-check: True
+       Finalized output ids cross-check: True
 ```
 
 Note that the results of OP and the results of TensorFlow are often different in the random inputs and weights. 
@@ -635,6 +723,35 @@ python encoder_decoding_sample.py \
         --data_type fp32
 ```
 
+#### Translation process
+
+This subsection demonstrates how to use FasterTansformer decoding to translate a sentence. We use the pretrained model and testing data in [OpenNMT-tf](https://opennmt.net/Models-tf/), which translate from English to German. 
+
+Because the FasterTransformer Encoder is based on BERT, we cannot restore the model of encoder of OpenNMT to FasterTransformer Encoder. Therefore, we use OpenNMT-tf to build the encoder and preprocess the source sentence.
+
+Another problem is that the implementation of FasterTransformer Decoder and decoder of OpenNMT-tf is a little different. For example, the decoder of OpenNMT-tf uses one convolution to compute query, key and value in masked-multihead-attention; but FasterTransformer Decoder splits them into three gemms. The tool `utils/dump_model.py` will convert the pretrained model to fit the model structure of FasterTransformer Decoder.
+
+`download_model_data.sh` will install the OpenNMT-tf v1, downloads the pretrained model into the `translation` folder, and convert the model. 
+
+```bash
+bash utils/translation/download_model_data.sh
+```
+
+Then run the translation sample by the following script:
+
+```bash
+./bin/decoding_gemm 1 4 8 64 32001 100 512 0
+python translate_sample.py
+```
+
+The outputs should be similar to the following:
+
+```bash
+[INFO] opennmt: ▁28 - jährige r ▁Chef koch ▁to t ▁in ▁San ▁Francisco </s>
+[INFO] tf     : ▁28 - jährige r ▁Chef koch ▁to t ▁in ▁San ▁Francisco </s>
+[INFO] op     : ▁28 - jährige r ▁Chef koch ▁to t ▁in ▁San ▁Francisco </s>
+```
+
 ## Performance
 
 Hardware settings: 
@@ -653,7 +770,7 @@ For Encoder, the reported time is the average inference time for 100 iterations 
 
 For Decoder and Decoding, the reported time the is average inference time for 50 iterations with 50 warm-up iterations.
 
-### Encoder  performance
+### Encoder performance
 
 We demonstrate the inference time of FasterTransformer in C++ and compare it to the inference time of TensorFlow in Python. 
 
@@ -716,7 +833,7 @@ bash scripts/profile_decoding_op_performance.sh
 
 * We set beam_width = 4
 
-| <batch_size, seq_len> | TensorFlow FP32 (in ms) | Decoder FP32 (in ms) | FP32 Speedup | TensorFlow FP16 (in ms) | Decoder FP16 (in ms) | FP16 Speedup |
+| <batch_size, seq_len> | TensorFlow FP32 (in ms) | Decoding FP32 (in ms) | FP32 Speedup | TensorFlow FP16 (in ms) | Decoding FP16 (in ms) | FP16 Speedup |
 |:------------:|:-------:|:-------:|:----:|:-------:|:------:|:-----:|
 | (1, 32)   | 430.39  | 64.16   | 6.70 | 537.95  | 49.07  | 10.96 |
 | (1, 64)   | 876.24  | 135.42  | 6.47 | 1056.78 | 97.45  | 10.84 |
@@ -738,7 +855,7 @@ bash scripts/profile_decoding_op_performance.sh
 
 * We set beam_width = 4
 
-| <batch_size, seq_len> | TensorFlow FP32 (in ms) | Decoder FP32 (in ms) | FP32 Speedup | TensorFlow FP16 (in ms) | Decoder FP16 (in ms) | FP16 Speedup |
+| <batch_size, seq_len> | TensorFlow FP32 (in ms) | Decoding FP32 (in ms) | FP32 Speedup | TensorFlow FP16 (in ms) | Decoding FP16 (in ms) | FP16 Speedup |
 |:------------:|:-------:|:------:|:----:|:-------:|:------:|:-----:|
 | (1, 32)   | 440.46  | 58.70  | 7.50 | 531.70  | 46.18  | 11.51 |
 | (1, 64)   | 888.19  | 122.50 | 7.25 | 1065.76 | 93.84  | 11.35 |
@@ -752,6 +869,20 @@ bash scripts/profile_decoding_op_performance.sh
 
 ### Changelog
 
+April 2020
+- Fix the bug of encoder tensorrt plugin.
+
+March 2020
+- Add feature in FasterTransformer 2.0
+  - Add `translate_sample.py` to demonstrate how to translate a sentence by restoring the pretrained model of OpenNMT-tf.
+- Fix bugs of Fastertransformer 2.0
+  - Fix the bug of maximum sequence length of decoder cannot be larger than 128.
+  - Fix the bug that decoding does not check finish or not after each step. 
+  - Fix the bug of decoder about max_seq_len.
+  - Modify the decoding model structure to fit the OpenNMT-tf decoding model. 
+    - Add a layer normalization layer after decoder.
+    - Add a normalization for inputs of decoder
+
 Febuary 2020
 - Release the FasterTransformer 2.0
   - Provide a highly optimized OpenNMT-tf based decoder and decoding, including C++ API and TensorFlow op. 
@@ -764,10 +895,8 @@ July 2019
 
 ### Known issues
 
-- sequence length of Decoder and Decoding should be smaller than 128.
-- batch_size should be smaller than 1024 in Decoder.
-- batch_size x beam_width should be smaller than 1024 in Decoding.
-- Results of TensorFlow  and OP would be different in decoding. This problem is caused by the accumulated log probability, and we do not avoid this problem. 
+- batch_size should be smaller or equal to 1024 in Decoder.
+- batch_size x beam_width should be smaller or equal to 1024 in Decoding.
+- Results of TensorFlow and OP would be different in decoding. This problem is caused by the accumulated log probability, and we do not avoid this problem. 
 - Cmake 15 or Cmake 16 fail to build this project. Cmake 14 is no problem. 
-- Max sequence length of encoder and decoder should be the same.  
-
+- Max sequence length of encoder and decoder should be the same. 

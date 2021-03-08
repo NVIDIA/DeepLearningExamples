@@ -15,8 +15,6 @@
 import os
 import tensorflow as tf
 from common import create_initializer
-from utils.position import SinusoidalPositionEncoder
-
 
 def norm(inputs):
     """Layer normalizes :obj:`inputs`."""
@@ -74,12 +72,6 @@ def tf_decoder(decoder_args,
                cache=None,
                kernel_initializer_range=0.02,
                bias_initializer_range=0):
-
-    position_encoder = SinusoidalPositionEncoder()
-    if position_encoder is not None:
-        inputs = position_encoder(
-            inputs, position=step + 1 if step is not None else None)
-
     memory_mask = None  # has something
 
     if memory is not None and not tf.contrib.framework.nest.is_sequence(memory):
@@ -340,10 +332,6 @@ def op_decoder(inputs,
     decoder_op_module = tf.load_op_library(
         os.path.join('./lib/libtf_decoder.so'))
 
-    position_encoder = SinusoidalPositionEncoder()
-    inputs = position_encoder(
-        inputs, position=step + 1 if step is not None else None)
-
     op_self_cache = tf.concat([op_self_cache, tf.zeros([decoder_args.num_layer, 2, 1,
                                                         decoder_args.batch_size * decoder_args.beam_width,
                                                         decoder_args.hidden_dim], dtype=decoder_args.dtype)], axis=2)
@@ -366,8 +354,8 @@ def op_decoder(inputs,
             decoder_vars[24 + 26 * i], decoder_vars[25 + 26 * i],
             op_self_cache[i], op_mem_cache[i],
             psuedo_input,  # add tf_result as input to prevent the OP and TF from parallel execution and lead to error result
-            max_seq_len=decoder_args.max_seq_len, head_num=decoder_args.head_num,
-            size_per_head=decoder_args.size_per_head, memory_hidden_dim=memory_hidden_dim)
+            head_num=decoder_args.head_num, 
+            size_per_head=decoder_args.size_per_head)
         inputs = op_result
 
     return op_result, op_self_cache, op_mem_cache
