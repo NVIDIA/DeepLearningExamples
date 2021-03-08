@@ -451,22 +451,27 @@ class SynteticDataLoader(object):
         height,
         width,
         one_hot,
+        device=torch.device("cpu"),
+        fp16=False,
         memory_format=torch.contiguous_format,
     ):
         input_data = (
             torch.empty(batch_size, num_channels, height, width)
             .contiguous(memory_format=memory_format)
-            .cuda()
+            .to(device)
             .normal_(0, 1.0)
         )
         if one_hot:
-            input_target = torch.empty(batch_size, num_classes).cuda()
+            input_target = torch.empty(batch_size, num_classes).to(device)
             input_target[:, 0] = 1.0
         else:
             input_target = torch.randint(0, num_classes, (batch_size,))
-        input_target = input_target.cuda()
-
-        self.input_data = input_data
+        input_target = input_target.to(device)
+        if fp16:
+            self.input_data = input_data.half()
+        else:
+            self.input_data = input_data
+        
         self.input_target = input_target
 
     def __iter__(self):
@@ -482,11 +487,13 @@ def get_syntetic_loader(
     start_epoch=0,
     workers=None,
     _worker_init_fn=None,
+    device=torch.device("cpu"),
+    fp16=False,
     memory_format=torch.contiguous_format,
 ):
     return (
         SynteticDataLoader(
-            batch_size, num_classes, 3, 224, 224, one_hot, memory_format=memory_format
+            batch_size, num_classes, 3, 224, 224, one_hot, device=device, fp16=fp16, memory_format=memory_format
         ),
         -1,
     )

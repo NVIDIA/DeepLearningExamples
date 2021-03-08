@@ -65,12 +65,17 @@ def initialize_model(args):
     return model.half() if args.fp16 else model
 
 
-def get_dataloader(args):
+def get_dataloader(batch_size, use_half, use_cpu):
     """ return dataloader for inference """
     from image_classification.dataloaders import get_syntetic_loader
+    
+    if use_cpu:
+        device = torch.device("cpu")
+    else:
+        device = torch.device("cuda")
 
     def data_loader():
-        loader, _ = get_syntetic_loader(None, 128, 1000, True, fp16=args.fp16)
+        loader, _ = get_syntetic_loader(None, batch_size, 1000, True, device=device, fp16=use_half)
         processed = 0
         for inp, _ in loader:
             yield inp
@@ -90,7 +95,7 @@ if __name__ == "__main__":
     model_args = get_model_args(model_argv)
 
     model = initialize_model(model_args)
-    dataloader = get_dataloader(model_args)
+    dataloader = get_dataloader(model_args.batch_size, model_args.fp16, deployer.args.triton_no_cuda)
 
     if model_args.dump_perf_data:
         input_0 = next(iter(dataloader))

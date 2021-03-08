@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     model_state_dict = {
         k[len("module.") :] if "module." in k else k: v
-        for k, v in checkpoint["state_dict"].items()
+        for k, v in checkpoint.items()
     }
 
     print(f"Loaded {checkpoint['arch']} : {checkpoint['best_prec1']}")
