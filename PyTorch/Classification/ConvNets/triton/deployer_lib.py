@@ -321,11 +321,12 @@ class DeployerLibrary:
         shapes = tuple(shapes)
         return shapes  # tuple of dynamic shapes
 
-    def run_models(self, models, inputs):
+    def run_models(self, models, inputs, use_cuda):
         """ run the models on inputs, return the outputs and execution times """
         ret = []
         for model in models:
-            torch.cuda.synchronize()
+            if use_cuda:
+                torch.cuda.synchronize()
             time_start = time.time()
             outputs = []
             for input in inputs:
@@ -334,7 +335,8 @@ class DeployerLibrary:
                 if type(output) is torch.Tensor:
                     output = [output]
                 outputs.append(output)
-            torch.cuda.synchronize()
+            if use_cuda:
+                torch.cuda.synchronize()
             time_end = time.time()
             t = time_end - time_start
             ret.append(outputs)
@@ -461,6 +463,9 @@ dynamic_batching {{
             "gpu_list": ", ".join([str(x) for x in range(torch.cuda.device_count())]),
             "engine_count": self.args.triton_engine_count,
         }
+
+        print("Generating Config: ", config_values)
+        print("\n")
 
         # write config
         with open(config_filename, "w") as file:
@@ -660,7 +665,7 @@ class Deployer:
         assert not model.training, "internal error - model should be in eval() mode! "
         models = (model, model_trt)
         outputs, time_model, outputs_trt, time_model_trt = self.lib.run_models(
-            models, inputs
+            models, inputs, self.args.triton_no_cuda == False
         )
 
         # check for errors
@@ -845,7 +850,6 @@ class Deployer:
             device = torch.device("cpu")
         else:
             device = torch.device("cuda")
-
         # prepare model
         model.to(device)
         model.eval()
@@ -888,7 +892,7 @@ class Deployer:
         ), "internal error - converted model should be in eval() mode! "
         models = (model, model_ts)
         outputs, time_model, outputs_ts, time_model_ts = self.lib.run_models(
-            models, inputs
+            models, inputs, self.args.triton_no_cuda == False
         )
 
         # check for errors
