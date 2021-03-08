@@ -37,6 +37,4 @@ if __name__ == "__main__":
         for k, v in checkpoint.items()
     }
 
-    print(f"Loaded {checkpoint['arch']} : {checkpoint['best_prec1']}")
-
-    torch.save(model_state_dict, args.weight_path.format(arch=checkpoint['arch'][0], acc = checkpoint['best_prec1']))
+    torch.save(model_state_dict, args.weight_path)
