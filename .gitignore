@@ -1,3 +1,5 @@
 repos.cfg
 repos_init.cfg
 nvtool*
+.vscode
+__pycache__
