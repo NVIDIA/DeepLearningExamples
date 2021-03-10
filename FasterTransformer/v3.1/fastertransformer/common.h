@@ -431,8 +431,8 @@ void print_to_file(T *result, const int size, char *file)
 template <typename T>
 void print_to_screen(T *result, const int size)
 {
-  float *tmp = (float *)malloc(sizeof(float) * size);
-  check_cuda_error(cudaMemcpy(tmp, result, sizeof(float) * size, cudaMemcpyDeviceToHost));
+  T *tmp = (T *)malloc(sizeof(T) * size);
+  check_cuda_error(cudaMemcpy(tmp, result, sizeof(T) * size, cudaMemcpyDeviceToHost));
   for (int i = 0; i < size; ++i)
     printf("%d, %f\n", i, (float)tmp[i]);
   free(tmp);
