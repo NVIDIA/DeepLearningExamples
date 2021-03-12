@@ -897,7 +897,7 @@ Our results were obtained by running the `scripts/benchmark_squad.sh` training s
  
 ##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
  
-Our results were obtained by running the `scripts/benchmark_squad.sh` training scripts in the tensorflow:20.07-tf2-py3 NGC container on NVIDIA DGX-1 with (8x V100 32GB) GPUs. Performance numbers (in sequences per second) were averaged over an entire training epoch.
+Our results were obtained by running the `scripts/benchmark_squad.sh` training scripts in the tensorflow:20.07-tf2-py3 NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs. Performance numbers (in sequences per second) were averaged over an entire training epoch.
  
 ###### Pre-training NVIDIA DGX-1 (8x V100 16GB)
  
