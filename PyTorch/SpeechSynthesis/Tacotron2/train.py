@@ -372,14 +372,18 @@ def main():
     parser = parse_args(parser)
     args, _ = parser.parse_known_args()
 
-    writer = SummaryWriter(args.tensorboard_path)
-
     if 'LOCAL_RANK' in os.environ and 'WORLD_SIZE' in os.environ:
         local_rank = int(os.environ['LOCAL_RANK'])
         world_size = int(os.environ['WORLD_SIZE'])
     else:
         local_rank = args.rank
         world_size = args.world_size
+
+    if local_rank == 0:
+        writer = SummaryWriter(args.tensorboard_path)
+    else:
+        writer = None
+
 
     distributed_run = world_size > 1
 
@@ -519,7 +523,8 @@ def main():
                 raise Exception("loss is NaN")
 
             DLLogger.log(step=(epoch,i), data={'train_loss': reduced_loss})
-            writer.add_scalar("train/loss", reduced_loss, num_iters)
+            if writer:
+                writer.add_scalar("train/loss", reduced_loss, num_iters)
 
             num_iters += 1
 
@@ -576,7 +581,8 @@ def main():
     run_time = run_stop_time - run_start_time
     DLLogger.log(step=tuple(), data={'run_time': run_time})
     DLLogger.log(step=tuple(), data={'val_loss': val_loss})
-    writer.add_scalar("val/loss", val_loss, num_iters)
+    if writer:
+        writer.add_scalar("val/loss", val_loss, num_iters)
     DLLogger.log(step=tuple(), data={'train_items_per_sec':
                                      (train_epoch_items_per_sec/num_iters if num_iters > 0 else 0.0)})
     DLLogger.log(step=tuple(), data={'val_items_per_sec': val_items_per_sec})
