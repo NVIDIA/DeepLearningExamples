@@ -524,7 +524,7 @@ def main():
 
             DLLogger.log(step=(epoch,i), data={'train_loss': reduced_loss})
             if writer:
-                writer.add_scalar("train/loss", reduced_loss, num_iters)
+                writer.add_scalar("train/loss", reduced_loss, iteration)
 
             num_iters += 1
 
@@ -582,7 +582,7 @@ def main():
     DLLogger.log(step=tuple(), data={'run_time': run_time})
     DLLogger.log(step=tuple(), data={'val_loss': val_loss})
     if writer:
-        writer.add_scalar("val/loss", val_loss, num_iters)
+        writer.add_scalar("val/loss", val_loss, iteration)
     DLLogger.log(step=tuple(), data={'train_items_per_sec':
                                      (train_epoch_items_per_sec/num_iters if num_iters > 0 else 0.0)})
     DLLogger.log(step=tuple(), data={'val_items_per_sec': val_items_per_sec})
