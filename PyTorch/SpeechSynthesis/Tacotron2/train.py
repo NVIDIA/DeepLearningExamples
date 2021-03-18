@@ -30,9 +30,9 @@ import time
 import argparse
 import numpy as np
 from contextlib import contextmanager
-
 import torch
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from torch.autograd import Variable
 from torch.nn.parameter import Parameter
 
@@ -45,6 +45,7 @@ import models
 import loss_functions
 import data_functions
 from common.utils import ParseFromConfigFile
+from plotting_utils import plot_alignment_to_numpy, plot_mel_to_numpy
 
 import dllogger as DLLogger
 from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
@@ -76,6 +77,7 @@ def parse_args(parser):
 
     parser.add_argument('--config-file', action=ParseFromConfigFile,
                          type=str, help='Path to configuration file')
+    parser.add_argument('--tensorboard-path', type=str, default="runs")
 
     # training
     training = parser.add_argument_group('training setup')
@@ -231,7 +233,8 @@ def save_checkpoint(model, optimizer, epoch, config, amp_run, output_dir, model_
             print("Updating symlink", symlink_dst, "to point to", symlink_src)
             os.remove(symlink_dst)
 
-        os.symlink(symlink_src, symlink_dst)
+        # os.symlink(symlink_src, symlink_dst)
+        torch.save(checkpoint, symlink_dst)
 
 
 def get_last_checkpoint_filename(output_dir, model_name):
@@ -283,7 +286,8 @@ def evaluating(model):
 
 
 def validate(model, criterion, valset, epoch, batch_iter, batch_size,
-             world_size, collate_fn, distributed_run, rank, batch_to_gpu):
+             world_size, collate_fn, distributed_run, rank, batch_to_gpu,
+             summary_writer=None):
     """Handles all the validation scoring and printing"""
     with evaluating(model), torch.no_grad():
         val_sampler = DistributedSampler(valset) if distributed_run else None
@@ -302,6 +306,20 @@ def validate(model, criterion, valset, epoch, batch_iter, batch_size,
             x, y, num_items = batch_to_gpu(batch)
             y_pred = model(x)
             loss = criterion(y_pred, y)
+            if i % 50 == 0 and summary_writer is not None:
+                _, mel_outputs_postnet, _, alignments = y_pred
+                summary_writer.add_image(
+                    f'attention_weights_sample_{i}',
+                    plot_alignment_to_numpy(alignments[0].data.cpu().numpy().T),
+                    epoch,
+                    dataformats='HWC',
+                )
+                summary_writer.add_image(
+                    f'mel_outputs_sample_{i}',
+                    plot_mel_to_numpy(mel_outputs_postnet[0].data.cpu().numpy()),
+                    epoch,
+                    dataformats='HWC',
+                )
             if distributed_run:
                 reduced_val_loss = reduce_tensor(loss.data, world_size).item()
                 reduced_num_items = reduce_tensor(num_items.data, 1).item()
@@ -353,6 +371,8 @@ def main():
     parser = argparse.ArgumentParser(description='PyTorch Tacotron 2 Training')
     parser = parse_args(parser)
     args, _ = parser.parse_known_args()
+
+    writer = SummaryWriter(args.tensorboard_path)
 
     if 'LOCAL_RANK' in os.environ and 'WORLD_SIZE' in os.environ:
         local_rank = int(os.environ['LOCAL_RANK'])
@@ -499,6 +519,7 @@ def main():
                 raise Exception("loss is NaN")
 
             DLLogger.log(step=(epoch,i), data={'train_loss': reduced_loss})
+            writer.add_scalar("train/loss", reduced_loss, num_iters)
 
             num_iters += 1
 
@@ -540,7 +561,8 @@ def main():
                                                iteration, args.batch_size,
                                                world_size, collate_fn,
                                                distributed_run, local_rank,
-                                               batch_to_gpu)
+                                               batch_to_gpu,
+                                               summary_writer=writer)
 
         if (epoch % args.epochs_per_checkpoint == 0) and args.bench_class == "":
             save_checkpoint(model, optimizer, epoch, model_config,
@@ -554,6 +576,7 @@ def main():
     run_time = run_stop_time - run_start_time
     DLLogger.log(step=tuple(), data={'run_time': run_time})
     DLLogger.log(step=tuple(), data={'val_loss': val_loss})
+    writer.add_scalar("val/loss", val_loss, num_iters)
     DLLogger.log(step=tuple(), data={'train_items_per_sec':
                                      (train_epoch_items_per_sec/num_iters if num_iters > 0 else 0.0)})
     DLLogger.log(step=tuple(), data={'val_items_per_sec': val_items_per_sec})
