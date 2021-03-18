@@ -240,8 +240,10 @@ def save_checkpoint(model, optimizer, epoch, config, amp_run, output_dir, model_
 def get_last_checkpoint_filename(output_dir, model_name):
     symlink = os.path.join(output_dir, "checkpoint_{}_last.pt".format(model_name))
     if os.path.exists(symlink):
-        print("Loading checkpoint from symlink", symlink)
-        return os.path.join(output_dir, os.readlink(symlink))
+        print("Loading last checkpoint")
+        return symlink
+        # print("Loading checkpoint from symlink", symlink)
+        # return os.path.join(output_dir, os.readlink(symlink))
     else:
         print("No last checkpoint available - starting from epoch 0 ")
         return ""
