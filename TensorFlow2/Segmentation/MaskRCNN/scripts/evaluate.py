@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" Script that simplifies running training benchmark """
+""" Script that simplifies evaluation. """
 
 import argparse
 import os
@@ -28,15 +28,13 @@ if __name__ == '__main__':
     # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(
         description=(
-            'NVIDIA MaskRCNN TF2 train benchmark'
+            'NVIDIA MaskRCNN TF2 evaluation'
             '\n\nNote: Any additional flags not specified below will be passed to main.py'
         ),
         formatter_class=lambda prog: CustomFormatter(prog, max_help_position=100)
     )
-    parser.add_argument('--gpus', type=int, metavar='N',
-                        help='Number of GPU\'s. Defaults to all available')
-    parser.add_argument('--batch_size', type=int, required=True,
-                        help='Batch size used during training')
+    parser.add_argument('--batch_size', type=int, metavar='N', default=8,
+                        help='Batch size used during evaluation')
     parser.add_argument('--amp', action='store_true',
                         help='Enable automatic mixed precision')
     parser.add_argument('--no_xla', action='store_true',
@@ -54,13 +52,11 @@ if __name__ == '__main__':
     # build command
     cmd = (
         f'python {main_path}'
-        f' train'
+        f' eval'
         f' --data_dir "{flags.data_dir}"'
+        f' --eval_file "{os.path.join(flags.data_dir, "annotations/instances_val2017.json")}"'
         f' --backbone_checkpoint "{checkpoint_path}"'
-        f' --epochs 1'
-        f' --steps_per_epoch 200'
-        f' --log_every 10'
-        f' --train_batch_size {flags.batch_size}'
+        f' --eval_batch_size {flags.batch_size}'
     )
 
     if not flags.no_xla:
@@ -69,8 +65,6 @@ if __name__ == '__main__':
         cmd += ' --amp'
     if remainder:
         cmd += ' ' + ' '.join(remainder)
-    if flags.gpus is not None:
-        cmd = f'CUDA_VISIBLE_DEVICES={",".join(map(str, range(flags.gpus)))} ' + cmd
 
     # print command
     line = '-' * shutil.get_terminal_size()[0]
