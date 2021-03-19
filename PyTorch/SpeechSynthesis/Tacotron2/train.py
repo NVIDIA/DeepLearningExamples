@@ -418,6 +418,10 @@ def main():
                              cpu_run=False,
                              uniform_initialize_bn_weight=not args.disable_uniform_initialize_bn_weight)
 
+    if args.freeze_encoder:
+        for param in model.encoder.parameters():
+            param.requires_grad = False
+
     if not args.amp and distributed_run:
         model = DDP(model)
 
@@ -480,9 +484,6 @@ def main():
     num_iters = 0
 
     model.train()
-    if args.freeze_encoder:
-        for param in model.encoder.parameters():
-            param.requires_grad = False
 
     for epoch in range(start_epoch, args.epochs):
         torch.cuda.synchronize()
