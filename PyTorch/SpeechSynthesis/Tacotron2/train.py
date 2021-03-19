@@ -436,10 +436,11 @@ def main():
 
     start_epoch = [0]
 
-    if args.resume_from_last:
-        args.checkpoint_path = get_last_checkpoint_filename(args.output, model_name)
-
     if args.checkpoint_path is not "":
+        load_checkpoint(model, optimizer, start_epoch, model_config,
+                        args.amp, args.checkpoint_path, local_rank)
+    elif args.resume_from_last:
+        args.checkpoint_path = get_last_checkpoint_filename(args.output, model_name)
         load_checkpoint(model, optimizer, start_epoch, model_config,
                         args.amp, args.checkpoint_path, local_rank)
 
@@ -570,6 +571,8 @@ def main():
                                                distributed_run, local_rank,
                                                batch_to_gpu,
                                                summary_writer=writer)
+        if writer:
+            writer.add_scalar("val/loss", val_loss, iteration)
 
         if (epoch % args.epochs_per_checkpoint == 0) and args.bench_class == "":
             save_checkpoint(model, optimizer, epoch, model_config,
