@@ -194,10 +194,8 @@ class _LogSessionRunHook(tf.estimator.SessionRunHook):
     print_step = self.global_step + 1 # One-based index for printing.
     self.loss += total_loss
     self.all_count += 1
+    self.count += 1
     if update_step:
-
-        self.count += 1
-
         # Removing first six steps after every checkpoint save from timing
         if (self.global_step - self.init_global_step) % self.save_ckpt_steps < 6:
           print("Skipping time record for ", self.global_step, " due to checkpoint-saving/warmup overhead")
