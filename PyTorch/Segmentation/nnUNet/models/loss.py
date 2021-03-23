@@ -12,42 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from monai.losses import FocalLoss
-
-
-class DiceLoss(nn.Module):
-    def __init__(self, include_background=False, smooth=1e-5, eps=1e-7):
-        super(DiceLoss, self).__init__()
-        self.include_background = include_background
-        self.smooth = smooth
-        self.dims = (0, 2)
-        self.eps = eps
-
-    def forward(self, y_pred, y_true):
-        num_classes, batch_size = y_pred.size(1), y_true.size(0)
-        y_pred = y_pred.log_softmax(dim=1).exp()
-        y_true, y_pred = y_true.view(batch_size, -1), y_pred.view(batch_size, num_classes, -1)
-        y_true = F.one_hot(y_true.to(torch.int64), num_classes).permute(0, 2, 1)
-        if not self.include_background:
-            y_true, y_pred = y_true[:, 1:], y_pred[:, 1:]
-        intersection = torch.sum(y_true * y_pred, dim=self.dims)
-        cardinality = torch.sum(y_true + y_pred, dim=self.dims)
-        dice_loss = 1 - (2.0 * intersection + self.smooth) / (cardinality + self.smooth).clamp_min(self.eps)
-        mask = (y_true.sum(self.dims) > 0).to(dice_loss.dtype)
-        dice_loss *= mask.to(dice_loss.dtype)
-        dice_loss = dice_loss.sum() / mask.sum()
-        return dice_loss
+from monai.losses import DiceLoss, FocalLoss
 
 
 class Loss(nn.Module):
     def __init__(self, focal):
         super(Loss, self).__init__()
-        self.dice = DiceLoss()
-        self.cross_entropy = nn.CrossEntropyLoss()
+        self.dice = DiceLoss(include_background=False, softmax=True, to_onehot_y=True, batch=True)
         self.focal = FocalLoss(gamma=2.0)
+        self.cross_entropy = nn.CrossEntropyLoss()
         self.use_focal = focal
 
     def forward(self, y_pred, y_true):

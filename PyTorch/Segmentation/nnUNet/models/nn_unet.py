@@ -42,6 +42,8 @@ class NNUnet(pl.LightningModule):
     def __init__(self, args):
         super(NNUnet, self).__init__()
         self.args = args
+        if not hasattr(self.args, "drop_block"):  # For backward compability
+            self.args.drop_block = False
         self.save_hyperparameters()
         self.build_nnunet()
         self.loss = Loss(self.args.focal)
