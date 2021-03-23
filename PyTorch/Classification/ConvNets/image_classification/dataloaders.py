@@ -158,7 +158,13 @@ class HybridValPipe(Pipeline):
             pad_last_batch=True,
         )
 
-        self.decode = ops.ImageDecoder(device="mixed", output_type=types.RGB)
+        self.decode = ops.ImageDecoder(
+            device="mixed", 
+            output_type=types.RGB,
+            device_memory_padding=117440512,
+            host_memory_padding=8388608,
+        )
+        
         self.res = ops.Resize(device="gpu", resize_shorter=size)
         self.cmnp = ops.CropMirrorNormalize(
             device="gpu",
