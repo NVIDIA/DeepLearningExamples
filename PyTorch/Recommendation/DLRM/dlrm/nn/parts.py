@@ -1,4 +1,4 @@
-# Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021 NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -85,7 +85,6 @@ class DlrmBottom(nn.Module):
         Returns:
             Tensor: Concatenated bottom mlp and embedding output in shape [batch, 1 + #embedding, embedding_dim]
         """
-        batch_size = len(numerical_input) if numerical_input is not None else len(categorical_inputs)
         bottom_output = []
         bottom_mlp_output = None
 
@@ -95,7 +94,7 @@ class DlrmBottom(nn.Module):
                 bottom_mlp_output = bottom_mlp_output.half()
 
             # reshape bottom mlp to concatenate with embeddings
-            bottom_output.append(bottom_mlp_output.view(batch_size, 1, -1))
+            bottom_output.append(bottom_mlp_output.view(-1, 1, self._embedding_dim))
 
         if self.num_categorical_features > 0:
             bottom_output += self.embeddings(categorical_inputs)

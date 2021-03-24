@@ -25,7 +25,7 @@ The very first step of deployment is to acquire trained checkpoint and model con
 checkpoint. Default model configuration are stored inside `dlrm/config` directory.
 
 **Currently, our implementation only supports TorchScript deployment for models that fit into the memory of a single GPU.**
-You can read more about training DLRM models on different dataset configurations based on frequency threshold in the preprocessing step in [README](https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/Recommendation/DLRM/README.md#preprocess-with-spark).
+You can read more about training DLRM models on different dataset configurations based on frequency threshold in the preprocessing step in [README](https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/Recommendation/DLRM/README.md#preprocessing-on-gpu).
 
 #### Inference container
 
@@ -126,11 +126,11 @@ is mounted under `/data`
 #### Running the Triton server
 **NOTE: This step is executed outside inference container**
 
-1. `docker pull nvcr.io/nvidia/tritonserver:20.06-py3`
-2. `docker run -d --rm --gpus device=0 --ipc=host --network=host [--cpuset-cpus=0-15] -p 8000:8000 -p 8001:8001 -p 8002:8002 -v <PATH_TO_MODEL_REPOSITORY>:/models nvcr.io/nvidia/tritonserver:20.06-py3 tritonserver --model-repository=/models --log-verbose=1 --model-control-mode=explicit`
+1. `docker pull nvcr.io/nvidia/tritonserver:20.09-py3`
+2. `docker run -d --rm --gpus device=0 --ipc=host --network=host [--cpuset-cpus=0-15] -p 8000:8000 -p 8001:8001 -p 8002:8002 -v <PATH_TO_MODEL_REPOSITORY>:/models nvcr.io/nvidia/tritonserver:20.09-py3 tritonserver --model-repository=/models --log-verbose=1 --model-control-mode=explicit`
 
 Here `--gpus '"device=0,1,2,3"'` selects GPUs indexed by ordinals `0,1,2` and `3`, respectively. The server will see only these GPUs. If you write `device=all`, then the server will see all the available GPUs. `PATH_TO_MODEL_REPOSITORY` indicates location where
-deployed models were stored. Additional `--model-controle-mode` option allows to manually load and
+deployed models were stored. Additional `--model-control-mode` option allows to manually load and
 unload models. This is especially useful when dealing with numerous large models like DLRM.
 
 For models exported to onnx format and hosted inside onnx runtime it might be required to limit visible cpu to fully utlize gpu acceleration. Use `--cpuset-cpus` docker option for that.

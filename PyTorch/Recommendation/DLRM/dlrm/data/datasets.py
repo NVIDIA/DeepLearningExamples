@@ -1,4 +1,4 @@
-# Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021 NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ class SyntheticDataset(Dataset):
         self,
         num_entries: int,
         device: str = 'cuda',
-        batch_size: int = 1,
+        batch_size: int = 32768,
         numerical_features: Optional[int] = None,
         categorical_feature_sizes: Optional[Sequence[int]] = None,
         device_mapping: Optional[Dict[str, Any]] = None
@@ -79,12 +79,12 @@ class CriteoBinDataset(Dataset):
 
     def __init__(
         self,
-        data_file: str,
+        data_path: str,
         batch_size: int = 1,
-        subset: float = None,
         numerical_features: int = 13,
         categorical_features: int = 26,
-        data_type: str = 'int32'
+        data_type: str = 'int32',
+        **kwargs
     ):
         self.data_type = np.__dict__[data_type]
         bytes_per_feature = self.data_type().nbytes
@@ -94,14 +94,9 @@ class CriteoBinDataset(Dataset):
 
         self.batch_size = batch_size
         self.bytes_per_entry = (bytes_per_feature * self.tot_fea * batch_size)
-        self.num_entries = math.ceil(os.path.getsize(data_file) / self.bytes_per_entry)
+        self.num_entries = math.ceil(os.path.getsize(data_path) / self.bytes_per_entry)
 
-        if subset is not None:
-            if subset <= 0 or subset > 1:
-                raise ValueError('Subset parameter must be in (0,1) range')
-            self.num_entries = math.ceil(self.num_entries * subset)
-
-        self.file = open(data_file, 'rb')
+        self.file = open(data_path, 'rb')
         self._last_read_idx = -1
 
     def __len__(self):
@@ -142,13 +137,16 @@ class SplitCriteoDataset(Dataset):
         data_path: str,
         batch_size: int = 1,
         numerical_features: bool = False,
+        number_of_numerical_features: int = 13,
         categorical_features: Optional[Sequence[int]] = None,
         categorical_feature_sizes: Optional[Sequence[int]] = None,
         prefetch_depth: int = 10,
         drop_last_batch: bool = False,
+        **kwargs
     ):
         self._label_bytes_per_batch = np.dtype(np.bool).itemsize * batch_size
-        self._numerical_bytes_per_batch = 13 * np.dtype(np.float16).itemsize * batch_size if numerical_features else 0
+        self._number_of_numerical_features = number_of_numerical_features
+        self._numerical_bytes_per_batch = self._number_of_numerical_features * np.dtype(np.float16).itemsize * batch_size if numerical_features else 0
         self._categorical_feature_types = [
             get_categorical_feature_type(size) for size in categorical_feature_sizes
         ] if categorical_feature_sizes else []
@@ -226,7 +224,7 @@ class SplitCriteoDataset(Dataset):
         raw_numerical_data = os.pread(self._numerical_features_file, self._numerical_bytes_per_batch,
                                       idx * self._numerical_bytes_per_batch)
         array = np.frombuffer(raw_numerical_data, dtype=np.float16)
-        return torch.from_numpy(array).view(-1, 13)
+        return torch.from_numpy(array).view(-1, self._number_of_numerical_features)
 
     def _get_categorical_features(self, idx: int) -> Optional[torch.Tensor]:
         if self._categorical_features_files is None:

@@ -1,4 +1,4 @@
-# Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021 NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -54,18 +54,9 @@ export DRIVER_MEMORY=32
 # the memory per executor
 export EXECUTOR_MEMORY=$(((${TOTAL_MEMORY}-${DRIVER_MEMORY})/${NUM_EXECUTORS}))
 
-
 OPTS="--frequency_limit $FREQUENCY_LIMIT"
 
-# use frequency_limit=15 or not
-# by default use a frequency limit of 15
-USE_FREQUENCY_LIMIT=1
-OPTS=""
-if [[ $USE_FREQUENCY_LIMIT == 1 ]]; then
-    OPTS="--frequency_limit 15"
-fi
-
-export SPARK_HOME=/opt/spark-3.0.0-bin-hadoop3.2
+export SPARK_HOME=/opt/spark
 export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
 export PATH=$SPARK_HOME/bin:$SPARK_HOME/sbin:$PATH
 

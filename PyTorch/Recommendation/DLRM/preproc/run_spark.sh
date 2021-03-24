@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021 NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -21,14 +21,19 @@
 echo "Input mode option: $1"
 if [ "$1" = "CPU" ]
 then
-   echo "Run with CPU.";
-   shift
-   ./run_spark_cpu.sh ${@}
-elif [ "$1" = "DGX2" ]
+    echo "Run with CPU.";
+    shift
+    ./run_spark_cpu.sh ${@}
+elif [ "$1" = "GPU" ]
 then
-   echo "Run with GPU.";
-   shift
-   ./run_spark_gpu.sh ${@} DGX2
+    echo "Run with GPU.";
+    shift
+    if [ "$DGX_VERSION" = "DGX-2" ]
+    then
+        ./run_spark_gpu_DGX-2.sh ${@}
+    else
+        ./run_spark_gpu_DGX-A100.sh ${@}
+    fi
 else
-   echo "Please choose mode (CPU/DGX2).";
+   echo "Please choose mode (CPU/GPU).";
 fi
