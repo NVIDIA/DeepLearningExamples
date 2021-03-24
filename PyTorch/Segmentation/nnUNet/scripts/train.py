@@ -24,11 +24,15 @@ parser.add_argument("--fold", type=int, required=True, choices=[0, 1, 2, 3, 4], 
 parser.add_argument("--dim", type=int, required=True, choices=[2, 3], help="Dimension of UNet")
 parser.add_argument("--amp", action="store_true", help="Enable automatic mixed precision")
 parser.add_argument("--tta", action="store_true", help="Enable test time augmentation")
+parser.add_argument("--results", type=str, default="/results", help="Path to results directory")
+parser.add_argument("--logname", type=str, default="log", help="Name of dlloger output")
 
 if __name__ == "__main__":
     args = parser.parse_args()
     path_to_main = os.path.join(dirname(dirname(os.path.realpath(__file__))), "main.py")
-    cmd = f"python {path_to_main} --exec_mode train --task {args.data} --deep_supervision --save_ckpt "
+    cmd = f"python {path_to_main} --exec_mode train --task {args.task} --deep_supervision --save_ckpt "
+    cmd += f"--results {args.results} "
+    cmd += f"--logname {args.logname} "
     cmd += f"--dim {args.dim} "
     cmd += f"--batch_size {2 if args.dim == 3 else 64} "
     cmd += f"--val_batch_size {4 if args.dim == 3 else 64} "
