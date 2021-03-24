@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -31,7 +31,7 @@ import sys
 
 import numpy as np
 import torch
-import tritonhttpclient
+import tritonclient.http as http_client
 from sklearn.metrics import roc_auc_score
 from tqdm import tqdm
 
@@ -73,14 +73,14 @@ def run_infer(model_name, model_version, numerical_features, categorical_feature
     inputs = []
     outputs = []
     num_type = "FP16" if numerical_features.dtype == np.float16 else "FP32"
-    inputs.append(tritonhttpclient.InferInput('input__0', numerical_features.shape, num_type))
-    inputs.append(tritonhttpclient.InferInput('input__1', categorical_features.shape, "INT64"))
+    inputs.append(http_client.InferInput('input__0', numerical_features.shape, num_type))
+    inputs.append(http_client.InferInput('input__1', categorical_features.shape, "INT64"))
 
     # Initialize the data
     inputs[0].set_data_from_numpy(numerical_features, binary_data=True)
     inputs[1].set_data_from_numpy(categorical_features, binary_data=False)
 
-    outputs.append(tritonhttpclient.InferRequestedOutput('output__0', binary_data=True))
+    outputs.append(http_client.InferRequestedOutput('output__0', binary_data=True))
     results = triton_client.infer(model_name,
                                   inputs,
                                   model_version=str(model_version) if model_version != -1 else '',
@@ -124,7 +124,7 @@ if __name__ == '__main__':
 
     FLAGS = parser.parse_args()
     try:
-        triton_client = tritonhttpclient.InferenceServerClient(url=FLAGS.triton_server_url, verbose=FLAGS.verbose)
+        triton_client = http_client.InferenceServerClient(url=FLAGS.triton_server_url, verbose=FLAGS.verbose)
     except Exception as e:
         print("channel creation failed: " + str(e))
         sys.exit(1)
