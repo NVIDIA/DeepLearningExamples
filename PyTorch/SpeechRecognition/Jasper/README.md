@@ -439,9 +439,9 @@ LOG_FILE:            path to the DLLogger .json logfile. (default: '')
 CUDNN_BENCHMARK:     enable cudnn benchmark mode for using more optimized kernels. (default: false)
 MAX_DURATION:        filter out recordings shorter then MAX_DURATION seconds. (default: "")
 PAD_TO_MAX_DURATION: pad all sequences with zeros to maximum length. (default: false)
-NUM_GPUS:            number of GPUs to use. Note that with > 1 GPUs WER results might be innaccurate due to the batching policy. (default: 1)
+NUM_GPUS:            number of GPUs to use. Note that with > 1 GPUs WER results might be inaccurate due to the batching policy. (default: 1)
 NUM_STEPS:           number of batches to evaluate, loop the dataset if necessary. (default: 0)
-NUM_WARMUP_STEPS:    number of initial steps before measuring preformance. (default: 0)
+NUM_WARMUP_STEPS:    number of initial steps before measuring performance. (default: 0)
 AMP:                 enable FP16 inference with AMP. (default: false)
 BATCH_SIZE:          data batch size. (default: 64)
 EMA:                 Attempt to load exponentially averaged weights from a checkpoint. (default: true)
@@ -460,7 +460,7 @@ DATASET:         (default: "test-other")
 
 The `scripts/inference_benchmark.sh` script pads all input to a fixed duration and computes the mean, 90%, 95%, 99% percentile of latency for the specified number of inference steps. Latency is measured in milliseconds per batch. The `scripts/inference_benchmark.sh` measures latency for a single GPU and loops over a number of batch sizes and durations. It extends  `scripts/inference.sh`, and changes the defaults with:
 ```bash
-BATCH_SIZE_SEQ:      batch sizes to measre on. (defaul: "1 2 4 8 16")
+BATCH_SIZE_SEQ:      batch sizes to measure on. (default: "1 2 4 8 16")
 MAX_DURATION_SEQ:    input durations (in seconds) to measure on (default: "2 7 16.7")
 CUDNN_BENCHMARK:     (default: true)
 PAD_TO_MAX_DURATION: (default: true)
@@ -474,7 +474,7 @@ Training performance is measured with on-line speed perturbation and cuDNN bench
 The script `scripts/train_benchmark.sh` loops over a number of batch sizes and GPU counts.
 It extends `scripts/train.sh`, and the complete list of available parameters for `scripts/train_benchmark.sh` script contains:
 ```bash
-BATCH_SIZE_SEQ:          batch sizes to measre on. (defaul: "1 2 4 8 16")
+BATCH_SIZE_SEQ:          batch sizes to measure on. (default: "1 2 4 8 16")
 NUM_GPUS_SEQ:            number of GPUs to run the training on. (default: "1 4 8")
 MODEL_CONFIG:            (default: "configs/jasper10x5dr_speedp-online_train-benchmark.yaml")
 TRAIN_MANIFESTS:         (default: "$DATA_DIR/librispeech-train-clean-100-wav.json")
@@ -497,7 +497,7 @@ python inference.py --help
 ```
 
 ### Getting the data
-The Jasper model was trained on LibriSpeech dataset. We use the concatenation of `train-clean-100`, `train-clean-360` and `train-other-500` for training and `dev-clean` for validation.
+The Jasper model was trained on the LibriSpeech dataset. We use the concatenation of `train-clean-100`, `train-clean-360` and `train-other-500` for training and `dev-clean` for validation.
 
 This repository contains the `scripts/download_librispeech.sh` and `scripts/preprocess_librispeech.sh` scripts which will automatically download and preprocess the training, test and development datasets. By default, data will be downloaded to the `/datasets/LibriSpeech` directory, a minimum of 250GB free space is required for download and preprocessing, the final preprocessed dataset is approximately 100GB. With offline speed perturbation, the dataset will be about 3x larger.
 
@@ -806,6 +806,7 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 To achieve these same results, follow the [Quick Start Guide](#quick-start-guide) outlined above.
 
 ## Release notes
+We're constantly refining and improving our performance on AI and HPC workloads even on the same hardware with frequent updates to our software stack. For our latest performance data please refer to these pages for AI and HPC benchmarks.
 
 ### Changelog
 February 2021
