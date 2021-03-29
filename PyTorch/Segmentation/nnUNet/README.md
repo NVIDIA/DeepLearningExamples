@@ -53,6 +53,8 @@ The differences between this nnU-net and [original model](https://github.com/MIC
 
 This model is trained with mixed precision using Tensor Cores on Volta, Turing, and the NVIDIA Ampere GPU architectures. Therefore, researchers can get results 2x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
 
+We developed the model using [PyTorch Lightning](https://ai.facebook.com/blog/reengineering-facebook-ais-deep-learning-platforms-for-interoperability/), a new easy to use framework that ensures code readability and reproducibility without the boilerplate.
+
 ### Model architecture
     
 The nnU-Net allows training two types of networks: 2D U-Net and 3D U-Net to perform semantic segmentation of 3D images, with high accuracy and performance.
