@@ -241,7 +241,7 @@ To train your model using mixed or TF32 precision with Tensor Cores or using FP3
     The following script will download the pre-trained weights to `/weights`.
 
     ```bash
-    bash scripts/download_weights.sh /weights
+    python scripts/download_weights.py --save_dir=/weights
     ```
 
 6. Start training.
