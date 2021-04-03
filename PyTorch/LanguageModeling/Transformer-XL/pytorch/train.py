@@ -35,6 +35,10 @@ try:
     from apex import amp
 except ModuleNotFoundError:
     warnings.warn('APEX AMP is unavailable')
+try:
+    import pyprof
+except ModuleNotFoundError:
+    warnings.warn('PyProf is unavailable')
 
 from torch.nn.parallel import DistributedDataParallel
 
@@ -111,6 +115,15 @@ def parse_args():
                          help='Optimization level for apex amp')
     general.add_argument('--amp', choices=['apex', 'pytorch'], default='apex',
                          help='Implementation of automatic mixed precision')
+    general.add_argument('--affinity', type=str,
+                         default='socket_unique_interleaved',
+                         choices=['socket', 'single', 'single_unique',
+                                  'socket_unique_interleaved',
+                                  'socket_unique_continuous',
+                                  'disabled'],
+                         help='type of CPU affinity')
+    general.add_argument('--profile', action='store_true',
+                         help='Enable profiling with DLProf')
 
     dataset = parser.add_argument_group('dataset setup')
     dataset.add_argument('--data', type=str, default='../data/wikitext-103',
@@ -255,6 +268,19 @@ def parse_args():
 
     if args.ext_len < 0:
         raise RuntimeError('Extended context length must be non-negative')
+
+    if args.mem_len == 0:
+        if args.eval_tgt_len > args.ext_len + args.tgt_len:
+            raise RuntimeError('eval_tgt_len should be <= tgt_len + ext_len; '
+                               f'eval_tgt_len: {args.eval_tgt_len}, '
+                               f'tgt_len: {args.tgt_len}, '
+                               f'ext_len: {args.ext_len}')
+    else:
+        if args.eval_tgt_len > args.mem_len + args.tgt_len:
+            raise RuntimeError('eval_tgt_len should be <= tgt_len + mem_len; '
+                               f'eval_tgt_len: {args.eval_tgt_len}, '
+                               f'tgt_len: {args.tgt_len}, '
+                               f'mem_len: {args.mem_len}')
 
     if args.batch_size % args.batch_chunk != 0:
         raise RuntimeError('Batch size needs to be divisible by batch chunk')
@@ -421,7 +447,7 @@ def evaluate(eval_iter, model, args):
             loss, mems = model(data, target, mems)
             loss = loss.float().mean()
             if warm:
-                assert (mems is None) or mems.size(1) == model.mem_len
+                # assert (mems is None) or mems.size(1) == model.mem_len
                 total_loss += seq_len * loss.item()
                 total_len += seq_len
 
@@ -659,7 +685,14 @@ def train(tr_iter, va_iter, model, para_model, model_config, optimizer,
 
 def main():
     args = parse_args()
-    utils.gpu_affinity.set_affinity(args.local_rank)
+    if args.affinity != 'disabled':
+        nproc_per_node = torch.cuda.device_count()
+        affinity = utils.gpu_affinity.set_affinity(
+            args.local_rank,
+            nproc_per_node,
+            args.affinity
+        )
+        print(f'{args.local_rank}: thread affinity: {affinity}')
 
     # Initialize device and distributed backend
     torch.cuda.set_device(args.local_rank)
@@ -702,6 +735,12 @@ def main():
         args.batch_size = world_size * args.local_batch_size
         logging.info(f'--local_batch_size was set, adjusting global batch size'
                      f' to {args.batch_size} (local_batch_size * world_size)')
+
+    if args.profile:
+        try:
+            pyprof.init(enable_function_stack=True)
+        except NameError:
+            warnings.warn('Called pyprof.init() but pyprof is not available')
 
     logging.info(args)
     dllogger.log(step='PARAMETER', data=vars(args))
@@ -956,28 +995,30 @@ def main():
     # Loop over epochs.
     # At any point you can hit Ctrl + C to break out of training early.
     start_time = time.time()
-    with TimeoutHandler() as timeout_handler:
-        try:
-            for epoch in itertools.count(start=start_epoch):
-                if args.roll:
-                    tr_iter.roll(seed=args.seed + epoch)
-                train_step, best_val_loss = train(
-                    tr_iter, va_iter, model, para_model, model_config,
-                    optimizer, optimizer_sparse, scheduler, scheduler_sparse,
-                    scaler, vocab, epoch, last_batch, last_iter, train_step,
-                    best_val_loss, meters, timeout_handler, device, args
-                    )
+    with torch.autograd.profiler.emit_nvtx(enabled=args.profile):
+        with TimeoutHandler() as timeout_handler:
+            try:
+                for epoch in itertools.count(start=start_epoch):
+                    if args.roll:
+                        tr_iter.roll(seed=args.seed + epoch)
+                    train_step, best_val_loss = train(
+                        tr_iter, va_iter, model, para_model, model_config,
+                        optimizer, optimizer_sparse, scheduler,
+                        scheduler_sparse, scaler, vocab, epoch, last_batch,
+                        last_iter, train_step, best_val_loss, meters,
+                        timeout_handler, device, args
+                        )
 
-                last_batch = 0
-                last_iter = 0
+                    last_batch = 0
+                    last_iter = 0
 
-                if train_step == args.max_step:
-                    logging.info('-' * 100)
-                    logging.info('End of training')
-                    break
-        except KeyboardInterrupt:
-            logging.info('-' * 100)
-            logging.info('Exiting from training early')
+                    if train_step == args.max_step:
+                        logging.info('-' * 100)
+                        logging.info('End of training')
+                        break
+            except KeyboardInterrupt:
+                logging.info('-' * 100)
+                logging.info('Exiting from training early')
     elapsed = time.time() - start_time
 
     ###########################################################################
@@ -992,8 +1033,9 @@ def main():
 
         # Run on test data.
         test_start_time = time.time()
-        test_loss = evaluate(te_iter, model, args)
-        test_loss = utils.distributed.all_reduce_item(test_loss, 'mean')
+        with torch.autograd.profiler.emit_nvtx(enabled=args.profile):
+            test_loss = evaluate(te_iter, model, args)
+            test_loss = utils.distributed.all_reduce_item(test_loss, 'mean')
         test_elapsed = time.time() - test_start_time
 
         logging.info('=' * 100)

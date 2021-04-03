@@ -33,7 +33,7 @@ for (( i = 0; i < ${#TYPES[@]}; i++ )); do
          DIR="LM-TFM/inference/${GPU}_${BATCH_SIZES[j]}_${MATHS_FULL[k]}_${TYPES[i]}"
          mkdir -p "${DIR}"
 
-         taskset -c 0 bash run_wt103_"${MODEL}".sh eval 1 \
+         bash run_wt103_"${MODEL}".sh eval 1 \
             --work_dir "${DIR}" \
             --model "${CHECKPOINT}" \
             --type "${TYPES[i]}" \
