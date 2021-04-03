@@ -983,7 +983,7 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 ##### Inference performance: NVIDIA DGX A100 (1x A100 40GB) 
  
-Our results were obtained by running `scripts/run_squad.sh` in the pytorch:20.06-py3 NGC container on NVIDIA DGX-1 with (1x A100 40G) GPUs.
+Our results were obtained by running `scripts/run_squad.sh` in the pytorch:20.06-py3 NGC container on NVIDIA DGX A100 with (1x A100 40G) GPUs.
  
 ###### Fine-tuning inference on NVIDIA DGX A100 (1x A100 40GB)
 
