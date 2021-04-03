@@ -83,7 +83,7 @@ The default configuration of this model can be found at `pytorch/maskrcnn_benchm
  
   - Feature extractor:
     - Backend network set to Resnet50_conv4
-    - Backbone network weights are frozen after second epoch
+    - First two blocks of backbone network weights are frozen
  
   - Region Proposal Network (RPN):
     - Anchor stride set to 16
