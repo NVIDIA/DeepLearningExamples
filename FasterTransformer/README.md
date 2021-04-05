@@ -1,6 +1,7 @@
 # FasterTransformer
 
 This repository provides a script and recipe to run the highly optimized transformer for inference, and it is tested and maintained by NVIDIA.
+This repo is move to https://github.com/NVIDIA/FasterTransformer and we will deprecate this sub-repo in the future. 
 
 ## Table Of Contents
 - [FasterTransformer](#fastertransformer)
@@ -59,6 +60,8 @@ FasterTransformer v2 will be deprecated on Dec 2020.
 FasterTransformer v2.1 will be deprecated on July 2021. 
 
 FasterTransformer v3.0 will be deprecated on Sep 2021. 
+
+FasterTransformer v3.1 will be deprecated on Dec 2021. 
 
 ### Changelog
 
