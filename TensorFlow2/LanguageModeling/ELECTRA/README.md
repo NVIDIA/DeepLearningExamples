@@ -970,7 +970,7 @@ TF32
  
 ##### Inference performance: NVIDIA T4
  
-Our results were obtained by running the `scripts/benchmark_squad.sh` script in the tensorflow:20.07-tf2-py3 NGC container on NVIDIA DGX-1 with (1x V100 16G) GPUs. 
+Our results were obtained by running the `scripts/benchmark_squad.sh` script in the tensorflow:20.07-tf2-py3 NGC container on NVIDIA Tesla T4 (1x T4 16GB) GPU. 
  
 ###### Fine-tuning inference on NVIDIA T4
  
