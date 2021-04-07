@@ -32,7 +32,7 @@ The content of the repository is tested and maintained by NVIDIA.
 - [Performance](#performance)
   * [Benchmarking](#benchmarking)
     + [NVTabular and Spark CPU Preprocessing comparison](#nvtabular-and-spark-cpu-preprocessing-comparison)
-    + [Training and evaluation performance benchmark](#training-and-evaluation-performance-benchmark)
+    + [Training and inference performance benchmark](#training-and-inference-performance-benchmark)
   * [Results](#results)
     + [Training accuracy results](#training-accuracy-results)
       - [Training accuracy: NVIDIA DGX A100 (8x A100 80GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-80gb)
@@ -43,9 +43,9 @@ The content of the repository is tested and maintained by NVIDIA.
     + [Training performance results](#training-performance-results)
       - [Training performance: NVIDIA DGX A100 (8x A100 80GB)](#training-performance-nvidia-dgx-a100-8x-a100-80gb)
       - [Training performance: NVIDIA DGX-1 (8x V100 16GB)](#training-performance-nvidia-dgx-1-8x-v100-16gb)
-    + [Evaluation performance results](#evaluation-performance-results)
-      - [Evaluation performance: NVIDIA DGX A100 (8x A100 80GB)](#evaluation-performance-nvidia-dgx-a100-8x-a100-80gb)
-      - [Evaluation performance: NVIDIA DGX-1 (8x V100 16GB)](#evaluation-performance-nvidia-dgx-1-8x-v100-16gb)
+    + [Inference performance results](#inference-performance-results)
+      - [Inference performance: NVIDIA DGX A100 (8x A100 80GB)](#inference-performance-nvidia-dgx-a100-8x-a100-80gb)
+      - [Inference performance: NVIDIA DGX-1 (8x V100 16GB)](#inference-performance-nvidia-dgx-1-8x-v100-16gb)
 - [Release notes](#release-notes)
   * [Changelog](#changelog)
   * [Known issues](#known-issues)
@@ -112,7 +112,7 @@ For more information about feature preprocessing, go to [Dataset preprocessing](
 
 Model accuracy is defined with the [MAP@12](https://en.wikipedia.org/wiki/Evaluation_measures_(information_retrieval)#Mean_average_precision) metric. This metric follows the way of assessing model accuracy in the original [Kaggle Outbrain Click Prediction Challenge](https://www.kaggle.com/c/outbrain-click-prediction/). In this repository, the leaked clicked ads are not taken into account since in industrial setup Data Scientists do not have access to leaked information when training the model. For more information about data leak in Kaggle Outbrain Click Prediction challenge, visit this  [blogpost](https://medium.com/unstructured/how-feature-engineering-can-help-you-do-well-in-a-kaggle-competition-part-ii-3645d92282b8) by the 19th place finisher in that competition.
 
-Training and evaluation script also reports AUC ROC, binary accuracy, and Loss (BCE) values.
+Training and inference script also reports AUC ROC, binary accuracy, and Loss (BCE) values.
 
 ### Feature support matrix
 
@@ -304,7 +304,7 @@ For 8 GPUs:
 mpiexec --allow-run-as-root --bind-to socket -np 8 python main.py --evaluate --use_checkpoint
 ```
 
-Now that you have your model trained and evaluated, you can choose to compare your training results with our [Training accuracy results](#training-accuracy-results). You can also choose to benchmark yours performance to [Training and evaluation performance benchmark](#training-and-evaluation-performance-benchmark). Following the steps in these sections will ensure that you achieve the same accuracy and performance results as stated in the [Results](#results) section.
+Now that you have your model trained and evaluated, you can choose to compare your training results with our [Training accuracy results](#training-accuracy-results). You can also choose to benchmark yours performance to [Training and inference performance benchmark](#training-and-inference-performance-benchmark). Following the steps in these sections will ensure that you achieve the same accuracy and performance results as stated in the [Results](#results) section.
 
 ## Advanced
 
@@ -495,7 +495,7 @@ cd /wd && bash scripts/preproc_benchmark.sh -m nvtabular
 ```
 
 
-#### Training and evaluation performance benchmark
+#### Training and inference performance benchmark
 
 Benchmark script is prepared to measure performance of the model during training (default configuration) and evaluation (`--evaluation`). Benchmark runs training or evaluation for `--benchmark_steps` batches, however measurement of performance starts after `--benchmark_warmup_steps`. Benchmark can be run for single and 8 GPUs and with a combination of XLA (`--xla`), AMP (`--amp`), batch sizes (`--global_batch_size` , `--eval_batch_size`) and affinity (`--affinity`).
 
@@ -712,9 +712,9 @@ Our results were obtained by running the benchmark script (`main.py --benchmark`
 |8|16,384|No|1490044|1837962|1.23|4.63|2.17
 
 
-#### Evaluation performance results
+#### Inference performance results
 
-##### Evaluation performance: NVIDIA DGX A100 (8x A100 80GB)
+##### Inference performance: NVIDIA DGX A100 (8x A100 80GB)
 
 Our results were obtained by running the benchmark script (`main.py --evaluate --benchmark`) in the TensorFlow2 NGC container on NVIDIA DGX A100 with 8x A100 80GB GPUs. 
 
@@ -737,7 +737,7 @@ Our results were obtained by running the benchmark script (`main.py --evaluate -
 For more results go to the expandable table below.
 
 <details>
-<summary>Full tabular data for evaluation performance results for DGX A100</summary>
+<summary>Full tabular data for inference performance results for DGX A100</summary>
 
 |GPUs|Batch size / GPU|XLA|Throughput \[samples/s\] TF32|Throughput \[samples/s\]AMP|Throughput speedup AMP to TF32
 |----|----------------|---|------------------------------|-----------------------------|-------------------------------
@@ -768,7 +768,7 @@ For more results go to the expandable table below.
  </details>
 
 
-##### Evaluation performance: NVIDIA DGX-1 (8x V100 16GB)
+##### Inference performance: NVIDIA DGX-1 (8x V100 16GB)
 
 Our results were obtained by running the benchmark script (`main.py --evaluate --benchmark`) in the TensorFlow2 NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs.
 
@@ -792,7 +792,7 @@ Our results were obtained by running the benchmark script (`main.py --evaluate -
 For more results go to the expandable table below.
 
 <details>
-<summary>Full tabular data for evaluation performance for DGX-1 V100 results</summary>
+<summary>Full tabular data for inference performance for DGX-1 V100 results</summary>
 
 |GPUs|Batch size / GPU|XLA|Throughput \[samples/s\] TF32|Throughput \[samples/s\]AMP|Throughput speedup AMP to TF32
 |----|----------------|---|------------------------------|-----------------------------|-------------------------------
