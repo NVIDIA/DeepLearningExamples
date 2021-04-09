@@ -18,14 +18,37 @@ import json
 import torch
 from torch.cuda.amp import autocast
 import torch.backends.cudnn as cudnn
-import torchvision.transforms as transforms
-import image_classification.resnet as models
-from image_classification.dataloaders import load_jpeg_from_file
 
+from image_classification import models
+import torchvision.transforms as transforms
+
+from image_classification.models import (
+    resnet50,
+    resnext101_32x4d,
+    se_resnext101_32x4d,
+    efficientnet_b0,
+    efficientnet_b4,
+    efficientnet_widese_b0,
+    efficientnet_widese_b4,
+)
+
+def available_models():
+    models = {
+        m.name: m
+        for m in [
+            resnet50,
+            resnext101_32x4d,
+            se_resnext101_32x4d,
+            efficientnet_b0,
+            efficientnet_b4,
+            efficientnet_widese_b0,
+            efficientnet_widese_b4,
+        ]
+    }
+    return models
 
 def add_parser_arguments(parser):
-    model_names = models.resnet_versions.keys()
-    model_configs = models.resnet_configs.keys()
+    model_names = available_models().keys()
     parser.add_argument("--image-size", default="224", type=int)
     parser.add_argument(
         "--arch",
@@ -36,38 +59,48 @@ def add_parser_arguments(parser):
         help="model architecture: " + " | ".join(model_names) + " (default: resnet50)",
     )
     parser.add_argument(
-        "--model-config",
-        "-c",
-        metavar="CONF",
-        default="classic",
-        choices=model_configs,
-        help="model configs: " + " | ".join(model_configs) + "(default: classic)",
-    )
-    parser.add_argument("--weights", metavar="<path>", help="file with model weights")
-    parser.add_argument(
         "--precision", metavar="PREC", default="AMP", choices=["AMP", "FP32"]
     )
+    parser.add_argument("--cpu", action="store_true", help="perform inference on CPU")
     parser.add_argument("--image", metavar="<path>", help="path to classified image")
 
 
-def main(args):
+def load_jpeg_from_file(path, image_size, cuda=True):
+    img_transforms = transforms.Compose(
+        [
+            transforms.Resize(image_size + 32),
+            transforms.CenterCrop(image_size),
+            transforms.ToTensor(),
+        ]
+    )
+
+    img = img_transforms(Image.open(path))
+    with torch.no_grad():
+        # mean and std are not multiplied by 255 as they are in training script
+        # torch dataloader reads data into bytes whereas loading directly
+        # through PIL creates a tensor with floats in [0,1] range
+        mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+
+        if cuda:
+            mean = mean.cuda()
+            std = std.cuda()
+            img = img.cuda()
+        img = img.float()
+
+        input = img.unsqueeze(0).sub_(mean).div_(std)
+
+    return input
+
+
+def main(args, model_args):
     imgnet_classes = np.array(json.load(open("./LOC_synset_mapping.json", "r")))
-    model = models.build_resnet(args.arch, args.model_config, 1000, verbose=False)
-
-    if args.weights is not None:
-        weights = torch.load(args.weights)
-        # Temporary fix to allow NGC checkpoint loading
-        weights = {
-            k.replace("module.", ""): v for k, v in weights.items()
-        }
-        model.load_state_dict(weights)
-
-    model = model.cuda()
+    model = available_models()[args.arch](**model_args.__dict__)
+    if not args.cpu:
+        model = model.cuda()
     model.eval()
 
-    input = load_jpeg_from_file(
-        args.image, cuda=True
-    )
+    input = load_jpeg_from_file(args.image, args.image_size, cuda=not args.cpu)
 
     with torch.no_grad(), autocast(enabled = args.precision == "AMP"):
         output = torch.nn.functional.softmax(model(input), dim=1)
@@ -81,11 +114,14 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="PyTorch ImageNet Training")
+    parser = argparse.ArgumentParser(description="PyTorch ImageNet Classification")
 
     add_parser_arguments(parser)
-    args = parser.parse_args()
+    args, rest = parser.parse_known_args()
+    model_args, rest = available_models()[args.arch].parser().parse_known_args(rest)
+
+    assert len(rest) == 0, f"Unknown args passed: {rest}"
 
     cudnn.benchmark = True
 
-    main(args)
+    main(args, model_args)

@@ -25,6 +25,7 @@ The following table provides links to where you can find additional information 
 | resnet50 | [README](./resnet50v1.5/README.md) |
 | resnext101-32x4d | [README](./resnext101-32x4d/README.md) |
 | se-resnext101-32x4d | [README](./se-resnext101-32x4d/README.md) |
+| EfficientNet-B0 | [README](./efficientnet/README.md) |
 
 ## Validation accuracy results
 

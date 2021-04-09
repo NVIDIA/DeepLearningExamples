@@ -174,7 +174,7 @@ def main():
             None if local_rank == 0 else open("GPU_" + str(local_rank) + ".log", "w")
         )
 
-        process = subprocess.Popen(cmd, env=current_env, stdout=stdout)
+        process = subprocess.Popen(cmd, env=current_env, stdout=stdout, stderr=stdout)
         processes.append(process)
 
     try:
