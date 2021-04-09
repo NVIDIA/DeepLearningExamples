@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Dict, Any
 import yaml
 
-from main import main, add_parser_arguments
+from main import main, add_parser_arguments, available_models
 import torch.backends.cudnn as cudnn
 
 import argparse
@@ -38,13 +38,16 @@ if __name__ == "__main__":
         **config["models"][yaml_args.model][yaml_args.platform][yaml_args.precision],
         **config["mode"][yaml_args.mode],
     }
-    print(cfg)
 
     parser = argparse.ArgumentParser(description="PyTorch ImageNet Training")
     add_parser_arguments(parser)
     parser.set_defaults(**cfg)
-    args = parser.parse_args(rest)
-    print(args)
+    args, rest = parser.parse_known_args(rest)
+    model_parser = available_models()[args.arch].parser()
+    model_args, rest = model_parser.parse_known_args(rest)
+
+    assert len(rest) == 0, f"Unknown args passed: {rest}"
+
     cudnn.benchmark = True
 
-    main(args)
+    main(args, model_args)

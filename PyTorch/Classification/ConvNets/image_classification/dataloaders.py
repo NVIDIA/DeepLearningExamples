@@ -35,6 +35,8 @@ import torchvision.transforms as transforms
 from PIL import Image
 from functools import partial
 
+from image_classification.autoaugment import AutoaugmentImageNetPolicy
+
 DATA_BACKEND_CHOICES = ["pytorch", "syntetic"]
 try:
     from nvidia.dali.plugin.pytorch import DALIClassificationIterator
@@ -76,11 +78,23 @@ def load_jpeg_from_file(path, cuda=True):
 
 class HybridTrainPipe(Pipeline):
     def __init__(
-        self, batch_size, num_threads, device_id, data_dir, crop, dali_cpu=False
+        self,
+        batch_size,
+        num_threads,
+        device_id,
+        data_dir,
+        interpolation,
+        crop,
+        dali_cpu=False,
     ):
         super(HybridTrainPipe, self).__init__(
             batch_size, num_threads, device_id, seed=12 + device_id
         )
+        interpolation = {
+            "bicubic": types.INTERP_CUBIC,
+            "bilinear": types.INTERP_LINEAR,
+            "triangular": types.INTERP_TRIANGULAR,
+        }[interpolation]
         if torch.distributed.is_initialized():
             rank = torch.distributed.get_rank()
             world_size = torch.distributed.get_world_size()
@@ -113,7 +127,7 @@ class HybridTrainPipe(Pipeline):
         self.res = ops.RandomResizedCrop(
             device=dali_device,
             size=[crop, crop],
-            interp_type=types.INTERP_LINEAR,
+            interp_type=interpolation,
             random_aspect_ratio=[0.75, 4.0 / 3.0],
             random_area=[0.08, 1.0],
             num_attempts=100,
@@ -139,10 +153,17 @@ class HybridTrainPipe(Pipeline):
 
 
 class HybridValPipe(Pipeline):
-    def __init__(self, batch_size, num_threads, device_id, data_dir, crop, size):
+    def __init__(
+        self, batch_size, num_threads, device_id, data_dir, interpolation, crop, size
+    ):
         super(HybridValPipe, self).__init__(
             batch_size, num_threads, device_id, seed=12 + device_id
         )
+        interpolation = {
+            "bicubic": types.INTERP_CUBIC,
+            "bilinear": types.INTERP_LINEAR,
+            "triangular": types.INTERP_TRIANGULAR,
+        }[interpolation]
         if torch.distributed.is_initialized():
             rank = torch.distributed.get_rank()
             world_size = torch.distributed.get_world_size()
@@ -159,7 +180,9 @@ class HybridValPipe(Pipeline):
         )
 
         self.decode = ops.ImageDecoder(device="mixed", output_type=types.RGB)
-        self.res = ops.Resize(device="gpu", resize_shorter=size)
+        self.res = ops.Resize(
+            device="gpu", resize_shorter=size, interp_type=interpolation
+        )
         self.cmnp = ops.CropMirrorNormalize(
             device="gpu",
             dtype=types.FLOAT,
@@ -202,9 +225,12 @@ class DALIWrapper(object):
 def get_dali_train_loader(dali_cpu=False):
     def gdtl(
         data_path,
+        image_size,
         batch_size,
         num_classes,
         one_hot,
+        interpolation="bilinear",
+        augmentation=None,
         start_epoch=0,
         workers=5,
         _worker_init_fn=None,
@@ -218,13 +244,18 @@ def get_dali_train_loader(dali_cpu=False):
             world_size = 1
 
         traindir = os.path.join(data_path, "train")
+        if augmentation is not None:
+            raise NotImplementedError(
+                f"Augmentation {augmentation} for dali loader is not supported"
+            )
 
         pipe = HybridTrainPipe(
             batch_size=batch_size,
             num_threads=workers,
             device_id=rank % torch.cuda.device_count(),
             data_dir=traindir,
-            crop=224,
+            interpolation=interpolation,
+            crop=image_size,
             dali_cpu=dali_cpu,
         )
 
@@ -244,9 +275,12 @@ def get_dali_train_loader(dali_cpu=False):
 def get_dali_val_loader():
     def gdvl(
         data_path,
+        image_size,
         batch_size,
         num_classes,
         one_hot,
+        interpolation="bilinear",
+        crop_padding=32,
         workers=5,
         _worker_init_fn=None,
         memory_format=torch.contiguous_format,
@@ -265,8 +299,9 @@ def get_dali_val_loader():
             num_threads=workers,
             device_id=rank % torch.cuda.device_count(),
             data_dir=valdir,
-            crop=224,
-            size=256,
+            interpolation=interpolation,
+            crop=image_size,
+            size=image_size + crop_padding,
         )
 
         pipe.build()
@@ -296,7 +331,7 @@ def fast_collate(memory_format, batch):
             nump_array = np.expand_dims(nump_array, axis=-1)
         nump_array = np.rollaxis(nump_array, 2)
 
-        tensor[i] += torch.from_numpy(nump_array)
+        tensor[i] += torch.from_numpy(nump_array.copy())
 
     return tensor, targets
 
@@ -369,24 +404,33 @@ class PrefetchedWrapper(object):
 
 def get_pytorch_train_loader(
     data_path,
+    image_size,
     batch_size,
     num_classes,
     one_hot,
+    interpolation="bilinear",
+    augmentation=None,
     start_epoch=0,
     workers=5,
     _worker_init_fn=None,
     memory_format=torch.contiguous_format,
 ):
+    interpolation = {"bicubic": Image.BICUBIC, "bilinear": Image.BILINEAR}[
+        interpolation
+    ]
     traindir = os.path.join(data_path, "train")
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        transforms.Compose(
-            [transforms.RandomResizedCrop(224), transforms.RandomHorizontalFlip()]
-        ),
-    )
+    transforms_list = [
+        transforms.RandomResizedCrop(image_size, interpolation=interpolation),
+        transforms.RandomHorizontalFlip(),
+    ]
+    if augmentation == "autoaugment":
+        transforms_list.append(AutoaugmentImageNetPolicy())
+    train_dataset = datasets.ImageFolder(traindir, transforms.Compose(transforms_list))
 
     if torch.distributed.is_initialized():
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset, shuffle=True)
+        train_sampler = torch.utils.data.distributed.DistributedSampler(
+            train_dataset, shuffle=True
+        )
     else:
         train_sampler = None
 
@@ -400,6 +444,7 @@ def get_pytorch_train_loader(
         pin_memory=True,
         collate_fn=partial(fast_collate, memory_format),
         drop_last=True,
+        persistent_workers=False,
     )
 
     return (
@@ -410,20 +455,36 @@ def get_pytorch_train_loader(
 
 def get_pytorch_val_loader(
     data_path,
+    image_size,
     batch_size,
     num_classes,
     one_hot,
+    interpolation="bilinear",
     workers=5,
     _worker_init_fn=None,
+    crop_padding=32,
     memory_format=torch.contiguous_format,
 ):
+    interpolation = {"bicubic": Image.BICUBIC, "bilinear": Image.BILINEAR}[
+        interpolation
+    ]
     valdir = os.path.join(data_path, "val")
     val_dataset = datasets.ImageFolder(
-        valdir, transforms.Compose([transforms.Resize(256), transforms.CenterCrop(224)])
+        valdir,
+        transforms.Compose(
+            [
+                transforms.Resize(
+                    image_size + crop_padding, interpolation=interpolation
+                ),
+                transforms.CenterCrop(image_size),
+            ]
+        ),
     )
 
     if torch.distributed.is_initialized():
-        val_sampler = torch.utils.data.distributed.DistributedSampler(val_dataset, shuffle=False)
+        val_sampler = torch.utils.data.distributed.DistributedSampler(
+            val_dataset, shuffle=False
+        )
     else:
         val_sampler = None
 
@@ -437,6 +498,7 @@ def get_pytorch_val_loader(
         pin_memory=True,
         collate_fn=partial(fast_collate, memory_format),
         drop_last=False,
+        persistent_workers=False,
     )
 
     return PrefetchedWrapper(val_loader, 0, num_classes, one_hot), len(val_loader)
@@ -454,7 +516,7 @@ class SynteticDataLoader(object):
         memory_format=torch.contiguous_format,
     ):
         input_data = (
-            torch.empty(batch_size, num_channels, height, width)
+            torch.randn(batch_size, num_channels, height, width)
             .contiguous(memory_format=memory_format)
             .cuda()
             .normal_(0, 1.0)
@@ -476,9 +538,12 @@ class SynteticDataLoader(object):
 
 def get_syntetic_loader(
     data_path,
+    image_size,
     batch_size,
     num_classes,
     one_hot,
+    interpolation=None,
+    augmentation=None,
     start_epoch=0,
     workers=None,
     _worker_init_fn=None,
@@ -486,7 +551,13 @@ def get_syntetic_loader(
 ):
     return (
         SynteticDataLoader(
-            batch_size, num_classes, 3, 224, 224, one_hot, memory_format=memory_format
+            batch_size,
+            num_classes,
+            3,
+            image_size,
+            image_size,
+            one_hot,
+            memory_format=memory_format,
         ),
         -1,
     )

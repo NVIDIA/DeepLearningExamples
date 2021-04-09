@@ -27,6 +27,7 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+import math
 import os
 import numpy as np
 import torch
@@ -112,8 +113,7 @@ def first_n(n, generator):
 class TimeoutHandler:
     def __init__(self, sig=signal.SIGTERM):
         self.sig = sig
-        rank = dist.get_rank() if dist.is_initialized() else 0
-        self.device = f'cuda:{rank}'
+        self.device = torch.device("cuda")
     @property
     def interrupted(self):
         if not dist.is_initialized():
@@ -123,26 +123,31 @@ class TimeoutHandler:
         dist.broadcast(interrupted, 0)
         interrupted = bool(interrupted.item())
         return interrupted
+
     def __enter__(self):
         self._interrupted = False
         self.released = False
         self.original_handler = signal.getsignal(self.sig)
+
         def master_handler(signum, frame):
             self.release()
             self._interrupted = True
-            print(f'Received SIGTERM')
-        def ignorind_handler(signum, frame):
+            print(f"Received SIGTERM")
+
+        def ignoring_handler(signum, frame):
             self.release()
-            print('Received SIGTERM, ignoring')
+            print("Received SIGTERM, ignoring")
 
         rank = dist.get_rank() if dist.is_initialized() else 0
         if rank == 0:
             signal.signal(self.sig, master_handler)
         else:
-            signal.signal(self.sig, ignorind_handler)
+            signal.signal(self.sig, ignoring_handler)
         return self
+
     def __exit__(self, type, value, tb):
         self.release()
+
     def release(self):
         if self.released:
             return False
