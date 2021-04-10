@@ -472,8 +472,8 @@ Our results were obtained by running the training scripts in the tensorflow:21.0
 
 | GPUs     | Accuracy - FP32  | Accuracy - mixed precision  |   Time to train - FP32  |  Time to train - mixed precision | Time to train speedup (FP32 to mixed precision)        |
 |-------------------|-----------------------|-------------|-------|-------------------|---------------------------------------|
-|     8              |             77.54          |           77.51  |     11.48   |  11.44     |     1.003           |
-|     32              |           77.38          |         77.62  |        48 |  44   |  1.09  |
+|     8              |             77.54          |           77.51  |     48   |  44     |     1.09           |
+|     32              |           77.38          |         77.62  |        11.48 |  11.44   |  1.003  |
 
 
 #### Training accuracy results for EfficientNet-B4
