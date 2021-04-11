@@ -531,7 +531,6 @@ def train_loop(
                 register_metrics=epoch == start_epoch,
                 batch_size_multiplier=batch_size_multiplier,
             )
-
         if not skip_validation:
             prec1, nimg = validate(
                 val_loader,
@@ -542,21 +541,21 @@ def train_loop(
                 prof=prof,
                 register_metrics=epoch == start_epoch,
             )
+        if not skip_validation:
+            is_best = logger.metrics["val.top1"]["meter"].get_epoch() > best_prec1
+            best_prec1 = max(
+                logger.metrics["val.top1"]["meter"].get_epoch(), best_prec1
+            )
+        else:
+            is_best = False
+            best_prec1 = 0
+
         if logger is not None:
             logger.end_epoch()
 
         if save_checkpoints and (
             not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0
         ):
-            if not skip_validation:
-                is_best = logger.metrics["val.top1"]["meter"].get_epoch() > best_prec1
-                best_prec1 = max(
-                    logger.metrics["val.top1"]["meter"].get_epoch(), best_prec1
-                )
-            else:
-                is_best = False
-                best_prec1 = 0
-
             if should_backup_checkpoint(epoch):
                 backup_filename = "checkpoint-{}.pth.tar".format(epoch + 1)
             else:
@@ -574,6 +573,7 @@ def train_loop(
                 backup_filename=backup_filename,
                 filename=checkpoint_filename,
             )
-
+        if not skip_validation and best_prec1 >= 0.761:
+            break
 
 # }}}
