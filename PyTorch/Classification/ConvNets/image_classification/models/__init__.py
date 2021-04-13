@@ -18,4 +18,6 @@ from .efficientnet import (
     efficientnet_b4,
     efficientnet_widese_b0,
     efficientnet_widese_b4,
+    efficientnet_quant_b0,
+    efficientnet_quant_b4,
 )

@@ -31,7 +31,7 @@ if __name__ == "__main__":
 
     with open(yaml_args.cfg_file, "r") as cfg_file:
         config = yaml.load(cfg_file, Loader=yaml.FullLoader)
-
+    
     cfg = {
         **config["precision"][yaml_args.precision],
         **config["platform"][yaml_args.platform],
@@ -43,11 +43,11 @@ if __name__ == "__main__":
     add_parser_arguments(parser)
     parser.set_defaults(**cfg)
     args, rest = parser.parse_known_args(rest)
-    model_parser = available_models()[args.arch].parser()
-    model_args, rest = model_parser.parse_known_args(rest)
 
+    model_arch = available_models()[args.arch]
+    model_args, rest = model_arch.parser().parse_known_args(rest)
     assert len(rest) == 0, f"Unknown args passed: {rest}"
 
     cudnn.benchmark = True
 
-    main(args, model_args)
+    main(args, model_args, model_arch)

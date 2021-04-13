@@ -77,7 +77,7 @@ def available_models():
     return models
 
 
-def add_parser_arguments(parser):
+def add_parser_arguments(parser, skip_arch=False):
     parser.add_argument("data", metavar="DIR", help="path to dataset")
     parser.add_argument(
         "--data-backend",
@@ -94,15 +94,16 @@ def add_parser_arguments(parser):
         default="bilinear",
         help="interpolation type for resizing images: bilinear, bicubic or triangular(DALI only)",
     )
-    model_names = available_models().keys()
-    parser.add_argument(
-        "--arch",
-        "-a",
-        metavar="ARCH",
-        default="resnet50",
-        choices=model_names,
-        help="model architecture: " + " | ".join(model_names) + " (default: resnet50)",
-    )
+    if not skip_arch:
+        model_names = available_models().keys()
+        parser.add_argument(
+            "--arch",
+            "-a",
+            metavar="ARCH",
+            default="resnet50",
+            choices=model_names,
+            help="model architecture: " + " | ".join(model_names) + " (default: resnet50)",
+        )
 
     parser.add_argument(
         "-j",
@@ -312,14 +313,11 @@ def add_parser_arguments(parser):
         type=str,
         default=None,
         choices=[None, "autoaugment"],
-        help="augmenation method",
+        help="augmentation method",
     )
 
 
-def main(args, model_args):
-    exp_start_time = time.time()
-    global best_prec1
-    best_prec1 = 0
+def prepare_for_training(args, model_args, model_arch):
 
     args.distributed = False
     if "WORLD_SIZE" in os.environ:
@@ -413,7 +411,7 @@ def main(args, model_args):
     memory_format = (
         torch.channels_last if args.memory_format == "nhwc" else torch.contiguous_format
     )
-    model = available_models()[args.arch](
+    model = model_arch(
         **{
             k: v
             if k != "pretrained"
@@ -536,6 +534,18 @@ def main(args, model_args):
         print("load ema")
         ema.load_state_dict(model_state_ema)
 
+    return (model_and_loss, optimizer, lr_policy, scaler, train_loader, val_loader, logger, ema, model_ema,
+            train_loader_len, batch_size_multiplier, start_epoch)
+
+
+def main(args, model_args, model_arch):
+    exp_start_time = time.time()
+    global best_prec1
+    best_prec1 = 0
+
+    model_and_loss, optimizer, lr_policy, scaler, train_loader, val_loader, logger, ema, model_ema, train_loader_len, \
+        batch_size_multiplier, start_epoch = prepare_for_training(args, model_args, model_arch)
+
     train_loop(
         model_and_loss,
         optimizer,
@@ -586,12 +596,13 @@ if __name__ == "__main__":
     add_parser_arguments(parser)
 
     args, rest = parser.parse_known_args()
-
-    model_args, rest = available_models()[args.arch].parser().parse_known_args(rest)
+    
+    model_arch = available_models()[args.arch]
+    model_args, rest = model_arch.parser().parse_known_args(rest)
     print(model_args)
 
     assert len(rest) == 0, f"Unknown args passed: {rest}"
 
     cudnn.benchmark = True
 
-    main(args, model_args)
+    main(args, model_args, model_arch)

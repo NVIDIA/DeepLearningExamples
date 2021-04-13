@@ -13,7 +13,7 @@ class ModelArch:
 @dataclass
 class ModelParams:
     def parser(self, name):
-        return argparse.ArgumentParser(description=f"{name} arguments", add_help = False, usage="")
+        return argparse.ArgumentParser(description=f"{name} arguments", add_help=False, usage="")
 
 
 @dataclass
@@ -44,7 +44,7 @@ class EntryPoint:
         state_dict = None
         if pretrained:
             assert self.model.checkpoint_url is not None
-            state_dict = torch.hub.load_state_dict_from_url(self.model.checkpoint_url,  map_location=torch.device('cpu'))
+            state_dict = torch.hub.load_state_dict_from_url(self.model.checkpoint_url, map_location=torch.device('cpu'))
 
         if pretrained_from_file is not None:
             if os.path.isfile(pretrained_from_file):
@@ -63,8 +63,12 @@ class EntryPoint:
         # Temporary fix to allow NGC checkpoint loading
         if state_dict is not None:
             state_dict = {
-                    k[len("module."):] if k.startswith("module.") else k: v for k, v in state_dict.items()
-                }
+                k[len("module."):] if k.startswith("module.") else k: v for k, v in state_dict.items()
+            }
+            state_dict = {
+                k: v.view(v.shape[0], -1, 1, 1) if is_linear_se_weight(k, v) else v for k, v in state_dict.items()
+            }
+
             model.load_state_dict(state_dict)
         return model
 
@@ -89,10 +93,13 @@ class EntryPoint:
         return parser
 
 
+def is_linear_se_weight(key, value):
+    return (key.endswith('squeeze.weight') or key.endswith('expand.weight')) and len(value.shape) == 2
+
+
 def create_entrypoint(m: Model):
     def _ep(**kwargs):
         params = replace(m.params, **kwargs)
         return m.constructor(arch=m.arch, **asdict(params))
 
     return _ep
-

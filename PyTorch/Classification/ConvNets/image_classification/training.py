@@ -274,7 +274,7 @@ def train(
 
     data_iter = enumerate(train_loader)
     if logger is not None:
-        data_iter = logger.iteration_generator_wrapper(data_iter)
+        data_iter = logger.iteration_generator_wrapper(data_iter, mode='train')
 
     for i, (input, target) in data_iter:
         bs = input.size(0)
@@ -290,8 +290,8 @@ def train(
 
         if logger is not None:
             logger.log_metric("train.loss", loss.item(), bs)
-            logger.log_metric("train.compute_ips", calc_ips(bs, it_time - data_time))
-            logger.log_metric("train.total_ips", calc_ips(bs, it_time))
+            logger.log_metric("train.compute_ips", utils.calc_ips(bs, it_time - data_time))
+            logger.log_metric("train.total_ips", utils.calc_ips(bs, it_time))
             logger.log_metric("train.data_time", data_time)
             logger.log_metric("train.compute_time", it_time - data_time)
 
@@ -413,7 +413,7 @@ def validate(
 
     data_iter = enumerate(val_loader)
     if not logger is None:
-        data_iter = logger.iteration_generator_wrapper(data_iter, val=True)
+        data_iter = logger.iteration_generator_wrapper(data_iter, mode='val')
 
     for i, (input, target) in data_iter:
         bs = input.size(0)
@@ -428,8 +428,8 @@ def validate(
             logger.log_metric(f"{prefix}.top1", prec1.item(), bs)
             logger.log_metric(f"{prefix}.top5", prec5.item(), bs)
             logger.log_metric(f"{prefix}.loss", loss.item(), bs)
-            logger.log_metric(f"{prefix}.compute_ips", calc_ips(bs, it_time - data_time))
-            logger.log_metric(f"{prefix}.total_ips", calc_ips(bs, it_time))
+            logger.log_metric(f"{prefix}.compute_ips", utils.calc_ips(bs, it_time - data_time))
+            logger.log_metric(f"{prefix}.total_ips", utils.calc_ips(bs, it_time))
             logger.log_metric(f"{prefix}.data_time", data_time)
             logger.log_metric(f"{prefix}.compute_latency", it_time - data_time)
             logger.log_metric(f"{prefix}.compute_latency_at95", it_time - data_time)
@@ -445,12 +445,6 @@ def validate(
 
 
 # Train loop {{{
-def calc_ips(batch_size, time):
-    world_size = (
-        torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
-    )
-    tbs = world_size * batch_size
-    return tbs / time
 
 
 def train_loop(
@@ -483,7 +477,9 @@ def train_loop(
 
     if early_stopping_patience > 0:
         epochs_since_improvement = 0
-
+    backup_prefix = checkpoint_filename[:-len("checkpoint.pth.tar")] if \
+        checkpoint_filename.endswith("checkpoint.pth.tar") else ""
+    
     print(f"RUNNING EPOCHS FROM {start_epoch} TO {end_epoch}")
     with utils.TimeoutHandler() as timeout_handler:
         interrupted = False
@@ -546,7 +542,7 @@ def train_loop(
                 not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0
             ):
                 if should_backup_checkpoint(epoch):
-                    backup_filename = "checkpoint-{}.pth.tar".format(epoch + 1)
+                    backup_filename = "{}checkpoint-{}.pth.tar".format(backup_prefix, epoch + 1)
                 else:
                     backup_filename = None
                 checkpoint_state = {
