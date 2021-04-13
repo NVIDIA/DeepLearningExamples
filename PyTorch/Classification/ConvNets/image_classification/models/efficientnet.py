@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 import torch
 from torch import nn
 from functools import partial
+from pytorch_quantization import nn as quant_nn
 
 from .common import (
     SqueezeAndExcitation,
@@ -25,6 +26,8 @@ from .model import (
     create_entrypoint,
     EntryPoint,
 )
+
+from ..quantization import switch_on_quantization
 
 # EffNetArch {{{
 @dataclass
@@ -103,6 +106,7 @@ class EffNetParams(ModelParams):
     bn_momentum: float = 1 - 0.99
     bn_epsilon: float = 1e-3
     survival_prob: float = 1
+    quantized: bool = False
 
     def parser(self, name):
         p = super().parser(name)
@@ -141,14 +145,6 @@ class EffNetParams(ModelParams):
         p.add_argument(
             "--dropout", default=self.dropout, type=float, help="Dropout drop prob"
         )
-        p.add_argument(
-            "--onnx",
-            dest="activation",
-            action="store_const",
-            const="onnx-silu",
-            default=self.activation,
-            help="Use ONNX-compatible SiLU implementation",
-        )
         return p
 
 
@@ -166,44 +162,47 @@ class EfficientNet(nn.Module):
         bn_momentum: float = 1 - 0.99,
         bn_epsilon: float = 1e-3,
         survival_prob: float = 1,
+        quantized: bool = False
     ):
-        super(EfficientNet, self).__init__()
-        self.arch = arch
-        self.num_layers = arch.num_layers()
-        self.num_blocks = sum(arch.num_repeat)
-        self.survival_prob = survival_prob
-        self.builder = LayerBuilder(
-            LayerBuilder.Config(
-                activation=activation,
-                conv_init=conv_init,
-                bn_momentum=bn_momentum,
-                bn_epsilon=bn_epsilon,
+        self.quantized = quantized
+        with switch_on_quantization(self.quantized):
+            super(EfficientNet, self).__init__()
+            self.arch = arch
+            self.num_layers = arch.num_layers()
+            self.num_blocks = sum(arch.num_repeat)
+            self.survival_prob = survival_prob
+            self.builder = LayerBuilder(
+                LayerBuilder.Config(
+                    activation=activation,
+                    conv_init=conv_init,
+                    bn_momentum=bn_momentum,
+                    bn_epsilon=bn_epsilon,
+                )
             )
-        )
 
-        self.stem = self._make_stem(arch.stem_channels)
-        out_channels = arch.stem_channels
+            self.stem = self._make_stem(arch.stem_channels)
+            out_channels = arch.stem_channels
 
-        plc = 0
-        for i, (k, s, r, e, c) in arch.enumerate():
-            layer, out_channels = self._make_layer(
-                block=arch.block,
-                kernel_size=k,
-                stride=s,
-                num_repeat=r,
-                expansion=e,
-                in_channels=out_channels,
-                out_channels=c,
-                squeeze_excitation_ratio=arch.squeeze_excitation_ratio,
-                prev_layer_count=plc,
+            plc = 0
+            for i, (k, s, r, e, c) in arch.enumerate():
+                layer, out_channels = self._make_layer(
+                    block=arch.block,
+                    kernel_size=k,
+                    stride=s,
+                    num_repeat=r,
+                    expansion=e,
+                    in_channels=out_channels,
+                    out_channels=c,
+                    squeeze_excitation_ratio=arch.squeeze_excitation_ratio,
+                    prev_layer_count=plc,
+                )
+                plc = plc + r
+                setattr(self, f"layer{i+1}", layer)
+
+            self.features = self._make_features(out_channels, arch.feature_channels)
+            self.classifier = self._make_classifier(
+                arch.feature_channels, num_classes, dropout
             )
-            plc = plc + r
-            setattr(self, f"layer{i+1}", layer)
-
-        self.features = self._make_features(out_channels, arch.feature_channels)
-        self.classifier = self._make_classifier(
-            arch.feature_channels, num_classes, dropout
-        )
 
     def forward(self, x):
         x = self.stem(x)
@@ -275,7 +274,8 @@ class EfficientNet(nn.Module):
         return nn.Sequential(
             OrderedDict(
                 [
-                    ("pooling", LambdaLayer(lambda x: torch.mean(x, [2, 3]))),
+                    ("pooling", nn.AdaptiveAvgPool2d(1)),
+                    ("squeeze", LambdaLayer(lambda x: x.squeeze(-1).squeeze(-1))),
                     ("dropout", nn.Dropout(dropout)),
                     ("fc", nn.Linear(num_features, num_classes)),
                 ]
@@ -307,6 +307,7 @@ class EfficientNet(nn.Module):
             stride,
             self.arch.squeeze_excitation_ratio,
             survival_prob if stride == 1 and in_channels == out_channels else 1.0,
+            self.quantized
         )
         layers.append((f"block{idx}", blk))
 
@@ -321,6 +322,7 @@ class EfficientNet(nn.Module):
                 1,  # stride
                 squeeze_excitation_ratio,
                 survival_prob,
+                self.quantized
             )
             layers.append((f"block{idx}", blk))
         return nn.Sequential(OrderedDict(layers)), out_channels
@@ -341,8 +343,10 @@ class MBConvBlock(nn.Module):
         squeeze_excitation_ratio: int,
         squeeze_hidden=False,
         survival_prob: float = 1.0,
+        quantized: bool = False
     ):
         super().__init__()
+        self.quantized = quantized
         self.residual = stride == 1 and in_channels == out_channels
         hidden_dim = in_channels * expand_ratio
         squeeze_base = hidden_dim if squeeze_hidden else in_channels
@@ -357,11 +361,14 @@ class MBConvBlock(nn.Module):
             depsep_kernel_size, hidden_dim, hidden_dim, stride, bn=True, act=True
         )
         self.se = SequentialSqueezeAndExcitation(
-            hidden_dim, squeeze_dim, builder.activation()
+            hidden_dim, squeeze_dim, builder.activation(), self.quantized
         )
         self.proj = builder.conv1x1(hidden_dim, out_channels, bn=True)
 
         self.survival_prob = survival_prob
+
+        if self.quantized and self.residual:
+            self.residual_quantizer = quant_nn.TensorQuantizer(quant_nn.QuantConv2d.default_quant_desc_input)  # TODO QuantConv2d ?!?
 
     def drop(self):
         if self.survival_prob == 1.0:
@@ -384,7 +391,8 @@ class MBConvBlock(nn.Module):
                 multiplication_factor = 1.0 / self.survival_prob
         else:
             multiplication_factor = 1.0
-
+        if self.quantized:
+            x = self.residual_quantizer(x)
         return torch.add(x, alpha=multiplication_factor, other=b)
 
 
@@ -397,6 +405,7 @@ def original_mbconv(
     stride: int,
     squeeze_excitation_ratio: int,
     survival_prob: float,
+    quantized: bool,
 ):
     return MBConvBlock(
         builder,
@@ -408,6 +417,7 @@ def original_mbconv(
         squeeze_excitation_ratio,
         squeeze_hidden=False,
         survival_prob=survival_prob,
+        quantized=quantized
     )
 
 
@@ -420,6 +430,7 @@ def widese_mbconv(
     stride: int,
     squeeze_excitation_ratio: int,
     survival_prob: float,
+    quantized: bool,
 ):
     return MBConvBlock(
         builder,
@@ -431,6 +442,7 @@ def widese_mbconv(
         squeeze_excitation_ratio,
         squeeze_hidden=True,
         survival_prob=survival_prob,
+        quantized=False
     )
 
 
@@ -477,6 +489,14 @@ architectures = {
     "efficientnet-widese-b5": _m(arch=replace(effnet_b5_layers, block=widese_mbconv), params=EffNetParams(dropout=0.4)),
     "efficientnet-widese-b6": _m(arch=replace(effnet_b6_layers, block=widese_mbconv), params=EffNetParams(dropout=0.5)),
     "efficientnet-widese-b7": _m(arch=replace(effnet_b7_layers, block=widese_mbconv), params=EffNetParams(dropout=0.5)),
+    "efficientnet-quant-b0": _m(arch=effnet_b0_layers, params=EffNetParams(dropout=0.2, quantized=True)),
+    "efficientnet-quant-b1": _m(arch=effnet_b1_layers, params=EffNetParams(dropout=0.2, quantized=True)),
+    "efficientnet-quant-b2": _m(arch=effnet_b2_layers, params=EffNetParams(dropout=0.3, quantized=True)),
+    "efficientnet-quant-b3": _m(arch=effnet_b3_layers, params=EffNetParams(dropout=0.3, quantized=True)),
+    "efficientnet-quant-b4": _m(arch=effnet_b4_layers, params=EffNetParams(dropout=0.4, survival_prob=0.8, quantized=True)),
+    "efficientnet-quant-b5": _m(arch=effnet_b5_layers, params=EffNetParams(dropout=0.4, quantized=True)),
+    "efficientnet-quant-b6": _m(arch=effnet_b6_layers, params=EffNetParams(dropout=0.5, quantized=True)),
+    "efficientnet-quant-b7": _m(arch=effnet_b7_layers, params=EffNetParams(dropout=0.5, quantized=True)),
 }
 # fmt: on
 
@@ -488,3 +508,6 @@ efficientnet_b4 = _ce("efficientnet-b4")
 
 efficientnet_widese_b0 = _ce("efficientnet-widese-b0")
 efficientnet_widese_b4 = _ce("efficientnet-widese-b4")
+
+efficientnet_quant_b0 = _ce("efficientnet-quant-b0")
+efficientnet_quant_b4 = _ce("efficientnet-quant-b4")

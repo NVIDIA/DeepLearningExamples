@@ -30,6 +30,8 @@ from image_classification.models import (
     efficientnet_b4,
     efficientnet_widese_b0,
     efficientnet_widese_b4,
+    efficientnet_quant_b0,
+    efficientnet_quant_b4,
 )
 
 def available_models():
@@ -43,6 +45,8 @@ def available_models():
             efficientnet_b4,
             efficientnet_widese_b0,
             efficientnet_widese_b4,
+            efficientnet_quant_b0,
+            efficientnet_quant_b4,
         ]
     }
     return models
@@ -93,9 +97,21 @@ def load_jpeg_from_file(path, image_size, cuda=True):
     return input
 
 
+def check_quant_weight_correctness(checkpoint_path, model):
+    state_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+    state_dict = {k[len("module."):] if k.startswith("module.") else k: v for k, v in state_dict.items()}
+    quantizers_sd_keys = {f'{n[0]}._amax' for n in model.named_modules() if 'quantizer' in n[0]}
+    sd_all_keys = quantizers_sd_keys | set(model.state_dict().keys())
+    assert set(state_dict.keys()) == sd_all_keys, (f'Passed quantized architecture, but following keys are missing in '
+                                                   f'checkpoint: {list(sd_all_keys - set(state_dict.keys()))}')
+
+
 def main(args, model_args):
     imgnet_classes = np.array(json.load(open("./LOC_synset_mapping.json", "r")))
     model = available_models()[args.arch](**model_args.__dict__)
+    if args.arch in ['efficientnet-quant-b0', 'efficientnet-quant-b4']:
+        check_quant_weight_correctness(model_args.pretrained_from_file, model)
+        
     if not args.cpu:
         model = model.cuda()
     model.eval()

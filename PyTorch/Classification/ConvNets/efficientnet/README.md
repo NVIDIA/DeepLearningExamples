@@ -12,6 +12,8 @@ achieve state-of-the-art accuracy, and is tested and maintained by NVIDIA.
   * [Mixed precision training](#mixed-precision-training)
     * [Enabling mixed precision](#enabling-mixed-precision)
     * [Enabling TF32](#enabling-tf32)
+  * [Quantization](#quantization)
+    * [Quantization-aware training](#qat)
 * [Setup](#setup)
   * [Requirements](#requirements)
 * [Quick Start Guide](#quick-start-guide)
@@ -22,6 +24,7 @@ achieve state-of-the-art accuracy, and is tested and maintained by NVIDIA.
   * [Training process](#training-process)
   * [Inference process](#inference-process)
     * [NGC pretrained weights](#ngc-pretrained-weights)
+  * [QAT process](#qat-process)
 * [Performance](#performance)
   * [Benchmarking](#benchmarking)
     * [Training performance benchmark](#training-performance-benchmark)
@@ -37,7 +40,10 @@ achieve state-of-the-art accuracy, and is tested and maintained by NVIDIA.
       * [Training performance: NVIDIA DGX-1 (8x V100 32GB)](#training-performance-nvidia-dgx-1-8x-v100-32gb)
   * [Inference performance results](#inference-performance-results)
       * [Inference performance: NVIDIA A100 (1x A100 80GB)](#inference-performance-nvidia-a100-1x-a100-80gb)
-      * [Inference performance: NVIDIA DGX-1 (1x V100 16GB)](#inference-performance-nvidia-dgx-1-1x-v100-16gb)
+      * [Inference performance: NVIDIA V100 (1x V100 16GB)](#inference-performance-nvidia-v100-1x-v100-16gb)
+  * [QAT results](#qat-results)
+      * [QAT Training performance: NVIDIA DGX-1 (8x V100 32GB)](#qat-training-performance-nvidia-dgx-1-8x-v100-32gb))
+      * [QAT Inference accuracy](#qat-inference-accuracy)
 * [Release notes](#release-notes)
   * [Changelog](#changelog)
   * [Known issues](#known-issues)
@@ -76,6 +82,28 @@ scale the learning rate.
 * [MixUp](https://arxiv.org/pdf/1710.09412.pdf) = 0.2
 * We train for 400 epochs
 
+**Optimizer for QAT**
+
+This model uses SGD optimizer for B0 models and RMSPROP optimizer alpha=0.853  epsilon=0.00422 for B4 models. Other hyperparameters we used are:
+* Momentum:
+  * 0.89 for B0 models
+  * 0.9 for B4 models
+* Learning rate (LR):
+  * 0.0125 for 128 batch size for B0 models
+  * 4.09e-06 for 32 batch size for B4 models
+scale the learning rate.
+* Learning rate schedule: 
+  * cosine LR schedule for B0 models
+  * linear LR schedule for B4 models
+* Weight decay (WD):
+  * 4.50e-05 for B0 models
+  * 9.714e-04 for B4 models
+* We do not apply WD on Batch Norm trainable parameters (gamma/bias)
+* We train for:
+	*10 epochs for B0 models
+	*2 epochs for B4 models
+
+
 **Data augmentation**
 
 This model uses the following data augmentation:
@@ -102,6 +130,7 @@ The following features are supported by this model:
 |-----------------------|--------------------------
 |[DALI](https://docs.nvidia.com/deeplearning/dali/release-notes/index.html)   |   Yes (without autoaugmentation)
 |[APEX AMP](https://nvidia.github.io/apex/amp.html) | Yes
+|[QAT](https://github.com/NVIDIA/TensorRT/tree/master/tools/pytorch-quantization)  |   Yes
 
 #### Features
 
@@ -123,6 +152,11 @@ DALI currently does not support Autoaugmentation, so for best accuracy it has to
 **[APEX](https://github.com/NVIDIA/apex)**
 
 A PyTorch extension that contains utility libraries, such as [Automatic Mixed Precision (AMP)](https://nvidia.github.io/apex/amp.html), which require minimal network code changes to leverage Tensor Cores performance. Refer to the [Enabling mixed precision](#enabling-mixed-precision) section for more details.
+
+**[QAT](https://github.com/NVIDIA/TensorRT/tree/master/tools/pytorch-quantization)**
+
+Quantization aware training (QAT) is a method for changing precision to INT8 which speeds up the inference process at the price of a slight decrease of network accuracy. Refer to the [Quantization](#quantization) section for more details.
+
 
 ### Mixed precision training
 
@@ -173,6 +207,28 @@ For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates A
 
 TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
 
+### Quantization
+
+Quantization is the process of transforming deep learning models to use parameters and computations at a lower precision. Traditionally, DNN training and inference have relied on the IEEE single-precision floating-point format, using 32 bits to represent the floating-point model weights and activation tensors.
+
+This compute budget may be acceptable at training as most DNNs are trained in data centers or in the cloud with NVIDIA V100 or A100 GPUs that have significantly large compute capability and much larger power budgets. However, during deployment, these models are most often required to run on devices with much smaller computing resources and lower power budgets at the edge. Running a DNN inference using the full 32-bit representation is not practical for real-time analysis given the compute, memory, and power constraints of the edge.
+
+To help reduce the compute budget, while not compromising on the structure and number of parameters in the model, you can run inference at a lower precision. Initially, quantized inferences were run at half-point precision with tensors and weights represented as 16-bit floating-point numbers. While this resulted in compute savings of about 1.2–1.5x, there was still some compute budget and memory bandwidth that could be leveraged. In lieu of this, models are now quantized to an even lower precision, with an 8-bit integer representation for weights and tensors. This results in a model that is 4x smaller in memory and about 2–4x faster in throughput.
+
+While 8-bit quantization is appealing to save compute and memory budgets, it is a lossy process. During quantization, a small range of floating-point numbers are squeezed to a fixed number of information buckets. This results in loss of information.
+
+The minute differences which could originally be resolved using 32-bit representations are now lost because they are quantized to the same bucket in 8-bit representations. This is similar to rounding errors that one encounters when representing fractional numbers as integers. To maintain accuracy during inferences at a lower precision, it is important to try and mitigate errors arising due to this loss of information.
+
+#### Quantization-aware training
+
+In QAT, the quantization error is considered when training the model. The training graph is modified to simulate the lower precision behavior in the forward pass of the training process. This introduces the quantization errors as part of the training loss, which the optimizer tries to minimize during the training. Thus, QAT helps in modeling the quantization errors during training and mitigates its effects on the accuracy of the model at deployment.
+
+However, the process of modifying the training graph to simulate lower precision behavior is intricate. To run QAT, it is necessary to insert FakeQuantization nodes for the weights of the DNN Layers and Quantize-Dequantize (QDQ) nodes to the intermediate activation tensors to compute their dynamic ranges.
+
+For more information, see this [Quantization paper](https://arxiv.org/abs/2004.09602) and [Quantization-Aware Training](https://docs.nvidia.com/deeplearning/frameworks/tf-trt-user-guide/index.html#quantization-training) documentation.
+Tutorial for `pytoch-quantization` library can be found here [`pytorch-quantization` tutorial](https://docs.nvidia.com/deeplearning/tensorrt/pytorch-quantization-toolkit/docs/tutorials/quant_resnet50.html).
+
+It is important to mention that EfficientNet is NN, which is hard to quantize because the activation function all across the network is the SiLU (called also the Swish), whose negative values lie in very short range, which introduce a large quantization error. More details can be found in Appendix D of the [Quantization paper](https://arxiv.org/abs/2004.09602).
 
 ## Setup
 
@@ -183,7 +239,7 @@ The following section lists the requirements that you need to meet in order to s
 This repository contains Dockerfile which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 20.12-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch) or newer
+* [PyTorch 21.03-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch) or newer
 * Supported GPUs:
     * [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
     * [NVIDIA Turing architecture](https://www.nvidia.com/en-us/geforce/turing/)
@@ -393,6 +449,29 @@ To run inference on JPEG images using pretrained weights, run:
 `python classify.py --arch efficientnet-<version> --weights  --precision AMP|FP32 --image <path to JPEG image>`
 
 
+### Quantization process
+
+EfficientNet-b0 and EfficientNet-b4 models can be quantized using the QAT process from running the `quant_main.py` script.
+
+`python ./quant_main.py <path to imagenet> --arch efficientnet-quant-<version> --epochs <# of QAT epochs> --pretrained-from-file <path to non-quantized model weights> <any other parameters for training such as batch, momentum etc.>`
+
+During the QAT process, evaluation is done in the same way as during standard training. `quant_main.py`  works in the same way as the original `main.py` script, but with quantized models. It means that `quant_main.py` can be used to resume the QAT process with the flag `--resume`:
+`python ./quant_main.py <path to imagenet> --arch efficientnet-quant-<version> --resume <path to mid-training checkpoint> ...`
+or to evaluate a created checkpoint with the flag `--evaluate`:
+`python ./quant_main.py --arch efficientnet-quant-<version> --evaluate --epochs 1 --resume <path to checkpoint> -b <batch size> <path to imagenet>` 
+It also can run on multi-GPU in an identical way as the standard `main.py` script:
+`python ./multiproc.py --nproc_per_node 8 ./quant_main.py --arch efficientnet-quant-<version> ... <path to imagenet>`
+
+There is also a possibility to transform trained models (quantized or not) into ONNX format, which is needed to convert it later into TensorRT, where quantized networks are much faster during inference. Conversion to TensorRT will be supported in the next release. The conversion to ONNX consists of two steps:
+* translate checkpoint to pure weights:
+`python checkpoint2model.py --checkpoint-path <path to quant checkpoint> --weight-path <path where quant weights will be stored>` 
+* translate pure weights to ONNX:
+`python model2onnx.py --arch efficientnet-quant-<version> --pretrained-from-file <path to model quant weights> -b <batch size>`
+
+Quantized models could also be used to classify new images using the `classify.py`  flag. For example:
+`python classify.py --arch efficientnet-quant-<version> -c fanin --pretrained-from-file <path to quant weights> --image <path to JPEG image>`
+
+
 ## Performance
 
 ### Benchmarking
@@ -466,9 +545,7 @@ Our results were obtained by running the applicable `efficientnet/training/<AMP|
 |       **Model**        | **Epochs** | **GPUs** | **Top1 accuracy - FP32** | **Top1 accuracy - mixed precision** | **Time to train - FP32** | **Time to train - mixed precision** | **Time to train speedup (FP32 to mixed precision)** |
 |:----------------------:|:----------:|:--------:|:------------------------:|:-----------------------------------:|:------------------------:|:-----------------------------------:|:---------------------------------------------------:|
 |    efficientnet-b0     |    400     |    8     |      77.02 +/- 0.04      |           77.17 +/- 0.08            |            34            |                 24                  |                        1.417                        |
-|    efficientnet-b4     |    400     |    8     |           NaN            |            82.68 +/- 0.1            |           NaN            |                 113                 |                         NaN                         |
 | efficientnet-widese-b0 |    400     |    8     |      77.59 +/- 0.16      |           77.69 +/- 0.12            |            35            |                 24                  |                        1.458                        |
-| efficientnet-widese-b4 |    400     |    8     |           NaN            |           82.89 +/- 0.07            |           NaN            |                 116                 |                         NaN                         |
 
 
 ##### Example plots
@@ -707,8 +784,27 @@ Our results were obtained by running the applicable `efficientnet/inference/<AMP
 | efficientnet-widese-b4 |      256       |     771 img/s      |    344.05 ms    |    329.69 ms    |    330.7 ms     |
 
 
-## Release notes
 
+#### Quantization results
+
+##### QAT Training performance: NVIDIA DGX-1 (8x V100 32GB)
+
+|       **Model**       | **GPUs** | **Calibration** |  **QAT model**  |  **FP32**  | **QAT ratio** |
+|:---------------------:|:---------|:---------------:|:---------------:|:----------:|:-------------:|
+| efficientnet-quant-b0 |    8     |   14.71 img/s   |  2644.62 img/s  | 3798 img/s |    0.696 x    |
+| efficientnet-quant-b4 |    8     |    1.85 img/s   |   310.41 img/s  | 666 img/s  |    0.466 x    |
+
+
+###### Quant Inference accuracy
+The best checkpoints generated during training were used as a base for the QAT.
+
+|       **Model**       | **QAT Epochs** | **QAT Top1** | **Gap between FP32 Top1 and QAT Top1** |
+|:---------------------:|:--------------:|:------------:|:--------------------------------------:|
+| efficientnet-quant-b0 |        10      |     77.12    |                  0.51                  |
+| efficientnet-quant-b4 |         2      |     82.54    |                  0.44                  |
+
+
+## Release notes
 ### Changelog
 
 1. April 2020

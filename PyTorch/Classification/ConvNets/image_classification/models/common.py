@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 import torch
 from torch import nn
+from pytorch_quantization import nn as quant_nn
 
 # LayerBuilder {{{
 class LayerBuilder(object):
@@ -135,18 +136,18 @@ class LambdaLayer(nn.Module):
 class SqueezeAndExcitation(nn.Module):
     def __init__(self, in_channels, squeeze, activation):
         super(SqueezeAndExcitation, self).__init__()
-        self.squeeze = nn.Linear(in_channels, squeeze)
-        self.expand = nn.Linear(squeeze, in_channels)
+        self.pooling = nn.AdaptiveAvgPool2d(1)
+        self.squeeze = nn.Conv2d(in_channels, squeeze, 1)
+        self.expand = nn.Conv2d(squeeze, in_channels, 1)
         self.activation = activation
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        out = torch.mean(x, [2, 3])
+        out = self.pooling(x)
         out = self.squeeze(out)
         out = self.activation(out)
         out = self.expand(out)
         out = self.sigmoid(out)
-        out = out.unsqueeze(2).unsqueeze(3)
         return out
 
 
@@ -198,5 +199,16 @@ class ONNXSiLU(nn.Module):
 
 
 class SequentialSqueezeAndExcitation(SqueezeAndExcitation):
+    def __init__(self, in_channels, squeeze, activation, quantized=False):
+        super().__init__(in_channels, squeeze, activation,)
+        self.quantized = quantized
+        if quantized:
+            self.mul_a_quantizer = quant_nn.TensorQuantizer(quant_nn.QuantConv2d.default_quant_desc_input)
+            self.mul_b_quantizer = quant_nn.TensorQuantizer(quant_nn.QuantConv2d.default_quant_desc_input)
+
     def forward(self, x):
-        return super().forward(x) * x
+        if not self.quantized:
+            return super().forward(x) * x
+        else:
+            x_quant = self.mul_a_quantizer(super().forward(x))
+            return x_quant * self.mul_b_quantizer(x)
