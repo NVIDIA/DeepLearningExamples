@@ -30,33 +30,29 @@ from typing import List, Optional
 import torch
 from torch import nn as nn
 from torch.nn.utils.rnn import pad_sequence
+import torch.nn.functional as F
 
 from common.layers import ConvReLUNorm
 from fastpitch.transformer_jit import FFTransformer
 
 
-def regulate_len(durations, enc_out, pace: float = 1.0,
-                 mel_max_len: Optional[int] = None):
+def regulate_len(durations, enc_out, pace=1.0, mel_max_len=0):
+    # type: (Tensor, Tensor, float, int)
     """If target=None, then predicted durations are applied"""
-    reps = torch.round(durations.float() / pace).long()
+    dtype = enc_out.dtype
+    reps = (durations.float() / pace + 0.5).long()
     dec_lens = reps.sum(dim=1)
 
     max_len = dec_lens.max()
-    bsz, _, hid = enc_out.size()
+    reps_cumsum = torch.cumsum(F.pad(reps, (1, 0, 0, 0)), dim=1)[:, None, :]
 
-    reps_padded = torch.cat([reps, (max_len - dec_lens)[:, None]], dim=1)
-    pad_vec = torch.zeros(bsz, 1, hid, dtype=enc_out.dtype,
-                          device=enc_out.device)
+    range_ = torch.arange(max_len).to(enc_out.device)[None, :, None]
+    mult = ((reps_cumsum[:, :, :-1] <= range_) &
+            (reps_cumsum[:, :, 1:] > range_))
+    mult = mult.to(dtype)
+    enc_rep = torch.matmul(mult, enc_out)
 
-    enc_rep = torch.cat([enc_out, pad_vec], dim=1)
-    enc_rep = torch.repeat_interleave(
-        enc_rep.view(-1, hid), reps_padded.view(-1), dim=0
-    ).view(bsz, -1, hid)
-
-    # enc_rep = pad_sequence([torch.repeat_interleave(o, r, dim=0)
-    #                         for o, r in zip(enc_out, reps)],
-    #                        batch_first=True)
-    if mel_max_len is not None:
+    if mel_max_len != 0:
         enc_rep = enc_rep[:, :mel_max_len]
         dec_lens = torch.clamp_max(dec_lens, mel_max_len)
     return enc_rep, dec_lens
@@ -237,7 +233,7 @@ class FastPitch(nn.Module):
 
         len_regulated, dec_lens = regulate_len(
             dur_pred if dur_tgt is None else dur_tgt,
-            enc_out, pace, mel_max_len=None)
+            enc_out, pace, mel_max_len=0)
 
         dec_out, dec_mask = self.decoder(len_regulated, dec_lens)
         mel_out = self.proj(dec_out)

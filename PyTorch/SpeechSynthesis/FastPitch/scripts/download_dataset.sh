@@ -14,5 +14,3 @@ if [ ! -d ${DATA_DIR} ]; then
   rm -f ${LJS_ARCH}
 fi
 
-bash ./scripts/download_tacotron2.sh
-bash ./scripts/download_waveglow.sh

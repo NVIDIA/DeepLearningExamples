@@ -81,7 +81,7 @@ class ConvReLUNorm(torch.nn.Module):
 
     def forward(self, signal):
         out = F.relu(self.conv(signal))
-        out = self.norm(out.transpose(1, 2)).transpose(1, 2)
+        out = self.norm(out.transpose(1, 2)).transpose(1, 2).to(signal.dtype)
         return self.dropout(out)
 
 

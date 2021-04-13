@@ -724,6 +724,8 @@ The input utterance has 128 characters, synthesized audio has 8.05 s.
 
 ## Release notes
 
+We're constantly refining and improving our performance on AI and HPC workloads even on the same hardware with frequent updates to our software stack. For our latest performance data please refer to these pages for AI and HPC benchmarks.
+
 ### Changelog
 
 October 2020

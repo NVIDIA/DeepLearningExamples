@@ -125,6 +125,29 @@ def parse_args(parser):
     return parser
 
 
+def load_model_from_ckpt(checkpoint_path, ema, model):
+
+    checkpoint_data = torch.load(checkpoint_path)
+    status = ''
+
+    if 'state_dict' in checkpoint_data:
+        sd = checkpoint_data['state_dict']
+        if ema and 'ema_state_dict' in checkpoint_data:
+            sd = checkpoint_data['ema_state_dict']
+            status += ' (EMA)'
+        elif ema and not 'ema_state_dict' in checkpoint_data:
+            print(f'WARNING: EMA weights missing for {checkpoint_data}')
+
+        if any(key.startswith('module.') for key in sd):
+            sd = {k.replace('module.', ''): v for k,v in sd.items()}
+        status += ' ' + str(model.load_state_dict(sd, strict=False))
+    else:
+        model = checkpoint_data['model']
+    print(f'Loaded {checkpoint_path}{status}')
+
+    return model
+
+
 def load_and_setup_model(model_name, parser, checkpoint, amp, device,
                          unk_args=[], forward_is_infer=False, ema=True,
                          jitable=False):
@@ -139,23 +162,7 @@ def load_and_setup_model(model_name, parser, checkpoint, amp, device,
                              jitable=jitable)
 
     if checkpoint is not None:
-        checkpoint_data = torch.load(checkpoint)
-        status = ''
-
-        if 'state_dict' in checkpoint_data:
-            sd = checkpoint_data['state_dict']
-            if ema and 'ema_state_dict' in checkpoint_data:
-                sd = checkpoint_data['ema_state_dict']
-                status += ' (EMA)'
-            elif ema and not 'ema_state_dict' in checkpoint_data:
-                print(f'WARNING: EMA weights missing for {model_name}')
-
-            if any(key.startswith('module.') for key in sd):
-                sd = {k.replace('module.', ''): v for k,v in sd.items()}
-            status += ' ' + str(model.load_state_dict(sd, strict=True))
-        else:
-            model = checkpoint_data['model']
-        print(f'Loaded {model_name}{status}')
+        model = load_model_from_ckpt(checkpoint, ema, model)
 
     if model_name == "WaveGlow":
         model = model.remove_weightnorm(model)
@@ -318,7 +325,7 @@ def main():
             with torch.no_grad():
                 if generator is not None:
                     b = batches[0]
-                    mel, *_ = generator(b['text'], b['text_lens'])
+                    mel, *_ = generator(b['text'])
                 if waveglow is not None:
                     audios = waveglow(mel, sigma=args.sigma_infer).float()
                     _ = denoiser(audios, strength=args.denoising_strength)
@@ -348,10 +355,10 @@ def main():
         for b in batches:
             if generator is None:
                 log(rep, {'Synthesizing from ground truth mels'})
-                mel, mel_lens = b['mel'], b['mel_lens']
+                mel = b['mel']
             else:
                 with torch.no_grad(), gen_measures:
-                    mel, mel_lens, *_ = generator(
+                    mel, mel_lens, dur_pred, pitch_pred = generator(
                         b['text'], b['text_lens'], **gen_kw)
 
                 gen_infer_perf = mel.size(0) * mel.size(2) / gen_measures[-1]
