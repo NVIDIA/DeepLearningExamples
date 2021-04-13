@@ -187,54 +187,6 @@ class MultiHeadAttn(nn.Module):
 
         return output
 
-    # disabled; slower
-    def forward_einsum(self, h, attn_mask=None):
-        # multihead attention
-        # [hlen x bsz x n_head x d_head]
-
-        c = h
-
-        if self.pre_lnorm:
-            # layer normalization
-            c = self.layer_norm(c)
-
-        head_q = self.q_net(h)
-        head_k, head_v = torch.chunk(self.kv_net(c), 2, -1)
-
-        head_q = head_q.view(h.size(0), h.size(1), self.n_head, self.d_head)
-        head_k = head_k.view(c.size(0), c.size(1), self.n_head, self.d_head)
-        head_v = head_v.view(c.size(0), c.size(1), self.n_head, self.d_head)
-
-        # [bsz x n_head x qlen x klen]
-        # attn_score = torch.einsum('ibnd,jbnd->bnij', (head_q, head_k))
-        attn_score = torch.einsum('bind,bjnd->bnij', (head_q, head_k))
-        attn_score.mul_(self.scale)
-        if attn_mask is not None and attn_mask.any().item():
-            attn_score.masked_fill_(attn_mask[:, None, None, :], -float('inf'))
-
-        # [bsz x qlen x klen x n_head]
-        attn_prob = F.softmax(attn_score, dim=3)
-        attn_prob = self.dropatt(attn_prob)
-
-        # [bsz x n_head x qlen x klen] * [klen x bsz x n_head x d_head] 
-        #     -> [qlen x bsz x n_head x d_head]
-        attn_vec = torch.einsum('bnij,bjnd->bind', (attn_prob, head_v))
-        attn_vec = attn_vec.contiguous().view(
-            attn_vec.size(0), attn_vec.size(1), self.n_head * self.d_head)
-
-        # linear projection
-        attn_out = self.o_net(attn_vec)
-        attn_out = self.drop(attn_out)
-
-        if self.pre_lnorm:
-            # residual connection
-            output = h + attn_out
-        else:
-            # residual connection + layer normalization
-            output = self.layer_norm(h + attn_out)
-
-        return output
-
 
 class TransformerLayer(nn.Module):
     def __init__(self, n_head, d_model, d_head, d_inner, kernel_size, dropout,

@@ -36,7 +36,7 @@ from scipy.io.wavfile import read
 
 def mask_from_lens(lens, max_len: Optional[int] = None):
     if max_len is None:
-        max_len = int(lens.max().item())
+        max_len = lens.max()
     ids = torch.arange(0, max_len, device=lens.device, dtype=lens.dtype)
     mask = torch.lt(ids, lens.unsqueeze(1))
     return mask

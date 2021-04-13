@@ -40,10 +40,10 @@ def get_collate_function(model_name):
             'WaveGlow': lambda _: torch.utils.data.dataloader.default_collate,
             'FastPitch': TextMelAliCollate}[model_name]()
 
-def get_data_loader(model_name, *args):
+def get_data_loader(model_name, **args):
     return {'Tacotron2': TextMelLoader,
             'WaveGlow': MelAudioLoader,
-            'FastPitch': TextMelAliLoader}[model_name](*args)
+            'FastPitch': TextMelAliLoader}[model_name](**args)
 
 def get_batch_to_gpu(model_name):
     return {'Tacotron2': batch_to_gpu_tacotron2,

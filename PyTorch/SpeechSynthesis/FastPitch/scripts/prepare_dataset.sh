@@ -3,7 +3,7 @@
 set -e
 
 DATA_DIR="LJSpeech-1.1"
-TACOTRON2="pretrained_models/tacotron2/nvidia_tacotron2pyt_fp16.pt"
+TACO_CH=${TACO_CH:-"pretrained_models/tacotron2/nvidia_tacotron2pyt_fp16.pt"}
 for FILELIST in ljs_audio_text_train_filelist.txt \
                 ljs_audio_text_val_filelist.txt \
                 ljs_audio_text_test_filelist.txt \
@@ -16,5 +16,5 @@ for FILELIST in ljs_audio_text_train_filelist.txt \
         --extract-mels \
         --extract-durations \
         --extract-pitch-char \
-        --tacotron2-checkpoint ${TACOTRON2}
+        --tacotron2-checkpoint ${TACO_CH}
 done
