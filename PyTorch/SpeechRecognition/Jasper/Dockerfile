@@ -21,6 +21,7 @@ WORKDIR /workspace/jasper
 
 # Install requirements (do this first for better caching)
 COPY requirements.txt .
+RUN conda install -y pyyaml==5.4.1
 RUN pip install --disable-pip-version-check -U -r requirements.txt
 
 RUN pip install --force-reinstall --extra-index-url https://developer.download.nvidia.com/compute/redist/nightly nvidia-dali-nightly-cuda110==0.28.0.dev20201026
