@@ -1,6 +1,7 @@
 # FasterTransformer
 
 This repository provides a script and recipe to run the highly optimized transformer for inference, and it is tested and maintained by NVIDIA.
+This repo is move to https://github.com/NVIDIA/FasterTransformer and we will deprecate this sub-repo in the future. 
 
 ## Table Of Contents
 - [FasterTransformer](#fastertransformer)
@@ -10,6 +11,7 @@ This repository provides a script and recipe to run the highly optimized transfo
     - [FasterTransformer v2](#fastertransformer-v2)
     - [FasterTransformer v2.1](#fastertransformer-v21)
     - [FasterTransformer v3.0](#fastertransformer-v30)
+    - [FasterTransformer v3.1](#fastertransformer-v31)
     - [Architecture matrix](#architecture-matrix)
   - [Release notes](#release-notes)
     - [Changelog](#changelog)
@@ -33,16 +35,21 @@ FasterTransformer v2.1 optimizes some kernels of encoder and decoder, adding the
 
 FasterTransformer v3.0 adds the supporting of INT8 quantization for cpp and TensorFlow encoder model on Turing and Ampere GPUs. 
 
+### FasterTransformer v3.1
+
+First, FasterTransformer v3.1 adds the supporting of INT8 quantization of PyTorch encoder model on Turing and Ampere GPUs. Second, v3.1 improves the performances of encoder on FP16 and INT8. Compared to v3.0, v3.1 provides at most 1.2x speedup on T4 FP16, and 1.7x speedup on T4 INT8. Third, v3.1 supports the inference of GPT-2 model.
+
 ### Architecture matrix
 
-The following matrix shows the Architecture Differences between the model.
+The following matrix shows the architecture differences between the model.
 
-| Architecure               | Encoder           | Encoder INT8 quantization  |Decoder             | Decoding with beam search | Decoding with sampling |
-|---------------------------|-------------------|----------------------------|--------------------|---------------------------|------------------------|
-|FasterTransformer v1    |  Yes | No  | No  | No  | No  |
-|FasterTransformer v2    |  Yes | No  | Yes | Yes | No  |
-|FasterTransformer v2.1  |  Yes | No  | Yes | Yes | Yes |
-|FasterTransformer v3.0  |  Yes | Yes | Yes | Yes | Yes |
+| Architecure               | Encoder           | Encoder INT8 quantization  | Decoder             | Decoding with beam search | Decoding with sampling | GPT-2 |
+|---------------------------|-------------------|----------------------------|---------------------|---------------------------|------------------------|-------|
+| v1   | Yes | No  | No  | No  | No  | No  |
+| v2   | Yes | No  | Yes | Yes | No  | No  |
+| v2.1 | Yes | No  | Yes | Yes | Yes | No  |
+| v3.0 | Yes | Yes | Yes | Yes | Yes | No  |
+| v3.1 | Yes | Yes | Yes | Yes | Yes | Yes |
 
 ## Release notes
 
@@ -52,9 +59,25 @@ FasterTransformer v2 will be deprecated on Dec 2020.
 
 FasterTransformer v2.1 will be deprecated on July 2021. 
 
+FasterTransformer v3.0 will be deprecated on Sep 2021. 
+
+FasterTransformer v3.1 will be deprecated on Dec 2021. 
+
 ### Changelog
 
+Dec 2020
+- **Release the FasterTransformer 3.1**
+
+Nov 2020
+- Optimize the INT8 inference.
+- Support PyTorch INT8 inference.
+- Provide PyTorch INT8 quantiztion tools.
+- Integrate the fused multi-head attention kernel of TensorRT into FasterTransformer.
+- Add unit test of SQuAD. 
+- Update the missed NGC checkpoints.
+
 Sep 2020
+- Support GPT2
 - **Release the FasterTransformer 3.0**
   - Support INT8 quantization of encoder of cpp and TensorFlow op.
   - Add bert-tf-quantization tool.

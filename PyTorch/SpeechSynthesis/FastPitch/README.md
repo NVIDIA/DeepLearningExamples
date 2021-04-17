@@ -662,7 +662,7 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 The following table shows the expected training time for convergence for 1500 epochs:
 
-|Number of GPUs|Batch size per GPU|Time to train with mixed precision (Hrs)|Time to train with TF32 (Hrs)|Speed-up with mixed precision|
+|Number of GPUs|Batch size per GPU|Time to train with mixed precision (Hrs)|Time to train with FP32 (Hrs)|Speed-up with mixed precision|
 |---:|-----------------:|-----:|-----:|-----:|
 |  1 | 64@AMP,  32@FP32 | 27.6 | 72.7 | 2.63 |
 |  4 | 64@AMP,  32@FP32 |  8.2 | 20.3 | 2.48 |
@@ -723,6 +723,8 @@ The input utterance has 128 characters, synthesized audio has 8.05 s.
 |    8 | FP32   |     9.09  |   9.11  |   9.114 |   9.122 |      153,434 |         - |  0.87 |
 
 ## Release notes
+
+We're constantly refining and improving our performance on AI and HPC workloads even on the same hardware with frequent updates to our software stack. For our latest performance data please refer to these pages for AI and HPC benchmarks.
 
 ### Changelog
 

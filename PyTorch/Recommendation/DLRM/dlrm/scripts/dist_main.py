@@ -1,4 +1,4 @@
-# Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021 NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,11 +32,11 @@ from dlrm.model.distributed import DistributedDlrm
 from dlrm.scripts.main import FLAGS, get_categorical_feature_sizes
 from dlrm.utils import distributed as dist
 from dlrm.utils.checkpointing.distributed import make_distributed_checkpoint_writer, make_distributed_checkpoint_loader
-from dlrm.utils.distributed import get_gpu_batch_sizes, get_device_mapping, is_main_process, is_distributed
+from dlrm.utils.distributed import get_gpu_batch_sizes, get_device_mapping, is_main_process
 
 # Training schedule flags
 FLAGS.set_default("batch_size", 65536)
-FLAGS.set_default("test_batch_size", 131072)
+FLAGS.set_default("test_batch_size", 65536)
 FLAGS.set_default("lr", 24.0)
 FLAGS.set_default("warmup_factor", 0)
 FLAGS.set_default("warmup_steps", 8000)
@@ -47,8 +47,11 @@ FLAGS.set_default("decay_end_lr", 0)
 FLAGS.set_default("embedding_type", "joint_sparse")
 
 flags.DEFINE_string("backend", "nccl", "Backend to use for distributed training. Default nccl")
-flags.DEFINE_boolean("bottom_features_ordered", False, "Sort features from the bottom model, useful when using saved "
-                                                       "checkpoint in different device configurations")
+flags.DEFINE_boolean("bottom_features_ordered", False,
+                     "Sort features from the bottom model, useful when using saved "
+                     "checkpoint in different device configurations")
+flags.DEFINE_boolean("Adam_embedding_optimizer", False, "Swaps embedding optimizer to Adam")
+flags.DEFINE_boolean("Adam_MLP_optimizer", False, "Swaps MLP optimizer to Adam")
 
 
 def main(argv):
@@ -59,9 +62,6 @@ def main(argv):
     use_gpu = "cpu" not in FLAGS.base_device.lower()
     rank, world_size, gpu = dist.init_distributed_mode(backend=FLAGS.backend, use_gpu=use_gpu)
     device = FLAGS.base_device
-
-    if not is_distributed():
-        raise NotImplementedError("This file is only for distributed training.")
 
     if is_main_process():
         dllogger.log(data=FLAGS.flag_values_dict(), step='PARAMETER')
@@ -113,15 +113,46 @@ def main(argv):
     # DDP introduces a gradient average through allreduce(mean), which doesn't apply to bottom model.
     # Compensate it with further scaling lr
     scaled_lr = FLAGS.lr / FLAGS.loss_scale if FLAGS.amp else FLAGS.lr
-    scaled_lrs = [scaled_lr / world_size, scaled_lr]
 
-    embedding_optimizer = torch.optim.SGD([
-        {'params': model.bottom_model.embeddings.parameters(), 'lr': scaled_lrs[0]},
-    ])
-    mlp_optimizer = apex_optim.FusedSGD([
-        {'params': model.bottom_model.mlp.parameters(), 'lr': scaled_lrs[0]},
-        {'params': model.top_model.parameters(), 'lr': scaled_lrs[1]}
-    ])
+    if FLAGS.Adam_embedding_optimizer:
+        embedding_model_parallel_lr = scaled_lr
+    else:
+        embedding_model_parallel_lr = scaled_lr / world_size
+    if FLAGS.Adam_MLP_optimizer:
+        MLP_model_parallel_lr = scaled_lr
+    else:
+        MLP_model_parallel_lr = scaled_lr / world_size
+    data_parallel_lr = scaled_lr
+
+
+    if is_main_process():
+        mlp_params = [
+            {'params': list(model.top_model.parameters()), 'lr': data_parallel_lr},
+            {'params': list(model.bottom_model.mlp.parameters()), 'lr': MLP_model_parallel_lr}
+        ]
+        mlp_lrs = [data_parallel_lr, MLP_model_parallel_lr]
+    else:
+        mlp_params = [
+            {'params': list(model.top_model.parameters()), 'lr': data_parallel_lr}
+        ]
+        mlp_lrs = [data_parallel_lr]
+
+    if FLAGS.Adam_MLP_optimizer:
+        mlp_optimizer = apex_optim.FusedAdam(mlp_params)
+    else:
+        mlp_optimizer = apex_optim.FusedSGD(mlp_params)
+
+    embedding_params = [{
+        'params': list(model.bottom_model.embeddings.parameters()),
+        'lr': embedding_model_parallel_lr
+    }]
+    embedding_lrs = [embedding_model_parallel_lr]
+    
+    if FLAGS.Adam_embedding_optimizer:
+        embedding_optimizer = torch.optim.SparseAdam(embedding_params)
+    else:
+        embedding_optimizer = torch.optim.SGD(embedding_params)
+
 
     checkpoint_writer = make_distributed_checkpoint_writer(
         device_mapping=device_mapping,
@@ -179,7 +210,7 @@ def main(argv):
     moving_loss_stream = torch.cuda.Stream()
 
     lr_scheduler = utils.LearningRateScheduler(optimizers=[mlp_optimizer, embedding_optimizer],
-                                               base_lrs=[scaled_lrs, [scaled_lrs[0]]],
+                                               base_lrs=[mlp_lrs, embedding_lrs],
                                                warmup_steps=FLAGS.warmup_steps,
                                                warmup_factor=FLAGS.warmup_factor,
                                                decay_start_step=FLAGS.decay_start_step,
@@ -221,10 +252,13 @@ def main(argv):
 
                 loss = loss_fn(output, click[batch_indices[rank]: batch_indices[rank + 1]])
 
-                # We don't need to accumulate gradient. Set grad to None is faster than optimizer.zero_grad()
-                for param_group in itertools.chain(embedding_optimizer.param_groups, mlp_optimizer.param_groups):
-                    for param in param_group['params']:
-                        param.grad = None
+                if FLAGS.Adam_embedding_optimizer or FLAGS.Adam_MLP_optimizer:
+                    model.zero_grad()
+                else:
+                    # We don't need to accumulate gradient. Set grad to None is faster than optimizer.zero_grad()
+                    for param_group in itertools.chain(embedding_optimizer.param_groups, mlp_optimizer.param_groups):
+                        for param in param_group['params']:
+                            param.grad = None
 
                 if FLAGS.amp:
                     loss *= FLAGS.loss_scale
@@ -233,7 +267,12 @@ def main(argv):
                 else:
                     loss.backward()
 
+                if FLAGS.Adam_MLP_optimizer:
+                    scale_MLP_gradients(mlp_optimizer, world_size)
                 mlp_optimizer.step()
+
+                if FLAGS.Adam_embedding_optimizer:
+                    scale_embeddings_gradients(embedding_optimizer, world_size)
                 embedding_optimizer.step()
 
                 moving_loss_stream.wait_stream(torch.cuda.current_stream())
@@ -248,23 +287,22 @@ def main(argv):
                 print(f"Started epoch {epoch}...")
             elif step % print_freq == 0:
                 torch.cuda.current_stream().wait_stream(moving_loss_stream)
-                # Averaging cross a print_freq period to reduce the error.
+                # Averaging across a print_freq period to reduce the error.
                 # An accurate timing needs synchronize which would slow things down.
 
                 if global_step < FLAGS.benchmark_warmup_steps:
                     metric_logger.update(
                         loss=moving_loss.item() / print_freq / (FLAGS.loss_scale if FLAGS.amp else 1),
-                        lr=mlp_optimizer.param_groups[1]["lr"] * (FLAGS.loss_scale if FLAGS.amp else 1))
+                        lr=mlp_optimizer.param_groups[0]["lr"] * (FLAGS.loss_scale if FLAGS.amp else 1))
                 else:
                     metric_logger.update(
                         step_time=timer.measured,
                         loss=moving_loss.item() / print_freq / (FLAGS.loss_scale if FLAGS.amp else 1),
-                        lr=mlp_optimizer.param_groups[1]["lr"] * (FLAGS.loss_scale if FLAGS.amp else 1))
+                        lr=mlp_optimizer.param_groups[0]["lr"] * (FLAGS.loss_scale if FLAGS.amp else 1))
                 stop_time = time()
 
                 eta_str = datetime.timedelta(seconds=int(metric_logger.step_time.global_avg * (steps_per_epoch - step)))
-                metric_logger.print(
-                    header=f"Epoch:[{epoch}/{FLAGS.epochs}] [{step}/{steps_per_epoch}]  eta: {eta_str}")
+                metric_logger.print(header=f"Epoch:[{epoch}/{FLAGS.epochs}] [{step}/{steps_per_epoch}]  eta: {eta_str}")
 
                 with torch.cuda.stream(moving_loss_stream):
                     moving_loss = 0.
@@ -285,7 +323,7 @@ def main(argv):
                 if FLAGS.auc_threshold and auc >= FLAGS.auc_threshold:
                     run_time_s = int(stop_time - start_time)
                     print(f"Hit target accuracy AUC {FLAGS.auc_threshold} at epoch "
-                          f"{global_step/steps_per_epoch:.2f} in {run_time_s}s. "
+                          f"{global_step / steps_per_epoch:.2f} in {run_time_s}s. "
                           f"Average speed {global_step * FLAGS.batch_size / run_time_s:.1f} records/s.")
                     sys.exit()
 
@@ -305,6 +343,16 @@ def main(argv):
 
     dllogger.log(data=results, step=tuple())
 
+def scale_MLP_gradients(mlp_optimizer: torch.optim.Optimizer, world_size: int):
+    for param_group in mlp_optimizer.param_groups[1:]:  # Omitting top MLP
+        for param in param_group['params']:
+            param.grad.div_(world_size)
+
+def scale_embeddings_gradients(embedding_optimizer: torch.optim.Optimizer, world_size: int):
+    for param_group in embedding_optimizer.param_groups:
+        for param in param_group['params']:
+            if param.grad != None:
+                param.grad.div_(world_size)
 
 def dist_evaluate(model, data_loader):
     """Test distributed DLRM model
@@ -374,6 +422,10 @@ def dist_evaluate(model, data_loader):
             torch.distributed.all_gather(list(output_receive_buffer.split(batch_sizes_per_gpu)), output)
             if last_batch_size is not None:
                 output_receive_buffer = output_receive_buffer[:last_batch_size]
+
+            if FLAGS.auc_device == "CPU":
+                click = click.cpu()
+                output_receive_buffer = output_receive_buffer.cpu()
 
             y_true.append(click)
             y_score.append(output_receive_buffer)

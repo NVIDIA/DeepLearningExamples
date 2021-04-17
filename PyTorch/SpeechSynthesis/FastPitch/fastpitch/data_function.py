@@ -37,11 +37,11 @@ from common.text.text_processing import TextProcessing
 class TextMelAliLoader(TextMelLoader):
     """
     """
-    def __init__(self, *args):
-        super(TextMelAliLoader, self).__init__(*args)
-        self.tp = TextProcessing(args[-1].symbol_set, args[-1].text_cleaners)
-        self.n_speakers = args[-1].n_speakers
-        if len(self.audiopaths_and_text[0]) != 4 + (args[-1].n_speakers > 1):
+    def __init__(self, **kwargs):
+        super(TextMelAliLoader, self).__init__(**kwargs)
+        self.tp = TextProcessing(kwargs['symbol_set'], kwargs['text_cleaners'])
+        self.n_speakers = kwargs['n_speakers']
+        if len(self.audiopaths_and_text[0]) != 4 + (kwargs['n_speakers'] > 1):
             raise ValueError('Expected four columns in audiopaths file for single speaker model. \n'
                              'For multispeaker model, the filelist format is '
                              '<mel>|<dur>|<pitch>|<text>|<speaker_id>')

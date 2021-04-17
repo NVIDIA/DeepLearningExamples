@@ -12,17 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.06-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.10-py3
 FROM ${FROM_IMAGE_NAME}
 
-
-RUN apt-get update && apt-get install -y libsndfile1 && apt-get install -y sox && rm -rf /var/lib/apt/lists/*
+RUN apt update && apt install -y libsndfile1 && apt install -y sox && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace/jasper
 
 # Install requirements (do this first for better caching)
 COPY requirements.txt .
+RUN conda install -y pyyaml==5.4.1
 RUN pip install --disable-pip-version-check -U -r requirements.txt
+
+RUN pip install --force-reinstall --extra-index-url https://developer.download.nvidia.com/compute/redist/nightly nvidia-dali-nightly-cuda110==0.28.0.dev20201026
 
 # Copy rest of files
 COPY . .

@@ -1,4 +1,3 @@
-
 # Deploying the BERT TensorFlow model using Triton Inference Server
 
 This folder contains instructions for deployment and exemplary client application to run inference on
@@ -183,7 +182,7 @@ For more information about `perf_client`, refer to the [official documentation](
 
 ### Latency vs Throughput for TensorRT Engine
 
-Performance numbers for BERT Large, sequence length=384 are obtained from [experiments]([https://github.com/NVIDIA/TensorRT/tree/release/7.1/demo/BERT#inference-performance-nvidia-a100-40gb](https://github.com/NVIDIA/TensorRT/tree/release/7.1/demo/BERT#inference-performance-nvidia-a100-40gb)) on NVIDIA A100 with 1x A100 40G GPUs. Throughput is measured in samples/second, and latency in milliseconds.
+Performance numbers for BERT Large, sequence length=384 are obtained from [experiments](https://github.com/NVIDIA/TensorRT/tree/release/7.1/demo/BERT#inference-performance-nvidia-a100-40gb) on NVIDIA A100 with 1x A100 40G GPUs. Throughput is measured in samples/second, and latency in milliseconds.
 
 ![](../data/images/bert_trt_throughput_vs_latency.png?raw=true)
 

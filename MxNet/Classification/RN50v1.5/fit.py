@@ -35,23 +35,25 @@
 
 """ train fit utility """
 import logging
-import os
-import time
-import re
 import math
-import sys
+import os
 import random
+import sys
+import time
 from itertools import starmap
-import numpy as np
-import mxnet as mx
-import mxnet.ndarray as nd
+
+import dllogger
 import horovod.mxnet as hvd
+import mxnet as mx
 import mxnet.contrib.amp as amp
+import numpy as np
 from mxnet import autograd as ag
 from mxnet import gluon
-from report import Report
-from benchmarking import BenchmarkingDataIter
+
 import data
+from benchmarking import BenchmarkingDataIter
+from global_metrics import CompositeMeter, MaxMeter, MinMeter, AvgMeter, PercentileMeter
+
 
 def add_fit_args(parser):
     def int_list(x):
@@ -65,12 +67,10 @@ def add_fit_args(parser):
                        help='mode')
     train.add_argument('--seed', type=int, default=None,
                        help='random seed')
-
     train.add_argument('--gpus', type=int_list, default=[0],
                        help='list of gpus to run, e.g. 0 or 0,2,5')
     train.add_argument('--kv-store', type=str, default='device', choices=('device', 'horovod'),
                        help='key-value store type')
-
     train.add_argument('--dtype', type=str, default='float16', choices=('float32', 'float16'),
                        help='precision')
     train.add_argument('--amp', action='store_true',
@@ -79,6 +79,8 @@ def add_fit_args(parser):
                        help='the batch size')
     train.add_argument('--num-epochs', type=int, default=90,
                        help='number of epochs')
+    train.add_argument('--run-epochs', type=int, default=-1, 
+                       help='number of epochs to run in single run')
     train.add_argument('--lr', type=float, default=0.1,
                        help='initial learning rate')
     train.add_argument('--lr-schedule', choices=('multistep', 'cosine'), default='cosine',
@@ -99,7 +101,6 @@ def add_fit_args(parser):
                        help='label smoothing factor')
     train.add_argument('--mixup', type=float, default=0,
                        help='alpha parameter for mixup (if 0 then mixup is not applied)')
-
     train.add_argument('--disp-batches', type=int, default=20,
                        help='show progress for every n batches')
     train.add_argument('--model-prefix', type=str, default='model',
@@ -110,23 +111,26 @@ def add_fit_args(parser):
     train.add_argument('--begin-epoch', type=int, default=0,
                        help='start the model from an epoch')
     train.add_argument('--load', help='checkpoint to load')
-
     train.add_argument('--test-io', action='store_true',
                        help='test reading speed without training')
     train.add_argument('--test-io-mode', default='train', choices=('train', 'val'),
                        help='data to test')
-
     train.add_argument('--log', type=str, default='log.log',
                        help='file where to save the log from the experiment')
-    train.add_argument('--report', default='report.json', help='file where to save report')
-
-    train.add_argument('--no-metrics', action='store_true', help='do not calculate evaluation metrics (for benchmarking)')
+    train.add_argument('--dllogger-log', type=str, default='dllogger_log.log',
+                       help='file where to save the dllogger log from the experiment')
+    train.add_argument('--workspace', type=str, default='./',
+                       help='path to directory where results will be stored')
+    train.add_argument('--no-metrics', action='store_true',
+                       help='do not calculate evaluation metrics (for benchmarking)')
     train.add_argument('--benchmark-iters', type=int, default=None,
                        help='run only benchmark-iters iterations from each epoch')
     return train
 
+
 def get_epoch_size(args, kv):
     return math.ceil(args.num_examples / args.batch_size)
+
 
 def get_lr_scheduler(args):
     def multistep_schedule(x):
@@ -158,12 +162,14 @@ def get_lr_scheduler(args):
     }
     return schedules[args.lr_schedule]
 
+
 def load_model(args, model):
     if args.load is None:
         return False
     model.load_parameters(args.load)
     logging.info('Loaded model {}'.format(args.load))
     return True
+
 
 def save_checkpoint(net, epoch, top1, best_acc, model_prefix, save_frequency, kvstore):
     if model_prefix is None or save_frequency == 0 or ('horovod' in kvstore and hvd.rank() != 0):
@@ -177,29 +183,6 @@ def save_checkpoint(net, epoch, top1, best_acc, model_prefix, save_frequency, kv
         net.save_parameters(fname)
         logging.info('[Epoch {}] Saving checkpoint to {} with Accuracy: {:.4f}'.format(epoch, fname, top1))
 
-def add_metrics_to_report(report, mode, metric, durations, total_batch_size, loss=None, warmup=20):
-    if report is None:
-        return
-
-    top1 = metric.get('accuracy', None)
-    if top1 is not None:
-        report.add_value('{}.top1'.format(mode), top1)
-
-    top5 = metric.get('top_k_accuracy_5', None)
-    if top5 is not None:
-        report.add_value('{}.top5'.format(mode), top5)
-
-    if loss is not None:
-        report.add_value('{}.loss'.format(mode), loss.get_global()[1])
-
-    if len(durations) > warmup:
-        durations = durations[warmup:]
-    duration = np.mean(durations)
-    total_ips = total_batch_size / duration
-    report.add_value('{}.latency_avg'.format(mode), duration)
-    for percentile in [50, 90, 95, 99, 100]:
-        report.add_value('{}.latency_{}'.format(mode, percentile), np.percentile(durations, percentile))
-    report.add_value('{}.total_ips'.format(mode), total_ips)
 
 def model_pred(args, model, image):
     from imagenet_classes import classes
@@ -208,6 +191,7 @@ def model_pred(args, model, image):
     for i, ind in enumerate(top):
         ind = int(ind.asscalar())
         logging.info('{:2d}. {:5.2f}% -> {}'.format(i + 1, output[ind].asscalar() * 100, classes[ind]))
+
 
 def reduce_metrics(args, metrics, kvstore):
     if 'horovod' not in kvstore or not metrics[0] or hvd.size() == 1:
@@ -218,7 +202,8 @@ def reduce_metrics(args, metrics, kvstore):
     values = reduced.as_in_context(mx.cpu()).asnumpy().tolist()
     return (metrics[0], values)
 
-def model_score(args, net, val_data, metric, kvstore, report=None):
+
+def model_score(args, net, val_data, metric, kvstore):
     if val_data is None:
         logging.info('Omitting validation: no data')
         return [], []
@@ -249,8 +234,13 @@ def model_score(args, net, val_data, metric, kvstore, report=None):
         tic = time.time()
 
     metric = reduce_metrics(args, metric.get_global(), kvstore)
-    add_metrics_to_report(report, 'val', dict(zip(*metric)), durations, total_batch_size)
-    return metric
+    duration_stats = {
+        'ips': total_batch_size / np.mean(durations),
+        'latency_avg': np.mean(durations),
+    }
+
+    return metric, duration_stats, durations
+
 
 class ScalarMetric(mx.metric.Loss):
     def update(self, _, scalar):
@@ -259,13 +249,14 @@ class ScalarMetric(mx.metric.Loss):
         self.num_inst += 1
         self.global_num_inst += 1
 
+
 def label_smoothing(labels, classes, eta):
     return labels.one_hot(classes, on_value=1 - eta + eta / classes, off_value=eta / classes)
 
-def model_fit(args, net, train_data, eval_metric, optimizer,
-        optimizer_params, lr_scheduler, eval_data, kvstore, kv,
-        begin_epoch, num_epoch, model_prefix, report, print_loss):
 
+def model_fit(args, net, train_data, eval_metric, optimizer,
+              optimizer_params, lr_scheduler, eval_data, global_metrics, kvstore, kv,
+              begin_epoch, num_epoch, run_epoch, model_prefix):
     if not isinstance(eval_metric, mx.metric.EvalMetric):
         eval_metric = mx.metric.create(eval_metric)
     loss_metric = ScalarMetric()
@@ -278,6 +269,7 @@ def model_fit(args, net, train_data, eval_metric, optimizer,
 
     if args.amp:
         amp.init_trainer(trainer)
+    
 
     sparse_label_loss = (args.label_smoothing == 0 and args.mixup == 0)
     loss = gluon.loss.SoftmaxCrossEntropyLoss(sparse_label=sparse_label_loss)
@@ -288,10 +280,12 @@ def model_fit(args, net, train_data, eval_metric, optimizer,
     durations = []
 
     epoch_size = get_epoch_size(args, kv)
+    run_epoch = num_epoch if (run_epoch == -1) else (begin_epoch + run_epoch)
 
     def transform_data(images, labels):
         if args.mixup != 0:
-            coeffs = mx.nd.array(np.random.beta(args.mixup, args.mixup, size=images.shape[0])).as_in_context(images.context)
+            coeffs = mx.nd.array(np.random.beta(args.mixup, args.mixup, size=images.shape[0])).as_in_context(
+                images.context)
             image_coeffs = coeffs.astype(images.dtype, copy=False).reshape(*coeffs.shape, 1, 1, 1)
             ret_images = image_coeffs * images + (1 - image_coeffs) * images[::-1]
 
@@ -307,21 +301,23 @@ def model_fit(args, net, train_data, eval_metric, optimizer,
 
         return ret_images, ret_labels
 
-
+    i = -1
     best_accuracy = -1
-    for epoch in range(begin_epoch, num_epoch):
+    for epoch in range(begin_epoch, min(run_epoch, num_epoch)):
         tic = time.time()
+        btic = time.time()
+        etic = time.time()
+
         train_data.reset()
         eval_metric.reset()
         loss_metric.reset()
-        btic = time.time()
 
         logging.info('Starting epoch {}'.format(epoch))
         outputs = []
         for i, batches in enumerate(train_data):
             # synchronize to previous iteration
-            for o in outputs:
-                o.wait_to_read()
+            #for o in outputs:
+            #    o.wait_to_read()
 
             trainer.set_learning_rate(lr_scheduler(epoch + i / epoch_size))
 
@@ -353,40 +349,43 @@ def model_fit(args, net, train_data, eval_metric, optimizer,
             else:
                 trainer.step(total_batch_size)
 
-            if print_loss:
-                loss_metric.update(..., np.mean([l.asnumpy() for l in Ls]).item())
-            eval_metric.update(orig_label, outputs)
+            loss_metric.update(..., np.mean([l.asnumpy() for l in Ls]).item())
 
             if args.disp_batches and not (i + 1) % args.disp_batches:
-                name, acc = eval_metric.get()
-                if print_loss:
-                    name = [loss_metric.get()[0]] + name
-                    acc = [loss_metric.get()[1]] + acc
+                dllogger_it_data = {
+                    'train.loss': loss_metric.get()[1],
+                    'train.ips': args.disp_batches * total_batch_size / (time.time() - btic),
+                    'train.lr': trainer.learning_rate
+                }
+                dllogger.log((epoch, i), data=dllogger_it_data)
 
-                logging.info('Epoch[{}] Batch [{}-{}]\tSpeed: {} samples/sec\tLR: {}\t{}'.format(
-                    epoch, (i // args.disp_batches) * args.disp_batches, i,
-                    args.disp_batches * total_batch_size / (time.time() - btic), trainer.learning_rate,
-                    '\t'.join(list(map(lambda x: '{}: {:.6f}'.format(*x), zip(name, acc))))))
-                eval_metric.reset_local()
                 loss_metric.reset_local()
                 btic = time.time()
 
             durations.append(time.time() - tic)
             tic = time.time()
 
-
-        add_metrics_to_report(report, 'train', dict(eval_metric.get_global_name_value()), durations, total_batch_size, loss_metric if print_loss else None)
-
+        dllogger_epoch_data = {
+            'train.loss': loss_metric.get_global()[1],
+            'train.ips': (i + 1) * total_batch_size / (time.time() - etic)
+        }
         if args.mode == 'train_val':
             logging.info('Validating epoch {}'.format(epoch))
-            score = model_score(args, net, eval_data, eval_metric, kvstore, report)
-            for name, value in zip(*score):
-                logging.info('Epoch[{}] Validation {:20}: {}'.format(epoch, name, value))
+            score, duration_stats, _ = model_score(args, net, eval_data, eval_metric, kvstore)
+
+            dllogger_epoch_data.update(
+                starmap(lambda key, val: ('val.{}'.format(key), val), zip(*score))
+            )
+            dllogger_epoch_data.update(
+                starmap(lambda key, val: ('val.{}'.format(key), val), duration_stats.items())
+            )
 
             score = dict(zip(*score))
             accuracy = score.get('accuracy', -1)
             save_checkpoint(net, epoch, accuracy, best_accuracy, model_prefix, args.save_frequency, kvstore)
             best_accuracy = max(best_accuracy, accuracy)
+        global_metrics.update_dict(dllogger_epoch_data)
+        dllogger.log(step=(epoch,), data=dllogger_epoch_data)
 
 
 def fit(args, model, data_loader):
@@ -399,11 +398,8 @@ def fit(args, model, data_loader):
 
     start_time = time.time()
 
-    report = Report(args.arch, len(args.gpus), sys.argv)
-
     # select gpu for horovod process
     if 'horovod' in args.kv_store:
-        hvd.init()
         args.gpus = [args.gpus[hvd.local_rank()]]
 
     if args.amp:
@@ -494,6 +490,23 @@ def fit(args, model, data_loader):
         params = model.collect_params()
         if params is not None:
             hvd.broadcast_parameters(params, root_rank=0)
+    global_metrics = CompositeMeter()
+    if args.mode in ['train_val', 'train']:
+        global_metrics.register_metric('train.loss', MinMeter())
+        global_metrics.register_metric('train.ips', AvgMeter())
+
+    if args.mode in ['train_val', 'val']:
+        global_metrics.register_metric('val.accuracy', MaxMeter())
+        global_metrics.register_metric('val.top_k_accuracy_5', MaxMeter())
+        global_metrics.register_metric('val.ips', AvgMeter())
+        global_metrics.register_metric('val.latency_avg', AvgMeter())
+
+    if args.mode in ['val']:
+        global_metrics.register_metric('val.latency_50', PercentileMeter(50))
+        global_metrics.register_metric('val.latency_90', PercentileMeter(90))
+        global_metrics.register_metric('val.latency_95', PercentileMeter(95))
+        global_metrics.register_metric('val.latency_99', PercentileMeter(99))
+        global_metrics.register_metric('val.latency_100', PercentileMeter(100))
 
     # run
     if args.mode in ['train_val', 'train']:
@@ -503,30 +516,32 @@ def fit(args, model, data_loader):
             train,
             begin_epoch=args.begin_epoch,
             num_epoch=args.num_epochs,
+            run_epoch=args.run_epochs,
             eval_data=val,
             eval_metric=eval_metrics,
+            global_metrics=global_metrics,
             kvstore=args.kv_store,
             kv=kv,
             optimizer=args.optimizer,
             optimizer_params=optimizer_params,
             lr_scheduler=lr_scheduler,
-            report=report,
-            model_prefix=args.model_prefix,
-            print_loss=not args.no_metrics,
+            model_prefix=os.path.join(args.workspace, args.model_prefix),
         )
     elif args.mode == 'val':
         for epoch in range(args.num_epochs):  # loop for benchmarking
-            score = model_score(args, model, val, eval_metrics, args.kv_store, report=report)
-            for name, value in zip(*score):
-                logging.info('Validation {:20}: {}'.format(name, value))
+            score, duration_stats, durations = model_score(args, model, val, eval_metrics, args.kv_store)
+            dllogger_data = dict(starmap(lambda key, val: ('val.{}'.format(key), val), zip(*score)))
+            dllogger_data.update(
+                starmap(lambda key, val: ('val.{}'.format(key), val), duration_stats.items())
+            )
+            global_metrics.update_dict(dllogger_data)
+            for percentile in [50, 90, 95, 99, 100]:
+                metric_name = 'val.latency_{}'.format(percentile)
+                dllogger_data[metric_name] = np.percentile(durations, percentile)
+                global_metrics.update_metric(metric_name, durations)
+            dllogger.log(step=(epoch,), data=dllogger_data)
     else:
         raise ValueError('Wrong mode')
 
     mx.nd.waitall()
-
-    report.set_total_duration(time.time() - start_time)
-    if args.report:
-        suffix = '-{}'.format(hvd.rank()) if 'horovod' in args.kv_store and hvd.rank() != 0 else ''
-        report.save(args.report + suffix)
-
-    logging.info('Experiment took: {} sec'.format(report.total_duration))
+    dllogger.log(tuple(), data=global_metrics.get())

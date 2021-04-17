@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -72,7 +72,7 @@ PARSER.add_argument('--log_every',
 PARSER.add_argument('--evaluate_every',
                     type=int,
                     default=0,
-                    help="""Evaluate every n steps""")
+                    help="""Log performance every n steps""")
 
 PARSER.add_argument('--warmup_steps',
                     type=int,

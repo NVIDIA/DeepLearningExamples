@@ -1,5 +1,3 @@
-#===============================================================================
-#
 # Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,45 +11,39 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# ==============================================================================
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.06-tf1-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:21.02-tf2-py3
 FROM ${FROM_IMAGE_NAME}
 
-ENV DEBIAN_FRONTEND=noninteractive
+LABEL model="MaskRCNN"
 
-RUN rm -rf /workspace && mkdir -p /workspace
-ADD . /workspace
-WORKDIR /workspace
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && \
     apt-get install -y libsm6 libxext6 libxrender-dev python3-tk cmake && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Make sure python and pip points to pip3 and python3
-RUN python -m pip install --upgrade pip && \
-    pip --no-cache-dir --no-cache install \
-        Cython \
-        matplotlib \
-        opencv-python-headless \
-        mpi4py \
-        Pillow \
-        pytest \
-        pyyaml && \
-    git clone https://github.com/pybind/pybind11 /opt/pybind11 && \
-    cd /opt/pybind11 && cmake . && make install && pip install . && \
-    pip --no-cache-dir --no-cache install \
-        'git+https://github.com/NVIDIA/cocoapi#egg=pycocotools&subdirectory=PythonAPI' && \
-    pip --no-cache-dir --no-cache install \
-        'git+https://github.com/NVIDIA/dllogger'
+# install pybind11
+RUN pip --no-cache-dir --no-cache install Cython pytest && \
+    git clone -b v2.5.0 https://github.com/pybind/pybind11 /opt/pybind11 && \
+    cd /opt/pybind11 && cmake . && make install && pip install .
 
 
-# Update protobuf 3 to 3.3.0
+# update protobuf 3 to 3.3.0
 RUN \
     curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v3.3.0/protoc-3.3.0-linux-x86_64.zip && \
     unzip -u protoc-3.3.0-linux-x86_64.zip -d protoc3 && \
     mv protoc3/bin/* /usr/local/bin/ && \
     mv protoc3/include/* /usr/local/include/
 
+# switch work directory
+ARG WORKSPACE=/workspace/mrcnn_tf2
+WORKDIR ${WORKSPACE}
+
+# install dependencies
+ADD requirements.txt .
+RUN pip install -r requirements.txt
+
+# copy code
+ADD . ${WORKSPACE}

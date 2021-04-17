@@ -1,3 +1,17 @@
+# Copyright (c) 2021 NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from typing import Sequence, Optional
 
 import torch
@@ -124,9 +138,12 @@ class DistributedDlrm(nn.Module):
 
         self.bottom_model = DlrmBottom(
             num_numerical_features, categorical_feature_sizes, bottom_mlp_sizes,
-            embedding_type, embedding_dim, hash_indices=hash_indices, use_cpp_mlp=use_cpp_mlp, fp16=fp16, device=device
+            embedding_type, embedding_dim, hash_indices=hash_indices, use_cpp_mlp=use_cpp_mlp,
+            fp16=fp16, device=device
         )
         self.top_model = DlrmTop(top_mlp_sizes, interaction, use_cpp_mlp=use_cpp_mlp).to(device)
+
+        self.distributed = dist.get_world_size() > 1
 
     def extra_repr(self):
         return f"interaction_op={self._interaction_op}, hash_indices={self._hash_indices}"
@@ -146,11 +163,14 @@ class DistributedDlrm(nn.Module):
             batch_sizes_per_gpu (Sequence[int]):
         """
         # bottom mlp output may be not present before all to all communication
-        bottom_output, _ = self.bottom_model(numerical_input, categorical_inputs)
+        from_bottom, bottom_mlp_output = self.bottom_model(numerical_input, categorical_inputs)
 
-        from_bottom = bottom_to_top(bottom_output, batch_sizes_per_gpu, self._embedding_dim, self._vectors_per_gpu,
-                                    self._feature_order, self._device_feature_order)
+        # only perform all_to_all in multiGPU mode
+        if self.distributed:
+            from_bottom = bottom_to_top(from_bottom, batch_sizes_per_gpu, self._embedding_dim, self._vectors_per_gpu,
+                                        self._feature_order, self._device_feature_order)
 
-        # TODO: take bottom_mlp GPU from device mapping, do not assume it's always first
-        bottom_mlp_output = from_bottom[:, 0, :]
+            # TODO: take bottom_mlp GPU from device mapping, do not assume it's always first
+            bottom_mlp_output = from_bottom[:, 0, :]
+
         return self.top_model(from_bottom, bottom_mlp_output)

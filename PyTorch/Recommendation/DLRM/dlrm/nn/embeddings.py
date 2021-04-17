@@ -1,4 +1,4 @@
-# Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021 NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -153,6 +153,10 @@ class JointEmbedding(Embeddings):
             data[offsets[cat]:offsets[cat + 1]] = weight
 
 
+# If you want ot use a fused joint embedding for a different number of variables, firstly change
+# the custom cuda kernel code to accommodate the new number, then change this value accordingly
+FUSED_JOINT_EMBEDDING_NUMBER_OF_CATEGORICAL_VARIABLES = 26
+
 class FusedJointEmbedding(Embeddings):
     """
     Buckle multiple one hot embedding together
@@ -183,6 +187,10 @@ class FusedJointEmbedding(Embeddings):
 
         self.register_parameter("weight", torch.nn.Parameter(
             torch.empty((self.offsets[-1].item(), embedding_dim), device=device), requires_grad=True))
+
+        if len(categorical_feature_sizes) != FUSED_JOINT_EMBEDDING_NUMBER_OF_CATEGORICAL_VARIABLES:
+            raise ValueError(  f"Number of categorical features must be equal to {FUSED_JOINT_EMBEDDING_NUMBER_OF_CATEGORICAL_VARIABLES}, got {len(categorical_feature_sizes)}\n"
+                             + f"If you want to train on a different number, you need to recompile cuda kernels to support it or use different embedding type.")
 
     def forward(self, categorical_inputs) -> List[torch.Tensor]:
         # Check input has the right shape

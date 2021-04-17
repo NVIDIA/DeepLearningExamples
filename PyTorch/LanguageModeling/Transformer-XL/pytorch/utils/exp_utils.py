@@ -155,6 +155,10 @@ def setup_logging(log_all_ranks=True, filename=os.devnull, filemode='w'):
         if rank != 0:
             filename = os.devnull
 
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+        handler.close()
+
     logging.basicConfig(level=logging.DEBUG,
                         format=logging_format,
                         datefmt="%Y-%m-%d %H:%M:%S",

@@ -4,7 +4,7 @@ FROM ${FROM_IMAGE_NAME}
 
 RUN apt-get update && apt-get install -y pbzip2 pv bzip2 libcurl4 curl libb64-dev
 RUN pip install --upgrade pip
-RUN pip install toposort networkx pytest nltk tqdm html2text progressbar
+RUN pip install toposort networkx pytest nltk tqdm html2text progressbar pynvml
 RUN pip --no-cache-dir --no-cache install git+https://github.com/NVIDIA/dllogger wget
 
 WORKDIR /workspace

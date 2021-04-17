@@ -15,11 +15,8 @@
 # limitations under the License.
 
 import argparse
-import json
 import sys
-import tempfile
 import json
-import os
 import traceback
 import numpy as np
 from collections import OrderedDict
@@ -48,8 +45,8 @@ parser.add_argument('--mode', metavar='MODE', choices=('train_val', 'train', 'va
                     help="benchmark mode")
 args, other_args = parser.parse_known_args()
 
-latency_percentiles = ['avg', 50, 90, 95, 99, 100]
-harmonic_mean_metrics = ['train.total_ips', 'val.total_ips']
+latency_percentiles = [50, 90, 95, 99, 100]
+harmonic_mean_metrics = ['train.ips', 'val.ips']
 
 res = OrderedDict()
 res['model'] = ''
@@ -57,11 +54,11 @@ res['ngpus'] = args.ngpus
 res['bs'] = args.batch_sizes
 res['metric_keys'] = []
 if args.mode == 'train' or args.mode == 'train_val':
-    res['metric_keys'].append('train.total_ips')
-    for percentile in latency_percentiles:
-        res['metric_keys'].append('train.latency_{}'.format(percentile))
+    res['metric_keys'].append('train.ips')
 if args.mode == 'val' or args.mode == 'train_val':
-    res['metric_keys'].append('val.total_ips')
+    res['metric_keys'].append('val.ips')
+    res['metric_keys'].append('val.latency_avg')
+if args.mode == 'val':
     for percentile in latency_percentiles:
         res['metric_keys'].append('val.latency_{}'.format(percentile))
 
@@ -72,29 +69,26 @@ for n in args.ngpus:
     for bs in args.batch_sizes:
         res['metrics'][str(n)][str(bs)] = OrderedDict()
 
-        report_file = args.output + '-{},{}'.format(n, bs)
+        log_file = args.output + '-{},{}'.format(n, bs)
         Popen(['timeout', args.timeout, args.executable, '-n', str(n), '-b', str(bs),
                '--benchmark-iters', str(args.benchmark_iters),
-               '-e', str(args.epochs), '--report', report_file,
+               '-e', str(args.epochs), '--dllogger-log', log_file,
                '--mode', args.mode, '--no-metrics'] + other_args,
               stdout=sys.stderr).wait()
 
         try:
-            for suffix in ['', *['-{}'.format(i) for i in range(1, n)]]:
-                try:
-                    with open(report_file + suffix, 'r') as f:
-                        report = json.load(f)
-                    break
-                except FileNotFoundError:
-                    pass
-            else:
-                with open(report_file, 'r') as f:
-                    report = json.load(f)
+
+            with open(log_file, 'r') as f:
+                lines = f.read().splitlines()
+                log_data = [json.loads(line[5:]) for line in lines]
+                epochs_report = list(filter(lambda x: len(x['step']) == 1, log_data))
+
+            if len(epochs_report) != args.epochs:
+                raise ValueError('Wrong number epochs in report')
+            epochs_report = epochs_report[args.warmup:]
 
             for metric in res['metric_keys']:
-                if len(report['metrics'][metric]) != args.epochs:
-                    raise ValueError('Wrong number epochs in report')
-                data = report['metrics'][metric][args.warmup:]
+                data = list(map(lambda x: x['data'][metric], epochs_report))
                 if metric in harmonic_mean_metrics:
                     avg = len(data) / sum(map(lambda x: 1 / x, data))
                 else:

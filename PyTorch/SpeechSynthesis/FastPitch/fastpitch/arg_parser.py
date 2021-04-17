@@ -34,7 +34,6 @@ def parse_fastpitch_args(parent, add_help=False):
     """
     parser = argparse.ArgumentParser(parents=[parent], add_help=add_help,
                                      allow_abbrev=False)
-
     io = parser.add_argument_group('io parameters')
     io.add_argument('--n-mel-channels', default=80, type=int,
                     help='Number of bins in mel-spectrograms')

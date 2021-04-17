@@ -99,9 +99,12 @@ def parse_args(parser):
 
 
 class FilenamedLoader(TextMelLoader):
-    def __init__(self, filenames, *args, **kwargs):
-        super(FilenamedLoader, self).__init__(*args, **kwargs)
-        self.tp = TextProcessing(args[-1].symbol_set, args[-1].text_cleaners)
+    def __init__(self, filenames, **kwargs):
+        # dict_args = vars(args)
+        kwargs['audiopaths_and_text'] = kwargs['wav_text_filelist']
+        kwargs['load_mel_from_disk'] = False
+        super(FilenamedLoader, self).__init__(**kwargs)
+        self.tp = TextProcessing(kwargs['symbol_set'], kwargs['text_cleaners'])
         self.filenames = filenames
 
     def __getitem__(self, index):
@@ -217,8 +220,7 @@ def main():
                  for l in open(args.wav_text_filelist, 'r')]
     # Compatibility with Tacotron2 Data loader
     args.n_speakers = 1
-    dataset = FilenamedLoader(filenames, args.dataset_path, args.wav_text_filelist,
-                              args, load_mel_from_disk=False)
+    dataset = FilenamedLoader(filenames, **vars(args))
     # TextMelCollate supports only n_frames_per_step=1
     data_loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=False,
                              sampler=None, num_workers=0,

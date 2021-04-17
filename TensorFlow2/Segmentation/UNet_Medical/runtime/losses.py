@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,8 +32,8 @@ def partial_losses(predict, target):
     flat_labels = tf.reshape(target,
                              [tf.shape(input=predict)[0], -1, n_classes])
 
-    crossentropy_loss = tf.reduce_mean(input_tensor=tf.keras.backend.binary_crossentropy(output=flat_logits,
-                                                                                         target=flat_labels),
+    crossentropy_loss = tf.reduce_mean(input_tensor=tf.nn.softmax_cross_entropy_with_logits(logits=flat_logits,
+                                                                                            labels=flat_labels),
                                        name='cross_loss_ref')
 
     dice_loss = tf.reduce_mean(input_tensor=1 - dice_coef(tf.keras.activations.softmax(flat_logits, axis=-1),
