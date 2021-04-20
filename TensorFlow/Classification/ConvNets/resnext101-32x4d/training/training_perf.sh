@@ -26,13 +26,13 @@ function run_benchmark() {
     MODE_SIZE=$2
     
     if [[ $4 -eq "1" ]]; then
-        XLA="--use_xla"
+        XLA="--xla"
     else
         XLA=""
     fi
 
     case $2 in
-        "amp") MODE_FLAGS="--use_tf_amp --use_static_loss_scaling --loss_scale=128";;
+        "amp") MODE_FLAGS="--amp --static_loss_scale 128";;
         "fp32"|"tf32") MODE_FLAGS="";;
         *) echo "Unsupported configuration, use amp, tf32 or fp32";;
     esac

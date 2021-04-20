@@ -32,7 +32,7 @@ allow_multiline_lambdas = True
 #                    # <------ this blank line
 #     def method():
 #         pass
-blank_line_before_nested_class_or_def = True
+blank_line_before_nested_class_or_def = False
 
 # Insert a blank line before a module docstring.
 blank_line_before_module_docstring = True
@@ -83,7 +83,7 @@ continuation_indent_width = 4
 #       start_ts=now()-timedelta(days=3),
 #       end_ts=now(),
 #   )        # <--- this bracket is dedented and on a separate line
-dedent_closing_brackets = True
+dedent_closing_brackets = False
 
 # Disable the heuristic which places each list element on a separate line if the list is comma-terminated.
 disable_ending_comma_heuristic = false

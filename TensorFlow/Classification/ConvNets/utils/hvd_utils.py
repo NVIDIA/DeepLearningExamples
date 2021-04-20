@@ -15,8 +15,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import horovod.tensorflow as hvd
 
 
 def is_using_hvd():
     return hvd.size() > 1
+    rank_env = ['HOROVOD_RANK', 'OMPI_COMM_WORLD_RANK', 'PMI_RANK']
+    size_env = ['HOROVOD_SIZE', 'OMPI_COMM_WORLD_SIZE', 'PMI_SIZE']
+
+    for r_var, s_var in zip(rank_env, size_env):
+        if r_var in os.environ and s_var in os.environ:
+            return int(s_var) > 1
+    return False

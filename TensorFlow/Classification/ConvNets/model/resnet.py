@@ -15,7 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 from __future__ import print_function
 
 import tensorflow as tf
@@ -33,7 +32,6 @@ from utils.data_utils import normalized_inputs
 
 from utils.learning_rate import learning_rate_scheduler
 from utils.optimizers import FixedLossScalerOptimizer
-
 
 __all__ = [
     'ResnetModel',
@@ -89,14 +87,14 @@ class ResnetModel(object):
         )
 
         self.conv2d_hparams = tf.contrib.training.HParams(
-            kernel_initializer=tf.variance_scaling_initializer(
+            kernel_initializer=tf.compat.v1.variance_scaling_initializer(
                 scale=2.0, distribution='truncated_normal', mode=weight_init
             ),
             bias_initializer=tf.constant_initializer(0.0)
         )
 
         self.dense_hparams = tf.contrib.training.HParams(
-            kernel_initializer=tf.variance_scaling_initializer(
+            kernel_initializer=tf.compat.v1.variance_scaling_initializer(
                 scale=2.0, distribution='truncated_normal', mode=weight_init
             ),
             bias_initializer=tf.constant_initializer(0.0)
@@ -109,12 +107,13 @@ class ResnetModel(object):
             print("Input_format", input_format)
             print("dtype", str(dtype))
 
-
     def __call__(self, features, labels, mode, params):
 
         if mode == tf.estimator.ModeKeys.TRAIN:
-            mandatory_params = ["batch_size", "lr_init", "num_gpus", "steps_per_epoch",
-                                "momentum", "weight_decay", "loss_scale", "label_smoothing"]
+            mandatory_params = [
+                "batch_size", "lr_init", "num_gpus", "steps_per_epoch", "momentum", "weight_decay", "loss_scale",
+                "label_smoothing"
+            ]
             for p in mandatory_params:
                 if p not in params:
                     raise RuntimeError("Parameter {} is missing.".format(p))
@@ -141,43 +140,46 @@ class ResnetModel(object):
 
             mixup = 0
             eta = 0
-            
-            if mode == tf.estimator.ModeKeys.TRAIN:        
+
+            if mode == tf.estimator.ModeKeys.TRAIN:
                 eta = params['label_smoothing']
                 mixup = params['mixup']
-                
-            if mode != tf.estimator.ModeKeys.PREDICT: 
-                one_hot_smoothed_labels = tf.one_hot(labels, 1001, 
-                                                     on_value = 1 - eta + eta/1001,
-                                                     off_value = eta/1001)
+
+            if mode != tf.estimator.ModeKeys.PREDICT:
+                n_cls = self.model_hparams.n_classes
+                one_hot_smoothed_labels = tf.one_hot(labels, n_cls, 
+                        on_value=1 - eta + eta / n_cls, off_value=eta / n_cls)
                 if mixup != 0:
 
                     print("Using mixup training with beta=", params['mixup'])
                     beta_distribution = tf.distributions.Beta(params['mixup'], params['mixup'])
 
-                    feature_coefficients = beta_distribution.sample(sample_shape=[params['batch_size'], 1, 1, 1])      
+                    feature_coefficients = beta_distribution.sample(sample_shape=[params['batch_size'], 1, 1, 1])
 
-                    reversed_feature_coefficients = tf.subtract(tf.ones(shape=feature_coefficients.shape), feature_coefficients)
+                    reversed_feature_coefficients = tf.subtract(
+                        tf.ones(shape=feature_coefficients.shape), feature_coefficients
+                    )
 
-                    rotated_features = tf.reverse(features, axis=[0])      
+                    rotated_features = tf.reverse(features, axis=[0])
 
                     features = feature_coefficients * features + reversed_feature_coefficients * rotated_features
 
                     label_coefficients = tf.squeeze(feature_coefficients, axis=[2, 3])
 
-                    rotated_labels = tf.reverse(one_hot_smoothed_labels, axis=[0])    
+                    rotated_labels = tf.reverse(one_hot_smoothed_labels, axis=[0])
 
-                    reversed_label_coefficients = tf.subtract(tf.ones(shape=label_coefficients.shape), label_coefficients)
+                    reversed_label_coefficients = tf.subtract(
+                        tf.ones(shape=label_coefficients.shape), label_coefficients
+                    )
 
                     one_hot_smoothed_labels = label_coefficients * one_hot_smoothed_labels + reversed_label_coefficients * rotated_labels
-                
-                
+
             # Update Global Step
             global_step = tf.train.get_or_create_global_step()
             tf.identity(global_step, name="global_step_ref")
 
             tf.identity(features, name="features_ref")
-            
+
             if mode == tf.estimator.ModeKeys.TRAIN:
                 tf.identity(labels, name="labels_ref")
 
@@ -202,16 +204,31 @@ class ResnetModel(object):
             tf.identity(probs, name="probs_ref")
             tf.identity(y_preds, name="y_preds_ref")
 
+            #if mode == tf.estimator.ModeKeys.TRAIN:
+            #
+            #    assert (len(tf.trainable_variables()) == 161)
+            #
+            #else:
+            #
+            #    assert (len(tf.trainable_variables()) == 0)
+
             if mode == tf.estimator.ModeKeys.TRAIN and params['quantize']:
                 dllogger.log(data={"QUANTIZATION AWARE TRAINING ENABLED": True}, step=tuple())
                 if params['symmetric']:
-                    dllogger.log(data={"MODE":"USING SYMMETRIC MODE"}, step=tuple())
-                    tf.contrib.quantize.experimental_create_training_graph(tf.get_default_graph(), symmetric=True, use_qdq=params['use_qdq'] ,quant_delay=params['quant_delay'])
+                    dllogger.log(data={"MODE": "USING SYMMETRIC MODE"}, step=tuple())
+                    tf.contrib.quantize.experimental_create_training_graph(
+                        tf.get_default_graph(),
+                        symmetric=True,
+                        use_qdq=params['use_qdq'],
+                        quant_delay=params['quant_delay']
+                    )
                 else:
-                    dllogger.log(data={"MODE":"USING ASSYMETRIC MODE"}, step=tuple())
-                    tf.contrib.quantize.create_training_graph(tf.get_default_graph(), quant_delay=params['quant_delay'], use_qdq=params['use_qdq'])
-            
-            # Fix for restoring variables during fine-tuning of Resnet-50
+                    dllogger.log(data={"MODE": "USING ASSYMETRIC MODE"}, step=tuple())
+                    tf.contrib.quantize.create_training_graph(
+                        tf.get_default_graph(), quant_delay=params['quant_delay'], use_qdq=params['use_qdq']
+                    )
+
+            # Fix for restoring variables during fine-tuning of Resnet
             if 'finetune_checkpoint' in params.keys():
                 train_vars = tf.trainable_variables()
                 train_var_dict = {}
@@ -219,6 +236,13 @@ class ResnetModel(object):
                     train_var_dict[var.op.name] = var
                 dllogger.log(data={"Restoring variables from checkpoint": params['finetune_checkpoint']}, step=tuple())
                 tf.train.init_from_checkpoint(params['finetune_checkpoint'], train_var_dict)
+
+        with tf.device("/cpu:0"):
+            if hvd_utils.is_using_hvd():
+                sync_var = tf.Variable(initial_value=[0], dtype=tf.int32, name="signal_handler_var")
+                sync_var_assing = sync_var.assign([1], name="signal_handler_var_set")
+                sync_var_reset = sync_var.assign([0], name="signal_handler_var_reset")
+                sync_op = hvd.allreduce(sync_var, op=hvd.Sum, name="signal_handler_all_reduce")
 
         if mode == tf.estimator.ModeKeys.PREDICT:
 
@@ -239,8 +263,12 @@ class ResnetModel(object):
                     acc_top5 = tf.nn.in_top_k(predictions=logits, targets=labels, k=5)
 
                 else:
-                    acc_top1, acc_top1_update_op = tf.metrics.mean(tf.nn.in_top_k(predictions=logits, targets=labels, k=1))
-                    acc_top5, acc_top5_update_op = tf.metrics.mean(tf.nn.in_top_k(predictions=logits, targets=labels, k=5))
+                    acc_top1, acc_top1_update_op = tf.metrics.mean(
+                        tf.nn.in_top_k(predictions=logits, targets=labels, k=1)
+                    )
+                    acc_top5, acc_top5_update_op = tf.metrics.mean(
+                        tf.nn.in_top_k(predictions=logits, targets=labels, k=5)
+                    )
 
                 tf.identity(acc_top1, name="acc_top1_ref")
                 tf.identity(acc_top5, name="acc_top5_ref")
@@ -251,20 +279,21 @@ class ResnetModel(object):
                     'accuracy_top1': acc_top1,
                     'accuracy_top5': acc_top5
                 }
-                
-                cross_entropy = tf.losses.softmax_cross_entropy(
-                    logits=logits, onehot_labels=one_hot_smoothed_labels)
+
+                cross_entropy = tf.losses.softmax_cross_entropy(logits=logits, onehot_labels=one_hot_smoothed_labels)
 
                 assert (cross_entropy.dtype == tf.float32)
                 tf.identity(cross_entropy, name='cross_entropy_loss_ref')
 
                 def loss_filter_fn(name):
                     """we don't need to compute L2 loss for BN and bias (eq. to add a cste)"""
-                    return all([
-                        tensor_name not in name.lower()
-                        # for tensor_name in ["batchnorm", "batch_norm", "batch_normalization", "bias"]
-                        for tensor_name in ["batchnorm", "batch_norm", "batch_normalization"]
-                    ])
+                    return all(
+                        [
+                            tensor_name not in name.lower()
+                            # for tensor_name in ["batchnorm", "batch_norm", "batch_normalization", "bias"]
+                            for tensor_name in ["batchnorm", "batch_norm", "batch_normalization"]
+                        ]
+                    )
 
                 filtered_params = [tf.cast(v, tf.float32) for v in tf.trainable_variables() if loss_filter_fn(v.name)]
 
@@ -287,7 +316,7 @@ class ResnetModel(object):
                 tf.summary.scalar('cross_entropy', cross_entropy)
                 tf.summary.scalar('l2_loss', l2_loss)
                 tf.summary.scalar('total_loss', total_loss)
-                
+
                 if mode == tf.estimator.ModeKeys.TRAIN:
 
                     with tf.device("/cpu:0"):
@@ -317,17 +346,18 @@ class ResnetModel(object):
                     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                     if mode != tf.estimator.ModeKeys.TRAIN:
                         update_ops += [acc_top1_update_op, acc_top5_update_op]
-                    
+
                     deterministic = True
-                    gate_gradients = (tf.train.Optimizer.GATE_OP if deterministic else tf.train.Optimizer.GATE_NONE)
+                    gate_gradients = (tf.compat.v1.train.Optimizer.GATE_OP if deterministic else tf.compat.v1.train.Optimizer.GATE_NONE)
 
                     backprop_op = optimizer.minimize(total_loss, gate_gradients=gate_gradients, global_step=global_step)
 
-                    
                     if self.model_hparams.use_dali:
                         train_ops = tf.group(backprop_op, update_ops, name='train_ops')
                     else:
-                        train_ops = tf.group(backprop_op, cpu_prefetch_op, gpu_prefetch_op, update_ops, name='train_ops')
+                        train_ops = tf.group(
+                            backprop_op, cpu_prefetch_op, gpu_prefetch_op, update_ops, name='train_ops'
+                        )
 
                     return tf.estimator.EstimatorSpec(mode=mode, loss=total_loss, train_op=train_ops)
 
@@ -338,23 +368,18 @@ class ResnetModel(object):
                     }
 
                     return tf.estimator.EstimatorSpec(
-                        mode=mode,
-                        predictions=predictions,
-                        loss=total_loss,
-                        eval_metric_ops=eval_metrics
+                        mode=mode, predictions=predictions, loss=total_loss, eval_metric_ops=eval_metrics
                     )
 
                 else:
                     raise NotImplementedError('Unknown mode {}'.format(mode))
 
-                
     @staticmethod
     def _stage(tensors):
         """Stages the given tensors in a StagingArea for asynchronous put/get.
         """
         stage_area = tf.contrib.staging.StagingArea(
-            dtypes=[tensor.dtype for tensor in tensors],
-            shapes=[tensor.get_shape() for tensor in tensors]
+            dtypes=[tensor.dtype for tensor in tensors], shapes=[tensor.get_shape() for tensor in tensors]
         )
 
         put_op = stage_area.put(tensors)
@@ -364,14 +389,11 @@ class ResnetModel(object):
 
         return put_op, get_tensors
 
-
-
     def build_model(self, inputs, training=True, reuse=False, use_final_conv=False):
-        
+
         with var_storage.model_variable_scope(
-            self.model_hparams.model_name,
-            reuse=reuse,
-            dtype=self.model_hparams.dtype):
+            self.model_hparams.model_name, reuse=reuse, dtype=self.model_hparams.dtype
+        ):
 
             with tf.variable_scope("input_reshape"):
                 if self.model_hparams.input_format == 'NHWC' and self.model_hparams.compute_format == 'NCHW':
@@ -426,27 +448,29 @@ class ResnetModel(object):
                         batch_norm_hparams=self.batch_norm_hparams,
                         block_name="btlnck_block_%d_%d" % (block_id, layer_id),
                         use_se=self.model_hparams.use_se,
-                        ratio=self.model_hparams.se_ratio)
+                        ratio=self.model_hparams.se_ratio
+                    )
 
             with tf.variable_scope("output"):
                 net = layers.reduce_mean(
-                    net, keepdims=use_final_conv, data_format=self.model_hparams.compute_format, name='spatial_mean')
+                    net, keepdims=False, data_format=self.model_hparams.compute_format, name='spatial_mean'
+                )
 
                 if use_final_conv:
                     logits = layers.conv2d(
-                                    net,
-                                    n_channels=self.model_hparams.n_classes,
-                                    kernel_size=(1, 1),
-                                    strides=(1, 1),
-                                    padding='SAME',
-                                    data_format=self.model_hparams.compute_format,
-                                    dilation_rate=(1, 1),
-                                    use_bias=True,
-                                    kernel_initializer=self.dense_hparams.kernel_initializer,
-                                    bias_initializer=self.dense_hparams.bias_initializer,
-                                    trainable=training,
-                                    name='dense'
-                                )
+                        net,
+                        n_channels=self.model_hparams.n_classes,
+                        kernel_size=(1, 1),
+                        strides=(1, 1),
+                        padding='SAME',
+                        data_format=self.model_hparams.compute_format,
+                        dilation_rate=(1, 1),
+                        use_bias=True,
+                        kernel_initializer=self.dense_hparams.kernel_initializer,
+                        bias_initializer=self.dense_hparams.bias_initializer,
+                        trainable=training,
+                        name='dense'
+                    )
                 else:
                     logits = layers.dense(
                         inputs=net,
@@ -454,7 +478,8 @@ class ResnetModel(object):
                         use_bias=True,
                         trainable=training,
                         kernel_initializer=self.dense_hparams.kernel_initializer,
-                        bias_initializer=self.dense_hparams.bias_initializer)
+                        bias_initializer=self.dense_hparams.bias_initializer
+                    )
 
                 if logits.dtype != tf.float32:
                     logits = tf.cast(logits, tf.float32)
@@ -464,27 +489,25 @@ class ResnetModel(object):
 
             return probs, logits
 
+
 model_architectures = {
     'resnet50': {
         'layers': [3, 4, 6, 3],
         'widths': [64, 128, 256, 512],
         'expansions': 4,
     },
-
     'resnext101-32x4d': {
         'layers': [3, 4, 23, 3],
         'widths': [128, 256, 512, 1024],
         'expansions': 2,
         'cardinality': 32,
     },
-
-    'se-resnext101-32x4d' : {
-        'cardinality' : 32,
-        'layers' : [3, 4, 23, 3],
-        'widths' : [128, 256, 512, 1024],
-        'expansions' : 2,
+    'se-resnext101-32x4d': {
+        'cardinality': 32,
+        'layers': [3, 4, 23, 3],
+        'widths': [128, 256, 512, 1024],
+        'expansions': 2,
         'use_se': True,
         'se_ratio': 16,
     },
-
 }

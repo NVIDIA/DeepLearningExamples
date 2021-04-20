@@ -520,7 +520,7 @@ Each of these scripts will run 100 iterations and save results in the `benchmark
 
 ### Results
 
-Our results were obtained by running the applicable training script in the pytorch-20.12 NGC container.
+Our results were obtained by running the applicable training script in the pytorch-21.03 NGC container.
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -562,226 +562,234 @@ The following images show an A100 run.
 
 ##### Training performance: NVIDIA A100 (8x A100 80GB)
 
-Our results were obtained by running the applicable `efficientnet/training/<AMP|TF32>/*.sh` training script in the PyTorch 20.12 NGC container on NVIDIA DGX A100 (8x A100 80GB) GPUs.
+Our results were obtained by running the applicable `efficientnet/training/<AMP|TF32>/*.sh` training script in the PyTorch 21.03 NGC container on NVIDIA DGX A100 (8x A100 80GB) GPUs.
 
-|       **Model**        | **GPUs** |  **TF32**  | **Throughput - mixed precision** | **Throughput speedup (TF32 to mixed precision)** | **TF32 Strong Scaling** | **Mixed Precision Strong Scaling** |
-|:----------------------:|:--------:|:----------:|:--------------------------------:|:------------------------------------------------:|:-----------------------:|:----------------------------------:|
-|    efficientnet-b0     |    1     | 1082 img/s |            2364 img/s            |                      2.18 x                      |          1.0 x          |               1.0 x                |
-|    efficientnet-b0     |    8     | 8225 img/s |           14391 img/s            |                      1.74 x                      |         7.59 x          |               6.08 x               |
-|    efficientnet-b4     |    1     | 154 img/s  |            300 img/s             |                      1.94 x                      |          1.0 x          |               1.0 x                |
-|    efficientnet-b4     |    8     | 1204 img/s |            2341 img/s            |                      1.94 x                      |          7.8 x          |               7.8 x                |
-| efficientnet-widese-b0 |    1     | 1081 img/s |            2368 img/s            |                      2.19 x                      |          1.0 x          |               1.0 x                |
-| efficientnet-widese-b0 |    8     | 8233 img/s |           15053 img/s            |                      1.82 x                      |         7.61 x          |               6.35 x               |
-| efficientnet-widese-b4 |    1     | 154 img/s  |            299 img/s             |                      1.94 x                      |          1.0 x          |               1.0 x                |
-| efficientnet-widese-b4 |    8     | 1202 img/s |            2339 img/s            |                      1.94 x                      |          7.8 x          |               7.81 x               |
+|       **Model**        | **GPUs** |  **TF32**   | **Throughput - mixed precision** | **Throughput speedup (TF32 to mixed precision)** | **TF32 Strong Scaling** | **Mixed Precision Strong Scaling** |
+|:----------------------:|:--------:|:-----------:|:--------------------------------:|:------------------------------------------------:|:-----------------------:|:----------------------------------:|
+|    efficientnet-b0     |    1     | 1078 img/s  |            2489 img/s            |                      2.3 x                       |          1.0 x          |               1.0 x                |
+|    efficientnet-b0     |    8     | 8193 img/s  |           16652 img/s            |                      2.03 x                      |         7.59 x          |               6.68 x               |
+|    efficientnet-b0     |    16    | 16137 img/s |           29332 img/s            |                      1.81 x                      |         14.96 x         |              11.78 x               |
+|    efficientnet-b4     |    1     |  157 img/s  |            331 img/s             |                      2.1 x                       |          1.0 x          |               1.0 x                |
+|    efficientnet-b4     |    8     | 1223 img/s  |            2570 img/s            |                      2.1 x                       |         7.76 x          |               7.75 x               |
+|    efficientnet-b4     |    16    | 2417 img/s  |            4813 img/s            |                      1.99 x                      |         15.34 x         |              14.51 x               |
+|    efficientnet-b4     |    32    | 4813 img/s  |            9425 img/s            |                      1.95 x                      |         30.55 x         |              28.42 x               |
+|    efficientnet-b4     |    64    | 9146 img/s  |           18900 img/s            |                      2.06 x                      |         58.05 x         |               57.0 x               |
+| efficientnet-widese-b0 |    1     | 1078 img/s  |            2512 img/s            |                      2.32 x                      |          1.0 x          |               1.0 x                |
+| efficientnet-widese-b0 |    8     | 8244 img/s  |           16368 img/s            |                      1.98 x                      |         7.64 x          |               6.51 x               |
+| efficientnet-widese-b0 |    16    | 16062 img/s |           29798 img/s            |                      1.85 x                      |         14.89 x         |              11.86 x               |
+| efficientnet-widese-b4 |    1     |  157 img/s  |            331 img/s             |                      2.1 x                       |          1.0 x          |               1.0 x                |
+| efficientnet-widese-b4 |    8     | 1223 img/s  |            2585 img/s            |                      2.11 x                      |         7.77 x          |               7.8 x                |
+| efficientnet-widese-b4 |    16    | 2399 img/s  |            5041 img/s            |                      2.1 x                       |         15.24 x         |              15.21 x               |
+| efficientnet-widese-b4 |    32    | 4616 img/s  |            9379 img/s            |                      2.03 x                      |         29.32 x         |               28.3 x               |
+| efficientnet-widese-b4 |    64    | 9140 img/s  |           18516 img/s            |                      2.02 x                      |         58.07 x         |              55.88 x               |
 
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
 
-Our results were obtained by running the applicable `efficientnet/training/<AMP|FP32>/*.sh` training script in the PyTorch 20.12 NGC container on NVIDIA DGX-1 (8x V100 16GB) GPUs.
+Our results were obtained by running the applicable `efficientnet/training/<AMP|FP32>/*.sh` training script in the PyTorch 21.03 NGC container on NVIDIA DGX-1 (8x V100 16GB) GPUs.
 
 |       **Model**        | **GPUs** |  **FP32**  | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **FP32 Strong Scaling** | **Mixed Precision Strong Scaling** |
 |:----------------------:|:--------:|:----------:|:--------------------------------:|:------------------------------------------------:|:-----------------------:|:----------------------------------:|
-|    efficientnet-b0     |    1     | 652 img/s  |            1254 img/s            |                      1.92 x                      |          1.0 x          |               1.0 x                |
-|    efficientnet-b0     |    8     | 4571 img/s |            7664 img/s            |                      1.67 x                      |          7.0 x          |               6.1 x                |
-|    efficientnet-b4     |    1     |  80 img/s  |            199 img/s             |                      2.47 x                      |          1.0 x          |               1.0 x                |
-|    efficientnet-b4     |    8     | 598 img/s  |            1330 img/s            |                      2.22 x                      |         7.42 x          |               6.67 x               |
-| efficientnet-widese-b0 |    1     | 654 img/s  |            1255 img/s            |                      1.91 x                      |          1.0 x          |               1.0 x                |
-| efficientnet-widese-b0 |    8     | 4489 img/s |            7694 img/s            |                      1.71 x                      |         6.85 x          |               6.12 x               |
-| efficientnet-widese-b4 |    1     |  79 img/s  |            198 img/s             |                      2.51 x                      |          1.0 x          |               1.0 x                |
-| efficientnet-widese-b4 |    8     | 590 img/s  |            1323 img/s            |                      2.24 x                      |         7.46 x          |               6.65 x               |
+|    efficientnet-b0     |    1     | 655 img/s  |            1301 img/s            |                      1.98 x                      |          1.0 x          |               1.0 x                |
+|    efficientnet-b0     |    8     | 4672 img/s |            7789 img/s            |                      1.66 x                      |         7.12 x          |               5.98 x               |
+|    efficientnet-b4     |    1     |  83 img/s  |            204 img/s             |                      2.46 x                      |          1.0 x          |               1.0 x                |
+|    efficientnet-b4     |    8     | 616 img/s  |            1366 img/s            |                      2.21 x                      |         7.41 x          |               6.67 x               |
+| efficientnet-widese-b0 |    1     | 655 img/s  |            1299 img/s            |                      1.98 x                      |          1.0 x          |               1.0 x                |
+| efficientnet-widese-b0 |    8     | 4592 img/s |            7875 img/s            |                      1.71 x                      |          7.0 x          |               6.05 x               |
+| efficientnet-widese-b4 |    1     |  83 img/s  |            204 img/s             |                      2.45 x                      |          1.0 x          |               1.0 x                |
+| efficientnet-widese-b4 |    8     | 612 img/s  |            1356 img/s            |                      2.21 x                      |         7.34 x          |               6.63 x               |
 
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 32GB)
 
-Our results were obtained by running the applicable `efficientnet/training/<AMP|FP32>/*.sh` training script in the PyTorch 20.12 NGC container on NVIDIA DGX-1 (8x V100 16GB) GPUs.
+Our results were obtained by running the applicable `efficientnet/training/<AMP|FP32>/*.sh` training script in the PyTorch 21.03 NGC container on NVIDIA DGX-1 (8x V100 16GB) GPUs.
 
 |       **Model**        | **GPUs** |  **FP32**  | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **FP32 Strong Scaling** | **Mixed Precision Strong Scaling** |
 |:----------------------:|:--------:|:----------:|:--------------------------------:|:------------------------------------------------:|:-----------------------:|:----------------------------------:|
-|    efficientnet-b0     |    1     | 637 img/s  |            1352 img/s            |                      2.12 x                      |          1.0 x          |               1.0 x                |
-|    efficientnet-b0     |    8     | 4834 img/s |            8645 img/s            |                      1.78 x                      |         7.58 x          |               6.39 x               |
-|    efficientnet-b4     |    1     |  84 img/s  |            200 img/s             |                      2.38 x                      |          1.0 x          |               1.0 x                |
-|    efficientnet-b4     |    8     | 632 img/s  |            1519 img/s            |                      2.4 x                       |         7.53 x          |               7.58 x               |
-| efficientnet-widese-b0 |    1     | 637 img/s  |            1349 img/s            |                      2.11 x                      |          1.0 x          |               1.0 x                |
-| efficientnet-widese-b0 |    8     | 4841 img/s |            8693 img/s            |                      1.79 x                      |         7.59 x          |               6.43 x               |
-| efficientnet-widese-b4 |    1     |  83 img/s  |            200 img/s             |                      2.38 x                      |          1.0 x          |               1.0 x                |
-| efficientnet-widese-b4 |    8     | 627 img/s  |            1508 img/s            |                      2.4 x                       |         7.47 x          |               7.53 x               |
+|    efficientnet-b0     |    1     | 646 img/s  |            1401 img/s            |                      2.16 x                      |          1.0 x          |               1.0 x                |
+|    efficientnet-b0     |    8     | 4937 img/s |            8615 img/s            |                      1.74 x                      |         7.63 x          |               6.14 x               |
+|    efficientnet-b4     |    1     |  36 img/s  |             89 img/s             |                      2.44 x                      |          1.0 x          |               1.0 x                |
+|    efficientnet-b4     |    8     | 641 img/s  |            1565 img/s            |                      2.44 x                      |         17.6 x          |              17.57 x               |
+| efficientnet-widese-b0 |    1     | 281 img/s  |            603 img/s             |                      2.14 x                      |          1.0 x          |               1.0 x                |
+| efficientnet-widese-b0 |    8     | 4924 img/s |            8870 img/s            |                      1.8 x                       |         17.49 x         |               14.7 x               |
+| efficientnet-widese-b4 |    1     |  36 img/s  |             89 img/s             |                      2.45 x                      |          1.0 x          |               1.0 x                |
+| efficientnet-widese-b4 |    8     | 639 img/s  |            1556 img/s            |                      2.43 x                      |         17.61 x         |              17.44 x               |
 
 
 #### Inference performance results
 
 ##### Inference performance: NVIDIA A100 (1x A100 80GB)
 
-Our results were obtained by running the applicable `efficientnet/inference/<AMP|FP32>/*.sh` inference script in the PyTorch 20.12 NGC container on NVIDIA DGX-1 (8x V100 16GB) GPUs.
+Our results were obtained by running the applicable `efficientnet/inference/<AMP|FP32>/*.sh` inference script in the PyTorch 21.03 NGC container on NVIDIA DGX-1 (8x V100 16GB) GPUs.
 
 ###### TF32 Inference Latency
 
 |       **Model**        | **Batch Size** | **Throughput Avg** | **Latency Avg** | **Latency 95%** | **Latency 99%** |
 |:----------------------:|:--------------:|:------------------:|:---------------:|:---------------:|:---------------:|
-|    efficientnet-b0     |       1        |     122 img/s      |    10.04 ms     |     8.59 ms     |     10.2 ms     |
-|    efficientnet-b0     |       2        |     249 img/s      |     9.91 ms     |     9.08 ms     |    10.84 ms     |
-|    efficientnet-b0     |       4        |     472 img/s      |    10.31 ms     |     9.67 ms     |    11.25 ms     |
-|    efficientnet-b0     |       8        |     922 img/s      |    10.67 ms     |    10.76 ms     |    12.13 ms     |
-|    efficientnet-b0     |       16       |     1796 img/s     |    10.86 ms     |     11.1 ms     |    13.01 ms     |
-|    efficientnet-b0     |       32       |     3235 img/s     |    12.05 ms     |    13.28 ms     |    15.07 ms     |
-|    efficientnet-b0     |       64       |     4658 img/s     |    16.27 ms     |    14.56 ms     |    16.18 ms     |
-|    efficientnet-b0     |      128       |     4911 img/s     |    31.51 ms     |    26.24 ms     |    27.29 ms     |
-|    efficientnet-b0     |      256       |     5015 img/s     |    62.64 ms     |    50.81 ms     |     55.6 ms     |
-|    efficientnet-b4     |       1        |      63 img/s      |    17.64 ms     |    16.29 ms     |    17.92 ms     |
-|    efficientnet-b4     |       2        |     122 img/s      |    18.27 ms     |    18.12 ms     |    22.32 ms     |
-|    efficientnet-b4     |       4        |     247 img/s      |    18.25 ms     |    17.79 ms     |    21.02 ms     |
-|    efficientnet-b4     |       8        |     469 img/s      |    19.03 ms     |    18.94 ms     |    22.49 ms     |
-|    efficientnet-b4     |       16       |     572 img/s      |    29.95 ms     |    28.14 ms     |    28.99 ms     |
-|    efficientnet-b4     |       32       |     638 img/s      |    52.25 ms     |    50.24 ms     |     50.5 ms     |
-|    efficientnet-b4     |       64       |     680 img/s      |    96.93 ms     |     94.1 ms     |     94.3 ms     |
-|    efficientnet-b4     |      128       |     672 img/s      |    197.49 ms    |    189.69 ms    |    189.91 ms    |
-|    efficientnet-b4     |      256       |     679 img/s      |    392.15 ms    |    374.18 ms    |    386.85 ms    |
-| efficientnet-widese-b0 |       1        |     120 img/s      |    10.21 ms     |     8.61 ms     |    11.37 ms     |
-| efficientnet-widese-b0 |       2        |     242 img/s      |    10.16 ms     |     9.98 ms     |    11.36 ms     |
-| efficientnet-widese-b0 |       4        |     493 img/s      |     9.97 ms     |     8.92 ms     |    10.23 ms     |
-| efficientnet-widese-b0 |       8        |     913 img/s      |    10.77 ms     |    10.58 ms     |    12.11 ms     |
-| efficientnet-widese-b0 |       16       |     1864 img/s     |    10.54 ms     |    10.34 ms     |    11.69 ms     |
-| efficientnet-widese-b0 |       32       |     3218 img/s     |    12.06 ms     |    13.17 ms     |    15.69 ms     |
-| efficientnet-widese-b0 |       64       |     4625 img/s     |     16.4 ms     |    15.35 ms     |    17.86 ms     |
-| efficientnet-widese-b0 |      128       |     4904 img/s     |    31.84 ms     |    26.22 ms     |    28.69 ms     |
-| efficientnet-widese-b0 |      256       |     5013 img/s     |     63.1 ms     |    50.95 ms     |    52.44 ms     |
-| efficientnet-widese-b4 |       1        |      64 img/s      |    17.51 ms     |     16.5 ms     |    20.03 ms     |
-| efficientnet-widese-b4 |       2        |     125 img/s      |    17.86 ms     |    17.24 ms     |    19.27 ms     |
-| efficientnet-widese-b4 |       4        |     248 img/s      |    18.09 ms     |    17.36 ms     |    21.34 ms     |
-| efficientnet-widese-b4 |       8        |     472 img/s      |    18.92 ms     |    18.33 ms     |    20.68 ms     |
-| efficientnet-widese-b4 |       16       |     569 img/s      |    30.11 ms     |    28.18 ms     |    28.45 ms     |
-| efficientnet-widese-b4 |       32       |     628 img/s      |    53.05 ms     |    51.11 ms     |    51.29 ms     |
-| efficientnet-widese-b4 |       64       |     679 img/s      |    97.17 ms     |    94.22 ms     |    94.43 ms     |
-| efficientnet-widese-b4 |      128       |     672 img/s      |    197.74 ms    |    189.93 ms    |    190.95 ms    |
-| efficientnet-widese-b4 |      256       |     679 img/s      |    392.7 ms     |    373.84 ms    |    378.35 ms    |
+|    efficientnet-b0     |       1        |     130 img/s      |     9.33 ms     |     7.95 ms     |     9.0 ms      |
+|    efficientnet-b0     |       2        |     262 img/s      |     9.39 ms     |     8.51 ms     |     9.5 ms      |
+|    efficientnet-b0     |       4        |     503 img/s      |     9.68 ms     |     9.53 ms     |    10.78 ms     |
+|    efficientnet-b0     |       8        |     1004 img/s     |     9.85 ms     |     9.89 ms     |    11.49 ms     |
+|    efficientnet-b0     |       16       |     1880 img/s     |    10.27 ms     |    10.34 ms     |    11.19 ms     |
+|    efficientnet-b0     |       32       |     3401 img/s     |    11.46 ms     |    12.51 ms     |    14.39 ms     |
+|    efficientnet-b0     |       64       |     4656 img/s     |    19.58 ms     |    14.52 ms     |    16.63 ms     |
+|    efficientnet-b0     |      128       |     5001 img/s     |    31.03 ms     |    25.72 ms     |    28.34 ms     |
+|    efficientnet-b0     |      256       |     5154 img/s     |    60.71 ms     |    49.44 ms     |    54.99 ms     |
+|    efficientnet-b4     |       1        |      69 img/s      |    16.22 ms     |    14.87 ms     |    15.34 ms     |
+|    efficientnet-b4     |       2        |     133 img/s      |    16.84 ms     |    16.49 ms     |    17.72 ms     |
+|    efficientnet-b4     |       4        |     259 img/s      |    17.33 ms     |    16.39 ms     |    19.67 ms     |
+|    efficientnet-b4     |       8        |     491 img/s      |    18.22 ms     |    18.09 ms     |    19.51 ms     |
+|    efficientnet-b4     |       16       |     606 img/s      |    28.28 ms     |    26.55 ms     |    26.84 ms     |
+|    efficientnet-b4     |       32       |     651 img/s      |    51.08 ms     |    49.39 ms     |    49.61 ms     |
+|    efficientnet-b4     |       64       |     684 img/s      |    96.23 ms     |    93.54 ms     |    93.78 ms     |
+|    efficientnet-b4     |      128       |     700 img/s      |    195.22 ms    |    182.17 ms    |    182.42 ms    |
+|    efficientnet-b4     |      256       |     702 img/s      |    380.01 ms    |    361.81 ms    |    371.64 ms    |
+| efficientnet-widese-b0 |       1        |     130 img/s      |     9.49 ms     |     8.76 ms     |     9.68 ms     |
+| efficientnet-widese-b0 |       2        |     265 img/s      |     9.25 ms     |     8.51 ms     |     9.75 ms     |
+| efficientnet-widese-b0 |       4        |     520 img/s      |     9.42 ms     |     8.67 ms     |     9.97 ms     |
+| efficientnet-widese-b0 |       8        |     996 img/s      |    12.27 ms     |     9.69 ms     |    11.31 ms     |
+| efficientnet-widese-b0 |       16       |     1916 img/s     |     10.2 ms     |    10.29 ms     |     11.3 ms     |
+| efficientnet-widese-b0 |       32       |     3293 img/s     |    11.71 ms     |     13.0 ms     |    14.57 ms     |
+| efficientnet-widese-b0 |       64       |     4639 img/s     |    16.21 ms     |    14.61 ms     |    16.29 ms     |
+| efficientnet-widese-b0 |      128       |     4997 img/s     |    30.81 ms     |    25.76 ms     |    26.02 ms     |
+| efficientnet-widese-b0 |      256       |     5166 img/s     |    73.68 ms     |    49.39 ms     |    55.74 ms     |
+| efficientnet-widese-b4 |       1        |      68 img/s      |    16.41 ms     |    15.14 ms     |    16.59 ms     |
+| efficientnet-widese-b4 |       2        |     135 img/s      |    16.65 ms     |    15.52 ms     |    17.93 ms     |
+| efficientnet-widese-b4 |       4        |     251 img/s      |    17.74 ms     |    17.29 ms     |    20.47 ms     |
+| efficientnet-widese-b4 |       8        |     501 img/s      |    17.75 ms     |    17.12 ms     |    18.01 ms     |
+| efficientnet-widese-b4 |       16       |     590 img/s      |    28.94 ms     |    27.29 ms     |    27.81 ms     |
+| efficientnet-widese-b4 |       32       |     651 img/s      |    50.96 ms     |    49.34 ms     |    49.55 ms     |
+| efficientnet-widese-b4 |       64       |     683 img/s      |    99.28 ms     |    93.65 ms     |    93.88 ms     |
+| efficientnet-widese-b4 |      128       |     700 img/s      |    189.81 ms    |    182.3 ms     |    182.58 ms    |
+| efficientnet-widese-b4 |      256       |     702 img/s      |    379.36 ms    |    361.84 ms    |    366.05 ms    |
 
 
 ###### Mixed Precision Inference Latency
 
 |       **Model**        | **Batch Size** | **Throughput Avg** | **Latency Avg** | **Latency 95%** | **Latency 99%** |
 |:----------------------:|:--------------:|:------------------:|:---------------:|:---------------:|:---------------:|
-|    efficientnet-b0     |       1        |      99 img/s      |    11.89 ms     |    10.83 ms     |    13.04 ms     |
-|    efficientnet-b0     |       2        |     208 img/s      |    11.43 ms     |    10.15 ms     |    10.87 ms     |
-|    efficientnet-b0     |       4        |     395 img/s      |     12.0 ms     |    11.01 ms     |     12.8 ms     |
-|    efficientnet-b0     |       8        |     763 img/s      |    12.33 ms     |    11.62 ms     |    13.94 ms     |
-|    efficientnet-b0     |       16       |     1499 img/s     |    12.58 ms     |    12.57 ms     |     14.4 ms     |
-|    efficientnet-b0     |       32       |     2875 img/s     |    13.19 ms     |    13.76 ms     |    15.29 ms     |
-|    efficientnet-b0     |       64       |     5841 img/s     |     13.7 ms     |    14.91 ms     |    18.73 ms     |
-|    efficientnet-b0     |      128       |     7850 img/s     |    21.53 ms     |    16.58 ms     |    18.94 ms     |
-|    efficientnet-b0     |      256       |     8285 img/s     |    42.07 ms     |    30.87 ms     |    38.03 ms     |
-|    efficientnet-b4     |       1        |      51 img/s      |     21.2 ms     |    19.73 ms     |    21.47 ms     |
-|    efficientnet-b4     |       2        |     103 img/s      |    21.17 ms     |    20.91 ms     |    24.17 ms     |
-|    efficientnet-b4     |       4        |     205 img/s      |    21.34 ms     |    20.32 ms     |    23.46 ms     |
-|    efficientnet-b4     |       8        |     376 img/s      |    23.11 ms     |    22.64 ms     |    24.77 ms     |
-|    efficientnet-b4     |       16       |     781 img/s      |    22.42 ms     |    23.03 ms     |    25.37 ms     |
-|    efficientnet-b4     |       32       |     1048 img/s     |    32.52 ms     |    30.76 ms     |    31.65 ms     |
-|    efficientnet-b4     |       64       |     1156 img/s     |    58.31 ms     |    55.45 ms     |    56.89 ms     |
-|    efficientnet-b4     |      128       |     1197 img/s     |    112.92 ms    |    106.69 ms    |    107.84 ms    |
-|    efficientnet-b4     |      256       |     1229 img/s     |    220.5 ms     |    206.68 ms    |    223.16 ms    |
-| efficientnet-widese-b0 |       1        |     100 img/s      |    11.75 ms     |    10.62 ms     |    13.67 ms     |
-| efficientnet-widese-b0 |       2        |     200 img/s      |    11.86 ms     |    11.38 ms     |    14.32 ms     |
-| efficientnet-widese-b0 |       4        |     400 img/s      |    11.81 ms     |     10.8 ms     |     13.8 ms     |
-| efficientnet-widese-b0 |       8        |     770 img/s      |    12.17 ms     |     11.2 ms     |    12.38 ms     |
-| efficientnet-widese-b0 |       16       |     1501 img/s     |    12.62 ms     |    12.12 ms     |    14.94 ms     |
-| efficientnet-widese-b0 |       32       |     2901 img/s     |    13.06 ms     |    13.28 ms     |    15.23 ms     |
-| efficientnet-widese-b0 |       64       |     5853 img/s     |    13.69 ms     |    14.38 ms     |    16.91 ms     |
-| efficientnet-widese-b0 |      128       |     7807 img/s     |    21.43 ms     |    16.63 ms     |     21.8 ms     |
-| efficientnet-widese-b0 |      256       |     8270 img/s     |    42.01 ms     |    30.97 ms     |    34.55 ms     |
-| efficientnet-widese-b4 |       1        |      52 img/s      |    21.03 ms     |     19.9 ms     |    22.23 ms     |
-| efficientnet-widese-b4 |       2        |     102 img/s      |    21.34 ms     |     21.6 ms     |    24.23 ms     |
-| efficientnet-widese-b4 |       4        |     200 img/s      |    21.76 ms     |    21.19 ms     |    23.69 ms     |
-| efficientnet-widese-b4 |       8        |     373 img/s      |    23.31 ms     |    22.99 ms     |    28.33 ms     |
-| efficientnet-widese-b4 |       16       |     763 img/s      |    22.93 ms     |    23.75 ms     |     26.6 ms     |
-| efficientnet-widese-b4 |       32       |     1043 img/s     |     32.7 ms     |    31.03 ms     |    33.52 ms     |
-| efficientnet-widese-b4 |       64       |     1152 img/s     |    58.27 ms     |    55.64 ms     |    55.86 ms     |
-| efficientnet-widese-b4 |      128       |     1197 img/s     |    112.86 ms    |    106.72 ms    |    108.65 ms    |
-| efficientnet-widese-b4 |      256       |     1229 img/s     |    221.11 ms    |    206.5 ms     |    221.37 ms    |
+|    efficientnet-b0     |       1        |     105 img/s      |    11.21 ms     |     9.9 ms      |    12.55 ms     |
+|    efficientnet-b0     |       2        |     214 img/s      |    11.01 ms     |    10.06 ms     |    11.89 ms     |
+|    efficientnet-b0     |       4        |     412 img/s      |    11.45 ms     |    11.73 ms     |     13.0 ms     |
+|    efficientnet-b0     |       8        |     803 img/s      |    11.78 ms     |    11.59 ms     |     14.2 ms     |
+|    efficientnet-b0     |       16       |     1584 img/s     |    11.89 ms     |     11.9 ms     |    13.63 ms     |
+|    efficientnet-b0     |       32       |     2915 img/s     |    13.03 ms     |    14.79 ms     |    17.35 ms     |
+|    efficientnet-b0     |       64       |     6315 img/s     |    12.71 ms     |    13.59 ms     |    15.27 ms     |
+|    efficientnet-b0     |      128       |     9311 img/s     |    18.78 ms     |    15.34 ms     |    17.99 ms     |
+|    efficientnet-b0     |      256       |    10239 img/s     |    39.05 ms     |    24.97 ms     |    29.24 ms     |
+|    efficientnet-b4     |       1        |      53 img/s      |    20.45 ms     |    19.06 ms     |    20.36 ms     |
+|    efficientnet-b4     |       2        |     109 img/s      |    20.01 ms     |    19.74 ms     |     21.5 ms     |
+|    efficientnet-b4     |       4        |     212 img/s      |     20.6 ms     |    19.88 ms     |    22.37 ms     |
+|    efficientnet-b4     |       8        |     416 img/s      |    21.02 ms     |    21.46 ms     |    24.82 ms     |
+|    efficientnet-b4     |       16       |     816 img/s      |    21.53 ms     |    22.91 ms     |    26.06 ms     |
+|    efficientnet-b4     |       32       |     1208 img/s     |     28.4 ms     |    26.77 ms     |     28.3 ms     |
+|    efficientnet-b4     |       64       |     1332 img/s     |    50.55 ms     |    48.23 ms     |    48.49 ms     |
+|    efficientnet-b4     |      128       |     1418 img/s     |    95.84 ms     |    90.12 ms     |    95.76 ms     |
+|    efficientnet-b4     |      256       |     1442 img/s     |    191.48 ms    |    176.19 ms    |    189.04 ms    |
+| efficientnet-widese-b0 |       1        |     104 img/s      |    11.28 ms     |     10.0 ms     |    12.72 ms     |
+| efficientnet-widese-b0 |       2        |     206 img/s      |    11.41 ms     |    10.65 ms     |    12.72 ms     |
+| efficientnet-widese-b0 |       4        |     426 img/s      |    11.15 ms     |    10.23 ms     |    11.03 ms     |
+| efficientnet-widese-b0 |       8        |     794 img/s      |     11.9 ms     |    12.68 ms     |    14.17 ms     |
+| efficientnet-widese-b0 |       16       |     1536 img/s     |    12.32 ms     |    13.22 ms     |    14.57 ms     |
+| efficientnet-widese-b0 |       32       |     2876 img/s     |    14.12 ms     |    14.45 ms     |    16.23 ms     |
+| efficientnet-widese-b0 |       64       |     6183 img/s     |    13.02 ms     |    14.19 ms     |    16.68 ms     |
+| efficientnet-widese-b0 |      128       |     9310 img/s     |    20.06 ms     |    15.24 ms     |    17.84 ms     |
+| efficientnet-widese-b0 |      256       |    10193 img/s     |    36.07 ms     |    25.13 ms     |    34.22 ms     |
+| efficientnet-widese-b4 |       1        |      53 img/s      |    20.24 ms     |    19.05 ms     |    19.91 ms     |
+| efficientnet-widese-b4 |       2        |     109 img/s      |    20.98 ms     |    19.24 ms     |    22.58 ms     |
+| efficientnet-widese-b4 |       4        |     213 img/s      |    20.48 ms     |    20.48 ms     |    23.64 ms     |
+| efficientnet-widese-b4 |       8        |     425 img/s      |    20.57 ms     |    20.26 ms     |    22.44 ms     |
+| efficientnet-widese-b4 |       16       |     800 img/s      |    21.93 ms     |    23.15 ms     |    26.51 ms     |
+| efficientnet-widese-b4 |       32       |     1201 img/s     |    28.51 ms     |    26.89 ms     |    28.13 ms     |
+| efficientnet-widese-b4 |       64       |     1322 img/s     |    50.96 ms     |    48.58 ms     |    48.77 ms     |
+| efficientnet-widese-b4 |      128       |     1417 img/s     |    96.45 ms     |    90.17 ms     |    90.43 ms     |
+| efficientnet-widese-b4 |      256       |     1439 img/s     |    190.06 ms    |    176.59 ms    |    188.51 ms    |
 
 
 ##### Inference performance: NVIDIA V100 (1x V100 16GB)
 
-Our results were obtained by running the applicable `efficientnet/inference/<AMP|FP32>/*.sh` inference script in the PyTorch 20.12 NGC container on NVIDIA DGX-1 (8x V100 16GB) GPUs.
+Our results were obtained by running the applicable `efficientnet/inference/<AMP|FP32>/*.sh` inference script in the PyTorch 21.03 NGC container on NVIDIA DGX-1 (8x V100 16GB) GPUs.
 
 ###### FP32 Inference Latency
 
 |       **Model**        | **Batch Size** | **Throughput Avg** | **Latency Avg** | **Latency 95%** | **Latency 99%** |
 |:----------------------:|:--------------:|:------------------:|:---------------:|:---------------:|:---------------:|
-|    efficientnet-b0     |       1        |      77 img/s      |    14.23 ms     |    13.31 ms     |    14.68 ms     |
-|    efficientnet-b0     |       2        |     153 img/s      |    14.46 ms     |    13.67 ms     |    14.69 ms     |
-|    efficientnet-b0     |       4        |     317 img/s      |    14.06 ms     |    15.77 ms     |    17.28 ms     |
-|    efficientnet-b0     |       8        |     646 img/s      |    13.88 ms     |    14.32 ms     |    15.05 ms     |
-|    efficientnet-b0     |       16       |     1217 img/s     |    14.74 ms     |    15.89 ms     |    18.03 ms     |
-|    efficientnet-b0     |       32       |     2162 img/s     |    16.51 ms     |     17.9 ms     |    20.06 ms     |
-|    efficientnet-b0     |       64       |     2716 img/s     |    25.74 ms     |    23.64 ms     |    24.08 ms     |
-|    efficientnet-b0     |      128       |     2816 img/s     |    50.21 ms     |    45.43 ms     |     46.3 ms     |
-|    efficientnet-b0     |      256       |     2955 img/s     |    96.46 ms     |    85.96 ms     |    92.74 ms     |
-|    efficientnet-b4     |       1        |      38 img/s      |    27.73 ms     |    27.98 ms     |    29.45 ms     |
-|    efficientnet-b4     |       2        |      84 img/s      |     25.1 ms     |     24.6 ms     |    26.29 ms     |
-|    efficientnet-b4     |       4        |     170 img/s      |    25.01 ms     |    24.84 ms     |    26.52 ms     |
-|    efficientnet-b4     |       8        |     304 img/s      |    27.75 ms     |    26.28 ms     |    27.71 ms     |
-|    efficientnet-b4     |       16       |     334 img/s      |    49.51 ms     |    47.98 ms     |    48.46 ms     |
-|    efficientnet-b4     |       32       |     353 img/s      |    92.42 ms     |    90.81 ms     |     91.0 ms     |
-|    efficientnet-b4     |       64       |     380 img/s      |    170.58 ms    |    168.32 ms    |    168.8 ms     |
-|    efficientnet-b4     |      128       |     381 img/s      |    343.03 ms    |    334.58 ms    |    334.94 ms    |
-| efficientnet-widese-b0 |       1        |      83 img/s      |    13.38 ms     |    13.14 ms     |    13.58 ms     |
-| efficientnet-widese-b0 |       2        |     149 img/s      |    14.82 ms     |    15.09 ms     |    16.03 ms     |
-| efficientnet-widese-b0 |       4        |     319 img/s      |    13.91 ms     |    13.06 ms     |    13.96 ms     |
-| efficientnet-widese-b0 |       8        |     566 img/s      |    15.62 ms     |     16.3 ms     |     17.5 ms     |
-| efficientnet-widese-b0 |       16       |     1211 img/s     |    14.85 ms     |    15.97 ms     |     18.8 ms     |
-| efficientnet-widese-b0 |       32       |     2055 img/s     |    17.33 ms     |    19.54 ms     |    21.59 ms     |
-| efficientnet-widese-b0 |       64       |     2707 img/s     |    25.66 ms     |    23.72 ms     |    23.93 ms     |
-| efficientnet-widese-b0 |      128       |     2811 img/s     |    49.93 ms     |    45.46 ms     |    45.51 ms     |
-| efficientnet-widese-b0 |      256       |     2953 img/s     |    96.43 ms     |    86.11 ms     |    87.33 ms     |
-| efficientnet-widese-b4 |       1        |      44 img/s      |    24.16 ms     |    23.16 ms     |    25.41 ms     |
-| efficientnet-widese-b4 |       2        |      89 img/s      |    23.95 ms     |    23.39 ms     |    25.93 ms     |
-| efficientnet-widese-b4 |       4        |     169 img/s      |    25.35 ms     |    25.15 ms     |    30.58 ms     |
-| efficientnet-widese-b4 |       8        |     279 img/s      |    30.27 ms     |    31.76 ms     |    33.37 ms     |
-| efficientnet-widese-b4 |       16       |     331 img/s      |    49.84 ms     |    48.32 ms     |    48.75 ms     |
-| efficientnet-widese-b4 |       32       |     353 img/s      |    92.31 ms     |    90.81 ms     |    90.95 ms     |
-| efficientnet-widese-b4 |       64       |     375 img/s      |    172.79 ms    |    170.49 ms    |    170.69 ms    |
-| efficientnet-widese-b4 |      128       |     381 img/s      |    342.33 ms    |    334.91 ms    |    335.23 ms    |
+|    efficientnet-b0     |       1        |      83 img/s      |    13.15 ms     |    13.23 ms     |    14.11 ms     |
+|    efficientnet-b0     |       2        |     167 img/s      |    13.17 ms     |    13.46 ms     |    14.39 ms     |
+|    efficientnet-b0     |       4        |     332 img/s      |    13.25 ms     |    13.29 ms     |    14.85 ms     |
+|    efficientnet-b0     |       8        |     657 img/s      |    13.42 ms     |    13.86 ms     |    15.77 ms     |
+|    efficientnet-b0     |       16       |     1289 img/s     |    13.78 ms     |    15.02 ms     |    16.99 ms     |
+|    efficientnet-b0     |       32       |     2140 img/s     |    16.46 ms     |    18.92 ms     |     22.2 ms     |
+|    efficientnet-b0     |       64       |     2743 img/s     |    25.14 ms     |    23.44 ms     |    23.79 ms     |
+|    efficientnet-b0     |      128       |     2908 img/s     |    48.03 ms     |    43.98 ms     |    45.36 ms     |
+|    efficientnet-b0     |      256       |     2968 img/s     |    94.86 ms     |    85.62 ms     |    91.01 ms     |
+|    efficientnet-b4     |       1        |      45 img/s      |    23.31 ms     |     23.3 ms     |     24.9 ms     |
+|    efficientnet-b4     |       2        |      87 img/s      |    24.07 ms     |    23.81 ms     |    25.14 ms     |
+|    efficientnet-b4     |       4        |     160 img/s      |    26.29 ms     |    26.78 ms     |    30.85 ms     |
+|    efficientnet-b4     |       8        |     316 img/s      |    26.65 ms     |    26.44 ms     |    28.61 ms     |
+|    efficientnet-b4     |       16       |     341 img/s      |    48.18 ms     |     46.9 ms     |    47.13 ms     |
+|    efficientnet-b4     |       32       |     365 img/s      |    89.07 ms     |    87.83 ms     |    88.02 ms     |
+|    efficientnet-b4     |       64       |     374 img/s      |    173.2 ms     |    171.61 ms    |    172.27 ms    |
+|    efficientnet-b4     |      128       |     376 img/s      |    346.32 ms    |    339.74 ms    |    340.37 ms    |
+| efficientnet-widese-b0 |       1        |      82 img/s      |    13.37 ms     |    12.95 ms     |    13.89 ms     |
+| efficientnet-widese-b0 |       2        |     168 img/s      |    13.11 ms     |    12.45 ms     |    13.94 ms     |
+| efficientnet-widese-b0 |       4        |     346 img/s      |    12.73 ms     |    12.22 ms     |    12.95 ms     |
+| efficientnet-widese-b0 |       8        |     674 img/s      |    13.07 ms     |    12.75 ms     |    14.93 ms     |
+| efficientnet-widese-b0 |       16       |     1235 img/s     |     14.3 ms     |    15.05 ms     |    16.53 ms     |
+| efficientnet-widese-b0 |       32       |     2194 img/s     |    15.99 ms     |    17.37 ms     |    19.01 ms     |
+| efficientnet-widese-b0 |       64       |     2747 img/s     |    25.05 ms     |    23.38 ms     |    23.71 ms     |
+| efficientnet-widese-b0 |      128       |     2906 img/s     |    48.05 ms     |     44.0 ms     |    44.59 ms     |
+| efficientnet-widese-b0 |      256       |     2962 img/s     |    95.14 ms     |    85.86 ms     |    86.25 ms     |
+| efficientnet-widese-b4 |       1        |      43 img/s      |    24.28 ms     |    25.24 ms     |    27.36 ms     |
+| efficientnet-widese-b4 |       2        |      87 img/s      |    24.04 ms     |    24.38 ms     |    26.01 ms     |
+| efficientnet-widese-b4 |       4        |     169 img/s      |    24.96 ms     |     25.8 ms     |    27.14 ms     |
+| efficientnet-widese-b4 |       8        |     307 img/s      |    27.39 ms     |     28.4 ms     |     30.7 ms     |
+| efficientnet-widese-b4 |       16       |     342 img/s      |    48.05 ms     |    46.74 ms     |     46.9 ms     |
+| efficientnet-widese-b4 |       32       |     363 img/s      |    89.44 ms     |    88.23 ms     |    88.39 ms     |
+| efficientnet-widese-b4 |       64       |     373 img/s      |    173.47 ms    |    172.01 ms    |    172.36 ms    |
+| efficientnet-widese-b4 |      128       |     376 img/s      |    347.18 ms    |    340.09 ms    |    340.45 ms    |
 
 
 ###### Mixed Precision Inference Latency
 
 |       **Model**        | **Batch Size** | **Throughput Avg** | **Latency Avg** | **Latency 95%** | **Latency 99%** |
 |:----------------------:|:--------------:|:------------------:|:---------------:|:---------------:|:---------------:|
-|    efficientnet-b0     |       1        |      66 img/s      |    16.38 ms     |    15.63 ms     |    17.01 ms     |
-|    efficientnet-b0     |       2        |     120 img/s      |     18.0 ms     |    18.39 ms     |    19.35 ms     |
-|    efficientnet-b0     |       4        |     244 img/s      |    17.77 ms     |    18.98 ms     |     21.4 ms     |
-|    efficientnet-b0     |       8        |     506 img/s      |    17.26 ms     |    18.23 ms     |    20.24 ms     |
-|    efficientnet-b0     |       16       |     912 img/s      |    19.07 ms     |    20.33 ms     |    22.59 ms     |
-|    efficientnet-b0     |       32       |     1758 img/s     |     20.3 ms     |     22.2 ms     |     24.7 ms     |
-|    efficientnet-b0     |       64       |     3720 img/s     |    19.18 ms     |    20.09 ms     |    21.48 ms     |
-|    efficientnet-b0     |      128       |     4942 img/s     |    30.53 ms     |     26.0 ms     |    27.54 ms     |
-|    efficientnet-b0     |      256       |     5339 img/s     |    57.82 ms     |    47.63 ms     |    51.61 ms     |
-|    efficientnet-b4     |       1        |      32 img/s      |    31.83 ms     |    32.51 ms     |    34.09 ms     |
-|    efficientnet-b4     |       2        |      65 img/s      |    31.82 ms     |    34.53 ms     |    36.95 ms     |
-|    efficientnet-b4     |       4        |     127 img/s      |    32.77 ms     |    32.87 ms     |    35.95 ms     |
-|    efficientnet-b4     |       8        |     255 img/s      |     32.9 ms     |    34.56 ms     |    37.01 ms     |
-|    efficientnet-b4     |       16       |     486 img/s      |    34.46 ms     |    36.56 ms     |     39.1 ms     |
-|    efficientnet-b4     |       32       |     681 img/s      |    48.48 ms     |    46.98 ms     |    48.55 ms     |
-|    efficientnet-b4     |       64       |     738 img/s      |    88.55 ms     |    86.55 ms     |    87.31 ms     |
-|    efficientnet-b4     |      128       |     757 img/s      |    174.13 ms    |    168.73 ms    |    168.92 ms    |
-|    efficientnet-b4     |      256       |     770 img/s      |    343.04 ms    |    329.95 ms    |    330.66 ms    |
-| efficientnet-widese-b0 |       1        |      63 img/s      |    17.08 ms     |    16.36 ms     |     17.8 ms     |
-| efficientnet-widese-b0 |       2        |     123 img/s      |    17.48 ms     |    16.74 ms     |    18.17 ms     |
-| efficientnet-widese-b0 |       4        |     241 img/s      |    17.95 ms     |    17.29 ms     |    18.76 ms     |
-| efficientnet-widese-b0 |       8        |     486 img/s      |    17.92 ms     |    19.42 ms     |     22.3 ms     |
-| efficientnet-widese-b0 |       16       |     898 img/s      |     19.3 ms     |    20.57 ms     |    22.41 ms     |
-| efficientnet-widese-b0 |       32       |     1649 img/s     |    21.06 ms     |    23.14 ms     |    24.83 ms     |
-| efficientnet-widese-b0 |       64       |     3360 img/s     |    21.22 ms     |    22.89 ms     |    25.07 ms     |
-| efficientnet-widese-b0 |      128       |     4934 img/s     |    30.35 ms     |    26.48 ms     |     30.3 ms     |
-| efficientnet-widese-b0 |      256       |     5340 img/s     |    57.83 ms     |    47.59 ms     |     54.7 ms     |
-| efficientnet-widese-b4 |       1        |      31 img/s      |    33.37 ms     |    34.12 ms     |    35.95 ms     |
-| efficientnet-widese-b4 |       2        |      63 img/s      |     33.0 ms     |    33.73 ms     |    35.15 ms     |
-| efficientnet-widese-b4 |       4        |     133 img/s      |    31.43 ms     |    31.72 ms     |    33.93 ms     |
-| efficientnet-widese-b4 |       8        |     244 img/s      |    34.35 ms     |    36.98 ms     |    39.72 ms     |
-| efficientnet-widese-b4 |       16       |     454 img/s      |     36.8 ms     |     39.8 ms     |    42.41 ms     |
-| efficientnet-widese-b4 |       32       |     680 img/s      |    48.63 ms     |     48.1 ms     |    50.57 ms     |
-| efficientnet-widese-b4 |       64       |     738 img/s      |    88.64 ms     |    86.56 ms     |     86.7 ms     |
-| efficientnet-widese-b4 |      128       |     756 img/s      |    174.52 ms    |    168.98 ms    |    169.13 ms    |
-| efficientnet-widese-b4 |      256       |     771 img/s      |    344.05 ms    |    329.69 ms    |    330.7 ms     |
+|    efficientnet-b0     |       1        |      62 img/s      |    17.19 ms     |    18.01 ms     |    18.63 ms     |
+|    efficientnet-b0     |       2        |     119 img/s      |    17.96 ms     |     18.3 ms     |    19.95 ms     |
+|    efficientnet-b0     |       4        |     238 img/s      |     17.9 ms     |     17.8 ms     |    19.13 ms     |
+|    efficientnet-b0     |       8        |     495 img/s      |    17.38 ms     |    18.34 ms     |    19.29 ms     |
+|    efficientnet-b0     |       16       |     945 img/s      |    18.23 ms     |    19.42 ms     |    21.58 ms     |
+|    efficientnet-b0     |       32       |     1784 img/s     |    19.29 ms     |    20.71 ms     |    22.51 ms     |
+|    efficientnet-b0     |       64       |     3480 img/s     |    20.34 ms     |    22.22 ms     |    24.62 ms     |
+|    efficientnet-b0     |      128       |     5759 img/s     |    26.11 ms     |    22.61 ms     |    24.06 ms     |
+|    efficientnet-b0     |      256       |     6176 img/s     |    49.36 ms     |    41.18 ms     |     43.5 ms     |
+|    efficientnet-b4     |       1        |      34 img/s      |    30.28 ms     |     30.2 ms     |    32.24 ms     |
+|    efficientnet-b4     |       2        |      69 img/s      |    30.12 ms     |    30.02 ms     |    31.92 ms     |
+|    efficientnet-b4     |       4        |     129 img/s      |    32.08 ms     |    33.29 ms     |    34.74 ms     |
+|    efficientnet-b4     |       8        |     242 img/s      |    34.43 ms     |    37.34 ms     |    41.08 ms     |
+|    efficientnet-b4     |       16       |     488 img/s      |    34.12 ms     |    36.13 ms     |    39.39 ms     |
+|    efficientnet-b4     |       32       |     738 img/s      |    44.67 ms     |    44.85 ms     |    47.86 ms     |
+|    efficientnet-b4     |       64       |     809 img/s      |    80.93 ms     |    79.19 ms     |    79.42 ms     |
+|    efficientnet-b4     |      128       |     843 img/s      |    156.42 ms    |    152.17 ms    |    152.76 ms    |
+|    efficientnet-b4     |      256       |     847 img/s      |    311.03 ms    |    301.44 ms    |    302.48 ms    |
+| efficientnet-widese-b0 |       1        |      64 img/s      |    16.71 ms     |    17.59 ms     |    19.23 ms     |
+| efficientnet-widese-b0 |       2        |     129 img/s      |    16.63 ms     |     16.1 ms     |    17.34 ms     |
+| efficientnet-widese-b0 |       4        |     238 img/s      |    17.92 ms     |    17.52 ms     |    18.82 ms     |
+| efficientnet-widese-b0 |       8        |     445 img/s      |    19.24 ms     |    19.53 ms     |     20.4 ms     |
+| efficientnet-widese-b0 |       16       |     936 img/s      |    18.64 ms     |    19.55 ms     |     21.1 ms     |
+| efficientnet-widese-b0 |       32       |     1818 img/s     |    18.97 ms     |    20.62 ms     |    23.06 ms     |
+| efficientnet-widese-b0 |       64       |     3572 img/s     |    19.81 ms     |    21.14 ms     |    23.29 ms     |
+| efficientnet-widese-b0 |      128       |     5748 img/s     |    26.18 ms     |    23.72 ms     |     26.1 ms     |
+| efficientnet-widese-b0 |      256       |     6187 img/s     |    49.11 ms     |    41.11 ms     |    41.59 ms     |
+| efficientnet-widese-b4 |       1        |      32 img/s      |     32.1 ms     |     31.6 ms     |    34.69 ms     |
+| efficientnet-widese-b4 |       2        |      68 img/s      |     30.4 ms     |     30.9 ms     |    32.67 ms     |
+| efficientnet-widese-b4 |       4        |     123 img/s      |    33.81 ms     |     39.0 ms     |    40.76 ms     |
+| efficientnet-widese-b4 |       8        |     257 img/s      |    32.34 ms     |    33.39 ms     |    34.93 ms     |
+| efficientnet-widese-b4 |       16       |     497 img/s      |    33.51 ms     |    34.92 ms     |    37.24 ms     |
+| efficientnet-widese-b4 |       32       |     739 img/s      |    44.63 ms     |    43.62 ms     |    46.39 ms     |
+| efficientnet-widese-b4 |       64       |     808 img/s      |    81.08 ms     |    79.43 ms     |    79.59 ms     |
+| efficientnet-widese-b4 |      128       |     840 img/s      |    157.11 ms    |    152.87 ms    |    153.26 ms    |
+| efficientnet-widese-b4 |      256       |     846 img/s      |    310.73 ms    |    301.68 ms    |    302.9 ms     |
 
 
 
