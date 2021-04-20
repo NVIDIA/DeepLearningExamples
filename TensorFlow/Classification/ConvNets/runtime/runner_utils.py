@@ -48,13 +48,13 @@ def list_filenames_in_dataset(data_dir, mode, count=True):
 
     filename_pattern = os.path.join(data_dir, '%s-*' % mode)
 
-    file_list = sorted(tf.gfile.Glob(filename_pattern))
+    file_list = sorted(tf.compat.v1.gfile.Glob(filename_pattern))
     num_samples = 0 
     
     if count:
         def count_records(tf_record_filename):
             count = 0
-            for _ in tf.python_io.tf_record_iterator(tf_record_filename):
+            for _ in tf.compat.v1.io.tf_record_iterator(tf_record_filename):
                 count += 1
             return count
 

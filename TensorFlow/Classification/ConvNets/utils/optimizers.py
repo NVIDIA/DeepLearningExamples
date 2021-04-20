@@ -24,7 +24,7 @@ import tensorflow as tf
 __all__ = ['FixedLossScalerOptimizer']
 
 
-class FixedLossScalerOptimizer(tf.train.Optimizer):
+class FixedLossScalerOptimizer(tf.compat.v1.train.Optimizer):
     """An optimizer that scales loss and un-scales gradients for FP16 training."""
 
     def __init__(self, optimizer, scale=None, name="LossScalingOptimizer", use_locking=False):

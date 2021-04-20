@@ -1,0 +1,12 @@
+networkx==2.5
+numpy<1.20.0,>=1.16.0  # # numpy 1.20+ requires py37+
+onnx==1.8.0
+onnxruntime==1.6.0
+pycuda>=2019.1.2
+PyYAML>=5.2
+tqdm>=4.44.1
+tf2onnx==1.8.3
+tabulate>=0.8.7
+natsort>=7.0.0
+# use tags instead of branch names - because there might be docker cache hit causing not fetching most recent changes on branch
+service_maker @ git+https://access-token:usVyg8b11sn9gCacsVCf@gitlab-master.nvidia.com/dl/JoC/service_maker.git@1b83b96#egg=service_maker
