@@ -190,7 +190,7 @@ The following section lists the requirements that you need to meet in order to s
 This repository contains Dockerfile which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch 20.12-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch) or newer
+* [PyTorch 21.03-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch) or newer
 * Supported GPUs:
     * [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
     * [NVIDIA Turing architecture](https://www.nvidia.com/en-us/geforce/turing/)
@@ -516,7 +516,7 @@ To benchmark inference, run:
 
 * TF32 (A100 GPUs only)
 
-`python ./launch.py --model resnext101-32x4d --precision FP32 --mode benchmark_inference --platform DGXA100 <path to imagenet> --raport-file benchmark.json --epochs 1 --prof 100`
+`python ./launch.py --model resnext101-32x4d --precision TF32 --mode benchmark_inference --platform DGXA100 <path to imagenet> --raport-file benchmark.json --epochs 1 --prof 100`
 
 * AMP
 
@@ -526,11 +526,11 @@ Each of these scripts will run 100 iterations and save results in the `benchmark
 
 ### Results
 
-Our results were obtained by running the applicable training script     in the pytorch-20.12 NGC container.
+#### Training accuracy results
+
+Our results were obtained by running the applicable training script the pytorch-20.12 NGC container.
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
-
-#### Training accuracy results
 
 ##### Training accuracy: NVIDIA DGX A100 (8x A100 80GB)
 
@@ -560,31 +560,39 @@ The following images show a 250 epochs configuration on a DGX-1V.
 
 #### Training performance results
 
+Our results were obtained by running the applicable training script the pytorch-21.03 NGC container.
+
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+
 ##### Training performance: NVIDIA DGX A100 (8x A100 80GB)
 
-| **GPUs** | **Mixed Precision** |  **TF32**  | **Mixed Precision Speedup** | **Mixed Precision Strong Scaling** | **Mixed Precision Training Time (90E)** | **TF32 Strong Scaling** | **TF32 Training Time (90E)** |
-|:--------:|:-------------------:|:----------:|:---------------------------:|:----------------------------------:|:---------------------------------------:|:-----------------------:|:----------------------------:|
-|    1     |     1169 img/s      | 420 img/s  |           2.77 x            |               1.0 x                |                ~29 hours                |          1.0 x          |          ~80 hours           |
-|    8     |     7399 img/s      | 3193 img/s |           2.31 x            |               6.32 x               |                ~5 hours                 |         7.58 x          |          ~11 hours           |
+| **GPUs** | **Throughput - TF32** | **Throughput - mixed precision** | **Throughput speedup (TF32 to mixed precision)** | **TF32 Strong Scaling** | **Mixed Precision Strong Scaling** | **Mixed Precision Training Time (90E)** | **TF32 Training Time (90E)** |
+|:--------:|:---------------------:|:--------------------------------:|:------------------------------------------------:|:-----------------------:|:----------------------------------:|:---------------------------------------:|:----------------------------:|
+|    1     |       456 img/s       |            1211 img/s            |                      2.65 x                      |          1.0 x          |               1.0 x                |                ~28 hours                |          ~74 hours           |
+|    8     |      3471 img/s       |            7925 img/s            |                      2.28 x                      |          7.6 x          |               6.54 x               |                ~5 hours                 |          ~10 hours           |
 
 
 ##### Training performance: NVIDIA DGX-1 16GB (8x V100 16GB)
 
-| **GPUs** | **Mixed Precision** |  **FP32**  | **Mixed Precision Speedup** | **Mixed Precision Strong Scaling** | **Mixed Precision Training Time (90E)** | **FP32 Strong Scaling** | **FP32 Training Time (90E)** |
-|:--------:|:-------------------:|:----------:|:---------------------------:|:----------------------------------:|:---------------------------------------:|:-----------------------:|:----------------------------:|
-|    1     |      578 img/s      | 149 img/s  |           3.86 x            |               1.0 x                |                ~59 hours                |          1.0 x          |          ~225 hours          |
-|    8     |     3742 img/s      | 1117 img/s |           3.34 x            |               6.46 x               |                ~9 hours                 |         7.45 x          |          ~31 hours           |
+| **GPUs** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **FP32 Strong Scaling** | **Mixed Precision Strong Scaling** | **Mixed Precision Training Time (90E)** | **FP32 Training Time (90E)** |
+|:--------:|:---------------------:|:--------------------------------:|:------------------------------------------------:|:-----------------------:|:----------------------------------:|:---------------------------------------:|:----------------------------:|
+|    1     |       147 img/s       |            587 img/s             |                      3.97 x                      |          1.0 x          |               1.0 x                |                ~58 hours                |          ~228 hours          |
+|    8     |      1133 img/s       |            4065 img/s            |                      3.58 x                      |         7.65 x          |               6.91 x               |                ~9 hours                 |          ~30 hours           |
 
 
 ##### Training performance: NVIDIA DGX-1 32GB (8x V100 32GB)
 
-| **GPUs** | **Mixed Precision** |  **FP32**  | **Mixed Precision Speedup** | **Mixed Precision Strong Scaling** | **Mixed Precision Training Time (90E)** | **FP32 Strong Scaling** | **FP32 Training Time (90E)** |
-|:--------:|:-------------------:|:----------:|:---------------------------:|:----------------------------------:|:---------------------------------------:|:-----------------------:|:----------------------------:|
-|    1     |      556 img/s      | 151 img/s  |           3.68 x            |               1.0 x                |                ~61 hours                |          1.0 x          |          ~223 hours          |
-|    8     |     3595 img/s      | 1102 img/s |           3.26 x            |               6.45 x               |                ~10 hours                |         7.28 x          |          ~31 hours           |
+| **GPUs** | **Throughput - FP32** | **Throughput - mixed precision** | **Throughput speedup (FP32 to mixed precision)** | **FP32 Strong Scaling** | **Mixed Precision Strong Scaling** | **Mixed Precision Training Time (90E)** | **FP32 Training Time (90E)** |
+|:--------:|:---------------------:|:--------------------------------:|:------------------------------------------------:|:-----------------------:|:----------------------------------:|:---------------------------------------:|:----------------------------:|
+|    1     |       144 img/s       |            565 img/s             |                      3.9 x                       |          1.0 x          |               1.0 x                |                ~60 hours                |          ~233 hours          |
+|    8     |      1108 img/s       |            3863 img/s            |                      3.48 x                      |         7.66 x          |               6.83 x               |                ~9 hours                 |          ~31 hours           |
 
 
 #### Inference performance results
+
+Our results were obtained by running the applicable training script the pytorch-21.03 NGC container.
+
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
 ##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
 
@@ -592,30 +600,30 @@ The following images show a 250 epochs configuration on a DGX-1V.
 
 | **Batch Size** | **Throughput Avg** | **Latency Avg** | **Latency 95%** | **Latency 99%** |
 |:--------------:|:------------------:|:---------------:|:---------------:|:---------------:|
-|       1        |      55 img/s      |    18.48 ms     |    18.88 ms     |    20.74 ms     |
-|       2        |     116 img/s      |    17.54 ms     |    18.15 ms     |    21.32 ms     |
-|       4        |     214 img/s      |    19.07 ms     |    20.44 ms     |    22.69 ms     |
-|       8        |     291 img/s      |     27.8 ms     |    27.99 ms     |    28.47 ms     |
-|       16       |     354 img/s      |    45.78 ms     |     45.4 ms     |    45.73 ms     |
-|       32       |     423 img/s      |    77.13 ms     |    75.96 ms     |    76.21 ms     |
-|       64       |     486 img/s      |    134.92 ms    |    132.17 ms    |    132.51 ms    |
-|      128       |     523 img/s      |    252.11 ms    |    244.5 ms     |    244.99 ms    |
-|      256       |     530 img/s      |    499.64 ms    |    479.83 ms    |    481.41 ms    |
+|       1        |      55 img/s      |    17.95 ms     |    20.61 ms     |     22.0 ms     |
+|       2        |     105 img/s      |     19.2 ms     |    20.74 ms     |    22.77 ms     |
+|       4        |     170 img/s      |    23.65 ms     |    24.66 ms     |     28.0 ms     |
+|       8        |     336 img/s      |    24.05 ms     |    24.92 ms     |    27.75 ms     |
+|       16       |     397 img/s      |    40.77 ms     |    40.44 ms     |    40.65 ms     |
+|       32       |     452 img/s      |    72.12 ms     |     71.1 ms     |    71.35 ms     |
+|       64       |     500 img/s      |    130.9 ms     |    128.19 ms    |    128.64 ms    |
+|      128       |     527 img/s      |    249.57 ms    |    242.77 ms    |    243.63 ms    |
+|      256       |     533 img/s      |    496.76 ms    |    478.04 ms    |    480.42 ms    |
 
 
 ###### Mixed Precision Inference Latency
 
 | **Batch Size** | **Throughput Avg** | **Latency Avg** | **Latency 95%** | **Latency 99%** |
 |:--------------:|:------------------:|:---------------:|:---------------:|:---------------:|
-|       1        |      40 img/s      |    25.17 ms     |     28.4 ms     |    30.66 ms     |
-|       2        |      89 img/s      |    22.64 ms     |    24.29 ms     |    25.99 ms     |
-|       4        |     165 img/s      |    24.54 ms     |    26.23 ms     |    28.61 ms     |
-|       8        |     334 img/s      |    24.31 ms     |    28.46 ms     |    29.91 ms     |
-|       16       |     632 img/s      |     25.8 ms     |    27.76 ms     |    29.53 ms     |
-|       32       |     1219 img/s     |    27.35 ms     |    29.86 ms     |     31.6 ms     |
-|       64       |     1525 img/s     |    43.97 ms     |    42.01 ms     |    42.96 ms     |
-|      128       |     1647 img/s     |    82.22 ms     |    77.65 ms     |    79.56 ms     |
-|      256       |     1689 img/s     |    161.53 ms    |    151.25 ms    |    152.01 ms    |
+|       1        |      43 img/s      |    23.08 ms     |    24.18 ms     |    27.82 ms     |
+|       2        |      84 img/s      |    23.65 ms     |    24.64 ms     |    27.87 ms     |
+|       4        |     164 img/s      |    24.38 ms     |    27.33 ms     |    27.95 ms     |
+|       8        |     333 img/s      |    24.18 ms     |    25.92 ms     |     28.3 ms     |
+|       16       |     640 img/s      |     25.4 ms     |    26.53 ms     |    29.47 ms     |
+|       32       |     1195 img/s     |    27.72 ms     |     29.9 ms     |    32.19 ms     |
+|       64       |     1595 img/s     |    41.89 ms     |    40.15 ms     |    41.08 ms     |
+|      128       |     1699 img/s     |    79.45 ms     |    75.65 ms     |    76.08 ms     |
+|      256       |     1746 img/s     |    154.68 ms    |    145.76 ms    |    146.52 ms    |
 
 
 ##### Inference performance: NVIDIA T4
@@ -624,30 +632,30 @@ The following images show a 250 epochs configuration on a DGX-1V.
 
 | **Batch Size** | **Throughput Avg** | **Latency Avg** | **Latency 95%** | **Latency 99%** |
 |:--------------:|:------------------:|:---------------:|:---------------:|:---------------:|
-|       1        |      79 img/s      |    13.07 ms     |    14.66 ms     |    15.59 ms     |
-|       2        |     119 img/s      |    17.21 ms     |    18.07 ms     |    19.78 ms     |
-|       4        |     141 img/s      |    28.65 ms     |    28.62 ms     |    28.77 ms     |
-|       8        |     139 img/s      |    57.84 ms     |    58.29 ms     |    58.62 ms     |
-|       16       |     153 img/s      |    104.8 ms     |    105.65 ms    |    106.2 ms     |
-|       32       |     178 img/s      |    181.24 ms    |    180.96 ms    |    181.57 ms    |
-|       64       |     179 img/s      |    360.93 ms    |    358.22 ms    |    359.11 ms    |
-|      128       |     177 img/s      |    735.99 ms    |    726.15 ms    |    727.81 ms    |
-|      256       |     167 img/s      |   1561.91 ms    |   1523.52 ms    |   1525.96 ms    |
+|       1        |      56 img/s      |    18.18 ms     |    20.45 ms     |    24.58 ms     |
+|       2        |     109 img/s      |    18.77 ms     |    21.53 ms     |    26.21 ms     |
+|       4        |     151 img/s      |    26.89 ms     |    27.81 ms     |    30.94 ms     |
+|       8        |     164 img/s      |    48.99 ms     |    49.44 ms     |    49.91 ms     |
+|       16       |     172 img/s      |    93.51 ms     |    93.73 ms     |    94.16 ms     |
+|       32       |     180 img/s      |    178.83 ms    |    178.41 ms    |    179.07 ms    |
+|       64       |     178 img/s      |    361.95 ms    |    360.7 ms     |    362.32 ms    |
+|      128       |     172 img/s      |    756.93 ms    |    750.21 ms    |    752.45 ms    |
+|      256       |     161 img/s      |   1615.79 ms    |   1580.61 ms    |   1583.43 ms    |
 
 
 ###### Mixed Precision Inference Latency
 
 | **Batch Size** | **Throughput Avg** | **Latency Avg** | **Latency 95%** | **Latency 99%** |
 |:--------------:|:------------------:|:---------------:|:---------------:|:---------------:|
-|       1        |      65 img/s      |    15.69 ms     |    16.95 ms     |    17.97 ms     |
-|       2        |     126 img/s      |     16.2 ms     |    16.78 ms     |     18.6 ms     |
-|       4        |     245 img/s      |    16.77 ms     |    18.35 ms     |    25.88 ms     |
-|       8        |     488 img/s      |    16.82 ms     |    17.86 ms     |    25.45 ms     |
-|       16       |     541 img/s      |    30.16 ms     |    29.95 ms     |    30.18 ms     |
-|       32       |     566 img/s      |    57.79 ms     |    57.11 ms     |    57.29 ms     |
-|       64       |     580 img/s      |    112.84 ms    |    111.07 ms    |    111.56 ms    |
-|      128       |     586 img/s      |    224.75 ms    |    219.12 ms    |    219.64 ms    |
-|      256       |     589 img/s      |    447.25 ms    |    434.18 ms    |    439.22 ms    |
+|       1        |      44 img/s      |     23.0 ms     |    25.77 ms     |    29.41 ms     |
+|       2        |      87 img/s      |    23.14 ms     |    26.55 ms     |    30.97 ms     |
+|       4        |     178 img/s      |     22.8 ms     |     24.2 ms     |    29.38 ms     |
+|       8        |     371 img/s      |    21.98 ms     |    25.34 ms     |    29.61 ms     |
+|       16       |     553 img/s      |    29.47 ms     |    29.52 ms     |    31.14 ms     |
+|       32       |     578 img/s      |    56.56 ms     |    56.04 ms     |    56.37 ms     |
+|       64       |     591 img/s      |    110.82 ms    |    109.37 ms    |    109.83 ms    |
+|      128       |     597 img/s      |    220.44 ms    |    215.33 ms    |    216.3 ms     |
+|      256       |     598 img/s      |    439.3 ms     |    428.2 ms     |    431.46 ms    |
 
 
 ## Release notes
