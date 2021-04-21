@@ -219,12 +219,14 @@ def build_stats(history, validation_output, train_callbacks, eval_callback, logg
         stats['avg_time_per_exp_eval'] = 1000./stats['avg_exp_per_second_eval']
         batch_time = eval_callback.batch_time
         batch_time.sort()
+        latency_pct_per_batch = sum( batch_time[:-1] ) / int( len(batch_time) - 1 )
+        stats['latency_pct'] = 1000.0 * latency_pct_per_batch
         latency_90pct_per_batch = sum( batch_time[:int( 0.9 * len(batch_time) )] ) / int( 0.9 * len(batch_time) )
-        stats['latency_90pct'] = 1000.0 * latency_90pct_per_batch / eval_callback.batch_size
+        stats['latency_90pct'] = 1000.0 * latency_90pct_per_batch
         latency_95pct_per_batch = sum( batch_time[:int( 0.95 * len(batch_time) )] ) / int( 0.95 * len(batch_time) )
-        stats['latency_95pct'] = 1000.0 * latency_95pct_per_batch / eval_callback.batch_size
+        stats['latency_95pct'] = 1000.0 * latency_95pct_per_batch
         latency_99pct_per_batch = sum( batch_time[:int( 0.99 * len(batch_time) )] ) / int( 0.99 * len(batch_time) )
-        stats['latency_99pct'] = 1000.0 * latency_99pct_per_batch / eval_callback.batch_size
+        stats['latency_99pct'] = 1000.0 * latency_99pct_per_batch
 
     if not hvd_utils.is_using_hvd() or hvd.rank() == 0:
         logger.log(step=(), data=stats)
