@@ -32,22 +32,68 @@ class WikiDownloader:
             'zh' : 'https://dumps.wikimedia.org/zhwiki/latest/zhwiki-latest-pages-articles.xml.bz2'
         }
 
+        self.checksum_urls = {
+            'en': 'https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-md5sums.txt',
+            'zh': 'https://dumps.wikimedia.org/zhwiki/latest/zhwiki-latest-md5sums.txt'
+        }
+
         self.output_files = {
             'en' : 'wikicorpus_en.xml.bz2',
             'zh' : 'wikicorpus_zh.xml.bz2'
         }
 
+        self.checksum_files = {
+            'en': 'enwiki-latest-md5sums.txt',
+            'zh': 'zhwiki-latest-md5sums.txt'
+        }
+
+    def _compare_hashes(self, data_hash, checksum_file):
+        # If the local archive hash is in the checksums file, then the dataset
+        # is valid.
+        with open(checksum_file, 'r') as checksums:
+            if data_hash in checksums.read():
+                return True
+        return False
+
+    def _valid_download(self, dataset_filename):
+        # If the dataset archive already exists, download the latest checksum
+        # file from the data repository and compare the archive's hash with the
+        # hashes in the checksums file.
+        checksum_url = self.checksum_urls[self.language]
+        checksum_file = self.checksum_files[self.language]
+        output_file = os.path.join(self.save_path, checksum_file)
+
+        print('** Download file already exists, checking if valid')
+        cmd = ['wget', checksum_url, f'--output-document={output_file}']
+        status = subprocess.run(cmd)
+        if status.returncode != 0:
+            raise RuntimeError('Unable to download Wiki checksum file')
+
+        cmd = ['md5sum', dataset_filename]
+        result = subprocess.run(cmd, stdout=subprocess.PIPE,
+                                universal_newlines=True)
+        if result.returncode == 0:
+            # The dataset hash is the first sub-string in the output.
+            data_hash = result.stdout.strip().split()[0]
+            if not self._compare_hashes(data_hash, output_file):
+                print('** Invalid archive file. Redownloading')
+                return False
+            return True
+        else:
+            raise RuntimeError('Unable to find hash for Wiki dataset')
+        return False
 
     def download(self):
         if self.language in self.download_urls:
             url = self.download_urls[self.language]
-            filename = self.output_files[self.language]
+            filename = os.path.join(self.save_path,
+                                    self.output_files[self.language])
 
             print('Downloading:', url)
-            if os.path.isfile(self.save_path + '/' + filename):
-                print('** Download file already exists, skipping download')
+            if os.path.isfile(filename) and self._valid_download(filename):
+                print('** Dataset hashes match, skipping download')
             else:
-                cmd = ['wget', url, '--output-document={}'.format(self.save_path + '/' + filename)]
+                cmd = ['wget', url, '--output-document={}'.format(filename)]
                 print('Running:', cmd)
                 status = subprocess.run(cmd)
                 if status.returncode != 0:
@@ -55,7 +101,7 @@ class WikiDownloader:
 
             # Always unzipping since this is relatively fast and will overwrite
             print('Unzipping:', self.output_files[self.language])
-            subprocess.run('bzip2 -dk ' + self.save_path + '/' + filename, shell=True, check=True)
+            subprocess.run('bzip2 -dk ' + filename, shell=True, check=True)
 
         else:
             assert False, 'WikiDownloader not implemented for this language yet.'
