@@ -55,7 +55,7 @@ class WikiDownloader:
 
             # Always unzipping since this is relatively fast and will overwrite
             print('Unzipping:', self.output_files[self.language])
-            subprocess.run('bzip2 -dk ' + self.save_path + '/' + filename, shell=True, check=True)
+            subprocess.run('bzip2 -dkf ' + self.save_path + '/' + filename, shell=True, check=True)
 
         else:
             assert False, 'WikiDownloader not implemented for this language yet.'
