@@ -30,9 +30,9 @@ import time
 import argparse
 import numpy as np
 from contextlib import contextmanager
-
 import torch
 from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from torch.autograd import Variable
 from torch.nn.parameter import Parameter
 
@@ -45,6 +45,7 @@ import models
 import loss_functions
 import data_functions
 from common.utils import ParseFromConfigFile
+from plotting_utils import plot_alignment_to_numpy, plot_mel_to_numpy
 
 import dllogger as DLLogger
 from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
@@ -76,6 +77,7 @@ def parse_args(parser):
 
     parser.add_argument('--config-file', action=ParseFromConfigFile,
                          type=str, help='Path to configuration file')
+    parser.add_argument('--tensorboard-path', type=str, default="runs")
 
     # training
     training = parser.add_argument_group('training setup')
@@ -97,6 +99,7 @@ def parse_args(parser):
                           help='Run cudnn benchmark')
     training.add_argument('--disable-uniform-initialize-bn-weight', action='store_true',
                           help='disable uniform initialization of batchnorm layer weight')
+    training.add_argument('--freeze-encoder', action='store_true', default=False)
 
     optimization = parser.add_argument_group('optimization setup')
     optimization.add_argument(
@@ -230,14 +233,17 @@ def save_checkpoint(model, optimizer, epoch, config, amp_run, output_dir, model_
             print("Updating symlink", symlink_dst, "to point to", symlink_src)
             os.remove(symlink_dst)
 
-        os.symlink(symlink_src, symlink_dst)
+        # os.symlink(symlink_src, symlink_dst)
+        torch.save(checkpoint, symlink_dst)
 
 
 def get_last_checkpoint_filename(output_dir, model_name):
     symlink = os.path.join(output_dir, "checkpoint_{}_last.pt".format(model_name))
     if os.path.exists(symlink):
-        print("Loading checkpoint from symlink", symlink)
-        return os.path.join(output_dir, os.readlink(symlink))
+        print("Loading last checkpoint")
+        return symlink
+        # print("Loading checkpoint from symlink", symlink)
+        # return os.path.join(output_dir, os.readlink(symlink))
     else:
         print("No last checkpoint available - starting from epoch 0 ")
         return ""
@@ -249,13 +255,15 @@ def load_checkpoint(model, optimizer, epoch, config, amp_run, filepath, local_ra
 
     epoch[0] = checkpoint['epoch']+1
     device_id = local_rank % torch.cuda.device_count()
-    torch.cuda.set_rng_state(checkpoint['cuda_rng_state_all'][device_id])
+    if "cuda_rng_state_all" in checkpoint:
+        torch.cuda.set_rng_state(checkpoint['cuda_rng_state_all'][device_id])
     if 'random_rng_states_all' in checkpoint:
         torch.random.set_rng_state(checkpoint['random_rng_states_all'][device_id])
     elif 'random_rng_state' in checkpoint:
         torch.random.set_rng_state(checkpoint['random_rng_state'])
     else:
-        raise Exception("Model checkpoint must have either 'random_rng_state' or 'random_rng_states_all' key.")
+        print("Loading model checkpoint even though rng states were not loaded!")
+        # raise Exception("Model checkpoint must have either 'random_rng_state' or 'random_rng_states_all' key.")
     config = checkpoint['config']
     model.load_state_dict(checkpoint['state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer'])
@@ -280,7 +288,8 @@ def evaluating(model):
 
 
 def validate(model, criterion, valset, epoch, batch_iter, batch_size,
-             world_size, collate_fn, distributed_run, rank, batch_to_gpu):
+             world_size, collate_fn, distributed_run, rank, batch_to_gpu,
+             summary_writer=None):
     """Handles all the validation scoring and printing"""
     with evaluating(model), torch.no_grad():
         val_sampler = DistributedSampler(valset) if distributed_run else None
@@ -299,6 +308,20 @@ def validate(model, criterion, valset, epoch, batch_iter, batch_size,
             x, y, num_items = batch_to_gpu(batch)
             y_pred = model(x)
             loss = criterion(y_pred, y)
+            if i % 50 == 0 and summary_writer is not None:
+                _, mel_outputs_postnet, _, alignments = y_pred
+                summary_writer.add_image(
+                    f'attention_weights_sample_{i}',
+                    plot_alignment_to_numpy(alignments[0].data.cpu().numpy().T),
+                    epoch,
+                    dataformats='HWC',
+                )
+                summary_writer.add_image(
+                    f'mel_outputs_sample_{i}',
+                    plot_mel_to_numpy(mel_outputs_postnet[0].data.cpu().numpy()),
+                    epoch,
+                    dataformats='HWC',
+                )
             if distributed_run:
                 reduced_val_loss = reduce_tensor(loss.data, world_size).item()
                 reduced_num_items = reduce_tensor(num_items.data, 1).item()
@@ -358,6 +381,12 @@ def main():
         local_rank = args.rank
         world_size = args.world_size
 
+    if local_rank == 0:
+        writer = SummaryWriter(args.tensorboard_path)
+    else:
+        writer = None
+
+
     distributed_run = world_size > 1
 
     if local_rank == 0:
@@ -389,6 +418,10 @@ def main():
                              cpu_run=False,
                              uniform_initialize_bn_weight=not args.disable_uniform_initialize_bn_weight)
 
+    if args.freeze_encoder:
+        for param in model.encoder.parameters():
+            param.requires_grad = False
+
     if not args.amp and distributed_run:
         model = DDP(model)
 
@@ -407,10 +440,11 @@ def main():
 
     start_epoch = [0]
 
-    if args.resume_from_last:
-        args.checkpoint_path = get_last_checkpoint_filename(args.output, model_name)
-
     if args.checkpoint_path is not "":
+        load_checkpoint(model, optimizer, start_epoch, model_config,
+                        args.amp, args.checkpoint_path, local_rank)
+    elif args.resume_from_last:
+        args.checkpoint_path = get_last_checkpoint_filename(args.output, model_name)
         load_checkpoint(model, optimizer, start_epoch, model_config,
                         args.amp, args.checkpoint_path, local_rank)
 
@@ -493,6 +527,8 @@ def main():
                 raise Exception("loss is NaN")
 
             DLLogger.log(step=(epoch,i), data={'train_loss': reduced_loss})
+            if writer:
+                writer.add_scalar("train/loss", reduced_loss, iteration)
 
             num_iters += 1
 
@@ -534,7 +570,10 @@ def main():
                                                iteration, args.batch_size,
                                                world_size, collate_fn,
                                                distributed_run, local_rank,
-                                               batch_to_gpu)
+                                               batch_to_gpu,
+                                               summary_writer=writer)
+        if writer:
+            writer.add_scalar("val/loss", val_loss, iteration)
 
         if (epoch % args.epochs_per_checkpoint == 0) and args.bench_class == "":
             save_checkpoint(model, optimizer, epoch, model_config,
@@ -548,6 +587,8 @@ def main():
     run_time = run_stop_time - run_start_time
     DLLogger.log(step=tuple(), data={'run_time': run_time})
     DLLogger.log(step=tuple(), data={'val_loss': val_loss})
+    if writer:
+        writer.add_scalar("val/loss", val_loss, iteration)
     DLLogger.log(step=tuple(), data={'train_items_per_sec':
                                      (train_epoch_items_per_sec/num_iters if num_iters > 0 else 0.0)})
     DLLogger.log(step=tuple(), data={'val_items_per_sec': val_items_per_sec})
