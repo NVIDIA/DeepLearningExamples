@@ -1215,4 +1215,4 @@ def main(_):
 
 if __name__ == "__main__":
   FLAGS = extract_run_squad_flags()
-  tf.app.run()
+  tf.compat.v1.app.run()
