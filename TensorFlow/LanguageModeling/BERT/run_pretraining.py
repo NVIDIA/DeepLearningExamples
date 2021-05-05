@@ -33,7 +33,7 @@ from dllogger import Verbosity
 
 from tensorflow.core.protobuf import rewriter_config_pb2
 
-flags = tf.flags
+flags = tf.compat.v1.flags
 
 FLAGS = flags.FLAGS
 

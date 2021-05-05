@@ -41,7 +41,7 @@ from utils.gpu_affinity import set_affinity
 import utils.dllogger_class
 from dllogger import Verbosity
 
-flags = tf.flags
+flags = tf.compat.v1.flags
 FLAGS = None
 
 def extract_run_squad_flags():
