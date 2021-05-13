@@ -30,7 +30,7 @@ parser.add_argument("--logname", type=str, default="log", help="Name of dlloger 
 if __name__ == "__main__":
     args = parser.parse_args()
     path_to_main = os.path.join(dirname(dirname(os.path.realpath(__file__))), "main.py")
-    cmd = f"python {path_to_main} --exec_mode train --task {args.task} --deep_supervision --save_ckpt "
+    cmd = f"python {path_to_main} --exec_mode train --task {args.task} --save_ckpt "
     cmd += f"--results {args.results} "
     cmd += f"--logname {args.logname} "
     cmd += f"--dim {args.dim} "

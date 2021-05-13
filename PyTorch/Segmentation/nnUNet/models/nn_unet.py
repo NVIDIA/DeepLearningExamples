@@ -39,28 +39,33 @@ from models.unet import UNet
 
 
 class NNUnet(pl.LightningModule):
-    def __init__(self, args):
+    def __init__(self, args, bermuda=False, data_dir=None):
         super(NNUnet, self).__init__()
         self.args = args
-        if not hasattr(self.args, "drop_block"):  # For backward compability
-            self.args.drop_block = False
+        self.bermuda = bermuda
+        if data_dir is not None:
+            self.args.data = data_dir
         self.save_hyperparameters()
         self.build_nnunet()
-        self.loss = Loss(self.args.focal)
-        self.dice = Dice(self.n_class)
         self.best_sum = 0
         self.best_sum_epoch = 0
         self.best_dice = self.n_class * [0]
         self.best_epoch = self.n_class * [0]
         self.best_sum_dice = self.n_class * [0]
-        self.learning_rate = args.learning_rate
-        self.tta_flips = get_tta_flips(args.dim)
         self.test_idx = 0
         self.test_imgs = []
-        if self.args.exec_mode in ["train", "evaluate"]:
-            self.dllogger = get_dllogger(args.results)
+        if not self.bermuda:
+            self.learning_rate = args.learning_rate
+            self.loss = Loss(self.args.focal)
+            self.tta_flips = get_tta_flips(args.dim)
+            self.dice = Dice(self.n_class)
+            if self.args.exec_mode in ["train", "evaluate"]:
+                self.dllogger = get_dllogger(args.results)
 
     def forward(self, img):
+        return torch.argmax(self.model(img), 1)
+
+    def _forward(self, img):
         if self.args.benchmark:
             if self.args.dim == 2 and self.args.data2d_dim == 3:
                 img = layout_2d(img, None)
@@ -70,14 +75,14 @@ class NNUnet(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         img, lbl = self.get_train_data(batch)
         pred = self.model(img)
-        loss = self.compute_loss(pred, lbl)
+        loss = self.loss(pred, lbl)
         return loss
 
     def validation_step(self, batch, batch_idx):
         if self.current_epoch < self.args.skip_first_n_eval:
             return None
         img, lbl = batch["image"], batch["label"]
-        pred = self.forward(img)
+        pred = self._forward(img)
         loss = self.loss(pred, lbl)
         self.dice.update(pred, lbl[:, 0])
         return {"val_loss": loss}
@@ -86,7 +91,7 @@ class NNUnet(pl.LightningModule):
         if self.args.exec_mode == "evaluate":
             return self.validation_step(batch, batch_idx)
         img = batch["image"]
-        pred = self.forward(img)
+        pred = self._forward(img)
         if self.args.save_preds:
             meta = batch["meta"][0].cpu().detach().numpy()
             original_shape = meta[2]
@@ -120,24 +125,11 @@ class NNUnet(pl.LightningModule):
             strides=strides,
             dimension=self.args.dim,
             residual=self.args.residual,
-            attention=self.args.attention,
-            drop_block=self.args.drop_block,
             normalization_layer=self.args.norm,
             negative_slope=self.args.negative_slope,
-            deep_supervision=self.args.deep_supervision,
         )
         if is_main_process():
             print(f"Filters: {self.model.filters},\nKernels: {kernels}\nStrides: {strides}")
-
-    def compute_loss(self, preds, label):
-        if self.args.deep_supervision:
-            loss = self.loss(preds[0], label)
-            for i, pred in enumerate(preds[1:]):
-                downsampled_label = nn.functional.interpolate(label, pred.shape[2:])
-                loss += 0.5 ** (i + 1) * self.loss(pred, downsampled_label)
-            c_norm = 1 / (2 - 2 ** (-len(preds)))
-            return c_norm * loss
-        return self.loss(preds, label)
 
     def do_inference(self, image):
         if self.args.dim == 3:

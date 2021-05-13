@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import torch.nn as nn
 
 from models.layers import ConvBlock, OutputBlock, ResidBlock, UpsampleBlock
@@ -26,19 +25,14 @@ class UNet(nn.Module):
         strides,
         normalization_layer,
         negative_slope,
-        deep_supervision,
-        attention,
-        drop_block,
         residual,
         dimension,
     ):
         super(UNet, self).__init__()
         self.dim = dimension
         self.n_class = n_class
-        self.attention = attention
         self.residual = residual
         self.negative_slope = negative_slope
-        self.deep_supervision = deep_supervision
         self.norm = normalization_layer + f"norm{dimension}d"
         self.filters = [min(2 ** (5 + i), 320 if dimension == 3 else 512) for i in range(len(strides))]
 
@@ -56,7 +50,6 @@ class UNet(nn.Module):
             out_channels=self.filters[1:],
             kernels=kernels[1:-1],
             strides=strides[1:-1],
-            drop_block=drop_block,
         )
         self.bottleneck = self.get_conv_block(
             conv_block=down_block,
@@ -64,7 +57,6 @@ class UNet(nn.Module):
             out_channels=self.filters[-1],
             kernel_size=kernels[-1],
             stride=strides[-1],
-            drop_block=drop_block,
         )
         self.upsamples = self.get_module_list(
             conv_block=UpsampleBlock,
@@ -74,8 +66,8 @@ class UNet(nn.Module):
             strides=strides[1:][::-1],
         )
         self.output_block = self.get_output_block(decoder_level=0)
-        self.deep_supervision_heads = self.get_deep_supervision_heads()
         self.apply(self.initialize_weights)
+        self.n_layers = len(self.upsamples) - 1
 
     def forward(self, input_data):
         out = self.input_block(input_data)
@@ -84,26 +76,18 @@ class UNet(nn.Module):
             out = downsample(out)
             encoder_outputs.append(out)
         out = self.bottleneck(out)
-        decoder_outputs = []
-        for upsample, skip in zip(self.upsamples, reversed(encoder_outputs)):
-            out = upsample(out, skip)
-            decoder_outputs.append(out)
+        for idx, upsample in enumerate(self.upsamples):
+            out = upsample(out, encoder_outputs[self.n_layers - idx])
         out = self.output_block(out)
-        if self.training and self.deep_supervision:
-            out = [out]
-            for i, decoder_out in enumerate(decoder_outputs[2:-1][::-1]):
-                out.append(self.deep_supervision_heads[i](decoder_out))
         return out
 
-    def get_conv_block(self, conv_block, in_channels, out_channels, kernel_size, stride, drop_block=False):
+    def get_conv_block(self, conv_block, in_channels, out_channels, kernel_size, stride):
         return conv_block(
             dim=self.dim,
             stride=stride,
             norm=self.norm,
-            drop_block=drop_block,
             kernel_size=kernel_size,
             in_channels=in_channels,
-            attention=self.attention,
             out_channels=out_channels,
             negative_slope=self.negative_slope,
         )
@@ -111,14 +95,10 @@ class UNet(nn.Module):
     def get_output_block(self, decoder_level):
         return OutputBlock(in_channels=self.filters[decoder_level], out_channels=self.n_class, dim=self.dim)
 
-    def get_deep_supervision_heads(self):
-        return nn.ModuleList([self.get_output_block(i + 1) for i in range(len(self.upsamples) - 1)])
-
-    def get_module_list(self, in_channels, out_channels, kernels, strides, conv_block, drop_block=False):
+    def get_module_list(self, in_channels, out_channels, kernels, strides, conv_block):
         layers = []
-        for i, (in_channel, out_channel, kernel, stride) in enumerate(zip(in_channels, out_channels, kernels, strides)):
-            use_drop_block = drop_block and len(in_channels) - i <= 2
-            conv_layer = self.get_conv_block(conv_block, in_channel, out_channel, kernel, stride, use_drop_block)
+        for in_channel, out_channel, kernel, stride in zip(in_channels, out_channels, kernels, strides):
+            conv_layer = self.get_conv_block(conv_block, in_channel, out_channel, kernel, stride)
             layers.append(conv_layer)
         return nn.ModuleList(layers)
 

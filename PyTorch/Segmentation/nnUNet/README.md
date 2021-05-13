@@ -134,10 +134,6 @@ TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by defaul
 
 Test time augmentation is an inference technique which averages predictions from augmented images with its prediction. As a result, predictions are more accurate, but with the cost of slower inference process. For nnU-Net, we use all possible flip combinations for image augmenting. Test time augmentation can be enabled by adding the `--tta` flag.
 
-**Deep supervision**
-
-Deep supervision is a technique which adds auxiliary loss in U-Net decoder. For nnU-Net, we add auxiliary losses to all but the lowest two decoder levels. Final loss is the weighted average of losses. Deep supervision can be enabled by adding the `--deep_supervision` flag.
-
 ## Setup
 
 The following section lists the requirements that you need to meet in order to start training the nnU-Net model.
@@ -308,7 +304,7 @@ To see the full list of available options and their descriptions, use the `-h` o
 The following example output is printed when running the model:
 
 ```
-usage: main.py [-h] [--exec_mode {train,evaluate,predict}] [--data DATA] [--results RESULTS] [--logname LOGNAME] [--task TASK] [--gpus GPUS] [--learning_rate LEARNING_RATE] [--gradient_clip_val GRADIENT_CLIP_VAL] [--negative_slope NEGATIVE_SLOPE] [--tta] [--amp] [--benchmark] [--deep_supervision] [--drop_block] [--attention] [--residual] [--focal] [--sync_batchnorm] [--save_ckpt] [--nfolds NFOLDS] [--seed SEED] [--skip_first_n_eval SKIP_FIRST_N_EVAL] [--ckpt_path CKPT_PATH] [--fold FOLD] [--patience PATIENCE] [--lr_patience LR_PATIENCE] [--batch_size BATCH_SIZE] [--val_batch_size VAL_BATCH_SIZE] [--steps STEPS [STEPS ...]] [--profile] [--momentum MOMENTUM] [--weight_decay WEIGHT_DECAY]  [--save_preds] [--dim {2,3}] [--resume_training] [--factor FACTOR] [--num_workers NUM_WORKERS] [--min_epochs MIN_EPOCHS] [--max_epochs MAX_EPOCHS] [--warmup WARMUP] [--norm {instance,batch,group}] [--nvol NVOL] [--data2d_dim {2,3}] [--oversampling OVERSAMPLING] [--overlap OVERLAP] [--affinity {socket,single,single_unique,socket_unique_interleaved,socket_unique_continuous,disabled}] [--scheduler {none,multistep,cosine,plateau}] [--optimizer {sgd,radam,adam}] [--blend {gaussian,constant}] [--train_batches TRAIN_BATCHES] [--test_batches TEST_BATCHES]
+usage: main.py [-h] [--exec_mode {train,evaluate,predict}] [--data DATA] [--results RESULTS] [--logname LOGNAME] [--task TASK] [--gpus GPUS] [--learning_rate LEARNING_RATE] [--gradient_clip_val GRADIENT_CLIP_VAL] [--negative_slope NEGATIVE_SLOPE] [--tta] [--amp] [--benchmark] [--residual] [--focal] [--sync_batchnorm] [--save_ckpt] [--nfolds NFOLDS] [--seed SEED] [--skip_first_n_eval SKIP_FIRST_N_EVAL] [--ckpt_path CKPT_PATH] [--fold FOLD] [--patience PATIENCE] [--lr_patience LR_PATIENCE] [--batch_size BATCH_SIZE] [--val_batch_size VAL_BATCH_SIZE] [--steps STEPS [STEPS ...]] [--profile] [--momentum MOMENTUM] [--weight_decay WEIGHT_DECAY]  [--save_preds] [--dim {2,3}] [--resume_training] [--factor FACTOR] [--num_workers NUM_WORKERS] [--min_epochs MIN_EPOCHS] [--max_epochs MAX_EPOCHS] [--warmup WARMUP] [--norm {instance,batch,group}] [--nvol NVOL] [--data2d_dim {2,3}] [--oversampling OVERSAMPLING] [--overlap OVERLAP] [--affinity {socket,single,single_unique,socket_unique_interleaved,socket_unique_continuous,disabled}] [--scheduler {none,multistep,cosine,plateau}] [--optimizer {sgd,radam,adam}] [--blend {gaussian,constant}] [--train_batches TRAIN_BATCHES] [--test_batches TEST_BATCHES]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -328,9 +324,6 @@ optional arguments:
   --tta                 Enable test time augmentation (default: False)
   --amp                 Enable automatic mixed precision (default: False)
   --benchmark           Run model benchmarking (default: False)
-  --deep_supervision    Enable deep supervision (default: False)
-  --drop_block          Enable drop block (default: False)
-  --attention           Enable attention in decoder (default: False)
   --residual            Enable residual block in encoder (default: False)
   --focal               Use focal loss instead of cross entropy (default: False)
   --sync_batchnorm      Enable synchronized batchnorm (default: False)
@@ -435,7 +428,7 @@ The default configuration minimizes a function `L = (1 - dice_coefficient) + cro
 The training can be run directly without using the predefined scripts. The name of the training script is `main.py`. For example:
 
 ```
-python main.py --exec_mode train --task 01 --fold 0 --gpus 1 --amp --deep_supervision
+python main.py --exec_mode train --task 01 --fold 0 --gpus 1 --amp
 ```
   
 Training artifacts will be saved to `/results` in the container. Some important artifacts are:
@@ -612,7 +605,7 @@ Our results were obtained by running the `python scripts/benchmark.py --mode pre
 
 FP16
  
-| Dimension | Batch size |  Resolution  | Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
+| Dimension | Batch size |Resolution| Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
 |:----------:|:---------:|:-------------:|:----------------------:|:----------------:|:----------------:|:----------------:|:----------------:|
 | 2 | 64 | 4x192x160 | 1866.52 | 34.29 | 34.7 | 48.87 | 52.44 |
 | 2 | 128 | 4x192x160 | 2032.74 | 62.97 | 63.21 | 63.25 | 63.32 |
@@ -622,7 +615,7 @@ FP16
 
 FP32
  
-| Dimension | Batch size |  Resolution  | Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
+| Dimension | Batch size |Resolution| Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
 |:----------:|:---------:|:-------------:|:----------------------:|:----------------:|:----------------:|:----------------:|:----------------:|
 | 2 | 64 | 4x192x160 | 1051.46 | 60.87 | 61.21 | 61.48 | 62.87 |
 | 2 | 128 | 4x192x160 | 1051.68 | 121.71 | 122.29 | 122.44 | 122.6 |
@@ -637,6 +630,10 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 ## Release notes
 
 ### Changelog
+
+May 2021
+- Add Triton Inference Server support
+- Removed deep supervision, attention and drop block
 
 March 2021
 - Container updated to 21.02

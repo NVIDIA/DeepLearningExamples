@@ -160,6 +160,37 @@ class EvalPipeline(Pipeline):
         return img, lbl
 
 
+class BermudaPipeline(Pipeline):
+    def __init__(self, batch_size, num_threads, device_id, **kwargs):
+        super(BermudaPipeline, self).__init__(batch_size, num_threads, device_id)
+        self.input_x = get_numpy_reader(
+            files=kwargs["imgs"],
+            shard_id=device_id,
+            num_shards=kwargs["gpus"],
+            seed=kwargs["seed"],
+            shuffle=False,
+        )
+        self.input_y = get_numpy_reader(
+            files=kwargs["lbls"],
+            shard_id=device_id,
+            num_shards=kwargs["gpus"],
+            seed=kwargs["seed"],
+            shuffle=False,
+        )
+        self.patch_size = kwargs["patch_size"]
+
+    def crop_fn(self, img, lbl):
+        img = fn.crop(img, crop=self.patch_size, out_of_bounds_policy="pad")
+        lbl = fn.crop(lbl, crop=self.patch_size, out_of_bounds_policy="pad")
+        return img, lbl
+
+    def define_graph(self):
+        img, lbl = self.input_x(name="ReaderX"), self.input_y(name="ReaderY")
+        img, lbl = fn.reshape(img, layout="CDHW"), fn.reshape(lbl, layout="CDHW")
+        img, lbl = self.crop_fn(img, lbl)
+        return img, lbl
+
+
 class TestPipeline(Pipeline):
     def __init__(self, batch_size, num_threads, device_id, **kwargs):
         super(TestPipeline, self).__init__(batch_size, num_threads, device_id)
@@ -249,11 +280,6 @@ def fetch_dali_loader(imgs, lbls, batch_size, mode, **kwargs):
             nbs *= batch_size
         imgs = list(itertools.chain(*(100 * [imgs])))[: nbs * kwargs["gpus"]]
         lbls = list(itertools.chain(*(100 * [lbls])))[: nbs * kwargs["gpus"]]
-    if mode == "eval":
-        reminder = len(imgs) % kwargs["gpus"]
-        if reminder != 0:
-            imgs = imgs[:-reminder]
-            lbls = lbls[:-reminder]
 
     pipe_kwargs = {
         "imgs": imgs,
@@ -284,6 +310,10 @@ def fetch_dali_loader(imgs, lbls, batch_size, mode, **kwargs):
         pipeline = EvalPipeline
         output_map = ["image", "label"]
         dynamic_shape = True
+    elif mode == "bermuda":
+        pipeline = BermudaPipeline
+        output_map = ["image", "label"]
+        dynamic_shape = False
     else:
         pipeline = TestPipeline
         output_map = ["image", "meta"]

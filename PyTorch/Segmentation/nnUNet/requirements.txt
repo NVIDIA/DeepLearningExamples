@@ -6,4 +6,3 @@ pynvml==8.0.4
 pillow==6.2.0
 fsspec==0.8.0
 pytorch_ranger==0.1.1
-dropblock
