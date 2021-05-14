@@ -48,17 +48,15 @@ This repository provides a script and recipe to train the FastPitch model to ach
 
 ## Model overview
 
-[FastPitch](https://arxiv.org/abs/2006.06873) is one of two major components in a neural, text-to-speech (TTS) system:
+[FastPitch](https://arxiv.org/abs/2006.06873) is a fully-parallel transformer architecture with prosody control over pitch and individual phoneme duration.
+It is one of two major components in a neural, text-to-speech (TTS) system:
 
 * a mel-spectrogram generator such as [FastPitch](https://arxiv.org/abs/2006.06873) or [Tacotron 2](https://arxiv.org/abs/1712.05884), and
 * a waveform synthesizer such as [WaveGlow](https://arxiv.org/abs/1811.00002) (see [NVIDIA example code](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2)).
 
 Such two-component TTS system is able to synthesize natural sounding speech from raw transcripts.
 
-The FastPitch model generates mel-spectrograms and predicts a pitch contour from raw input text. It allows to exert additional control over the synthesized utterances, such as:
-* modify the pitch contour to control the prosody,
-* increase or decrease the fundamental frequency in a naturally sounding way, that preserves the perceived identity of the speaker,
-* alter the pace of speech.
+The FastPitch model generates mel-spectrograms and predicts a pitch contour from raw input text.
 Some of the capabilities of FastPitch are presented on the website with [samples](https://fastpitch.github.io/).
 
 Speech synthesized with FastPitch has state-of-the-art quality, and does not suffer from missing/repeating phrases like Tacotron2 does.
