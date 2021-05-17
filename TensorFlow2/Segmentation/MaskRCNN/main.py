@@ -57,7 +57,7 @@ def main():
     # setup dataset
     dataset = Dataset(params)
 
-    if params.mode in ['train', 'train_and_eval']:
+    if params.mode == 'train':
         run_training(dataset, params)
     if params.mode == 'eval':
         run_evaluation(dataset, params)

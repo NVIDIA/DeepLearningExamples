@@ -45,12 +45,11 @@ RUNTIME_GROUP.add_argument(
     help=(
         'One of supported execution modes:'
         '\n\ttrain - run in training mode'
-        '\n\ttrain_and_eval - run training followed by evaluation'
         '\n\teval - run evaluation on eval data split'
         '\n\tinfer - run inference on eval data split'
     ),
     choices=[
-        'train', 'train_and_eval', 'eval', 'infer'
+        'train', 'eval', 'infer'
     ]
 )
 
