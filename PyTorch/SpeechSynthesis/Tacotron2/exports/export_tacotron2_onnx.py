@@ -35,7 +35,7 @@ sys.path.append('./')
 
 import models
 from inference import checkpoint_from_distributed, unwrap_distributed, load_and_setup_model, prepare_input_sequence
-from common.utils import to_gpu, get_mask_from_lengths
+from tacotron2_common.utils import to_gpu, get_mask_from_lengths
 
 def parse_args(parser):
     """

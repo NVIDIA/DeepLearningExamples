@@ -44,7 +44,7 @@ from apex.parallel import DistributedDataParallel as DDP
 import models
 import loss_functions
 import data_functions
-from common.utils import ParseFromConfigFile
+from tacotron2_common.utils import ParseFromConfigFile
 
 import dllogger as DLLogger
 from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
