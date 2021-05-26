@@ -434,11 +434,19 @@ You can also run the ImageNet validation on pretrained weights:
 Pretrained weights can be downloaded from NGC:
 
 ```bash
-wget --content-disposition <ngc weights url>
+wget <ngc weights url>
 ```
 
+URL for each model can be found in the following table:
 
-
+| **Model** | **NGC weights URL** |
+|:---------:|:-------------------:|
+| efficientnet-b0 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b0_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-b0_210412.pth | 
+| efficientnet-b4 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b4_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-b4_210412.pth | 
+| efficientnet-widese-b0 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_widese_b0_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-widese-b0_210412.pth | 
+| efficientnet-widese-b4 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_widese_b4_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-widese-b4_210412.pth | 
+| efficientnet-quant-b0 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b0_pyt_qat_ckpt_fp32/versions/21.03.0/files/nvidia-efficientnet-quant-b0-130421.pth | 
+| efficientnet-quant-b4 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b4_pyt_qat_ckpt_fp32/versions/21.03.0/files/nvidia-efficientnet-quant-b4-130421.pth | 
 
 To run inference on ImageNet, run:
 

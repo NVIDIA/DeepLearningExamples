@@ -3,8 +3,17 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Optional
 import torch
+import warnings
 from torch import nn
-from pytorch_quantization import nn as quant_nn
+
+try:
+    from pytorch_quantization import nn as quant_nn
+except ImportError as e:
+    warnings.warn(
+        "pytorch_quantization module not found, quantization will not be available"
+    )
+    quant_nn = None
+
 
 # LayerBuilder {{{
 class LayerBuilder(object):
@@ -134,20 +143,30 @@ class LambdaLayer(nn.Module):
 
 # SqueezeAndExcitation {{{
 class SqueezeAndExcitation(nn.Module):
-    def __init__(self, in_channels, squeeze, activation):
+    def __init__(self, in_channels, squeeze, activation, use_conv=False):
         super(SqueezeAndExcitation, self).__init__()
-        self.pooling = nn.AdaptiveAvgPool2d(1)
-        self.squeeze = nn.Conv2d(in_channels, squeeze, 1)
-        self.expand = nn.Conv2d(squeeze, in_channels, 1)
+        if use_conv:
+            self.pooling = nn.AdaptiveAvgPool2d(1)
+            self.squeeze = nn.Conv2d(in_channels, squeeze, 1)
+            self.expand = nn.Conv2d(squeeze, in_channels, 1)
+        else:
+            self.squeeze = nn.Linear(in_channels, squeeze)
+            self.expand = nn.Linear(squeeze, in_channels)
         self.activation = activation
         self.sigmoid = nn.Sigmoid()
+        self.use_conv = use_conv
 
     def forward(self, x):
-        out = self.pooling(x)
+        if self.use_conv:
+            out = self.pooling(x)
+        else:
+            out = torch.mean(x, [2, 3])
         out = self.squeeze(out)
         out = self.activation(out)
         out = self.expand(out)
         out = self.sigmoid(out)
+        if not self.use_conv:
+            out = out.unsqueeze(2).unsqueeze(3)
         return out
 
 
@@ -199,12 +218,19 @@ class ONNXSiLU(nn.Module):
 
 
 class SequentialSqueezeAndExcitation(SqueezeAndExcitation):
-    def __init__(self, in_channels, squeeze, activation, quantized=False):
-        super().__init__(in_channels, squeeze, activation,)
+    def __init__(
+        self, in_channels, squeeze, activation, quantized=False, use_conv=False
+    ):
+        super().__init__(in_channels, squeeze, activation, use_conv=use_conv)
         self.quantized = quantized
         if quantized:
-            self.mul_a_quantizer = quant_nn.TensorQuantizer(quant_nn.QuantConv2d.default_quant_desc_input)
-            self.mul_b_quantizer = quant_nn.TensorQuantizer(quant_nn.QuantConv2d.default_quant_desc_input)
+            assert quant_nn is not None, "pytorch_quantization is not available"
+            self.mul_a_quantizer = quant_nn.TensorQuantizer(
+                quant_nn.QuantConv2d.default_quant_desc_input
+            )
+            self.mul_b_quantizer = quant_nn.TensorQuantizer(
+                quant_nn.QuantConv2d.default_quant_desc_input
+            )
 
     def forward(self, x):
         if not self.quantized:

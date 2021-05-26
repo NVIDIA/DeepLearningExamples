@@ -309,6 +309,48 @@ models:
                 arch: efficientnet-b0
                 batch_size: 256
     # }}}
+    efficientnet-quant-b0: # {{{
+        T4:
+            AMP:
+                <<: *efficientnet_b0_params_4k
+                arch: efficientnet-quant-b0
+                batch_size: 128
+                memory_format: nhwc
+            FP32:
+                <<: *efficientnet_b0_params_4k
+                arch: efficientnet-quant-b0
+                batch_size: 64
+        DGX1V-16G:
+            AMP:
+                <<: *efficientnet_b0_params_4k
+                arch: efficientnet-quant-b0
+                batch_size: 128
+                memory_format: nhwc
+            FP32:
+                <<: *efficientnet_b0_params_4k
+                arch: efficientnet-quant-b0
+                batch_size: 64
+        DGX1V-32G:
+            AMP:
+                <<: *efficientnet_b0_params_4k
+                arch: efficientnet-quant-b0
+                batch_size: 256
+                memory_format: nhwc
+            FP32:
+                <<: *efficientnet_b0_params_4k
+                arch: efficientnet-quant-b0
+                batch_size: 128
+        DGXA100:
+            AMP:
+                <<: *efficientnet_b0_params_4k
+                arch: efficientnet-quant-b0
+                batch_size: 256
+                memory_format: nhwc
+            TF32:
+                <<: *efficientnet_b0_params_4k
+                arch: efficientnet-quant-b0
+                batch_size: 256
+    # }}}
     efficientnet-widese-b4: # {{{
         T4:
             AMP:
@@ -391,5 +433,47 @@ models:
             TF32:
                 <<: *efficientnet_b4_params_4k
                 arch: efficientnet-b4
+                batch_size: 64
+    # }}}
+    efficientnet-quant-b4: # {{{
+        T4:
+            AMP:
+                <<: *efficientnet_b4_params_4k
+                arch: efficientnet-quant-b4
+                batch_size: 32
+                memory_format: nhwc
+            FP32:
+                <<: *efficientnet_b4_params_4k
+                arch: efficientnet-quant-b4
+                batch_size: 16
+        DGX1V-16G:
+            AMP:
+                <<: *efficientnet_b4_params_4k
+                arch: efficientnet-quant-b4
+                batch_size: 32
+                memory_format: nhwc
+            FP32:
+                <<: *efficientnet_b4_params_4k
+                arch: efficientnet-quant-b4
+                batch_size: 16
+        DGX1V-32G:
+            AMP:
+                <<: *efficientnet_b4_params_4k
+                arch: efficientnet-quant-b4
+                batch_size: 64
+                memory_format: nhwc
+            FP32:
+                <<: *efficientnet_b4_params_4k
+                arch: efficientnet-quant-b4
+                batch_size: 32
+        DGXA100:
+            AMP:
+                <<: *efficientnet_b4_params_4k
+                arch: efficientnet-quant-b4
+                batch_size: 128
+                memory_format: nhwc
+            TF32:
+                <<: *efficientnet_b4_params_4k
+                arch: efficientnet-quant-b4
                 batch_size: 64
     # }}}

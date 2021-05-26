@@ -1,6 +1,7 @@
 import argparse
 import random
 import math
+import warnings
 from typing import List, Any, Optional
 from collections import namedtuple, OrderedDict
 from dataclasses import dataclass, replace
@@ -8,7 +9,26 @@ from dataclasses import dataclass, replace
 import torch
 from torch import nn
 from functools import partial
-from pytorch_quantization import nn as quant_nn
+
+try:
+    from pytorch_quantization import nn as quant_nn
+    from ..quantization import switch_on_quantization
+except ImportError as e:
+    warnings.warn(
+        "pytorch_quantization module not found, quantization will not be available"
+    )
+    quant_nn = None
+
+    import contextlib
+
+    @contextlib.contextmanager
+    def switch_on_quantization(do_quantization=False):
+        assert not do_quantization, "quantization is not available"
+        try:
+            yield
+        finally:
+            pass
+
 
 from .common import (
     SqueezeAndExcitation,
@@ -27,7 +47,6 @@ from .model import (
     EntryPoint,
 )
 
-from ..quantization import switch_on_quantization
 
 # EffNetArch {{{
 @dataclass
@@ -107,6 +126,7 @@ class EffNetParams(ModelParams):
     bn_epsilon: float = 1e-3
     survival_prob: float = 1
     quantized: bool = False
+    trt: bool = False
 
     def parser(self, name):
         p = super().parser(name)
@@ -145,6 +165,7 @@ class EffNetParams(ModelParams):
         p.add_argument(
             "--dropout", default=self.dropout, type=float, help="Dropout drop prob"
         )
+        p.add_argument("--trt", metavar="True|False", default=self.trt, type=bool)
         return p
 
 
@@ -162,7 +183,8 @@ class EfficientNet(nn.Module):
         bn_momentum: float = 1 - 0.99,
         bn_epsilon: float = 1e-3,
         survival_prob: float = 1,
-        quantized: bool = False
+        quantized: bool = False,
+        trt: bool = False,
     ):
         self.quantized = quantized
         with switch_on_quantization(self.quantized):
@@ -195,6 +217,7 @@ class EfficientNet(nn.Module):
                     out_channels=c,
                     squeeze_excitation_ratio=arch.squeeze_excitation_ratio,
                     prev_layer_count=plc,
+                    trt=trt,
                 )
                 plc = plc + r
                 setattr(self, f"layer{i+1}", layer)
@@ -293,6 +316,7 @@ class EfficientNet(nn.Module):
         out_channels,
         squeeze_excitation_ratio,
         prev_layer_count,
+        trt,
     ):
         layers = []
 
@@ -307,7 +331,8 @@ class EfficientNet(nn.Module):
             stride,
             self.arch.squeeze_excitation_ratio,
             survival_prob if stride == 1 and in_channels == out_channels else 1.0,
-            self.quantized
+            self.quantized,
+            trt=trt,
         )
         layers.append((f"block{idx}", blk))
 
@@ -322,7 +347,8 @@ class EfficientNet(nn.Module):
                 1,  # stride
                 squeeze_excitation_ratio,
                 survival_prob,
-                self.quantized
+                self.quantized,
+                trt=trt,
             )
             layers.append((f"block{idx}", blk))
         return nn.Sequential(OrderedDict(layers)), out_channels
@@ -343,7 +369,8 @@ class MBConvBlock(nn.Module):
         squeeze_excitation_ratio: int,
         squeeze_hidden=False,
         survival_prob: float = 1.0,
-        quantized: bool = False
+        quantized: bool = False,
+        trt: bool = False,
     ):
         super().__init__()
         self.quantized = quantized
@@ -361,14 +388,17 @@ class MBConvBlock(nn.Module):
             depsep_kernel_size, hidden_dim, hidden_dim, stride, bn=True, act=True
         )
         self.se = SequentialSqueezeAndExcitation(
-            hidden_dim, squeeze_dim, builder.activation(), self.quantized
+            hidden_dim, squeeze_dim, builder.activation(), self.quantized, use_conv=trt
         )
         self.proj = builder.conv1x1(hidden_dim, out_channels, bn=True)
 
         self.survival_prob = survival_prob
 
         if self.quantized and self.residual:
-            self.residual_quantizer = quant_nn.TensorQuantizer(quant_nn.QuantConv2d.default_quant_desc_input)  # TODO QuantConv2d ?!?
+            assert quant_nn is not None, "pytorch_quantization is not available"
+            self.residual_quantizer = quant_nn.TensorQuantizer(
+                quant_nn.QuantConv2d.default_quant_desc_input
+            )  # TODO QuantConv2d ?!?
 
     def drop(self):
         if self.survival_prob == 1.0:
@@ -406,6 +436,7 @@ def original_mbconv(
     squeeze_excitation_ratio: int,
     survival_prob: float,
     quantized: bool,
+    trt: bool
 ):
     return MBConvBlock(
         builder,
@@ -417,7 +448,8 @@ def original_mbconv(
         squeeze_excitation_ratio,
         squeeze_hidden=False,
         survival_prob=survival_prob,
-        quantized=quantized
+        quantized=quantized,
+        trt=trt,
     )
 
 
@@ -431,6 +463,7 @@ def widese_mbconv(
     squeeze_excitation_ratio: int,
     survival_prob: float,
     quantized: bool,
+    trt: bool,
 ):
     return MBConvBlock(
         builder,
@@ -442,7 +475,8 @@ def widese_mbconv(
         squeeze_excitation_ratio,
         squeeze_hidden=True,
         survival_prob=survival_prob,
-        quantized=False
+        quantized=quantized,
+        trt=trt,
     )
 
 
@@ -469,31 +503,42 @@ effnet_b5_layers=effnet_b0_layers.scale(wc=1.6, dc=2.2, dis=456)
 effnet_b6_layers=effnet_b0_layers.scale(wc=1.8, dc=2.6, dis=528)
 effnet_b7_layers=effnet_b0_layers.scale(wc=2.0, dc=3.1, dis=600)
 
+
+
+urls = {
+    "efficientnet-b0": "https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b0_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-b0_210412.pth",
+    "efficientnet-b4": "https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b4_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-b4_210412.pth",
+    "efficientnet-widese-b0": "https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_widese_b0_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-widese-b0_210412.pth",
+    "efficientnet-widese-b4": "https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_widese_b4_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-widese-b4_210412.pth",
+    "efficientnet-quant-b0": "https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b0_pyt_qat_ckpt_fp32/versions/21.03.0/files/nvidia-efficientnet-quant-b0-130421.pth",
+    "efficientnet-quant-b4": "https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b4_pyt_qat_ckpt_fp32/versions/21.03.0/files/nvidia-efficientnet-quant-b4-130421.pth",
+}
+
 def _m(*args, **kwargs):
     return Model(constructor=EfficientNet, *args, **kwargs)
 
 architectures = {
-    "efficientnet-b0": _m(arch=effnet_b0_layers, params=EffNetParams(dropout=0.2)),
+    "efficientnet-b0": _m(arch=effnet_b0_layers, params=EffNetParams(dropout=0.2), checkpoint_url=urls["efficientnet-b0"]),
     "efficientnet-b1": _m(arch=effnet_b1_layers, params=EffNetParams(dropout=0.2)),
     "efficientnet-b2": _m(arch=effnet_b2_layers, params=EffNetParams(dropout=0.3)),
     "efficientnet-b3": _m(arch=effnet_b3_layers, params=EffNetParams(dropout=0.3)),
-    "efficientnet-b4": _m(arch=effnet_b4_layers, params=EffNetParams(dropout=0.4, survival_prob=0.8)),
+    "efficientnet-b4": _m(arch=effnet_b4_layers, params=EffNetParams(dropout=0.4, survival_prob=0.8), checkpoint_url=urls["efficientnet-b4"]),
     "efficientnet-b5": _m(arch=effnet_b5_layers, params=EffNetParams(dropout=0.4)),
     "efficientnet-b6": _m(arch=effnet_b6_layers, params=EffNetParams(dropout=0.5)),
     "efficientnet-b7": _m(arch=effnet_b7_layers, params=EffNetParams(dropout=0.5)),
-    "efficientnet-widese-b0": _m(arch=replace(effnet_b0_layers, block=widese_mbconv), params=EffNetParams(dropout=0.2)),
+    "efficientnet-widese-b0": _m(arch=replace(effnet_b0_layers, block=widese_mbconv), params=EffNetParams(dropout=0.2), checkpoint_url=urls["efficientnet-widese-b0"]),
     "efficientnet-widese-b1": _m(arch=replace(effnet_b1_layers, block=widese_mbconv), params=EffNetParams(dropout=0.2)),
     "efficientnet-widese-b2": _m(arch=replace(effnet_b2_layers, block=widese_mbconv), params=EffNetParams(dropout=0.3)),
     "efficientnet-widese-b3": _m(arch=replace(effnet_b3_layers, block=widese_mbconv), params=EffNetParams(dropout=0.3)),
-    "efficientnet-widese-b4": _m(arch=replace(effnet_b4_layers, block=widese_mbconv), params=EffNetParams(dropout=0.4, survival_prob=0.8)),
+    "efficientnet-widese-b4": _m(arch=replace(effnet_b4_layers, block=widese_mbconv), params=EffNetParams(dropout=0.4, survival_prob=0.8), checkpoint_url=urls["efficientnet-widese-b4"]),
     "efficientnet-widese-b5": _m(arch=replace(effnet_b5_layers, block=widese_mbconv), params=EffNetParams(dropout=0.4)),
     "efficientnet-widese-b6": _m(arch=replace(effnet_b6_layers, block=widese_mbconv), params=EffNetParams(dropout=0.5)),
     "efficientnet-widese-b7": _m(arch=replace(effnet_b7_layers, block=widese_mbconv), params=EffNetParams(dropout=0.5)),
-    "efficientnet-quant-b0": _m(arch=effnet_b0_layers, params=EffNetParams(dropout=0.2, quantized=True)),
+    "efficientnet-quant-b0": _m(arch=effnet_b0_layers, params=EffNetParams(dropout=0.2, quantized=True), checkpoint_url=urls["efficientnet-quant-b0"]),
     "efficientnet-quant-b1": _m(arch=effnet_b1_layers, params=EffNetParams(dropout=0.2, quantized=True)),
     "efficientnet-quant-b2": _m(arch=effnet_b2_layers, params=EffNetParams(dropout=0.3, quantized=True)),
     "efficientnet-quant-b3": _m(arch=effnet_b3_layers, params=EffNetParams(dropout=0.3, quantized=True)),
-    "efficientnet-quant-b4": _m(arch=effnet_b4_layers, params=EffNetParams(dropout=0.4, survival_prob=0.8, quantized=True)),
+    "efficientnet-quant-b4": _m(arch=effnet_b4_layers, params=EffNetParams(dropout=0.4, survival_prob=0.8, quantized=True), checkpoint_url=urls["efficientnet-quant-b4"]),
     "efficientnet-quant-b5": _m(arch=effnet_b5_layers, params=EffNetParams(dropout=0.4, quantized=True)),
     "efficientnet-quant-b6": _m(arch=effnet_b6_layers, params=EffNetParams(dropout=0.5, quantized=True)),
     "efficientnet-quant-b7": _m(arch=effnet_b7_layers, params=EffNetParams(dropout=0.5, quantized=True)),

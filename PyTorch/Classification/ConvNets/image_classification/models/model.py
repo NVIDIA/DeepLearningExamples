@@ -13,7 +13,9 @@ class ModelArch:
 @dataclass
 class ModelParams:
     def parser(self, name):
-        return argparse.ArgumentParser(description=f"{name} arguments", add_help=False, usage="")
+        return argparse.ArgumentParser(
+            description=f"{name} arguments", add_help=False, usage=""
+        )
 
 
 @dataclass
@@ -44,7 +46,9 @@ class EntryPoint:
         state_dict = None
         if pretrained:
             assert self.model.checkpoint_url is not None
-            state_dict = torch.hub.load_state_dict_from_url(self.model.checkpoint_url, map_location=torch.device('cpu'))
+            state_dict = torch.hub.load_state_dict_from_url(
+                self.model.checkpoint_url, map_location=torch.device("cpu")
+            )
 
         if pretrained_from_file is not None:
             if os.path.isfile(pretrained_from_file):
@@ -53,7 +57,9 @@ class EntryPoint:
                         pretrained_from_file
                     )
                 )
-                state_dict = torch.load(pretrained_from_file, map_location=torch.device('cpu'))
+                state_dict = torch.load(
+                    pretrained_from_file, map_location=torch.device("cpu")
+                )
             else:
                 print(
                     "=> no pretrained weights found at '{}'".format(
@@ -63,17 +69,40 @@ class EntryPoint:
         # Temporary fix to allow NGC checkpoint loading
         if state_dict is not None:
             state_dict = {
-                k[len("module."):] if k.startswith("module.") else k: v for k, v in state_dict.items()
+                k[len("module.") :] if k.startswith("module.") else k: v
+                for k, v in state_dict.items()
             }
+
+            def reshape(t, conv):
+                if conv:
+                    if len(t.shape) == 4:
+                        return t
+                    else:
+                        return t.view(t.shape[0], -1, 1, 1)
+                else:
+                    if len(t.shape) == 4:
+                        return t.view(t.shape[0], t.shape[1])
+                    else:
+                        return t
+
             state_dict = {
-                k: v.view(v.shape[0], -1, 1, 1) if is_linear_se_weight(k, v) else v for k, v in state_dict.items()
+                k: reshape(
+                    v,
+                    conv=dict(model.named_modules())[
+                        ".".join(k.split(".")[:-2])
+                    ].use_conv,
+                )
+                if is_se_weight(k, v)
+                else v
+                for k, v in state_dict.items()
             }
 
             model.load_state_dict(state_dict)
         return model
 
     def parser(self):
-        if self.model.params is None: return None
+        if self.model.params is None:
+            return None
         parser = self.model.params.parser(self.name)
         parser.add_argument(
             "--pretrained-from-file",
@@ -87,15 +116,14 @@ class EntryPoint:
                 "--pretrained",
                 default=False,
                 action="store_true",
-                help="load pretrained weights from NGC"
+                help="load pretrained weights from NGC",
             )
 
         return parser
 
 
-def is_linear_se_weight(key, value):
-    return (key.endswith('squeeze.weight') or key.endswith('expand.weight')) and len(value.shape) == 2
-
+def is_se_weight(key, value):
+    return (key.endswith("squeeze.weight") or key.endswith("expand.weight"))
 
 def create_entrypoint(m: Model):
     def _ep(**kwargs):

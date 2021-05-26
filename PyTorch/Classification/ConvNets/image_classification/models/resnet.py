@@ -114,6 +114,7 @@ class Bottleneck(nn.Module):
         downsample=None,
         fused_se=True,
         last_bn_0_init=False,
+        trt=False,
     ):
         super(Bottleneck, self).__init__()
         self.conv1 = builder.conv1x1(inplanes, planes)
@@ -128,7 +129,7 @@ class Bottleneck(nn.Module):
 
         self.fused_se = fused_se
         self.squeeze = (
-            SqueezeAndExcitation(planes * expansion, se_squeeze, builder.activation())
+            SqueezeAndExcitation(planes * expansion, se_squeeze, builder.activation(), use_conv=trt)
             if se
             else None
         )
@@ -175,6 +176,7 @@ class SEBottleneck(Bottleneck):
         downsample=None,
         fused_se=True,
         last_bn_0_init=False,
+        trt=False,
     ):
         super(SEBottleneck, self).__init__(
             builder,
@@ -188,6 +190,7 @@ class SEBottleneck(Bottleneck):
             downsample=downsample,
             fused_se=fused_se,
             last_bn_0_init=last_bn_0_init,
+            trt=trt,
         )
 
 
@@ -211,6 +214,7 @@ class ResNet(nn.Module):
         num_classes: int = 1000
         last_bn_0_init: bool = False
         conv_init: str = "fan_in"
+        trt: bool = False
 
         def parser(self, name):
             p = super().parser(name)
@@ -235,7 +239,7 @@ class ResNet(nn.Module):
                 type=str,
                 help="initialization mode for convolutional layers, see https://pytorch.org/docs/stable/nn.init.html#torch.nn.init.kaiming_normal_",
             )
-
+            p.add_argument("--trt", metavar="True|False", default=self.trt, type=bool)
             return p
 
     def __init__(
@@ -244,6 +248,7 @@ class ResNet(nn.Module):
         num_classes: int = 1000,
         last_bn_0_init: bool = False,
         conv_init: str = "fan_in",
+        trt: bool = False,
     ):
 
         super(ResNet, self).__init__()
@@ -269,6 +274,7 @@ class ResNet(nn.Module):
                 l,
                 cardinality=arch.cardinality,
                 stride=1 if i == 0 else 2,
+                trt=trt,
             )
             setattr(self, f"layer{i+1}", layer)
 
@@ -326,7 +332,7 @@ class ResNet(nn.Module):
 
     # helper functions {{{
     def _make_layer(
-        self, block, expansion, inplanes, planes, blocks, stride=1, cardinality=1
+        self, block, expansion, inplanes, planes, blocks, stride=1, cardinality=1, trt=False,
     ):
         downsample = None
         if stride != 1 or inplanes != planes * expansion:
@@ -350,6 +356,7 @@ class ResNet(nn.Module):
                     downsample=downsample if i == 0 else None,
                     fused_se=True,
                     last_bn_0_init=self.last_bn_0_init,
+                    trt = trt,
                 )
             )
             inplanes = planes * expansion
