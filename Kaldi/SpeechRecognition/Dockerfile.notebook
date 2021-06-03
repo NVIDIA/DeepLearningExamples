@@ -27,5 +27,5 @@ RUN apt-get update && apt-get install -y jupyter \
                    vim
 
 RUN python3 -m pip uninstall -y pip
-RUN apt install python3-pip --reinstall
+RUN apt install python3-pip -y --reinstall
 RUN pip3 install matplotlib soundfile librosa sounddevice
