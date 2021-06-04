@@ -82,7 +82,7 @@ if __name__ == '__main__':
         cmd_train += ' ' + ' '.join(remainder)
         cmd_eval += ' ' + ' '.join(remainder)
     if flags.gpus is not None:
-        cmd_train = f'CUDA_VISIBLE_DEVICES={",".join(map(str, range(flags.gpus)))} ' + cmd
+        cmd_train = f'CUDA_VISIBLE_DEVICES={",".join(map(str, range(flags.gpus)))} ' + cmd_train
 
     # print command
     line = '-' * shutil.get_terminal_size()[0]
