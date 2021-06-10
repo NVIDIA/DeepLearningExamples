@@ -151,7 +151,7 @@ TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by defaul
 
 Many recommendation models contain very large embedding tables. As a result, the model is often too large to fit onto a single device. This could be easily solved by training in a model-parallel way, using either the CPU or other GPUs as "memory donors". However, this approach is suboptimal as the "memory donor" devices' compute is not utilized. In this repository, we use the model-parallel approach for the bottom part of the model (Embedding Tables + Bottom MLP) while using a usual data parallel approach for the top part of the model (Dot Interaction + Top MLP). This way we can train models much larger than what would normally fit into a single GPU while at the same time making the training faster by using multiple GPUs. We call this approach hybrid-parallel.
 
-The transition from model-parallel to data-parallel in the middle of the neural net needs a specific multi-GPU communication pattern called [all-2-all](https://en.wikipedia.org/wiki/All-to-all_\(parallel_pattern\)) which is available in our [PyTorch 21.02-py3](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch/tags) NGC docker container. In the [original DLRM whitepaper](https://arxiv.org/abs/1906.00091) this has been also referred to as "butterfly shuffle". 
+The transition from model-parallel to data-parallel in the middle of the neural net needs a specific multi-GPU communication pattern called [all-2-all](https://en.wikipedia.org/wiki/All-to-all_\(parallel_pattern\)) which is available in our [PyTorch 21.04-py3](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch/tags) NGC docker container. In the [original DLRM whitepaper](https://arxiv.org/abs/1906.00091) this has been also referred to as "butterfly shuffle". 
 
 <p align="center">
   <img width="100%" src="./img/hybrid_parallel.png" />
@@ -184,7 +184,7 @@ The following section lists the requirements for training DLRM.
 
 This repository contains Dockerfile which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 - [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-- [PyTorch 21.02-py3](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch/tags) NGC container
+- [PyTorch 21.04-py3](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch/tags) NGC container
 - Supported GPUs:
     - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
     - [NVIDIA Turing architecture](https://www.nvidia.com/en-us/design-visualization/technologies/turing-architecture/)
@@ -616,9 +616,9 @@ Our results were obtained by running training scripts as described in the Quick 
 
 | GPUs    | Model size    | Batch size / GPU    | Accuracy (AUC) - TF32  | Accuracy (AUC) - mixed precision  |   Time to train - TF32 [minutes]  |  Time to train - mixed precision [minutes] | Time to train speedup (TF32 to mixed precision)        
 |----:|----|----|----:|----:|---:|---:|---:|
-| 8 | xlarge | 64k | 0.8026 | 0.8026 |  6.63 |  4.78 | 1.39 |
-| 8 |  large | 64k | 0.8027 | 0.8027 |  6.62 |  4.85 | 1.36 |
-| 1 |  small | 32k | 0.8036 | 0.8036 | 26.05 | 17.45 | 1.49 |
+| 8 | xlarge | 64k | 0.8026 | 0.8026 |  6.75 |  4.73 | 1.43 |
+| 8 |  large | 64k | 0.8027 | 0.8027 |  6.98 |  4.72 | 1.48 |
+| 1 |  small | 32k | 0.8036 | 0.8036 | 25.88 | 17.17 | 1.51 |
 
 
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 32GB)
@@ -629,8 +629,8 @@ Our results were obtained by running training scripts as described in the Quick 
 
 | GPUs    | Model size    | Batch size / GPU    | Accuracy (AUC) - FP32  | Accuracy (AUC) - mixed precision  |   Time to train - FP32  [minutes] |  Time to train - mixed precision  [minutes] | Time to train speedup (FP32 to mixed precision)        
 |----:|----|----|----:|----:|---:|---:|---:|
-| 8 | large | 64k | 0.8027 | 0.8027 | 43.13 | 21.16 | 2.03 |
-| 1 | small | 32k | 0.8035 | 0.8035 | 105.98 | 31.12 | 3.40 |
+| 8 | large | 64k | 0.8026 | 0.8026 | 25.05 | 9.87 | 2.54 |
+| 1 | small | 32k | 0.8036 | 0.8036 | 106.6 | 32.6 | 3.27 |
 
 
 ##### Training accuracy plots
@@ -664,7 +664,7 @@ All other parameters of training are default.
 Training of the model is stable for multiple configurations achieving the standard deviation of 10e-4. 
 The model achieves similar ROC AUC scores for A100 and V100, training precisions. 
 The DLRM model was trained for one epoch (roughly 4 billion samples, 128028 batches for single-GPU and 64014 for multi-GPU training), starting from 20 different initial random seeds for each setup.
-The training was performed in the pytorch:21.02-py3 NGC container with and without mixed precision enabled.
+The training was performed in the pytorch:21.04-py3 NGC container with and without mixed precision enabled.
 The provided charts and numbers consider single and 8 GPU training. After training, the models were evaluated on the test set. 
 The following plots compare distributions of ROC AUC on the test set. 
 In columns there is single vs 8 GPU training, in rows type of hardware: A100 and V100.
@@ -723,12 +723,12 @@ Distribution of AUC ROC for single precision training (TF32 for A100, FP32 for V
 
 | Supercomputer | Dataset | GPUs | mean AUC ROC for TF32 (DGX A100)/ FP32 (DGX-1,DGX-2) | std AUC ROC for TF32 (DGX A100)/ FP32 (DGX-1,DGX-2) |mean AUC ROC for AMP | std AUC ROC for AMP | KS test value: statistics, p-value |
 | ------------- | -----| ------- | ---------------------------------------------------- | ----------------------------------------------------|---------------------|-------------------- | -----------------------------------|
-DGX A100|FL2|8|0.80261|0.00008|0.80265|0.00008|0.30000 (0.33559)|
-DGX A100|FL3|8|0.80266|0.00007|0.80266|0.00006|0.10000 (0.99999)|
-DGX A100|FL15|1|0.80361|0.00004|0.80363|0.00005|0.20000 (0.83197)|
-DGX-2 / DGX-1|FL3|8|0.80266|0.00008|0.80266|0.00006|0.20000 (0.83197)|
-DGX-2 |FL3|16|0.80265|0.00006|0.80266|0.00005|0.15000 (0.98314)|
-DGX-2 / DGX-1|FL15|1|0.80360|0.00006|0.80362|0.00006|0.20000 (0.83197)|
+DGX A100|FL2|8|0.80262|0.00006|0.80262|0.00005|0.30000 (0.33559)|
+DGX A100|FL3|8|0.80266|0.00008|0.80265|0.00006|0.20000 (0.83197)|
+DGX A100|FL15|1|0.80360|0.00007|0.80359|0.00006|0.20000 (0.83197)|
+DGX-2 / DGX-1|FL3|8|0.80259|0.00009|0.80257|0.00008|0.20000 (0.83197)|
+DGX-2 / DGX-1|FL3|16|0.80262|0.00006|0.80261|0.00007|0.20000 (0.83197)|
+DGX-2 / DGX-1|FL15|1|0.80362|0.00009|0.80361|0.00006|0.25000 (0.57134)|
 
 Sample size was set to 20 experiments for each training setup.
 
@@ -758,9 +758,9 @@ in the DLRM Docker container on NVIDIA DGX A100 (8x A100 80GB) GPUs. Performance
 
 | GPUs   | Model size    | Batch size / GPU   | Throughput - TF32    | Throughput - mixed precision    | Throughput speedup (TF32 - mixed precision)      
 |----:|----|----|---:|---:|---:|
-| 8 | xlarge | 64k | 10,538,937 | 14,608,934 | 1.39 |
-| 8 |  large | 64k | 10,556,858 | 14,369,146 | 1.36 |
-| 1 |  small | 32k |  2,684,082 |  4,006,897 | 1.49 |
+| 8 | xlarge | 64k | 10,700,000 | 16,400,000 | 1.53 |
+| 8 |  large | 64k | 10,600,000 | 16,200,000 | 1.53 |
+| 1 |  small | 32k |  2,740,000 |  4,180,000 | 1.53 |
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -782,8 +782,8 @@ in the DLRM Docker container on NVIDIA DGX A100 (8x A100 40GB) GPUs. Performance
 
 | GPUs   | Model size    | Batch size / GPU   | Throughput - TF32    | Throughput - mixed precision    | Throughput speedup (TF32 - mixed precision)      
 |----:|----|----|---:|---:|---:|
-| 8 | large | 64k | 9,729,442 | 13,860,895 | 1.42 |
-| 1 | small | 32k | 2,489,746 |  3,859,449 | 1.55 |
+| 8 | large | 64k | 9,980,000 | 15,400,000 | 1.54 |
+| 1 | small | 32k | 2,530,000 |  3,970,000 | 1.57 |
 
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 32GB)
@@ -804,8 +804,8 @@ python -m torch.distributed.launch --no_python --use_env --nproc_per_node 8 \
 
 | GPUs   | Model size    | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)   |     
 |----:|----|----|---:|---:|---:|
-| 8 | large | 64k | 2,761,951 | 6,489,102 | 2.34 |
-| 1 | small | 32k |   639,906 | 2,125,239 | 3.32 |
+| 8 | large | 64k | 2,830,000 | 7,480,000 | 2.64 |
+| 1 | small | 32k |   667,000 | 2,200,000 | 3.30 |
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -827,9 +827,9 @@ python -m torch.distributed.launch --no_python --use_env --nproc_per_node [8/16]
 
 | GPUs   | Model size   | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)     
 |----:|----|---|---:|---:|---:|
-| 16 | large | 64k | 4,494,685 | 10,360,385 | 2.30 |
-| 8  | large | 64k | 3,202,701 |  8,394,967 | 2.62 |
-| 1  | small | 32k |   692,052 |  2,235,067 | 3.23 |
+| 16 | large | 64k | 4,690,000 | 11,100,000 | 2.37 |
+| 8  | large | 64k | 3,280,000 |  8,480,000 | 2.59 |
+| 1  | small | 32k |   713,000 |  2,330,000 | 3.27 |
 
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
@@ -863,7 +863,11 @@ March 2021
 - Added Adam as an optional optimizer for embedding and MLPs, for multi-GPU training
 - Improved README
 
+June 2021
+- Updated container version
+- Updated performance results
+
 ### Known issues
 
 - Adam performance is not optimized.  
-
+- For some seeds, the model's loss can become NaN due to aggressive scheduling rate policy.

@@ -19,7 +19,7 @@ import numpy as np
 import torch
 from absl import app, flags
 from apex import amp
-import pyprof
+import nvidia_dlprof_pytorch_nvtx
 import torch.cuda.profiler as profiler
 
 import dlrm.scripts.utils as utils
@@ -188,7 +188,7 @@ def main(argv):
     optimizer = torch.optim.SGD(model.parameters(), lr=scaled_lr)
 
     if FLAGS.mode == 'prof-train':
-        pyprof.init(enable_function_stack=True)
+        nvidia_dlprof_pytorch_nvtx.init(enable_function_stack=True)
 
     if FLAGS.amp and (FLAGS.mode == 'train' or FLAGS.mode == 'prof-train'):
         (model.top_model, model.bottom_model.mlp), optimizer = amp.initialize([model.top_model, model.bottom_model.mlp],
