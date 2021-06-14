@@ -18,7 +18,11 @@ import os
 import random
 import time
 
-import pyprof
+try:
+    import nvidia_dlprof_pytorch_nvtx as pyprof
+except ModuleNotFoundError:
+    import pyprof
+
 import torch
 import numpy as np
 import torch.cuda.profiler as profiler
