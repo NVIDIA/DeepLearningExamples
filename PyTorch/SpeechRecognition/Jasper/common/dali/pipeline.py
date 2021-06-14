@@ -14,6 +14,7 @@
 
 import nvidia.dali
 import nvidia.dali.ops as ops
+import nvidia.dali.ops.random as random
 import nvidia.dali.types as types
 import multiprocessing
 import numpy as np
@@ -103,14 +104,14 @@ class DaliPipeline(nvidia.dali.pipeline.Pipeline):
             self.speed_perturbation_coeffs = ops.ExternalSource(device="cpu", cycle=True,
                                                                 source=self._discrete_resample_coeffs_generator)
         elif resample_range is not None:
-            self.speed_perturbation_coeffs = ops.Uniform(device="cpu", range=resample_range)
+            self.speed_perturbation_coeffs = random.Uniform(device="cpu", range=resample_range)
         else:
             self.speed_perturbation_coeffs = None
 
         self.decode = ops.AudioDecoder(device="cpu", sample_rate=self.sample_rate if resample_range is None else None,
                                        dtype=types.FLOAT, downmix=True)
 
-        self.normal_distribution = ops.NormalDistribution(device=preprocessing_device)
+        self.normal_distribution = random.Normal(device=preprocessing_device)
 
         self.preemph = ops.PreemphasisFilter(device=preprocessing_device, preemph_coeff=preemph_coeff)
 
@@ -325,7 +326,7 @@ class DaliPipeline(nvidia.dali.pipeline.Pipeline):
         Generate resample coeffs from discrete set
         """
         yield np.random.choice([self.resample_range[0], 1.0, self.resample_range[1]],
-                               size=self.batch_size).astype('float32')
+                               size=self.max_batch_size).astype('float32')
 
     def _cutouts_generator(self):
         """
@@ -339,7 +340,7 @@ class DaliPipeline(nvidia.dali.pipeline.Pipeline):
             """
             return map(list, zip(*tuples))
 
-        [anchors, shapes] = tuples2list([self._generate_cutouts() for _ in range(self.batch_size)])
+        [anchors, shapes] = tuples2list([self._generate_cutouts() for _ in range(self.max_batch_size)])
         yield np.array(anchors, dtype=np.float32), np.array(shapes, dtype=np.float32)
 
     def define_graph(self):
