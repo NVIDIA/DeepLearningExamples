@@ -21,6 +21,7 @@ docker run --rm -d \
   -p 8002:8002 \
   --runtime=nvidia \
   -e NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES} \
+  -e ORT_TENSORRT_FP16_ENABLE=1 \
   -v ${MODEL_REPOSITORY_PATH}:${MODEL_REPOSITORY_PATH} \
   --shm-size=1g \
   --ulimit memlock=-1 \
