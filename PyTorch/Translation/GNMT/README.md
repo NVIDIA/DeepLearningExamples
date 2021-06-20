@@ -568,7 +568,7 @@ training setup:
                         maximum sequence length for training (including
                         special BOS and EOS tokens) (default: 50)
   --train-min-length TRAIN_MIN_LENGTH
-		minimum sequence length for training (including
+                        minimum sequence length for training (including
                         special BOS and EOS tokens) (default: 0)
   --train-loader-workers TRAIN_LOADER_WORKERS
                         number of workers for training data loading (default:

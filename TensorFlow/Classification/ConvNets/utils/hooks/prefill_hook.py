@@ -23,7 +23,7 @@ import tensorflow as tf
 __all__ = ['PrefillStagingAreasHook']
 
 
-class PrefillStagingAreasHook(tf.train.SessionRunHook):
+class PrefillStagingAreasHook(tf.estimator.SessionRunHook):
 
     def after_create_session(self, session, coord):
         # TODO: This assumes TF collections are ordered; is this safe?

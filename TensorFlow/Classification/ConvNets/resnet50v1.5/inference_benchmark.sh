@@ -22,12 +22,12 @@ function test_configuration() {
 }
 
 test_configuration "FP32 nodali noxla"
-test_configuration "FP32 nodali xla" "--use_xla"
-test_configuration "FP16 nodali noxla" "--use_tf_amp"
-test_configuration "FP16 nodali xla" "--use_tf_amp --use_xla"
+test_configuration "FP32 nodali xla" "--xla"
+test_configuration "FP16 nodali noxla" "--amp"
+test_configuration "FP16 nodali xla" "--amp --xla"
 
 if [ ! -z $DALI_DIR ]; then
-    test_configuration "FP16 dali xla" "--use_tf_amp --use_xla --use_dali --data_idx_dir ${DALI_DIR}"
+    test_configuration "FP16 dali xla" "--amp --xla --dali --data_idx_dir ${DALI_DIR}"
 fi
 
 cat $INFERENCE_BENCHMARK

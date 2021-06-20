@@ -22,7 +22,7 @@ def dense(
     units,
     use_bias=True,
     trainable=True,
-    kernel_initializer=tf.variance_scaling_initializer(),
+    kernel_initializer=tf.compat.v1.variance_scaling_initializer(),
     bias_initializer=tf.zeros_initializer()
 ):
 

@@ -1,3 +1,17 @@
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import operator
 import time
 
@@ -25,14 +39,16 @@ class LoggingCallback(Callback):
         self.step += 1
         if self.profile and self.step == self.warmup_steps:
             profiler.start()
-        if self.step >= self.warmup_steps:
+        if self.step > self.warmup_steps:
             self.timestamps.append(time.time())
 
     def on_train_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
-        self.do_step()
+        if trainer.current_epoch == 1:
+            self.do_step()
 
     def on_test_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
-        self.do_step()
+        if trainer.current_epoch == 1:
+            self.do_step()
 
     def process_performance_stats(self, deltas):
         def _round3(val):
@@ -63,4 +79,5 @@ class LoggingCallback(Callback):
         self.log()
 
     def on_test_end(self, trainer, pl_module):
-        self.log()
+        if trainer.current_epoch == 1:
+            self.log()

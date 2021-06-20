@@ -35,8 +35,10 @@ import time
 from collections import defaultdict, OrderedDict
 from contextlib import contextmanager
 
-import torch
 import numpy as np
+import nvidia_dlprof_pytorch_nvtx as pyprof
+import torch
+import torch.cuda.profiler as profiler
 import torch.distributed as dist
 from scipy.io.wavfile import write as write_wav
 from torch.autograd import Variable
@@ -48,6 +50,8 @@ from torch.utils.data.distributed import DistributedSampler
 import common.tb_dllogger as logger
 from apex import amp
 from apex.optimizers import FusedAdam, FusedLAMB
+from apex.multi_tensor_apply import multi_tensor_applier
+import amp_C
 
 import common
 import data_functions
@@ -65,6 +69,7 @@ def parse_args(parser):
                         help='Path to dataset')
     parser.add_argument('--log-file', type=str, default=None,
                         help='Path to a DLLogger log file')
+    parser.add_argument('--pyprof', action='store_true', help='Enable pyprof profiling')
 
     training = parser.add_argument_group('training setup')
     training.add_argument('--epochs', type=int, required=True,
@@ -283,6 +288,12 @@ def apply_ema_decay(model, ema_model, decay):
         v.copy_(decay * v + (1 - decay) * st[k])
 
 
+def apply_multi_tensor_ema(model_weight_list, ema_model_weight_list, decay, overflow_buf):
+    if not decay:
+        return
+    amp_C.multi_tensor_axpby(65536, overflow_buf, [ema_model_weight_list, model_weight_list, ema_model_weight_list], decay, 1-decay, -1)
+
+
 def main():
     parser = argparse.ArgumentParser(description='PyTorch FastPitch Training',
                                      allow_abbrev=False)
@@ -349,6 +360,9 @@ def main():
             model, device_ids=[args.local_rank], output_device=args.local_rank,
             find_unused_parameters=True)
 
+    if args.pyprof:
+        pyprof.init(enable_function_stack=True)
+
     start_epoch = [1]
     start_iter = [0]
 
@@ -374,10 +388,12 @@ def main():
         pitch_predictor_loss_scale=args.pitch_predictor_loss_scale)
 
     collate_fn = data_functions.get_collate_function('FastPitch')
-    trainset = data_functions.get_data_loader('FastPitch', args.dataset_path,
-                                              args.training_files, args)
-    valset = data_functions.get_data_loader('FastPitch', args.dataset_path,
-                                            args.validation_files, args)
+    trainset = data_functions.get_data_loader('FastPitch',
+                                              audiopaths_and_text=args.training_files,
+                                              **vars(args))
+    valset = data_functions.get_data_loader('FastPitch',
+                                            audiopaths_and_text=args.validation_files,
+                                            **vars(args))
     if distributed_run:
         train_sampler, shuffle = DistributedSampler(trainset), False
     else:
@@ -390,7 +406,16 @@ def main():
 
     batch_to_gpu = data_functions.get_batch_to_gpu('FastPitch')
 
+    if args.ema_decay:
+        ema_model_weight_list, model_weight_list, overflow_buf_for_ema = init_multi_tensor_ema(model, ema_model)
+    else:
+        ema_model_weight_list, model_weight_list, overflow_buf_for_ema = None, None, None
+
     model.train()
+
+    if args.pyprof:
+        torch.autograd.profiler.emit_nvtx().__enter__()
+        profiler.start()
 
     torch.cuda.synchronize()
     for epoch in range(start_epoch, args.epochs + 1):
@@ -465,7 +490,7 @@ def main():
                         model.parameters(), args.grad_clip_thresh)
 
                 optimizer.step()
-                apply_ema_decay(model, ema_model, args.ema_decay)
+                apply_multi_tensor_ema(model_weight_list, ema_model_weight_list, args.ema_decay, overflow_buf_for_ema)
 
                 iter_time = time.perf_counter() - iter_start_time
                 iter_mel_loss = iter_meta['mel_loss'].item()
@@ -522,6 +547,10 @@ def main():
         logger.flush()
 
     # Finished training
+    if args.pyprof:
+        profiler.stop()
+        torch.autograd.profiler.emit_nvtx().__exit__(None, None, None)
+
     logger.log((),
                tb_total_steps=None,
                subset='train_avg',

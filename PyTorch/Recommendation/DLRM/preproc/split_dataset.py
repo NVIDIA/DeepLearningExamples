@@ -1,4 +1,4 @@
-# Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021 NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -89,15 +89,15 @@ def split_binary_file(
 def split_dataset(dataset_dir: str, output_dir: str, batch_size: int, numerical_features: int):
     categorical_sizes_file = os.path.join(dataset_dir, "model_size.json")
     with open(categorical_sizes_file) as f:
-        categorical_sizes = list(json.load(f).values())
+        categorical_sizes = [int(v) for v in json.load(f).values()]
 
     train_file = os.path.join(dataset_dir, "train_data.bin")
     test_file = os.path.join(dataset_dir, "test_data.bin")
-    val_file = os.path.join(dataset_dir, "val_data.bin")
+    val_file = os.path.join(dataset_dir, "validation_data.bin")
 
     target_train = os.path.join(output_dir, "train")
     target_test = os.path.join(output_dir, "test")
-    target_val = os.path.join(output_dir, "val")
+    target_val = os.path.join(output_dir, "validation")
 
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(target_train, exist_ok=True)

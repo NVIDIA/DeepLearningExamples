@@ -493,7 +493,7 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 ##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
 
 Our results were obtained by running the scripts `./scripts/benchmarking/UNet_evalbench{_AMP}.sh`
-evaluation script in the `20.06-tf1-py3` NGC container on NVIDIA DGX-1 (8x V100 16GB) GPUs.
+evaluation script in the `20.06-tf1-py3` NGC container on NVIDIA DGX-1 (1x V100 16GB) GPUs.
 
 FP16
 

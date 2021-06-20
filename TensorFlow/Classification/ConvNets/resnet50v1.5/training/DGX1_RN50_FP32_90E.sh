@@ -25,7 +25,7 @@ fi
 
 mpiexec --allow-run-as-root ${BIND_TO_SOCKET} -np 8 python3 main.py --arch=resnet50 \
     --mode=train_and_evaluate --iter_unit=epoch --num_iter=90 \
-    --batch_size=128 --warmup_steps=100 --use_cosine --label_smoothing 0.1 \
+    --batch_size=128 --warmup_steps=100 --cosine_lr --label_smoothing 0.1 \
     --lr_init=0.256 --lr_warmup_epochs=8 --momentum=0.875 --weight_decay=3.0517578125e-05 \
     --data_dir=${DATA_DIR}/tfrecords --data_idx_dir=${DATA_DIR}/dali_idx \
     --results_dir=${WORKSPACE}/results --weight_init=fan_in ${OTHER}

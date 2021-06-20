@@ -27,16 +27,16 @@ __all__ = ['preprocess_image_record', 'preprocess_image_file']
 
 def _deserialize_image_record(record):
     feature_map = {
-        'image/encoded': tf.FixedLenFeature([], tf.string, ''),
-        'image/class/label': tf.FixedLenFeature([], tf.int64, -1),
-        'image/class/text': tf.FixedLenFeature([], tf.string, ''),
-        'image/object/bbox/xmin': tf.VarLenFeature(dtype=tf.float32),
-        'image/object/bbox/ymin': tf.VarLenFeature(dtype=tf.float32),
-        'image/object/bbox/xmax': tf.VarLenFeature(dtype=tf.float32),
-        'image/object/bbox/ymax': tf.VarLenFeature(dtype=tf.float32)
+        'image/encoded': tf.io.FixedLenFeature([], tf.string, ''),
+        'image/class/label': tf.io.FixedLenFeature([], tf.int64, -1),
+        'image/class/text': tf.io.FixedLenFeature([], tf.string, ''),
+        'image/object/bbox/xmin': tf.io.VarLenFeature(dtype=tf.float32),
+        'image/object/bbox/ymin': tf.io.VarLenFeature(dtype=tf.float32),
+        'image/object/bbox/xmax': tf.io.VarLenFeature(dtype=tf.float32),
+        'image/object/bbox/ymax': tf.io.VarLenFeature(dtype=tf.float32)
     }
     with tf.name_scope('deserialize_image_record'):
-        obj = tf.parse_single_example(record, feature_map)
+        obj = tf.io.parse_single_example(record, feature_map)
         imgdata = obj['image/encoded']
         label = tf.cast(obj['image/class/label'], tf.int32)
         bbox = tf.stack([obj['image/object/bbox/%s' % x].values for x in ['ymin', 'xmin', 'ymax', 'xmax']])
@@ -129,7 +129,7 @@ def _resize_image(image, height, width):
     resized_image: A 3-D tensor containing the resized image. The first two
       dimensions have the shape [height, width].
     """
-    return tf.image.resize_images(image, [height, width], method=tf.image.ResizeMethod.BILINEAR, align_corners=False)
+    return tf.image.resize(image, [height, width], method=tf.image.ResizeMethod.BILINEAR, preserve_aspect_ratio=False)
 
 
 def preprocess_image_record(record, height, width, num_channels, is_training=False):

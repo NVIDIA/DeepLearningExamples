@@ -1,0 +1,32 @@
+name: "feature-extractor-ts-trace"
+platform: "pytorch_libtorch"
+default_model_filename: "model.pt"
+max_batch_size: 64
+
+input [
+    {
+	name: "input__0"
+	data_type: TYPE_FP32
+	dims: [ -1 ]
+    },
+    {
+	name: "input__1"
+	data_type: TYPE_INT32
+	dims: [ 1 ]
+	reshape { shape: [] }
+    }
+]
+
+output [
+    {
+	name: "output__0"
+	data_type: TYPE_FP32
+	dims: [64, -1]
+    },
+    {	
+	name: "output__1"
+	data_type: TYPE_INT32
+	dims: [ 1 ]
+	reshape: { shape: [] }
+    }
+]

@@ -1,4 +1,4 @@
-# Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021 NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ class SmoothedValue(object):
     @property
     def median(self):
         d = torch.tensor(list(self.deque))
-        return d.median().item()
+        return d.median().item() if len(self.deque) else 0
 
     @property
     def avg(self):
@@ -68,15 +68,15 @@ class SmoothedValue(object):
 
     @property
     def global_avg(self):
-        return self.total / self.count
+        return self.total / self.count if self.count else 0
 
     @property
     def max(self):
-        return max(self.deque)
+        return max(self.deque) if len(self.deque) else 0
 
     @property
     def value(self):
-        return self.deque[-1]
+        return self.deque[-1] if len(self.deque) else None
 
     def __str__(self):
         return self.fmt.format(

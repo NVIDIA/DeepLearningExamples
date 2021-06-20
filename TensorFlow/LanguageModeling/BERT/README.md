@@ -269,7 +269,7 @@ The pretraining dataset is 170GB+ and takes 15+ hours to download. The BookCorpu
 Users are welcome to download BookCorpus from other sources to match our accuracy, or repeatedly try our script until the required number of files are downloaded by running the following:
 `bash scripts/data_download.sh wiki_books`
 
-Note: Not using BookCorpus can potentially change final accuracy on a few downstream tasks.
+Note: Ensure a complete Wikipedia download. If in any case, the download breaks, remove the output file `wikicorpus_en.xml.bz2`  and start again. If a partially downloaded file exists, the script assumes successful download which causes the extraction to fail. Not using BookCorpus can potentially change final accuracy on a few downstream tasks.
 
 4. Download the pretrained models from NGC.
 
@@ -939,8 +939,8 @@ Our results were obtained by running the `scripts/run_squad.sh` training script 
 | **GPUs** | **Batch size / GPU: mixed precision, TF32** | **Throughput - mixed precision** | **Throughput - TF32** | **Throughput speedup (TF32 to mixed precision)** | **Weak scaling - TF32** | **Weak scaling - mixed precision** |
 |----------|---------------------------------------------|----------------------------------|-----------------------|--------------------------------------------------|-------------------------|------------------------------------|
 |        1 | 32, 16                                      |                           102.26 |                61.364 |                                             1.67 |                    1.00 |                               1.00 |
-|        4 | 32, 16                                      |                          366.353 |               223.187 |                                             1.64 |                    3.58 |                               3.64 |
-|        8 | 32, 16                                      |                          518.898 |                440.47 |                                             1.18 |                    5.07 |                               7.18 |
+|        4 | 32, 16                                      |                          366.353 |               223.187 |                                             1.64 |                    3.64 |                               3.58 |
+|        8 | 32, 16                                      |                          767.071 |                440.47 |                                             1.74 |                    7.18 |                               7.50 |
 
 Note: The respective values for TF32 runs that use a batch size of 32 are not available due to out of memory errors that arise.
 
@@ -1090,7 +1090,7 @@ Our results were obtained by running the `scripts/finetune_inference_benchmark.s
 
 ###### Fine-tuning inference performance for SQuAD v1.1 on DGX A100  40GB
 
-Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 20.06-py3 NGC container on NVIDIA DGX A100 with 1x V100 40GB GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
+Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 20.06-py3 NGC container on NVIDIA DGX A100 with 1x A100 40GB GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1024 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 
 | Model | Sequence Length | Batch Size | Precision | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-------|-----------------|------------|-----------|------------------------------|---------------------|-----------------|-----------------|-----------------|

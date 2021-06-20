@@ -48,17 +48,15 @@ This repository provides a script and recipe to train the FastPitch model to ach
 
 ## Model overview
 
-[FastPitch](https://arxiv.org/abs/2006.06873) is one of two major components in a neural, text-to-speech (TTS) system:
+[FastPitch](https://arxiv.org/abs/2006.06873) is a fully-parallel transformer architecture with prosody control over pitch and individual phoneme duration.
+It is one of two major components in a neural, text-to-speech (TTS) system:
 
 * a mel-spectrogram generator such as [FastPitch](https://arxiv.org/abs/2006.06873) or [Tacotron 2](https://arxiv.org/abs/1712.05884), and
 * a waveform synthesizer such as [WaveGlow](https://arxiv.org/abs/1811.00002) (see [NVIDIA example code](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2)).
 
 Such two-component TTS system is able to synthesize natural sounding speech from raw transcripts.
 
-The FastPitch model generates mel-spectrograms and predicts a pitch contour from raw input text. It allows to exert additional control over the synthesized utterances, such as:
-* modify the pitch contour to control the prosody,
-* increase or decrease the fundamental frequency in a naturally sounding way, that preserves the perceived identity of the speaker,
-* alter the pace of speech.
+The FastPitch model generates mel-spectrograms and predicts a pitch contour from raw input text.
 Some of the capabilities of FastPitch are presented on the website with [samples](https://fastpitch.github.io/).
 
 Speech synthesized with FastPitch has state-of-the-art quality, and does not suffer from missing/repeating phrases like Tacotron2 does.
@@ -662,7 +660,7 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 The following table shows the expected training time for convergence for 1500 epochs:
 
-|Number of GPUs|Batch size per GPU|Time to train with mixed precision (Hrs)|Time to train with TF32 (Hrs)|Speed-up with mixed precision|
+|Number of GPUs|Batch size per GPU|Time to train with mixed precision (Hrs)|Time to train with FP32 (Hrs)|Speed-up with mixed precision|
 |---:|-----------------:|-----:|-----:|-----:|
 |  1 | 64@AMP,  32@FP32 | 27.6 | 72.7 | 2.63 |
 |  4 | 64@AMP,  32@FP32 |  8.2 | 20.3 | 2.48 |
@@ -723,6 +721,8 @@ The input utterance has 128 characters, synthesized audio has 8.05 s.
 |    8 | FP32   |     9.09  |   9.11  |   9.114 |   9.122 |      153,434 |         - |  0.87 |
 
 ## Release notes
+
+We're constantly refining and improving our performance on AI and HPC workloads even on the same hardware with frequent updates to our software stack. For our latest performance data please refer to these pages for AI and HPC benchmarks.
 
 ### Changelog
 

@@ -1,3 +1,17 @@
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import itertools
 import os
 
@@ -5,45 +19,53 @@ import numpy as np
 import nvidia.dali.fn as fn
 import nvidia.dali.math as math
 import nvidia.dali.ops as ops
-import nvidia.dali.tfrecord as tfrec
 import nvidia.dali.types as types
 from nvidia.dali.pipeline import Pipeline
 from nvidia.dali.plugin.pytorch import DALIGenericIterator
 
 
-class TFRecordTrain(Pipeline):
+def get_numpy_reader(files, shard_id, num_shards, seed, shuffle):
+    return ops.NumpyReader(
+        seed=seed,
+        files=files,
+        device="cpu",
+        read_ahead=True,
+        shard_id=shard_id,
+        pad_last_batch=True,
+        num_shards=num_shards,
+        dont_use_mmap=True,
+        shuffle_after_epoch=shuffle,
+    )
+
+
+class TrainPipeline(Pipeline):
     def __init__(self, batch_size, num_threads, device_id, **kwargs):
-        super(TFRecordTrain, self).__init__(batch_size, num_threads, device_id)
+        super(TrainPipeline, self).__init__(batch_size, num_threads, device_id)
         self.dim = kwargs["dim"]
-        self.seed = kwargs["seed"]
         self.oversampling = kwargs["oversampling"]
-        self.input = ops.TFRecordReader(
-            path=kwargs["tfrecords"],
-            index_path=kwargs["tfrecords_idx"],
-            features={
-                "X_shape": tfrec.FixedLenFeature([self.dim + 1], tfrec.int64, 0),
-                "Y_shape": tfrec.FixedLenFeature([self.dim + 1], tfrec.int64, 0),
-                "X": tfrec.VarLenFeature([], tfrec.float32, 0.0),
-                "Y": tfrec.FixedLenFeature([], tfrec.string, ""),
-                "fname": tfrec.FixedLenFeature([], tfrec.string, ""),
-            },
+        self.input_x = get_numpy_reader(
             num_shards=kwargs["gpus"],
+            files=kwargs["imgs"],
+            seed=kwargs["seed"],
             shard_id=device_id,
-            random_shuffle=True,
-            pad_last_batch=True,
-            read_ahead=True,
-            seed=self.seed,
+            shuffle=True,
+        )
+        self.input_y = get_numpy_reader(
+            num_shards=kwargs["gpus"],
+            files=kwargs["lbls"],
+            seed=kwargs["seed"],
+            shard_id=device_id,
+            shuffle=True,
         )
         self.patch_size = kwargs["patch_size"]
+        if self.dim == 2:
+            self.patch_size = [kwargs["batch_size_2d"]] + self.patch_size
         self.crop_shape = types.Constant(np.array(self.patch_size), dtype=types.INT64)
         self.crop_shape_float = types.Constant(np.array(self.patch_size), dtype=types.FLOAT)
-        self.layout = "CDHW" if self.dim == 3 else "CHW"
-        self.axis_name = "DHW" if self.dim == 3 else "HW"
 
-    def load_data(self, features):
-        img = fn.reshape(features["X"], shape=features["X_shape"], layout=self.layout)
-        lbl = fn.reshape(features["Y"], shape=features["Y_shape"], layout=self.layout)
-        lbl = fn.reinterpret(lbl, dtype=types.DALIDataType.UINT8)
+    def load_data(self):
+        img, lbl = self.input_x(name="ReaderX"), self.input_y(name="ReaderY")
+        img, lbl = fn.reshape(img, layout="CDHW"), fn.reshape(lbl, layout="CDHW")
         return img, lbl
 
     def random_augmentation(self, probability, augmented, original):
@@ -52,17 +74,17 @@ class TFRecordTrain(Pipeline):
         return condition * augmented + neg_condition * original
 
     @staticmethod
-    def slice_fn(img, start_idx, length):
-        return fn.slice(img, start_idx, length, axes=[0])
+    def slice_fn(img):
+        return fn.slice(img, 1, 3, axes=[0])
 
     def crop_fn(self, img, lbl):
         center = fn.segmentation.random_mask_pixel(lbl, foreground=fn.coin_flip(probability=self.oversampling))
-        crop_anchor = self.slice_fn(center, 1, self.dim) - self.crop_shape // 2
+        crop_anchor = self.slice_fn(center) - self.crop_shape // 2
         adjusted_anchor = math.max(0, crop_anchor)
-        max_anchor = self.slice_fn(fn.shapes(lbl), 1, self.dim) - self.crop_shape
+        max_anchor = self.slice_fn(fn.shapes(lbl)) - self.crop_shape
         crop_anchor = math.min(adjusted_anchor, max_anchor)
-        img = fn.slice(img.gpu(), crop_anchor, self.crop_shape, axis_names=self.axis_name, out_of_bounds_policy="pad")
-        lbl = fn.slice(lbl.gpu(), crop_anchor, self.crop_shape, axis_names=self.axis_name, out_of_bounds_policy="pad")
+        img = fn.slice(img.gpu(), crop_anchor, self.crop_shape, axis_names="DHW", out_of_bounds_policy="pad")
+        lbl = fn.slice(lbl.gpu(), crop_anchor, self.crop_shape, axis_names="DHW", out_of_bounds_policy="pad")
         return img, lbl
 
     def zoom_fn(self, img, lbl):
@@ -73,7 +95,7 @@ class TFRecordTrain(Pipeline):
         return img, lbl
 
     def noise_fn(self, img):
-        img_noised = img + fn.normal_distribution(img, stddev=fn.uniform(range=(0.0, 0.33)))
+        img_noised = img + fn.random.normal(img, stddev=fn.uniform(range=(0.0, 0.33)))
         return self.random_augmentation(0.15, img_noised, img)
 
     def blur_fn(self, img):
@@ -96,111 +118,144 @@ class TFRecordTrain(Pipeline):
             kwargs.update({"depthwise": fn.coin_flip(probability=0.33)})
         return fn.flip(img, **kwargs), fn.flip(lbl, **kwargs)
 
+    def transpose_fn(self, img, lbl):
+        img, lbl = fn.transpose(img, perm=(1, 0, 2, 3)), fn.transpose(lbl, perm=(1, 0, 2, 3))
+        return img, lbl
+
     def define_graph(self):
-        features = self.input(name="Reader")
-        img, lbl = self.load_data(features)
+        img, lbl = self.load_data()
         img, lbl = self.crop_fn(img, lbl)
         img, lbl = self.zoom_fn(img, lbl)
+        img, lbl = self.flips_fn(img, lbl)
         img = self.noise_fn(img)
         img = self.blur_fn(img)
         img = self.brightness_fn(img)
         img = self.contrast_fn(img)
-        img, lbl = self.flips_fn(img, lbl)
+        if self.dim == 2:
+            img, lbl = self.transpose_fn(img, lbl)
         return img, lbl
 
 
-class TFRecordEval(Pipeline):
+class EvalPipeline(Pipeline):
     def __init__(self, batch_size, num_threads, device_id, **kwargs):
-        super(TFRecordEval, self).__init__(batch_size, num_threads, device_id)
-        self.input = ops.TFRecordReader(
-            path=kwargs["tfrecords"],
-            index_path=kwargs["tfrecords_idx"],
-            features={
-                "X_shape": tfrec.FixedLenFeature([4], tfrec.int64, 0),
-                "Y_shape": tfrec.FixedLenFeature([4], tfrec.int64, 0),
-                "X": tfrec.VarLenFeature([], tfrec.float32, 0.0),
-                "Y": tfrec.FixedLenFeature([], tfrec.string, ""),
-                "fname": tfrec.FixedLenFeature([], tfrec.string, ""),
-            },
+        super(EvalPipeline, self).__init__(batch_size, num_threads, device_id)
+        self.input_x = get_numpy_reader(
+            files=kwargs["imgs"],
             shard_id=device_id,
             num_shards=kwargs["gpus"],
-            read_ahead=True,
-            random_shuffle=False,
-            pad_last_batch=True,
+            seed=kwargs["seed"],
+            shuffle=False,
+        )
+        self.input_y = get_numpy_reader(
+            files=kwargs["lbls"],
+            shard_id=device_id,
+            num_shards=kwargs["gpus"],
+            seed=kwargs["seed"],
+            shuffle=False,
         )
 
-    def load_data(self, features):
-        img = fn.reshape(features["X"].gpu(), shape=features["X_shape"], layout="CDHW")
-        lbl = fn.reshape(features["Y"].gpu(), shape=features["Y_shape"], layout="CDHW")
-        lbl = fn.reinterpret(lbl, dtype=types.DALIDataType.UINT8)
+    def define_graph(self):
+        img, lbl = self.input_x(name="ReaderX").gpu(), self.input_y(name="ReaderY").gpu()
+        img, lbl = fn.reshape(img, layout="CDHW"), fn.reshape(lbl, layout="CDHW")
         return img, lbl
 
-    def define_graph(self):
-        features = self.input(name="Reader")
-        img, lbl = self.load_data(features)
-        return img, lbl, features["fname"]
 
-
-class TFRecordTest(Pipeline):
+class BermudaPipeline(Pipeline):
     def __init__(self, batch_size, num_threads, device_id, **kwargs):
-        super(TFRecordTest, self).__init__(batch_size, num_threads, device_id)
-        self.input = ops.TFRecordReader(
-            path=kwargs["tfrecords"],
-            index_path=kwargs["tfrecords_idx"],
-            features={
-                "X_shape": tfrec.FixedLenFeature([4], tfrec.int64, 0),
-                "X": tfrec.VarLenFeature([], tfrec.float32, 0.0),
-                "fname": tfrec.FixedLenFeature([], tfrec.string, ""),
-            },
+        super(BermudaPipeline, self).__init__(batch_size, num_threads, device_id)
+        self.input_x = get_numpy_reader(
+            files=kwargs["imgs"],
             shard_id=device_id,
             num_shards=kwargs["gpus"],
-            read_ahead=True,
-            random_shuffle=False,
-            pad_last_batch=True,
+            seed=kwargs["seed"],
+            shuffle=False,
         )
-
-    def define_graph(self):
-        features = self.input(name="Reader")
-        img = fn.reshape(features["X"].gpu(), shape=features["X_shape"], layout="CDHW")
-        return img, features["fname"]
-
-
-class TFRecordBenchmark(Pipeline):
-    def __init__(self, batch_size, num_threads, device_id, **kwargs):
-        super(TFRecordBenchmark, self).__init__(batch_size, num_threads, device_id)
-        self.dim = kwargs["dim"]
-        self.input = ops.TFRecordReader(
-            path=kwargs["tfrecords"],
-            index_path=kwargs["tfrecords_idx"],
-            features={
-                "X_shape": tfrec.FixedLenFeature([self.dim + 1], tfrec.int64, 0),
-                "Y_shape": tfrec.FixedLenFeature([self.dim + 1], tfrec.int64, 0),
-                "X": tfrec.VarLenFeature([], tfrec.float32, 0.0),
-                "Y": tfrec.FixedLenFeature([], tfrec.string, ""),
-                "fname": tfrec.FixedLenFeature([], tfrec.string, ""),
-            },
+        self.input_y = get_numpy_reader(
+            files=kwargs["lbls"],
             shard_id=device_id,
             num_shards=kwargs["gpus"],
-            read_ahead=True,
+            seed=kwargs["seed"],
+            shuffle=False,
         )
         self.patch_size = kwargs["patch_size"]
-        self.layout = "CDHW" if self.dim == 3 else "CHW"
 
-    def load_data(self, features):
-        img = fn.reshape(features["X"].gpu(), shape=features["X_shape"], layout=self.layout)
-        lbl = fn.reshape(features["Y"].gpu(), shape=features["Y_shape"], layout=self.layout)
-        lbl = fn.reinterpret(lbl, dtype=types.DALIDataType.UINT8)
+    def crop_fn(self, img, lbl):
+        img = fn.crop(img, crop=self.patch_size, out_of_bounds_policy="pad")
+        lbl = fn.crop(lbl, crop=self.patch_size, out_of_bounds_policy="pad")
+        return img, lbl
+
+    def define_graph(self):
+        img, lbl = self.input_x(name="ReaderX"), self.input_y(name="ReaderY")
+        img, lbl = fn.reshape(img, layout="CDHW"), fn.reshape(lbl, layout="CDHW")
+        img, lbl = self.crop_fn(img, lbl)
+        return img, lbl
+
+
+class TestPipeline(Pipeline):
+    def __init__(self, batch_size, num_threads, device_id, **kwargs):
+        super(TestPipeline, self).__init__(batch_size, num_threads, device_id)
+        self.input_x = get_numpy_reader(
+            files=kwargs["imgs"],
+            shard_id=device_id,
+            num_shards=kwargs["gpus"],
+            seed=kwargs["seed"],
+            shuffle=False,
+        )
+        self.input_meta = get_numpy_reader(
+            files=kwargs["meta"],
+            shard_id=device_id,
+            num_shards=kwargs["gpus"],
+            seed=kwargs["seed"],
+            shuffle=False,
+        )
+
+    def define_graph(self):
+        img, meta = self.input_x(name="ReaderX").gpu(), self.input_meta(name="ReaderY").gpu()
+        img = fn.reshape(img, layout="CDHW")
+        return img, meta
+
+
+class BenchmarkPipeline(Pipeline):
+    def __init__(self, batch_size, num_threads, device_id, **kwargs):
+        super(BenchmarkPipeline, self).__init__(batch_size, num_threads, device_id)
+        self.input_x = get_numpy_reader(
+            files=kwargs["imgs"],
+            shard_id=device_id,
+            seed=kwargs["seed"],
+            num_shards=kwargs["gpus"],
+            shuffle=False,
+        )
+        self.input_y = get_numpy_reader(
+            files=kwargs["lbls"],
+            shard_id=device_id,
+            num_shards=kwargs["gpus"],
+            seed=kwargs["seed"],
+            shuffle=False,
+        )
+        self.dim = kwargs["dim"]
+        self.patch_size = kwargs["patch_size"]
+        if self.dim == 2:
+            self.patch_size = [kwargs["batch_size_2d"]] + self.patch_size
+
+    def load_data(self):
+        img, lbl = self.input_x(name="ReaderX").gpu(), self.input_y(name="ReaderY").gpu()
+        img, lbl = fn.reshape(img, layout="CDHW"), fn.reshape(lbl, layout="CDHW")
+        return img, lbl
+
+    def transpose_fn(self, img, lbl):
+        img, lbl = fn.transpose(img, perm=(1, 0, 2, 3)), fn.transpose(lbl, perm=(1, 0, 2, 3))
         return img, lbl
 
     def crop_fn(self, img, lbl):
-        img = fn.crop(img, crop=self.patch_size)
-        lbl = fn.crop(lbl, crop=self.patch_size)
+        img = fn.crop(img, crop=self.patch_size, out_of_bounds_policy="pad")
+        lbl = fn.crop(lbl, crop=self.patch_size, out_of_bounds_policy="pad")
         return img, lbl
 
     def define_graph(self):
-        features = self.input(name="Reader")
-        img, lbl = self.load_data(features)
+        img, lbl = self.load_data()
         img, lbl = self.crop_fn(img, lbl)
+        if self.dim == 2:
+            img, lbl = self.transpose_fn(img, lbl)
         return img, lbl
 
 
@@ -214,39 +269,54 @@ class LightningWrapper(DALIGenericIterator):
         return out
 
 
-def fetch_dali_loader(tfrecords, idx_files, batch_size, mode, **kwargs):
-    assert len(tfrecords) > 0, "Got empty tfrecord list"
-    assert len(idx_files) == len(tfrecords), f"Got {len(idx_files)} index files but {len(tfrecords)} tfrecords"
+def fetch_dali_loader(imgs, lbls, batch_size, mode, **kwargs):
+    assert len(imgs) > 0, "Got empty list of images"
+    if lbls is not None:
+        assert len(imgs) == len(lbls), f"Got {len(imgs)} images but {len(lbls)} lables"
 
-    if kwargs["benchmark"]:
-        tfrecords = list(itertools.chain(*(20 * [tfrecords])))
-        idx_files = list(itertools.chain(*(20 * [idx_files])))
+    if kwargs["benchmark"]:  # Just to make sure the number of examples is large enough for benchmark run.
+        nbs = kwargs["test_batches"] if mode == "test" else kwargs["train_batches"]
+        if kwargs["dim"] == 3:
+            nbs *= batch_size
+        imgs = list(itertools.chain(*(100 * [imgs])))[: nbs * kwargs["gpus"]]
+        lbls = list(itertools.chain(*(100 * [lbls])))[: nbs * kwargs["gpus"]]
 
     pipe_kwargs = {
-        "tfrecords": tfrecords,
-        "tfrecords_idx": idx_files,
+        "imgs": imgs,
+        "lbls": lbls,
+        "dim": kwargs["dim"],
         "gpus": kwargs["gpus"],
         "seed": kwargs["seed"],
+        "meta": kwargs["meta"],
         "patch_size": kwargs["patch_size"],
-        "dim": kwargs["dim"],
         "oversampling": kwargs["oversampling"],
     }
 
-    if kwargs["benchmark"] and mode == "eval":
-        pipeline = TFRecordBenchmark
+    if kwargs["benchmark"]:
+        pipeline = BenchmarkPipeline
         output_map = ["image", "label"]
         dynamic_shape = False
-    elif mode == "training":
-        pipeline = TFRecordTrain
+        if kwargs["dim"] == 2:
+            pipe_kwargs.update({"batch_size_2d": batch_size})
+            batch_size = 1
+    elif mode == "train":
+        pipeline = TrainPipeline
         output_map = ["image", "label"]
         dynamic_shape = False
+        if kwargs["dim"] == 2:
+            pipe_kwargs.update({"batch_size_2d": batch_size // kwargs["nvol"]})
+            batch_size = kwargs["nvol"]
     elif mode == "eval":
-        pipeline = TFRecordEval
-        output_map = ["image", "label", "fname"]
+        pipeline = EvalPipeline
+        output_map = ["image", "label"]
         dynamic_shape = True
+    elif mode == "bermuda":
+        pipeline = BermudaPipeline
+        output_map = ["image", "label"]
+        dynamic_shape = False
     else:
-        pipeline = TFRecordTest
-        output_map = ["image", "fname"]
+        pipeline = TestPipeline
+        output_map = ["image", "meta"]
         dynamic_shape = True
 
     device_id = int(os.getenv("LOCAL_RANK", "0"))
@@ -254,7 +324,7 @@ def fetch_dali_loader(tfrecords, idx_files, batch_size, mode, **kwargs):
     return LightningWrapper(
         pipe,
         auto_reset=True,
-        reader_name="Reader",
+        reader_name="ReaderX",
         output_map=output_map,
         dynamic_shape=dynamic_shape,
     )

@@ -1,4 +1,0 @@
-[submodule "external/triton-inference-server"]
-	path = external/triton-inference-server
-	url = https://github.com/NVIDIA/triton-inference-server
-	branch = r19.12

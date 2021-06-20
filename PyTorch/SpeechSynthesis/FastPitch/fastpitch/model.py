@@ -28,6 +28,7 @@
 import torch
 from torch import nn as nn
 from torch.nn.utils.rnn import pad_sequence
+import torch.nn.functional as F
 
 from common.layers import ConvReLUNorm
 from common.utils import mask_from_lens
@@ -36,12 +37,21 @@ from fastpitch.transformer import FFTransformer
 
 def regulate_len(durations, enc_out, pace=1.0, mel_max_len=None):
     """If target=None, then predicted durations are applied"""
-    reps = torch.round(durations.float() / pace).long()
+    dtype = enc_out.dtype
+    reps = durations.float() / pace
+    reps = (reps + 0.5).long()
     dec_lens = reps.sum(dim=1)
 
-    enc_rep = pad_sequence([torch.repeat_interleave(o, r, dim=0)
-                            for o, r in zip(enc_out, reps)],
-                           batch_first=True)
+    max_len = dec_lens.max()
+    reps_cumsum = torch.cumsum(F.pad(reps, (1, 0, 0, 0), value=0.0), dim=1)[:, None, :]
+    reps_cumsum = reps_cumsum.to(dtype)
+
+    range_ = torch.arange(max_len).to(enc_out.device)[None, :, None]
+    mult = ((reps_cumsum[:, :, :-1] <= range_) &
+            (reps_cumsum[:, :, 1:] > range_))
+    mult = mult.to(dtype)
+    enc_rep = torch.matmul(mult, enc_out)
+
     if mel_max_len:
         enc_rep = enc_rep[:, :mel_max_len]
         dec_lens = torch.clamp_max(dec_lens, mel_max_len)

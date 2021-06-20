@@ -244,16 +244,16 @@ For example, to train on DGX-1 for 90 epochs using AMP, run:
 Additionally, features like DALI data preprocessing or TensorFlow XLA can be enabled with
 following arguments when running those scripts:
 
-`bash ./resnet50v1.5/training/DGX1_RN50_AMP_90E.sh /path/to/result /data --use_xla --use_dali`
+`bash ./resnet50v1.5/training/DGX1_RN50_AMP_90E.sh /path/to/result /data --xla --dali`
 
 7. Start validation/evaluation.
 To evaluate the validation dataset located in `/data/tfrecords`, run `main.py` with
 `--mode=evaluate`. For example:
 
 `python main.py --mode=evaluate --data_dir=/data/tfrecords --batch_size <batch size> --model_dir
-<model location> --results_dir <output location> [--use_xla] [--use_tf_amp]`
+<model location> --results_dir <output location> [--xla] [--amp]`
 
-The optional `--use_xla` and `--use_tf_amp` flags control XLA and AMP during evaluation. 
+The optional `--xla` and `--amp` flags control XLA and AMP during evaluation. 
 
 ## Advanced
 
@@ -292,99 +292,116 @@ The `runtime/` directory contains the following module that define the mechanics
 The script for training and evaluating the ResNet-50 v1.5 model has a variety of parameters that control these processes.
 
 ```
-usage: main.py [-h]
-               [--arch {resnet50,resnext101-32x4d,se-resnext101-32x4d}]
+usage: main.py [-h] [--arch {resnet50,resnext101-32x4d,se-resnext101-32x4d}]
                [--mode {train,train_and_evaluate,evaluate,predict,training_benchmark,inference_benchmark}]
-               [--data_dir DATA_DIR] [--data_idx_dir DATA_IDX_DIR]
-               [--export_dir EXPORT_DIR] [--to_predict TO_PREDICT]
-               [--batch_size BATCH_SIZE] [--num_iter NUM_ITER]
-               [--iter_unit {epoch,batch}] [--warmup_steps WARMUP_STEPS]
-               [--model_dir MODEL_DIR] [--results_dir RESULTS_DIR]
-               [--log_filename LOG_FILENAME] [--display_every DISPLAY_EVERY]
-               [--lr_init LR_INIT] [--lr_warmup_epochs LR_WARMUP_EPOCHS]
-               [--weight_decay WEIGHT_DECAY] [--weight_init {fan_in,fan_out}]
-               [--momentum MOMENTUM] [--loss_scale LOSS_SCALE]
-               [--label_smoothing LABEL_SMOOTHING] [--mixup MIXUP]
-               [--use_static_loss_scaling | --nouse_static_loss_scaling]
-               [--use_xla | --nouse_xla] [--use_dali | --nouse_dali]
-               [--use_tf_amp | --nouse_tf_amp]
-               [--use_cosine_lr | --nouse_cosine_lr] [--seed SEED]
+               [--export_dir EXPORT_DIR] [--to_predict TO_PREDICT]       
+               --batch_size BATCH_SIZE [--num_iter NUM_ITER]  
+               [--run_iter RUN_ITER] [--iter_unit {epoch,batch}]              
+               [--warmup_steps WARMUP_STEPS] [--model_dir MODEL_DIR]
+               [--results_dir RESULTS_DIR] [--log_filename LOG_FILENAME]      
+               [--display_every DISPLAY_EVERY] [--seed SEED]
                [--gpu_memory_fraction GPU_MEMORY_FRACTION] [--gpu_id GPU_ID]
-
-JoC-RN50v1.5-TF
-
-optional arguments:
-  -h, --help            Show this help message and exit
+               [--finetune_checkpoint FINETUNE_CHECKPOINT] [--use_final_conv]
+               [--quant_delay QUANT_DELAY] [--quantize] [--use_qdq]        
+               [--symmetric] [--data_dir DATA_DIR]         
+               [--data_idx_dir DATA_IDX_DIR] [--dali]
+               [--synthetic_data_size SYNTHETIC_DATA_SIZE] [--lr_init LR_INIT]
+               [--lr_warmup_epochs LR_WARMUP_EPOCHS] 
+               [--weight_decay WEIGHT_DECAY] [--weight_init {fan_in,fan_out}]
+               [--momentum MOMENTUM] [--label_smoothing LABEL_SMOOTHING]
+               [--mixup MIXUP] [--cosine_lr] [--xla]            
+               [--data_format {NHWC,NCHW}] [--amp]
+               [--static_loss_scale STATIC_LOSS_SCALE]
+                                                            
+JoC-RN50v1.5-TF                      
+                                                                           
+optional arguments:          
+  -h, --help            show this help message and exit.
   --arch {resnet50,resnext101-32x4d,se-resnext101-32x4d}
-                        Architecture of model to run (default is resnet50)
+                        Architecture of model to run.                           
   --mode {train,train_and_evaluate,evaluate,predict,training_benchmark,inference_benchmark}
                         The execution mode of the script.
+  --export_dir EXPORT_DIR                                                                                                                                                                                                                                                  
+                        Directory in which to write exported SavedModel.         
+  --to_predict TO_PREDICT        
+                        Path to file or directory of files to run prediction
+                        on.
+  --batch_size BATCH_SIZE      
+                        Size of each minibatch per GPU.                    
+  --num_iter NUM_ITER   Number of iterations to run.
+  --run_iter RUN_ITER   Number of training iterations to run on single run.
+  --iter_unit {epoch,batch}                                
+                        Unit of iterations.                                  
+  --warmup_steps WARMUP_STEPS                                    
+                        Number of steps considered as warmup and not taken
+                        into account for performance measurements.                                  
+  --model_dir MODEL_DIR                
+                        Directory in which to write model. If undefined,         
+                        results dir will be used.                                                  
+  --results_dir RESULTS_DIR
+                        Directory in which to write training logs, summaries
+                        and checkpoints.
+  --log_filename LOG_FILENAME
+                        Name of the JSON file to which write the training log.
+  --display_every DISPLAY_EVERY
+                        How often (in batches) to print out running
+                        information.
+  --seed SEED           Random seed.
+  --gpu_memory_fraction GPU_MEMORY_FRACTION
+                        Limit memory fraction used by training script for DALI.
+  --gpu_id GPU_ID       Specify ID of the target GPU on multi-device platform.
+                        Effective only for single-GPU mode.
+  --finetune_checkpoint FINETUNE_CHECKPOINT
+                        Path to pre-trained checkpoint which will be used for
+                        fine-tuning.
+  --use_final_conv      Use convolution operator instead of MLP as last layer.
+  --quant_delay QUANT_DELAY
+                        Number of steps to be run before quantization starts
+                        to happen.
+  --quantize            Quantize weights and activations during training.
+                        (Defaults to Assymmetric quantization)
+  --use_qdq             Use QDQV3 op instead of FakeQuantWithMinMaxVars op for
+                        quantization. QDQv3 does only scaling.
+  --symmetric           Quantize weights and activations during training using
+                        symmetric quantization.
+
+Dataset arguments:
   --data_dir DATA_DIR   Path to dataset in TFRecord format. Files should be
                         named 'train-*' and 'validation-*'.
   --data_idx_dir DATA_IDX_DIR
                         Path to index files for DALI. Files should be named
                         'train-*' and 'validation-*'.
-  --export_dir EXPORT_DIR
-                        Directory in which to write exported SavedModel.
-  --to_predict TO_PREDICT
-                        Path to file or directory of files to run prediction
-                        on.
-  --batch_size BATCH_SIZE
-                        Size of each minibatch per GPU.
-  --num_iter NUM_ITER   Number of iterations to run.
-  --iter_unit {epoch,batch}
-                        Unit of iterations.
-  --warmup_steps WARMUP_STEPS
-                        Number of steps considered as warmup and not taken
-                        into account for performance measurements.
-  --model_dir MODEL_DIR
-                        Directory in which to write the model. If undefined,
-                        results directory will be used.
-  --results_dir RESULTS_DIR
-                        Directory in which to write training logs, summaries
-                        and checkpoints.
-  --log_filename LOG_FILENAME
-                        Name of the JSON file to which write the training log
-  --display_every DISPLAY_EVERY
-                        How often (in batches) to print out running
-                        information.
+  --dali                Enable DALI data input.
+  --synthetic_data_size SYNTHETIC_DATA_SIZE
+                        Dimension of image for synthetic dataset.
+
+Training arguments:
   --lr_init LR_INIT     Initial value for the learning rate.
   --lr_warmup_epochs LR_WARMUP_EPOCHS
-                        Number of warmup epochs for the learning rate schedule.
+                        Number of warmup epochs for learning rate schedule.
   --weight_decay WEIGHT_DECAY
                         Weight Decay scale factor.
   --weight_init {fan_in,fan_out}
                         Model weight initialization method.
-  --momentum MOMENTUM   SGD momentum value for the momentum optimizer.
-  --loss_scale LOSS_SCALE
-                        Loss scale for FP16 training and fast math FP32.
+  --momentum MOMENTUM   SGD momentum value for the Momentum optimizer.
   --label_smoothing LABEL_SMOOTHING
                         The value of label smoothing.
   --mixup MIXUP         The alpha parameter for mixup (if 0 then mixup is not
                         applied).
-  --use_static_loss_scaling
-                        Use static loss scaling in FP16 or FP32 AMP.
-  --nouse_static_loss_scaling
-  --use_xla             Enable XLA (Accelerated Linear Algebra) computation
+  --cosine_lr           Use cosine learning rate schedule.
+
+Generic optimization arguments:
+  --xla                 Enable XLA (Accelerated Linear Algebra) computation
                         for improved performance.
-  --nouse_xla
-  --use_dali            Enable DALI data input.
-  --nouse_dali
-  --use_tf_amp          Enable AMP to speedup FP32
-                        computation using Tensor Cores.
-  --nouse_tf_amp
-  --use_cosine_lr       Use cosine learning rate schedule.
-  --nouse_cosine_lr
-  --seed SEED           Random seed.
-  --gpu_memory_fraction GPU_MEMORY_FRACTION
-                        Limit memory fraction used by the training script for DALI
-  --gpu_id GPU_ID       Specify the ID of the target GPU on a multi-device platform.
-                        Effective only for single-GPU mode.
-  --quantize            Used to add quantization nodes in the graph (Default: Asymmetric quantization)
-  --symmetric           If --quantize mode is used, this option enables symmetric quantization
-  --use_qdq             Use quantize_and_dequantize (QDQ) op instead of FakeQuantWithMinMaxVars op for quantization. QDQ does only scaling.
-  --finetune_checkpoint Path to pre-trained checkpoint which can be used for fine-tuning
-  --quant_delay         Number of steps to be run before quantization starts to happen
+  --data_format {NHWC,NCHW}
+                        Data format used to do calculations.
+  --amp                 Enable Automatic Mixed Precision to speedup
+                        computation using tensor cores.
+
+Automatic Mixed Precision arguments:
+  --static_loss_scale STATIC_LOSS_SCALE
+                        Use static loss scaling in FP32 AMP.
+
 ```
 
 ### Quantization Aware Training
@@ -424,12 +441,13 @@ Arguments:
 * `--input_format` : Data format of input tensor (Default: NCHW). Use NCHW format to optimize the graph with TensorRT.
 * `--compute_format` : Data format of the operations in the network (Default: NCHW). Use NCHW format to optimize the graph with TensorRT.
 
+
 ### Inference process
 To run inference on a single example with a checkpoint and a model script, use: 
 
 `python main.py --mode predict --model_dir <path to model> --to_predict <path to image> --results_dir <path to results>`
 
-The optional `--use_xla` and `--use_tf_amp` flags control XLA and AMP during inference.
+The optional `--xla` and `--amp` flags control XLA and AMP during inference.
 
 ## Performance
 
@@ -448,7 +466,7 @@ To benchmark the training performance on a specific batch size, run:
         
     * AMP
 
-        `python ./main.py --mode=training_benchmark  --use_tf_amp --warmup_steps 200 --batch_size <batch size> --data_dir=<path to imagenet> --results_dir=<path to results directory>`
+        `python ./main.py --mode=training_benchmark  --amp --warmup_steps 200 --batch_size <batch size> --data_dir=<path to imagenet> --results_dir=<path to results directory>`
         
 * For multiple GPUs
     * FP32 / TF32
@@ -457,14 +475,17 @@ To benchmark the training performance on a specific batch size, run:
         
     * AMP
     
-        `mpiexec --allow-run-as-root --bind-to socket -np <num_gpus> python ./main.py --mode=training_benchmark --use_tf_amp --batch_size <batch size> --data_dir=<path to imagenet> --results_dir=<path to results directory>`
+        `mpiexec --allow-run-as-root --bind-to socket -np <num_gpus> python ./main.py --mode=training_benchmark --amp --batch_size <batch size> --data_dir=<path to imagenet> --results_dir=<path to results directory>`
         
         
 Each of these scripts runs 200 warm-up iterations and measures the first epoch.
 
 To control warmup and benchmark length, use the `--warmup_steps`, `--num_iter` and `--iter_unit` flags. Features like XLA or DALI can be controlled
-with `--use_xla` and `--use_dali` flags. If no `--data_dir=<path to imagenet>` flag is specified then the benchmarks will use a synthetic dataset.
+with `--xla` and `--dali` flags. For proper throughput reporting the value of `--num_iter` must be greater than `--warmup_steps` value.
 Suggested batch sizes for training are 256 for mixed precision training and 128 for single precision training per single V100 16 GB.
+
+If no `--data_dir=<path to imagenet>` flag is specified then the benchmarks will use a synthetic dataset. The resolution of synthetic images used can be controlled with `--synthetic_data_size` flag.
+
 
 #### Inference performance benchmark
 
@@ -476,7 +497,7 @@ To benchmark the inference performance on a specific batch size, run:
 
 * AMP
 
-`python ./main.py --mode=inference_benchmark --use_tf_amp --warmup_steps 20 --num_iter 100 --iter_unit batch --batch_size <batch size> --data_dir=<path to imagenet> --results_dir=<path to results directory>`
+`python ./main.py --mode=inference_benchmark --amp --warmup_steps 20 --num_iter 100 --iter_unit batch --batch_size <batch size> --data_dir=<path to imagenet> --results_dir=<path to results directory>`
 
 By default, each of these scripts runs 20 warm-up iterations and measures the next 80 iterations.
 To control warm-up and benchmark length, use the `--warmup_steps`, `--num_iter` and `--iter_unit` flags. 
@@ -488,6 +509,9 @@ The benchmark can be automated with the `inference_benchmark.sh` script provided
 The `<data dir>` parameter refers to the input data directory (by default `/data/tfrecords` inside the container). 
 By default, the benchmark tests the following configurations: **FP32**, **AMP**, **AMP + XLA** with different batch sizes.
 When the optional directory with the DALI index files `<data idx dir>` is specified, the benchmark executes an additional **DALI + AMP + XLA** configuration.
+For proper throughput reporting the value of `--num_iter` must be greater than `--warmup_steps` value.
+
+For performance benchmark of raw model, synthetic dataset can be used. To use synthetic dataset, use `--synthetic_data_size` flag instead of `--data_dir` to specify input image size.
 
 ### Results
 
@@ -564,17 +588,6 @@ on NVIDIA DGX A100 with (8x A100 40G) GPUs.
 |---|--------|---------|
 | 1 | ~18h   | ~40h   |
 | 8 | ~2h    | ~5h   | 
-
-
-##### Training time: NVIDIA DGX A100 (8x A100 40GB)
-
-Our results were estimated based on the [training performance results](#training-performance-nvidia-dgx-a100-8x-a100-40g) 
-on NVIDIA DGX A100 with (8x A100 40G) GPUs.
-
-| GPUs | Time to train - mixed precision + XLA | Time to train - mixed precision | Time to train - TF32 + XLA | Time to train - TF32 |
-|---|--------|---------|---------|-------|
-| 1 | ~18h   | ~19.5h | ~40h   | ~47h   |
-| 8 | ~2h    | ~2.5h  | ~5h    | ~6h    | 
 
 
 ##### Training time: NVIDIA DGX-1 (8x V100 16G)
@@ -819,22 +832,25 @@ on NVIDIA T4 with (1x T4 16G) GPU.
   * Added benchmark results for DGX-2 and XLA-enabled DGX-1 and DGX-2.
 3. July, 2019
   * Added Cosine learning rate schedule
-3. August, 2019
+4. August, 2019
   * Added mixup regularization
   * Added T4 benchmarks
   * Improved inference capabilities
   * Added SavedModel export 
-4. January, 2020
+5. January, 2020
   * Removed manual checks for dataset paths to facilitate cloud storage solutions
   * Move to a new logging solution
   * Bump base docker image version
-5. March, 2020
+6. March, 2020
   * Code cleanup and refactor
   * Improved training process
-6. June, 2020
+7. June, 2020
   * Added benchmark results for DGX-A100
   * Updated benchmark results for DGX-1, DGX-2 and T4
   * Updated base docker image version
+8. August 2020
+  * Updated command line argument names
+  * Added support for syntetic dataset with different image size
 
 ### Known issues
-Performance without XLA enabled is low. We recommend using XLA.
+Performance without XLA enabled is low due to BN + ReLU fusion bug.

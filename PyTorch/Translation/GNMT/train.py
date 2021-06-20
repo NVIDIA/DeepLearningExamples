@@ -26,6 +26,7 @@ import logging
 import os
 import sys
 import time
+import warnings
 from ast import literal_eval
 
 import dllogger
@@ -34,7 +35,13 @@ import torch.nn.parallel
 import torch.optim
 import torch.utils.data.distributed
 
+try:
+    import pyprof
+except ModuleNotFoundError:
+    warnings.warn('PyProf is unavailable')
+
 import seq2seq.data.config as config
+import seq2seq.gpu_affinity as gpu_affinity
 import seq2seq.train.trainer as trainers
 import seq2seq.utils as utils
 from seq2seq.data.dataset import LazyParallelDataset
@@ -154,6 +161,15 @@ def parse_args():
                          help='controls preallocation')
     general.add_argument('--dllog-file', type=str, default='train_log.json',
                          help='Name of the DLLogger output file')
+    general.add_argument('--affinity', type=str,
+                         default='socket_unique_interleaved',
+                         choices=['socket', 'single', 'single_unique',
+                                  'socket_unique_interleaved',
+                                  'socket_unique_continuous',
+                                  'disabled'],
+                         help='type of CPU affinity')
+    general.add_argument('--profile', action='store_true',
+                         help='Enable profiling with DLProf')
 
     exclusive_group(group=general, name='eval', default=True,
                     help='run validation and test after every epoch')
@@ -367,6 +383,14 @@ def main():
     """
     training_start = time.time()
     args = parse_args()
+    if args.affinity != 'disabled':
+        nproc_per_node = torch.cuda.device_count()
+        affinity = gpu_affinity.set_affinity(
+            args.local_rank,
+            nproc_per_node,
+            args.affinity
+        )
+        print(f'{args.local_rank}: thread affinity: {affinity}')
     device = utils.set_device(args.cuda, args.local_rank)
     utils.init_distributed(args.cuda)
     args.rank = utils.get_rank()
@@ -384,6 +408,12 @@ def main():
 
     dllog_file = os.path.join(args.save_dir, args.dllog_file)
     utils.setup_dllogger(enabled=True, filename=dllog_file)
+
+    if args.profile:
+        try:
+            pyprof.init(enable_function_stack=True)
+        except NameError:
+            warnings.warn('Called pyprof.init() but pyprof is not available')
 
     if args.env:
         utils.log_env_info()
@@ -552,60 +582,61 @@ def main():
     training_perf = []
     break_training = False
     test_bleu = None
-    for epoch in range(args.start_epoch, args.epochs):
-        logging.info(f'Starting epoch {epoch}')
+    with torch.autograd.profiler.emit_nvtx(enabled=args.profile):
+        for epoch in range(args.start_epoch, args.epochs):
+            logging.info(f'Starting epoch {epoch}')
 
-        train_loader.sampler.set_epoch(epoch)
+            train_loader.sampler.set_epoch(epoch)
 
-        trainer.epoch = epoch
-        train_loss, train_perf = trainer.optimize(train_loader)
-        training_perf.append(train_perf)
+            trainer.epoch = epoch
+            train_loss, train_perf = trainer.optimize(train_loader)
+            training_perf.append(train_perf)
 
-        # evaluate on validation set
-        if args.eval:
-            logging.info(f'Running validation on dev set')
-            val_loss, val_perf = trainer.evaluate(val_loader)
+            # evaluate on validation set
+            if args.eval:
+                logging.info(f'Running validation on dev set')
+                val_loss, val_perf = trainer.evaluate(val_loader)
 
-            # remember best prec@1 and save checkpoint
+                # remember best prec@1 and save checkpoint
+                if args.rank == 0:
+                    is_best = val_loss < best_loss
+                    best_loss = min(val_loss, best_loss)
+                    trainer.save(save_all=args.save_all, is_best=is_best)
+
+            if args.eval:
+                utils.barrier()
+                eval_fname = f'eval_epoch_{epoch}'
+                eval_path = os.path.join(args.save_dir, eval_fname)
+                _, eval_stats = translator.run(
+                    calc_bleu=True,
+                    epoch=epoch,
+                    eval_path=eval_path,
+                    )
+                test_bleu = eval_stats['bleu']
+                if args.target_bleu and test_bleu >= args.target_bleu:
+                    logging.info(f'Target accuracy reached')
+                    break_training = True
+
+            acc_log = []
+            acc_log += [f'Summary: Epoch: {epoch}']
+            acc_log += [f'Training Loss: {train_loss:.4f}']
+            if args.eval:
+                acc_log += [f'Validation Loss: {val_loss:.4f}']
+                acc_log += [f'Test BLEU: {test_bleu:.2f}']
+
+            perf_log = []
+            perf_log += [f'Performance: Epoch: {epoch}']
+            perf_log += [f'Training: {train_perf:.0f} Tok/s']
+            if args.eval:
+                perf_log += [f'Validation: {val_perf:.0f} Tok/s']
+
             if args.rank == 0:
-                is_best = val_loss < best_loss
-                best_loss = min(val_loss, best_loss)
-                trainer.save(save_all=args.save_all, is_best=is_best)
+                logging.info('\t'.join(acc_log))
+                logging.info('\t'.join(perf_log))
 
-        if args.eval:
-            utils.barrier()
-            eval_fname = f'eval_epoch_{epoch}'
-            eval_path = os.path.join(args.save_dir, eval_fname)
-            _, eval_stats = translator.run(
-                calc_bleu=True,
-                epoch=epoch,
-                eval_path=eval_path,
-                )
-            test_bleu = eval_stats['bleu']
-            if args.target_bleu and test_bleu >= args.target_bleu:
-                logging.info(f'Target accuracy reached')
-                break_training = True
-
-        acc_log = []
-        acc_log += [f'Summary: Epoch: {epoch}']
-        acc_log += [f'Training Loss: {train_loss:.4f}']
-        if args.eval:
-            acc_log += [f'Validation Loss: {val_loss:.4f}']
-            acc_log += [f'Test BLEU: {test_bleu:.2f}']
-
-        perf_log = []
-        perf_log += [f'Performance: Epoch: {epoch}']
-        perf_log += [f'Training: {train_perf:.0f} Tok/s']
-        if args.eval:
-            perf_log += [f'Validation: {val_perf:.0f} Tok/s']
-
-        if args.rank == 0:
-            logging.info('\t'.join(acc_log))
-            logging.info('\t'.join(perf_log))
-
-        logging.info(f'Finished epoch {epoch}')
-        if break_training:
-            break
+            logging.info(f'Finished epoch {epoch}')
+            if break_training:
+                break
 
     utils.barrier()
     training_stop = time.time()

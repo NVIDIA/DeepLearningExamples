@@ -1,4 +1,4 @@
-# Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021 NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -428,7 +428,6 @@ def _main():
                 delete_combined_model(spark, args.model_folder)
 
     if args.mode == 'transform':
-        spark.conf.set('spark.sql.shuffle.partitions', args.days * args.apply_shuffle_parallel_per_day)
         with _timed('transform'):
             if args.output_ordering == 'total_random':
                 df = rand_ordinal(df)

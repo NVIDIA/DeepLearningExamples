@@ -25,10 +25,13 @@ optparser.add_argument('-b', '--batch-size', type=int, default=192, help='batch 
 optparser.add_argument('-e', '--num-epochs', type=int, default=90, help='number of epochs')
 optparser.add_argument('-l', '--lr', type=float, default=0.256, help='learning rate; '
                        'IMPORTANT: true learning rate will be calculated as `lr * batch_size / 256`')
-optparser.add_argument('--data-root', type=Path, help='Directory with RecordIO data files', default=Path('/data/imagenet/train-val-recordio-passthrough'))
+optparser.add_argument('--data-root', type=Path, help='Directory with RecordIO data files',
+                       default=Path('/data/imagenet/train-val-recordio-passthrough'))
 optparser.add_argument('--dtype', help='Precision', default='float16', choices=('float32', 'float16'))
 optparser.add_argument('--kv-store', default='horovod', choices=('device', 'horovod'), help='key-value store type')
-optparser.add_argument('--data-backend', default='dali-gpu', choices=('dali-gpu', 'dali-cpu', 'mxnet', 'synthetic'), help='data backend')
+optparser.add_argument('--data-backend', default='dali-gpu', choices=('dali-gpu', 'dali-cpu', 'mxnet', 'synthetic'),
+                       help='data backend')
+optparser.add_argument('--launcher', default='horovod', choices=('horovod', 'slurm'), help='type of launcher')
 
 opts, args = optparser.parse_known_args()
 
@@ -41,7 +44,7 @@ opts.batch_size *= opts.ngpus
 opts.lr *= opts.batch_size / 256
 
 command = []
-if 'horovod' in opts.kv_store:
+if 'horovod' in opts.kv_store and opts.launcher == 'horovod':
     command += ['horovodrun', '-np', str(opts.ngpus)]
 command += ['python', str(Path(__file__).parent / "train.py")]
 command += ['--data-train', str(opts.data_root / "train.rec")]
@@ -73,7 +76,6 @@ os.environ['MXNET_GPU_COPY_NTHREADS'] = "1"
 os.environ['MXNET_OPTIMIZER_AGGREGATION_SIZE'] = "54"
 os.environ['HOROVOD_CYCLE_TIME'] = "0.1"
 os.environ['HOROVOD_FUSION_THRESHOLD'] = "67108864"
-os.environ['HOROVOD_NUM_NCCL_STREAMS'] = "2"
 os.environ['MXNET_HOROVOD_NUM_GROUPS'] = "16"
 os.environ['MXNET_EXEC_BULK_EXEC_MAX_NODE_TRAIN_FWD'] = "999"
 os.environ['MXNET_EXEC_BULK_EXEC_MAX_NODE_TRAIN_BWD'] = "25"
