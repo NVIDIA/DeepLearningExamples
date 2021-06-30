@@ -1,5 +1,10 @@
 import copy
 import inspect
+import typing
+from ast import literal_eval
+from contextlib import suppress
+from numbers import Number
+
 import yaml
 
 from .model import JasperDecoderForCTC, JasperBlock, JasperEncoder
@@ -99,12 +104,22 @@ def decoder(conf, n_classes):
     return validate_and_fill(JasperDecoderForCTC, decoder_kw)
 
 
-def apply_duration_flags(cfg, max_duration, pad_to_max_duration):
-    if max_duration is not None:
-        cfg['input_train']['audio_dataset']['max_duration'] = max_duration
-        cfg['input_train']['filterbank_features']['max_duration'] = max_duration
+def apply_config_overrides(conf, args):
+    if args.override_config is None:
+        return
+    for override_key_val in args.override_config:
+        key, val = override_key_val.split('=')
+        with suppress(TypeError, ValueError):
+            val = literal_eval(val)
+        apply_nested_config_override(conf, key, val)
 
-    if pad_to_max_duration:
-        assert cfg['input_train']['audio_dataset']['max_duration'] > 0
-        cfg['input_train']['audio_dataset']['pad_to_max_duration'] = True
-        cfg['input_train']['filterbank_features']['pad_to_max_duration'] = True
+
+def apply_nested_config_override(conf, key_str, val):
+    fields = key_str.split('.')
+    for f in fields[:-1]:
+        conf = conf[f]
+    f = fields[-1]
+    assert (f not in conf
+            or type(val) is type(conf[f])
+            or (isinstance(val, Number) and isinstance(conf[f], Number)))
+    conf[f] = val

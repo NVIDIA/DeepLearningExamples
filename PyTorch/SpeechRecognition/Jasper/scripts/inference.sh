@@ -55,7 +55,9 @@ ARGS+=" --warmup_steps $NUM_WARMUP_STEPS"
 [ -n "$PREDICTION_FILE" ] &&         ARGS+=" --save_prediction $PREDICTION_FILE"
 [ -n "$LOGITS_FILE" ] &&             ARGS+=" --logits_save_to $LOGITS_FILE"
 [ "$CPU" == "true" ] &&              ARGS+=" --cpu"
-[ -n "$MAX_DURATION" ] &&            ARGS+=" --max_duration $MAX_DURATION"
-[ "$PAD_TO_MAX_DURATION" = true ] && ARGS+=" --pad_to_max_duration"
+[ -n "$MAX_DURATION" ] &&            ARGS+=" --override_config input_val.audio_dataset.max_duration=$MAX_DURATION" \
+                                     ARGS+=" --override_config input_val.filterbank_features.max_duration=$MAX_DURATION"
+[ "$PAD_TO_MAX_DURATION" = true ] && ARGS+=" --override_config input_val.audio_dataset.pad_to_max_duration=True" \
+                                     ARGS+=" --override_config input_val.filterbank_features.pad_to_max_duration=True"
 
 python -m torch.distributed.launch --nproc_per_node=$NUM_GPUS inference.py $ARGS

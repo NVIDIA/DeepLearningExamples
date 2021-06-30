@@ -78,7 +78,10 @@ ARGS+=" --dali_device=$DALI_DEVICE"
 [ "$AMP" = true ] &&                 ARGS+=" --amp"
 [ "$RESUME" = true ] &&              ARGS+=" --resume"
 [ "$CUDNN_BENCHMARK" = true ] &&     ARGS+=" --cudnn_benchmark"
-[ "$PAD_TO_MAX_DURATION" = true ] && ARGS+=" --pad_to_max_duration"
+[ -n "$MAX_DURATION" ] &&            ARGS+=" --override_config input_train.audio_dataset.max_duration=$MAX_DURATION" \
+                                     ARGS+=" --override_config input_train.filterbank_features.max_duration=$MAX_DURATION"
+[ "$PAD_TO_MAX_DURATION" = true ] && ARGS+=" --override_config input_train.audio_dataset.pad_to_max_duration=True" \
+                                     ARGS+=" --override_config input_train.filterbank_features.pad_to_max_duration=True"
 [ -n "$CHECKPOINT" ] &&              ARGS+=" --ckpt=$CHECKPOINT"
 [ -n "$LOG_FILE" ] &&                ARGS+=" --log_file $LOG_FILE"
 [ -n "$PRE_ALLOCATE" ] &&            ARGS+=" --pre_allocate_range $PRE_ALLOCATE"

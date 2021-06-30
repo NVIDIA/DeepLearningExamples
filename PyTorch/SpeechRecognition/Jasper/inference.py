@@ -57,10 +57,6 @@ def get_parser():
                         help='Relative path to evaluation dataset manifest files')
     parser.add_argument('--ckpt', default=None, type=str,
                         help='Path to model checkpoint')
-    parser.add_argument('--max_duration', default=None, type=float,
-                        help='Filter out longer inputs (in seconds)')
-    parser.add_argument('--pad_to_max_duration', action='store_true',
-                        help='Pads every batch to max_duration')
     parser.add_argument('--amp', '--fp16', action='store_true',
                         help='Use FP16 precision')
     parser.add_argument('--cudnn_benchmark', action='store_true',
@@ -92,6 +88,9 @@ def get_parser():
                     help='Evaluate with a TorchScripted model')
     io.add_argument('--torchscript_export', action='store_true',
                     help='Export the model with torch.jit to the output_dir')
+    io.add_argument('--override_config', type=str, action='append',
+                    help='Overrides a value from a config .yaml.'
+                         ' Syntax: `--override_config nested.config.key=val`.')
     return parser
 
 
@@ -193,15 +192,7 @@ def main():
         print_once(f'Inference with {distrib.get_world_size()} GPUs')
 
     cfg = config.load(args.model_config)
-
-    if args.max_duration is not None:
-        cfg['input_val']['audio_dataset']['max_duration'] = args.max_duration
-        cfg['input_val']['filterbank_features']['max_duration'] = args.max_duration
-
-    if args.pad_to_max_duration:
-        assert cfg['input_val']['audio_dataset']['max_duration'] > 0
-        cfg['input_val']['audio_dataset']['pad_to_max_duration'] = True
-        cfg['input_val']['filterbank_features']['pad_to_max_duration'] = True
+    config.apply_config_overrides(cfg, args)
 
     symbols = helpers.add_ctc_blank(cfg['labels'])
 
