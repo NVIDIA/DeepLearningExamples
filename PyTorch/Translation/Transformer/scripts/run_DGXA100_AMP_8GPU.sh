@@ -20,35 +20,22 @@ CHECKPOINTS_DIR='/results/checkpoints'
 STAT_FILE=${RESULTS_DIR}/DGXA100_amp_8GPU_log.json
 mkdir -p $CHECKPOINTS_DIR
 
-PREC=${1:-'amp'}
-SEED=${2:-1}
-LR=${3:-0.000846}
-WARMUP=${4:-4000}
-NUM_EPOCHS=${5:-40}
-BATCH_SIZE=${6:-10240}
-NUM_GPU=${7:-8}
-: ${USE_SLURM:=0}
+SEED=${1:-1}
+LR=${2:-0.000846}
+WARMUP=${3:-4000}
+NUM_EPOCHS=${4:-40}
+BATCH_SIZE=${5:-10240}
+NUM_GPU=${6:-8}
 
 DISTRIBUTED="-m torch.distributed.launch --nproc_per_node=${NUM_GPU}"
-[ ${USE_SLURM} = 1 ] && DISTRIBUTED+=" --nnodes ${WORLD_SIZE} --node_rank ${SLURM_NODEID}  \
-        --master_addr ${MASTER_ADDR} --master_port ${MASTER_PORT} "
-
-if [ "$PREC" = "amp" ];
-then
-    PREC='--amp --amp-level O2 '
-else
-    PREC=''
-fi
-
-
 
 python ${DISTRIBUTED} /workspace/translation/train.py \
   /data/wmt14_en_de_joined_dict \
   --arch transformer_wmt_en_de_big_t2t \
   --share-all-embeddings \
   --optimizer adam \
-  --adam-betas '(0.9, 0.997)' \
-  --adam-eps "1e-9" \
+  --adam-betas 0.9 0.997 \
+  --adam-eps 1e-9 \
   --clip-norm 0.0 \
   --lr-scheduler inverse_sqrt \
   --warmup-init-lr 0.0 \
@@ -68,5 +55,4 @@ python ${DISTRIBUTED} /workspace/translation/train.py \
   --log-interval 500 \
   --save-dir ${RESULTS_DIR} \
   --stat-file ${STAT_FILE} \
-  --distributed-init-method env:// \
-  ${PREC}
+  --amp

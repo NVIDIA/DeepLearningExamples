@@ -13,8 +13,6 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from fairseq import utils
-
 
 class SinusoidalPositionalEmbedding(nn.Module):
     """This module produces sinusoidal positional embeddings of any length.
@@ -34,7 +32,9 @@ class SinusoidalPositionalEmbedding(nn.Module):
             padding_idx,
         )
         self.register_buffer('_float_tensor', torch.FloatTensor(1))
-        self.register_buffer('positions_buffer', torch.arange(padding_idx + 1, init_size + padding_idx + 1)) #JIT compliance
+        # JIT compliance
+        self.register_buffer(
+            'positions_buffer', torch.arange(padding_idx + 1, init_size + padding_idx + 1))
 
     @staticmethod
     def get_embedding(num_embeddings: int, embedding_dim: int, padding_idx: int):
@@ -51,7 +51,7 @@ class SinusoidalPositionalEmbedding(nn.Module):
         if embedding_dim % 2 == 1:
             # zero pad
             emb = torch.cat([emb, torch.zeros(num_embeddings, 1)], dim=1)
-        emb[padding_idx] = torch.zeros(emb.shape[1]) # emb[padding_idx, :] = 0
+        emb[padding_idx] = torch.zeros(emb.shape[1])  # emb[padding_idx, :] = 0
         return emb
 
     def forward(self, input: Tensor, incremental_state: Optional[Dict[str, Dict[str, Tensor]]]=None):
@@ -80,4 +80,3 @@ class SinusoidalPositionalEmbedding(nn.Module):
         #############
 
         return self.weights.index_select(0, positions.view(-1)).view(bsz, seq_len, -1).detach()
-

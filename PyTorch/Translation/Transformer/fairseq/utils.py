@@ -29,6 +29,7 @@ import traceback
 
 from torch.serialization import default_restore_location
 
+
 def torch_persistent_save(*args, **kwargs):
     for i in range(3):
         try:
@@ -151,8 +152,8 @@ def load_align_dict(replace_unk):
                 cols = line.split()
                 align_dict[cols[0]] = cols[1]
     else:
-        # No alignment dictionary provided but we still want to perform unknown word replacement by copying the
-        # original source word.
+        # No alignment dictionary provided but we still want to perform unknown word replacement by copying
+        # the original source word.
         align_dict = {}
     return align_dict
 
@@ -228,7 +229,8 @@ def make_positions(tensor, padding_idx, left_pad):
     """
     max_pos = padding_idx + 1 + tensor.size(1)
     if not hasattr(make_positions, 'range_buf'):
-        make_positions.range_buf = torch.arange(padding_idx + 1, 768, dtype=tensor.dtype, device=tensor.device)
+        make_positions.range_buf = torch.arange(padding_idx + 1, 768,
+                                                dtype=tensor.dtype, device=tensor.device)
     make_positions.range_buf = make_positions.range_buf.type_as(tensor)
     if make_positions.range_buf.numel() < max_pos:
         torch.arange(padding_idx + 1, max_pos, out=make_positions.range_buf)
@@ -311,3 +313,4 @@ def checkpoint_paths(path, pattern=r'checkpoint(\d+)\.pt'):
             idx = int(m.group(1)) if len(m.groups()) > 0 else i
             entries.append((idx, m.group(0)))
     return [os.path.join(path, x[1]) for x in sorted(entries, reverse=True)]
+

@@ -21,10 +21,13 @@
 # limitations under the License.
 
 import pickle
+import os
+import socket
 
 import torch.distributed
 
 from fairseq import utils
+
 
 def is_master(args):
     return args.distributed_rank == 0
@@ -36,25 +39,19 @@ def distributed_init(args):
 
     print('| distributed init (rank {}): {}'.format(
         args.distributed_rank, args.distributed_init_method), flush=True)
-    if args.distributed_init_method.startswith('tcp://'):
-        torch.distributed.init_process_group(
-            backend=args.distributed_backend, init_method=args.distributed_init_method,
-            world_size=args.distributed_world_size, rank=args.distributed_rank)
-    elif args.distributed_init_method.startswith('env://'):
-        import os
-        print("| distributed env init. MASTER_ADDR: " + os.environ['MASTER_ADDR'] + ", MASTER_PORT: " + os.environ['MASTER_PORT'] +
-                ", WORLD_SIZE: " + os.environ['WORLD_SIZE'] + ", RANK: " + os.environ['RANK'], flush=True)
-        torch.distributed.init_process_group(
-            backend=args.distributed_backend, init_method=args.distributed_init_method)
-        print("| distributed init done!", flush=True)
-        args.distributed_world_size = int(os.environ['WORLD_SIZE'])
-    else:
-        torch.distributed.init_process_group(
-            backend=args.distributed_backend, init_method=args.distributed_init_method,
-            world_size=args.distributed_world_size)
+    print("| distributed env init. MASTER_ADDR: " + os.environ['MASTER_ADDR'] +
+          ", MASTER_PORT: " + os.environ['MASTER_PORT'] +
+          ", WORLD_SIZE: " + os.environ['WORLD_SIZE'] + ", RANK: " + os.environ['RANK'], flush=True)
+    torch.distributed.init_process_group(
+        backend=args.distributed_backend, init_method='env://')
+    print("| distributed init done!", flush=True)
+    args.distributed_world_size = int(os.environ['WORLD_SIZE'])
 
     args.distributed_rank = torch.distributed.get_rank()
+    args.device_id = int(os.environ.get('LOCAL_RANK', args.local_rank))
     suppress_output(args)
+    print('| initialized host {} as rank {} and device id {}'
+          .format(socket.gethostname(), args.distributed_rank, args.device_id))
 
     return args.distributed_rank
 
@@ -66,19 +63,19 @@ def suppress_output(main_args):
 
     def print_master(*args, **kwargs):
         if 'force' in kwargs:
-            force = kwargs.pop('force')
+            kwargs.pop('force')
         builtin_print(*args, **kwargs)
-
 
     def print(*args, **kwargs):
         if 'force' in kwargs:
             force = kwargs.pop('force')
             if force:
                 builtin_print(*args, **kwargs)
-    if(is_master(main_args)):
+    if is_master(main_args):
         __builtin__.print = print_master
     else:
         __builtin__.print = print
+
 
 def all_gather_list(data, max_size=16384):
     """Gathers arbitrary data from all nodes into a list."""
@@ -97,10 +94,10 @@ def all_gather_list(data, max_size=16384):
     enc_size = len(enc)
     if enc_size + 2 > max_size:
         raise ValueError('encoded data exceeds max_size: {}'.format(enc_size + 2))
-    assert max_size < 255*256
+    assert max_size < 255 * 256
     in_buffer[0] = enc_size // 255  # this encoding works for max_size < 65k
     in_buffer[1] = enc_size % 255
-    in_buffer[2:enc_size+2] = torch.ByteTensor(list(enc))
+    in_buffer[2:enc_size + 2] = torch.ByteTensor(list(enc))
 
     torch.distributed.all_gather(out_buffers, in_buffer.cuda())
 
@@ -109,6 +106,6 @@ def all_gather_list(data, max_size=16384):
         out_buffer = out_buffers[i]
         size = (255 * utils.item(out_buffer[0])) + utils.item(out_buffer[1])
         result.append(
-            pickle.loads(bytes(out_buffer[2:size+2].tolist()))
+            pickle.loads(bytes(out_buffer[2:size + 2].tolist()))
         )
     return result

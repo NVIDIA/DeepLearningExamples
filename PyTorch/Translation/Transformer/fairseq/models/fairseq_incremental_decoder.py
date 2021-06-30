@@ -7,6 +7,7 @@
 
 import torch.nn as nn
 
+
 class FairseqIncrementalDecoder(nn.Module):
     """Base class for incremental decoders."""
 

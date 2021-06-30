@@ -21,9 +21,7 @@
 # limitations under the License.
 
 from .dictionary import Dictionary
-from .fairseq_dataset import FairseqDataset
 from .indexed_dataset import IndexedDataset, IndexedInMemoryDataset, IndexedRawTextDataset  # noqa: F401
 from .language_pair_dataset import LanguagePairDataset, load_dataset_splits
-from .token_block_dataset import TokenBlockDataset
 
 from .data_utils import EpochBatchIterator

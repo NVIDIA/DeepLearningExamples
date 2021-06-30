@@ -21,18 +21,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import namedtuple
-import numpy as np
 import sys
 import os
 import time
+from collections import namedtuple
 
+import numpy as np
 import torch
 from torch.serialization import default_restore_location
 
-from fairseq import data, options, tokenizer, utils
+from fairseq import data, options, tokenizer, utils, log_helper
 from fairseq.sequence_generator import SequenceGenerator
-from fairseq.data import Dictionary
 from fairseq.meters import StopwatchMeter
 from fairseq.models.transformer import TransformerModel
 import dllogger
@@ -43,13 +42,8 @@ from apply_bpe import BPE
 Batch = namedtuple('Batch', 'srcs tokens lengths')
 Translation = namedtuple('Translation', 'src_str hypos pos_scores alignments')
 
-def _override_model_args(args, model_arg_overrides):
-    # Uses model_arg_overrides {'arg_name': arg} to override model args
-    for arg_name, arg_val in model_arg_overrides.items():
-        setattr(args, arg_name, arg_val)
-    return args
 
-def load_ensemble_for_inference(filenames, model_arg_overrides=None):
+def load_ensemble_for_inference(filenames):
     """Load an ensemble of models for inference.
 
     model_arg_overrides allows you to pass a dictionary model_arg_overrides --
@@ -67,9 +61,6 @@ def load_ensemble_for_inference(filenames, model_arg_overrides=None):
     ensemble = []
     for state in states:
         args = state['args']
-        
-        if model_arg_overrides is not None:
-            args = _override_model_args(args, model_arg_overrides)
 
         # build model for ensemble
         model = TransformerModel.build_model(args)
@@ -82,21 +73,27 @@ def load_ensemble_for_inference(filenames, model_arg_overrides=None):
     return ensemble, args, src_dict, tgt_dict
 
 
-def buffered_read(buffer_size):
+def buffered_read(buffer_size, data_descriptor):
     buffer = []
-    for src_str in sys.stdin:
+    for src_str in data_descriptor:
         buffer.append(src_str.strip())
         if len(buffer) >= buffer_size:
             yield buffer
             buffer = []
 
-    if len(buffer) > 0:
+    if buffer:
         yield buffer
 
 
 def make_batches(lines, args, src_dict, max_positions, bpe=None):
     tokens = [
-        tokenizer.Tokenizer.tokenize(src_str, src_dict, tokenize=tokenizer.tokenize_en, add_if_not_exist=False, bpe=bpe).long()
+        tokenizer.Tokenizer.tokenize(
+            src_str,
+            src_dict,
+            tokenize=tokenizer.tokenize_en,
+            add_if_not_exist=False,
+            bpe=bpe
+            ).long()
         for src_str in lines
     ]
     lengths = np.array([t.numel() for t in tokens])
@@ -113,29 +110,30 @@ def make_batches(lines, args, src_dict, max_positions, bpe=None):
             lengths=batch['net_input']['src_lengths'],
         ), batch['id']
 
-def setup_logger(args):
-    dllogger.init(backends=[dllogger.JSONStreamBackend(verbosity=1, filename=args.stat_file)])
-    for k,v in vars(args).items():
-        dllogger.log(step='PARAMETER', data= {k:v}, verbosity=0)
-    container_setup_info = {
-            'NVIDIA_PYTORCH_VERSION': os.environ.get('NVIDIA_PYTORCH_VERSION'),
-            'PYTORCH_VERSION': os.environ.get('PYTORCH_VERSION'),
-            'CUBLAS_VERSION' : os.environ.get('CUBLAS_VERSION'),
-            'NCCL_VERSION' : os.environ.get('NCCL_VERSION'),
-            'CUDA_DRIVER_VERSION' : os.environ.get('CUDA_DRIVER_VERSION'),
-            'CUDNN_VERSION' : os.environ.get('CUDNN_VERSION'),
-            'CUDA_VERSION' : os.environ.get('CUDA_VERSION')
-            }
-    dllogger.log(step='PARAMETER', data=container_setup_info, verbosity=0)
-    dllogger.metadata('throughput', {'unit':'tokens/s', 'format':':/3f', 'GOAL':'MAXIMIZE', 'STAGE':'INFER'})
 
-def main(args):
+def setup_logger(args):
     if not args.no_dllogger:
-        setup_logger(args)
+        dllogger.init(backends=[dllogger.JSONStreamBackend(verbosity=1, filename=args.stat_file)])
+        for k, v in vars(args).items():
+            dllogger.log(step='PARAMETER', data={k:v}, verbosity=0)
+        container_setup_info = log_helper.get_framework_env_vars()
+        dllogger.log(step='PARAMETER', data=container_setup_info, verbosity=0)
+        dllogger.metadata('throughput',
+                          {'unit':'tokens/s', 'format':':/3f', 'GOAL':'MAXIMIZE', 'STAGE':'INFER'})
     else:
         dllogger.init(backends=[])
 
+
+def main(args):
+    setup_logger(args)
+
     args.interactive = sys.stdin.isatty() # Just make the code more understendable
+    
+    if args.file:
+        data_descriptor = open(args.file, 'r')
+    else:
+        data_descriptor = sys.stdin
+    
     if args.interactive:
         args.buffer_size = 1
     if args.max_tokens is None and args.max_sentences is None:
@@ -158,7 +156,7 @@ def main(args):
     # Load ensemble
     print('| loading model(s) from {}'.format(args.path), file=sys.stderr)
     model_paths = args.path.split(':')
-    models, model_args, src_dict, tgt_dict = load_ensemble_for_inference(model_paths, model_arg_overrides=eval(args.model_overrides))
+    models, model_args, src_dict, tgt_dict = load_ensemble_for_inference(model_paths)
     if args.fp16:
         for model in models:
             model.half()
@@ -172,12 +170,12 @@ def main(args):
         models,
         tgt_dict.get_metadata(),
         maxlen=args.max_target_positions,
-        beam_size=args.beam, 
+        beam_size=args.beam,
         stop_early=(not args.no_early_stop),
-        normalize_scores=(not args.unnormalized), 
+        normalize_scores=(not args.unnormalized),
         len_penalty=args.lenpen,
         unk_penalty=args.unkpen,
-        sampling=args.sampling, 
+        sampling=args.sampling,
         sampling_topk=args.sampling_topk,
         minlen=args.min_len,
         sampling_temperature=args.sampling_temperature
@@ -214,16 +212,11 @@ def main(args):
             )
             hypo_str = tokenizer.Tokenizer.detokenize(hypo_str, 'de').strip()
             result.hypos.append((hypo['score'], hypo_str))
-            result.pos_scores.append('P\t{}'.format(
-                ' '.join(map(
-                    lambda x: '{:.4f}'.format(x),
-                    hypo['positional_scores'].tolist(),
-                ))
-            ))
-            result.alignments.append(
-                'A\t{}'.format(' '.join(map(lambda x: str(utils.item(x)), alignment)))
-                if args.print_alignment else None
-            )
+            result.pos_scores.append('P\t' + ' '.join(f'{x:.4f}' for x in hypo['positional_scores'].tolist()))
+            result.alignments.append('A\t' + ' '.join(str(utils.item(x)) for x in alignment)
+                                     if args.print_alignment else None
+                                    )
+
         return result
 
     gen_timer = StopwatchMeter()
@@ -250,7 +243,7 @@ def main(args):
 
     if args.interactive:
         print('| Type the input sentence and press return:')
-    for inputs in buffered_read(args.buffer_size):
+    for inputs in buffered_read(args.buffer_size, data_descriptor):
         indices = []
         results = []
         for batch, batch_indices in make_batches(inputs, args, src_dict, args.max_positions, bpe):
@@ -267,26 +260,31 @@ def main(args):
                 if align is not None:
                     print(align, file=sys.stderr)
 
+    if args.file:
+        data_descriptor.close()
+
     log_dict = {
-            'throughput': 1./gen_timer.avg,
-            'latency_avg': sum(gen_timer.intervals)/len(gen_timer.intervals),
-            'latency_p90': gen_timer.p(90),
-            'latency_p95': gen_timer.p(95),
-            'latency_p99': gen_timer.p(99),
-            'total_infernece_time': gen_timer.sum,
-            'total_run_time': time.time() - processing_start,
-            }
-    print('Translation time: {} s'.format(log_dict['total_infernece_time']), file=sys.stderr)
-    print('Model throughput (beam {}): {} tokens/s'.format(args.beam, log_dict['throughput']), file=sys.stderr)
+                'throughput': 1./gen_timer.avg,
+                'latency_avg': sum(gen_timer.intervals)/len(gen_timer.intervals),
+                'latency_p90': gen_timer.p(90),
+                'latency_p95': gen_timer.p(95),
+                'latency_p99': gen_timer.p(99),
+                'total_infernece_time': gen_timer.sum,
+                'total_run_time': time.time() - processing_start,
+                }
+    print('Translation time: {} s'.format(log_dict['total_infernece_time']),
+          file=sys.stderr)
+    print('Model throughput (beam {}): {} tokens/s'.format(args.beam, log_dict['throughput']),
+          file=sys.stderr)
     print('Latency:\n\tAverage {:.3f}s\n\tp90 {:.3f}s\n\tp95 {:.3f}s\n\tp99 {:.3f}s'.format(
-        log_dict['latency_avg'], log_dict['latency_p90'], log_dict['latency_p95'], log_dict['latency_p99'],
-        file=sys.stderr))
+          log_dict['latency_avg'], log_dict['latency_p90'], log_dict['latency_p95'], log_dict['latency_p99']),
+          file=sys.stderr)
     print('End to end time: {} s'.format(log_dict['total_run_time']), file=sys.stderr)
-    dllogger.log(step=[], data=log_dict)
+    dllogger.log(step=(), data=log_dict)
 
 
 if __name__ == '__main__':
     parser = options.get_inference_parser()
     parser.add_argument('--no-dllogger', action='store_true')
-    args = options.parse_args_and_arch(parser)
-    main(args)
+    ARGS = options.parse_args_and_arch(parser)
+    main(ARGS)

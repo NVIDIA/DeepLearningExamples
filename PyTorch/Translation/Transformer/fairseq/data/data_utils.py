@@ -27,7 +27,6 @@ import os
 import numpy as np
 import torch
 
-from . import FairseqDataset
 import fairseq.data.batch_C
 import sys
 from .dictionary import Dictionary
@@ -41,6 +40,7 @@ def infer_language_pair(path):
         if len(parts) >= 3 and len(parts[1].split('-')) == 2:
             return parts[1].split('-')
     return src, dst
+
 
 def load_dictionaries(args):
     if args.source_lang is None or args.target_lang is None:
@@ -59,8 +59,8 @@ def load_dictionaries(args):
     args.padding_idx = src_dict.pad()
     print('| [{}] dictionary: {} types'.format(args.source_lang, len(src_dict)))
     print('| [{}] dictionary: {} types'.format(args.target_lang, len(tgt_dict)))
-
     return src_dict, tgt_dict
+
 
 class ShardedIterator(object):
     """A sharded wrapper around an iterable (padded to length)."""
@@ -121,11 +121,11 @@ def collate_tokens(values, pad_idx, eos_idx, left_pad, move_eos_to_beginning=Fal
     #size = max(v.size(0) for v in values)
     orig_size = max(v.size(0) for v in values)
     size = 0
-    if pad_sequence > 1 :
+    if pad_sequence > 1:
         size = orig_size // pad_sequence * pad_sequence
-        if orig_size % pad_sequence > 0 :
+        if orig_size % pad_sequence > 0:
             size += pad_sequence
-    else :
+    else:
         size = orig_size
     res = values[0].new(len(values), size).fill_(pad_idx)
 
@@ -141,6 +141,7 @@ def collate_tokens(values, pad_idx, eos_idx, left_pad, move_eos_to_beginning=Fal
     for i, v in enumerate(values):
         copy_tensor(v, res[i][size - len(v):] if left_pad else res[i][:len(v)])
     return res
+
 
 def collate(samples, pad_idx, eos_idx, left_pad_source=True, left_pad_target=False, pad_sequence=1):
     if len(samples) == 0:
@@ -189,8 +190,9 @@ def collate(samples, pad_idx, eos_idx, left_pad_source=True, left_pad_target=Fal
         'target': target,
     }
 
+
 def get_dummy_batch(num_tokens, src_dict, tgt_dict, src_len=128, tgt_len=128,
-        left_pad_source=True, left_pad_target=False, pad_sequence=1):
+                    left_pad_source=True, left_pad_target=False, pad_sequence=1):
     bsz = num_tokens // max(src_len, tgt_len)
     dummy_samples = [
         {
@@ -206,6 +208,7 @@ def get_dummy_batch(num_tokens, src_dict, tgt_dict, src_len=128, tgt_len=128,
         pad_sequence=pad_sequence,
     )
 
+
 class EpochBatchIterator(object):
     """Iterate over a FairseqDataset and yield batches bucketed by size.
 
@@ -217,7 +220,6 @@ class EpochBatchIterator(object):
         max_tokens: max number of tokens in each batch
         max_sentences: max number of sentences in each batch
         max_positions: max sentence length supported by the model
-        ignore_invalid_inputs: don't raise Exception for sentences that are too long
         required_batch_size_multiple: require batch size to be a multiple of N
         seed: seed for random number generator for reproducibility
         num_shards: shard the data iterator into N shards
@@ -226,20 +228,17 @@ class EpochBatchIterator(object):
 
     def __init__(
         self, dataset, max_tokens=None, max_sentences=None, max_positions=None,
-        ignore_invalid_inputs=False, required_batch_size_multiple=1, seed=1,
+        required_batch_size_multiple=1, seed=1,
         num_shards=1, shard_id=0, epoch=0
     ):
-        assert isinstance(dataset, FairseqDataset)
         self.dataset = dataset
         self.max_tokens = max_tokens if max_tokens is not None else float('Inf')
         self.max_sentences = max_sentences if max_sentences is not None else float('Inf')
         self.max_positions = max_positions
-        self.ignore_invalid_inputs = ignore_invalid_inputs
         self.bsz_mult = required_batch_size_multiple
         self.seed = seed
         self.num_shards = num_shards
         self.shard_id = shard_id
-        
         self.epoch = epoch
         self._cur_epoch_itr = None
         self._next_epoch_itr = None
@@ -251,10 +250,11 @@ class EpochBatchIterator(object):
             max_positions_num = 1024
             max_tokens = max_tokens if max_tokens is not None else sys.maxsize
             #Following line is workaround due to the fact we cannot pass None object as argument
-            tgt_sizes = self.dataset.tgt_sizes if not self.dataset.tgt_sizes is None else self.dataset.src_sizes
-            batches = fairseq.data.batch_C.make_batches(self.dataset.src_sizes, tgt_sizes, indices, max_tokens, max_sentences, self.bsz_mult, max_positions_num)
-            self.frozen_batches = tuple(batches) 
-#            self.frozen_batches = tuple(self._batch_generator())
+            tgt_sizes = self.dataset.tgt_sizes if self.dataset.tgt_sizes is not None else self.dataset.src_sizes
+            batches = fairseq.data.batch_C.make_batches(
+                self.dataset.src_sizes, tgt_sizes, indices, max_tokens,
+                max_sentences, self.bsz_mult, max_positions_num)
+            self.frozen_batches = tuple(batches)
 
     def __len__(self):
         return len(self.frozen_batches)
@@ -307,58 +307,9 @@ class EpochBatchIterator(object):
         return CountingIterator(torch.utils.data.DataLoader(
             self.dataset,
             collate_fn=self.dataset.collater,
-            num_workers = 1,
+            num_workers=1,
             batch_sampler=ShardedIterator(batches, self.num_shards, self.shard_id, fill_value=[]),
         ))
-
-    def _batch_generator(self):
-        batch = []
-
-        def is_batch_full(num_tokens):
-            if len(batch) == 0:
-                return False
-            if len(batch) == self.max_sentences:
-                return True
-            if num_tokens > self.max_tokens:
-                return True
-            return False
-
-        sample_len = 0
-        sample_lens = []
-        ignored = []
-        for idx in self.dataset.ordered_indices(self.seed, self.epoch):
-            if not self.dataset.valid_size(idx, self.max_positions):
-                if self.ignore_invalid_inputs:
-                    ignored.append(idx)
-                    continue
-                raise Exception((
-                    'Size of sample #{} is invalid, max_positions={}, skip this '
-                    'example with --skip-invalid-size-inputs-valid-test'
-                ).format(idx, self.max_positions))
-
-            sample_lens.append(self.dataset.num_tokens(idx))
-            sample_len = max(sample_len, sample_lens[-1])
-            num_tokens = (len(batch) + 1) * sample_len
-            if is_batch_full(num_tokens):
-                mod_len = max(
-                    self.bsz_mult * (len(batch) // self.bsz_mult),
-                    len(batch) % self.bsz_mult,
-                )
-                yield batch[:mod_len]
-                batch = batch[mod_len:]
-                sample_lens = sample_lens[mod_len:]
-                sample_len = max(sample_lens) if len(sample_lens) > 0 else 0
-
-            batch.append(idx)
-
-        if len(batch) > 0:
-            yield batch
-
-        if len(ignored) > 0:
-            print((
-                '| WARNING: {} samples have invalid sizes and will be skipped, '
-                'max_positions={}, first few sample ids={}'
-            ).format(len(ignored), self.max_positions, ignored[:10]))
 
 
 @contextlib.contextmanager

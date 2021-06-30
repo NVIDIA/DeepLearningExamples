@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.06-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.05-py3
 FROM ${FROM_IMAGE_NAME}
 
 WORKDIR /workspace
@@ -24,10 +24,11 @@ RUN pip install --upgrade --no-cache-dir pip \
  && pip install --no-cache-dir \
       sacrebleu \
       sentencepiece
-RUN pip install tensorboardX
+RUN pip install jupyter
 
+ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update
-RUN apt-get install -y cmake pkg-config protobuf-compiler libprotobuf-dev libgoogle-perftools-dev
+RUN apt-get install -y -q cmake pkg-config protobuf-compiler libprotobuf-dev libgoogle-perftools-dev
 RUN git clone https://github.com/google/sentencepiece.git /workspace/sentencepiece
 RUN cd /workspace/sentencepiece \
   && git checkout d4dd947 \
@@ -44,5 +45,5 @@ RUN git clone https://github.com/rsennrich/subword-nmt.git /workspace/translatio
 RUN git clone https://github.com/NVIDIA/cutlass.git && cd cutlass && git checkout ed2ed4d6 && cd ..
 COPY . .
 RUN pip install -e .
-RUN git clone https://github.com/NVIDIA/dllogger.git
-RUN pip install dllogger/
+RUN pip install nvidia-pyindex
+RUN pip install nvidia-dllogger

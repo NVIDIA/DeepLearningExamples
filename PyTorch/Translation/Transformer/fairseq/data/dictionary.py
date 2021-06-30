@@ -159,7 +159,7 @@ class Dictionary(object):
         for line in lines:
             idx = line.rfind(' ')
             word = line[:idx]
-            count = int(line[idx+1:])
+            count = int(line[idx + 1:])
             d.indices[word] = len(d.symbols)
             d.symbols.append(word)
             d.count.append(count)
@@ -206,9 +206,16 @@ class Dictionary(object):
         for symbol, count in zip(self.symbols[self.nspecial:], self.count[self.nspecial:]):
             rv += '{} {}\n'.format(symbol, count)
         return rv
+
     def dummy_sentence(self, length):
         t = torch.Tensor(length).uniform_(self.nspecial + 1, len(self)).long()
         t[-1] = self.eos()
         return t
+
     def get_metadata(self):
-        return {'len':self.__len__(), 'pad':self.pad_index, 'eos':self.eos_index, 'unk':self.unk_index, 'nspecial':self.nspecial}
+        return {'len': self.__len__(),
+                'pad': self.pad_index,
+                'eos': self.eos_index,
+                'unk': self.unk_index,
+                'nspecial': self.nspecial
+                }

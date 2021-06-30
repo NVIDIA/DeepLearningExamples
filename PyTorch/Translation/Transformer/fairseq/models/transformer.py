@@ -28,12 +28,8 @@ import torch.nn.functional as F
 from torch import Tensor
 from typing import Optional, Dict
 
-torch.set_printoptions(threshold=500000000, linewidth=1024)
-
-from fairseq import options
-
 from fairseq.modules import (
-    AdaptiveSoftmax, LearnedPositionalEmbedding, MultiheadAttention, SinusoidalPositionalEmbedding
+    LearnedPositionalEmbedding, MultiheadAttention, SinusoidalPositionalEmbedding
 )
 
 from . import (
@@ -43,16 +39,19 @@ from . import (
 
 from apex.normalization.fused_layer_norm import FusedLayerNorm
 
+torch.set_printoptions(threshold=500000000, linewidth=1024)
+
 
 @torch.jit.script
-def jit_dropout_add(x, residual, prob, is_training) :
+def jit_dropout_add(x, residual, prob, is_training):
     # type: (Tensor, Tensor, float, bool) -> Tensor
     out = F.dropout(x, p=prob, training=is_training)
     out = residual + out
     return out
 
+
 @torch.jit.script
-def jit_relu_dropout(x, prob, is_training) :
+def jit_relu_dropout(x, prob, is_training):
     # type: (Tensor, float, bool) -> Tensor
     out = F.threshold(x, 0., 0.)
     out = F.dropout(out, p=prob, training=is_training)
@@ -104,9 +103,6 @@ class TransformerModel(nn.Module):
         parser.add_argument('--share-all-embeddings', action='store_true',
                             help='share encoder, decoder and output embeddings'
                                  ' (requires shared dictionary and embed dim)')
-        parser.add_argument('--adaptive-softmax-cutoff', metavar='EXPR',
-                            help='comma separated list of adaptive softmax cutoff points. '
-                                 'Must be used with adaptive_loss criterion')
 
     def __init__(self, encoder, decoder):
         super().__init__()
@@ -179,6 +175,7 @@ class TransformerModel(nn.Module):
         decoder_out = self.decoder(prev_output_tokens, encoder_out, padding_mask)
         return decoder_out
 
+
 class TransformerEncoder(nn.Module):
     """Transformer encoder."""
 
@@ -220,9 +217,9 @@ class TransformerEncoder(nn.Module):
         # B x T x C -> T x B x C
         # The tensor needs to copy transposed because
         # fused dropout is not capable of handing strided data
-        if self.fuse_dropout_add :
+        if self.fuse_dropout_add:
             x = x.transpose(0, 1).contiguous()
-        else :
+        else:
             x = x.transpose(0, 1)
 
         # compute padding mask
@@ -276,22 +273,15 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             TransformerDecoderLayer(args, no_encoder_attn)
             for _ in range(args.decoder_layers)
         ])
-        self.adaptive_softmax = None
 
-        if args.adaptive_softmax_cutoff is not None:
-            self.adaptive_softmax = AdaptiveSoftmax(
-                args.tgt_vocab_size, args.decoder_embed_dim,
-                options.eval_str_list(args.adaptive_softmax_cutoff, type=int),
-                dropout=args.dropout
-            )
-        elif not self.share_input_output_embed:
+        if not self.share_input_output_embed:
             self.embed_out = nn.Parameter(torch.Tensor(args.tgt_vocab_size, embed_dim))
             nn.init.normal_(self.embed_out, mean=0, std=embed_dim ** -0.5)
         else:
             self.embed_out = self.embed_tokens.weight
         self.normalize = args.decoder_normalize_before
         if self.normalize:
-            self.layer_norm = FusedLayerNorm(embed_dim) if args.fuse_layer_norm else nn.LayerNorm(embed_dim) 
+            self.layer_norm = FusedLayerNorm(embed_dim) if args.fuse_layer_norm else nn.LayerNorm(embed_dim)
 
     def forward(self,
                 prev_output_tokens: Tensor,
@@ -318,9 +308,9 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         # B x T x C -> T x B x C
         # The tensor needs to copy transposed because
         # fused dropout is not capable of handing strided data
-        if self.fuse_dropout_add :
+        if self.fuse_dropout_add:
             x = x.transpose(0, 1).contiguous()
-        else :
+        else:
             x = x.transpose(0, 1)
         attn = None
 
@@ -339,9 +329,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         # T x B x C -> B x T x C
         x = x.transpose(0, 1)
 
-        if self.adaptive_softmax is None:
-            # project back to size of vocabulary
-            x = F.linear(x, self.embed_out)
+        # project back to size of vocabulary
+        x = F.linear(x, self.embed_out)
 
         return x, attn
 
@@ -375,21 +364,20 @@ class TransformerEncoderLayer(nn.Module):
         self.maybe_ln1 = MaybeLayerNorm(self.embed_dim, self.normalize_before, fuse=args.fuse_layer_norm)
         self.maybe_ln2 = MaybeLayerNorm(self.embed_dim, self.normalize_before, fuse=args.fuse_layer_norm)
 
-
     def forward(self, x: Tensor, encoder_padding_mask: Optional[Tensor]):
         residual = x
 
         x = self.maybe_ln1(x, before=True)
         x, _ = self.self_attn(query=x, key=x, value=x,
-                mask_future_timesteps=False,
-                key_padding_mask=encoder_padding_mask,
-                incremental_state=None,
-                need_weights=False,
-                static_kv=False)
+                              mask_future_timesteps=False,
+                              key_padding_mask=encoder_padding_mask,
+                              incremental_state=None,
+                              need_weights=False,
+                              static_kv=False)
 
-        if self.fuse_dropout_add and self.training :
+        if self.fuse_dropout_add and self.training:
             x = jit_dropout_add(x, residual, self.dropout, self.training)
-        else :
+        else:
             x = F.dropout(x, p=self.dropout, training=self.training)
             x = residual + x
         x = self.maybe_ln1(x, after=True)
@@ -397,16 +385,16 @@ class TransformerEncoderLayer(nn.Module):
         residual = x
         x = self.maybe_ln2(x, before=True)
 
-        if self.fuse_relu_dropout :
+        if self.fuse_relu_dropout:
             x = jit_relu_dropout(self.fc1(x), self.relu_dropout, self.training)
-        else :
+        else:
             x = F.threshold(self.fc1(x), 0.0, 0.0)
             x = F.dropout(x, p=self.relu_dropout, training=self.training)
         x = self.fc2(x)
 
-        if self.fuse_dropout_add and self.training :
+        if self.fuse_dropout_add and self.training:
             x = jit_dropout_add(x, residual, self.dropout, self.training)
-        else :
+        else:
             x = F.dropout(x, p=self.dropout, training=self.training)
             x = residual + x
         x = self.maybe_ln2(x, after=True)
@@ -429,7 +417,8 @@ class TransformerDecoderLayer(nn.Module):
         self.fuse_dropout_add = args.fuse_dropout_add
         self.fuse_relu_dropout = args.fuse_relu_dropout
 
-        self.self_attn_layer_norm = MaybeLayerNorm(self.embed_dim, self.normalize_before, fuse=args.fuse_layer_norm)
+        self.self_attn_layer_norm = MaybeLayerNorm(
+            self.embed_dim, self.normalize_before, fuse=args.fuse_layer_norm)
 
         if no_encoder_attn:
             self.encoder_attn = None
@@ -439,17 +428,18 @@ class TransformerDecoderLayer(nn.Module):
                 self.embed_dim, args.decoder_attention_heads,
                 dropout=args.attention_dropout,
             )
-            self.encoder_attn_layer_norm = MaybeLayerNorm(self.embed_dim, self.normalize_before, fuse=args.fuse_layer_norm)
+            self.encoder_attn_layer_norm = MaybeLayerNorm(
+                self.embed_dim, self.normalize_before, fuse=args.fuse_layer_norm)
 
         self.fc1 = Linear(self.embed_dim, args.decoder_ffn_embed_dim)
         self.fc2 = Linear(args.decoder_ffn_embed_dim, self.embed_dim)
 
-        self.final_layer_norm = MaybeLayerNorm(self.embed_dim, self.normalize_before, fuse=args.fuse_layer_norm)
+        self.final_layer_norm = MaybeLayerNorm(
+            self.embed_dim, self.normalize_before, fuse=args.fuse_layer_norm)
         self.need_attn = True
 
-
     def forward(self,
-                x: Tensor, 
+                x: Tensor,
                 encoder_out: Tensor,
                 encoder_padding_mask: Optional[Tensor],
                 incremental_state: Optional[Dict[str, Dict[str, Tensor]]]):
@@ -465,9 +455,9 @@ class TransformerDecoderLayer(nn.Module):
             need_weights=False,
             static_kv=False
         )
-        if self.fuse_dropout_add and self.training :
+        if self.fuse_dropout_add and self.training:
             x = jit_dropout_add(x, residual, self.dropout, self.training)
-        else :
+        else:
             x = F.dropout(x, p=self.dropout, training=self.training)
             x = residual + x
         x = self.self_attn_layer_norm(x, after=True)
@@ -486,24 +476,24 @@ class TransformerDecoderLayer(nn.Module):
                 mask_future_timesteps=False,
                 need_weights=(not self.training and self.need_attn),
             )
-            if self.fuse_dropout_add and self.training :
+            if self.fuse_dropout_add and self.training:
                 x = jit_dropout_add(x, residual, self.dropout, self.training)
-            else :
+            else:
                 x = F.dropout(x, p=self.dropout, training=self.training)
                 x = residual + x
             x = self.encoder_attn_layer_norm(x, after=True)
 
         residual = x
         x = self.final_layer_norm(x, before=True)
-        if self.fuse_relu_dropout :
+        if self.fuse_relu_dropout:
             x = jit_relu_dropout(self.fc1(x), self.relu_dropout, self.training)
-        else :
+        else:
             x = F.threshold(self.fc1(x), 0.0, 0.0)
             x = F.dropout(x, p=self.relu_dropout, training=self.training)
         x = self.fc2(x)
-        if self.fuse_dropout_add and self.training :
+        if self.fuse_dropout_add and self.training:
             x = jit_dropout_add(x, residual, self.dropout, self.training)
-        else :
+        else:
             x = F.dropout(x, p=self.dropout, training=self.training)
             x = residual + x
         x = self.final_layer_norm(x, after=True)
@@ -519,18 +509,21 @@ def Embedding(num_embeddings, embedding_dim, padding_idx):
     nn.init.constant_(m.weight[padding_idx], 0)
     return m
 
+
 class MaybeLayerNorm(nn.Module):
     def __init__(self, embed_dim, normalize_before, fuse=True):
         super().__init__()
         self.embed_dim = embed_dim
         self.normalize_before = normalize_before
         self.ln = FusedLayerNorm(embed_dim) if fuse else nn.LayerNorm(embed_dim)
+
     def forward(self, x: Tensor, before: bool = False, after: bool = False):
         assert before ^ after
         if after ^ self.normalize_before:
             return self.ln(x)
         else:
             return x
+
 
 def Linear(in_features, out_features, bias=True):
     m = nn.Linear(in_features, out_features, bias)
@@ -545,7 +538,8 @@ def PositionalEmbedding(num_embeddings, embedding_dim, padding_idx, left_pad, le
         nn.init.normal_(m.weight, mean=0, std=embedding_dim ** -0.5)
         nn.init.constant_(m.weight[padding_idx], 0)
     else:
-        m = SinusoidalPositionalEmbedding(embedding_dim, padding_idx, left_pad, num_embeddings + padding_idx + 1)
+        m = SinusoidalPositionalEmbedding(
+            embedding_dim, padding_idx, left_pad, num_embeddings + padding_idx + 1)
     return m
 
 
@@ -568,7 +562,6 @@ def base_architecture(args):
     args.attention_dropout = getattr(args, 'attention_dropout', 0.)
     args.relu_dropout = getattr(args, 'relu_dropout', 0.)
     args.dropout = getattr(args, 'dropout', 0.1)
-    args.adaptive_softmax_cutoff = getattr(args, 'adaptive_softmax_cutoff', None)
     args.share_decoder_input_output_embed = getattr(args, 'share_decoder_input_output_embed', False)
     args.share_all_embeddings = getattr(args, 'share_all_embeddings', False)
     args.no_token_positional_embeddings = getattr(args, 'no_token_positional_embeddings', False)

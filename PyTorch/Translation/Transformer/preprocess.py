@@ -15,24 +15,34 @@ import shutil
 from fairseq.data import indexed_dataset, dictionary
 from fairseq.tokenizer import Tokenizer, tokenize_line
 
+
 def get_parser():
     parser = argparse.ArgumentParser(
         description='Data pre-processing: Create dictionary and store data in binary format')
-    parser.add_argument('-s', '--source-lang', default=None, metavar='SRC', help='source language')
-    parser.add_argument('-t', '--target-lang', default=None, metavar='TARGET', help='target language')
-    parser.add_argument('--trainpref', metavar='FP', default=None, help='train file prefix')
-    parser.add_argument('--validpref', metavar='FP', default=None, help='comma separated, valid file prefixes')
-    parser.add_argument('--testpref', metavar='FP', default=None, help='comma separated, test file prefixes')
-    parser.add_argument('--destdir', metavar='DIR', default='data-bin', help='destination dir')
+    parser.add_argument('-s', '--source-lang', default=None, metavar='SRC',
+                        help='source language')
+    parser.add_argument('-t', '--target-lang', default=None, metavar='TARGET',
+                        help='target language')
+    parser.add_argument('--trainpref', metavar='FP', default=None,
+                        help='train file prefix')
+    parser.add_argument('--validpref', metavar='FP', default=None,
+                        help='comma separated, valid file prefixes')
+    parser.add_argument('--testpref', metavar='FP', default=None,
+                        help='comma separated, test file prefixes')
+    parser.add_argument('--destdir', metavar='DIR', default='data-bin',
+                        help='destination dir')
     parser.add_argument('--thresholdtgt', metavar='N', default=0, type=int,
                         help='map words appearing less than threshold times to unknown')
     parser.add_argument('--thresholdsrc', metavar='N', default=0, type=int,
                         help='map words appearing less than threshold times to unknown')
     parser.add_argument('--tgtdict', metavar='FP', help='reuse given target dictionary')
     parser.add_argument('--srcdict', metavar='FP', help='reuse given source dictionary')
-    parser.add_argument('--nwordstgt', metavar='N', default=-1, type=int, help='number of target words to retain')
-    parser.add_argument('--nwordssrc', metavar='N', default=-1, type=int, help='number of source words to retain')
-    parser.add_argument('--alignfile', metavar='ALIGN', default=None, help='an alignment file (optional)')
+    parser.add_argument('--nwordstgt', metavar='N', default=-1, type=int,
+                        help='number of target words to retain')
+    parser.add_argument('--nwordssrc', metavar='N', default=-1, type=int,
+                        help='number of source words to retain')
+    parser.add_argument('--alignfile', metavar='ALIGN', default=None,
+                        help='an alignment file (optional)')
     parser.add_argument('--output-format', metavar='FORMAT', default='binary', choices=['binary', 'raw'],
                         help='output format (optional)')
     parser.add_argument('--joined-dictionary', action='store_true', help='Generate joined dictionary')
@@ -76,10 +86,10 @@ def main(args):
     if args.joined_dictionary:
         assert not args.srcdict, 'cannot combine --srcdict and --joined-dictionary'
         assert not args.tgtdict, 'cannot combine --tgtdict and --joined-dictionary'
-        src_dict = build_dictionary(set([
+        src_dict = build_dictionary({
             train_path(lang)
             for lang in [args.source_lang, args.target_lang]
-        ]))
+            })
         tgt_dict = src_dict
     else:
         if args.srcdict:
@@ -110,8 +120,8 @@ def main(args):
         tgt_dict.save(dict_path(args.target_lang))
 
     def make_binary_dataset(input_prefix, output_prefix, lang):
-        dict = dictionary.Dictionary.load(dict_path(lang))
-        print('| [{}] Dictionary: {} types'.format(lang, len(dict) - 1))
+        _dict = dictionary.Dictionary.load(dict_path(lang))
+        print('| [{}] Dictionary: {} types'.format(lang, len(_dict) - 1))
 
         ds = indexed_dataset.IndexedDatasetBuilder(dataset_dest_path(output_prefix, lang, 'bin'))
 
@@ -119,10 +129,10 @@ def main(args):
             ds.add_item(tensor)
 
         input_file = '{}{}'.format(input_prefix, ('.' + lang) if lang is not None else '')
-        res = Tokenizer.binarize(input_file, dict, consumer)
+        res = Tokenizer.binarize(input_file, _dict, consumer)
         print('| [{}] {}: {} sents, {} tokens, {:.3}% replaced by {}'.format(
             lang, input_file, res['nseq'], res['ntok'],
-            100 * res['nunk'] / res['ntok'], dict.unk_word))
+            100 * res['nunk'] / res['ntok'], _dict.unk_word))
         ds.finalize(dataset_dest_path(output_prefix, lang, 'idx'))
 
     def make_dataset(input_prefix, output_prefix, lang):
@@ -185,7 +195,7 @@ def main(args):
                                     freq_map[srcidx][tgtidx] += 1
 
         align_dict = {}
-        for srcidx in freq_map.keys():
+        for srcidx in freq_map:
             align_dict[srcidx] = max(freq_map[srcidx], key=freq_map[srcidx].get)
 
         with open(os.path.join(args.destdir, 'alignment.{}-{}.txt'.format(
@@ -196,5 +206,5 @@ def main(args):
 
 if __name__ == '__main__':
     parser = get_parser()
-    args = parser.parse_args()
-    main(args)
+    ARGS = parser.parse_args()
+    main(ARGS)
