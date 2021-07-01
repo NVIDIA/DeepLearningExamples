@@ -464,17 +464,27 @@ EfficientNet-b0 and EfficientNet-b4 models can be quantized using the QAT proces
 `python ./quant_main.py <path to imagenet> --arch efficientnet-quant-<version> --epochs <# of QAT epochs> --pretrained-from-file <path to non-quantized model weights> <any other parameters for training such as batch, momentum etc.>`
 
 During the QAT process, evaluation is done in the same way as during standard training. `quant_main.py`  works in the same way as the original `main.py` script, but with quantized models. It means that `quant_main.py` can be used to resume the QAT process with the flag `--resume`:
+
 `python ./quant_main.py <path to imagenet> --arch efficientnet-quant-<version> --resume <path to mid-training checkpoint> ...`
+
 or to evaluate a created checkpoint with the flag `--evaluate`:
+
 `python ./quant_main.py --arch efficientnet-quant-<version> --evaluate --epochs 1 --resume <path to checkpoint> -b <batch size> <path to imagenet>` 
+
 It also can run on multi-GPU in an identical way as the standard `main.py` script:
+
 `python ./multiproc.py --nproc_per_node 8 ./quant_main.py --arch efficientnet-quant-<version> ... <path to imagenet>`
 
 There is also a possibility to transform trained models (quantized or not) into ONNX format, which is needed to convert it later into TensorRT, where quantized networks are much faster during inference. Conversion to TensorRT will be supported in the next release. The conversion to ONNX consists of two steps:
+
 * translate checkpoint to pure weights:
-`python checkpoint2model.py --checkpoint-path <path to quant checkpoint> --weight-path <path where quant weights will be stored>` 
+
+`python checkpoint2model.py --checkpoint-path <path to quant checkpoint> --weight-path <path where quant weights will be stored>`
+
 * translate pure weights to ONNX:
-`python model2onnx.py --arch efficientnet-quant-<version> --pretrained-from-file <path to model quant weights> -b <batch size>`
+
+`python model2onnx.py --arch efficientnet-quant-<version> --pretrained-from-file <path to model quant weights> -b <batch size> --trt True`
+
 
 Quantized models could also be used to classify new images using the `classify.py`  flag. For example:
 `python classify.py --arch efficientnet-quant-<version> -c fanin --pretrained-from-file <path to quant weights> --image <path to JPEG image>`
