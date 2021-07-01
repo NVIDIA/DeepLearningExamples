@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
 
 r"""
 To infer the model on framework runtime, you can use `run_inference_on_fw.py` script.
-It infers data obtained from pointed data loader locally and saves received data into
-[npz files](https://gitlab-master.nvidia.com/dl/JoC/bermuda-api/-/blob/develop/bermuda_api_toolset/docs/dump_files.md).
+It infers data obtained from pointed data loader locally and saves received data into npz files.
 Those files are stored in directory pointed by `--output-dir` argument.
 
 Example call:

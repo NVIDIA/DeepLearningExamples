@@ -196,7 +196,7 @@ processing, and training of the model.
    Generate the configuration from your model repository.
  
    ```
-    python3 triton/config_model_on_trion.py \
+    python3 triton/config_model_on_triton.py \
         --model-repository ${MODEL_REPOSITORY_PATH} \
         --model-path ${SHARED_DIR}/model \
         --model-format ${FORMAT} \

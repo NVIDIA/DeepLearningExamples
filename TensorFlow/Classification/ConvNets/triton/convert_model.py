@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 r"""
 `convert_model.py` script allows to convert between model formats with additional model optimizations
 for faster inference.
-It converts model from results of [`get_model`](https://gitlab-master.nvidia.com/dl/JoC/bermuda-api/-/blob/develop/bermuda_api_toolset/docs/model.md) function.
+It converts model from results of get_model function.
 
 Currently supported input and output formats are:
 

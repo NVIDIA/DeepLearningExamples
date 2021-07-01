@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ where N and M are variable-size dimensions, to tell perf_analyzer to send batch-
 import argparse
 import csv
 import os
+import sys
 from pathlib import Path
 from typing import List, Optional
 
@@ -66,15 +67,16 @@ def _parse_batch_sizes(batch_sizes: str):
 
 
 def online_performance(
-    model_name: str,
-    batch_sizes: List[int],
-    result_path: str,
-    input_shapes: Optional[List[str]] = None,
-    profiling_data: str = "random",
-    triton_instances: int = 1,
-    triton_gpu_engine_count: int = 1,
-    server_url: str = "localhost",
-    measurement_window: int = 10000,
+        model_name: str,
+        batch_sizes: List[int],
+        result_path: str,
+        input_shapes: Optional[List[str]] = None,
+        profiling_data: str = "random",
+        triton_instances: int = 1,
+        triton_gpu_engine_count: int = 1,
+        server_url: str = "localhost",
+        measurement_window: int = 10000,
+        shared_memory: bool = False
 ):
     print("\n")
     print(f"==== Dynamic batching analysis start ====")
@@ -85,13 +87,13 @@ def online_performance(
     print(f"Running performance tests for dynamic batching")
     performance_file = f"triton_performance_dynamic_partial.csv"
 
-    steps = 16
-
     max_batch_size = max(batch_sizes)
-    max_concurrency = max(steps, max_batch_size * triton_instances * triton_gpu_engine_count)
-    step = max(1, max_concurrency // steps)
+    max_total_requests = 2 * max_batch_size * triton_instances * triton_gpu_engine_count
+    max_concurrency = min(256, max_total_requests)
+    batch_size = max(1, max_total_requests // 256)
+
+    step = max(1, max_concurrency // 32)
     min_concurrency = step
-    batch_size = 1
 
     exec_args = f"""-m {model_name} \
         -x 1 \
@@ -102,13 +104,15 @@ def online_performance(
         -b {batch_size} \
         -f {performance_file} \
         --concurrency-range {min_concurrency}:{max_concurrency}:{step} \
-        --input-data {profiling_data} {input_shapes}
-    """
+        --input-data {profiling_data} {input_shapes}"""
+
+    if shared_memory:
+        exec_args += " --shared-memory=cuda"
 
     result = os.system(f"perf_client {exec_args}")
     if result != 0:
         print(f"Failed running performance tests. Perf client failed with exit code {result}")
-        exit(1)
+        sys.exit(1)
 
     results = list()
     update_performance_data(results=results, performance_file=performance_file)
@@ -149,6 +153,8 @@ def main():
     parser.add_argument(
         "--measurement-window", required=False, help="Time which perf_analyzer will wait for results", default=10000
     )
+    parser.add_argument("--shared-memory", help="Use shared memory for communication with Triton", action="store_true",
+                        default=False)
 
     args = parser.parse_args()
 
@@ -157,9 +163,11 @@ def main():
         model_name=args.model_name,
         batch_sizes=_parse_batch_sizes(args.batch_sizes),
         triton_instances=args.triton_instances,
+        triton_gpu_engine_count=args.number_of_model_instances,
         profiling_data=args.input_data,
         input_shapes=args.input_shape,
         measurement_window=args.measurement_window,
+        shared_memory=args.shared_memory
     )
 
     online_performance(
@@ -172,6 +180,7 @@ def main():
         input_shapes=args.input_shape,
         result_path=args.result_path,
         measurement_window=args.measurement_window,
+        shared_memory=args.shared_memory
     )
 
 

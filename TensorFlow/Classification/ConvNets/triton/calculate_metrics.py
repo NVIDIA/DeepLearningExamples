@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,9 +16,8 @@
 
 r"""
 Using `calculate_metrics.py` script, you can obtain model accuracy/error metrics using defined `MetricsCalculator` class.
-See [documentation](https://gitlab-master.nvidia.com/dl/JoC/bermuda-api/-/blob/develop/bermuda_api_toolset/docs/metrics.md) on preparation of this class.
 
-Data provided to `MetricsCalculator` are obtained from [npz dump files](https://gitlab-master.nvidia.com/dl/JoC/bermuda-api/-/blob/develop/bermuda_api_toolset/docs/dump_files.md)
+Data provided to `MetricsCalculator` are obtained from npz dump files
 stored in directory pointed by `--dump-dir` argument.
 Above files are prepared by `run_inference_on_fw.py` and `run_inference_on_triton.py` scripts.
 
