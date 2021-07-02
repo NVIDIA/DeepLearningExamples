@@ -113,7 +113,7 @@ def main(args, model_args, model_arch):
 
     model = model_arch(**model_args.__dict__)
 
-    if quant_arch:
+    if quant_arch and model_args.pretrained_from_file is not None:
         check_quant_weight_correctness(model_args.pretrained_from_file, model)
 
     image_size = args.image_size if args.image_size is not None else model.arch.default_image_size
