@@ -61,6 +61,7 @@ class Runner(object):
             use_xla=False,
             use_tf_amp=False,
             use_dali=False,
+            use_cpu=False,
             gpu_memory_fraction=1.0,
             gpu_id=0,
 
@@ -136,6 +137,7 @@ class Runner(object):
                                                              use_tf_amp=use_tf_amp,
                                                              use_xla=use_xla,
                                                              use_dali=use_dali,
+                                                             use_cpu=use_cpu,
                                                              gpu_memory_fraction=gpu_memory_fraction,
                                                              gpu_id=gpu_id)
 
@@ -161,6 +163,7 @@ class Runner(object):
                                          dtype=model_hparams.dtype,
                                          weight_init=weight_init,
                                          use_dali=use_dali,
+                                         use_cpu=use_cpu,
                                          cardinality=architecture['cardinality'] if 'cardinality' in architecture else 1,
                                          use_se=architecture['use_se'] if 'use_se' in architecture else False,
                                          se_ratio=architecture['se_ratio'] if 'se_ratio' in architecture else 1)
@@ -200,42 +203,45 @@ class Runner(object):
             return worker_batch_size
 
     @staticmethod
-    def _get_session_config(mode, use_xla, use_dali, gpu_memory_fraction, gpu_id=0):
+    def _get_session_config(mode, use_xla, use_dali, use_cpu, gpu_memory_fraction, gpu_id=0):
 
         if mode not in ["train", 'validation', 'benchmark', 'inference']:
             raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark', 'inference')" %
                              mode)
 
-        # Limit available GPU memory (tune the size)
-        if use_dali:
-            gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_memory_fraction)
-            config = tf.ConfigProto(gpu_options=gpu_options)
-            config.gpu_options.allow_growth = False
-        else:
-            config = tf.ConfigProto()
-            config.gpu_options.allow_growth = True
+        config = tf.ConfigProto()
+        if not use_cpu:
+            # Limit available GPU memory (tune the size)
+            if use_dali:
+                gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_memory_fraction)
+                config = tf.ConfigProto(gpu_options=gpu_options)
+                config.gpu_options.allow_growth = False
+            else:
+                config.gpu_options.allow_growth = True
 
-        config.allow_soft_placement = True
-        config.log_device_placement = False
+            config.allow_soft_placement = True
+            config.log_device_placement = False
 
-        config.gpu_options.visible_device_list = str(gpu_id)
+            config.gpu_options.visible_device_list = str(gpu_id)
+            config.gpu_options.force_gpu_compatible = True  # Force pinned memory
 
-        if hvd_utils.is_using_hvd():
-            config.gpu_options.visible_device_list = str(hvd.local_rank())
+            if hvd_utils.is_using_hvd():
+                config.gpu_options.visible_device_list = str(hvd.local_rank())
+
+            config.gpu_options.force_gpu_compatible = True  # Force pinned memory
 
         if use_xla:
             config.graph_options.optimizer_options.global_jit_level = tf.OptimizerOptions.ON_1
 
-        config.gpu_options.force_gpu_compatible = True  # Force pinned memory
-
         if mode == 'train':
-            config.intra_op_parallelism_threads = 1  # Avoid pool of Eigen threads
-            config.inter_op_parallelism_threads = max(2, (multiprocessing.cpu_count() // max(hvd.size(), 8) - 2))
+            if not use_cpu:
+                config.intra_op_parallelism_threads = 1  # Avoid pool of Eigen threads
+                config.inter_op_parallelism_threads = max(2, (multiprocessing.cpu_count() // max(hvd.size(), 8) - 2))
 
         return config
 
     @staticmethod
-    def _get_run_config(mode, model_dir, use_xla, use_dali, gpu_memory_fraction, gpu_id=0, seed=None):
+    def _get_run_config(mode, model_dir, use_xla, use_dali, use_cpu, gpu_memory_fraction, gpu_id=0, seed=None):
 
         if mode not in ["train", 'validation', 'benchmark', 'inference']:
             raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark', 'inference')" %
@@ -258,6 +264,7 @@ class Runner(object):
             session_config=Runner._get_session_config(mode=mode,
                                                       use_xla=use_xla,
                                                       use_dali=use_dali,
+                                                      use_cpu=use_cpu,
                                                       gpu_memory_fraction=gpu_memory_fraction,
                                                       gpu_id=gpu_id),
             keep_checkpoint_max=5,
@@ -288,6 +295,7 @@ class Runner(object):
                                             model_dir=self.run_hparams.model_dir,
                                             use_xla=use_xla,
                                             use_dali=use_dali,
+                                            use_cpu=self.run_hparams.use_cpu,
                                             gpu_memory_fraction=gpu_memory_fraction,
                                             gpu_id=gpu_id,
                                             seed=self.run_hparams.seed)

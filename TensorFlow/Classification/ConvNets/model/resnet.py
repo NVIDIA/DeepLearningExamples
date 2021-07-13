@@ -53,6 +53,7 @@ class ResnetModel(object):
         weight_init='fan_out',
         dtype=tf.float32,
         use_dali=False,
+        use_cpu=False,
         cardinality=1,
         use_se=False,
         se_ratio=1,
@@ -68,6 +69,7 @@ class ResnetModel(object):
             expansions=expansions,
             model_name=model_name,
             use_dali=use_dali,
+            use_cpu=use_cpu,
             cardinality=cardinality,
             use_se=use_se,
             se_ratio=se_ratio
@@ -124,11 +126,13 @@ class ResnetModel(object):
                 # Stage inputs on the host
                 cpu_prefetch_op, (features, labels) = self._stage([features, labels])
 
-            with tf.device('/gpu:0'):
-                # Stage inputs to the device
-                gpu_prefetch_op, (features, labels) = self._stage([features, labels])
+            if not self.model_hparams.use_cpu:
+                with tf.device('/gpu:0'):
+                    # Stage inputs to the device
+                    gpu_prefetch_op, (features, labels) = self._stage([features, labels])
 
-        with tf.device("/gpu:0"):
+        main_device = "/gpu:0" if not self.model_hparams.use_cpu else "/cpu:0"
+        with tf.device(main_device):
 
             if features.dtype != self.model_hparams.dtype:
                 features = tf.cast(features, self.model_hparams.dtype)
@@ -237,14 +241,6 @@ class ResnetModel(object):
                 dllogger.log(data={"Restoring variables from checkpoint": params['finetune_checkpoint']}, step=tuple())
                 tf.train.init_from_checkpoint(params['finetune_checkpoint'], train_var_dict)
 
-        with tf.device("/cpu:0"):
-            if hvd_utils.is_using_hvd():
-                sync_var = tf.Variable(initial_value=[0], dtype=tf.int32, name="signal_handler_var",
-                                       trainable=False)
-                sync_var_assing = sync_var.assign([1], name="signal_handler_var_set")
-                sync_var_reset = sync_var.assign([0], name="signal_handler_var_reset")
-                sync_op = hvd.allreduce(sync_var, op=hvd.Sum, name="signal_handler_all_reduce")
-
         if mode == tf.estimator.ModeKeys.PREDICT:
 
             predictions = {'classes': y_preds, 'probabilities': probs}
@@ -257,7 +253,7 @@ class ResnetModel(object):
 
         else:
 
-            with tf.device("/gpu:0"):
+            with tf.device(main_device):
 
                 if mode == tf.estimator.ModeKeys.TRAIN:
                     acc_top1 = tf.nn.in_top_k(predictions=logits, targets=labels, k=1)
@@ -355,6 +351,10 @@ class ResnetModel(object):
 
                     if self.model_hparams.use_dali:
                         train_ops = tf.group(backprop_op, update_ops, name='train_ops')
+                    elif self.model_hparams.use_cpu:
+                        train_ops = tf.group(
+                            backprop_op, cpu_prefetch_op, update_ops, name='train_ops'
+                        )
                     else:
                         train_ops = tf.group(
                             backprop_op, cpu_prefetch_op, gpu_prefetch_op, update_ops, name='train_ops'

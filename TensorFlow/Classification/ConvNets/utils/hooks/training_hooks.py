@@ -118,47 +118,37 @@ class TrainingPartitionHook(tf.estimator.SessionRunHook):
     def __init__(self, sync_freq=10):
         super().__init__()
         self.signal_recieved = False
-        self.should_sync_params = False
         self.sync_freq = sync_freq
         self.global_step = 0
-
-        self.should_exit = False
 
         signal.signal(signal.SIGUSR1, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
 
+    def begin(self):
+        if is_using_hvd():
+            with tf.device("/cpu:0"):
+                self.input_op = tf.placeholder(tf.int32, shape=())
+                self.allreduce_op = hvd.allreduce(self.input_op, op=hvd.Sum, 
+                                                  name="signal_handler_all_reduce")
+
     def before_run(self, run_context):
         fetches = [tf.train.get_global_step()]
+        feed_dict = None
 
-        if is_using_hvd():
-            fetches.append(
-                "signal_handler_var_set:0" if self.signal_recieved else "signal_handler_var:0")
-
-
-            if self.should_exit:
-                fetches.append("signal_handler_var_reset:0")
-            elif self.signal_recieved:
-                fetches.append("signal_handler_var_set:0")
-            else:
-                fetches.append("signal_handler_var:0")
-
-            if ((self.global_step % self.sync_freq) == 0) and not self.should_exit:
-                fetches.append("signal_handler_all_reduce:0")
-
-        run_args = tf.train.SessionRunArgs(fetches)
-        return run_args
+        if is_using_hvd() and (self.global_step % self.sync_freq) == 0:
+            fetches += [self.allreduce_op]
+            feed_dict = {self.input_op: int(self.signal_recieved)}
+            
+        return tf.train.SessionRunArgs(fetches, feed_dict=feed_dict)
 
     def after_run(self, run_context, run_values):
-        self.global_step = run_values.results[0]
+        self.global_step = run_values.results[0] + 1
 
-        if self.should_exit:
+        if is_using_hvd() and len(run_values.results) == 2:
+            if run_values.results[1] > 0:
+                run_context.request_stop()
+        elif self.signal_recieved:
             run_context.request_stop()
-            return
-
-        if is_using_hvd() and len(run_values.results) == 3:
-            self.should_exit = (run_values.results[2][0] == hvd.size())
-        else:
-            self.should_exit = self.signal_recieved
 
     def _signal_handler(self, signum, frame):
         print("Stop signal received")

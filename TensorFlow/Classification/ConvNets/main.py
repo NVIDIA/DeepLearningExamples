@@ -69,6 +69,7 @@ if __name__ == "__main__":
         use_xla=FLAGS.xla,
         use_tf_amp=FLAGS.amp,
         use_dali=FLAGS.dali,
+        use_cpu=FLAGS.cpu,
         gpu_memory_fraction=FLAGS.gpu_memory_fraction,
         gpu_id=FLAGS.gpu_id,
         seed=FLAGS.seed)
