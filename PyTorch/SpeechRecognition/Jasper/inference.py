@@ -57,6 +57,8 @@ def get_parser():
                         help='Relative path to evaluation dataset manifest files')
     parser.add_argument('--ckpt', default=None, type=str,
                         help='Path to model checkpoint')
+    parser.add_argument("--max_duration", default=None, type=float, help='maximum duration of sequences. if None uses attribute from model configuration file')
+    parser.add_argument("--pad_to_max_duration", action='store_true', help='pad to maximum duration of sequences')
     parser.add_argument('--amp', '--fp16', action='store_true',
                         help='Use FP16 precision')
     parser.add_argument('--cudnn_benchmark', action='store_true',
@@ -247,7 +249,7 @@ def main():
             config_features=features_kw,
             json_names=args.val_manifests,
             batch_size=args.batch_size,
-            pipeline_type=("train" if measure_perf else "val"),  # no drop_last 
+            pipeline_type=("train" if measure_perf else "val"),  # no drop_last
             device_type=args.dali_device,
             symbols=symbols)
 
