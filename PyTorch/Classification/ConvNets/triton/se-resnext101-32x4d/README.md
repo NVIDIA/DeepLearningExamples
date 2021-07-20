@@ -1,6 +1,6 @@
 # Deploying the SE-ResNeXt101-32x4d model using Triton Inference Server
 
-The [NVIDIA Triton Inference Server](https://github.com/NVIDIA/trtis-inference-server) provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server. 
+The [NVIDIA Triton Inference Server](https://github.com/NVIDIA/triton-inference-server) provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server. 
 
 This folder contains instructions on how to deploy and run inference on
 Triton Inference Server as well as gather detailed performance analysis.
@@ -29,7 +29,7 @@ The SE-ResNeXt101-32x4d is a [ResNeXt101-32x4d](https://arxiv.org/pdf/1611.05431
 model with added Squeeze-and-Excitation module introduced
 in [Squeeze-and-Excitation Networks](https://arxiv.org/pdf/1709.01507.pdf) paper.
 
-The SE-ResNeXt101-32x4d model can be deployed for inference on the [NVIDIA Triton Inference Server](https://github.com/NVIDIA/trtis-inference-server) using
+The SE-ResNeXt101-32x4d model can be deployed for inference on the [NVIDIA Triton Inference Server](https://github.com/NVIDIA/triton-inference-server) using
 TorchScript, ONNX Runtime or TensorRT as an execution backend.
 
 ## Setup
