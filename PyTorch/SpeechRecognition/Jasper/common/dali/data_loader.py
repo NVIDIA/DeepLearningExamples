@@ -17,7 +17,7 @@ import math
 import numpy as np
 import torch.distributed as dist
 from .iterator import DaliJasperIterator, SyntheticDataIterator
-from .pipeline import DaliPipeline
+from .pipeline import make_dali_asr_pipeline
 from common.helpers import print_once
 
 
@@ -113,10 +113,10 @@ class DaliDataLoader:
         self.dataset_size = len(output_files)
         print_once(f"Dataset read by DALI. Number of samples: {self.dataset_size}")
 
-        pipeline = DaliPipeline.from_config(config_data=config_data, config_features=config_features, device_id=gpu_id,
-                                            file_root=dataset_path, file_list=file_list_path,
-                                            device_type=self.device_type, batch_size=self.batch_size,
-                                            train_pipeline=train_pipeline)
+        pipeline = make_dali_asr_pipeline(config_data=config_data, config_features=config_features, device_id=gpu_id,
+                                          file_root=dataset_path, file_list=file_list_path,
+                                          device_type=self.device_type, batch_size=self.batch_size,
+                                          train_pipeline=train_pipeline)
 
         return DaliJasperIterator([pipeline], transcripts=transcripts, symbols=symbols, batch_size=self.batch_size,
                                   reader_name="file_reader", train_iterator=train_pipeline)
