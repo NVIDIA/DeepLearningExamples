@@ -180,6 +180,8 @@ For more information about `perf_client`, refer to the [official documentation](
 
 ## Performance
 
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
+
 ### Latency vs Throughput for TensorRT Engine
 
 Performance numbers for BERT Large, sequence length=384 are obtained from [experiments](https://github.com/NVIDIA/TensorRT/tree/release/7.1/demo/BERT#inference-performance-nvidia-a100-40gb) on NVIDIA A100 with 1x A100 40G GPUs. Throughput is measured in samples/second, and latency in milliseconds.

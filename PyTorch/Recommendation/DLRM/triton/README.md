@@ -192,6 +192,8 @@ For more information about `perf_client` please refer to [official documentation
 
 ## Performance
 
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
+
 ### Throughput/Latency results
 
 Throughput is measured in recommendations/second, and latency in milliseconds.

@@ -626,6 +626,8 @@ I0424 23:59:50.031537 139905798453056 run_squad.py:302] ------------------------
 
 ## Performance
 
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
+
 
 ### Benchmarking
 

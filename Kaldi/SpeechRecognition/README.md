@@ -192,6 +192,8 @@ you can set `count` to `1` in the [`instance_group` section](https://docs.nvidia
 
 ## Performance
 
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
+
 
 ### Metrics
 

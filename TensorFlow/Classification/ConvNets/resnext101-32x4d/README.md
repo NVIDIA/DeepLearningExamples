@@ -420,6 +420,8 @@ The optional `--xla` and `--amp` flags control XLA and AMP during inference.
 
 ## Performance
 
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
+
 ### Benchmarking
 
 The following section shows how to run benchmarks measuring the model performance in training and inference modes.
