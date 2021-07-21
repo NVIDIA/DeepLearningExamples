@@ -160,6 +160,8 @@ By default the `./build_trtis.sh` script builds the TensorRT engines with FP16 m
 
 ## Performance
 
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
+
 The following tables show inference statistics for the Tacotron2 and WaveGlow
 text-to-speech system.
 The tables include average latency, latency standard deviation,

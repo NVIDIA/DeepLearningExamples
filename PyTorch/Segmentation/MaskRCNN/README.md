@@ -484,6 +484,8 @@ __Note__: The score is always the Average Precision(AP) at
   - maxDets = 100
  
 ## Performance
+
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
  
 ### Benchmarking
 Benchmarking can be performed for both training and inference. Both scripts run the Mask R-CNN model using the parameters defined in `configs/e2e_mask_rcnn_R_50_FPN_1x.yaml`. You can specify whether benchmarking is performed in FP16, TF32 or FP32 by specifying it as an argument to the benchmarking scripts.

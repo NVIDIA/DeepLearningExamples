@@ -344,6 +344,8 @@ we can consider that all clients are local.
 
 ## Performance
 
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
+
 
 ### Offline scenario
 This table lists the common variable parameters for all performance measurements:

@@ -274,6 +274,8 @@ For more information about `perf_client`, refer to the [official documentation](
 
 ## Performance
 
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
+
 ### Inference Benchmarking in Triton Inference Server
 
 To benchmark the inference performance on Volta Turing or Ampere GPU, run `bash triton/scripts/execute_all_perf_runs.sh` according to [Quick-Start-Guide](#quick-start-guide) Step 7.
