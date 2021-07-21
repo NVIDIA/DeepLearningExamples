@@ -119,7 +119,7 @@ class DaliDataLoader:
                                             train_pipeline=train_pipeline)
 
         return DaliJasperIterator([pipeline], transcripts=transcripts, symbols=symbols, batch_size=self.batch_size,
-                                  shard_size=self._shard_size(), train_iterator=train_pipeline)
+                                  reader_name="file_reader", train_iterator=train_pipeline)
 
     def _init_synth_iterator(self, batch_size, nfeatures, iters_per_epoch, ngpus):
         self.dataset_size = ngpus * iters_per_epoch * batch_size
