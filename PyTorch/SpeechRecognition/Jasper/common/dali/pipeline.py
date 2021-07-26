@@ -108,7 +108,7 @@ def _dali_init_log(args: dict):
 
 
 @dali.pipeline_def
-def dali_asr_pipeline(train_pipeline,  # True if train, False if valid pipeline
+def dali_asr_pipeline(train_pipeline,  # True if training, False if validation
                       file_root,
                       file_list,
                       sample_rate,
