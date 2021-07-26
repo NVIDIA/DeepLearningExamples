@@ -66,8 +66,9 @@ class MaskedConv1d(nn.Conv1d):
         self.masked = masked
 
     def get_seq_len(self, lens):
-        return ((lens + 2 * self.padding[0] - self.dilation[0]
-                 * (self.kernel_size[0] - 1) - 1) // self.stride[0] + 1)
+        pad, ks = self.padding[0], self.kernel_size[0]
+        return torch.div(lens + 2 * pad - self.dilation[0] * (ks - 1) - 1,
+                         self.stride[0], rounding_mode='trunc') + 1
 
     def forward(self, x, x_lens=None):
         if self.masked:

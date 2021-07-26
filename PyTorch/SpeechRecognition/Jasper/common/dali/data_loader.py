@@ -12,29 +12,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
+import json
 import math
-import numpy as np
+import os
+
+import torch
 import torch.distributed as dist
-from .iterator import DaliJasperIterator, SyntheticDataIterator
-from .pipeline import make_dali_asr_pipeline
+
+from .iterator import DaliIterator, SyntheticDataIterator
+from .pipeline import DaliPipelineFactory
 from common.helpers import print_once
 
 
 def _parse_json(json_path: str, start_label=0, predicate=lambda json: True):
     """
-    Parses json file to the format required by DALI
+    Parses json file to the format required by DALI.
+
     Args:
         json_path: path to json file
-        start_label: the label, starting from which DALI will assign consecutive int numbers to every transcript
-        predicate: function, that accepts a sample descriptor (i.e. json dictionary) as an argument.
-                   If the predicate for a given sample returns True, it will be included in the dataset.
+        start_label: the label, starting from which DALI will assign
+            consecutive int numbers to every transcript
+        predicate: function, that accepts a sample descriptor
+            (i.e. json dictionary) as an argument. If the predicate for a given
+            sample returns True, it will be included in the dataset.
 
     Returns:
-        output_files: dictionary, that maps file name to label assigned by DALI
-        transcripts: dictionary, that maps label assigned by DALI to the transcript
+        output_files: dict that maps file name to label assigned by DALI
+        transcripts: dict that maps label assigned by DALI to the transcript
     """
-    import json
     global cnt
     with open(json_path) as f:
         librispeech_json = json.load(f)
@@ -71,32 +76,37 @@ class DaliDataLoader:
         device_type: Which device to use for preprocessing. Choose: "cpu", "gpu"
         pipeline_type: Choose: "train", "val", "synth"
     """
-
-    def __init__(self, gpu_id, dataset_path: str, config_data: dict, config_features: dict, json_names: list,
-                 symbols: list, batch_size: int, pipeline_type: str, grad_accumulation_steps: int = 1,
+    def __init__(self, gpu_id, dataset_path: str, config_data: dict,
+                 config_features: dict, json_names: list, symbols: list,
+                 batch_size: int, pipeline_type: str,
+                 grad_accumulation_steps: int = 1,
                  synth_iters_per_epoch: int = 544, device_type: str = "gpu"):
-        import torch
+
         self.batch_size = batch_size
         self.grad_accumulation_steps = grad_accumulation_steps
         self.drop_last = (pipeline_type == 'train')
         self.device_type = device_type
         pipeline_type = self._parse_pipeline_type(pipeline_type)
         if pipeline_type == "synth":
-            self._dali_data_iterator = self._init_synth_iterator(self.batch_size, config_features['nfilt'],
-                                                                 iters_per_epoch=synth_iters_per_epoch,
-                                                                 ngpus=torch.distributed.get_world_size())
+            self._dali_data_iterator = self._init_synth_iterator(
+                self.batch_size,
+                config_features['nfilt'],
+                iters_per_epoch=synth_iters_per_epoch,
+                ngpus=torch.distributed.get_world_size())
         else:
-            self._dali_data_iterator = self._init_iterator(gpu_id=gpu_id, dataset_path=dataset_path,
-                                                           config_data=config_data,
-                                                           config_features=config_features,
-                                                           json_names=json_names, symbols=symbols,
-                                                           train_pipeline=pipeline_type == "train")
+            self._dali_data_iterator = self._init_iterator(
+                gpu_id=gpu_id,
+                dataset_path=dataset_path,
+                config_data=config_data,
+                config_features=config_features,
+                json_names=json_names,
+                symbols=symbols,
+                train_pipeline=pipeline_type == "train")
 
-    def _init_iterator(self, gpu_id, dataset_path, config_data, config_features, json_names: list, symbols: list,
+    def _init_iterator(self, gpu_id, dataset_path, config_data,
+                       config_features, json_names: list, symbols: list,
                        train_pipeline: bool):
-        """
-        Returns data iterator. Data underneath this operator is preprocessed within Dali
-        """
+        """Returns an iterator over data preprocessed with Dali."""
 
         def hash_list_of_strings(li):
             return str(abs(hash(''.join(li))))
@@ -104,31 +114,44 @@ class DaliDataLoader:
         output_files, transcripts = {}, {}
         max_duration = config_data['max_duration']
         for jname in json_names:
-            of, tr = _parse_json(jname if jname[0] == '/' else os.path.join(dataset_path, jname), len(output_files),
-                                 predicate=lambda json: json['original_duration'] <= max_duration)
+            of, tr = _parse_json(
+                jname if jname[0] == '/' else os.path.join(dataset_path, jname),
+                len(output_files),
+                predicate=lambda json: json['original_duration'] <= max_duration)
             output_files.update(of)
             transcripts.update(tr)
-        file_list_path = os.path.join("/tmp", "jasper_dali.file_list." + hash_list_of_strings(json_names))
+        file_list_path = os.path.join(
+            "/tmp", "asr_dali.file_list." + hash_list_of_strings(json_names))
         _dict_to_file(output_files, file_list_path)
         self.dataset_size = len(output_files)
-        print_once(f"Dataset read by DALI. Number of samples: {self.dataset_size}")
+        print_once('Dataset read by DALI. '
+                   f'Number of samples: {self.dataset_size}')
 
-        pipeline = make_dali_asr_pipeline(config_data=config_data, config_features=config_features, device_id=gpu_id,
-                                          file_root=dataset_path, file_list=file_list_path,
-                                          device_type=self.device_type, batch_size=self.batch_size,
-                                          train_pipeline=train_pipeline)
+        pipeline = DaliPipelineFactory.from_config(
+            config_data=config_data,
+            config_features=config_features,
+            device_id=gpu_id,
+            file_root=dataset_path,
+            file_list=file_list_path,
+            device_type=self.device_type,
+            batch_size=self.batch_size,
+            train_pipeline=train_pipeline)
 
-        return DaliJasperIterator([pipeline], transcripts=transcripts, symbols=symbols, batch_size=self.batch_size,
-                                  reader_name="file_reader", train_iterator=train_pipeline)
+        return DaliIterator([pipeline], transcripts=transcripts,
+                            symbols=symbols, batch_size=self.batch_size,
+                            reader_name="file_reader",
+                            train_iterator=train_pipeline)
 
-    def _init_synth_iterator(self, batch_size, nfeatures, iters_per_epoch, ngpus):
+    def _init_synth_iterator(self, batch_size, nfeatures, iters_per_epoch,
+                             ngpus):
         self.dataset_size = ngpus * iters_per_epoch * batch_size
         return SyntheticDataIterator(batch_size, nfeatures, regenerate=True)
 
     @staticmethod
     def _parse_pipeline_type(pipeline_type):
         pipe = pipeline_type.lower()
-        assert pipe in ("train", "val", "synth"), 'Invalid pipeline type (choices: "train", "val", "synth").'
+        assert pipe in ("train", "val", "synth"), \
+            'Invalid pipeline type (choices: "train", "val", "synth").'
         return pipe
 
     def _shard_size(self):
@@ -147,7 +170,8 @@ class DaliDataLoader:
         Number of batches handled by each GPU.
         """
         if self.drop_last:
-            assert self._shard_size() % self.batch_size == 0, f'{self._shard_size()} {self.batch_size}'
+            assert self._shard_size() % self.batch_size == 0, \
+                f'{self._shard_size()} {self.batch_size}'
 
         return int(math.ceil(self._shard_size() / self.batch_size))
 
