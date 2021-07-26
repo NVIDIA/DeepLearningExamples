@@ -315,6 +315,13 @@ def add_parser_arguments(parser, skip_arch=False):
         choices=[None, "autoaugment"],
         help="augmentation method",
     )
+    parser.add_argument(
+        "--num-classes",
+        type=int,
+        default=None,
+        required=False,
+        help="number of classes"
+    )
 
 
 def prepare_for_training(args, model_args, model_arch):
