@@ -20,7 +20,7 @@ import torch
 import torch.distributed as dist
 
 from .iterator import DaliIterator, SyntheticDataIterator
-from .pipeline import DaliPipelineFactory
+from .pipeline import make_dali_asr_pipeline
 from common.helpers import print_once
 
 
@@ -127,7 +127,7 @@ class DaliDataLoader:
         print_once('Dataset read by DALI. '
                    f'Number of samples: {self.dataset_size}')
 
-        pipeline = DaliPipelineFactory.from_config(
+        pipeline = make_dali_asr_pipeline(
             config_data=config_data,
             config_features=config_features,
             device_id=gpu_id,

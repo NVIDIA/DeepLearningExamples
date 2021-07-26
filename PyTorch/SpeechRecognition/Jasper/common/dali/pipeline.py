@@ -108,26 +108,26 @@ def _dali_init_log(args: dict):
 
 
 @dali.pipeline_def
-def dali_asr_pipe(train_pipeline,  # True if train, False if valid pipeline
-                  file_root,
-                  file_list,
-                  sample_rate,
-                  silence_threshold,
-                  resample_range,
-                  discrete_resample_range,
-                  window_size,
-                  window_stride,
-                  nfeatures,
-                  nfft,
-                  frame_splicing_factor,
-                  dither_coeff,
-                  pad_align,
-                  preemph_coeff,
-                  do_spectrogram_masking=False,
-                  cutouts_generator=None,
-                  shard_id=0,
-                  n_shards=1,
-                  preprocessing_device="gpu"):
+def dali_asr_pipeline(train_pipeline,  # True if train, False if valid pipeline
+                      file_root,
+                      file_list,
+                      sample_rate,
+                      silence_threshold,
+                      resample_range,
+                      discrete_resample_range,
+                      window_size,
+                      window_stride,
+                      nfeatures,
+                      nfft,
+                      frame_splicing_factor,
+                      dither_coeff,
+                      pad_align,
+                      preemph_coeff,
+                      do_spectrogram_masking=False,
+                      cutouts_generator=None,
+                      shard_id=0,
+                      n_shards=1,
+                      preprocessing_device="gpu"):
     do_remove_silence = silence_threshold is not None
 
     def _div_ceil(dividend, divisor):
@@ -201,145 +201,143 @@ def dali_asr_pipe(train_pipeline,  # True if train, False if valid pipeline
     return log_features.gpu(), label.gpu(), log_features_len.gpu()
 
 
-class DaliPipelineFactory:
-    @staticmethod
-    def from_config(train_pipeline: bool, device_id, batch_size,
-                    file_root: str, file_list: str, config_data: dict,
-                    config_features: dict, device_type: str = "gpu",
-                    do_resampling: bool = True,
-                    num_cpu_threads: int = multiprocessing.cpu_count()):
-        max_duration = config_data['max_duration']
-        sample_rate = config_data['sample_rate']
-        silence_threshold = -60 if config_data['trim_silence'] else None
+def make_dali_asr_pipeline(train_pipeline: bool, device_id, batch_size,
+                           file_root: str, file_list: str, config_data: dict,
+                           config_features: dict, device_type: str = "gpu",
+                           do_resampling: bool = True,
+                           num_cpu_threads: int = multiprocessing.cpu_count()):
+    max_duration = config_data['max_duration']
+    sample_rate = config_data['sample_rate']
+    silence_threshold = -60 if config_data['trim_silence'] else None
 
-        # TODO Take into account resampling probablity
-        # TODO     config_features['speed_perturbation']['p']
-        if do_resampling and config_data['speed_perturbation'] is not None:
-            resample_range = [config_data['speed_perturbation']['min_rate'],
-                              config_data['speed_perturbation']['max_rate']]
-            discrete_resample_range = config_data['speed_perturbation']['discrete']
-        else:
-            resample_range = None
-            discrete_resample_range = False
+    # TODO Take into account resampling probablity
+    # TODO     config_features['speed_perturbation']['p']
+    if do_resampling and config_data['speed_perturbation'] is not None:
+        resample_range = [config_data['speed_perturbation']['min_rate'],
+                            config_data['speed_perturbation']['max_rate']]
+        discrete_resample_range = config_data['speed_perturbation']['discrete']
+    else:
+        resample_range = None
+        discrete_resample_range = False
 
-        window_size = config_features['window_size']
-        window_stride = config_features['window_stride']
-        nfeatures = config_features['n_filt']
-        nfft = config_features['n_fft']
-        frame_splicing_factor = config_features['frame_splicing']
-        dither_coeff = config_features['dither']
-        pad_align = config_features['pad_align']
-        pad_to_max_duration = config_features['pad_to_max_duration']
-        assert not pad_to_max_duration, \
-            "Padding to max duration currently not supported in DALI"
-        preemph_coeff = .97
+    window_size = config_features['window_size']
+    window_stride = config_features['window_stride']
+    nfeatures = config_features['n_filt']
+    nfft = config_features['n_fft']
+    frame_splicing_factor = config_features['frame_splicing']
+    dither_coeff = config_features['dither']
+    pad_align = config_features['pad_align']
+    pad_to_max_duration = config_features['pad_to_max_duration']
+    assert not pad_to_max_duration, \
+        "Padding to max duration currently not supported in DALI"
+    preemph_coeff = .97
 
-        config_spec = config_features['spec_augment']
-        if config_spec is not None:
-            mask_time_num_regions = config_spec['time_masks']
-            mask_time_min = config_spec['min_time']
-            mask_time_max = config_spec['max_time']
-            mask_freq_num_regions = config_spec['freq_masks']
-            mask_freq_min = config_spec['min_freq']
-            mask_freq_max = config_spec['max_freq']
-        else:
-            mask_time_num_regions = 0
-            mask_time_min = 0
-            mask_time_max = 0
-            mask_freq_num_regions = 0
-            mask_freq_min = 0
-            mask_freq_max = 0
+    config_spec = config_features['spec_augment']
+    if config_spec is not None:
+        mask_time_num_regions = config_spec['time_masks']
+        mask_time_min = config_spec['min_time']
+        mask_time_max = config_spec['max_time']
+        mask_freq_num_regions = config_spec['freq_masks']
+        mask_freq_min = config_spec['min_freq']
+        mask_freq_max = config_spec['max_freq']
+    else:
+        mask_time_num_regions = 0
+        mask_time_min = 0
+        mask_time_max = 0
+        mask_freq_num_regions = 0
+        mask_freq_min = 0
+        mask_freq_max = 0
 
-        config_cutout = config_features['cutout_augment']
-        if config_cutout is not None:
-            mask_both_num_regions = config_cutout['masks']
-            mask_both_min_time = config_cutout['min_time']
-            mask_both_max_time = config_cutout['max_time']
-            mask_both_min_freq = config_cutout['min_freq']
-            mask_both_max_freq = config_cutout['max_freq']
-        else:
-            mask_both_num_regions = 0
-            mask_both_min_time = 0
-            mask_both_max_time = 0
-            mask_both_min_freq = 0
-            mask_both_max_freq = 0
+    config_cutout = config_features['cutout_augment']
+    if config_cutout is not None:
+        mask_both_num_regions = config_cutout['masks']
+        mask_both_min_time = config_cutout['min_time']
+        mask_both_max_time = config_cutout['max_time']
+        mask_both_min_freq = config_cutout['min_freq']
+        mask_both_max_freq = config_cutout['max_freq']
+    else:
+        mask_both_num_regions = 0
+        mask_both_min_time = 0
+        mask_both_max_time = 0
+        mask_both_min_freq = 0
+        mask_both_max_freq = 0
 
-        nfeatures = config_features['n_filt']
-        do_spectrogram_masking = \
-            mask_time_num_regions > 0 or mask_freq_num_regions > 0 or \
-            mask_both_num_regions > 0
+    nfeatures = config_features['n_filt']
+    do_spectrogram_masking = \
+        mask_time_num_regions > 0 or mask_freq_num_regions > 0 or \
+        mask_both_num_regions > 0
 
-        do_remove_silence = silence_threshold is not None
+    do_remove_silence = silence_threshold is not None
 
-        del(config_spec)
-        del(config_cutout)
-        del(config_data)
-        del(config_features)
+    del(config_spec)
+    del(config_cutout)
+    del(config_data)
+    del(config_features)
 
-        _dali_init_log(locals())
+    _dali_init_log(locals())
 
-        mask_params = {
-            'time_num_regions': mask_time_num_regions,
-            'time_min': mask_time_min,
-            'time_max': mask_time_max,
-            'freq_num_regions': mask_freq_num_regions,
-            'freq_min': mask_freq_min,
-            'freq_max': mask_freq_max,
-            'both_num_regions': mask_both_num_regions,
-            'both_min_time': mask_both_min_time,
-            'both_max_time': mask_both_max_time,
-            'both_min_freq': mask_both_min_freq,
-            'both_max_freq': mask_both_max_freq,
-        }
+    mask_params = {
+        'time_num_regions': mask_time_num_regions,
+        'time_min': mask_time_min,
+        'time_max': mask_time_max,
+        'freq_num_regions': mask_freq_num_regions,
+        'freq_min': mask_freq_min,
+        'freq_max': mask_freq_max,
+        'both_num_regions': mask_both_num_regions,
+        'both_min_time': mask_both_min_time,
+        'both_max_time': mask_both_max_time,
+        'both_min_freq': mask_both_min_freq,
+        'both_max_freq': mask_both_max_freq,
+    }
 
-        def _cutouts_generator():
-            """
-            Generator, that wraps cutouts creation in order to randomize inputs
-            and allow passing them to DALI's ExternalSource operator
-            """
-            [anchors, shapes] = _tuples2list(
-                [_generate_cutouts(mask_params, nfeatures)
-                 for _ in range(batch_size)]
-            )
-            yield (np.array(anchors, dtype=np.float32),
-                   np.array(shapes, dtype=np.float32))
+    def _cutouts_generator():
+        """
+        Generator, that wraps cutouts creation in order to randomize inputs
+        and allow passing them to DALI's ExternalSource operator
+        """
+        [anchors, shapes] = _tuples2list(
+            [_generate_cutouts(mask_params, nfeatures)
+             for _ in range(batch_size)])
 
-        cutouts_gen = _cutouts_generator if do_spectrogram_masking else None
+        yield (np.array(anchors, dtype=np.float32),
+               np.array(shapes, dtype=np.float32))
 
-        if torch.distributed.is_initialized():
-            shard_id = torch.distributed.get_rank()
-            n_shards = torch.distributed.get_world_size()
-        else:
-            shard_id = 0
-            n_shards = 1
+    cutouts_gen = _cutouts_generator if do_spectrogram_masking else None
 
-        preprocessing_device = device_type.lower()
-        assert preprocessing_device == "cpu" or preprocessing_device == "gpu", \
-            "Incorrect preprocessing device. Please choose either 'cpu' or 'gpu'"
+    if torch.distributed.is_initialized():
+        shard_id = torch.distributed.get_rank()
+        n_shards = torch.distributed.get_world_size()
+    else:
+        shard_id = 0
+        n_shards = 1
 
-        pipe = dali_asr_pipe(
-            train_pipeline=train_pipeline,
-            file_root=file_root,
-            file_list=file_list,
-            sample_rate=sample_rate,
-            silence_threshold=silence_threshold,
-            resample_range=resample_range,
-            discrete_resample_range=discrete_resample_range,
-            window_size=window_size,
-            window_stride=window_stride,
-            nfeatures=nfeatures,
-            nfft=nfft,
-            frame_splicing_factor=frame_splicing_factor,
-            dither_coeff=dither_coeff,
-            pad_align=pad_align,
-            preemph_coeff=preemph_coeff,
-            do_spectrogram_masking=do_spectrogram_masking,
-            cutouts_generator=cutouts_gen,
-            shard_id=shard_id,
-            n_shards=n_shards,
-            preprocessing_device=preprocessing_device,
-            batch_size=batch_size,
-            num_threads=num_cpu_threads,
-            device_id=device_id
-        )
-        return pipe
+    preprocessing_device = device_type.lower()
+    assert preprocessing_device == "cpu" or preprocessing_device == "gpu", \
+        "Incorrect preprocessing device. Please choose either 'cpu' or 'gpu'"
+
+    pipe = dali_asr_pipeline(
+        train_pipeline=train_pipeline,
+        file_root=file_root,
+        file_list=file_list,
+        sample_rate=sample_rate,
+        silence_threshold=silence_threshold,
+        resample_range=resample_range,
+        discrete_resample_range=discrete_resample_range,
+        window_size=window_size,
+        window_stride=window_stride,
+        nfeatures=nfeatures,
+        nfft=nfft,
+        frame_splicing_factor=frame_splicing_factor,
+        dither_coeff=dither_coeff,
+        pad_align=pad_align,
+        preemph_coeff=preemph_coeff,
+        do_spectrogram_masking=do_spectrogram_masking,
+        cutouts_generator=cutouts_gen,
+        shard_id=shard_id,
+        n_shards=n_shards,
+        preprocessing_device=preprocessing_device,
+        batch_size=batch_size,
+        num_threads=num_cpu_threads,
+        device_id=device_id
+    )
+    return pipe
