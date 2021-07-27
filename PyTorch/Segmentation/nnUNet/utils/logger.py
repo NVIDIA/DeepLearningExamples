@@ -65,7 +65,7 @@ class LoggingCallback(Callback):
 
         return stats
 
-    def log(self):
+    def _log(self):
         if is_main_process():
             diffs = list(map(operator.sub, self.timestamps[1:], self.timestamps[:-1]))
             deltas = np.array(diffs)
@@ -76,8 +76,8 @@ class LoggingCallback(Callback):
     def on_train_end(self, trainer, pl_module):
         if self.profile:
             profiler.stop()
-        self.log()
+        self._log()
 
     def on_test_end(self, trainer, pl_module):
         if trainer.current_epoch == 1:
-            self.log()
+            self._log()

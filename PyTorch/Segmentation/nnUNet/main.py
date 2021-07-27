@@ -28,8 +28,9 @@ if __name__ == "__main__":
     args = get_main_args()
 
     if args.profile:
-        import pyprof
-        pyprof.init(enable_function_stack=True)
+        import nvidia_dlprof_pytorch_nvtx
+
+        nvidia_dlprof_pytorch_nvtx.init()
         print("Profiling enabled")
 
     if args.affinity != "disabled":
