@@ -16,7 +16,7 @@
 
 r"""
 To infer the model deployed on Triton, you can use `run_inference_on_triton.py` script.
-It sends a request with data obtained from pointed data loader and dumps received data into npz files.
+It sends a request with data obtained from pointed data loader and dumps received data into dump files.
 Those files are stored in directory pointed by `--output-dir` argument.
 
 Currently, the client communicates with the Triton server asynchronously using GRPC protocol.
@@ -47,18 +47,9 @@ from tqdm import tqdm
 # pytype: disable=import-error
 try:
     from tritonclient import utils as client_utils  # noqa: F401
-    from tritonclient.grpc import (
-        InferenceServerClient,
-        InferInput,
-        InferRequestedOutput,
-    )
+    from tritonclient.grpc import InferenceServerClient, InferInput, InferRequestedOutput
 except ImportError:
-    import tritongrpcclient as grpc_client
-    from tritongrpcclient import (
-        InferenceServerClient,
-        InferInput,
-        InferRequestedOutput,
-    )
+    from tritongrpcclient import InferenceServerClient, InferInput, InferRequestedOutput
 # pytype: enable=import-error
 
 # method from PEP-366 to support relative import in executed modules
@@ -67,7 +58,7 @@ if __package__ is None:
 
 from .deployment_toolkit.args import ArgParserGenerator
 from .deployment_toolkit.core import DATALOADER_FN_NAME, load_from_file
-from .deployment_toolkit.dump import NpzWriter
+from .deployment_toolkit.dump import JsonDumpWriter
 
 LOGGER = logging.getLogger("run_inference_on_triton")
 
@@ -222,9 +213,15 @@ def _parse_args():
     parser.add_argument("--dump-inputs", help="Dump inputs to output dir", action="store_true", default=False)
     parser.add_argument("-v", "--verbose", help="Verbose logs", action="store_true", default=False)
     parser.add_argument("--output-dir", required=True, help="Path to directory where outputs will be saved")
-    parser.add_argument("--response-wait-time", required=False, help="Maximal time to wait for response", default=120)
     parser.add_argument(
-        "--max-unresponded-requests", required=False, help="Maximal number of unresponded requests", default=128
+        "--response-wait-time", required=False, help="Maximal time to wait for response", default=120, type=float
+    )
+    parser.add_argument(
+        "--max-unresponded-requests",
+        required=False,
+        help="Maximal number of unresponded requests",
+        default=128,
+        type=int,
     )
 
     args, *_ = parser.parse_known_args()
@@ -243,7 +240,7 @@ def main():
     log_level = logging.INFO if not args.verbose else logging.DEBUG
     logging.basicConfig(level=log_level, format=log_format)
 
-    LOGGER.info(f"args:")
+    LOGGER.info("args:")
     for key, value in vars(args).items():
         LOGGER.info(f"    {key} = {value}")
 
@@ -260,7 +257,7 @@ def main():
         max_unresponded_reqs=args.max_unresponded_requests,
     )
 
-    with NpzWriter(output_dir=args.output_dir) as writer:
+    with JsonDumpWriter(output_dir=args.output_dir) as writer:
         start = time.time()
         for ids, x, y_pred, y_real in tqdm(runner, unit="batch", mininterval=10):
             data = _verify_and_format_dump(args, ids, x, y_pred, y_real)

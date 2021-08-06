@@ -11,14 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+model_navigator[pyt] @ git+https://github.com/triton-inference-server/model_navigator.git@8ac0e35#egg=model_navigator
+natsort>=7.0.0
 networkx==2.5
-numpy<1.20.0,>=1.19.1  # # numpy 1.20+ requires py37
-onnx==1.8.0
-onnxruntime==1.5.2
+numpy
+onnx==1.8.1
+onnxruntime-gpu==1.8.1
 pycuda>=2019.1.2
 PyYAML>=5.2
-tqdm>=4.44.1
 tabulate>=0.8.7
-natsort>=7.0.0
-# use tags instead of branch names - because there might be docker cache hit causing not fetching most recent changes on branch
-model_navigator @ git+https://github.com/triton-inference-server/model_navigator.git@v0.1.0#egg=model_navigator
+tqdm>=4.44.1

@@ -23,23 +23,29 @@ import numpy as np
 try:
     import pycuda.autoinit
     import pycuda.driver as cuda
-except (ImportError, Exception) as e:
+except Exception as e:
     logging.getLogger(__name__).warning(f"Problems with importing pycuda package; {e}")
 # pytype: enable=import-error
 
 import tensorrt as trt  # pytype: disable=import-error
 
-from ..core import BaseLoader, BaseRunner, BaseRunnerSession, BaseSaver, Format, Model, Precision, TensorSpec
+from ..core import BaseLoader, BaseRunner, BaseRunnerSession, BaseSaver, Format, Model, TensorSpec
 from ..extensions import loaders, runners, savers
 
 LOGGER = logging.getLogger(__name__)
 TRT_LOGGER = trt.Logger(trt.Logger.INFO)
 
-"""
-documentation:
-https://docs.nvidia.com/deeplearning/tensorrt/api/python_api/index.html
-https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#python_samples_section
-"""
+# documentation:
+# https://docs.nvidia.com/deeplearning/tensorrt/api/python_api/index.html
+# https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#python_samples_section
+
+_NP_DTYPE2TRT_DTYPE = {
+    np.dtype("float32"): trt.DataType.FLOAT,
+    np.dtype("float16"): trt.DataType.HALF,
+    np.dtype("int8"): trt.DataType.INT8,
+    np.dtype("int32"): trt.DataType.INT32,
+    np.dtype("bool"): trt.DataType.BOOL,
+}
 
 
 class TensorRTLoader(BaseLoader):
@@ -58,7 +64,7 @@ class TensorRTLoader(BaseLoader):
         for binding_idx in range(engine.num_bindings):
             name = engine.get_binding_name(binding_idx)
             is_input = engine.binding_is_input(binding_idx)
-            dtype = engine.get_binding_dtype(binding_idx)
+            dtype = np.dtype(trt.nptype(engine.get_binding_dtype(binding_idx))).name
             shape = engine.get_binding_shape(binding_idx)
             if is_input:
                 inputs[name] = TensorSpec(name, dtype, shape)
@@ -193,9 +199,23 @@ class TensorRTRunnerSession(BaseRunnerSession):
             y_pred_host = {}
             for name in self._output_names:
                 shape = self._context.get_binding_shape(self._engine[name])
-                y_pred_host[name] = np.zeros(shape, dtype=trt.nptype(self._model.outputs[name].dtype))
+                binding_idx: int = self._engine[name]
+                dtype_from_trt_binding = np.dtype(trt.nptype(self._engine.get_binding_dtype(binding_idx)))
+                dtype_from_model_spec = np.dtype(self._model.outputs[name].dtype)
+
+                assert dtype_from_model_spec == dtype_from_trt_binding
+
+                y_pred_host[name] = np.zeros(shape, dtype=dtype_from_model_spec)
 
             y_pred_dev = {name: cuda.mem_alloc(data.nbytes) for name, data in y_pred_host.items()}
+
+            # cast host input into binding dtype
+            def _cast_input(name, data):
+                binding_idx: int = self._engine[name]
+                np_dtype = trt.nptype(self._engine.get_binding_dtype(binding_idx))
+                return data.astype(np_dtype)
+
+            x_host = {name: _cast_input(name, host_input) for name, host_input in x_host.items()}
 
             x_dev = {
                 name: cuda.mem_alloc(host_input.nbytes)

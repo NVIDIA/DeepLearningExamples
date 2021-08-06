@@ -39,10 +39,14 @@ class Parameter(Enum):
     def __lt__(self, other: "Parameter") -> bool:
         return self.value < other.value
 
+    def __str__(self):
+        return self.value
+
 
 class Accelerator(Parameter):
+    NONE = "none"
     AMP = "amp"
-    CUDA = "cuda"
+    CUDA = NONE
     TRT = "trt"
 
 
@@ -155,7 +159,6 @@ class BaseConverter(abc.ABC):
 class BaseMetricsCalculator(abc.ABC):
     required_fn_name_for_signature_parsing: Optional[str] = None
 
-    @abc.abstractmethod
     def calc(
         self,
         *,
@@ -174,6 +177,21 @@ class BaseMetricsCalculator(abc.ABC):
         Returns:
             dictionary where key is metric name and value is its value
         """
+        pass
+
+    @abc.abstractmethod
+    def update(
+        self,
+        ids: List[Any],
+        y_pred: Dict[str, np.ndarray],
+        x: Optional[Dict[str, np.ndarray]],
+        y_real: Optional[Dict[str, np.ndarray]],
+    ):
+        pass
+
+    @property
+    @abc.abstractmethod
+    def metrics(self) -> Dict[str, Any]:
         pass
 
 
