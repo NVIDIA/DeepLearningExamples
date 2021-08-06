@@ -1,4 +1,4 @@
-# Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2020-2021 NVIDIA CORPORATION. All rights reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.06-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.12-py3
 FROM nvcr.io/nvidia/tritonserver:20.06-v1-py3-clientsdk as trt
 FROM ${FROM_IMAGE_NAME}
 RUN apt-get update && apt-get install -y pbzip2 pv bzip2 cabextract
@@ -33,8 +33,8 @@ RUN pip install /workspace/install/python/tensorrtserver*.whl
 WORKDIR /workspace/bert
 RUN pip install --upgrade --no-cache-dir pip \
  && pip install --no-cache-dir \
- tqdm boto3 requests six ipdb h5py html2text nltk progressbar onnxruntime \
- git+https://github.com/NVIDIA/dllogger wget
+ tqdm boto3 requests six ipdb h5py html2text nltk onnxruntime tokenizers==0.7\
+ git+https://github.com/NVIDIA/dllogger@a20b622 wget
 
 RUN apt-get install -y iputils-ping
 
