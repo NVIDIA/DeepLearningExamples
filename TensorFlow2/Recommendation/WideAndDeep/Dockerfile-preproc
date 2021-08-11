@@ -47,7 +47,7 @@ RUN source activate rapids && \
     pip install --upgrade pip && \
     pip install --no-cache-dir pyspark==2.3.1 && \
     pip install --no-cache-dir --no-deps tensorflow-transform==0.24.1 apache-beam==2.14 tensorflow-metadata==0.14.0 pydot dill \
-    pip install --no-cache-dir -e git://github.com/NVIDIA/dllogger#egg=dllogger
+    pip install --no-cache-dir -e git+https://github.com/NVIDIA/dllogger#egg=dllogger
 
 WORKDIR  /wd
 
