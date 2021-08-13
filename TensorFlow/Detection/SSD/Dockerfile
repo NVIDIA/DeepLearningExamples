@@ -29,5 +29,4 @@ ENV PYTHONPATH="/workdir/models/research/:/workdir/models/research/slim/:$PYTHON
 
 COPY examples/ examples
 COPY configs/ configs/
-COPY qa/ qa/
 COPY download_all.sh download_all.sh

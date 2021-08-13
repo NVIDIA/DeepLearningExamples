@@ -235,7 +235,7 @@ bash triton/scripts/run_server.sh
 To run in the foreground interactively, for debugging purposes, run:
 
 ```bash
-DAEMON="--detach=false" bash trinton/scripts/run_server.sh
+DAEMON="--detach=false" bash triton/scripts/run_server.sh
 ```
 
 The script mounts and loads models at `$PWD/triton/deploy/model_repo` to the server with all visible GPUs. In order to selectively choose the devices, set `NVIDIA_VISIBLE_DEVICES`.
