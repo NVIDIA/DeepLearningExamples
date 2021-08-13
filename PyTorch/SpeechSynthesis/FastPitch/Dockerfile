@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y libb64-dev libb64-0d
 
 # Install Triton Client Python API and copy Perf Client
 COPY --from=triton-client /workspace/install/ /workspace/install/
-RUN find /workspace/install/python/ -iname triton*manylinux*.whl -exec pip install {}[all] \;
+RUN pip install /workspace/install/python/triton*.whl
 
 # Setup environment variables to access Triton Client binaries and libs
 ENV PATH /workspace/install/bin:${PATH}

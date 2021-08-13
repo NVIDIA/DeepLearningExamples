@@ -32,19 +32,11 @@ import glob
 import os
 import re
 import time
-import warnings
 from collections import defaultdict, OrderedDict
 from contextlib import contextmanager
 
 import numpy as np
-try:
-    import nvidia_dlprof_pytorch_nvtx as pyprof
-except ModuleNotFoundError:
-    try:
-        import pyprof
-    except ModuleNotFoundError:
-        warnings.warn('PyProf is unavailable')
-
+import nvidia_dlprof_pytorch_nvtx as pyprof
 import torch
 import torch.cuda.profiler as profiler
 import torch.distributed as dist

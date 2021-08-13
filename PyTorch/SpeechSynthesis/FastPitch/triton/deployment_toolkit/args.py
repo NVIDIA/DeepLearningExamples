@@ -53,7 +53,7 @@ def add_args_for_fn_signature(parser, fn) -> argparse.ArgumentParser:
             if parameter.annotation == bool:
                 argument_kwargs["type"] = str2bool
                 argument_kwargs["choices"] = [0, 1]
-            elif isinstance(parameter.annotation, type(Optional[Any])):
+            elif type(parameter.annotation) == type(Union): # isinstance(parameter.annotation, type(Optional[Any])):
                 types = [type_ for type_ in parameter.annotation.__args__ if not isinstance(None, type_)]
                 if len(types) != 1:
                     raise RuntimeError(

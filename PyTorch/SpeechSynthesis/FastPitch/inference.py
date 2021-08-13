@@ -325,7 +325,7 @@ def main():
             with torch.no_grad():
                 if generator is not None:
                     b = batches[0]
-                    mel, *_ = generator(b['text'], b['text_lens'])
+                    mel, *_ = generator(b['text'])
                 if waveglow is not None:
                     audios = waveglow(mel, sigma=args.sigma_infer).float()
                     _ = denoiser(audios, strength=args.denoising_strength)

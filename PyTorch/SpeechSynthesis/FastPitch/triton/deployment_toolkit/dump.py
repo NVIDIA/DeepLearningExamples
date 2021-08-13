@@ -11,12 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import abc
-import json
-import pickle
-import threading
+
 from pathlib import Path
-from typing import Dict, Iterator, List, Union
+from typing import Dict, Iterable
 
 import numpy as np
 
@@ -25,115 +22,120 @@ B2MB = 1 / MB2B
 FLUSH_THRESHOLD_B = 256 * MB2B
 
 
-def _validate_batch(name: str, value: Union[list, np.ndarray]):
-    if not isinstance(value, (list, np.ndarray)):
-        raise ValueError(f"Values shall be lists or np.ndarrays; current type {type(value)}")
+def pad_except_batch_axis(data: np.ndarray, target_shape_with_batch_axis: Iterable[int]):
+    assert all(
+        [current_size <= target_size for target_size, current_size in zip(target_shape_with_batch_axis, data.shape)]
+    ), "target_shape should have equal or greater all dimensions comparing to data.shape"
+    padding = [(0, 0)] + [  # (0, 0) - do not pad on batch_axis (with index 0)
+        (0, target_size - current_size)
+        for target_size, current_size in zip(target_shape_with_batch_axis[1:], data.shape[1:])
+    ]
+    return np.pad(data, padding, "constant", constant_values=np.nan)
 
 
-def _validate_prefix_data(prefix_data: Dict[str, List[np.ndarray]]):
-    batch_sizes_per_io_name = {name: [len(batch) for batch in batches] for name, batches in prefix_data.items()}
-    names = list(batch_sizes_per_io_name)
-    for io_name in names:
-        for batch_idx, batch_size in enumerate(batch_sizes_per_io_name[io_name]):
-            if not all([batch_sizes_per_io_name[other_name][batch_idx] == batch_size for other_name in names]):
-                non_equal_batch_sizes = {
-                    other_name: batch_sizes_per_io_name[other_name][batch_idx] for other_name in names
-                }
-                non_equal_batch_sizes_str = ", ".join(
-                    [f"{name}={batch_size}" for name, batch_size in non_equal_batch_sizes.items()]
-                )
-                raise ValueError(
-                    "All inputs/outputs should have same number of batches with equal batch_size. "
-                    f"At batch_idx={batch_idx} there are batch_sizes: {non_equal_batch_sizes_str}"
-                )
-        # ensure if each io has same number of batches with equal size
+class NpzWriter:
+    """
+    Dumps dicts of numpy arrays into npz files
 
+    It can/shall be used as context manager:
+    ```
+    with OutputWriter('mydir') as writer:
+        writer.write(outputs={'classes': np.zeros(8), 'probs': np.zeros((8, 4))},
+                     labels={'classes': np.zeros(8)},
+                     inputs={'input': np.zeros((8, 240, 240, 3)})
+    ```
 
-def _get_nitems_and_batches(prefix_data: Dict[str, List[np.ndarray]]):
-    nitems = 0
-    nbatches = 0
+    ## Variable size data
 
-    if prefix_data:
-        nitems_per_io_name = {name: sum(len(batch) for batch in batches) for name, batches in prefix_data.items()}
-        nbatches_per_io_name = {name: len(batches) for name, batches in prefix_data.items()}
-        nitems = list(nitems_per_io_name.values())[0]
-        nbatches = list(nbatches_per_io_name.values())[0]
-    return nitems, nbatches
+    Only dynamic of last axis is handled. Data is padded with np.nan value.
+    Also each generated file may have different size of dynamic axis.
+    """
 
-
-class BaseDumpWriter(abc.ABC):
-    FILE_SUFFIX = ".abstract"
-
-    def __init__(self, output_dir: Union[str, Path]):
+    def __init__(self, output_dir, compress=False):
         self._output_dir = Path(output_dir)
-        # outer dict key is prefix (i.e. input/output/labels/...), inner dict key is input/output name
-        # list is list of batches
-        self._items_cache: Dict[str, Dict[str, List[np.ndarray]]] = {}
-        # key is prefix
+        self._items_cache: Dict[str, Dict[str, np.ndarray]] = {}
         self._items_counters: Dict[str, int] = {}
-        self._cache_lock = threading.RLock()
         self._flush_threshold_b = FLUSH_THRESHOLD_B
+        self._compress = compress
 
     @property
     def cache_size(self):
-        def _get_bytes_size(name, batch):
-            _validate_batch(name, batch)
-            if not isinstance(batch, np.ndarray):
-                batch = np.narray(batch)
+        return {name: sum([a.nbytes for a in data.values()]) for name, data in self._items_cache.items()}
 
-            return batch.nbytes
-
-        with self._cache_lock:
-            return {
-                prefix: sum(_get_bytes_size(name, batch) for name, batches in data.items() for batch in batches)
-                for prefix, data in self._items_cache.items()
-            }
-
-    def _append_to_cache(self, prefix, prefix_data):
-        if prefix_data is None:
+    def _append_to_cache(self, prefix, data):
+        if data is None:
             return
 
-        if not isinstance(prefix_data, dict):
+        if not isinstance(data, dict):
             raise ValueError(f"{prefix} data to store shall be dict")
 
-        with self._cache_lock:
-            cached_prefix_data = self._items_cache.setdefault(prefix, {})
-            for name, batch in prefix_data.items():
-                _validate_batch(name, batch)
-                if not isinstance(batch, np.ndarray):
-                    batch = np.array(batch)
+        cached_data = self._items_cache.get(prefix, {})
+        for name, value in data.items():
+            assert isinstance(
+                value, (list, np.ndarray)
+            ), f"Values shall be lists or np.ndarrays; current type {type(value)}"
+            if not isinstance(value, np.ndarray):
+                value = np.array(value)
 
-                cached_batches = cached_prefix_data.setdefault(name, [])
-                cached_batches += [batch]
+            assert value.dtype.kind in ["S", "U"] or not np.any(
+                np.isnan(value)
+            ), f"Values with np.nan is not supported; {name}={value}"
+            cached_value = cached_data.get(name, None)
+            if cached_value is not None:
+                target_shape = np.max([cached_value.shape, value.shape], axis=0)
+                cached_value = pad_except_batch_axis(cached_value, target_shape)
+                value = pad_except_batch_axis(value, target_shape)
+                value = np.concatenate((cached_value, value))
+            cached_data[name] = value
+        self._items_cache[prefix] = cached_data
 
     def write(self, **kwargs):
-        with self._cache_lock:
-            for prefix, prefix_data in kwargs.items():
-                self._append_to_cache(prefix, prefix_data)
+        """
+        Writes named list of dictionaries of np.ndarrays.
+        Finally keyword names will be later prefixes of npz files where those dictionaries will be stored.
 
-            biggest_prefix_data_size = max(self.cache_size.values())
-            if biggest_prefix_data_size > self._flush_threshold_b:
-                self.flush()
+        ex. writer.write(inputs={'input': np.zeros((2, 10))},
+                         outputs={'classes': np.zeros((2,)), 'probabilities': np.zeros((2, 32))},
+                         labels={'classes': np.zeros((2,))})
+        Args:
+            **kwargs: named list of dictionaries of np.ndarrays to store
+        """
+
+        for prefix, data in kwargs.items():
+            self._append_to_cache(prefix, data)
+
+        biggest_item_size = max(self.cache_size.values())
+        if biggest_item_size > self._flush_threshold_b:
+            self.flush()
 
     def flush(self):
-        with self._cache_lock:
-            for prefix, prefix_data in self._items_cache.items():
-                _validate_prefix_data(prefix_data)
+        for prefix, data in self._items_cache.items():
+            self._dump(prefix, data)
+        self._items_cache = {}
 
-                output_path = self._output_dir / self._get_filename(prefix)
-                self._dump(prefix_data, output_path)
-
-                nitems, nbatches = _get_nitems_and_batches(prefix_data)
-                self._items_counters[prefix] += nitems
-            self._items_cache = {}
-
-    def _get_filename(self, prefix):
+    def _dump(self, prefix, data):
         idx = self._items_counters.setdefault(prefix, 0)
-        return f"{prefix}-{idx:012d}{self.FILE_SUFFIX}"
+        filename = f"{prefix}-{idx:012d}.npz"
+        output_path = self._output_dir / filename
+        if self._compress:
+            np.savez_compressed(output_path, **data)
+        else:
+            np.savez(output_path, **data)
 
-    @abc.abstractmethod
-    def _dump(self, prefix_data: Dict[str, List[np.ndarray]], output_path: Path):
-        pass
+        nitems = len(list(data.values())[0])
+
+        msg_for_labels = (
+            "If these are correct shapes - consider moving loading of them into metrics.py."
+            if prefix == "labels"
+            else ""
+        )
+        shapes = {name: value.shape if isinstance(value, np.ndarray) else (len(value),) for name, value in data.items()}
+
+        assert all(len(v) == nitems for v in data.values()), (
+            f'All items in "{prefix}" shall have same size on 0 axis equal to batch size. {msg_for_labels}'
+            f'{", ".join(f"{name}: {shape}" for name, shape in shapes.items())}'
+        )
+        self._items_counters[prefix] += nitems
 
     def __enter__(self):
         if self._output_dir.exists() and len(list(self._output_dir.iterdir())):
@@ -143,111 +145,3 @@ class BaseDumpWriter(abc.ABC):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.flush()
-
-
-class PickleDumpWriter(BaseDumpWriter):
-    FILE_SUFFIX = ".pkl"
-
-    def _dump(self, prefix_data: Dict[str, List[np.ndarray]], output_path: Path):
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with output_path.open("wb") as pickle_file:
-            pickle.dump(prefix_data, pickle_file)
-
-
-class JsonDumpWriter(BaseDumpWriter):
-    FILE_SUFFIX = ".json"
-
-    def _dump(self, prefix_data: Dict[str, List[np.ndarray]], output_path: Path):
-        repacked_prefix_data = self._format_data(prefix_data)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with output_path.open("w") as json_file:
-            json.dump(repacked_prefix_data, json_file)
-
-    def _format_data(self, prefix_data: Dict[str, List[np.ndarray]]) -> Dict:
-        def _format_batch_for_perf_analyzer_json_format(batch: np.ndarray):
-            return {
-                "content": batch.flatten().tolist(),
-                "shape": list(batch.shape),
-                "dtype": str(batch.dtype),
-            }
-
-        _, nbatches = _get_nitems_and_batches(prefix_data)
-        batches = [{} for _ in range(nbatches)]
-        for io_name, batches_per_io in prefix_data.items():
-            for batch_idx, batch in enumerate(batches_per_io):
-                batches[batch_idx][io_name] = _format_batch_for_perf_analyzer_json_format(batch)
-
-        return {"data": batches}
-
-
-class BaseDumpReader(abc.ABC):
-    FILE_SUFFIX = ".abstract"
-
-    def __init__(self, dump_dir: Union[Path, str]):
-        self._dump_dir = Path(dump_dir)
-
-    def get(self, prefix: str) -> Iterator[Dict[str, np.ndarray]]:
-        dump_files_paths = sorted(self._dump_dir.glob(f"{prefix}*{self.FILE_SUFFIX}"))
-        for dump_file_path in dump_files_paths:
-            prefix_data = self._load_file(dump_file_path)
-            nitems, nbatches = _get_nitems_and_batches(prefix_data)
-            for batch_idx in range(nbatches):
-                yield {io_name: prefix_data[io_name][batch_idx] for io_name in prefix_data}
-
-    @abc.abstractmethod
-    def _load_file(self, dump_file_path: Path) -> Dict[str, List[np.ndarray]]:
-        pass
-
-    def iterate_over(self, prefix_list: List[str]) -> Iterator:
-        iterators = [self.get(prefix) for prefix in prefix_list]
-        empty_iterators = [False] * len(iterators)
-        while not all(empty_iterators):
-            values = [None] * len(iterators)
-            for idx, iterator in enumerate(iterators):
-                if empty_iterators[idx]:
-                    continue
-                try:
-                    values[idx] = next(iterator)
-                except StopIteration:
-                    empty_iterators[idx] = True
-                    if all(empty_iterators):
-                        break
-
-            if not all(empty_iterators):
-                yield values
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        pass
-
-
-class PickleDumpReader(BaseDumpReader):
-    FILE_SUFFIX = ".pkl"
-
-    def _load_file(self, dump_file_path: Path) -> Dict[str, List[np.ndarray]]:
-        with dump_file_path.open("rb") as pickle_file:
-            return pickle.load(pickle_file)
-
-
-class JsonDumpReader(BaseDumpReader):
-    FILE_SUFFIX = ".json"
-
-    def _load_file(self, dump_file_path: Path) -> Dict[str, List[np.ndarray]]:
-        with dump_file_path.open("rb") as json_file:
-            data = json.load(json_file)
-            return self._repack_data(data)
-
-    def _repack_data(self, data: Dict) -> Dict[str, List[np.ndarray]]:
-        result: Dict[str, List[np.ndarray]] = {}
-        batches = data["data"]
-        for batch in batches:
-            for io_name, batch_as_dict in batch.items():
-                io_batches = result.setdefault(io_name, [])
-                flat_array = batch_as_dict["content"]
-                shape = batch_as_dict["shape"]
-                dtype = batch_as_dict["dtype"]
-                batch_as_array = np.array(flat_array).reshape(shape).astype(dtype)
-                io_batches.append(batch_as_array)
-        return result
