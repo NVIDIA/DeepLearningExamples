@@ -40,7 +40,6 @@ def get_training_parser():
     add_checkpoint_args(parser)
     add_inference_args(parser)
     add_perf_args(parser)
-    add_profiling_args(parser)
     return parser
 
 
@@ -303,18 +302,6 @@ def add_inference_args(parser):
                        help='read this many sentences into a buffer before processing them')
     group.add_argument('--fp16', action='store_true', help='use fp16 precision')
     return group
-
-
-def add_profiling_args(parser):
-    group = parser.add_argument_group('Profiling')
-    group.add_argument('--profile', action='store_true',
-                       help='Run profiler')
-    group.add_argument('--profiler-steps', type=int, default=10,
-                       help='Override to the max steps argument')
-    group.add_argument('--profiler-start-iter', type=int, default=20,
-                        help='Start profiling on this iteration')
-    return group
-
 
 def add_model_args(parser):
     group = parser.add_argument_group('Model configuration')

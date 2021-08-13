@@ -29,9 +29,6 @@ import ctypes
 
 from copy import deepcopy
 
-import pyprof
-import torch.cuda.profiler as profiler
-
 import torch
 import sacrebleu
 import dllogger as DLLogger
@@ -44,11 +41,7 @@ from fairseq.data import data_utils, load_dataset_splits
 from fairseq.models import build_model
 from fairseq.log_helper import setup_logger, reset_perf_meters
 
-
 def main(args):
-
-    if args.profile:
-        pyprof.init(enable_function_stack=True)
 
     print(args)
     setup_logger(args)
@@ -125,8 +118,7 @@ def main(args):
     while lr >= args.min_lr and epoch_itr.epoch < max_epoch and trainer.get_num_updates() < max_update and current_bleu < tgt_bleu:
         DLLogger.log(step=trainer.get_num_updates()+1, data={'epoch': epoch_itr.epoch}, verbosity=0)
         # train for one epoch
-        with torch.autograd.profiler.emit_nvtx(enabled=args.profile):
-            train(args, trainer, epoch_itr)
+        train(args, trainer, epoch_itr)
         DLLogger.log(step=trainer.get_num_updates(), data={'walltime': train_meter.sum}, verbosity=1)
         DLLogger.log(step=trainer.get_num_updates(),
                      data={'avg_epoch_loss': trainer.avg_loss_meter.avg}, verbosity=1)
@@ -179,22 +171,12 @@ def train(args, trainer, epoch_itr):
     trainer.get_throughput_meter().reset()
 
     for i, sample in enumerate(itr):
-        # Profiling ---------
-        if trainer.get_num_updates() == args.profiler_start_iter:
-            profiler.start()
-        # -------------------
-
         if i < num_batches - 1 and (i + 1) % update_freq > 0:
             # buffer updates according to --update-freq
             trainer.train_step(sample, update_params=False, last_step=(i == len(itr)-1))
             continue
         else:
             trainer.train_step(sample, update_params=True, last_step=(i == len(itr)-1))
-
-        # Profiling ---------
-        if trainer.get_num_updates() == args.profiler_start_iter + args.profiler_steps:
-            profiler.stop()
-        # -------------------
 
         # ignore the first mini-batch in words-per-second calculation
         if i == 0:

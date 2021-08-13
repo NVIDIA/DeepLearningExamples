@@ -127,7 +127,7 @@ def setup_logger(args):
 def main(args):
     setup_logger(args)
 
-    args.interactive = sys.stdin.isatty() # Just make the code more understendable
+    args.interactive = sys.stdin.isatty() and not args.file # Just make the code more understendable
     
     if args.file:
         data_descriptor = open(args.file, 'r')
