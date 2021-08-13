@@ -16,6 +16,13 @@ valid_symbols = [
 _valid_symbol_set = set(valid_symbols)
 
 
+def lines_to_list(filename):
+  with open(filename, encoding='utf-8') as f:
+    lines = f.readlines()
+  lines = [l.rstrip() for l in lines]
+  return lines
+
+
 class CMUDict:
   '''Thin wrapper around CMUDict data. http://www.speech.cs.cmu.edu/cgi-bin/cmudict'''
   def __init__(self, file_or_path=None, heteronyms_path=None, keep_ambiguous=True):

@@ -31,6 +31,8 @@ ENV LD_LIBRARY_PATH /workspace/install/lib:${LD_LIBRARY_PATH}
 ENV PYTHONPATH /workspace/fastpitch
 WORKDIR /workspace/fastpitch
 
+# RUN conda install -y tqdm
+
 ADD requirements.txt .
 ADD triton/requirements.txt triton/requirements.txt
 RUN pip install -r requirements.txt

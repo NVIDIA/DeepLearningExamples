@@ -1,7 +1,7 @@
 matplotlib
 numpy
 inflect
-librosa
+librosa==0.8.0
 scipy
 Unidecode
 praat-parselmouth==0.3.3

@@ -71,8 +71,9 @@ import argparse
 import logging
 import time
 
-from model_navigator import Accelerator, Format, Precision
-from model_navigator.args import str2bool
+from model_navigator.triton.config import BackendAccelerator as Accelerator
+from model_navigator.triton.config import TensorRTOptPrecision as Precision
+from model_navigator.model import Format
 from model_navigator.log import set_logger, log_dict
 from model_navigator.triton import ModelConfig, TritonClient, TritonModelStore
 
@@ -160,7 +161,7 @@ def main():
         help="Use cuda capture graph (used only by TensorRT platform)",
     )
 
-    parser.add_argument("-v", "--verbose", help="Provide verbose logs", type=str2bool, default=False)
+    parser.add_argument("-v", "--verbose", help="Provide verbose logs", action='store_true')
     args = parser.parse_args()
 
     set_logger(verbose=args.verbose)

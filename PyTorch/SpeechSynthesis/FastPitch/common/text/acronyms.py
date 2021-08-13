@@ -31,12 +31,30 @@ _letter_to_arpabet = {
     's': 'Z'
 }
 
+# Acronyms that should not be expanded
+hardcoded_acronyms = [
+    'BMW', 'MVD', 'WDSU', 'GOP', 'UK', 'AI', 'GPS', 'BP', 'FBI', 'HD',
+    'CES', 'LRA', 'PC', 'NBA', 'BBL', 'OS', 'IRS', 'SAC', 'UV', 'CEO', 'TV',
+    'CNN', 'MSS', 'GSA', 'USSR', 'DNA', 'PRS', 'TSA', 'US', 'GPU', 'USA',
+    'FPCC', 'CIA']
+
+# Words and acronyms that should be read as regular words, e.g., NATO, HAPPY, etc.
+uppercase_whiteliset = []
+
+acronyms_exceptions = {
+    'NVIDIA': 'N.VIDIA',
+}
+
+non_uppercase_exceptions = {
+    'email': 'e-mail',
+}
+
 # must ignore roman numerals
-# _acronym_re = re.compile(r'([A-Z][A-Z]+)s?|([A-Z]\.([A-Z]\.)+s?)')
-_acronym_re = re.compile(r'([A-Z][A-Z]+)s?')
+_acronym_re = re.compile(r'([a-z]*[A-Z][A-Z]+)s?\.?')
+_non_uppercase_re = re.compile(r'\b({})\b'.format('|'.join(non_uppercase_exceptions.keys())), re.IGNORECASE)
 
 
-def _expand_acronyms(m, add_spaces=True):
+def _expand_acronyms_to_arpa(m, add_spaces=True):
     acronym = m.group(0)
 
     # remove dots if they exist
@@ -63,5 +81,29 @@ def _expand_acronyms(m, add_spaces=True):
 
 
 def normalize_acronyms(text):
-    text = re.sub(_acronym_re, _expand_acronyms, text)
+    text = re.sub(_acronym_re, _expand_acronyms_to_arpa, text)
+    return text
+
+
+def expand_acronyms(m):
+    text = m.group(1)
+    if text in acronyms_exceptions:
+        text = acronyms_exceptions[text]
+    elif text in uppercase_whiteliset:
+        text = text
+    else:
+        text = '.'.join(text) + '.'
+
+    if 's' in m.group(0):
+        text = text + '\'s'
+
+    if text[-1] != '.' and m.group(0)[-1] == '.':
+        return text + '.'
+    else:
+        return text
+
+
+def spell_acronyms(text):
+    text = re.sub(_non_uppercase_re, lambda m: non_uppercase_exceptions[m.group(0).lower()], text)
+    text = re.sub(_acronym_re, expand_acronyms, text)
     return text

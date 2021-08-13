@@ -13,7 +13,7 @@ _currency_key = {'$': 'dollar', '£': 'pound', '€': 'euro', '₩': 'won'}
 _inflect = inflect.engine()
 _comma_number_re = re.compile(r'([0-9][0-9\,]+[0-9])')
 _decimal_number_re = re.compile(r'([0-9]+\.[0-9]+)')
-_currency_re = re.compile(r'([\$€£₩])([0-9\.\,]*[0-9]+)(?:[ ]?({})(?=[^a-zA-Z]))?'.format("|".join(_magnitudes)), re.IGNORECASE)
+_currency_re = re.compile(r'([\$€£₩])([0-9\.\,]*[0-9]+)(?:[ ]?({})(?=[^a-zA-Z]|$))?'.format("|".join(_magnitudes)), re.IGNORECASE)
 _measurement_re = re.compile(r'([0-9\.\,]*[0-9]+(\s)?{}\b)'.format(_measurements), re.IGNORECASE)
 _ordinal_re = re.compile(r'[0-9]+(st|nd|rd|th)')
 # _range_re = re.compile(r'(?<=[0-9])+(-)(?=[0-9])+.*?')

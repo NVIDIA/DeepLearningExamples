@@ -25,9 +25,12 @@
 #
 # *****************************************************************************
 
+import shutil
+import warnings
 from pathlib import Path
 from typing import Optional
 
+import librosa
 import numpy as np
 
 import torch
@@ -42,8 +45,12 @@ def mask_from_lens(lens, max_len: Optional[int] = None):
     return mask
 
 
-def load_wav_to_torch(full_path):
-    sampling_rate, data = read(full_path)
+def load_wav_to_torch(full_path, force_sampling_rate=None):
+    if force_sampling_rate is not None:
+        data, sampling_rate = librosa.load(full_path, sr=force_sampling_rate)
+    else:
+        sampling_rate, data = read(full_path)
+
     return torch.FloatTensor(data.astype(np.float32)), sampling_rate
 
 
@@ -57,7 +64,7 @@ def load_filepaths_and_text(dataset_path, fnames, has_speakers=False, split="|")
         return tuple(str(Path(root, p)) for p in paths) + tuple(non_paths)
 
     fpaths_and_text = []
-    for fname in fnames.split(','):
+    for fname in fnames:
         with open(fname, encoding='utf-8') as f:
             fpaths_and_text += [split_line(dataset_path, line) for line in f]
     return fpaths_and_text
@@ -81,3 +88,13 @@ def to_device_async(tensor, device):
 
 def to_numpy(x):
     return x.cpu().numpy() if isinstance(x, torch.Tensor) else x
+
+
+def prepare_tmp(path):
+    if path is None:
+        return
+    p = Path(path)
+    if p.is_dir():
+        warnings.warn(f'{p} exists. Removing...')
+        shutil.rmtree(p, ignore_errors=True)
+    p.mkdir(parents=False, exist_ok=False)

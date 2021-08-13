@@ -49,7 +49,7 @@ def _expand_letters_and_numbers(m):
                 if string[-1] == '0':
                     string = [string]
                 else:
-                    string = [string[:-3], string[-2], string[-1]]
+                    string = [string[:-2], string[-2], string[-1]]
             elif len(string) % 2 == 0:
                 string = [string[i:i+2] for i in range(0, len(string), 2)]
             elif len(string) > 2:

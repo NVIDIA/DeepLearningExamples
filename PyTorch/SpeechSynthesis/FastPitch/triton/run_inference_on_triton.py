@@ -222,9 +222,9 @@ def _parse_args():
     parser.add_argument("--dump-inputs", help="Dump inputs to output dir", action="store_true", default=False)
     parser.add_argument("-v", "--verbose", help="Verbose logs", action="store_true", default=False)
     parser.add_argument("--output-dir", required=True, help="Path to directory where outputs will be saved")
-    parser.add_argument("--response-wait-time", required=False, help="Maximal time to wait for response", default=120)
+    parser.add_argument("--response-wait-time", required=False, help="Maximal time to wait for response", type=int, default=120)
     parser.add_argument(
-        "--max-unresponded-requests", required=False, help="Maximal number of unresponded requests", default=128
+        "--max-unresponded-requests", required=False, help="Maximal number of unresponded requests", type=int, default=128
     )
 
     args, *_ = parser.parse_known_args()

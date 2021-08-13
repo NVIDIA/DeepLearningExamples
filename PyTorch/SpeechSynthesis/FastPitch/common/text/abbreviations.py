@@ -3,6 +3,7 @@ import re
 _no_period_re = re.compile(r'(No[.])(?=[ ]?[0-9])')
 _percent_re = re.compile(r'([ ]?[%])')
 _half_re = re.compile('([0-9]½)|(½)')
+_url_re = re.compile(r'([a-zA-Z])\.(com|gov|org)')
 
 
 # List of (regular expression, replacement) pairs for abbreviations:
@@ -27,6 +28,7 @@ _abbreviations = [(re.compile('\\b%s\\.' % x[0], re.IGNORECASE), x[1]) for x in 
     ('col', 'colonel'),
     ('ft', 'fort'),
     ('sen', 'senator'),
+    ('etc', 'et cetera'),
 ]]
 
 
@@ -48,10 +50,17 @@ def _expand_half(m):
     return word[0] + ' and a half'
 
 
+def _expand_urls(m):
+    return f'{m.group(1)} dot {m.group(2)}'
+
+
 def normalize_abbreviations(text):
     text = re.sub(_no_period_re, _expand_no_period, text)
     text = re.sub(_percent_re, _expand_percent, text)
     text = re.sub(_half_re, _expand_half, text)
+    text = re.sub('&', ' and ', text)
+    text = re.sub('@', ' at ', text)
+    text = re.sub(_url_re, _expand_urls, text)
 
     for regex, replacement in _abbreviations:
         text = re.sub(regex, replacement, text)

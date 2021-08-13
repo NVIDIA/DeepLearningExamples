@@ -108,8 +108,21 @@ def parse_fastpitch_args(parent, add_help=False):
     pitch_pred.add_argument('--pitch-predictor-n-layers', default=2, type=int,
                             help='Number of conv-1D layers')
 
+    energy_pred = parser.add_argument_group('energy predictor parameters')
+    energy_pred.add_argument('--energy-conditioning', action='store_true')
+    energy_pred.add_argument('--energy-predictor-kernel-size', default=3, type=int,
+                            help='Pitch predictor conv-1D kernel size')
+    energy_pred.add_argument('--energy-predictor-filter-size', default=256, type=int,
+                            help='Pitch predictor conv-1D filter size')
+    energy_pred.add_argument('--p-energy-predictor-dropout', default=0.1, type=float,
+                            help='Pitch probability for energy predictor')
+    energy_pred.add_argument('--energy-predictor-n-layers', default=2, type=int,
+                            help='Number of conv-1D layers')
+
     cond = parser.add_argument_group('conditioning parameters')
     cond.add_argument('--pitch-embedding-kernel-size', default=3, type=int,
+                      help='Pitch embedding conv-1D kernel size')
+    cond.add_argument('--energy-embedding-kernel-size', default=3, type=int,
                       help='Pitch embedding conv-1D kernel size')
     cond.add_argument('--speaker-emb-weight', type=float, default=1.0,
                       help='Scale speaker embedding')

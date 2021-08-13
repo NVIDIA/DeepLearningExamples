@@ -3,7 +3,7 @@ import re
 import numpy as np
 from . import cleaners
 from .symbols import get_symbols
-from .cmudict import CMUDict
+from . import cmudict
 from .numerical import _currency_re, _expand_currency
 
 
@@ -19,13 +19,6 @@ _words_re = re.compile(r"([a-zA-ZÀ-ž]+['][a-zA-ZÀ-ž]{1,2}|[a-zA-ZÀ-ž]+)|([
 
 # Regular expression separating words enclosed in curly braces for cleaning
 _arpa_re = re.compile(r'{[^}]+}|\S+')
-
-
-def lines_to_list(filename):
-    with open(filename, encoding='utf-8') as f:
-        lines = f.readlines()
-    lines = [l.rstrip() for l in lines]
-    return lines
 
 
 class TextProcessing(object):
@@ -111,6 +104,10 @@ class TextProcessing(object):
         elif arpabet[0] == '{':
             arpabet = [arpabet[1:-1]]
 
+        # XXX arpabet might not be a list here
+        if type(arpabet) is not list:
+            return word
+
         if len(arpabet) > 1:
             if self.handle_arpabet_ambiguous == 'first':
                 arpabet = arpabet[0]
@@ -125,21 +122,13 @@ class TextProcessing(object):
 
         return arpabet
 
-    # def get_characters(self, word):
-    #     for name in self.cleaner_names:
-    #         cleaner = getattr(cleaners, f'{name}_post_chars')
-    #         if not cleaner:
-    #             raise Exception('Unknown cleaner: %s' % name)
-    #         word = cleaner(word)
-
-    #     return word
-
     def encode_text(self, text, return_all=False):
         if self.expand_currency:
             text = re.sub(_currency_re, _expand_currency, text)
         text_clean = [self.clean_text(split) if split[0] != '{' else split
                       for split in _arpa_re.findall(text)]
         text_clean = ' '.join(text_clean)
+        text_clean = cleaners.collapse_whitespace(text_clean)
         text = text_clean
 
         text_arpabet = ''
