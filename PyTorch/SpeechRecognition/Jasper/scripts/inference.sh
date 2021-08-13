@@ -23,6 +23,7 @@
 : ${CUDNN_BENCHMARK:=false}
 : ${MAX_DURATION:=""}
 : ${PAD_TO_MAX_DURATION:=false}
+: ${PAD_LEADING:=16}
 : ${NUM_GPUS:=1}
 : ${NUM_STEPS:=0}
 : ${NUM_WARMUP_STEPS:=0}
@@ -46,6 +47,7 @@ ARGS+=" --seed=$SEED"
 ARGS+=" --dali_device=$DALI_DEVICE"
 ARGS+=" --steps $NUM_STEPS"
 ARGS+=" --warmup_steps $NUM_WARMUP_STEPS"
+ARGS+=" --pad_leading $PAD_LEADING"
 
 [ "$AMP" = true ] &&                 ARGS+=" --amp"
 [ "$EMA" = true ] &&                 ARGS+=" --ema"
