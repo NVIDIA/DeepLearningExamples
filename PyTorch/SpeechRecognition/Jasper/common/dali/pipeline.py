@@ -116,15 +116,23 @@ def dali_asr_pipeline(train_pipeline,  # True if train pipeline, False if valida
                       cutouts_generator = None,
                       shard_id = 0,
                       n_shards = 1,
-                      preprocessing_device = "gpu"):
+                      preprocessing_device = "gpu",
+                      is_triton_pipeline = False):
     do_remove_silence = silence_threshold is not None
 
     def _div_ceil(dividend, divisor):
         return (dividend + (divisor - 1)) // divisor
 
-    encoded, label = fn.readers.file(device="cpu", name="file_reader",
-                                     file_root=file_root, file_list=file_list, shard_id=shard_id,
-                                     num_shards=n_shards, shuffle_after_epoch=train_pipeline)
+    if is_triton_pipeline:
+        assert not train_pipeline, "Pipeline for Triton shall be a validation pipeline"
+        if torch.distributed.is_initialized():
+            raise RuntimeError(
+                "You're creating Triton pipeline, using multi-process mode. Please use single-process mode.")
+        encoded, label = fn.external_source(device="cpu", name="DALI_INPUT_0", no_copy=True)
+    else:
+        encoded, label = fn.readers.file(device="cpu", name="file_reader",
+                                         file_root=file_root, file_list=file_list, shard_id=shard_id,
+                                         num_shards=n_shards, shuffle_after_epoch=train_pipeline)
 
     speed_perturbation_coeffs = None
     if resample_range is not None:
@@ -183,7 +191,7 @@ def dali_asr_pipeline(train_pipeline,  # True if train pipeline, False if valida
 def make_dali_asr_pipeline(train_pipeline: bool, device_id, batch_size,
                            file_root: str, file_list: str, config_data: dict,
                            config_features: dict, device_type: str = "gpu", do_resampling: bool = True,
-                           num_cpu_threads: int = multiprocessing.cpu_count()):
+                           num_cpu_threads: int = multiprocessing.cpu_count(), is_triton_pipeline: bool = False):
     max_duration = config_data['max_duration']
     sample_rate = config_data['sample_rate']
     silence_threshold = -60 if config_data['trim_silence'] else None
@@ -296,7 +304,13 @@ def make_dali_asr_pipeline(train_pipeline: bool, device_id, batch_size,
         window_size=window_size, window_stride=window_stride, nfeatures=nfeatures, nfft=nfft,
         frame_splicing_factor=frame_splicing_factor, dither_coeff=dither_coeff, pad_align=pad_align, preemph_coeff=preemph_coeff,
         do_spectrogram_masking=do_spectrogram_masking, cutouts_generator=cutouts_gen,
-        shard_id=shard_id, n_shards=n_shards, preprocessing_device=preprocessing_device,
+        shard_id=shard_id, n_shards=n_shards, preprocessing_device=preprocessing_device, is_triton_pipeline=is_triton_pipeline,
         batch_size=batch_size, num_threads=num_cpu_threads, device_id=device_id
     )
     return pipe
+
+def serialize_dali_triton_pipeline(output_path: str, config_data: dict, config_features: dict):
+    pipe = make_dali_asr_pipeline(
+        train_pipeline=False, device_id=-1, batch_size=-1, file_root=None, file_list=None, config_data=config_data,
+        config_features=config_features, do_resampling=False, num_cpu_threads=-1, is_triton_pipeline=True)
+    pipe.serialize(filename=output_path)
