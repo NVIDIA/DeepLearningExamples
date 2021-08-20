@@ -1,0 +1,7 @@
+SE(3)-Transformer PyTorch
+
+This repository includes software from https://github.com/FabianFuchsML/se3-transformer-public
+licensed under the MIT License.
+
+This repository includes software from https://github.com/lucidrains/se3-transformer-pytorch
+licensed under the MIT License.
