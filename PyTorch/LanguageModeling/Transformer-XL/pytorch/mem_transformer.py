@@ -125,7 +125,7 @@ class MultiHeadAttn(nn.Module):
         head_v = head_v.view(c.size(0), c.size(1), self.n_head, self.d_head)
 
         # [bsz x n_head x qlen x klen]
-        attn_score = torch.einsum('ibnd,jbnd->bnij', (head_q, head_k))
+        attn_score = torch.einsum('ibnd,jbnd->bnij', head_q, head_k)
         attn_score.mul_(self.scale)
         if attn_mask is not None:
             if attn_mask.dim() == 2:
@@ -138,7 +138,7 @@ class MultiHeadAttn(nn.Module):
         attn_prob = self.dropatt(attn_prob)
 
         # [bsz x n_head x qlen x klen] * [klen x bsz x n_head x d_head] -> [qlen x bsz x n_head x d_head]
-        attn_vec = torch.einsum('bnij,jbnd->ibnd', (attn_prob, head_v))
+        attn_vec = torch.einsum('bnij,jbnd->ibnd', attn_prob, head_v)
         attn_vec = attn_vec.contiguous().view(
             attn_vec.size(0), attn_vec.size(1), self.n_head * self.d_head)
 
@@ -264,10 +264,10 @@ class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
 
         # compute attention score
         rw_head_q = w_head_q + r_w_bias                                # qlen x bsz x n_head x d_head
-        AC = torch.einsum('ibnd,jbnd->bnij', (rw_head_q, w_head_k))    # bsz x n_head x qlen x klen
+        AC = torch.einsum('ibnd,jbnd->bnij', rw_head_q, w_head_k)      # bsz x n_head x qlen x klen
 
         rr_head_q = w_head_q + r_r_bias
-        BD = torch.einsum('ibnd,jnd->bnij', (rr_head_q, r_head_k))     # bsz x n_head x qlen x klen
+        BD = torch.einsum('ibnd,jnd->bnij', rr_head_q, r_head_k)       # bsz x n_head x qlen x klen
         BD = self._rel_shift(BD)
 
         # [bsz x n_head x qlen x klen]
@@ -285,7 +285,7 @@ class RelPartialLearnableMultiHeadAttn(RelMultiHeadAttn):
         attn_prob = self.dropatt(attn_prob)
 
         # compute attention vector
-        attn_vec = torch.einsum('bnij,jbnd->ibnd', (attn_prob, w_head_v))
+        attn_vec = torch.einsum('bnij,jbnd->ibnd', attn_prob, w_head_v)
 
         # [qlen x bsz x n_head x d_head]
         attn_vec = attn_vec.contiguous().view(
@@ -350,11 +350,11 @@ class RelLearnableMultiHeadAttn(RelMultiHeadAttn):
         r_bias = r_bias.t()
 
         # compute attention score
-        rw_head_q = w_head_q + r_w_bias[None]                        # qlen x bsz x n_head x d_head
+        rw_head_q = w_head_q + r_w_bias[None]                      # qlen x bsz x n_head x d_head
 
-        AC = torch.einsum('ibnd,jbnd->bnij', (rw_head_q, w_head_k))  # bsz x n_head x qlen x klen
-        B_ = torch.einsum('ibnd,jnd->bnij', (w_head_q, r_emb))       # bsz x n_head x qlen x klen
-        D_ = r_bias[None, :, None, :]                                # 1   x n_head x    1 x klen
+        AC = torch.einsum('ibnd,jbnd->bnij', rw_head_q, w_head_k)  # bsz x n_head x qlen x klen
+        B_ = torch.einsum('ibnd,jnd->bnij', w_head_q, r_emb)       # bsz x n_head x qlen x klen
+        D_ = r_bias[None, :, None, :]                              # 1   x n_head x    1 x klen
         BD = self._rel_shift(B_ + D_)
 
         # [bsz x qlen x klen x n_head]
@@ -372,7 +372,7 @@ class RelLearnableMultiHeadAttn(RelMultiHeadAttn):
         attn_prob = self.dropatt(attn_prob)
 
         # compute attention vector
-        attn_vec = torch.einsum('bnij,jbnd->ibnd', (attn_prob, w_head_v))
+        attn_vec = torch.einsum('bnij,jbnd->ibnd', attn_prob, w_head_v)
 
         # [qlen x bsz x n_head x d_head]
         attn_vec = attn_vec.contiguous().view(
