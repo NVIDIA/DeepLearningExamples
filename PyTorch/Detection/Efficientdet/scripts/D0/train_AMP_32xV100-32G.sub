@@ -1,0 +1,26 @@
+#!/bin/bash
+#SBATCH -t 8:00:00                 # wall time
+#SBATCH --ntasks-per-node=8        # tasks per node
+#SBATCH --exclusive                # exclusive node access
+#SBATCH --mem=0                    # all mem avail
+#SBATCH --mail-type=FAIL           # only send email on failure
+#SBATCH --overcommit               # Needed for pytorch
+
+
+# Data dir
+readonly datadir="/coco2017"
+# Path to where trained checkpoints will be saved on the system
+readonly checkpointdir="$PWD/results/"
+
+CREATE_FOLDER_CMD="if [ ! -d ${checkpointdir} ]; then mkdir -p ${checkpointdir} ; fi"
+
+srun --ntasks="${SLURM_JOB_NUM_NODES}" --ntasks-per-node=1 sh -c "${CREATE_FOLDER_CMD}"
+
+OUTFILE="${checkpointdir}/slurm-%j.out"
+ERRFILE="${checkpointdir}/error-%j.out"
+
+readonly mounts="${datadir}:/workspace/object_detection/datasets/coco,${checkpointdir}:/model,/backbone_checkpoints:/checkpoints"
+
+### export USE_CUDNN_BATCHNORM_SPATIAL_PERSISTENT=1
+
+srun -l -o $OUTFILE -e $ERRFILE --container-image nvcr.io/nvidia/effdet:21.06-py3 --no-container-entrypoint --container-mounts ${mounts} --mpi=pmix python3 train.py /workspace/object_detection/datasets/coco --model efficientdet_d0 -b 60 --lr 2.42 --amp --sync-bn --opt fusedmomentum --warmup-epochs 90 --output /model --lr-noise 0.55 0.9 --workers 16 --fill-color mean --model-ema --model-ema-decay 0.999 --eval-after 200 --epochs 400 --resume --pretrained-backbone-path /backbone_checkpoints/jocbackbone_statedict_B0.pth --smoothing 0.0 --fused-focal-loss --seed 31
