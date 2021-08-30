@@ -169,7 +169,7 @@ def train(train_loop_func, logger, args):
         loss_func.cuda()
 
     optimizer = torch.optim.SGD(tencent_trick(ssd300), lr=args.learning_rate,
-                                    momentum=args.momentum, weight_decay=args.weight_decay)
+                                momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = MultiStepLR(optimizer=optimizer, milestones=args.multistep, gamma=0.1)
     if args.amp:
         ssd300, optimizer = amp.initialize(ssd300, optimizer, opt_level='O2')
@@ -198,8 +198,8 @@ def train(train_loop_func, logger, args):
         acc = evaluate(ssd300, val_dataloader, cocoGt, encoder, inv_map, args)
         if args.local_rank == 0:
             print('Model precision {} mAP'.format(acc))
-
         return
+
     mean, std = generate_mean_std(args)
 
     for epoch in range(start_epoch, args.epochs):

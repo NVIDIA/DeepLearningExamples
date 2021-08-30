@@ -93,6 +93,7 @@ class Logger:
         DLLogger.log((), self.summary)
 
     def update_iter(self, epoch, iteration, loss):
+        self.epoch = epoch
         self.train_iter = iteration
         self.train_loss_logger.update_iter(loss)
         if iteration % self.log_interval == 0:
