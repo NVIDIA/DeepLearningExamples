@@ -35,25 +35,21 @@ set -x
 
 DATASET_NAME=${1:-'ml-20m'}
 RAW_DATADIR=${2:-"/data/${DATASET_NAME}"}
-CACHED_DATADIR=${3:-"/data/cache/${DATASET_NAME}"}
+CACHED_DATADIR=${3:-"$/data/cache/${DATASET_NAME}"}
 
 # you can add another option to this case in order to support other datasets
 case ${DATASET_NAME} in
     'ml-20m')
 	ZIP_PATH=${RAW_DATADIR}/'ml-20m.zip'
-	SHOULD_UNZIP=1
 	RATINGS_PATH=${RAW_DATADIR}'/ml-20m/ratings.csv'
 	;;
     'ml-1m')
 	ZIP_PATH=${RAW_DATADIR}/'ml-1m.zip'
-	SHOULD_UNZIP=1
 	RATINGS_PATH=${RAW_DATADIR}'/ml-1m/ratings.dat'
 	;;
-	  *)
-	echo "Using unknown dataset: $DATASET_NAME."
-	RATINGS_PATH=${RAW_DATADIR}'/ratings.csv'
-	echo "Expecting file at ${RATINGS_PATH}"
-	SHOULD_UNZIP=0
+	*)
+	echo "Unsupported dataset name: $DATASET_NAME"
+	exit 1
 esac
 
 if [ ! -d ${RAW_DATADIR} ]; then
@@ -68,30 +64,38 @@ if [ -f log ]; then
     rm -f log
 fi
 
+if [ ! -f ${ZIP_PATH} ]; then
+    echo "Dataset not found. Please download it from: https://grouplens.org/datasets/movielens/20m/ and put it in ${ZIP_PATH}"
+    exit 1
+fi
+
 if [ ! -f ${RATINGS_PATH} ]; then
-    if [ $SHOULD_UNZIP == 1 ]; then
-        if [ ! -f ${ZIP_PATH} ]; then
-          echo "Dataset not found. Please download it from: https://grouplens.org/datasets/movielens/20m/ and put it in ${ZIP_PATH}"
-          exit 1
-        fi
-        unzip -u ${ZIP_PATH}  -d ${RAW_DATADIR}
-    else
-      echo "File not found at ${RATINGS_PATH}. Aborting."
-      exit 1
+    unzip -u ${ZIP_PATH}  -d ${RAW_DATADIR}
+fi
+
+for test_name in more_pos less_pos less_user less_item more_user more_item other_names;
+do
+    NEW_DIR=${CACHED_DATADIR}/${test_name}
+
+    if [ ! -d ${NEW_DIR} ]; then
+    mkdir -p ${NEW_DIR}
     fi
-fi
 
+    python convert_test.py --path ${RATINGS_PATH} --output $NEW_DIR --test ${test_name}
+    echo "Generated testing for $test_name"
+done
 
-if [ ! -f ${CACHED_DATADIR}/feature_spec.yaml ]; then
-    echo "preprocessing ${RATINGS_PATH} and save to disk"
-    t0=$(date +%s)
-    python convert.py --path ${RATINGS_PATH} --output ${CACHED_DATADIR}
-    t1=$(date +%s)
-    delta=$(( $t1 - $t0 ))
-    echo "Finish preprocessing in $delta seconds"
-else
-    echo 'Using cached preprocessed data'
-fi
+for test_sample in '0' '10' '200';
+do
+    NEW_DIR=${CACHED_DATADIR}/sample_${test_name}
+
+    if [ ! -d ${NEW_DIR} ]; then
+    mkdir -p ${NEW_DIR}
+    fi
+
+    python convert_test.py --path ${RATINGS_PATH} --output $NEW_DIR --valid_negative $test_sample
+    echo "Generated testing for $test_name"
+done
 
 echo "Dataset $DATASET_NAME successfully prepared at: $CACHED_DATADIR"
 echo "You can now run the training with: python -m torch.distributed.launch --nproc_per_node=<number_of_GPUs> --use_env ncf.py --data ${CACHED_DATADIR}"

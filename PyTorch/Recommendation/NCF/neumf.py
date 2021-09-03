@@ -35,6 +35,7 @@ import torch.nn as nn
 import sys
 from os.path import abspath, join, dirname
 
+
 class NeuMF(nn.Module):
     def __init__(self, nb_users, nb_items,
                  mf_dim, mlp_layer_sizes, dropout=0):

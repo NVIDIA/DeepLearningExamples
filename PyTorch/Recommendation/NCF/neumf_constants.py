@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,18 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-from functools import reduce
-
-
-def count_parameters(model):
-    c = map(lambda p: reduce(lambda x, y: x * y, p.size()), model.parameters())
-    return sum(c)
-
-
-def save_result(result, path):
-    write_heading = not os.path.exists(path)
-    with open(path, mode='a') as out:
-        if write_heading:
-            out.write(",".join([str(k) for k, v in result.items()]) + '\n')
-        out.write(",".join([str(v) for k, v in result.items()]) + '\n')
+USER_CHANNEL_NAME = 'user_ch'
+ITEM_CHANNEL_NAME = 'item_ch'
+LABEL_CHANNEL_NAME = 'label_ch'
+TEST_SAMPLES_PER_SERIES = 'test_samples_per_series'

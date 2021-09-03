@@ -30,17 +30,11 @@
 
 from argparse import ArgumentParser
 import pandas as pd
+import numpy as np
 from load import implicit_load
-from feature_spec import FeatureSpec
-from neumf_constants import USER_CHANNEL_NAME, ITEM_CHANNEL_NAME, LABEL_CHANNEL_NAME, TEST_SAMPLES_PER_SERIES
+from convert import save_feature_spec, _TestNegSampler, TEST_0, TEST_1, TRAIN_0, TRAIN_1
 import torch
 import os
-import tqdm
-
-TEST_1 = 'test_data_1.pt'
-TEST_0 = 'test_data_0.pt'
-TRAIN_1 = 'train_data_1.pt'
-TRAIN_0 = 'train_data_0.pt'
 
 USER_COLUMN = 'user_id'
 ITEM_COLUMN = 'item_id'
@@ -56,103 +50,8 @@ def parse_args():
                         help='Number of negative samples for each positive test example')
     parser.add_argument('--seed', '-s', type=int, default=1,
                         help='Manually set random seed for torch')
+    parser.add_argument('--test', type=str, help='select modification to be applied to the set')
     return parser.parse_args()
-
-
-class _TestNegSampler:
-    def __init__(self, train_ratings, nb_neg):
-        self.nb_neg = nb_neg
-        self.nb_users = int(train_ratings[:, 0].max()) + 1
-        self.nb_items = int(train_ratings[:, 1].max()) + 1
-
-        # compute unique ids for quickly created hash set and fast lookup
-        ids = (train_ratings[:, 0] * self.nb_items) + train_ratings[:, 1]
-        self.set = set(ids)
-
-    def generate(self, batch_size=128 * 1024):
-        users = torch.arange(0, self.nb_users).reshape([1, -1]).repeat([self.nb_neg, 1]).transpose(0, 1).reshape(-1)
-
-        items = [-1] * len(users)
-
-        random_items = torch.LongTensor(batch_size).random_(0, self.nb_items).tolist()
-        print('Generating validation negatives...')
-        for idx, u in enumerate(tqdm.tqdm(users.tolist())):
-            if not random_items:
-                random_items = torch.LongTensor(batch_size).random_(0, self.nb_items).tolist()
-            j = random_items.pop()
-            while u * self.nb_items + j in self.set:
-                if not random_items:
-                    random_items = torch.LongTensor(batch_size).random_(0, self.nb_items).tolist()
-                j = random_items.pop()
-
-            items[idx] = j
-        items = torch.LongTensor(items)
-        return items
-
-
-def save_feature_spec(user_cardinality, item_cardinality, dtypes, test_negative_samples, output_path,
-                      user_feature_name='user',
-                      item_feature_name='item',
-                      label_feature_name='label'):
-    feature_spec = {
-        user_feature_name: {
-            'dtype': dtypes[user_feature_name],
-            'cardinality': int(user_cardinality)
-        },
-        item_feature_name: {
-            'dtype': dtypes[item_feature_name],
-            'cardinality': int(item_cardinality)
-        },
-        label_feature_name: {
-            'dtype': dtypes[label_feature_name],
-        }
-    }
-    metadata = {
-        TEST_SAMPLES_PER_SERIES: test_negative_samples + 1
-    }
-    train_mapping = [
-        {
-            'type': 'torch_tensor',
-            'features': [
-                user_feature_name,
-                item_feature_name
-            ],
-            'files': [TRAIN_0]
-        },
-        {
-            'type': 'torch_tensor',
-            'features': [
-                label_feature_name
-            ],
-            'files': [TRAIN_1]
-        }
-    ]
-    test_mapping = [
-        {
-            'type': 'torch_tensor',
-            'features': [
-                user_feature_name,
-                item_feature_name
-            ],
-            'files': [TEST_0],
-        },
-        {
-            'type': 'torch_tensor',
-            'features': [
-                label_feature_name
-            ],
-            'files': [TEST_1],
-        }
-    ]
-    channel_spec = {
-        USER_CHANNEL_NAME: [user_feature_name],
-        ITEM_CHANNEL_NAME: [item_feature_name],
-        LABEL_CHANNEL_NAME: [label_feature_name]
-    }
-    source_spec = {'train': train_mapping, 'test': test_mapping}
-    feature_spec = FeatureSpec(feature_spec=feature_spec, metadata=metadata, source_spec=source_spec,
-                               channel_spec=channel_spec, base_directory="")
-    feature_spec.to_yaml(output_path=output_path)
 
 
 def main():
@@ -163,6 +62,23 @@ def main():
 
     print("Loading raw data from {}".format(args.path))
     df = implicit_load(args.path, sort=False)
+
+    if args.test == 'less_user':
+        to_drop = set(list(df[USER_COLUMN].unique())[-100:])
+        df = df[~df[USER_COLUMN].isin(to_drop)]
+    if args.test == 'less_item':
+        to_drop = set(list(df[ITEM_COLUMN].unique())[-100:])
+        df = df[~df[ITEM_COLUMN].isin(to_drop)]
+    if args.test == 'more_user':
+        sample = df.sample(frac=0.2).copy()
+        sample[USER_COLUMN] = sample[USER_COLUMN] + 10000000
+        df = df.append(sample)
+        users = df[USER_COLUMN]
+        df = df[users.isin(users[users.duplicated(keep=False)])]  # make sure something remains in the train set
+    if args.test == 'more_item':
+        sample = df.sample(frac=0.2).copy()
+        sample[ITEM_COLUMN] = sample[ITEM_COLUMN] + 10000000
+        df = df.append(sample)
 
     print("Mapping original user and item IDs to new sequential IDs")
     df[USER_COLUMN] = pd.factorize(df[USER_COLUMN])[0]
@@ -186,7 +102,22 @@ def main():
 
     sampler = _TestNegSampler(train_data.values, args.valid_negative)
     test_negs = sampler.generate().cuda()
-    test_negs = test_negs.reshape(-1, args.valid_negative)
+    if args.valid_negative > 0:
+        test_negs = test_negs.reshape(-1, args.valid_negative)
+    else:
+        test_negs = test_negs.reshape(test_data.shape[0], 0)
+
+    if args.test == 'more_pos':
+        mask = np.random.rand(len(test_data)) < 0.5
+        sample = test_data[mask].copy()
+        sample[ITEM_COLUMN] = sample[ITEM_COLUMN] + 5
+        test_data = test_data.append(sample)
+        test_negs_copy = test_negs[mask]
+        test_negs = torch.cat((test_negs, test_negs_copy), dim=0)
+    if args.test == 'less_pos':
+        mask = np.random.rand(len(test_data)) < 0.5
+        test_data = test_data[mask]
+        test_negs = test_negs[mask]
 
     # Reshape train set into user,item,label tabular and save
     train_ratings = torch.from_numpy(train_data.values).cuda()
@@ -209,8 +140,18 @@ def main():
     torch.save(test_tensor, os.path.join(args.output, TEST_0))
     torch.save(test_labels, os.path.join(args.output, TEST_1))
 
-    save_feature_spec(user_cardinality=user_cardinality, item_cardinality=item_cardinality, dtypes=dtypes,
-                      test_negative_samples=args.valid_negative, output_path=args.output + '/feature_spec.yaml')
+    if args.test == 'other_names':
+        dtypes = {'user_2': str(test_users.dtype),
+                  'item_2': str(test_items.dtype),
+                  'label_2': str(test_labels.dtype)}
+        save_feature_spec(user_cardinality=user_cardinality, item_cardinality=item_cardinality, dtypes=dtypes,
+                          test_negative_samples=args.valid_negative, output_path=args.output + '/feature_spec.yaml',
+                          user_feature_name='user_2',
+                          item_feature_name='item_2',
+                          label_feature_name='label_2')
+    else:
+        save_feature_spec(user_cardinality=user_cardinality, item_cardinality=item_cardinality, dtypes=dtypes,
+                          test_negative_samples=args.valid_negative, output_path=args.output + '/feature_spec.yaml')
 
 
 if __name__ == '__main__':
