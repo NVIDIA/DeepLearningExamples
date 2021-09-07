@@ -2,8 +2,7 @@
 
 set -e
 
-echo "Downloading cmudict-0.7b ..."
-wget https://github.com/Alexir/CMUdict/raw/master/cmudict-0.7b -qO cmudict/cmudict-0.7b
+scripts/download_cmudict.sh
 
 DATA_DIR="LJSpeech-1.1"
 LJS_ARCH="LJSpeech-1.1.tar.bz2"

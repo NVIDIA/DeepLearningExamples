@@ -74,7 +74,7 @@ This is reflected in Mean Opinion Scores ([details](https://arxiv.org/abs/2006.0
 | FastPitch 1.0  | 4.080 ± 0.133            |
 
 The current version of the model offers even higher quality, as reflected
-in the pairwise preference scores.
+in the pairwise preference scores ([details](https://arxiv.org/abs/2108.10447)).
 
 | Model          | Average preference |
 |:---------------|:-------------------|
@@ -82,7 +82,7 @@ in the pairwise preference scores.
 | FastPitch 1.1  | 0.565 ± 0.068      |
 
 The FastPitch model is based on the [FastSpeech](https://arxiv.org/abs/1905.09263) model. The main differences between FastPitch and FastSpeech are that FastPitch:
-* no dependence on external aligner (Transformer TTS, Tacotron 2); in version 1.1, FastPitch aligns audio to transcriptions by itself,
+* no dependence on external aligner (Transformer TTS, Tacotron 2); in version 1.1, FastPitch aligns audio to transcriptions by itself as in [One TTS Alignment To Rule Them All](https://arxiv.org/abs/2108.10447),
 * explicitly learns to predict the pitch contour,
 * pitch conditioning removes harsh sounding artifacts and provides faster convergence,
 * no need for distilling mel-spectrograms with a teacher model,
