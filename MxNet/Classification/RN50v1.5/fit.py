@@ -234,6 +234,7 @@ def model_score(args, net, val_data, metric, kvstore):
         tic = time.time()
 
     metric = reduce_metrics(args, metric.get_global(), kvstore)
+    durations = durations[min(len(durations) // 10, 100):]
     duration_stats = {
         'ips': total_batch_size / np.mean(durations),
         'latency_avg': np.mean(durations),
@@ -365,9 +366,10 @@ def model_fit(args, net, train_data, eval_metric, optimizer,
             durations.append(time.time() - tic)
             tic = time.time()
 
+        durations = durations[min(len(durations) // 10, 100):]
         dllogger_epoch_data = {
             'train.loss': loss_metric.get_global()[1],
-            'train.ips': (i + 1) * total_batch_size / (time.time() - etic)
+            'train.ips': total_batch_size / np.mean(durations)
         }
         if args.mode == 'train_val':
             logging.info('Validating epoch {}'.format(epoch))
