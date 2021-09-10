@@ -80,7 +80,8 @@ class QM9DataModule(DataModule):
         qm9_kwargs = dict(label_keys=[self.task], verbose=False, raw_dir=str(data_dir))
         if precompute_bases:
             bases_kwargs = dict(max_degree=num_degrees - 1, use_pad_trick=using_tensor_cores(amp), amp=amp)
-            full_dataset = CachedBasesQM9EdgeDataset(bases_kwargs=bases_kwargs, batch_size=batch_size, **qm9_kwargs)
+            full_dataset = CachedBasesQM9EdgeDataset(bases_kwargs=bases_kwargs, batch_size=batch_size,
+                                                     num_workers=num_workers, **qm9_kwargs)
         else:
             full_dataset = QM9EdgeDataset(**qm9_kwargs)
 
@@ -134,7 +135,7 @@ class QM9DataModule(DataModule):
 class CachedBasesQM9EdgeDataset(QM9EdgeDataset):
     """ Dataset extending the QM9 dataset from DGL with precomputed (cached in RAM) pairwise bases """
 
-    def __init__(self, bases_kwargs: dict, batch_size: int, *args, **kwargs):
+    def __init__(self, bases_kwargs: dict, batch_size: int, num_workers: int, *args, **kwargs):
         """
         :param bases_kwargs:  Arguments to feed the bases computation function
         :param batch_size:    Batch size to use when iterating over the dataset for computing bases
@@ -142,13 +143,14 @@ class CachedBasesQM9EdgeDataset(QM9EdgeDataset):
         self.bases_kwargs = bases_kwargs
         self.batch_size = batch_size
         self.bases = None
+        self.num_workers = num_workers
         super().__init__(*args, **kwargs)
 
     def load(self):
         super().load()
         # Iterate through the dataset and compute bases (pairwise only)
-        # Potential improvement: use multi-GPU and reduction
-        dataloader = DataLoader(self, shuffle=False, batch_size=self.batch_size,
+        # Potential improvement: use multi-GPU and gather
+        dataloader = DataLoader(self, shuffle=False, batch_size=self.batch_size, num_workers=self.num_workers,
                                 collate_fn=lambda samples: dgl.batch([sample[0] for sample in samples]))
         bases = []
         for i, graph in tqdm(enumerate(dataloader), total=len(dataloader), desc='Precomputing QM9 bases',

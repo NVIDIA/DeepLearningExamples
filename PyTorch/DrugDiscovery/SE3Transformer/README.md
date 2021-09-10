@@ -472,7 +472,7 @@ Our results were obtained by running the `scripts/train.sh` training script in t
 | GPUs    | Batch size / GPU    | Absolute error - TF32  | Absolute error - mixed precision  |   Time to train - TF32  |  Time to train - mixed precision | Time to train speedup (mixed precision to TF32) |       
 |:------------------:|:----------------------:|:--------------------:|:------------------------------------:|:---------------------------------:|:----------------------:|:----------------------------------------------:|
 |  1                 |    240                   |           0.03456                            |        0.03460                                |        1h23min      |    1h03min                |    1.32x              |
-|  8                 |    240                   |           0.03417                            |        0.03424                                |        35min          |    27min                |    1.30x              |
+|  8                 |    240                   |           0.03417                            |        0.03424                                |        15min          |    12min                |    1.25x              |
 
 
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
@@ -482,7 +482,7 @@ Our results were obtained by running the `scripts/train.sh` training script in t
 | GPUs    | Batch size / GPU    | Absolute error - FP32  | Absolute error - mixed precision  |   Time to train - FP32  |  Time to train - mixed precision | Time to train speedup (mixed precision to FP32)  |      
 |:------------------:|:----------------------:|:--------------------:|:------------------------------------:|:---------------------------------:|:----------------------:|:----------------------------------------------:|
 |  1                 |    240                   |           0.03432                            |        0.03439                                |         2h25min         |    1h33min                |    1.56x              |
-|  8                 |    240                   |           0.03380                            |        0.03495                                |        1h08min          |    44min                |    1.55x              |
+|  8                 |    240                   |           0.03380                            |        0.03495                                |        29min          |    20min                |    1.45x              |
 
 
 #### Training performance results
