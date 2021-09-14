@@ -1,0 +1,5 @@
+QuartzNet in PyTorch
+
+This repository includes source code (in "common/") from:
+* https://github.com/keithito/tacotron and https://github.com/ryanleary/patter licensed under MIT license.
+
