@@ -1,0 +1,1 @@
+python ./multiproc.py --nproc_per_node 2 ./main.py --arch resnet50 --label-smoothing 0.1 --amp --static-loss-scale 256 --data-backend pytorch --num-classes 100 -j 20 --epochs 90 --raport-file /imagenet/PyTorch/cifar100.json --workspace /imagenet/PyTorch /imagenet
