@@ -1,3 +1,5 @@
+# nvidia-docker run --rm -it --ipc=host -v /work/chauhans/cifar100:/cifar100 rn50_tf1
+
 for (( n = 0; i < 3; n++ )); do
   for (( i = 0; i < 91; i++ )); do
       mkdir /imagenet/TensorFlow/run_"${n}"/epoch_"${i}"/
