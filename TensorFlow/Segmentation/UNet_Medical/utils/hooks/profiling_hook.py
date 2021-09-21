@@ -50,5 +50,6 @@ class ProfilingHook(tf.estimator.SessionRunHook):
     def end(self, session):
         if hvd.rank() == 0:
             stats = process_performance_stats(np.array(self._timestamps),
-                                              self._global_batch_size)
-            self.logger.log(step=(), data={metric: value for (metric, value) in stats})
+                                              self._global_batch_size,
+                                              self.mode)
+            self.logger.log(step=(), data=stats)
