@@ -167,8 +167,7 @@ def dali_asr_pipeline(train_pipeline,  # True if training, False if validation
         audio = audio.gpu()
 
     if dither_coeff != 0.:
-        audio = audio + fn.random.normal(device=preprocessing_device
-                                         ) * dither_coeff
+        audio = audio + fn.random.normal(audio) * dither_coeff
 
     audio = fn.preemphasis_filter(audio, preemph_coeff=preemph_coeff)
 
