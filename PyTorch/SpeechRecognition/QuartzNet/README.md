@@ -264,7 +264,7 @@ To train your model using mixed or TF32 precision with Tensor Cores or using FP3
 7. Start inference/predictions.
    Inside the container, use the following script to run inference.
    Make sure the downloaded and preprocessed dataset is located at `$DATA_DIR/LibriSpeech` on the host, which is mounted as `/datasets/LibriSpeech` inside the container.
-   A pretrained model checkpoint can be downloaded from [NGC model repository](https://ngc.nvidia.com/catalog/models).
+   A pretrained model checkpoint can be downloaded from [NGC model repository](https://ngc.nvidia.com/catalog/models), manually or automatically using `scripts/download_quartznet.sh`.
 
    ```bash
    [OPTION1=value1 OPTION2=value2 ...] bash scripts/inference.sh

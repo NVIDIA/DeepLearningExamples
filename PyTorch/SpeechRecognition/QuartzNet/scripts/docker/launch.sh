@@ -4,13 +4,11 @@ SCRIPT_DIR=$(cd $(dirname $0); pwd)
 QN_REPO=${QN_REPO:-"${SCRIPT_DIR}/../.."}
 
 DATA_DIR=${1:-${DATA_DIR-${QN_REPO}"/datasets"}}
-CHECKPOINT_DIR=${2:-${CHECKPOINT_DIR:-${QN_REPO}"/checkpoints"}}
-RESULT_DIR=${3:-${RESULT_DIR:-${QN_REPO}"/results"}}
-PROGRAM_PATH=${PROGRAM_PATH}
+RESULT_DIR=${2:-${RESULT_DIR:-${QN_REPO}"/results"}}
+SCRIPT=${3:-${SCRIPT:-""}}
 
 MOUNTS=""
 MOUNTS+=" -v $DATA_DIR:/datasets"
-MOUNTS+=" -v $CHECKPOINT_DIR:/checkpoints"
 MOUNTS+=" -v $RESULT_DIR:/results"
 MOUNTS+=" -v ${QN_REPO}:/quartznet"
 
@@ -21,4 +19,4 @@ docker run -it --rm --gpus all\
   --ulimit stack=67108864 \
   $MOUNTS \
   -w /quartznet \
-  quartznet:latest bash $PROGRAM_PATH
+  quartznet:latest bash $SCRIPT

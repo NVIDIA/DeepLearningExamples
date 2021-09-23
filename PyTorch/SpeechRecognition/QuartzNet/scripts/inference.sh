@@ -17,7 +17,7 @@
 : ${DATA_DIR:=${1:-"/datasets/LibriSpeech"}}
 : ${MODEL_CONFIG:=${2:-"configs/quartznet15x5_speedp-online-1.15_speca.yaml"}}
 : ${OUTPUT_DIR:=${3:-"/results"}}
-: ${CHECKPOINT:=${4:-"/checkpoints/quartznet_fp16.pt"}}
+: ${CHECKPOINT:=${4:-"pretrained_models/quartznet/nvidia_quartznet_210504.pt"}}
 : ${DATASET:="test-other"}
 : ${LOG_FILE:=""}
 : ${CUDNN_BENCHMARK:=false}
