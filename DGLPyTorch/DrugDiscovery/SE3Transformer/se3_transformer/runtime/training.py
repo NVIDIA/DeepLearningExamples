@@ -104,7 +104,7 @@ def train_epoch(model, train_dataloader, loss_fn, epoch_idx, grad_scaler, optimi
 
             grad_scaler.step(optimizer)
             grad_scaler.update()
-            optimizer.zero_grad()
+            model.zero_grad(set_to_none=True)
 
         losses.append(loss.item())
 
@@ -163,7 +163,7 @@ def train(model: nn.Module,
                 and (epoch_idx + 1) % args.ckpt_interval == 0:
             save_state(model, optimizer, epoch_idx, args.save_ckpt_path, callbacks)
 
-        if not args.benchmark and args.eval_interval > 0 and (epoch_idx + 1) % args.eval_interval == 0:
+        if not args.benchmark and ((args.eval_interval > 0 and (epoch_idx + 1) % args.eval_interval == 0) or epoch_idx + 1 == args.epochs):
             evaluate(model, val_dataloader, callbacks, args)
             model.train()
 
@@ -236,3 +236,5 @@ if __name__ == '__main__':
           args)
 
     logging.info('Training finished successfully')
+
+

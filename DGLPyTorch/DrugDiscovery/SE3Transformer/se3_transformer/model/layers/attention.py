@@ -79,7 +79,7 @@ class AttentionSE3(nn.Module):
             with nvtx_range('attention dot product + softmax'):
                 # Compute attention weights (softmax of inner product between key and query)
                 edge_weights = dgl.ops.e_dot_v(graph, key, query).squeeze(-1)
-                edge_weights /= np.sqrt(self.key_fiber.num_features)
+                edge_weights = edge_weights / np.sqrt(self.key_fiber.num_features)
                 edge_weights = edge_softmax(graph, edge_weights)
                 edge_weights = edge_weights[..., None, None]
 
@@ -178,3 +178,5 @@ class AttentionBlockSE3(nn.Module):
                     value[degree] = feat
 
         return key, value
+
+

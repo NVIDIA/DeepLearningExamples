@@ -299,14 +299,12 @@ class ConvSE3(nn.Module):
             elif self.used_fuse_level == ConvSE3FuseLevel.PARTIAL and hasattr(self, 'conv_out'):
                 in_features_fused = torch.cat(in_features, dim=-1)
                 for degree_out in self.fiber_out.degrees:
-                    out[str(degree_out)] = self.conv_out[str(degree_out)](in_features_fused, invariant_edge_feats,
-                                                                          basis[f'out{degree_out}_fused'])
+                    out[str(degree_out)] = self.conv_out[str(degree_out)](in_features_fused, invariant_edge_feats, basis[f'out{degree_out}_fused'])
 
             elif self.used_fuse_level == ConvSE3FuseLevel.PARTIAL and hasattr(self, 'conv_in'):
                 out = 0
                 for degree_in, feature in zip(self.fiber_in.degrees, in_features):
-                    out += self.conv_in[str(degree_in)](feature, invariant_edge_feats,
-                                                        basis[f'in{degree_in}_fused'])
+                    out = out + self.conv_in[str(degree_in)](feature, invariant_edge_feats, basis[f'in{degree_in}_fused'])
                 if not self.allow_fused_output or self.self_interaction or self.pool:
                     out = unfuse_features(out, self.fiber_out.degrees)
             else:
@@ -315,8 +313,7 @@ class ConvSE3(nn.Module):
                     out_feature = 0
                     for degree_in, feature in zip(self.fiber_in.degrees, in_features):
                         dict_key = f'{degree_in},{degree_out}'
-                        out_feature = out_feature + self.conv[dict_key](feature, invariant_edge_feats,
-                                                                        basis.get(dict_key, None))
+                        out_feature = out_feature + self.conv[dict_key](feature, invariant_edge_feats, basis.get(dict_key, None))
                     out[str(degree_out)] = out_feature
 
             for degree_out in self.fiber_out.degrees:
@@ -324,7 +321,7 @@ class ConvSE3(nn.Module):
                     with nvtx_range(f'self interaction'):
                         dst_features = node_feats[str(degree_out)][dst]
                         kernel_self = self.to_kernel_self[str(degree_out)]
-                        out[str(degree_out)] += kernel_self @ dst_features
+                        out[str(degree_out)] = out[str(degree_out)] + kernel_self @ dst_features
 
                 if self.pool:
                     with nvtx_range(f'pooling'):
@@ -333,3 +330,5 @@ class ConvSE3(nn.Module):
                         else:
                             out = dgl.ops.copy_e_sum(graph, out)
             return out
+
+
