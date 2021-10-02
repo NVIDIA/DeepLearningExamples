@@ -2,7 +2,7 @@
 
 # set classes to 100 in main.py before running
 
-for (( n = 1; i < 6; n++ )); do
+for (( n = 0; i < 6; n++ )); do
   for (( i = 0; i < 91; i++ )); do
       mkdir /cifar100/TensorFlow/run_"${n}"/epoch_"${i}"/
       echo "Created Folder epoch_${i}"
