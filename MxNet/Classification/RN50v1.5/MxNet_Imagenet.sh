@@ -5,7 +5,7 @@ for (( i = 0; i < 3; i++ )); do # 3 runs
     ./runner -n 2 -b 192 --num-epochs 90 --mode train_val \
     --amp --dllogger-log /imagenet/MxNet/run_"${i}"/run_"${i}".log \
     --workspace /imagenet/MxNet/run_"${i}"/ --data-backend mxnet \
-    --data-backend-threads 80 \
+    --data-mxnet-threads 80 \
     --data-root /imagenet --warmup 0
     echo "Run ${i} done"
 done
