@@ -363,16 +363,11 @@ FastPitch 1.1 aligns input symbols to output mel-spectrogram frames automaticall
 on any external aligning model. FastPitch training can now be started on raw waveforms
 without any pre-processing: pitch values and mel-spectrograms will be calculated on-line.
 
-For every mel-spectrogram frame, its fundamental frequency in Hz is estimated with either
-the Probabilistic YIN algorithm or [Praat](http://praat.org).
-
-The former is more accurate but time consuming, and we recommend to pre-calculate
-pitch during the data processing step. The latter is suitable for on-line pitch calculation.
-Pitch values are then averaged over every character, in order to provide sparse
-pitch cues for the model.
+For every mel-spectrogram frame, its fundamental frequency in Hz is estimated with
+the Probabilistic YIN algorithm.
 
 <p align="center">
-  <img src="./img/pitch.png" alt="Pitch estimates extracted with Praat" />
+  <img src="./img/pitch.png" alt="Pitch contour estimate" />
 </p>
 <p align="center">
   <em>Figure 2. Pitch estimates for mel-spectrogram frames of phrase "in being comparatively"

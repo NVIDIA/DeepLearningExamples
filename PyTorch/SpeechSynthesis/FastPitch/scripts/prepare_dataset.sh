@@ -3,7 +3,6 @@
 set -e
 
 : ${DATA_DIR:=LJSpeech-1.1}
-: ${F0_METHOD:="pyin"}
 : ${ARGS="--extract-mels"}
 
 python prepare_dataset.py \
@@ -12,5 +11,5 @@ python prepare_dataset.py \
     --batch-size 1 \
     --dataset-path $DATA_DIR \
     --extract-pitch \
-    --f0-method $F0_METHOD \
+    --f0-method pyin \
     $ARGS

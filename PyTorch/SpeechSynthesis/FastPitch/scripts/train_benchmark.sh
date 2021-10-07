@@ -6,7 +6,6 @@ set -a
 : ${NUM_GPUS_SEQUENCE:="1 4 8"}
 : ${EPOCHS:=30}
 : ${OUTPUT_DIR:="./output"}
-: ${F0_METHOD:=praat}
 : ${BATCH_SIZE:=16}
 
 for NUM_GPUS in $NUM_GPUS_SEQUENCE ; do
