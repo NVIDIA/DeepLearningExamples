@@ -31,8 +31,8 @@ hyperparameter. Some cleaners are English-specific. You'll typically want to use
 '''
 
 import re
-from unidecode import unidecode
 from .numbers import normalize_numbers
+from .unidecoder import unidecoder
 
 # Regular expression matching whitespace:
 _whitespace_re = re.compile(r'\s+')
@@ -74,7 +74,7 @@ def collapse_whitespace(text):
     return re.sub(_whitespace_re, ' ', text)
 
 def convert_to_ascii(text):
-    return unidecode(text)
+    return unidecoder(text)
 
 def remove_punctuation(text, table):
     text = text.translate(table)

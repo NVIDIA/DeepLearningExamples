@@ -13,12 +13,12 @@ hyperparameter. Some cleaners are English-specific. You'll typically want to use
 '''
 
 import re
-from unidecode import unidecode
-from .numerical import normalize_numbers
+from .abbreviations import normalize_abbreviations
 from .acronyms import normalize_acronyms, spell_acronyms
 from .datestime import normalize_datestime
 from .letters_and_numbers import normalize_letters_and_numbers
-from .abbreviations import normalize_abbreviations
+from .numerical import normalize_numbers
+from .unidecoder import unidecoder
 
 
 # Regular expression matching whitespace:
@@ -60,7 +60,7 @@ def separate_acronyms(text):
 
 
 def convert_to_ascii(text):
-    return unidecode(text)
+    return unidecoder(text)
 
 
 def basic_cleaners(text):
