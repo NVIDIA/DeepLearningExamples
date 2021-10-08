@@ -5,5 +5,4 @@ networkx
 pytest
 nltk
 tqdm
-html2text
 progressbar
