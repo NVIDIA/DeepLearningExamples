@@ -1,0 +1,8 @@
+switch:cartesian
+repeat 2
+ramp_repack_min 0.02  0.01     1.0  50
+ramp_repack_min 0.250 0.01     0.5  50
+ramp_repack_min 0.550 0.01     0.1 100
+ramp_repack_min 1     0.00001  0.1 200
+accept_to_best
+endrepeat

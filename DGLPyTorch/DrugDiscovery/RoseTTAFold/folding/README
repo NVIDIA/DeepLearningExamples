@@ -1,0 +1,43 @@
+###############################################################################
+RosettaTR.py: Relax on dualspace (2 rounds of relax w/ different set of
+        restraints)
+###############################################################################
+
+
+usage: RosettaTR.py [-h] [-r NRESTARTS] [-pd PCUT] [-m {0,1,2}] [-bb BB]
+                    [-sg SG] [-n STEPS] [--save_chk] [--orient] [--no-orient]
+                    [--fastrelax] [--no-fastrelax] [--roll] [--no-roll]
+                    NPZ FASTA OUT
+
+positional arguments:
+  NPZ             input distograms and anglegrams (NN predictions)
+  FASTA           input sequence
+  OUT             output model (in PDB format)
+
+optional arguments:
+  -h, --help      show this help message and exit
+  -r NRESTARTS    number of noisy restrarts (default: 3)
+  -pd PCUT        min probability of distance restraints (default: 0.05)
+  -m {0,1,2}      0: sh+m+l, 1: (sh+m)+l, 2: (sh+m+l) (default: 2)
+  -bb BB          predicted backbone torsions (default: )
+  -sg SG          window size and order for a Savitzky-Golay filter (comma-
+                  separated) (default: )
+  -n STEPS        number of minimization steps (default: 1000)
+  --save_chk      save checkpoint files to restart (default: False)
+  --orient        use orientations (default: True)
+  --no-orient
+  --fastrelax     perform FastRelax (default: True)
+  --no-fastrelax
+  --roll          circularly shift 6d coordinate arrays by 1 (default: False)
+  --no-roll
+
+
+# USAGE 
+conda activate folding 
+
+# try: -m 0,1,2
+#      -pd 0.05, 0.15, 0.25, 0.35, 0.45
+# repeat ~3-5 times for every combination of -m and -pd
+# !!! use '--roll' option if no-contact bin is the last one !!!
+python ./RosettaTR.py -m 0 -pd 0.15 fake.npz fake.fa model.pdb
+
