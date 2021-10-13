@@ -13,5 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-docker build . -f Dockerfile --rm -t trtis_kaldi_server
-docker build . -f Dockerfile.client --rm -t trtis_kaldi_client
+set -eu
+
+# Use development branch of Kaldi for latest feature support
+docker build . -f Dockerfile \
+    --rm -t triton_kaldi_server
+docker build . -f Dockerfile.client \
+    --rm -t triton_kaldi_client

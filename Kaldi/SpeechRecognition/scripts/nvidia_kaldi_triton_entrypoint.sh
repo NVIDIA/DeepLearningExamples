@@ -19,4 +19,4 @@ if [ -d "/mnt/model-repo/kaldi_online" ]; then
 	ln -s /mnt/model-repo/kaldi_online/config.pbtxt /workspace/model-repo/kaldi_online/
 fi
 
-/opt/tensorrtserver/nvidia_entrypoint.sh $@
+/opt/tritonserver/nvidia_entrypoint.sh $@
