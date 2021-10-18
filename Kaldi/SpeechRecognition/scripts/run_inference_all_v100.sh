@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2019-2021 NVIDIA CORPORATION. All rights reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,7 +15,7 @@
 
 set -e
 
-if [[ "$(docker ps | grep trtis_kaldi_server | wc -l)" == "0" ]]; then
+if [[ "$(docker ps | grep triton_kaldi_server | wc -l)" == "0" ]]; then
 	printf "\nThe Triton server is currently not running. Please run scripts/docker/launch_server.sh\n\n"
 	exit 1
 fi
@@ -26,6 +26,5 @@ scripts/docker/launch_client.sh -i 5 -c 2000
 
 printf "\nOnline benchmarks:\n"
 
-scripts/docker/launch_client.sh -i 10 -c 1500 -o
+scripts/docker/launch_client.sh -i 10 -c 2000 -o
 scripts/docker/launch_client.sh -i 10 -c 1000 -o
-scripts/docker/launch_client.sh -i 5 -c 800 -o

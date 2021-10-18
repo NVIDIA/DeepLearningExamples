@@ -15,10 +15,10 @@ oovtok=$(cat $result_path/words.txt | grep "<unk>" | awk '{print $2}')
 # convert lattice to transcript
 /opt/kaldi/src/latbin/lattice-best-path \
 	"ark:gunzip -c $result_path/lat.cuda-asr.gz |"\
-	"ark,t:|gzip -c > $result_path/trans.cuda-asr.gz" 2> /dev/null
+	"ark,t:$result_path/trans.cuda-asr" 2> /dev/null
 
 # calculate wer
 /opt/kaldi/src/bin/compute-wer --mode=present \
 	"ark:$result_path/text_ints" \
-	"ark:gunzip -c $result_path/trans.cuda-asr.gz |" 2>&1
+	"ark:$result_path/trans.cuda-asr" 2> /dev/null
 

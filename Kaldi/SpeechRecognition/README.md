@@ -46,15 +46,18 @@ A reference model is used by all test scripts and benchmarks presented in this r
 Details about parameters can be found in the [Parameters](#parameters) section.
 
 * `model path`: Configured to use the pretrained LibriSpeech model.
+* `use_tensor_cores`: 1
+* `main_q_capacity`: 30000
+* `aux_q_capacity`: 400000
 * `beam`: 10
+* `num_channels`: 4000
 * `lattice_beam`: 7
 * `max_active`: 10,000
 * `frame_subsampling_factor`: 3
 * `acoustic_scale`: 1.0
-* `num_worker_threads`: 20
-* `max_execution_batch_size`: 256
-* `max_batch_size`: 4096
-* `instance_group.count`: 2
+* `num_worker_threads`: 40
+* `max_batch_size`: 400
+* `instance_group.count`: 1
 
 ## Setup
 
@@ -134,9 +137,8 @@ The model configuration parameters are passed to the model and have  an impact o
 
 The inference engine configuration parameters configure the inference engine. They impact performance, but not accuracy.
 
-* `max_batch_size`: The maximum number of inference channels opened at a given time. If set to `4096`, then one instance will handle at most 4096 concurrent users.
+* `max_batch_size`: The size of one execution batch on the GPU. This parameter should be set as large as necessary to saturate the GPU, but not bigger. Larger batches will lead to a higher throughput, smaller batches to lower latency.
 * `num_worker_threads`: The number of CPU threads for the postprocessing CPU tasks, such as lattice determinization and text generation from the lattice.
-* `max_execution_batch_size`: The size of one execution batch on the GPU. This parameter should be set as large as necessary to saturate the GPU, but not bigger. Larger batches will lead to a higher throughput, smaller batches to lower latency. 
 * `input.WAV_DATA.dims`: The maximum number of samples per chunk. The value must be a multiple of `frame_subsampling_factor * chunks_per_frame`.
 
 ### Inference process
@@ -156,7 +158,7 @@ The client can be configured through a set of parameters that define its behavio
     -u <URL for inference service and its gRPC port>
     -o : Only feed each channel at realtime speed. Simulates online clients.
     -p : Print text outputs
-
+    -b : Print partial (best path) text outputs
 ```
 
 ### Input/Output
@@ -187,12 +189,7 @@ Even if only the best path is used, we are still generating a full lattice for b
 
 Support for Kaldi ASR models that are different from the provided LibriSpeech model is experimental. However, it is possible to modify the [Model Path](#model-path) section of the config file `model-repo/kaldi_online/config.pbtxt` to set up your own model. 
 
-The models and Kaldi allocators are currently not shared between instances. This means that if your model is large, you may end up with not enough memory on the GPU to store two different instances. If that's the case, 
-you can set `count` to `1` in the [`instance_group` section](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-guide/docs/model_configuration.html#instance-groups) of the config file.
-
 ## Performance
-
-The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
 
 
 ### Metrics
@@ -207,8 +204,7 @@ Latency is defined as the delay between the availability of the last chunk of au
 4. *Server:* Compute inference of last chunk
 5. *Server:* Generate the raw lattice for the full utterance
 6. *Server:* Determinize the raw lattice
-7. *Server:* Generate the text output associated with the best path in the determinized lattice
-8. *Client:* Receive text output
+8. *Client:* Receive lattice output
 9. *Client:* Call callback with output
 10. ***t1** <- Current time*  
 
@@ -219,20 +215,18 @@ The latency is defined such as `latency = t1 - t0`.
 Our results were obtained by:
 
 1. Building and starting the server as described in [Quick Start Guide](#quick-start-guide).
-2. Running  `scripts/run_inference_all_v100.sh` and  `scripts/run_inference_all_t4.sh`
+2. Running  `scripts/run_inference_all_a100.sh`,  `scripts/run_inference_all_v100.sh` and `scripts/run_inference_all_t4.sh`
 
 
-| GPU | Realtime I/O | Number of parallel audio channels | Throughput (RTFX) | Latency | | | |
-| ------ | ------ | ------ | ------ | ------ | ------ | ------ |------ |
-| | | | | 90% | 95% | 99% | Avg |
-| V100 | No | 2000 | 1506.5 | N/A | N/A | N/A | N/A |
-| V100 | Yes | 1500 |  1243.2 | 0.582 | 0.699 | 1.04 | 0.400 |
-| V100 | Yes | 1000 |  884.1 | 0.379 | 0.393 | 0.788 | 0.333 |
-| V100 | Yes | 800 |  660.2 | 0.334 | 0.340 | 0.438 | 0.288 |
-| T4 | No | 1000 | 675.2 | N/A | N/A | N/A| N/A |
-| T4 | Yes | 700 | 629.2 | 0.945 | 1.08 | 1.27 | 0.645 |
-| T4 | Yes | 400 | 373.7 | 0.579 | 0.624 | 0.758 | 0.452 |
-
+|  GPU  | Realtime I/O | Number of parallel audio channels | Latency (s) |       |       |       |
+| ----- | ------------ | --------------------------------- | ----------- | ----- | ----- | ----- |
+|       |              |                                   |     90%     |  95%  |  99%  |  Avg  |
+|  A100 |          Yes |                              2000 |       0.11 | 0.12 | 0.14 | 0.09 |
+|  V100 |          Yes |                              2000 |       0.42 | 0.50 | 0.61 | 0.23 |
+|  V100 |          Yes |                              1000 |       0.09 | 0.09 | 0.11 | 0.07 |
+|  T4   |          Yes |                              600  |       0.17 | 0.18 | 0.22 | 0.14 |
+|  T4   |          Yes |                              400  |       0.12 | 0.13 | 0.15 | 0.10 |
+  
 ## Release notes
 
 ### Changelog
@@ -243,6 +237,10 @@ January 2020
 April 2020
 * Printing WER accuracy in Triton client
 * Using the latest Kaldi GPU ASR pipeline, extended support for features (ivectors, fbanks)
+
+July 2021
+* Significantly improve latency and throughput for the backend
+* Update Triton to v2.10.0
 
 ### Known issues
 * No multi-gpu support for the Triton integration

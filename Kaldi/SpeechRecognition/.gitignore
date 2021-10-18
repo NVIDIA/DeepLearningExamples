@@ -2,3 +2,4 @@ data/*
 !data/README.md
 .*.swp
 .*.swo
+.clang-format
