@@ -22,7 +22,6 @@ import monai.transforms as transforms
 import nibabel
 import numpy as np
 from joblib import Parallel, delayed
-from skimage.morphology import dilation, erosion, square
 from skimage.transform import resize
 from utils.utils import get_task_code, make_empty_dir
 
@@ -39,32 +38,34 @@ class Preprocessor:
         self.target_spacing = None
         self.task = args.task
         self.task_code = get_task_code(args)
+        self.verbose = args.verbose
         self.patch_size = patch_size[self.task_code]
         self.training = args.exec_mode == "training"
         self.data_path = os.path.join(args.data, task[args.task])
+        metadata_path = os.path.join(self.data_path, "dataset.json")
+        self.metadata = json.load(open(metadata_path, "r"))
+        self.modality = self.metadata["modality"]["0"]
         self.results = os.path.join(args.results, self.task_code)
         if not self.training:
             self.results = os.path.join(self.results, self.args.exec_mode)
         self.crop_foreg = transforms.CropForegroundd(keys=["image", "label"], source_key="image")
-        self.normalize_intensity = transforms.NormalizeIntensity(nonzero=False, channel_wise=True)
-        metadata_path = os.path.join(self.data_path, "dataset.json")
+        nonzero = True if self.modality != "CT" else False  # normalize only non-zero region for MRI
+        self.normalize_intensity = transforms.NormalizeIntensity(nonzero=nonzero, channel_wise=True)
         if self.args.exec_mode == "val":
             dataset_json = json.load(open(metadata_path, "r"))
             dataset_json["val"] = dataset_json["training"]
             with open(metadata_path, "w") as outfile:
                 json.dump(dataset_json, outfile)
-        self.metadata = json.load(open(metadata_path, "r"))
-        self.modality = self.metadata["modality"]["0"]
 
     def run(self):
         make_empty_dir(self.results)
-
         print(f"Preprocessing {self.data_path}")
         try:
             self.target_spacing = spacings[self.task_code]
         except:
             self.collect_spacings()
-        print(f"Target spacing {self.target_spacing}")
+        if self.verbose:
+            print(f"Target spacing {self.target_spacing}")
 
         if self.modality == "CT":
             try:
@@ -77,7 +78,8 @@ class Preprocessor:
 
             _mean = round(self.ct_mean, 2)
             _std = round(self.ct_std, 2)
-            print(f"[CT] min: {self.ct_min}, max: {self.ct_max}, mean: {_mean}, std: {_std}")
+            if self.verbose:
+                print(f"[CT] min: {self.ct_min}, max: {self.ct_max}, mean: {_mean}, std: {_std}")
 
         self.run_parallel(self.preprocess_pair, self.args.exec_mode)
 
@@ -86,7 +88,7 @@ class Preprocessor:
                 "patch_size": self.patch_size,
                 "spacings": self.target_spacing,
                 "n_class": len(self.metadata["labels"]),
-                "in_channels": len(self.metadata["modality"]),
+                "in_channels": len(self.metadata["modality"]) + int(self.args.ohe),
             },
             open(os.path.join(self.results, "config.pkl"), "wb"),
         )
@@ -99,9 +101,10 @@ class Preprocessor:
             image, label = data["image"], data["label"]
             test_metadata = None
         else:
+            orig_shape = image.shape[1:]
             bbox = transforms.utils.generate_spatial_bounding_box(image)
-            test_metadata = np.vstack([bbox, image.shape[1:]])
             image = transforms.SpatialCrop(roi_start=bbox[0], roi_end=bbox[1])(image)
+            test_metadata = np.vstack([bbox, orig_shape, image.shape[1:]])
             if label is not None:
                 label = transforms.SpatialCrop(roi_start=bbox[0], roi_end=bbox[1])(label)
         if self.args.dim == 3:
@@ -111,11 +114,16 @@ class Preprocessor:
         image = self.normalize(image)
         if self.training:
             image, label = self.standardize(image, label)
-            if self.args.dilation:
-                new_lbl = np.zeros(label.shape, dtype=np.uint8)
-                for depth in range(label.shape[1]):
-                    new_lbl[0, depth] = erosion(dilation(label[0, depth], square(3)), square(3))
-                label = new_lbl
+
+        if self.args.ohe:
+            mask = np.ones(image.shape[1:], dtype=np.float32)
+            for i in range(image.shape[0]):
+                zeros = np.where(image[i] <= 0)
+                mask[zeros] *= 0.0
+            image = self.normalize_intensity(image).astype(np.float32)
+            mask = np.expand_dims(mask, 0)
+            image = np.concatenate([image, mask])
+
         self.save(image, label, fname, test_metadata)
 
     def resample(self, image, label, image_spacings):
@@ -145,7 +153,8 @@ class Preprocessor:
 
     def save(self, image, label, fname, test_metadata):
         mean, std = np.round(np.mean(image, (1, 2, 3)), 2), np.round(np.std(image, (1, 2, 3)), 2)
-        print(f"Saving {fname} shape {image.shape} mean {mean} std {std}")
+        if self.verbose:
+            print(f"Saving {fname} shape {image.shape} mean {mean} std {std}")
         self.save_npy(image, fname, "_x.npy")
         if label is not None:
             self.save_npy(label, fname, "_y.npy")

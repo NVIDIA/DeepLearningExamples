@@ -20,8 +20,9 @@ import torch
 import torch.nn as nn
 from apex.optimizers import FusedAdam, FusedSGD
 from monai.inferers import sliding_window_inference
+from scipy.special import expit, softmax
 from skimage.transform import resize
-from torch_optimizer import RAdam
+from utils.scheduler import WarmupCosineSchedule
 from utils.utils import (
     flip,
     get_dllogger,
@@ -33,7 +34,7 @@ from utils.utils import (
     layout_2d,
 )
 
-from models.loss import Loss
+from models.loss import Loss, LossBraTS
 from models.metrics import Dice
 from models.unet import UNet
 
@@ -41,24 +42,25 @@ from models.unet import UNet
 class NNUnet(pl.LightningModule):
     def __init__(self, args, bermuda=False, data_dir=None):
         super(NNUnet, self).__init__()
+        self.save_hyperparameters()
         self.args = args
         self.bermuda = bermuda
         if data_dir is not None:
             self.args.data = data_dir
-        self.save_hyperparameters()
         self.build_nnunet()
-        self.best_sum = 0
-        self.best_sum_epoch = 0
+        self.best_mean = 0
+        self.best_mean_epoch = 0
         self.best_dice = self.n_class * [0]
         self.best_epoch = self.n_class * [0]
-        self.best_sum_dice = self.n_class * [0]
+        self.best_mean_dice = self.n_class * [0]
         self.test_idx = 0
         self.test_imgs = []
         if not self.bermuda:
             self.learning_rate = args.learning_rate
-            self.loss = Loss(self.args.focal)
+            loss = LossBraTS if self.args.brats else Loss
+            self.loss = loss(self.args.focal)
             self.tta_flips = get_tta_flips(args.dim)
-            self.dice = Dice(self.n_class)
+            self.dice = Dice(self.n_class, self.args.brats)
             if self.args.exec_mode in ["train", "evaluate"]:
                 self.dllogger = get_dllogger(args.results)
 
@@ -72,10 +74,17 @@ class NNUnet(pl.LightningModule):
             return self.model(img)
         return self.tta_inference(img) if self.args.tta else self.do_inference(img)
 
+    def compute_loss(self, preds, label):
+        if self.args.deep_supervision:
+            pred0, pred1, pred2 = preds
+            loss = self.loss(pred0, label) + 0.5 * self.loss(pred1, label) + 0.25 * self.loss(pred2, label)
+            return loss / 1.75
+        return self.loss(preds, label)
+
     def training_step(self, batch, batch_idx):
         img, lbl = self.get_train_data(batch)
         pred = self.model(img)
-        loss = self.loss(pred, lbl)
+        loss = self.compute_loss(pred, lbl)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -84,49 +93,50 @@ class NNUnet(pl.LightningModule):
         img, lbl = batch["image"], batch["label"]
         pred = self._forward(img)
         loss = self.loss(pred, lbl)
-        self.dice.update(pred, lbl[:, 0])
-        return {"val_loss": loss}
+        self.dice.update(pred, lbl[:, 0], loss)
 
     def test_step(self, batch, batch_idx):
         if self.args.exec_mode == "evaluate":
             return self.validation_step(batch, batch_idx)
         img = batch["image"]
-        pred = self._forward(img)
+        pred = self._forward(img).squeeze(0).cpu().detach().numpy()
         if self.args.save_preds:
             meta = batch["meta"][0].cpu().detach().numpy()
-            original_shape = meta[2]
             min_d, max_d = meta[0, 0], meta[1, 0]
             min_h, max_h = meta[0, 1], meta[1, 1]
             min_w, max_w = meta[0, 2], meta[1, 2]
-
-            final_pred = torch.zeros((1, pred.shape[1], *original_shape), device=img.device)
-            final_pred[:, :, min_d:max_d, min_h:max_h, min_w:max_w] = pred
-            final_pred = nn.functional.softmax(final_pred, dim=1)
-            final_pred = final_pred.squeeze(0).cpu().detach().numpy()
-
-            if not all(original_shape == final_pred.shape[1:]):
-                class_ = final_pred.shape[0]
-                resized_pred = np.zeros((class_, *original_shape))
-                for i in range(class_):
+            n_class, original_shape, cropped_shape = pred.shape[0], meta[2], meta[3]
+            if not all(cropped_shape == pred.shape[1:]):
+                resized_pred = np.zeros((n_class, *cropped_shape))
+                for i in range(n_class):
                     resized_pred[i] = resize(
-                        final_pred[i], original_shape, order=3, mode="edge", cval=0, clip=True, anti_aliasing=False
+                        pred[i], cropped_shape, order=3, mode="edge", cval=0, clip=True, anti_aliasing=False
                     )
-                final_pred = resized_pred
+                pred = resized_pred
+            final_pred = np.zeros((n_class, *original_shape))
+            final_pred[:, min_d:max_d, min_h:max_h, min_w:max_w] = pred
+            if self.args.brats:
+                final_pred = expit(final_pred)
+            else:
+                final_pred = softmax(final_pred, axis=0)
 
             self.save_mask(final_pred)
 
     def build_nnunet(self):
         in_channels, n_class, kernels, strides, self.patch_size = get_unet_params(self.args)
         self.n_class = n_class - 1
+        if self.args.brats:
+            n_class = 3
         self.model = UNet(
             in_channels=in_channels,
             n_class=n_class,
             kernels=kernels,
             strides=strides,
             dimension=self.args.dim,
-            residual=self.args.residual,
             normalization_layer=self.args.norm,
             negative_slope=self.args.negative_slope,
+            deep_supervision=self.args.deep_supervision,
+            more_chn=self.args.more_chn,
         )
         if is_main_process():
             print(f"Filters: {self.model.filters},\nKernels: {kernels}\nStrides: {strides}")
@@ -180,39 +190,30 @@ class NNUnet(pl.LightningModule):
             mode=self.args.blend,
         )
 
-    @staticmethod
-    def metric_mean(name, outputs):
-        return torch.stack([out[name] for out in outputs]).mean(dim=0)
-
     def validation_epoch_end(self, outputs):
-        if self.current_epoch < self.args.skip_first_n_eval:
-            self.log("dice_sum", 0.001 * self.current_epoch)
-            self.dice.reset()
-            return None
-        loss = self.metric_mean("val_loss", outputs)
-        dice = self.dice.compute()
-        dice_sum = torch.sum(dice)
-        if dice_sum >= self.best_sum:
-            self.best_sum = dice_sum
-            self.best_sum_dice = dice[:]
-            self.best_sum_epoch = self.current_epoch
+        dice, loss = self.dice.compute()
+        self.dice.reset()
+        dice_mean = torch.mean(dice)
+        if dice_mean >= self.best_mean:
+            self.best_mean = dice_mean
+            self.best_mean_dice = dice[:]
+            self.best_mean_epoch = self.current_epoch
         for i, dice_i in enumerate(dice):
             if dice_i > self.best_dice[i]:
                 self.best_dice[i], self.best_epoch[i] = dice_i, self.current_epoch
 
         if is_main_process():
             metrics = {}
-            metrics.update({"mean dice": round(torch.mean(dice).item(), 2)})
-            metrics.update({"TOP_mean": round(torch.mean(self.best_sum_dice).item(), 2)})
+            metrics.update({"Mean dice": round(torch.mean(dice).item(), 2)})
+            metrics.update({"Highest": round(torch.mean(self.best_mean_dice).item(), 2)})
             if self.n_class > 1:
                 metrics.update({f"L{i+1}": round(m.item(), 2) for i, m in enumerate(dice)})
-                metrics.update({f"TOP_L{i+1}": round(m.item(), 2) for i, m in enumerate(self.best_sum_dice)})
             metrics.update({"val_loss": round(loss.item(), 4)})
             self.dllogger.log(step=self.current_epoch, data=metrics)
             self.dllogger.flush()
 
         self.log("val_loss", loss)
-        self.log("dice_sum", dice_sum)
+        self.log("dice_mean", dice_mean)
 
     def test_epoch_end(self, outputs):
         if self.args.exec_mode == "evaluate":
@@ -222,22 +223,20 @@ class NNUnet(pl.LightningModule):
         optimizer = {
             "sgd": FusedSGD(self.parameters(), lr=self.learning_rate, momentum=self.args.momentum),
             "adam": FusedAdam(self.parameters(), lr=self.learning_rate, weight_decay=self.args.weight_decay),
-            "radam": RAdam(self.parameters(), lr=self.learning_rate, weight_decay=self.args.weight_decay),
         }[self.args.optimizer.lower()]
 
-        scheduler = {
-            "none": None,
-            "multistep": torch.optim.lr_scheduler.MultiStepLR(optimizer, self.args.steps, gamma=self.args.factor),
-            "cosine": torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, self.args.max_epochs),
-            "plateau": torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer, factor=self.args.factor, patience=self.args.lr_patience
-            ),
-        }[self.args.scheduler.lower()]
-
-        opt_dict = {"optimizer": optimizer, "monitor": "val_loss"}
-        if scheduler is not None:
-            opt_dict.update({"lr_scheduler": scheduler})
-        return opt_dict
+        if self.args.scheduler:
+            scheduler = {
+                "scheduler": WarmupCosineSchedule(
+                    optimizer=optimizer,
+                    warmup_steps=250,
+                    t_total=self.args.epochs * len(self.trainer.datamodule.train_dataloader()),
+                ),
+                "interval": "step",
+                "frequency": 1,
+            }
+            return {"optimizer": optimizer, "monitor": "val_loss", "lr_scheduler": scheduler}
+        return {"optimizer": optimizer, "monitor": "val_loss"}
 
     def save_mask(self, pred):
         if self.test_idx == 0:

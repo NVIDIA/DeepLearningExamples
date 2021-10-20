@@ -35,7 +35,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     path_to_main = os.path.join(dirname(dirname(os.path.realpath(__file__))), "main.py")
     cmd = ""
-    cmd += f"python main.py --task {args.task} --benchmark --max_epochs 2 --min_epochs 1 --optimizer adam "
+    cmd += f"python main.py --task {args.task} --benchmark --epochs 2 "
     cmd += f"--results {args.results} "
     cmd += f"--logname {args.logname} "
     cmd += f"--exec_mode {args.mode} "

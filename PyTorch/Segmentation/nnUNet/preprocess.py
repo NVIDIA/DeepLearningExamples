@@ -29,7 +29,8 @@ parser.add_argument(
     choices=["training", "val", "test"],
     help="Mode for data preprocessing",
 )
-parser.add_argument("--dilation", action="store_true", help="Perform morphological label dilation")
+parser.add_argument("--ohe", action="store_true", help="Add one-hot-encoding for foreground voxels (voxels > 0)")
+parser.add_argument("--verbose", action="store_true")
 parser.add_argument("--task", type=str, help="Number of task to be run. MSD uses numbers 01-10")
 parser.add_argument("--dim", type=int, default=3, choices=[2, 3], help="Data dimension to prepare")
 parser.add_argument("--n_jobs", type=int, default=-1, help="Number of parallel jobs for data preprocessing")
@@ -44,4 +45,4 @@ if __name__ == "__main__":
     if args.exec_mode == "test":
         path = os.path.join(path, "test")
     end = time.time()
-    print(f"Preprocessing time: {(end - start):.2f}")
+    print(f"Pre-processing time: {(end - start):.2f}")

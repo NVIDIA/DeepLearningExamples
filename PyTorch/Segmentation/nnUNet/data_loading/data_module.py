@@ -57,8 +57,7 @@ class DataModule(LightningDataModule):
             self.val_imgs = get_split(imgs, val_idx)
             self.val_lbls = get_split(lbls, val_idx)
             if is_main_process():
-                ntrain, nval = len(self.train_imgs), len(self.val_imgs)
-                print(f"Number of examples: Train {ntrain} - Val {nval}")
+                print(f"Number of examples: Train {len(self.train_imgs)} - Val {len(self.val_imgs)}")
         elif is_main_process():
             print(f"Number of test examples: {len(self.test_imgs)}")
 

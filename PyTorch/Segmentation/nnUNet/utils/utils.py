@@ -101,7 +101,7 @@ def get_unet_params(args):
     strides, kernels, sizes = [], [], patch_size[:]
     while True:
         spacing_ratio = [spacing / min(spacings) for spacing in spacings]
-        stride = [2 if ratio <= 2 and size >= 8 else 1 for (ratio, size) in zip(spacing_ratio, sizes)]
+        stride = [2 if ratio <= 2 and size >= 2 * args.min_fmap else 1 for (ratio, size) in zip(spacing_ratio, sizes)]
         kernel = [3 if ratio <= 2 else 1 for ratio in spacing_ratio]
         if all(s == 1 for s in stride):
             break
@@ -109,7 +109,7 @@ def get_unet_params(args):
         spacings = [i * j for i, j in zip(spacings, stride)]
         kernels.append(kernel)
         strides.append(stride)
-        if len(strides) == 5:
+        if len(strides) == 6:
             break
     strides.insert(0, len(spacings) * [1])
     kernels.append(len(spacings) * [3])
@@ -184,13 +184,15 @@ def get_main_args(strings=None):
     arg("--logname", type=str, default=None, help="Name of dlloger output")
     arg("--task", type=str, help="Task number. MSD uses numbers 01-10")
     arg("--gpus", type=non_negative_int, default=1, help="Number of gpus")
-    arg("--learning_rate", type=float, default=0.001, help="Learning rate")
+    arg("--learning_rate", type=float, default=0.0008, help="Learning rate")
     arg("--gradient_clip_val", type=float, default=0, help="Gradient clipping norm value")
     arg("--negative_slope", type=float, default=0.01, help="Negative slope for LeakyReLU")
     arg("--tta", action="store_true", help="Enable test time augmentation")
+    arg("--brats", action="store_true", help="Enable BraTS specific training and inference")
+    arg("--deep_supervision", action="store_true", help="Enable deep supervision")
+    arg("--more_chn", action="store_true", help="Create encoder with more channels")
     arg("--amp", action="store_true", help="Enable automatic mixed precision")
     arg("--benchmark", action="store_true", help="Run model benchmarking")
-    arg("--residual", action="store_true", help="Enable residual block in encoder")
     arg("--focal", action="store_true", help="Use focal loss instead of cross entropy")
     arg("--sync_batchnorm", action="store_true", help="Enable synchronized batchnorm")
     arg("--save_ckpt", action="store_true", help="Enable saving checkpoint")
@@ -200,20 +202,16 @@ def get_main_args(strings=None):
     arg("--ckpt_path", type=str, default=None, help="Path to checkpoint")
     arg("--fold", type=non_negative_int, default=0, help="Fold number")
     arg("--patience", type=positive_int, default=100, help="Early stopping patience")
-    arg("--lr_patience", type=positive_int, default=70, help="Patience for ReduceLROnPlateau scheduler")
     arg("--batch_size", type=positive_int, default=2, help="Batch size")
     arg("--val_batch_size", type=positive_int, default=4, help="Validation batch size")
-    arg("--steps", nargs="+", type=positive_int, required=False, help="Steps for multistep scheduler")
     arg("--profile", action="store_true", help="Run dlprof profiling")
     arg("--momentum", type=float, default=0.99, help="Momentum factor")
     arg("--weight_decay", type=float, default=0.0001, help="Weight decay (L2 penalty)")
     arg("--save_preds", action="store_true", help="Enable prediction saving")
     arg("--dim", type=int, choices=[2, 3], default=3, help="UNet dimension")
     arg("--resume_training", action="store_true", help="Resume training from the last checkpoint")
-    arg("--factor", type=float, default=0.3, help="Scheduler factor")
     arg("--num_workers", type=non_negative_int, default=8, help="Number of subprocesses to use for data loading")
-    arg("--min_epochs", type=non_negative_int, default=30, help="Force training for at least these many epochs")
-    arg("--max_epochs", type=non_negative_int, default=10000, help="Stop training after this number of epochs")
+    arg("--epochs", type=non_negative_int, default=1000, help="Number of training epochs")
     arg("--warmup", type=non_negative_int, default=5, help="Warmup iterations before collecting statistics")
     arg("--norm", type=str, choices=["instance", "batch", "group"], default="instance", help="Normalization layer")
     arg("--nvol", type=positive_int, default=1, help="Number of volumes which come into single batch size for 2D model")
@@ -252,17 +250,21 @@ def get_main_args(strings=None):
     )
     arg(
         "--scheduler",
-        type=str,
-        default="none",
-        choices=["none", "multistep", "cosine", "plateau"],
-        help="Learning rate scheduler",
+        action="store_true",
+        help="Enable cosine rate scheduler with warmup",
     )
     arg(
         "--optimizer",
         type=str,
-        default="radam",
-        choices=["sgd", "radam", "adam"],
+        default="adam",
+        choices=["sgd", "adam"],
         help="Optimizer",
+    )
+    arg(
+        "--min_fmap",
+        type=non_negative_int,
+        default=4,
+        help="The minimal size that feature map can be reduced in bottleneck",
     )
     arg(
         "--blend",

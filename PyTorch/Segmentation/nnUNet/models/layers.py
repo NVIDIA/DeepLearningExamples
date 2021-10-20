@@ -67,7 +67,6 @@ def get_output_padding(kernel_size, stride, padding):
     return out_padding if len(out_padding) > 1 else out_padding[0]
 
 
-
 class ConvLayer(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride, **kwargs):
         super(ConvLayer, self).__init__()
@@ -91,30 +90,6 @@ class ConvBlock(nn.Module):
     def forward(self, input_data):
         out = self.conv1(input_data)
         out = self.conv2(out)
-        return out
-
-
-class ResidBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride, **kwargs):
-        super(ResidBlock, self).__init__()
-        self.conv1 = ConvLayer(in_channels, out_channels, kernel_size, stride, **kwargs)
-        self.conv2 = get_conv(out_channels, out_channels, kernel_size, 1, kwargs["dim"])
-        self.norm = get_norm(kwargs["norm"], out_channels)
-        self.lrelu = nn.LeakyReLU(negative_slope=kwargs["negative_slope"], inplace=True)
-        self.downsample = None
-        if max(stride) > 1 or in_channels != out_channels:
-            self.downsample = get_conv(in_channels, out_channels, kernel_size, stride, kwargs["dim"])
-            self.norm_res = get_norm(kwargs["norm"], out_channels)
-
-    def forward(self, input_data):
-        residual = input_data
-        out = self.conv1(input_data)
-        out = self.conv2(out)
-        out = self.norm(out)
-        if self.downsample is not None:
-            residual = self.downsample(residual)
-            residual = self.norm_res(residual)
-        out = self.lrelu(out + residual)
         return out
 
 
