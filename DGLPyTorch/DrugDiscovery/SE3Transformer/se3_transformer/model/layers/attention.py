@@ -178,5 +178,3 @@ class AttentionBlockSE3(nn.Module):
                     value[degree] = feat
 
         return key, value
-
-

@@ -54,9 +54,8 @@ def get_all_clebsch_gordon(max_degree: int, device) -> List[List[Tensor]]:
 
 def get_spherical_harmonics(relative_pos: Tensor, max_degree: int) -> List[Tensor]:
     all_degrees = list(range(2 * max_degree + 1))
-    with nvtx_range('spherical harmonics'):
-        sh = o3.spherical_harmonics(all_degrees, relative_pos, normalize=True)
-        return torch.split(sh, [degree_to_dim(d) for d in all_degrees], dim=1)
+    sh = o3.spherical_harmonics(all_degrees, relative_pos, normalize=True)
+    return torch.split(sh, [degree_to_dim(d) for d in all_degrees], dim=1)
 
 
 @torch.jit.script
