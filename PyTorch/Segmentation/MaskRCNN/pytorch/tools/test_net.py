@@ -20,13 +20,6 @@ from maskrcnn_benchmark.utils.miscellaneous import mkdir
 from maskrcnn_benchmark.utils.logger import format_step
 import dllogger
 
-# Check if we can enable mixed-precision via apex.amp
-try:
-    from apex import amp
-except ImportError:
-    raise ImportError('Use APEX for mixed precision via apex.amp')
-
-
 def main():
     parser = argparse.ArgumentParser(description="PyTorch Object Detection Inference")
     parser.add_argument(
@@ -100,9 +93,7 @@ def main():
     if args.fp16:
         use_mixed_precision = True
     else:
-        use_mixed_precision = cfg.DTYPE == "float16"
-    amp_opt_level = 'O1' if use_mixed_precision else 'O0'
-    model = amp.initialize(model, opt_level=amp_opt_level)    
+        use_mixed_precision = cfg.DTYPE == "float16" 
     
     output_dir = cfg.OUTPUT_DIR
     checkpointer = DetectronCheckpointer(cfg, model, save_dir=output_dir)
@@ -122,19 +113,35 @@ def main():
 
     results = []
     for output_folder, dataset_name, data_loader_val in zip(output_folders, dataset_names, data_loaders_val):
-        result = inference(
-            model,
-            data_loader_val,
-            dataset_name=dataset_name,
-            iou_types=iou_types,
-            box_only=cfg.MODEL.RPN_ONLY,
-            device=cfg.MODEL.DEVICE,
-            expected_results=cfg.TEST.EXPECTED_RESULTS,
-            expected_results_sigma_tol=cfg.TEST.EXPECTED_RESULTS_SIGMA_TOL,
-            output_folder=output_folder,
-            skip_eval=args.skip_eval,
-            dllogger=dllogger,
-        )
+        if use_mixed_precision:
+            with torch.cuda.amp.autocast():
+                result = inference(
+                    model,
+                    data_loader_val,
+                    dataset_name=dataset_name,
+                    iou_types=iou_types,
+                    box_only=cfg.MODEL.RPN_ONLY,
+                    device=cfg.MODEL.DEVICE,
+                    expected_results=cfg.TEST.EXPECTED_RESULTS,
+                    expected_results_sigma_tol=cfg.TEST.EXPECTED_RESULTS_SIGMA_TOL,
+                    output_folder=output_folder,
+                    skip_eval=args.skip_eval,
+                    dllogger=dllogger,
+                )
+        else:
+            result = inference(
+                    model,
+                    data_loader_val,
+                    dataset_name=dataset_name,
+                    iou_types=iou_types,
+                    box_only=cfg.MODEL.RPN_ONLY,
+                    device=cfg.MODEL.DEVICE,
+                    expected_results=cfg.TEST.EXPECTED_RESULTS,
+                    expected_results_sigma_tol=cfg.TEST.EXPECTED_RESULTS_SIGMA_TOL,
+                    output_folder=output_folder,
+                    skip_eval=args.skip_eval,
+                    dllogger=dllogger,
+                )
         synchronize()
         results.append(result)
     

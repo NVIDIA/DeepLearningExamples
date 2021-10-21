@@ -318,8 +318,6 @@ _C.PATHS_CATALOG = os.path.join(os.path.dirname(__file__), "paths_catalog.py")
 # Precision of input, allowable: (float32, float16)
 _C.DTYPE = "float32"
 
-# Enable verbosity in apex.amp
-_C.AMP_VERBOSE = False
 
 # Evaluate every epoch
 _C.PER_EPOCH_EVAL = False

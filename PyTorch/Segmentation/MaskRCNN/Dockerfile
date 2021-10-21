@@ -19,7 +19,7 @@ FROM ${FROM_IMAGE_NAME}
 RUN pip install --upgrade --no-cache-dir pip \
  && pip install --no-cache-dir \
       mlperf-compliance==0.0.10 \
-      opencv-python==3.4.1.15 \
+      opencv-python==4.2.0.32 \
       git+https://github.com/NVIDIA/dllogger \
       yacs
 
