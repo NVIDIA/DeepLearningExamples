@@ -328,7 +328,7 @@ The complete list of the available parameters for the `training.py` script conta
 - `--gradient_clip`: Clipping of the gradient norms (default: `None`)
 - `--accumulate_grad_batches`: Gradient accumulation (default: `1`)
 - `--ckpt_interval`: Save a checkpoint every N epochs (default: `-1`)
-- `--eval_interval`: Do an evaluation round every N epochs (default: `1`)
+- `--eval_interval`: Do an evaluation round every N epochs (default: `20`)
 - `--silent`: Minimize stdout output (default: `false`)
 
 **Paths**
@@ -485,6 +485,7 @@ Our results were obtained by running the `scripts/train.sh` training script in t
 |  8                 |    240                   |           0.03380                            |        0.03495                                |        29min          |    20min                |    1.45x              |
 
 
+
 #### Training performance results
 
 ##### Training performance: NVIDIA DGX A100 (8x A100 80GB)
@@ -495,8 +496,8 @@ Our results were obtained by running the `scripts/benchmark_train.sh` and `scrip
 |:------------------:|:----------------------:|:--------------------:|:------------------------------------:|:---------------------------------:|:----------------------:|:----------------------------------------------:|
 |   1              |     240             |   2.21                                       |   2.92                            |   1.32x                         |                      |                                              |
 |   1              |     120              |  1.81                                        |  2.04                             |  1.13x                          |                      |                                              |
-|   8              |     240             |   17.15                                      |     22.95                         |   1.34x                         |   7.76               |    7.86                                     |
-|   8              |     120              |  13.89                                       |    15.62                          |  1.12x                          |       7.67           |    7.66                                       |
+|   8              |     240             |   15.88                                      |     21.02                         |   1.32x                         |   7.18               |    7.20                                     |
+|   8              |     120              |  12.68                                       |    13.99                          |  1.10x                          |       7.00           |    6.86                                       |
 
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
@@ -510,8 +511,8 @@ Our results were obtained by running the `scripts/benchmark_train.sh` and `scrip
 |:------------------:|:----------------------:|:--------------------:|:------------------------------------:|:---------------------------------:|:----------------------:|:----------------------------------------------:|
 |   1              |     240              |    1.25          |    1.88                           |  1.50x                          |                      |                                              |
 |   1              |     120              |    1.03           |   1.41                            |  1.37x                          |                      |                                              |
-|   8              |     240              |    9.33           |   14.02                           |  1.50x                          |      7.46            |      7.46                                    |
-|   8              |     120              |    7.39           |   9.41                           |   1.27x                         |        7.17          |        6.67                                  |
+|   8              |     240              |    8.68           |   12.75                           |  1.47x                          |      6.94            |      6.78                                    |
+|   8              |     120              |    6.64           |   8.58                           |   1.29x                         |        6.44          |        6.08                                  |
 
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
@@ -571,6 +572,15 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 ## Release notes
 
 ### Changelog
+
+October 2021:
+- Updated README performance tables
+- Fixed shape mismatch when using partially fused TFNs per output degree
+- Fixed shape mismatch when using partially fused TFNs per input degree with edge degrees > 0
+
+September 2021:
+- Moved to new location (from `PyTorch/DrugDiscovery` to `DGLPyTorch/DrugDiscovery`)
+- Fixed multi-GPUs training script
 
 August 2021
 - Initial release

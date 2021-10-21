@@ -58,7 +58,7 @@ PARSER.add_argument('--amp', type=str2bool, nargs='?', const=True, default=False
 PARSER.add_argument('--gradient_clip', type=float, default=None, help='Clipping of the gradient norms')
 PARSER.add_argument('--accumulate_grad_batches', type=int, default=1, help='Gradient accumulation')
 PARSER.add_argument('--ckpt_interval', type=int, default=-1, help='Save a checkpoint every N epochs')
-PARSER.add_argument('--eval_interval', dest='eval_interval', type=int, default=1,
+PARSER.add_argument('--eval_interval', dest='eval_interval', type=int, default=20,
                     help='Do an evaluation round every N epochs')
 PARSER.add_argument('--silent', type=str2bool, nargs='?', const=True, default=False,
                     help='Minimize stdout output')
