@@ -50,7 +50,6 @@ COPY --from=dgl_builder /dgl ./dgl
 RUN cd dgl/python && python setup.py install && cd ../.. && rm -rf dgl
 
 ADD requirements.txt .
-RUN pip install --no-cache-dir --upgrade --pre pip
 RUN pip install --no-cache-dir -r requirements.txt
 ADD . .
 

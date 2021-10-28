@@ -69,5 +69,4 @@ WORKDIR /workspace/rf
 
 RUN wget https://openstructure.org/static/lddt-linux.zip -O lddt.zip && unzip -d lddt -j lddt.zip
 
-RUN pip install --upgrade pip
 RUN pip install -r requirements.txt

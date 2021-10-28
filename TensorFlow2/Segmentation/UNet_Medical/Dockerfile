@@ -4,6 +4,5 @@ FROM ${FROM_IMAGE_NAME}
 ADD . /workspace/unet
 WORKDIR /workspace/unet
 
-RUN pip install --upgrade pip
 RUN pip install git+https://github.com/NVIDIA/dllogger
 RUN pip install -r requirements.txt

@@ -16,8 +16,7 @@ ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.06-py3
 FROM ${FROM_IMAGE_NAME}
 
 # Install Python dependencies
-RUN pip install --upgrade --no-cache-dir pip \
- && pip install --no-cache-dir \
+RUN pip install --no-cache-dir \
       mlperf-compliance==0.0.10 \
       opencv-python==4.2.0.32 \
       git+https://github.com/NVIDIA/dllogger \

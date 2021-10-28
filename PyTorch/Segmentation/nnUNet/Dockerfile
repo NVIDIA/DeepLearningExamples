@@ -6,7 +6,6 @@ RUN pip install --disable-pip-version-check -r /requirements.txt
 RUN apt-get update && apt-get install -y libb64-dev libb64-0d
 
 ADD ./requirements.txt /
-RUN pip install --upgrade pip
 RUN pip install --disable-pip-version-check -r /requirements.txt
 RUN pip install monai==0.7.0 --no-dependencies
 RUN pip install numpy --upgrade
