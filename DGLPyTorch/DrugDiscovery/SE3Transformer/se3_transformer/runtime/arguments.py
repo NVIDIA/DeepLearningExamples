@@ -62,6 +62,8 @@ PARSER.add_argument('--eval_interval', dest='eval_interval', type=int, default=2
                     help='Do an evaluation round every N epochs')
 PARSER.add_argument('--silent', type=str2bool, nargs='?', const=True, default=False,
                     help='Minimize stdout output')
+PARSER.add_argument('--wandb', type=str2bool, nargs='?', const=True, default=False,
+                    help='Enable W&B logging')
 
 PARSER.add_argument('--benchmark', type=str2bool, nargs='?', const=True, default=False,
                     help='Benchmark mode')

@@ -46,7 +46,8 @@ class DataModule(ABC):
         if dist.is_initialized():
             dist.barrier(device_ids=[get_local_rank()])
 
-        self.dataloader_kwargs = {'pin_memory': True, 'persistent_workers': True, **dataloader_kwargs}
+        self.dataloader_kwargs = {'pin_memory': True, 'persistent_workers': dataloader_kwargs.get('num_workers', 0) > 0,
+                                  **dataloader_kwargs}
         self.ds_train, self.ds_val, self.ds_test = None, None, None
 
     def prepare_data(self):

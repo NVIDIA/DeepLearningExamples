@@ -125,6 +125,7 @@ def train(model: nn.Module,
 
     if dist.is_initialized():
         model = DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank)
+        model._set_static_graph()
 
     model.train()
     grad_scaler = torch.cuda.amp.GradScaler(enabled=args.amp)
@@ -147,7 +148,8 @@ def train(model: nn.Module,
         if isinstance(train_dataloader.sampler, DistributedSampler):
             train_dataloader.sampler.set_epoch(epoch_idx)
 
-        loss = train_epoch(model, train_dataloader, loss_fn, epoch_idx, grad_scaler, optimizer, local_rank, callbacks, args)
+        loss = train_epoch(model, train_dataloader, loss_fn, epoch_idx, grad_scaler, optimizer, local_rank, callbacks,
+                           args)
         if dist.is_initialized():
             loss = torch.tensor(loss, dtype=torch.float, device=device)
             torch.distributed.all_reduce(loss)
@@ -163,7 +165,8 @@ def train(model: nn.Module,
                 and (epoch_idx + 1) % args.ckpt_interval == 0:
             save_state(model, optimizer, epoch_idx, args.save_ckpt_path, callbacks)
 
-        if not args.benchmark and ((args.eval_interval > 0 and (epoch_idx + 1) % args.eval_interval == 0) or epoch_idx + 1 == args.epochs):
+        if not args.benchmark and (
+                (args.eval_interval > 0 and (epoch_idx + 1) % args.eval_interval == 0) or epoch_idx + 1 == args.epochs):
             evaluate(model, val_dataloader, callbacks, args)
             model.train()
 
@@ -197,10 +200,10 @@ if __name__ == '__main__':
         logging.info(f'Using seed {args.seed}')
         seed_everything(args.seed)
 
-    logger = LoggerCollection([
-        DLLogger(save_dir=args.log_dir, filename=args.dllogger_name),
-        WandbLogger(name=f'QM9({args.task})', save_dir=args.log_dir, project='se3-transformer')
-    ])
+    loggers = [DLLogger(save_dir=args.log_dir, filename=args.dllogger_name)]
+    if args.wandb:
+        loggers.append(WandbLogger(name=f'QM9({args.task})', save_dir=args.log_dir, project='se3-transformer'))
+    logger = LoggerCollection(loggers)
 
     datamodule = QM9DataModule(**vars(args))
     model = SE3TransformerPooled(
@@ -236,5 +239,3 @@ if __name__ == '__main__':
           args)
 
     logging.info('Training finished successfully')
-
-

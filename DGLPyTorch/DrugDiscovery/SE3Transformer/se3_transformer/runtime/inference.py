@@ -32,7 +32,7 @@ from tqdm import tqdm
 from se3_transformer.runtime import gpu_affinity
 from se3_transformer.runtime.arguments import PARSER
 from se3_transformer.runtime.callbacks import BaseCallback
-from se3_transformer.runtime.loggers import DLLogger
+from se3_transformer.runtime.loggers import DLLogger, WandbLogger, LoggerCollection
 from se3_transformer.runtime.utils import to_cuda, get_local_rank
 
 
@@ -87,7 +87,10 @@ if __name__ == '__main__':
 
     major_cc, minor_cc = torch.cuda.get_device_capability()
 
-    logger = DLLogger(args.log_dir, filename=args.dllogger_name)
+    loggers = [DLLogger(save_dir=args.log_dir, filename=args.dllogger_name)]
+    if args.wandb:
+        loggers.append(WandbLogger(name=f'QM9({args.task})', save_dir=args.log_dir, project='se3-transformer'))
+    logger = LoggerCollection(loggers)
     datamodule = QM9DataModule(**vars(args))
     model = SE3TransformerPooled(
         fiber_in=Fiber({0: datamodule.NODE_FEATURE_DIM}),
@@ -108,6 +111,7 @@ if __name__ == '__main__':
         nproc_per_node = torch.cuda.device_count()
         affinity = gpu_affinity.set_affinity(local_rank, nproc_per_node)
         model = DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank)
+        model._set_static_graph()
 
     test_dataloader = datamodule.test_dataloader() if not args.benchmark else datamodule.train_dataloader()
     evaluate(model,

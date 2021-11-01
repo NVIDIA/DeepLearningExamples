@@ -29,6 +29,7 @@ import dgl
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.utils.checkpoint
 from dgl import DGLGraph
 from torch import Tensor
 from torch.cuda.nvtx import range as nvtx_range
@@ -185,7 +186,8 @@ class ConvSE3(nn.Module):
             self_interaction: bool = False,
             max_degree: int = 4,
             fuse_level: ConvSE3FuseLevel = ConvSE3FuseLevel.FULL,
-            allow_fused_output: bool = False
+            allow_fused_output: bool = False,
+            low_memory: bool = False
     ):
         """
         :param fiber_in:           Fiber describing the input features
@@ -205,6 +207,7 @@ class ConvSE3(nn.Module):
         self.self_interaction = self_interaction
         self.max_degree = max_degree
         self.allow_fused_output = allow_fused_output
+        self.conv_checkpoint = torch.utils.checkpoint.checkpoint if low_memory else lambda m, *x: m(*x)
 
         # channels_in: account for the concatenation of edge features
         channels_in_set = set([f.channels + fiber_edge[f.degree] * (f.degree > 0) for f in self.fiber_in])
@@ -244,8 +247,8 @@ class ConvSE3(nn.Module):
             self.used_fuse_level = ConvSE3FuseLevel.PARTIAL
             self.conv_in = nn.ModuleDict()
             for d_in, c_in in fiber_in:
-                sum_freq = sum([degree_to_dim(min(d_in, d)) for d in fiber_out.degrees])
                 channels_in_new = c_in + fiber_edge[d_in] * (d_in > 0)
+                sum_freq = sum([degree_to_dim(min(d_in, d)) for d in fiber_out.degrees])
                 self.conv_in[str(d_in)] = VersatileConvSE3(sum_freq, channels_in_new, list(channels_out_set)[0],
                                                            fuse_level=self.used_fuse_level, **common_args)
         else:
@@ -298,7 +301,9 @@ class ConvSE3(nn.Module):
 
             if self.used_fuse_level == ConvSE3FuseLevel.FULL:
                 in_features_fused = torch.cat(in_features, dim=-1)
-                out = self.conv(in_features_fused, invariant_edge_feats, basis['fully_fused'])
+                out = self.conv_checkpoint(
+                    self.conv, in_features_fused, invariant_edge_feats, basis['fully_fused']
+                )
 
                 if not self.allow_fused_output or self.self_interaction or self.pool:
                     out = unfuse_features(out, self.fiber_out.degrees)
@@ -308,13 +313,16 @@ class ConvSE3(nn.Module):
                 for degree_out in self.fiber_out.degrees:
                     basis_used = basis[f'out{degree_out}_fused']
                     out[str(degree_out)] = self._try_unpad(
-                        self.conv_out[str(degree_out)](in_features_fused, invariant_edge_feats, basis_used),
-                        basis_used)
+                        self.conv_checkpoint(
+                            self.conv_out[str(degree_out)], in_features_fused, invariant_edge_feats, basis_used
+                        ), basis_used)
 
             elif self.used_fuse_level == ConvSE3FuseLevel.PARTIAL and hasattr(self, 'conv_in'):
                 out = 0
                 for degree_in, feature in zip(self.fiber_in.degrees, in_features):
-                    out = out + self.conv_in[str(degree_in)](feature, invariant_edge_feats, basis[f'in{degree_in}_fused'])
+                    out = out + self.conv_checkpoint(
+                        self.conv_in[str(degree_in)], feature, invariant_edge_feats, basis[f'in{degree_in}_fused']
+                    )
                 if not self.allow_fused_output or self.self_interaction or self.pool:
                     out = unfuse_features(out, self.fiber_out.degrees)
             else:
@@ -325,8 +333,9 @@ class ConvSE3(nn.Module):
                         dict_key = f'{degree_in},{degree_out}'
                         basis_used = basis.get(dict_key, None)
                         out_feature = out_feature + self._try_unpad(
-                            self.conv[dict_key](feature, invariant_edge_feats, basis_used),
-                            basis_used)
+                            self.conv_checkpoint(
+                                self.conv[dict_key], feature, invariant_edge_feats, basis_used
+                            ), basis_used)
                     out[str(degree_out)] = out_feature
 
             for degree_out in self.fiber_out.degrees:

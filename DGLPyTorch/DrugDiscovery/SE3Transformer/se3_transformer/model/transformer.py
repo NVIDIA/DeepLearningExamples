@@ -101,11 +101,11 @@ class SE3Transformer(nn.Module):
         self.tensor_cores = tensor_cores
         self.low_memory = low_memory
 
-        if low_memory and not tensor_cores:
-            logging.warning('Low memory mode will have no effect with no Tensor Cores')
-
-        # Fully fused convolutions when using Tensor Cores (and not low memory mode)
-        fuse_level = ConvSE3FuseLevel.FULL if tensor_cores and not low_memory else ConvSE3FuseLevel.PARTIAL
+        if low_memory:
+            self.fuse_level = ConvSE3FuseLevel.NONE
+        else:
+            # Fully fused convolutions when using Tensor Cores (and not low memory mode)
+            self.fuse_level = ConvSE3FuseLevel.FULL if tensor_cores else ConvSE3FuseLevel.PARTIAL
 
         graph_modules = []
         for i in range(num_layers):
@@ -116,7 +116,8 @@ class SE3Transformer(nn.Module):
                                                    channels_div=channels_div,
                                                    use_layer_norm=use_layer_norm,
                                                    max_degree=self.max_degree,
-                                                   fuse_level=fuse_level))
+                                                   fuse_level=self.fuse_level,
+                                                   low_memory=low_memory))
             if norm:
                 graph_modules.append(NormSE3(fiber_hidden))
             fiber_in = fiber_hidden
@@ -143,7 +144,7 @@ class SE3Transformer(nn.Module):
 
         # Add fused bases (per output degree, per input degree, and fully fused) to the dict
         basis = update_basis_with_fused(basis, self.max_degree, use_pad_trick=self.tensor_cores and not self.low_memory,
-                                        fully_fused=self.tensor_cores and not self.low_memory)
+                                        fully_fused=self.fuse_level == ConvSE3FuseLevel.FULL)
 
         edge_feats = get_populated_edge_features(graph.edata['rel_pos'], edge_feats)
 

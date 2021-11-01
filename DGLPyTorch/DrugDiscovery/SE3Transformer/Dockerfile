@@ -42,7 +42,6 @@ RUN make -j8
 
 FROM ${FROM_IMAGE_NAME}
 
-RUN rm -rf /workspace/*
 WORKDIR /workspace/se3-transformer
 
 # copy built DGL and install it
@@ -55,3 +54,5 @@ ADD . .
 
 ENV DGLBACKEND=pytorch
 ENV OMP_NUM_THREADS=1
+
+
