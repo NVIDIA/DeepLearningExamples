@@ -21,8 +21,7 @@ import tensorflow as tf
 import dllogger
 import signal
 
-import horovod.tensorflow as hvd
-from utils.hvd_utils import is_using_hvd
+from utils import hvd_wrapper as hvd
 
 __all__ = ['TrainingLoggingHook', 'TrainingPartitionHook']
 
@@ -125,17 +124,17 @@ class TrainingPartitionHook(tf.estimator.SessionRunHook):
         signal.signal(signal.SIGTERM, self._signal_handler)
 
     def begin(self):
-        if is_using_hvd():
+        if hvd.size() > 1:
             with tf.device("/cpu:0"):
                 self.input_op = tf.placeholder(tf.int32, shape=())
-                self.allreduce_op = hvd.allreduce(self.input_op, op=hvd.Sum, 
-                                                  name="signal_handler_all_reduce")
+                self.allreduce_op = hvd.hvd_global_object.allreduce(
+                    self.input_op, op=hvd.hvd_global_object.Sum, name="signal_handler_all_reduce")
 
     def before_run(self, run_context):
         fetches = [tf.train.get_global_step()]
         feed_dict = None
 
-        if is_using_hvd() and (self.global_step % self.sync_freq) == 0:
+        if hvd.size() > 1 and (self.global_step % self.sync_freq) == 0:
             fetches += [self.allreduce_op]
             feed_dict = {self.input_op: int(self.signal_recieved)}
             
@@ -144,7 +143,7 @@ class TrainingPartitionHook(tf.estimator.SessionRunHook):
     def after_run(self, run_context, run_values):
         self.global_step = run_values.results[0] + 1
 
-        if is_using_hvd() and len(run_values.results) == 2:
+        if hvd.size() > 1 and len(run_values.results) == 2:
             if run_values.results[1] > 0:
                 run_context.request_stop()
         elif self.signal_recieved:

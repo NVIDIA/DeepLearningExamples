@@ -23,8 +23,8 @@ def get_model(
     use_dali: bool = False,
     gpu_memory_fraction=0.7,
 ):
-    import horovod.tensorflow as hvd
     from runtime import Runner
+    from utils import hvd_wrapper as hvd
 
     hvd.init()
 

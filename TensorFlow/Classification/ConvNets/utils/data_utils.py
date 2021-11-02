@@ -18,11 +18,10 @@
 import sys
 
 import tensorflow as tf
-import horovod.tensorflow as hvd
 
 from utils import image_processing
-from utils import hvd_utils
 from utils import dali_utils
+from utils import hvd_wrapper as hvd
 
 __all__ = ["get_synth_input_fn", "normalized_inputs"]
 
@@ -82,16 +81,13 @@ def get_tfrecords_input_fn(filenames, batch_size, height, width, training, disto
     shuffle_buffer_size = 4096
 
     if deterministic:
-        if hvd_utils.is_using_hvd():
-            seed = 13 * (1 + hvd.rank())
-        else:
-            seed = 13
+        seed = 13 * hvd.rank()
     else:
         seed = None
 
     ds = tf.data.Dataset.from_tensor_slices(filenames)
 
-    if hvd_utils.is_using_hvd() and training:
+    if hvd.size() > 1 and training:
         ds = ds.shard(hvd.size(), hvd.rank())
 
     ds = ds.interleave(tf.data.TFRecordDataset, cycle_length=10, block_length=8)
