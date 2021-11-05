@@ -226,7 +226,7 @@ def main(argv):
         optimizers = [mlp_optimizer]
 
     elif FLAGS.optimizer == 'adam':
-        embedding_optimizer = tfa.optimizers.LazyAdam(lr=FLAGS.learning_rate)0
+        embedding_optimizer = tfa.optimizers.LazyAdam(lr=FLAGS.learning_rate)
 
         mlp_optimizer = tf.keras.optimizers.Adam(lr=FLAGS.learning_rate)
         if FLAGS.amp:
