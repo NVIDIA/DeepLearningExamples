@@ -607,7 +607,6 @@ if __name__ == "__main__":
     model_arch = available_models()[args.arch]
     model_args, rest = model_arch.parser().parse_known_args(rest)
     print(model_args)
-    print(model_args.num_classes)
 
     assert len(rest) == 0, f"Unknown args passed: {rest}"
 
