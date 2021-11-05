@@ -54,12 +54,12 @@ class IterationAverageMeter:
 
 
 class Logger:
-    def __init__(self, name, json_output=None, print_freq=20):
+    def __init__(self, name, json_output=None, log_interval=20):
         self.name = name
         self.train_loss_logger = IterationAverageMeter("Training loss")
         self.train_epoch_time_logger = EpochMeter("Training 1 epoch time")
         self.val_acc_logger = EpochMeter("Validation accuracy")
-        self.print_freq = print_freq
+        self.log_interval = log_interval
 
         backends = [ DLLogger.StdOutBackend(DLLogger.Verbosity.DEFAULT) ]
         if json_output:
@@ -93,9 +93,10 @@ class Logger:
         DLLogger.log((), self.summary)
 
     def update_iter(self, epoch, iteration, loss):
+        self.epoch = epoch
         self.train_iter = iteration
         self.train_loss_logger.update_iter(loss)
-        if iteration % self.print_freq == 0:
+        if iteration % self.log_interval == 0:
             self.log('loss', loss)
 
     def update_epoch(self, epoch, acc):

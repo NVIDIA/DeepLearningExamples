@@ -32,7 +32,6 @@ from pathlib import Path
 
 import librosa
 import numpy as np
-import parselmouth
 import torch
 import torch.nn.functional as F
 from scipy import ndimage
@@ -88,35 +87,7 @@ def estimate_pitch(wav, mel_len, method='pyin', normalize_mean=None,
     if type(normalize_std) is float or type(normalize_std) is list:
         normalize_std = torch.tensor(normalize_std)
 
-    if method == 'praat':
-
-        snd = parselmouth.Sound(wav)
-        pitch_mel = snd.to_pitch(time_step=snd.duration / (mel_len + 3)
-                                 ).selected_array['frequency']
-        assert np.abs(mel_len - pitch_mel.shape[0]) <= 1.0
-
-        pitch_mel = torch.from_numpy(pitch_mel).unsqueeze(0)
-
-        if n_formants > 1:
-            formant = snd.to_formant_burg(
-                time_step=snd.duration / (mel_len + 3))
-            formant_n_frames = formant.get_number_of_frames()
-            assert np.abs(mel_len - formant_n_frames) <= 1.0
-
-            formants_mel = np.zeros((formant_n_frames + 1, n_formants - 1))
-            for i in range(1, formant_n_frames + 1):
-                formants_mel[i] = np.asarray([
-                    formant.get_value_at_time(
-                        formant_number=f,
-                        time=formant.get_time_from_frame_number(i))
-                    for f in range(1, n_formants)
-                ])
-
-            pitch_mel = torch.cat(
-                [pitch_mel, torch.from_numpy(formants_mel).permute(1, 0)],
-                dim=0)
-
-    elif method == 'pyin':
+    if method == 'pyin':
 
         snd, sr = librosa.load(wav)
         pitch_mel, voiced_flag, voiced_probs = librosa.pyin(
@@ -181,7 +152,7 @@ class TTSDataset(torch.utils.data.Dataset):
                  pitch_online_dir=None,
                  betabinomial_online_dir=None,
                  use_betabinomial_interpolator=True,
-                 pitch_online_method='praat',
+                 pitch_online_method='pyin',
                  **ignored):
 
         # Expect a list of filenames
@@ -338,7 +309,7 @@ class TTSDataset(torch.utils.data.Dataset):
             if cached_fpath.is_file():
                 return torch.load(cached_fpath)
 
-        # No luck so far - calculate or replace with praat
+        # No luck so far - calculate
         wav = audiopath
         if not wav.endswith('.wav'):
             wav = re.sub('/mels/', '/wavs/', wav)

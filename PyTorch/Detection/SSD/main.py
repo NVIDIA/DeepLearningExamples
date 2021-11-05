@@ -108,6 +108,8 @@ def make_parser():
     parser.add_argument('--num-workers', type=int, default=4)
     parser.add_argument('--amp', action='store_true',
                         help='Whether to enable AMP ops. When false, uses TF32 on A100 and FP32 on V100 GPUS.')
+    parser.add_argument('--log-interval', type=int, default=20,
+                        help='Logging interval.')
     parser.add_argument('--json-summary', type=str, default=None,
                         help='If provided, the json summary will be written to'
                              'the specified file.')
@@ -167,7 +169,7 @@ def train(train_loop_func, logger, args):
         loss_func.cuda()
 
     optimizer = torch.optim.SGD(tencent_trick(ssd300), lr=args.learning_rate,
-                                    momentum=args.momentum, weight_decay=args.weight_decay)
+                                momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = MultiStepLR(optimizer=optimizer, milestones=args.multistep, gamma=0.1)
     if args.amp:
         ssd300, optimizer = amp.initialize(ssd300, optimizer, opt_level='O2')
@@ -196,8 +198,8 @@ def train(train_loop_func, logger, args):
         acc = evaluate(ssd300, val_dataloader, cocoGt, encoder, inv_map, args)
         if args.local_rank == 0:
             print('Model precision {} mAP'.format(acc))
-
         return
+
     mean, std = generate_mean_std(args)
 
     for epoch in range(start_epoch, args.epochs):
@@ -273,15 +275,18 @@ if __name__ == "__main__":
 
     if args.mode == 'benchmark-training':
         train_loop_func = benchmark_train_loop
-        logger = BenchLogger('Training benchmark', json_output=args.json_summary)
+        logger = BenchLogger('Training benchmark', log_interval=args.log_interval,
+                             json_output=args.json_summary)
         args.epochs = 1
     elif args.mode == 'benchmark-inference':
         train_loop_func = benchmark_inference_loop
-        logger = BenchLogger('Inference benchmark', json_output=args.json_summary)
+        logger = BenchLogger('Inference benchmark', log_interval=args.log_interval,
+                             json_output=args.json_summary)
         args.epochs = 1
     else:
         train_loop_func = train_loop
-        logger = Logger('Training logger', print_freq=1, json_output=args.json_summary)
+        logger = Logger('Training logger', log_interval=args.log_interval,
+                        json_output=args.json_summary)
 
     log_params(logger, args)
 

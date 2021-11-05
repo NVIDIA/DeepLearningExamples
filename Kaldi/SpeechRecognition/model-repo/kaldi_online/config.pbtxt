@@ -1,80 +1,103 @@
 name: "kaldi_online"
-platform: "custom"
-default_model_filename: "libkaldi-trtisbackend.so"
-max_batch_size: 2200
-parameters: {
-key: "mfcc_filename"
-value: { 
-string_value:"/data/models/LibriSpeech/conf/mfcc.conf"
+backend: "kaldi"
+max_batch_size: 600
+model_transaction_policy {
+  decoupled: True
 }
-}
-parameters: {
-key: "ivector_filename"
-value: { 
-string_value:"/data/models/LibriSpeech/conf/ivector_extractor.conf"
-}
-}
-parameters: {
-key: "nnet3_rxfilename"
-value: { 
-string_value: "/data/models/LibriSpeech/final.mdl"
-}
-}
-parameters: {
-key: "fst_rxfilename"
-value: { 
-string_value: "/data/models/LibriSpeech/HCLG.fst"
-}
-}
-parameters: {
-key: "word_syms_rxfilename"
-value: { 
-string_value:"/data/models/LibriSpeech/words.txt"
-}
-}
-parameters: [{
-key: "beam"
-value: { 
-string_value:"10"
-}
-},{
-key: "num_worker_threads"
-value: { 
-string_value:"40"
-} 
-},
-{
-key: "max_execution_batch_size"
-value: { 
-string_value:"400"
-}
-}]
-parameters: {
-key: "lattice_beam"
-value: { 
-string_value:"7" 
-}
-}
-parameters: {
-key: "max_active"
-value: { 
-string_value:"10000" 
-}
-}
-parameters: {
-key: "frame_subsampling_factor"
-value: { 
-string_value:"3" 
-}
-}
-parameters: {
-key: "acoustic_scale"
-value: { 
-string_value:"1.0" 
-}
-}
+parameters [
+  {
+    key: "config_filename"
+    value { 
+      string_value: "/data/models/LibriSpeech/conf/online.conf"
+    }
+  },
+  {
+    key: "nnet3_rxfilename"
+    value { 
+      string_value: "/data/models/LibriSpeech/final.mdl"
+    }
+  },
+  {
+    key: "fst_rxfilename"
+    value { 
+      string_value: "/data/models/LibriSpeech/HCLG.fst"
+    }
+  },
+  {
+    key: "word_syms_rxfilename"
+    value { 
+      string_value: "/data/models/LibriSpeech/words.txt"
+    }
+  },
+  {
+    key: "lattice_postprocessor_rxfilename"
+    value { 
+      string_value: ""
+    }
+  },
+  {
+    key: "use_tensor_cores"
+    value {
+      string_value: "1"
+    }
+  },
+  {
+    key: "main_q_capacity"
+    value {
+      string_value: "30000"
+    }
+  },
+  {
+    key: "aux_q_capacity"
+    value {
+      string_value: "400000"
+    }
+  },
+  {
+    key: "beam"
+    value { 
+      string_value: "10"
+    }
+  },
+  {
+    key: "num_worker_threads"
+    value { 
+      string_value: "40"
+    } 
+  },
+  {
+    key: "num_channels"
+    value { 
+      string_value: "4000"
+    }
+  },
+  {
+    key: "lattice_beam"
+    value { 
+      string_value: "7" 
+    }
+  },
+  {
+    key: "max_active"
+    value { 
+      string_value: "10000" 
+    }
+  },
+  {
+    key: "frame_subsampling_factor"
+    value { 
+      string_value: "3" 
+    }
+  },
+  {
+    key: "acoustic_scale"
+    value { 
+      string_value: "1.0" 
+    }
+  }
+]
 sequence_batching {
-max_sequence_idle_microseconds:5000000
+  max_sequence_idle_microseconds: 5000000
   control_input [
     {
       name: "START"
@@ -108,16 +131,16 @@ max_sequence_idle_microseconds:5000000
       control [
         {
           kind: CONTROL_SEQUENCE_CORRID
-    data_type: TYPE_UINT64
+          data_type: TYPE_UINT64
         }
       ]
     }
   ]
-oldest {
-max_candidate_sequences:2200
-preferred_batch_size:[400]
-max_queue_delay_microseconds:1000
-}
+  oldest {
+    max_candidate_sequences: 4000
+    preferred_batch_size: [ 600 ]
+    max_queue_delay_microseconds: 1000
+  }
 },
 
 input [
@@ -142,13 +165,17 @@ output [
     name: "TEXT"
     data_type: TYPE_STRING
     dims: [ 1 ]
+  },
+  {
+    name: "CTM"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
   }
+
 ]
 instance_group [
   {
-    count: 2
+    count: 1
     kind: KIND_GPU
   }
 ]
-
-

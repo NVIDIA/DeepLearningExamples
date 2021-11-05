@@ -18,7 +18,6 @@ RUN PROTOC_VERSION=3.0.0 && \
     rm -f $PROTOC_ZIP
 
 COPY requirements.txt .
-RUN pip install Cython
 RUN pip install -r requirements.txt
 RUN pip --no-cache-dir --no-cache install 'git+https://github.com/NVIDIA/dllogger'
 

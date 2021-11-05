@@ -20,7 +20,6 @@ from SSD import _C as C
 from apex import amp
 
 def train_loop(model, loss_func, epoch, optim, train_dataloader, val_dataloader, encoder, iteration, logger, args, mean, std):
-#     for nbatch, (img, _, img_size, bbox, label) in enumerate(train_dataloader):
     for nbatch, data in enumerate(train_dataloader):
         img = data[0][0][0]
         bbox = data[0][1][0]
@@ -82,8 +81,8 @@ def benchmark_train_loop(model, loss_func, epoch, optim, train_dataloader, val_d
     start_time = None
     # tensor for results
     result = torch.zeros((1,)).cuda()
-    for i, data in enumerate(loop(train_dataloader)):
-        if i >= args.benchmark_warmup:
+    for nbatch, data in enumerate(loop(train_dataloader)):
+        if nbatch >= args.benchmark_warmup:
             torch.cuda.synchronize()
             start_time = time.time()
 
@@ -109,6 +108,7 @@ def benchmark_train_loop(model, loss_func, epoch, optim, train_dataloader, val_d
             continue
         bbox, label = C.box_encoder(N, bbox, bbox_offsets, label, encoder.dboxes.cuda(), 0.5)
 
+        # output is ([N*8732, 4], [N*8732], need [N, 8732, 4], [N, 8732] respectively
         M = bbox.shape[0] // N
         bbox = bbox.view(N, M, 4)
         label = label.view(N, M)
@@ -141,20 +141,18 @@ def benchmark_train_loop(model, loss_func, epoch, optim, train_dataloader, val_d
         optim.step()
         optim.zero_grad()
 
-        if i >= args.benchmark_warmup + args.benchmark_iterations:
+        if nbatch >= args.benchmark_warmup + args.benchmark_iterations:
             break
 
-        if i >= args.benchmark_warmup:
+        if nbatch >= args.benchmark_warmup:
             torch.cuda.synchronize()
-            logger.update(args.batch_size, time.time() - start_time)
-
+            logger.update(args.batch_size*args.N_gpu, time.time() - start_time)
 
     result.data[0] = logger.print_result()
     if args.N_gpu > 1:
         torch.distributed.reduce(result, 0)
     if args.local_rank == 0:
         print('Training performance = {} FPS'.format(float(result.data[0])))
-
 
 
 def loop(dataloader, reset=True):

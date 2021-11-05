@@ -18,8 +18,7 @@ FROM ${FROM_IMAGE_NAME}
 
 USER root
 
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir --no-deps tensorflow-transform==0.24.1 tensorflow-metadata==0.14.0 pydot dill && \
+RUN pip install --no-cache-dir --no-deps tensorflow-transform==0.24.1 tensorflow-metadata==0.14.0 pydot dill && \
     pip install --no-cache-dir ipdb pynvml==8.0.4 && \
     pip install --no-cache-dir -e git+https://github.com/NVIDIA/dllogger#egg=dllogger
 

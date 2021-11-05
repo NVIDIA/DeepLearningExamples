@@ -10,13 +10,6 @@ import torch.distributed as dist
 from maskrcnn_benchmark.utils.comm import get_world_size
 from maskrcnn_benchmark.utils.metric_logger import MetricLogger
 
-try:
-    from apex import amp
-    use_amp = True
-except ImportError:
-    print('Use APEX for multi-precision via apex.amp')
-    use_amp = False
-
 def reduce_loss_dict(loss_dict):
     """
     Reduce the loss dictionary from all processes so that process with rank
@@ -63,6 +56,8 @@ def do_train(
     model.train()
     start_training_time = time.time()
     end = time.time()
+    if use_amp:
+        scaler = torch.cuda.amp.GradScaler(init_scale=8192.0)
     for iteration, (images, targets, _) in enumerate(data_loader, start_iter):
         data_time = time.time() - end
         iteration = iteration + 1
@@ -71,7 +66,11 @@ def do_train(
         images = images.to(device)
         targets = [target.to(device) for target in targets]
 
-        loss_dict = model(images, targets)
+        if use_amp:
+            with torch.cuda.amp.autocast():
+                loss_dict = model(images, targets)
+        else:
+            loss_dict = model(images, targets)
 
         losses = sum(loss for loss in loss_dict.values())
 
@@ -84,23 +83,27 @@ def do_train(
         # Note: If mixed precision is not used, this ends up doing nothing
         # Otherwise apply loss scaling for mixed-precision recipe
         if use_amp:        
-            with amp.scale_loss(losses, optimizer) as scaled_losses:
-                scaled_losses.backward()
+            scaler.scale(losses).backward()
         else:
             losses.backward()
 
-        if not cfg.SOLVER.ACCUMULATE_GRAD:
-            optimizer.step()
+        def _take_step():
+            if use_amp:
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                optimizer.step()
             scheduler.step()
             optimizer.zero_grad()
+        
+        if not cfg.SOLVER.ACCUMULATE_GRAD:
+            _take_step()
         else:
             if (iteration + 1) % cfg.SOLVER.ACCUMULATE_STEPS == 0:
                 for param in model.parameters():
                     if param.grad is not None:
                         param.grad.data.div_(cfg.SOLVER.ACCUMULATE_STEPS)
-                optimizer.step()
-                scheduler.step()
-                optimizer.zero_grad()
+                _take_step()
             
         batch_time = time.time() - end
         end = time.time()

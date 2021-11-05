@@ -1,6 +1,6 @@
 #!/bin/bash 
 
-# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2019-2021 NVIDIA CORPORATION. All rights reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,8 +15,9 @@
 
 NV_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-"0"}
 
-# Start TRTIS server 
-nvidia-docker run --rm -it \
+# Start Triton server 
+docker run --rm -it \
+   --gpus $NV_VISIBLE_DEVICES \
    --shm-size=1g \
    --ulimit memlock=-1 \
    --ulimit stack=67108864 \
@@ -24,7 +25,6 @@ nvidia-docker run --rm -it \
    -p8001:8001 \
    -p8002:8002 \
    --name trt_server_asr \
-   -e NVIDIA_VISIBLE_DEVICES=$NV_VISIBLE_DEVICES \
    -v $PWD/data:/data \
    -v $PWD/model-repo:/mnt/model-repo \
-   trtis_kaldi_server trtserver --model-repo=/workspace/model-repo/
+   triton_kaldi_server

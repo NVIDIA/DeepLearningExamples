@@ -13,21 +13,32 @@
 # limitations under the License.
 
 import torch.nn as nn
-from monai.losses import DiceLoss, FocalLoss
+from monai.losses import DiceCELoss, DiceFocalLoss, DiceLoss, FocalLoss
 
 
 class Loss(nn.Module):
     def __init__(self, focal):
         super(Loss, self).__init__()
-        self.dice = DiceLoss(include_background=False, softmax=True, to_onehot_y=True, batch=True)
-        self.focal = FocalLoss(gamma=2.0)
-        self.cross_entropy = nn.CrossEntropyLoss()
-        self.use_focal = focal
+        if focal:
+            self.loss = DiceFocalLoss(gamma=2.0, softmax=True, to_onehot_y=True, batch=True)
+        else:
+            self.loss = DiceCELoss(softmax=True, to_onehot_y=True, batch=True)
 
     def forward(self, y_pred, y_true):
-        loss = self.dice(y_pred, y_true)
-        if self.use_focal:
-            loss += self.focal(y_pred, y_true)
-        else:
-            loss += self.cross_entropy(y_pred, y_true[:, 0].long())
-        return loss
+        return self.loss(y_pred, y_true)
+
+
+class LossBraTS(nn.Module):
+    def __init__(self, focal):
+        super(LossBraTS, self).__init__()
+        self.dice = DiceLoss(sigmoid=True, batch=True)
+        self.ce = FocalLoss(gamma=2.0, to_onehot_y=False) if focal else nn.BCEWithLogitsLoss()
+
+    def _loss(self, p, y):
+        return self.dice(p, y) + self.ce(p, y.float())
+
+    def forward(self, p, y):
+        y_wt, y_tc, y_et = y > 0, ((y == 1) + (y == 3)) > 0, y == 3
+        p_wt, p_tc, p_et = p[:, 0].unsqueeze(1), p[:, 1].unsqueeze(1), p[:, 2].unsqueeze(1)
+        l_wt, l_tc, l_et = self._loss(p_wt, y_wt), self._loss(p_tc, y_tc), self._loss(p_et, y_et)
+        return l_wt + l_tc + l_et

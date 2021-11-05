@@ -17,8 +17,7 @@ ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.02-py3
 FROM ${FROM_IMAGE_NAME}
 RUN apt-get update && apt-get install -y pbzip2
 
-RUN pip install --upgrade --no-cache-dir pip \
- && pip install --no-cache-dir tokenizers==0.8.0 dataclasses gitpython rouge-score pynvml==8.0.4 \
+RUN pip install --no-cache-dir tokenizers==0.8.0 dataclasses gitpython rouge-score pynvml==8.0.4 \
  git+https://github.com/NVIDIA/dllogger pytorch-lightning==1.1.5 gdown
 
 RUN pip install tqdm --upgrade

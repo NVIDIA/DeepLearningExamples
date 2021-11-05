@@ -1,4 +1,4 @@
-pytablewriter==0.47.0
+pytablewriter==0.64.0
 sacrebleu==1.2.10
 sacremoses==0.0.19
 pynvml==8.0.4

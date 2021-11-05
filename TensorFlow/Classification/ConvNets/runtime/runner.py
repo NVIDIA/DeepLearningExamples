@@ -21,13 +21,11 @@ import warnings
 import tensorflow as tf
 import numpy as np
 
-import horovod.tensorflow as hvd
-
 from model import resnet
 
 from utils import hooks
 from utils import data_utils
-from utils import hvd_utils
+from utils import hvd_wrapper as hvd
 
 from runtime import runner_utils
 
@@ -142,8 +140,8 @@ class Runner(object):
                                                              gpu_id=gpu_id)
 
         run_config_additional = tf.contrib.training.HParams(
-            model_dir=model_dir, #if not hvd_utils.is_using_hvd() or hvd.rank() == 0 else None,
-            log_dir=log_dir if not hvd_utils.is_using_hvd() or hvd.rank() == 0 else None,
+            model_dir=model_dir,
+            log_dir=log_dir if hvd.rank() == 0 else None,
             data_dir=data_dir,
             data_idx_dir=data_idx_dir,
             num_preprocessing_threads=num_preprocessing_threads)
@@ -196,11 +194,7 @@ class Runner(object):
 
     @staticmethod
     def _get_global_batch_size(worker_batch_size):
-
-        if hvd_utils.is_using_hvd():
-            return worker_batch_size * hvd.size()
-        else:
-            return worker_batch_size
+        return worker_batch_size * hvd.size()
 
     @staticmethod
     def _get_session_config(mode, use_xla, use_dali, use_cpu, gpu_memory_fraction, gpu_id=0):
@@ -225,7 +219,7 @@ class Runner(object):
             config.gpu_options.visible_device_list = str(gpu_id)
             config.gpu_options.force_gpu_compatible = True  # Force pinned memory
 
-            if hvd_utils.is_using_hvd():
+            if hvd.size() > 1:
                 config.gpu_options.visible_device_list = str(hvd.local_rank())
 
             config.gpu_options.force_gpu_compatible = True  # Force pinned memory
@@ -248,10 +242,7 @@ class Runner(object):
                              mode)
 
         if seed is not None:
-            if hvd_utils.is_using_hvd():
-                tf_random_seed = 2 * (seed + hvd.rank())
-            else:
-                tf_random_seed = 2 * seed
+            tf_random_seed = 2 * (seed + hvd.rank())
         else:
             tf_random_seed = None
 
@@ -277,11 +268,8 @@ class Runner(object):
             experimental_distribute=None)
 
         if mode == 'train':
-            if hvd_utils.is_using_hvd():
-                config = config.replace(save_checkpoints_steps=1000 if hvd.rank() == 0 else None,
-                                        keep_checkpoint_every_n_hours=3)
-            else:
-                config = config.replace(save_checkpoints_steps=1000, keep_checkpoint_every_n_hours=3)
+            config = config.replace(save_checkpoints_steps=1000 if hvd.rank() == 0 else None,
+                                    keep_checkpoint_every_n_hours=3)
 
         return config
 
@@ -343,7 +331,7 @@ class Runner(object):
         else:
             use_static_loss_scaling = False  # Make sure it hasn't been set to True on FP32 training
 
-        num_gpus = 1 if not hvd_utils.is_using_hvd() else hvd.size()
+        num_gpus = hvd.size()
         global_batch_size = batch_size * num_gpus
 
         if self.run_hparams.data_dir is not None:
@@ -402,8 +390,8 @@ class Runner(object):
                 )
             training_hooks.append(self.training_logging_hook)
 
-        if hvd_utils.is_using_hvd():
-            bcast_hook = hvd.BroadcastGlobalVariablesHook(0)
+        if hvd.size() > 1:
+            bcast_hook = hvd.hvd_global_object.BroadcastGlobalVariablesHook(0)
             training_hooks.append(bcast_hook)
 
         training_hooks.append(hooks.PrefillStagingAreasHook())
@@ -527,7 +515,7 @@ class Runner(object):
         if self.run_hparams.data_dir is None and not is_benchmark:
             raise ValueError('`data_dir` must be specified for evaluation!')
 
-        if hvd_utils.is_using_hvd() and hvd.rank() != 0:
+        if hvd.rank() != 0:
             raise RuntimeError('Multi-GPU inference is not supported')
 
         estimator_params = {'quantize': quantize,
@@ -620,18 +608,25 @@ class Runner(object):
             )
 
             eval_throughput = self.eval_logging_hook.mean_throughput.value()
-            eval_latencies = np.array(self.eval_logging_hook.latencies) * 1000
-            eval_latencies_q = np.quantile(eval_latencies, q=[0.9, 0.95, 0.99])
-            eval_latencies_mean = np.mean(eval_latencies)
+            if len(self.eval_logging_hook.latencies) > 0:
+                eval_latencies = np.array(self.eval_logging_hook.latencies) * 1000
+                eval_latencies_q = np.quantile(eval_latencies, q=[0.9, 0.95, 0.99])
+                eval_latencies_mean = np.mean(eval_latencies)
+                additional_metrics = {
+                    'eval_latency_avg': eval_latencies_mean,
+                    'eval_latency_p90': eval_latencies_q[0],
+                    'eval_latency_p95': eval_latencies_q[1],
+                    'eval_latency_p99': eval_latencies_q[2],
+                }
+            else:
+                additional_metrics = {}
+
 
             dllogger.log(data={
                 'top1_accuracy': float(eval_results['top1_accuracy']),
                 'top5_accuracy': float(eval_results['top5_accuracy']),
                 'eval_throughput': eval_throughput,
-                'eval_latency_avg': eval_latencies_mean,
-                'eval_latency_p90': eval_latencies_q[0],
-                'eval_latency_p95': eval_latencies_q[1],
-                'eval_latency_p99': eval_latencies_q[2],
+                **additional_metrics
             },
                          step=tuple())
 
@@ -644,7 +639,7 @@ class Runner(object):
                                                                              data_format=self.run_hparams.input_format,
                                                                              dtype=self.run_hparams.dtype)
 
-                image_classifier.export_savedmodel(export_dir, input_receiver_fn)
+                self.exported_path = image_classifier.export_savedmodel(export_dir, input_receiver_fn)
 
         except KeyboardInterrupt:
             print("Keyboard interrupt")

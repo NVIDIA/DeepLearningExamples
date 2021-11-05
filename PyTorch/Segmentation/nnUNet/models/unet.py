@@ -11,9 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+import torch
 import torch.nn as nn
 
-from models.layers import ConvBlock, OutputBlock, ResidBlock, UpsampleBlock
+from models.layers import ConvBlock, OutputBlock, UpsampleBlock
 
 
 class UNet(nn.Module):
@@ -25,34 +27,39 @@ class UNet(nn.Module):
         strides,
         normalization_layer,
         negative_slope,
-        residual,
         dimension,
+        deep_supervision,
+        more_chn,
     ):
         super(UNet, self).__init__()
+        self.more_chn = more_chn
         self.dim = dimension
         self.n_class = n_class
-        self.residual = residual
         self.negative_slope = negative_slope
         self.norm = normalization_layer + f"norm{dimension}d"
-        self.filters = [min(2 ** (5 + i), 320 if dimension == 3 else 512) for i in range(len(strides))]
+        self.deep_supervision = deep_supervision
+        self.depth = len(strides)
+        if self.more_chn:
+            self.filters = [64, 96, 128, 192, 256, 384, 512, 768, 1024][: self.depth]
+        else:
+            self.filters = [min(2 ** (5 + i), 320 if dimension == 3 else 512) for i in range(self.depth)]
 
-        down_block = ResidBlock if self.residual else ConvBlock
         self.input_block = self.get_conv_block(
-            conv_block=down_block,
+            conv_block=ConvBlock,
             in_channels=in_channels,
             out_channels=self.filters[0],
             kernel_size=kernels[0],
             stride=strides[0],
         )
         self.downsamples = self.get_module_list(
-            conv_block=down_block,
+            conv_block=ConvBlock,
             in_channels=self.filters[:-1],
             out_channels=self.filters[1:],
             kernels=kernels[1:-1],
             strides=strides[1:-1],
         )
         self.bottleneck = self.get_conv_block(
-            conv_block=down_block,
+            conv_block=ConvBlock,
             in_channels=self.filters[-2],
             out_channels=self.filters[-1],
             kernel_size=kernels[-1],
@@ -65,6 +72,8 @@ class UNet(nn.Module):
             kernels=kernels[1:][::-1],
             strides=strides[1:][::-1],
         )
+        self.deep_supervision_head1 = self.get_output_block(1)
+        self.deep_supervision_head2 = self.get_output_block(2)
         self.output_block = self.get_output_block(decoder_level=0)
         self.apply(self.initialize_weights)
         self.n_layers = len(self.upsamples) - 1
@@ -76,9 +85,17 @@ class UNet(nn.Module):
             out = downsample(out)
             encoder_outputs.append(out)
         out = self.bottleneck(out)
-        for idx, upsample in enumerate(self.upsamples):
-            out = upsample(out, encoder_outputs[self.n_layers - idx])
+        decoder_outputs = []
+        for i, upsample in enumerate(self.upsamples):
+            out = upsample(out, encoder_outputs[self.depth - i - 2])
+            decoder_outputs.append(out)
         out = self.output_block(out)
+        if self.training and self.deep_supervision:
+            out1 = self.deep_supervision_head1(decoder_outputs[-2])
+            out2 = self.deep_supervision_head2(decoder_outputs[-3])
+            out1 = nn.functional.interpolate(out1, out.shape[2:], mode="trilinear", align_corners=True)
+            out2 = nn.functional.interpolate(out2, out.shape[2:], mode="trilinear", align_corners=True)
+            return torch.stack([out, out1, out2])
         return out
 
     def get_conv_block(self, conv_block, in_channels, out_channels, kernel_size, stride):

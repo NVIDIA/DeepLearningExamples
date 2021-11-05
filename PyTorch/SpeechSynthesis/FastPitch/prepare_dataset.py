@@ -73,7 +73,7 @@ def parse_args(parser):
     parser.add_argument('--n-mel-channels', type=int, default=80)
     # Pitch extraction
     parser.add_argument('--f0-method', default='pyin', type=str,
-                        choices=('pyin', 'praat'), help='F0 estimation method')
+                        choices=['pyin'], help='F0 estimation method')
     # Performance
     parser.add_argument('-b', '--batch-size', default=1, type=int)
     parser.add_argument('--n-workers', type=int, default=16)

@@ -64,10 +64,10 @@ def conv2d_block(
                 trainable=is_training,
                 dtype=tf.float32)
             net = tf.nn.conv2d(inputs,
-                                      group_filter,
-                                      strides=strides,
-                                      padding='SAME',
-                                      data_format=data_format)
+                               group_filter,
+                               strides=strides,
+                               padding='SAME',
+                               data_format=data_format)
         if use_batch_norm:
             net = layers.batch_norm(
                 net,

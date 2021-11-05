@@ -1,0 +1,9 @@
+name: folding
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - tensorflow-gpu=1.14
+  - pandas
+  - scikit-learn=0.24
+  - parallel

@@ -47,7 +47,7 @@ Mask R-CNN is a convolution based neural network for the task of object instance
 The repository also contains scripts to interactively launch training, benchmarking and inference routines in a Docker container.
  
 The major differences between the official implementation of the paper and our version of Mask R-CNN are as follows:
-  - Mixed precision support with [PyTorch AMP](https://github.com/NVIDIA/apex).
+  - Mixed precision support with [PyTorch AMP](https://pytorch.org/docs/stable/amp.html).
   - Gradient accumulation to simulate larger batches.
   - Custom fused CUDA kernels for faster computations.
  
@@ -117,7 +117,8 @@ The following features are supported by this model.
  
 | **Feature** | **Mask R-CNN** |
 |:---------:|:----------:|
-|APEX AMP|Yes|
+|APEX AMP|No|
+|PyTorch AMP|Yes|
 |APEX DDP|Yes|
  
 #### Features
@@ -150,22 +151,8 @@ For information about:
  
 #### Enabling mixed precision
  
-In this repository, mixed precision training is enabled by NVIDIA’s [APEX](https://github.com/NVIDIA/apex) library. The APEX library has an automatic mixed precision module that allows mixed precision to be enabled with minimal code changes.
- 
-Automatic mixed precision can be enabled with the following code changes: 
- 
-```
-from apex import amp
-if fp16:
-    # Wrap optimizer and model
-    model, optimizer = amp.initialize(model, optimizer, opt_level=<opt_level>, loss_scale="dynamic")
- 
-if fp16:
-    with amp.scale_loss(loss, optimizer) as scaled_loss:
-        scaled_loss.backward()
-   ```
- 
-Where <opt_level> is the optimization level. In the MaskRCNN, "O1" is set as the optimization level. Mixed precision training can be turned on by passing in the argument fp16 to the pre-training and fine-tuning Python scripts. Shell scripts all have a positional argument available to enable mixed precision training.
+In this repository, mixed precision training is enabled by using Pytorch's [AMP](https://pytorch.org/docs/stable/amp.html).
+
  
 #### Enabling TF32
  
@@ -608,6 +595,10 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
  
 ### Changelog
  
+October 2021
+- Replace APEX AMP with PyTorch native AMP
+- Use opencv-python version 4.2.0.32
+
 June 2020
 - Updated accuracy and performance tables to include A100 results
 

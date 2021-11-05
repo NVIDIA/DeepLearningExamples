@@ -82,18 +82,23 @@ def main():
         items = torch.cuda.LongTensor(batch_size).random_(0, args.n_items)
 
         latencies = []
-        for _ in range(args.num_batches):
+        for i in range(args.num_batches):
             torch.cuda.synchronize()
             start = time.time()
             _ = model(users, items, sigmoid=True)
             torch.cuda.synchronize()
-            latencies.append(time.time() - start)
+            end_time = time.time()
+
+            if i < 10: # warmup iterations
+                continue
+
+            latencies.append(end_time - start)
 
         result_data[f'batch_{batch_size}_mean_throughput'] = batch_size / np.mean(latencies)
         result_data[f'batch_{batch_size}_mean_latency'] = np.mean(latencies)
-        result_data[f'batch_{batch_size}_p90_latency'] = np.percentile(latencies, 0.90)
-        result_data[f'batch_{batch_size}_p95_latency'] = np.percentile(latencies, 0.95)
-        result_data[f'batch_{batch_size}_p99_latency'] = np.percentile(latencies, 0.99)
+        result_data[f'batch_{batch_size}_p90_latency'] = np.percentile(latencies, 90)
+        result_data[f'batch_{batch_size}_p95_latency'] = np.percentile(latencies, 95)
+        result_data[f'batch_{batch_size}_p99_latency'] = np.percentile(latencies, 99)
 
     dllogger.log(data=result_data, step=tuple())
     dllogger.flush()

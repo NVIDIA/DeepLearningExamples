@@ -13,9 +13,8 @@
 # limitations under the License.
 
 import os
-import json
 from functools import reduce
-import time
+
 
 def count_parameters(model):
     c = map(lambda p: reduce(lambda x, y: x * y, p.size()), model.parameters())

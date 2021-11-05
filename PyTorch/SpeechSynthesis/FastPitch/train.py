@@ -147,8 +147,8 @@ def parse_args(parser):
                            'n_speakers > 1 enables speaker embeddings')
     cond.add_argument('--load-pitch-from-disk', action='store_true',
                       help='Use pitch cached on disk with prepare_dataset.py')
-    cond.add_argument('--pitch-online-method', default='praat',
-                      choices=['praat', 'pyin'],
+    cond.add_argument('--pitch-online-method', default='pyin',
+                      choices=['pyin'],
                       help='Calculate pitch on the fly during trainig')
     cond.add_argument('--pitch-online-dir', type=str, default=None,
                       help='A directory for storing pitch calculated on-line')

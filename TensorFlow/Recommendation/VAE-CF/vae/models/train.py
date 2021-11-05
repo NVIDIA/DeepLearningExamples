@@ -413,15 +413,8 @@ class VAE:
         dllogger.log(data=metrics_scores, step=(epoch,))
 
     def log_final_stats(self):
-        data = {"total_train_time": np.sum(self.time_elapsed_training_history),
-                "total_valid_time": np.sum(self.time_elapsed_validation_history),
-                "average_train_epoch time": np.mean(self.time_elapsed_training_history),
-                "average_validation_time": np.mean(self.time_elapsed_validation_history),
-                "total_elapsed_time" : self.total_time,
-                "mean_training_throughput": np.mean(self.training_throughputs[10:]),
-                "mean_inference_throughput": np.mean(self.inference_throughputs),
-                "max_training_throughput": np.max(self.training_throughputs[10:]),
-                "max_inference_throughput": np.max(self.inference_throughputs)}
+        data = {"mean_training_throughput": np.mean(self.training_throughputs[10:]),
+                "mean_inference_throughput": np.mean(self.inference_throughputs[2:])}
 
         for metric_name, metric_values in self.metrics_history.items():
             data["final_" + metric_name] = metric_values[-1]

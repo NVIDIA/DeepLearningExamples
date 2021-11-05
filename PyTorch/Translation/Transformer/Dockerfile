@@ -20,8 +20,7 @@ WORKDIR /workspace
 # && cd apex \
 # && pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
 # Install Python dependencies
-RUN pip install --upgrade --no-cache-dir pip \
- && pip install --no-cache-dir \
+RUN pip install --no-cache-dir \
       sacrebleu \
       sentencepiece
 RUN pip install jupyter

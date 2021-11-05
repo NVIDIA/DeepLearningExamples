@@ -136,7 +136,7 @@ class DaliPipeline():
                 audio = audio.gpu()
 
             if self.dither_coeff != 0.:
-                audio = audio + fn.random.normal(device=preprocessing_device) * self.dither_coeff
+                audio = audio + fn.random.normal(audio) * self.dither_coeff
 
             audio = fn.preemphasis_filter(audio, preemph_coeff=preemph_coeff)
 
