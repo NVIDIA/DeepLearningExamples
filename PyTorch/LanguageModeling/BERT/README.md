@@ -294,7 +294,7 @@ To run on multiple nodes, see the [Multi-node](#multi-node) section.
 7. Start fine-tuning with the SQuAD dataset.
  
 The above pretrained BERT representations can be fine tuned with just one additional output layer for a state-of-the-art question answering system. Running the following script launches fine-tuning for question answering with the SQuAD dataset.
-`bash scripts/run_squad.sh /workspace/checkpoints/<downloaded_checkpoint>`
+`bash scripts/run_squad.sh /workspace/bert/checkpoints/<downloaded_checkpoint>`
   
 8. Start fine-tuning with the GLUE tasks.
  
