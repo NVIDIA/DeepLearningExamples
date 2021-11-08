@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# @package _global_
+config:
+  trainer:
+    callback:
+      early_stopping:
+        _target_: callbacks.ctl_callbacks.EarlyStopping
+        metric: val_loss
+        max_diff: 0
+        patience: 5

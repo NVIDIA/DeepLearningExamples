@@ -1,0 +1,15 @@
+# @package _group_
+# SPDX-License-Identifier: Apache-2.0
+version: 1
+formatters:
+  simple:
+    format: '%(message)s'
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: simple
+    stream: ext://sys.stdout
+root:
+  handlers: [console]
+  level: INFO
+disable_existing_loggers: false
