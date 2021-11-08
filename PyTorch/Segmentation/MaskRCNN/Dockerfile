@@ -18,7 +18,7 @@ FROM ${FROM_IMAGE_NAME}
 # Install Python dependencies
 RUN pip install --no-cache-dir \
       mlperf-compliance==0.0.10 \
-      opencv-python==4.2.0.32 \
+      opencv-python==4.4.0.42 \
       git+https://github.com/NVIDIA/dllogger \
       yacs
 
@@ -29,6 +29,6 @@ RUN mkdir /results
 COPY pytorch/. .
 RUN pip install -e .
 
-RUN /opt/conda/bin/conda install -y numpy==1.17.4
+RUN /opt/conda/bin/conda install -y numpy
 
 ENV OMP_NUM_THREADS=1

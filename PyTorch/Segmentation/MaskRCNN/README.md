@@ -597,7 +597,7 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
  
 October 2021
 - Replace APEX AMP with PyTorch native AMP
-- Use opencv-python version 4.2.0.32
+- Use opencv-python version 4.4.0.42
 
 June 2020
 - Updated accuracy and performance tables to include A100 results
