@@ -15,34 +15,30 @@
 import os
 
 from data.outbrain.features import HASH_BUCKET_SIZES
-from data.outbrain.nvtabular.utils.feature_description import transform_spark_to_nvt
 
 
 def create_config(args):
-    stats_file = os.path.join(args.metadata_path, 'stats_wnd_workflow')
     data_bucket_folder = args.data_path
     output_bucket_folder = args.metadata_path
-    output_train_folder = os.path.join(output_bucket_folder, 'train/')
-    temporary_folder = os.path.join('/tmp', 'preprocessed')
-    train_path = os.path.join(temporary_folder, 'train_gdf.parquet')
-    valid_path = os.path.join(temporary_folder, 'valid_gdf.parquet')
-    output_valid_folder = os.path.join(output_bucket_folder, 'valid/')
-    tfrecords_path = args.tfrecords_path
-    workers = args.workers
-    hash_spec = {transform_spark_to_nvt(column): hash for column, hash in HASH_BUCKET_SIZES.items()}
+    temporary_folder = os.path.join("/tmp", "preprocessed")
+    train_path = os.path.join(temporary_folder, "train_gdf.parquet")
+    valid_path = os.path.join(temporary_folder, "valid_gdf.parquet")
+    stats_file = os.path.join(temporary_folder, "stats_wnd_workflow")
+    output_train_folder = os.path.join(output_bucket_folder, "train/")
+    output_valid_folder = os.path.join(output_bucket_folder, "valid/")
+    hash_spec = HASH_BUCKET_SIZES
 
     config = {
-        'stats_file': stats_file,
-        'data_bucket_folder': data_bucket_folder,
-        'output_bucket_folder': output_bucket_folder,
-        'output_train_folder': output_train_folder,
-        'temporary_folder': temporary_folder,
-        'train_path': train_path,
-        'valid_path': valid_path,
-        'output_valid_folder': output_valid_folder,
-        'tfrecords_path': tfrecords_path,
-        'workers': workers,
-        'hash_spec': hash_spec
+        "stats_file": stats_file,
+        "data_bucket_folder": data_bucket_folder,
+        "output_bucket_folder": output_bucket_folder,
+        "output_train_folder": output_train_folder,
+        "temporary_folder": temporary_folder,
+        "train_path": train_path,
+        "valid_path": valid_path,
+        "output_valid_folder": output_valid_folder,
+        "hash_spec": hash_spec,
+        "dask": args.use_dask
     }
 
     return config

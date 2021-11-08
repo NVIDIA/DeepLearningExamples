@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,16 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:20.12-tf2-py3
 
-FROM ${FROM_IMAGE_NAME}
+# Get local process ID from OpenMPI or alternatively from SLURM
+if [ -z "${CUDA_VISIBLE_DEVICES:-}" ]; then
+    if [ -n "${OMPI_COMM_WORLD_LOCAL_RANK:-}" ]; then
+        LOCAL_RANK="${OMPI_COMM_WORLD_LOCAL_RANK}"
+    elif [ -n "${SLURM_LOCALID:-}" ]; then
+        LOCAL_RANK="${SLURM_LOCALID}"
+    fi
+    export CUDA_VISIBLE_DEVICES=${LOCAL_RANK}
+fi
 
-USER root
-
-RUN pip install --no-cache-dir --no-deps tensorflow-transform==0.24.1 tensorflow-metadata==0.14.0 pydot dill && \
-    pip install --no-cache-dir ipdb pynvml==8.0.4 && \
-    pip install --no-cache-dir -e git+https://github.com/NVIDIA/dllogger#egg=dllogger
-
-WORKDIR  /wd
-
-COPY . .
+exec "$@"
