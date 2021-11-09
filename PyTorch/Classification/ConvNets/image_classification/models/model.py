@@ -47,7 +47,7 @@ class EntryPoint:
         if pretrained:
             assert self.model.checkpoint_url is not None
             state_dict = torch.hub.load_state_dict_from_url(
-                self.model.checkpoint_url, map_location=torch.device("cpu")
+                self.model.checkpoint_url, map_location=torch.device("cpu"), progress=True
             )
 
         if pretrained_from_file is not None:
