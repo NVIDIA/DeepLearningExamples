@@ -16,21 +16,20 @@ ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.06-py3
 
 FROM ${FROM_IMAGE_NAME}
 
-RUN apt-get update && apt-get install -y libb64-dev libb64-0d
-WORKDIR /workspace
-#ENV PYTHONPATH /workspace
-RUN pip uninstall -y typing
+RUN apt-get update && apt-get install -y \
+    libb64-dev \
+    libb64-0d \
+    p7zip-full \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN apt update && apt install -y p7zip-full
+WORKDIR /workspace
+
 COPY requirements.txt .
-RUN pip install --upgrade pip
-RUN pip install --no-cache-dir --ignore-installed -r requirements.txt
-RUN pip install --no-cache-dir -e git://github.com/NVIDIA/dllogger#egg=dllogger
+
+RUN pip uninstall -y typing && \
+    pip install --no-cache-dir --ignore-installed -r requirements.txt && \
+    pip install --no-cache-dir -e git+https://github.com/NVIDIA/dllogger#egg=dllogger
 
 COPY . .
-ENV PYTHONPATH="${PYTHONPATH}:/workspace"
 
-# AMP monkey-patch
-RUN sed -i 's/  def forward(ctx,/  @amp.custom_fwd\(cast_inputs=torch.float32\)\n  def forward(ctx,/g' /opt/conda/lib/python3.8/site-packages/apex/normalization/fused_layer_norm.py
-RUN sed -i 's/  def backward(ctx,/  @amp.custom_bwd\n  def backward(ctx,/g' /opt/conda/lib/python3.8/site-packages/apex/normalization/fused_layer_norm.py
-RUN sed -i 's/^import torch$/import torch\nfrom torch.cuda import amp/' /opt/conda/lib/python3.8/site-packages/apex/normalization/fused_layer_norm.py
+ENV PYTHONPATH="${PYTHONPATH}:/workspace"

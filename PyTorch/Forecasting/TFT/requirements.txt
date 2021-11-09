@@ -1,1 +1,2 @@
-tensorboard
+pandas==1.3.4
+pynvml==11.0.0
