@@ -33,8 +33,8 @@ The platform is designed to support multiple data types for input features, incl
 The TSPP utilizes the default configurations provided by each model for each accompanying dataset. More information on individual model configurations can be found within the respective model repositories. By default, Temporal Fusion Transformer (TFT) is included within the TSPP.
 
 ### Models
-    - Temporal Fusion Transformers XXX INSERT LINK HERE
-    - AutoARIMA
+-  [Temporal Fusion Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Forecasting/TFT)
+-  AutoARIMA
 
 ### Feature support matrix
 This tool supports the following features: 
