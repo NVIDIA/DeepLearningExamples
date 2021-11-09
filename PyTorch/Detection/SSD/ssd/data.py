@@ -17,20 +17,26 @@ import os
 import torch
 from torch.utils.data import DataLoader
 
-from src.utils import dboxes300_coco, COCODetection
-from src.utils import SSDTransformer
-from src.coco import COCO
+from ssd.utils import dboxes300_coco, COCODetection
+from ssd.utils import SSDTransformer
+from pycocotools.coco import COCO
 #DALI import
-from src.coco_pipeline import COCOPipeline, DALICOCOIterator
+from ssd.coco_pipeline import COCOPipeline, DALICOCOIterator
 
 def get_train_loader(args, local_seed):
     train_annotate = os.path.join(args.data, "annotations/instances_train2017.json")
     train_coco_root = os.path.join(args.data, "train2017")
 
-    train_pipe = COCOPipeline(args.batch_size, args.local_rank, train_coco_root,
-                    train_annotate, args.N_gpu, num_threads=args.num_workers,
-                    output_fp16=args.amp, output_nhwc=False,
-                    pad_output=False, seed=local_seed)
+    train_pipe = COCOPipeline(batch_size=args.batch_size,
+        file_root=train_coco_root,
+        annotations_file=train_annotate,
+        default_boxes=dboxes300_coco(),
+        device_id=args.local_rank,
+        num_shards=args.N_gpu,
+        output_fp16=args.amp,
+        output_nhwc=False,
+        pad_output=False,
+        num_threads=args.num_workers, seed=local_seed)
     train_pipe.build()
     test_run = train_pipe.schedule_run(), train_pipe.share_outputs(), train_pipe.release_outputs()
     train_loader = DALICOCOIterator(train_pipe, 118287 / args.N_gpu)
@@ -64,5 +70,5 @@ def get_val_dataloader(dataset, args):
 
 def get_coco_ground_truth(args):
     val_annotate = os.path.join(args.data, "annotations/instances_val2017.json")
-    cocoGt = COCO(annotation_file=val_annotate)
+    cocoGt = COCO(annotation_file=val_annotate, use_ext=True)
     return cocoGt

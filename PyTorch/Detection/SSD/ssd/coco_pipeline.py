@@ -11,75 +11,114 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-import torch
 import ctypes
+import time
 import logging
 
 import numpy as np
+import torch
 
 # DALI imports
+import nvidia.dali as dali
 from nvidia.dali.pipeline import Pipeline
-import nvidia.dali.ops as ops
-import nvidia.dali.types as types
-
-import time
 
 
 class COCOPipeline(Pipeline):
-    def __init__(self, batch_size, device_id, file_root, annotations_file, num_gpus,
-            output_fp16=False, output_nhwc=False, pad_output=False, num_threads=1, seed=15):
-        super(COCOPipeline, self).__init__(batch_size=batch_size, device_id=device_id,
-                                           num_threads=num_threads, seed = seed)
+    def __init__(self, batch_size, file_root, annotations_file, default_boxes,
+                 device_id, num_shards,
+                 output_fp16=False, output_nhwc=False, pad_output=False,
+                 num_threads=1, seed=15):
+        super(COCOPipeline, self).__init__(batch_size=batch_size,
+                                           device_id=device_id,
+                                           num_threads=num_threads,
+                                           seed=seed)
 
         if torch.distributed.is_initialized():
             shard_id = torch.distributed.get_rank()
         else:
             shard_id = 0
 
-        self.input = ops.COCOReader(file_root = file_root, annotations_file = annotations_file,
-                            shard_id = shard_id, num_shards = num_gpus, ratio=True, ltrb=True, random_shuffle=True,
-                                    skip_empty=True)
-        self.decode = ops.ImageDecoder(device = "cpu", output_type = types.RGB)
+        # Data loader and image decoder
+        self.input = dali.ops.readers.COCO(file_root=file_root,
+                                           annotations_file=annotations_file,
+                                           shard_id=shard_id,
+                                           num_shards=num_shards,
+                                           ratio=True,
+                                           ltrb=True,
+                                           shuffle_after_epoch=True,
+                                           skip_empty=True)
+        self.decode_slice = dali.ops.decoders.ImageSlice(device="cpu",
+                                                         output_type=dali.types.RGB)
 
         # Augumentation techniques
-        self.crop = ops.SSDRandomCrop(device="cpu", num_attempts=1)
-        self.twist = ops.ColorTwist(device="gpu")
+        ## Random crop
+        self.crop = dali.ops.RandomBBoxCrop(device="cpu",
+                                            aspect_ratio=[0.5, 2.0],
+                                            thresholds=[0, 0.1, 0.3, 0.5, 0.7, 0.9],
+                                            scaling=[0.3, 1.0],
+                                            bbox_layout="xyXY",
+                                            allow_no_crop=True,
+                                            num_attempts=1)
+        ## Color twist
+        self.hsv = dali.ops.Hsv(device="gpu",
+                                dtype=dali.types.FLOAT)  # use float to avoid clipping and quantizing the intermediate result
+        self.bc = dali.ops.BrightnessContrast(device="gpu",
+                                              contrast_center=128,  # input is in the [0, 255] range
+                                              dtype=dali.types.UINT8)
+        ## Cropping and normalization
+        dtype = dali.types.FLOAT16 if output_fp16 else dali.types.FLOAT
+        output_layout = dali.types.NHWC if output_nhwc else dali.types.NCHW
+        self.normalize = dali.ops.CropMirrorNormalize(
+            device="gpu",
+            crop=(300, 300),
+            mean=[0.0, 0.0, 0.0],
+            std=[255.0, 255.0, 255.0],
+            mirror=0,
+            dtype=dtype,
+            output_layout=output_layout,
+            pad_output=pad_output)
+        ## Flipping
+        self.flip = dali.ops.Flip(device="cpu")
+        self.bbflip = dali.ops.BbFlip(device="cpu", ltrb=True)
 
-        self.resize = ops.Resize(device = "gpu", resize_x = 300, resize_y = 300)
-
-        output_dtype = types.FLOAT16 if output_fp16 else types.FLOAT
-        output_layout = types.NHWC if output_nhwc else types.NCHW
-
-        self.normalize = ops.CropMirrorNormalize(device="gpu", crop=(300, 300),
-                                                 mean=[0.0, 0.0, 0.0],
-                                                 std=[255.0, 255.0, 255.0],
-                                                 mirror=0,
-                                                 output_dtype=output_dtype,
-                                                 output_layout=output_layout,
-                                                 pad_output=pad_output)
+        # Resize
+        self.resize = dali.ops.Resize(device="cpu",
+                                      resize_x=300,
+                                      resize_y=300)
 
         # Random variables
-        self.rng1 = ops.Uniform(range=[0.5, 1.5])
-        self.rng2 = ops.Uniform(range=[0.875, 1.125])
-        self.rng3 = ops.Uniform(range=[-0.5, 0.5])
+        self.rng1 = dali.ops.random.Uniform(range=[0.5, 1.5])
+        self.rng2 = dali.ops.random.Uniform(range=[0.875, 1.125])
+        self.rng3 = dali.ops.random.Uniform(range=[-0.5, 0.5])
+        self.flip_coin = dali.ops.random.CoinFlip(probability=0.5)
+
+        # bbox encoder
+        self.anchors = default_boxes(order='ltrb').cpu().numpy().flatten().tolist()
+        self.box_encoder = dali.ops.BoxEncoder(device="cpu",
+                                               criteria=0.5,
+                                               anchors=self.anchors)
 
     def define_graph(self):
         saturation = self.rng1()
         contrast = self.rng1()
         brightness = self.rng2()
         hue = self.rng3()
+        coin_rnd = self.flip_coin()
 
-        inputs, bboxes, labels = self.input()
-        images = self.decode(inputs)
+        inputs, bboxes, labels = self.input(name="Reader")
+        crop_begin, crop_size, bboxes, labels = self.crop(bboxes, labels)
+        images = self.decode_slice(inputs, crop_begin, crop_size)
 
-        images, bboxes, labels = self.crop(images, bboxes, labels)
-        images = self.resize(images.gpu())
-        images = self.twist(images.gpu(), saturation=saturation, contrast=contrast, brightness=brightness, hue=hue)
+        images = self.flip(images, horizontal=coin_rnd)
+        bboxes = self.bbflip(bboxes, horizontal=coin_rnd)
+        images = self.resize(images)
+        images = images.gpu()
+
+        images = self.hsv(images, hue=hue, saturation=saturation)
+        images = self.bc(images, brightness=brightness, contrast=contrast)
+
         images = self.normalize(images)
+        bboxes, labels = self.box_encoder(bboxes, labels)
 
         # bboxes and images and labels on GPU
         return (images, bboxes.gpu(), labels.gpu())
@@ -131,7 +170,7 @@ class DALICOCOIterator(object):
 
         self._num_gpus = len(pipelines)
         assert pipelines is not None, "Number of provided pipelines has to be at least 1"
-        self.batch_size = pipelines[0].batch_size
+        self.batch_size = pipelines[0].max_batch_size
         self._size = size
         self._pipes = pipelines
 
@@ -231,7 +270,7 @@ class DALICOCOIterator(object):
                 for k in range(len(l_list)):
                     if (pyt_labels[j][k].shape[0] != 0):
                         feed_ndarray(l_list[k], pyt_labels[j][k])
-                pyt_labels[j] = torch.cat(pyt_labels[j]).squeeze(dim=1)
+                pyt_labels[j] = torch.cat(pyt_labels[j])
 
             for j in range(len(pyt_offsets)):
                 pyt_offsets[j] = torch.IntTensor(bbox_offsets[j])

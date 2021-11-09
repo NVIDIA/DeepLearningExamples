@@ -38,11 +38,9 @@ def evaluate(model, coco, cocoGt, encoder, inv_map, args):
         print("Parsing batch: {}/{}".format(nbatch, len(coco)), end='\r')
         with torch.no_grad():
             inp = img.cuda()
-            if args.amp:
-                inp = inp.half()
-
-            # Get predictions
-            ploc, plabel = model(inp)
+            with torch.cuda.amp.autocast(enabled=args.amp):
+                # Get predictions
+                ploc, plabel = model(inp)
             ploc, plabel = ploc.float(), plabel.float()
 
             # Handle the batch of predictions produced
@@ -118,9 +116,9 @@ def evaluate(model, coco, cocoGt, encoder, inv_map, args):
         print("")
         print("Predicting Ended, total time: {:.2f} s".format(time.time() - start))
 
-    cocoDt = cocoGt.loadRes(final_results)
+    cocoDt = cocoGt.loadRes(final_results, use_ext=True)
 
-    E = COCOeval(cocoGt, cocoDt, iouType='bbox')
+    E = COCOeval(cocoGt, cocoDt, iouType='bbox', use_ext=True)
     E.evaluate()
     E.accumulate()
     if args.local_rank == 0:

@@ -141,12 +141,12 @@ class Loss(nn.Module):
         self.scale_xy = 1.0/dboxes.scale_xy
         self.scale_wh = 1.0/dboxes.scale_wh
 
-        self.sl1_loss = nn.SmoothL1Loss(reduce=False)
+        self.sl1_loss = nn.SmoothL1Loss(reduction='none')
         self.dboxes = nn.Parameter(dboxes(order="xywh").transpose(0, 1).unsqueeze(dim = 0),
             requires_grad=False)
         # Two factor are from following links
         # http://jany.st/post/2017-11-05-single-shot-detector-ssd-from-scratch-in-tensorflow.html
-        self.con_loss = nn.CrossEntropyLoss(reduce=False)
+        self.con_loss = nn.CrossEntropyLoss(reduction='none')
 
     def _loc_vec(self, loc):
         """
@@ -187,7 +187,7 @@ class Loss(nn.Module):
         neg_mask = con_rank < neg_num
 
         #print(con.shape, mask.shape, neg_mask.shape)
-        closs = (con*(mask.float() + neg_mask.float())).sum(dim=1)
+        closs = (con*((mask + neg_mask).float())).sum(dim=1)
 
         # avoid no object detected
         total_loss = sl1 + closs
