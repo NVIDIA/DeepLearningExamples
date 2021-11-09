@@ -97,7 +97,7 @@ def accuracy(output, target, topk=(1,)):
 
 
 def reduce_tensor(tensor):
-    rt = tensor.clone()
+    rt = tensor.clone().detach()
     dist.all_reduce(rt, op=dist.ReduceOp.SUM)
     rt /= (
         torch.distributed.get_world_size() if torch.distributed.is_initialized() else 1
@@ -114,6 +114,7 @@ class TimeoutHandler:
     def __init__(self, sig=signal.SIGTERM):
         self.sig = sig
         self.device = torch.device("cuda")
+
     @property
     def interrupted(self):
         if not dist.is_initialized():

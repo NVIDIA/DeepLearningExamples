@@ -22,6 +22,7 @@ def add_parser_arguments(parser):
     parser.add_argument(
         "--weight-path", metavar="<path>", help="name of file in which to store weights"
     )
+    parser.add_argument("--ema", action="store_true", default=False)
 
 
 if __name__ == "__main__":
@@ -30,8 +31,9 @@ if __name__ == "__main__":
     add_parser_arguments(parser)
     args = parser.parse_args()
 
-    checkpoint = torch.load(args.checkpoint_path, map_location=torch.device('cpu'))
+    checkpoint = torch.load(args.checkpoint_path, map_location=torch.device("cpu"))
 
+    key = "state_dict" if not args.ema else "ema_state_dict"
     model_state_dict = {
         k[len("module.") :] if "module." in k else k: v
         for k, v in checkpoint["state_dict"].items()
