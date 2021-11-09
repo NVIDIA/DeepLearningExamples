@@ -46,6 +46,7 @@ def train_loop(model, loss_func, epoch, optim, train_dataloader, val_dataloader,
         bbox = bbox.view(N, M, 4)
         label = label.view(N, M)
 
+        img = img.to(memory_format=torch.channels_last)
         ploc, plabel = model(img)
         ploc, plabel = ploc.float(), plabel.float()
 
@@ -116,7 +117,7 @@ def benchmark_train_loop(model, loss_func, epoch, optim, train_dataloader, val_d
 
 
 
-
+        img = img.to(memory_format=torch.channels_last)
         ploc, plabel = model(img)
         ploc, plabel = ploc.float(), plabel.float()
 
