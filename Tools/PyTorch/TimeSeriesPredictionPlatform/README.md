@@ -49,7 +49,7 @@ This tool supports the following features:
 
 **Automatic Mixed Precision (AMP)**[Automatic mixed precision](https://pytorch.org/docs/stable/amp.html) is a mode of computation for PyTorch models that allows operations to use float16 operations instead of float32 operations, potentially accelerating selected operations and total model runtime. More information can be found under the Mixed precision training section.
 
-**Multi-GPU training with PyTorch Distributed Data Parallel (DDP)**[DDP](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html) is a mode of computation for PyTorch models that allows operations to be executed across multiple GPUs in parallel to accelerate computation.
+**Multi-GPU training with PyTorch Distributed Data Parallel ([DDP](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html))** is a mode of computation for PyTorch models that allows operations to be executed across multiple GPUs in parallel to accelerate computation.
 
 **TorchScript, ONNX, and TRT conversion and NVIDIA Triton Deployment** refer to the conversion of a model to the aforementioned formats and the ability to deploy the resulting converted models to an NVIDIA Triton inference server.  More detail about this process and native inference can be found in the Advanced tab under the Conversion, Deployment, and Inference subsection.
 
@@ -262,7 +262,7 @@ Launching on multi-GPU requires no changes to model code and can be executed as 
 python -m torch.distributed.run --nproc_per_node={num_GPUS} launch_tspp.py {override parameters} +config.device.world_size={num_GPUS}
 ```
 
-Statistical models (like AutoARIMA)are not run on GPU, so they are not suitable for multi-GPU acceleration.
+Statistical models (like AutoARIMA) are not run on GPU, so they are not suitable for multi-GPU acceleration.
 
 ### Running experiments with Exponential Moving Averaging
 
