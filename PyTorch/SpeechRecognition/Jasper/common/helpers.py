@@ -17,8 +17,6 @@ import os
 import re
 from collections import OrderedDict
 
-from apex import amp
-
 import torch
 import torch.distributed as dist
 
@@ -187,11 +185,9 @@ def convert_v1_state_dict(state_dict):
 
 class Checkpointer(object):
 
-    def __init__(self, save_dir, model_name, keep_milestones=[100,200,300],
-                 use_amp=False):
+    def __init__(self, save_dir, model_name, keep_milestones=[100, 200, 300]):
         self.save_dir = save_dir
         self.keep_milestones = keep_milestones
-        self.use_amp = use_amp
         self.model_name = model_name
 
         tracked = [
@@ -200,7 +196,7 @@ class Checkpointer(object):
         tracked = sorted(tracked, key=lambda t: t[0])
         self.tracked = OrderedDict(tracked)
 
-    def save(self, model, ema_model, optimizer, epoch, step, best_wer,
+    def save(self, model, ema_model, optimizer, scaler, epoch, step, best_wer,
              is_best=False):
         """Saves model checkpoint for inference/resuming training.
 
@@ -234,7 +230,7 @@ class Checkpointer(object):
             'state_dict': unwrap_ddp(model).state_dict(),
             'ema_state_dict': unwrap_ddp(ema_model).state_dict() if ema_model is not None else None,
             'optimizer': optimizer.state_dict(),
-            'amp': amp.state_dict() if self.use_amp else None,
+            'scaler': scaler.state_dict(),
         }
 
         if is_best:
@@ -272,7 +268,7 @@ class Checkpointer(object):
         else:
             return None
 
-    def load(self, fpath, model, ema_model, optimizer, meta):
+    def load(self, fpath, model, ema_model, optimizer, scaler, meta):
 
         print_once(f'Loading model from {fpath}')
         checkpoint = torch.load(fpath, map_location="cpu")
@@ -292,9 +288,7 @@ class Checkpointer(object):
             unwrap_ddp(ema_model).load_state_dict(state_dict, strict=True)
 
         optimizer.load_state_dict(checkpoint['optimizer'])
-
-        if self.use_amp:
-            amp.load_state_dict(checkpoint['amp'])
+        scaler.load_state_dict(checkpoint['scaler'])
 
         meta['start_epoch'] = checkpoint.get('epoch')
         meta['best_wer'] = checkpoint.get('best_wer', meta['best_wer'])

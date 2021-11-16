@@ -49,10 +49,10 @@ class DaliJasperIterator(object):
         from nvidia.dali.plugin.pytorch import DALIGenericIterator
         from nvidia.dali.plugin.base_iterator import LastBatchPolicy
 
-        # in train pipeline shard_size is set to divisable by batch_size, so PARTIAL policy is safe
         self.dali_it = DALIGenericIterator(
             dali_pipelines, ["audio", "label", "audio_shape"], reader_name=reader_name,
-            dynamic_shape=True, auto_reset=True, last_batch_policy=LastBatchPolicy.PARTIAL)
+            dynamic_shape=True, auto_reset=True,
+            last_batch_policy=(LastBatchPolicy.DROP if train_iterator else LastBatchPolicy.PARTIAL))
 
     @staticmethod
     def _str2list(s: str):
