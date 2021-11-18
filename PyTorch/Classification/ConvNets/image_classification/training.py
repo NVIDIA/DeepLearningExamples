@@ -123,6 +123,16 @@ class Executor:
             self._forward = self.optimize(self._forward_fn)
         return self._forward
 
+    def train(self):
+        self.model.train()
+        if self.loss is not None:
+            self.loss.train()
+
+    def eval(self):
+        self.model.eval()
+        if self.loss is not None:
+            self.loss.eval()
+
 
 class Trainer:
     def __init__(
@@ -145,12 +155,14 @@ class Trainer:
         self.steps_since_update = 0
 
     def train(self):
-        self.executor.model.train()
+        self.executor.train()
+        if self.use_ema:
+            self.ema_executor.train()
 
     def eval(self):
-        self.executor.model.eval()
+        self.executor.eval()
         if self.use_ema:
-            self.executor.model.eval()
+            self.ema_executor.eval()
 
     def train_step(self, input, target, step=None):
         loss = self.executor.forward_backward(input, target)
