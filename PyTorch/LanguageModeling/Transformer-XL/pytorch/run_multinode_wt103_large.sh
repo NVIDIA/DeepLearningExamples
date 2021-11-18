@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+export OMP_NUM_THREADS=1
+
 if [[ $1 == 'train' ]] || [[ $1 == 'all' ]]; then
     echo 'Run training...'
     python train.py \

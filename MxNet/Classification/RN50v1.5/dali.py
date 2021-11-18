@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import warnings
+from packaging.version import Version
 from nvidia import dali
 from nvidia.dali.pipeline import Pipeline
 import nvidia.dali.ops as ops
@@ -25,23 +26,30 @@ def add_dali_args(parser):
     group = parser.add_argument_group('DALI data backend', 'entire group applies only to dali data backend')
     group.add_argument('--dali-separ-val', action='store_true',
                       help='each process will perform independent validation on whole val-set')
-    group.add_argument('--dali-threads', type=int, default=3, help="number of threads" +\
+    group.add_argument('--dali-threads', type=int, default=4, help="number of threads" +\
                        "per GPU for DALI")
     group.add_argument('--dali-validation-threads', type=int, default=10, help="number of threads" +\
                        "per GPU for DALI for validation")
     group.add_argument('--dali-prefetch-queue', type=int, default=2, help="DALI prefetch queue depth")
     group.add_argument('--dali-nvjpeg-memory-padding', type=int, default=64, help="Memory padding value for nvJPEG (in MB)")
     group.add_argument('--dali-fuse-decoder', type=int, default=1, help="0 or 1 whether to fuse decoder or not")
+
+    group.add_argument('--dali-nvjpeg-width-hint', type=int, default=5980, help="Width hint value for nvJPEG (in pixels)")
+    group.add_argument('--dali-nvjpeg-height-hint', type=int, default=6430, help="Height hint value for nvJPEG (in pixels)")
+    group.add_argument('--dali-dont-use-mmap', default=False, action='store_true', help="Use plain I/O instead of MMAP for datasets")
     return parser
 
 
 class HybridTrainPipe(Pipeline):
     def __init__(self, args, batch_size, num_threads, device_id, rec_path, idx_path,
                  shard_id, num_shards, crop_shape, nvjpeg_padding, prefetch_queue=3,
-                 output_layout=types.NCHW, pad_output=True, dtype='float16', dali_cpu=False):
+                 output_layout=types.NCHW, pad_output=True, dtype='float16', dali_cpu=False,
+                 nvjpeg_width_hint=5980, nvjpeg_height_hint=6430,
+                 ):
         super(HybridTrainPipe, self).__init__(batch_size, num_threads, device_id, seed=12 + device_id, prefetch_queue_depth = prefetch_queue)
         self.input = ops.MXNetReader(path=[rec_path], index_path=[idx_path],
-                                     random_shuffle=True, shard_id=shard_id, num_shards=num_shards)
+                                     random_shuffle=True, shard_id=shard_id, num_shards=num_shards,
+                                     dont_use_mmap=args.dali_dont_use_mmap)
 
         if dali_cpu:
             dali_device = "cpu"
@@ -50,12 +58,22 @@ class HybridTrainPipe(Pipeline):
             dali_device = "gpu"
             decoder_device = "mixed"
 
+        dali_kwargs_fallback = {}
+        if Version(dali.__version__) >= Version("1.2.0"):
+            dali_kwargs_fallback = {
+                "preallocate_width_hint": nvjpeg_width_hint,
+                "preallocate_height_hint": nvjpeg_height_hint,
+            }
         if args.dali_fuse_decoder:
             self.decode = ops.ImageDecoderRandomCrop(device=decoder_device, output_type=types.RGB,
-                                                    device_memory_padding=nvjpeg_padding, host_memory_padding=nvjpeg_padding)
+                                                     device_memory_padding=nvjpeg_padding, 
+                                                     host_memory_padding=nvjpeg_padding,
+                                                     **dali_kwargs_fallback)
         else:
             self.decode = ops.ImageDecoder(device=decoder_device, output_type=types.RGB,
-                                           device_memory_padding=nvjpeg_padding, host_memory_padding=nvjpeg_padding)
+                                           device_memory_padding=nvjpeg_padding, 
+                                           host_memory_padding=nvjpeg_padding,
+                                           **dali_kwargs_fallback)
 
         if args.dali_fuse_decoder:
             self.resize = ops.Resize(device=dali_device, resize_x=crop_shape[1], resize_y=crop_shape[0])
@@ -81,10 +99,12 @@ class HybridTrainPipe(Pipeline):
 class HybridValPipe(Pipeline):
     def __init__(self, args, batch_size, num_threads, device_id, rec_path, idx_path,
                  shard_id, num_shards, crop_shape, nvjpeg_padding, prefetch_queue=3, resize_shp=None,
-                 output_layout=types.NCHW, pad_output=True, dtype='float16', dali_cpu=False):
+                 output_layout=types.NCHW, pad_output=True, dtype='float16', dali_cpu=False,
+                 nvjpeg_width_hint=5980, nvjpeg_height_hint=6430):
         super(HybridValPipe, self).__init__(batch_size, num_threads, device_id, seed=12 + device_id, prefetch_queue_depth=prefetch_queue)
         self.input = ops.MXNetReader(path=[rec_path], index_path=[idx_path],
-                                     random_shuffle=False, shard_id=shard_id, num_shards=num_shards)
+                                     random_shuffle=False, shard_id=shard_id, num_shards=num_shards,
+                                     dont_use_mmap=args.dali_dont_use_mmap)
 
         if dali_cpu:
             dali_device = "cpu"
@@ -93,9 +113,17 @@ class HybridValPipe(Pipeline):
             dali_device = "gpu"
             decoder_device = "mixed"
 
+        dali_kwargs_fallback = {}
+        if Version(dali.__version__) >= Version("1.2.0"):
+            dali_kwargs_fallback = {
+                "preallocate_width_hint": nvjpeg_width_hint,
+                "preallocate_height_hint": nvjpeg_height_hint
+            }
+
         self.decode = ops.ImageDecoder(device=decoder_device, output_type=types.RGB,
                                        device_memory_padding=nvjpeg_padding,
-                                       host_memory_padding=nvjpeg_padding)
+                                       host_memory_padding=nvjpeg_padding,
+                                       **dali_kwargs_fallback)
         self.resize = ops.Resize(device=dali_device, resize_shorter=resize_shp) if resize_shp else None
         self.cmnp = ops.CropMirrorNormalize(device="gpu",
                                             output_dtype=types.FLOAT16 if dtype == 'float16' else types.FLOAT,
@@ -143,7 +171,10 @@ def get_rec_iter(args, kv=None, dali_cpu=False):
                                   pad_output     = pad_output,
                                   dali_cpu       = dali_cpu,
                                   nvjpeg_padding = args.dali_nvjpeg_memory_padding * 1024 * 1024,
-                                  prefetch_queue = args.dali_prefetch_queue) for gpu_id in gpus]
+                                  prefetch_queue = args.dali_prefetch_queue,
+                                  nvjpeg_width_hint  = args.dali_nvjpeg_width_hint, 
+                                  nvjpeg_height_hint = args.dali_nvjpeg_height_hint) for gpu_id in gpus]
+                                  
 
     if args.data_val:
         valpipes = [HybridValPipe(args           = args,
@@ -162,7 +193,9 @@ def get_rec_iter(args, kv=None, dali_cpu=False):
                                   pad_output     = pad_output,
                                   dali_cpu       = dali_cpu,
                                   nvjpeg_padding = args.dali_nvjpeg_memory_padding * 1024 * 1024,
-                                  prefetch_queue = args.dali_prefetch_queue) for gpu_id in gpus] if args.data_val else None
+                                  prefetch_queue = args.dali_prefetch_queue,
+                                  nvjpeg_width_hint  = args.dali_nvjpeg_width_hint, 
+                                  nvjpeg_height_hint = args.dali_nvjpeg_height_hint) for gpu_id in gpus] if args.data_val else None
     trainpipes[0].build()
     if args.data_val:
         valpipes[0].build()

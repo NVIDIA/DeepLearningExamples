@@ -285,6 +285,13 @@ def parse_args():
     if args.batch_size % args.batch_chunk != 0:
         raise RuntimeError('Batch size needs to be divisible by batch chunk')
 
+    if (
+        args.local_batch_size is not None
+        and args.local_batch_size % args.batch_chunk != 0
+    ):
+        raise RuntimeError('Local batch size needs to be divisible by '
+                           'batch chunk')
+
     if args.fp16 and args.amp == 'apex' and 'apex' not in sys.modules:
         raise RuntimeError(
             'APEX AMP unavailable, install APEX or switch to pytorch AMP'
@@ -444,8 +451,10 @@ def evaluate(eval_iter, model, args):
         for i, (data, target, seq_len, warm) in enumerate(eval_iter):
             if args.eval_max_steps > 0 and i >= args.eval_max_steps:
                 break
-            loss, mems = model(data, target, mems)
-            loss = loss.float().mean()
+            enable_autocast = args.fp16 and args.amp == 'pytorch'
+            with torch.cuda.amp.autocast(enable_autocast):
+                loss, mems = model(data, target, mems)
+                loss = loss.float().mean().type_as(loss)
             if warm:
                 # assert (mems is None) or mems.size(1) == model.mem_len
                 total_loss += seq_len * loss.item()
@@ -735,6 +744,9 @@ def main():
         args.batch_size = world_size * args.local_batch_size
         logging.info(f'--local_batch_size was set, adjusting global batch size'
                      f' to {args.batch_size} (local_batch_size * world_size)')
+        if args.batch_size % args.batch_chunk != 0:
+            raise RuntimeError('Batch size needs to be divisible by '
+                               'batch chunk')
 
     if args.profile:
         try:

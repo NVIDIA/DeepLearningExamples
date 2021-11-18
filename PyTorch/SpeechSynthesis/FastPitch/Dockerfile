@@ -1,4 +1,4 @@
-# Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021 NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,28 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.02-py3
-ARG TRITON_CLIENT_IMAGE_NAME=nvcr.io/nvidia/tritonserver:21.02-py3-sdk
-FROM ${TRITON_CLIENT_IMAGE_NAME} as triton-client
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.05-py3
 FROM ${FROM_IMAGE_NAME}
-
-# Install Perf Client required library
-RUN apt-get update && apt-get install -y libb64-dev libb64-0d
-
-# Install Triton Client Python API and copy Perf Client
-COPY --from=triton-client /workspace/install/ /workspace/install/
-RUN pip install /workspace/install/python/triton*.whl
-
-# Setup environment variables to access Triton Client binaries and libs
-ENV PATH /workspace/install/bin:${PATH}
-ENV LD_LIBRARY_PATH /workspace/install/lib:${LD_LIBRARY_PATH}
 
 ENV PYTHONPATH /workspace/fastpitch
 WORKDIR /workspace/fastpitch
 
 ADD requirements.txt .
-ADD triton/requirements.txt triton/requirements.txt
 RUN pip install -r requirements.txt
-RUN pip install -r triton/requirements.txt
 
 COPY . .

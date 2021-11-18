@@ -568,7 +568,7 @@ training setup:
                         maximum sequence length for training (including
                         special BOS and EOS tokens) (default: 50)
   --train-min-length TRAIN_MIN_LENGTH
-		minimum sequence length for training (including
+                        minimum sequence length for training (including
                         special BOS and EOS tokens) (default: 0)
   --train-loader-workers TRAIN_LOADER_WORKERS
                         number of workers for training data loading (default:
@@ -931,6 +931,12 @@ To view all available options for inference, run `python3 translate.py --help`.
 
 
 ## Performance
+
+The performance measurements in this document were conducted at the time of
+publication and may not reflect the performance achieved from NVIDIA’s latest
+software release. For the most up-to-date performance measurements, go to
+[NVIDIA Data Center Deep Learning Product
+Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
 
 ### Benchmarking
 The following section shows how to run benchmarks measuring the model

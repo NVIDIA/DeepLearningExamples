@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 export PRECISION="fp16"
-export FORMAT="trt"
+export FORMAT="onnx"
 export BATCH_SIZE="1,2,4,8,16,32,64,128"
-export BACKEND_ACCELERATOR="cuda"
+export BACKEND_ACCELERATOR="trt"
 export MAX_BATCH_SIZE="128"
 export NUMBER_OF_MODEL_INSTANCES="1"
 export TRITON_MAX_QUEUE_DELAY="1"

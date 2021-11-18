@@ -112,6 +112,11 @@ def init(log_fpath, log_dir, enabled=True, tb_subsets=[], **tb_kw):
         dllogger.metadata(f"{id_}_mel_loss",
                           {"name": f"{pref}mel loss", "format": ":>5.2f"})
 
+        dllogger.metadata(f"{id_}_kl_loss",
+                          {"name": f"{pref}kl loss", "format": ":>5.5f"})
+        dllogger.metadata(f"{id_}_kl_weight",
+                          {"name": f"{pref}kl weight", "format": ":>5.5f"})
+
         dllogger.metadata(f"{id_}_frames/s",
                           {"name": None, "unit": "frames/s", "format": ":>10.2f"})
         dllogger.metadata(f"{id_}_took",

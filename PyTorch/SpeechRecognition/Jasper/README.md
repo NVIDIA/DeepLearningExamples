@@ -439,6 +439,7 @@ LOG_FILE:            path to the DLLogger .json logfile. (default: '')
 CUDNN_BENCHMARK:     enable cudnn benchmark mode for using more optimized kernels. (default: false)
 MAX_DURATION:        filter out recordings shorter then MAX_DURATION seconds. (default: "")
 PAD_TO_MAX_DURATION: pad all sequences with zeros to maximum length. (default: false)
+PAD_LEADING:         pad every batch with leading zeros to counteract conv shifts of the field of view. (default: 16)
 NUM_GPUS:            number of GPUs to use. Note that with > 1 GPUs WER results might be inaccurate due to the batching policy. (default: 1)
 NUM_STEPS:           number of batches to evaluate, loop the dataset if necessary. (default: 0)
 NUM_WARMUP_STEPS:    number of initial steps before measuring performance. (default: 0)
@@ -464,6 +465,7 @@ BATCH_SIZE_SEQ:      batch sizes to measure on. (default: "1 2 4 8 16")
 MAX_DURATION_SEQ:    input durations (in seconds) to measure on (default: "2 7 16.7")
 CUDNN_BENCHMARK:     (default: true)
 PAD_TO_MAX_DURATION: (default: true)
+PAD_LEADING:         (default: 0)
 NUM_WARMUP_STEPS:    (default: 10)
 NUM_STEPS:           (default: 500)
 DALI_DEVICE:         (default: cpu)
@@ -566,6 +568,8 @@ More information on how to perform inference using Triton Inference Server with 
 
 
 ## Performance
+
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
 
 ### Benchmarking
 The following section shows how to run benchmarks measuring the model performance in training and inference modes.

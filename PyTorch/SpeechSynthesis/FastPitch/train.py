@@ -27,112 +27,159 @@
 
 import argparse
 import copy
-import json
 import glob
 import os
 import re
 import time
+import warnings
 from collections import defaultdict, OrderedDict
-from contextlib import contextmanager
+
+try:
+    import nvidia_dlprof_pytorch_nvtx as pyprof
+except ModuleNotFoundError:
+    try:
+        import pyprof
+    except ModuleNotFoundError:
+        warnings.warn('PyProf is unavailable')
 
 import numpy as np
-import nvidia_dlprof_pytorch_nvtx as pyprof
 import torch
 import torch.cuda.profiler as profiler
 import torch.distributed as dist
-from scipy.io.wavfile import write as write_wav
-from torch.autograd import Variable
+import amp_C
+from apex.optimizers import FusedAdam, FusedLAMB
 from torch.nn.parallel import DistributedDataParallel
-from torch.nn.parameter import Parameter
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 import common.tb_dllogger as logger
-from apex import amp
-from apex.optimizers import FusedAdam, FusedLAMB
-from apex.multi_tensor_apply import multi_tensor_applier
-import amp_C
-
-import common
-import data_functions
-import loss_functions
 import models
+from common.text import cmudict
+from common.utils import prepare_tmp
+from fastpitch.attn_loss_function import AttentionBinarizationLoss
+from fastpitch.data_function import batch_to_gpu, TTSCollate, TTSDataset
+from fastpitch.loss_function import FastPitchLoss
 
 
 def parse_args(parser):
-    """
-    Parse commandline arguments.
-    """
     parser.add_argument('-o', '--output', type=str, required=True,
                         help='Directory to save checkpoints')
     parser.add_argument('-d', '--dataset-path', type=str, default='./',
                         help='Path to dataset')
     parser.add_argument('--log-file', type=str, default=None,
                         help='Path to a DLLogger log file')
-    parser.add_argument('--pyprof', action='store_true', help='Enable pyprof profiling')
+    parser.add_argument('--pyprof', action='store_true',
+                        help='Enable pyprof profiling')
 
-    training = parser.add_argument_group('training setup')
-    training.add_argument('--epochs', type=int, required=True,
-                          help='Number of total epochs to run')
-    training.add_argument('--epochs-per-checkpoint', type=int, default=50,
-                          help='Number of epochs per checkpoint')
-    training.add_argument('--checkpoint-path', type=str, default=None,
-                          help='Checkpoint path to resume training')
-    training.add_argument('--resume', action='store_true',
-                          help='Resume training from the last available checkpoint')
-    training.add_argument('--seed', type=int, default=1234,
-                          help='Seed for PyTorch random number generators')
-    training.add_argument('--amp', action='store_true',
-                          help='Enable AMP')
-    training.add_argument('--cuda', action='store_true',
-                          help='Run on GPU using CUDA')
-    training.add_argument('--cudnn-benchmark', action='store_true',
-                          help='Enable cudnn benchmark mode')
-    training.add_argument('--ema-decay', type=float, default=0,
-                          help='Discounting factor for training weights EMA')
-    training.add_argument('--gradient-accumulation-steps', type=int, default=1,
-                          help='Training steps to accumulate gradients for')
+    train = parser.add_argument_group('training setup')
+    train.add_argument('--epochs', type=int, required=True,
+                       help='Number of total epochs to run')
+    train.add_argument('--epochs-per-checkpoint', type=int, default=50,
+                       help='Number of epochs per checkpoint')
+    train.add_argument('--checkpoint-path', type=str, default=None,
+                       help='Checkpoint path to resume training')
+    train.add_argument('--resume', action='store_true',
+                       help='Resume training from the last checkpoint')
+    train.add_argument('--seed', type=int, default=1234,
+                       help='Seed for PyTorch random number generators')
+    train.add_argument('--amp', action='store_true',
+                       help='Enable AMP')
+    train.add_argument('--cuda', action='store_true',
+                       help='Run on GPU using CUDA')
+    train.add_argument('--cudnn-benchmark', action='store_true',
+                       help='Enable cudnn benchmark mode')
+    train.add_argument('--ema-decay', type=float, default=0,
+                       help='Discounting factor for training weights EMA')
+    train.add_argument('--grad-accumulation', type=int, default=1,
+                       help='Training steps to accumulate gradients for')
+    train.add_argument('--kl-loss-start-epoch', type=int, default=250,
+                       help='Start adding the hard attention loss term')
+    train.add_argument('--kl-loss-warmup-epochs', type=int, default=100,
+                       help='Gradually increase the hard attention loss term')
+    train.add_argument('--kl-loss-weight', type=float, default=1.0,
+                       help='Gradually increase the hard attention loss term')
 
-    optimization = parser.add_argument_group('optimization setup')
-    optimization.add_argument('--optimizer', type=str, default='lamb',
-                              help='Optimization algorithm')
-    optimization.add_argument('-lr', '--learning-rate', type=float, required=True,
-                              help='Learing rate')
-    optimization.add_argument('--weight-decay', default=1e-6, type=float,
-                              help='Weight decay')
-    optimization.add_argument('--grad-clip-thresh', default=1000.0, type=float,
-                              help='Clip threshold for gradients')
-    optimization.add_argument('-bs', '--batch-size', type=int, required=True,
-                              help='Batch size per GPU')
-    optimization.add_argument('--warmup-steps', type=int, default=1000,
-                              help='Number of steps for lr warmup')
-    optimization.add_argument('--dur-predictor-loss-scale', type=float,
-                              default=1.0, help='Rescale duration predictor loss')
-    optimization.add_argument('--pitch-predictor-loss-scale', type=float,
-                              default=1.0, help='Rescale pitch predictor loss')
+    opt = parser.add_argument_group('optimization setup')
+    opt.add_argument('--optimizer', type=str, default='lamb',
+                     help='Optimization algorithm')
+    opt.add_argument('-lr', '--learning-rate', type=float, required=True,
+                     help='Learing rate')
+    opt.add_argument('--weight-decay', default=1e-6, type=float,
+                     help='Weight decay')
+    opt.add_argument('--grad-clip-thresh', default=1000.0, type=float,
+                     help='Clip threshold for gradients')
+    opt.add_argument('-bs', '--batch-size', type=int, required=True,
+                     help='Batch size per GPU')
+    opt.add_argument('--warmup-steps', type=int, default=1000,
+                     help='Number of steps for lr warmup')
+    opt.add_argument('--dur-predictor-loss-scale', type=float,
+                     default=1.0, help='Rescale duration predictor loss')
+    opt.add_argument('--pitch-predictor-loss-scale', type=float,
+                     default=1.0, help='Rescale pitch predictor loss')
+    opt.add_argument('--attn-loss-scale', type=float,
+                     default=1.0, help='Rescale alignment loss')
 
-    dataset = parser.add_argument_group('dataset parameters')
-    dataset.add_argument('--training-files', type=str, required=True,
-                         help='Path to training filelist. Separate multiple paths with commas.')
-    dataset.add_argument('--validation-files', type=str, required=True,
-                         help='Path to validation filelist. Separate multiple paths with commas.')
-    dataset.add_argument('--pitch-mean-std-file', type=str, default=None,
-                         help='Path to pitch stats to be stored in the model')
-    dataset.add_argument('--text-cleaners', nargs='*',
-                         default=['english_cleaners'], type=str,
-                         help='Type of text cleaners for input text')
-    dataset.add_argument('--symbol-set', type=str, default='english_basic',
-                         help='Define symbol set for input text')
+    data = parser.add_argument_group('dataset parameters')
+    data.add_argument('--training-files', type=str, nargs='*', required=True,
+                      help='Paths to training filelists.')
+    data.add_argument('--validation-files', type=str, nargs='*',
+                      required=True, help='Paths to validation filelists')
+    data.add_argument('--text-cleaners', nargs='*',
+                      default=['english_cleaners'], type=str,
+                      help='Type of text cleaners for input text')
+    data.add_argument('--symbol-set', type=str, default='english_basic',
+                      help='Define symbol set for input text')
+    data.add_argument('--p-arpabet', type=float, default=0.0,
+                      help='Probability of using arpabets instead of graphemes '
+                           'for each word; set 0 for pure grapheme training')
+    data.add_argument('--heteronyms-path', type=str, default='cmudict/heteronyms',
+                      help='Path to the list of heteronyms')
+    data.add_argument('--cmudict-path', type=str, default='cmudict/cmudict-0.7b',
+                      help='Path to the pronouncing dictionary')
+    data.add_argument('--prepend-space-to-text', action='store_true',
+                      help='Capture leading silence with a space token')
+    data.add_argument('--append-space-to-text', action='store_true',
+                      help='Capture trailing silence with a space token')
 
-    cond = parser.add_argument_group('conditioning on additional attributes')
+    cond = parser.add_argument_group('data for conditioning')
     cond.add_argument('--n-speakers', type=int, default=1,
-                      help='Condition on speaker, value > 1 enables trainable speaker embeddings.')
+                      help='Number of speakers in the dataset. '
+                           'n_speakers > 1 enables speaker embeddings')
+    cond.add_argument('--load-pitch-from-disk', action='store_true',
+                      help='Use pitch cached on disk with prepare_dataset.py')
+    cond.add_argument('--pitch-online-method', default='pyin',
+                      choices=['pyin'],
+                      help='Calculate pitch on the fly during trainig')
+    cond.add_argument('--pitch-online-dir', type=str, default=None,
+                      help='A directory for storing pitch calculated on-line')
+    cond.add_argument('--pitch-mean', type=float, default=214.72203,
+                      help='Normalization value for pitch')
+    cond.add_argument('--pitch-std', type=float, default=65.72038,
+                      help='Normalization value for pitch')
+    cond.add_argument('--load-mel-from-disk', action='store_true',
+                      help='Use mel-spectrograms cache on the disk')  # XXX
 
-    distributed = parser.add_argument_group('distributed setup')
-    distributed.add_argument('--local_rank', type=int, default=os.getenv('LOCAL_RANK', 0),
-                             help='Rank of the process for multiproc. Do not set manually.')
-    distributed.add_argument('--world_size', type=int, default=os.getenv('WORLD_SIZE', 1),
-                             help='Number of processes for multiproc. Do not set manually.')
+    audio = parser.add_argument_group('audio parameters')
+    audio.add_argument('--max-wav-value', default=32768.0, type=float,
+                       help='Maximum audiowave value')
+    audio.add_argument('--sampling-rate', default=22050, type=int,
+                       help='Sampling rate')
+    audio.add_argument('--filter-length', default=1024, type=int,
+                       help='Filter length')
+    audio.add_argument('--hop-length', default=256, type=int,
+                       help='Hop (stride) length')
+    audio.add_argument('--win-length', default=1024, type=int,
+                       help='Window length')
+    audio.add_argument('--mel-fmin', default=0.0, type=float,
+                       help='Minimum mel frequency')
+    audio.add_argument('--mel-fmax', default=8000.0, type=float,
+                       help='Maximum mel frequency')
+
+    dist = parser.add_argument_group('distributed setup')
+    dist.add_argument('--local_rank', type=int, default=os.getenv('LOCAL_RANK', 0),
+                      help='Rank of the process for multiproc; do not set manually')
+    dist.add_argument('--world_size', type=int, default=os.getenv('WORLD_SIZE', 1),
+                      help='Number of processes for multiproc; do not set manually')
     return parser
 
 
@@ -162,7 +209,7 @@ def last_checkpoint(output):
             torch.load(fpath, map_location='cpu')
             return False
         except:
-            print(f'WARNING: Cannot load {fpath}')
+            warnings.warn(f'Cannot load {fpath}')
             return True
 
     saved = sorted(
@@ -177,12 +224,19 @@ def last_checkpoint(output):
         return None
 
 
-def save_checkpoint(local_rank, model, ema_model, optimizer, epoch, total_iter,
-                    config, amp_run, filepath):
-    if local_rank != 0:
+def maybe_save_checkpoint(args, model, ema_model, optimizer, scaler, epoch,
+                          total_iter, config, final_checkpoint=False):
+    if args.local_rank != 0:
         return
 
-    print(f"Saving model and optimizer state at epoch {epoch} to {filepath}")
+    intermediate = (args.epochs_per_checkpoint > 0
+                    and epoch % args.epochs_per_checkpoint == 0)
+
+    if not intermediate and epoch < args.epochs:
+        return
+
+    fpath = os.path.join(args.output, f"FastPitch_checkpoint_{epoch}.pt")
+    print(f"Saving model and optimizer state at epoch {epoch} to {fpath}")
     ema_dict = None if ema_model is None else ema_model.state_dict()
     checkpoint = {'epoch': epoch,
                   'iteration': total_iter,
@@ -190,35 +244,33 @@ def save_checkpoint(local_rank, model, ema_model, optimizer, epoch, total_iter,
                   'state_dict': model.state_dict(),
                   'ema_state_dict': ema_dict,
                   'optimizer': optimizer.state_dict()}
-    if amp_run:
-        checkpoint['amp'] = amp.state_dict()
-    torch.save(checkpoint, filepath)
+    if args.amp:
+        checkpoint['scaler'] = scaler.state_dict()
+    torch.save(checkpoint, fpath)
 
 
-def load_checkpoint(local_rank, model, ema_model, optimizer, epoch, total_iter,
-                    config, amp_run, filepath, world_size):
-    if local_rank == 0:
+def load_checkpoint(args, model, ema_model, optimizer, scaler, epoch,
+                    total_iter, config, filepath):
+    if args.local_rank == 0:
         print(f'Loading model and optimizer state from {filepath}')
     checkpoint = torch.load(filepath, map_location='cpu')
     epoch[0] = checkpoint['epoch'] + 1
     total_iter[0] = checkpoint['iteration']
-    config = checkpoint['config']
 
     sd = {k.replace('module.', ''): v
           for k, v in checkpoint['state_dict'].items()}
     getattr(model, 'module', model).load_state_dict(sd)
     optimizer.load_state_dict(checkpoint['optimizer'])
 
-    if amp_run:
-        amp.load_state_dict(checkpoint['amp'])
+    if args.amp:
+        scaler.load_state_dict(checkpoint['scaler'])
 
     if ema_model is not None:
         ema_model.load_state_dict(checkpoint['ema_state_dict'])
 
 
 def validate(model, epoch, total_iter, criterion, valset, batch_size,
-             collate_fn, distributed_run, batch_to_gpu, use_gt_durations=False,
-             ema=False):
+             collate_fn, distributed_run, batch_to_gpu, ema=False):
     """Handles all the validation scoring and printing"""
     was_training = model.training
     model.eval()
@@ -226,7 +278,7 @@ def validate(model, epoch, total_iter, criterion, valset, batch_size,
     tik = time.perf_counter()
     with torch.no_grad():
         val_sampler = DistributedSampler(valset) if distributed_run else None
-        val_loader = DataLoader(valset, num_workers=8, shuffle=False,
+        val_loader = DataLoader(valset, num_workers=4, shuffle=False,
                                 sampler=val_sampler,
                                 batch_size=batch_size, pin_memory=False,
                                 collate_fn=collate_fn)
@@ -234,19 +286,19 @@ def validate(model, epoch, total_iter, criterion, valset, batch_size,
         val_num_frames = 0
         for i, batch in enumerate(val_loader):
             x, y, num_frames = batch_to_gpu(batch)
-            y_pred = model(x, use_gt_durations=use_gt_durations)
+            y_pred = model(x)
             loss, meta = criterion(y_pred, y, is_training=False, meta_agg='sum')
 
             if distributed_run:
-                for k,v in meta.items():
+                for k, v in meta.items():
                     val_meta[k] += reduce_tensor(v, 1)
                 val_num_frames += reduce_tensor(num_frames.data, 1).item()
             else:
-                for k,v in meta.items():
+                for k, v in meta.items():
                     val_meta[k] += v
                 val_num_frames = num_frames.item()
 
-        val_meta = {k: v / len(valset) for k,v in val_meta.items()}
+        val_meta = {k: v / len(valset) for k, v in val_meta.items()}
 
     val_meta['took'] = time.perf_counter() - tik
 
@@ -258,7 +310,7 @@ def validate(model, epoch, total_iter, criterion, valset, batch_size,
                    ('mel_loss', val_meta['mel_loss'].item()),
                    ('frames/s', num_frames.item() / val_meta['took']),
                    ('took', val_meta['took'])]),
-    )
+               )
 
     if was_training:
         model.train()
@@ -282,16 +334,23 @@ def apply_ema_decay(model, ema_model, decay):
         return
     st = model.state_dict()
     add_module = hasattr(model, 'module') and not hasattr(ema_model, 'module')
-    for k,v in ema_model.state_dict().items():
+    for k, v in ema_model.state_dict().items():
         if add_module and not k.startswith('module.'):
             k = 'module.' + k
         v.copy_(decay * v + (1 - decay) * st[k])
 
 
-def apply_multi_tensor_ema(model_weight_list, ema_model_weight_list, decay, overflow_buf):
-    if not decay:
-        return
-    amp_C.multi_tensor_axpby(65536, overflow_buf, [ema_model_weight_list, model_weight_list, ema_model_weight_list], decay, 1-decay, -1)
+def init_multi_tensor_ema(model, ema_model):
+    model_weights = list(model.state_dict().values())
+    ema_model_weights = list(ema_model.state_dict().values())
+    ema_overflow_buf = torch.cuda.IntTensor([0])
+    return model_weights, ema_model_weights, ema_overflow_buf
+
+
+def apply_multi_tensor_ema(decay, model_weights, ema_weights, overflow_buf):
+    amp_C.multi_tensor_axpby(
+        65536, overflow_buf, [ema_weights, model_weights, ema_weights],
+        decay, 1-decay, -1)
 
 
 def main():
@@ -299,6 +358,9 @@ def main():
                                      allow_abbrev=False)
     parser = parse_args(parser)
     args, _ = parser.parse_known_args()
+
+    if args.p_arpabet > 0.0:
+        cmudict.initialize(args.cmudict_path, keep_ambiguous=True)
 
     distributed_run = args.world_size > 1
 
@@ -332,11 +394,11 @@ def main():
     model_config = models.get_model_config('FastPitch', args)
     model = models.get_model('FastPitch', model_config, device)
 
+    attention_kl_loss = AttentionBinarizationLoss()
+
     # Store pitch mean/std as params to translate from Hz during inference
-    with open(args.pitch_mean_std_file, 'r') as f:
-        stats = json.load(f)
-    model.pitch_mean[0] = stats['mean']
-    model.pitch_std[0] = stats['std']
+    model.pitch_mean[0] = args.pitch_mean
+    model.pitch_std[0] = args.pitch_std
 
     kw = dict(lr=args.learning_rate, betas=(0.9, 0.98), eps=1e-9,
               weight_decay=args.weight_decay)
@@ -347,8 +409,7 @@ def main():
     else:
         raise ValueError
 
-    if args.amp:
-        model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
+    scaler = torch.cuda.amp.GradScaler(enabled=args.amp)
 
     if args.ema_decay > 0:
         ema_model = copy.deepcopy(model)
@@ -376,40 +437,38 @@ def main():
         ch_fpath = None
 
     if ch_fpath is not None:
-        load_checkpoint(args.local_rank, model, ema_model, optimizer, start_epoch,
-                        start_iter, model_config, args.amp, ch_fpath,
-                        args.world_size)
+        load_checkpoint(args, model, ema_model, optimizer, scaler,
+                        start_epoch, start_iter, model_config, ch_fpath)
 
     start_epoch = start_epoch[0]
     total_iter = start_iter[0]
 
-    criterion = loss_functions.get_loss_function('FastPitch',
+    criterion = FastPitchLoss(
         dur_predictor_loss_scale=args.dur_predictor_loss_scale,
-        pitch_predictor_loss_scale=args.pitch_predictor_loss_scale)
+        pitch_predictor_loss_scale=args.pitch_predictor_loss_scale,
+        attn_loss_scale=args.attn_loss_scale)
 
-    collate_fn = data_functions.get_collate_function('FastPitch')
-    trainset = data_functions.get_data_loader('FastPitch',
-                                              audiopaths_and_text=args.training_files,
-                                              **vars(args))
-    valset = data_functions.get_data_loader('FastPitch',
-                                            audiopaths_and_text=args.validation_files,
-                                            **vars(args))
+    collate_fn = TTSCollate()
+
+    if args.local_rank == 0:
+        prepare_tmp(args.pitch_online_dir)
+
+    trainset = TTSDataset(audiopaths_and_text=args.training_files, **vars(args))
+    valset = TTSDataset(audiopaths_and_text=args.validation_files, **vars(args))
+
     if distributed_run:
         train_sampler, shuffle = DistributedSampler(trainset), False
     else:
         train_sampler, shuffle = None, True
 
-    train_loader = DataLoader(trainset, num_workers=16, shuffle=shuffle,
+    # 4 workers are optimal on DGX-1 (from epoch 2 onwards)
+    train_loader = DataLoader(trainset, num_workers=4, shuffle=shuffle,
                               sampler=train_sampler, batch_size=args.batch_size,
-                              pin_memory=False, drop_last=True,
-                              collate_fn=collate_fn)
-
-    batch_to_gpu = data_functions.get_batch_to_gpu('FastPitch')
+                              pin_memory=True, persistent_workers=True,
+                              drop_last=True, collate_fn=collate_fn)
 
     if args.ema_decay:
-        ema_model_weight_list, model_weight_list, overflow_buf_for_ema = init_multi_tensor_ema(model, ema_model)
-    else:
-        ema_model_weight_list, model_weight_list, overflow_buf_for_ema = None, None, None
+        mt_ema_params = init_multi_tensor_ema(model, ema_model)
 
     model.train()
 
@@ -417,14 +476,20 @@ def main():
         torch.autograd.profiler.emit_nvtx().__enter__()
         profiler.start()
 
+    epoch_loss = []
+    epoch_mel_loss = []
+    epoch_num_frames = []
+    epoch_frames_per_sec = []
+    epoch_time = []
+
     torch.cuda.synchronize()
     for epoch in range(start_epoch, args.epochs + 1):
         epoch_start_time = time.perf_counter()
 
-        epoch_loss = 0.0
-        epoch_mel_loss = 0.0
-        epoch_num_frames = 0
-        epoch_frames_per_sec = 0.0
+        epoch_loss += [0.0]
+        epoch_mel_loss += [0.0]
+        epoch_num_frames += [0]
+        epoch_frames_per_sec += [0.0]
 
         if distributed_run:
             train_loader.sampler.set_epoch(epoch)
@@ -433,9 +498,10 @@ def main():
         iter_loss = 0
         iter_num_frames = 0
         iter_meta = {}
+        iter_start_time = None
 
         epoch_iter = 0
-        num_iters = len(train_loader) // args.gradient_accumulation_steps
+        num_iters = len(train_loader) // args.grad_accumulation
         for batch in train_loader:
 
             if accumulated_steps == 0:
@@ -443,31 +509,51 @@ def main():
                     break
                 total_iter += 1
                 epoch_iter += 1
-                iter_start_time = time.perf_counter()
+                if iter_start_time is None:
+                    iter_start_time = time.perf_counter()
 
                 adjust_learning_rate(total_iter, optimizer, args.learning_rate,
                                      args.warmup_steps)
 
-                model.zero_grad()
+                model.zero_grad(set_to_none=True)
 
             x, y, num_frames = batch_to_gpu(batch)
-            y_pred = model(x, use_gt_durations=True)
-            loss, meta = criterion(y_pred, y)
 
-            loss /= args.gradient_accumulation_steps
-            meta = {k: v / args.gradient_accumulation_steps
+            with torch.cuda.amp.autocast(enabled=args.amp):
+                y_pred = model(x)
+                loss, meta = criterion(y_pred, y)
+
+                if (args.kl_loss_start_epoch is not None
+                        and epoch >= args.kl_loss_start_epoch):
+
+                    if args.kl_loss_start_epoch == epoch and epoch_iter == 1:
+                        print('Begin hard_attn loss')
+
+                    _, _, _, _, _, _, _, _, attn_soft, attn_hard, _, _ = y_pred
+                    binarization_loss = attention_kl_loss(attn_hard, attn_soft)
+                    kl_weight = min((epoch - args.kl_loss_start_epoch) / args.kl_loss_warmup_epochs, 1.0) * args.kl_loss_weight
+                    meta['kl_loss'] = binarization_loss.clone().detach() * kl_weight
+                    loss += kl_weight * binarization_loss
+
+                else:
+                    meta['kl_loss'] = torch.zeros_like(loss)
+                    kl_weight = 0
+                    binarization_loss = 0
+
+                loss /= args.grad_accumulation
+
+            meta = {k: v / args.grad_accumulation
                     for k, v in meta.items()}
 
             if args.amp:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
+                scaler.scale(loss).backward()
             else:
                 loss.backward()
 
             if distributed_run:
                 reduced_loss = reduce_tensor(loss.data, args.world_size).item()
                 reduced_num_frames = reduce_tensor(num_frames.data, 1).item()
-                meta = {k: reduce_tensor(v, args.world_size) for k,v in meta.items()}
+                meta = {k: reduce_tensor(v, args.world_size) for k, v in meta.items()}
             else:
                 reduced_loss = loss.item()
                 reduced_num_frames = num_frames.item()
@@ -479,25 +565,30 @@ def main():
             iter_num_frames += reduced_num_frames
             iter_meta = {k: iter_meta.get(k, 0) + meta.get(k, 0) for k in meta}
 
-            if accumulated_steps % args.gradient_accumulation_steps == 0:
+            if accumulated_steps % args.grad_accumulation == 0:
 
                 logger.log_grads_tb(total_iter, model)
                 if args.amp:
+                    scaler.unscale_(optimizer)
                     torch.nn.utils.clip_grad_norm_(
-                        amp.master_params(optimizer), args.grad_clip_thresh)
+                        model.parameters(), args.grad_clip_thresh)
+                    scaler.step(optimizer)
+                    scaler.update()
                 else:
                     torch.nn.utils.clip_grad_norm_(
                         model.parameters(), args.grad_clip_thresh)
+                    optimizer.step()
 
-                optimizer.step()
-                apply_multi_tensor_ema(model_weight_list, ema_model_weight_list, args.ema_decay, overflow_buf_for_ema)
+                if args.ema_decay > 0.0:
+                    apply_multi_tensor_ema(args.ema_decay, *mt_ema_params)
 
                 iter_time = time.perf_counter() - iter_start_time
                 iter_mel_loss = iter_meta['mel_loss'].item()
-                epoch_frames_per_sec += iter_num_frames / iter_time
-                epoch_loss += iter_loss
-                epoch_num_frames += iter_num_frames
-                epoch_mel_loss += iter_mel_loss
+                iter_kl_loss = iter_meta['kl_loss'].item()
+                epoch_frames_per_sec[-1] += iter_num_frames / iter_time
+                epoch_loss[-1] += iter_loss
+                epoch_num_frames[-1] += iter_num_frames
+                epoch_mel_loss[-1] += iter_mel_loss
 
                 logger.log((epoch, epoch_iter, num_iters),
                            tb_total_steps=total_iter,
@@ -505,45 +596,45 @@ def main():
                            data=OrderedDict([
                                ('loss', iter_loss),
                                ('mel_loss', iter_mel_loss),
+                               ('kl_loss', iter_kl_loss),
+                               ('kl_weight', kl_weight),
                                ('frames/s', iter_num_frames / iter_time),
                                ('took', iter_time),
                                ('lrate', optimizer.param_groups[0]['lr'])]),
-                )
+                           )
 
                 accumulated_steps = 0
                 iter_loss = 0
                 iter_num_frames = 0
                 iter_meta = {}
+                iter_start_time = time.perf_counter()
 
         # Finished epoch
-        epoch_time = time.perf_counter() - epoch_start_time
+        epoch_loss[-1] /= epoch_iter
+        epoch_mel_loss[-1] /= epoch_iter
+        epoch_time += [time.perf_counter() - epoch_start_time]
+        iter_start_time = None
 
         logger.log((epoch,),
                    tb_total_steps=None,
                    subset='train_avg',
                    data=OrderedDict([
-                       ('loss', epoch_loss / epoch_iter),
-                       ('mel_loss', epoch_mel_loss / epoch_iter),
-                       ('frames/s', epoch_num_frames / epoch_time),
-                       ('took', epoch_time)]),
-        )
+                       ('loss', epoch_loss[-1]),
+                       ('mel_loss', epoch_mel_loss[-1]),
+                       ('frames/s', epoch_num_frames[-1] / epoch_time[-1]),
+                       ('took', epoch_time[-1])]),
+                   )
 
         validate(model, epoch, total_iter, criterion, valset, args.batch_size,
-                 collate_fn, distributed_run, batch_to_gpu,
-                 use_gt_durations=True)
+                 collate_fn, distributed_run, batch_to_gpu)
 
         if args.ema_decay > 0:
             validate(ema_model, epoch, total_iter, criterion, valset,
                      args.batch_size, collate_fn, distributed_run, batch_to_gpu,
-                     use_gt_durations=True, ema=True)
+                     ema=True)
 
-        if (epoch > 0 and args.epochs_per_checkpoint > 0 and
-            (epoch % args.epochs_per_checkpoint == 0) and args.local_rank == 0):
-
-            checkpoint_path = os.path.join(
-                args.output, f"FastPitch_checkpoint_{epoch}.pt")
-            save_checkpoint(args.local_rank, model, ema_model, optimizer, epoch,
-                            total_iter, model_config, args.amp, checkpoint_path)
+        maybe_save_checkpoint(args, model, ema_model, optimizer, scaler, epoch,
+                              total_iter, model_config)
         logger.flush()
 
     # Finished training
@@ -551,24 +642,25 @@ def main():
         profiler.stop()
         torch.autograd.profiler.emit_nvtx().__exit__(None, None, None)
 
-    logger.log((),
-               tb_total_steps=None,
-               subset='train_avg',
-               data=OrderedDict([
-                   ('loss', epoch_loss / epoch_iter),
-                   ('mel_loss', epoch_mel_loss / epoch_iter),
-                   ('frames/s', epoch_num_frames / epoch_time),
-                   ('took', epoch_time)]),
-    )
-    validate(model, None, total_iter, criterion, valset, args.batch_size,
-             collate_fn, distributed_run, batch_to_gpu, use_gt_durations=True)
+    if len(epoch_loss) > 0:
+        # Was trained - average the last 20 measurements
+        last_ = lambda l: np.asarray(l[-20:])
+        epoch_loss = last_(epoch_loss)
+        epoch_mel_loss = last_(epoch_mel_loss)
+        epoch_num_frames = last_(epoch_num_frames)
+        epoch_time = last_(epoch_time)
+        logger.log((),
+                   tb_total_steps=None,
+                   subset='train_avg',
+                   data=OrderedDict([
+                       ('loss', epoch_loss.mean()),
+                       ('mel_loss', epoch_mel_loss.mean()),
+                       ('frames/s', epoch_num_frames.sum() / epoch_time.sum()),
+                       ('took', epoch_time.mean())]),
+                   )
 
-    if (epoch > 0 and args.epochs_per_checkpoint > 0 and
-        (epoch % args.epochs_per_checkpoint != 0) and args.local_rank == 0):
-        checkpoint_path = os.path.join(
-            args.output, f"FastPitch_checkpoint_{epoch}.pt")
-        save_checkpoint(args.local_rank, model, ema_model, optimizer, epoch,
-                        total_iter, model_config, args.amp, checkpoint_path)
+    validate(model, None, total_iter, criterion, valset, args.batch_size,
+             collate_fn, distributed_run, batch_to_gpu)
 
 
 if __name__ == '__main__':

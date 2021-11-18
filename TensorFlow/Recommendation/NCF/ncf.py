@@ -227,7 +227,7 @@ def main():
     # Create and run Data Generator in a separate thread
     data_generator = DataGenerator(
         args.seed,
-        hvd.rank(),
+        hvd.local_rank(),
         nb_users,
         nb_items,
         neg_mat,

@@ -5,8 +5,6 @@ import librosa
 import torch
 import torch.nn as nn
 
-from apex import amp
-
 
 class BaseFeatures(nn.Module):
     """Base class for GPU accelerated audio preprocessing."""
@@ -42,14 +40,10 @@ class BaseFeatures(nn.Module):
     def calculate_features(self, audio, audio_lens):
         return audio, audio_lens
 
-    def __call__(self, audio, audio_lens, optim_level=0):
+    def __call__(self, audio, audio_lens):
         dtype = audio.dtype
         audio = audio.float()
-        if optim_level == 1:
-            with amp.disable_casts():
-                feat, feat_lens = self.calculate_features(audio, audio_lens)
-        else:
-            feat, feat_lens = self.calculate_features(audio, audio_lens)
+        feat, feat_lens = self.calculate_features(audio, audio_lens)
 
         feat = self.apply_padding(feat)
 
@@ -175,18 +169,28 @@ def normalize_batch(x, seq_len, normalize_type: str):
 
 
 @torch.jit.script
-def splice_frames(x, frame_splicing: int):
-    """ Stacks frames together across feature dim
+def stack_subsample_frames(x, x_lens, stacking: int = 1, subsampling: int = 1):
+    """ Stacks frames together across feature dim, and then subsamples
 
     input is batch_size, feature_dim, num_frames
-    output is batch_size, feature_dim*frame_splicing, num_frames
+    output is batch_size, feature_dim * stacking, num_frames / subsampling
 
     """
     seq = [x]
-    # TORCHSCRIPT: JIT doesnt like range(start, stop)
-    for n in range(frame_splicing - 1):
-        seq.append(torch.cat([x[:, :, :n + 1], x[:, :, n + 1:]], dim=2))
-    return torch.cat(seq, dim=1)
+    for n in range(1, stacking):
+        tmp = torch.zeros_like(x)
+        tmp[:, :, :-n] = x[:, :, n:]
+        seq.append(tmp)
+    x = torch.cat(seq, dim=1)[:, :, ::subsampling]
+
+    if subsampling > 1:
+        x_lens = torch.ceil(x_lens.float() / subsampling).int()
+
+        if x.size(2) > x_lens.max().item():
+            assert abs(x.size(2) - x_lens.max().item()) <= 1
+            x = x[:,:,:x_lens.max().item()]
+
+    return x, x_lens
 
 
 class FilterbankFeatures(BaseFeatures):

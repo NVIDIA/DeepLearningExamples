@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# @package _global_
+config:
+  trainer:
+    callback:
+      throughput_benchmark:
+        _target_: callbacks.ctl_callbacks.ThroughputBenchmark
+        warmup_epochs: 0

@@ -96,6 +96,12 @@ def onnx2trt(
                 LOGGER.error(f"OnnxParser error {i}/{parser.num_errors}: {parser.get_error(i)}")
             raise RuntimeError("Error during parsing ONNX model (see logs for details)")
 
+        # OnnxParser produces here FP32 TensorRT engine for FP16 network
+        # so we force FP16 here for first input/output
+        if fp16_mode:
+            network.get_input(0).dtype = trt.DataType.HALF
+            network.get_output(0).dtype = trt.DataType.HALF
+
         # optimization
         config = builder.create_builder_config()
         config.flags |= bool(fp16_mode) << int(trt.BuilderFlag.FP16)

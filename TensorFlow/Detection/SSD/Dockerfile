@@ -18,7 +18,6 @@ RUN PROTOC_VERSION=3.0.0 && \
     rm -f $PROTOC_ZIP
 
 COPY requirements.txt .
-RUN pip install Cython
 RUN pip install -r requirements.txt
 RUN pip --no-cache-dir --no-cache install 'git+https://github.com/NVIDIA/dllogger'
 
@@ -29,5 +28,4 @@ ENV PYTHONPATH="/workdir/models/research/:/workdir/models/research/slim/:$PYTHON
 
 COPY examples/ examples
 COPY configs/ configs/
-COPY qa/ qa/
 COPY download_all.sh download_all.sh

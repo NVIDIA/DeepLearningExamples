@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
 
 r"""
 To infer the model deployed on Triton, you can use `run_inference_on_triton.py` script.
-It sends a request with data obtained from pointed data loader and dumps received data into
-[npz files](https://gitlab-master.nvidia.com/dl/JoC/bermuda-api/-/blob/develop/bermuda_api_toolset/docs/dump_files.md).
+It sends a request with data obtained from pointed data loader and dumps received data into npz files.
 Those files are stored in directory pointed by `--output-dir` argument.
 
 Currently, the client communicates with the Triton server asynchronously using GRPC protocol.
@@ -223,9 +222,15 @@ def _parse_args():
     parser.add_argument("--dump-inputs", help="Dump inputs to output dir", action="store_true", default=False)
     parser.add_argument("-v", "--verbose", help="Verbose logs", action="store_true", default=False)
     parser.add_argument("--output-dir", required=True, help="Path to directory where outputs will be saved")
-    parser.add_argument("--response-wait-time", required=False, help="Maximal time to wait for response", default=120)
     parser.add_argument(
-        "--max-unresponded-requests", required=False, help="Maximal number of unresponded requests", default=128
+        "--response-wait-time", required=False, help="Maximal time to wait for response", default=120, type=float
+    )
+    parser.add_argument(
+        "--max-unresponded-requests",
+        required=False,
+        help="Maximal number of unresponded requests",
+        default=128,
+        type=int,
     )
 
     args, *_ = parser.parse_known_args()

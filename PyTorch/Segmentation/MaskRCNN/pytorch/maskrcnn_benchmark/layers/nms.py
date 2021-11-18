@@ -3,10 +3,10 @@
 # from ._utils import _C
 from maskrcnn_benchmark import _C
 
-from apex import amp
+from torch.cuda.amp import custom_fwd
 
 # Only valid with fp32 inputs - give AMP the hint
-nms = amp.float_function(_C.nms)
+nms = custom_fwd(_C.nms)
 
 # nms.__doc__ = """
 # This function performs Non-maximum suppresion"""

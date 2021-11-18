@@ -276,11 +276,11 @@ unzip resnext101_32x4d_pyt_amp_20.06.0.zip
 
 To run inference on ImageNet, run:
 
-`python ./main.py --arch resnext101-32x4d --evaluate --epochs 1 --pretrained-weights nvidia_resnext101-32x4d_200821.pth.tar -b <batch size> <path to imagenet>`
+`python ./main.py --arch resnext101-32x4d --evaluate --epochs 1 --pretrained-from-file nvidia_resnext101-32x4d_200821.pth.tar -b <batch size> <path to imagenet>`
 
 To run inference on JPEG image using pretrained weights:
 
-`python classify.py --arch resnext101-32x4d -c fanin --weights nvidia_resnext101-32x4d_200821.pth.tar --precision AMP|FP32 --image <path to JPEG image>`
+`python classify.py --arch resnext101-32x4d --pretrained-from-file nvidia_resnext101-32x4d_200821.pth.tar --precision AMP|FP32 --image <path to JPEG image>`
 
 
 ## Advanced
@@ -319,7 +319,7 @@ usage: main.py [-h] [--data-backend BACKEND] [--arch ARCH]
                [--lr-schedule SCHEDULE] [--warmup E] [--label-smoothing S]
                [--mixup ALPHA] [--momentum M] [--weight-decay W]
                [--bn-weight-decay] [--nesterov] [--print-freq N]
-               [--resume PATH] [--pretrained-weights PATH]
+               [--resume PATH] [--pretrained-from-file PATH]
                [--static-loss-scale STATIC_LOSS_SCALE] [--dynamic-loss-scale]
                [--prof N] [--amp] [--seed SEED] [--gather-checkpoints]
                [--raport-file RAPORT_FILE] [--evaluate] [--training-only]
@@ -368,7 +368,7 @@ optional arguments:
   --nesterov            use nesterov momentum, (default: false)
   --print-freq N, -p N  print frequency (default: 10)
   --resume PATH         path to latest checkpoint (default: none)
-  --pretrained-weights PATH
+  --pretrained-from-file PATH
                         load weights from here
   --static-loss-scale STATIC_LOSS_SCALE
                         Static loss scale, positive power of 2 values can
@@ -420,7 +420,7 @@ Metrics gathered through training:
 
 To restart training from checkpoint use `--resume` option.
 
-To start training from pretrained weights (e.g. downloaded from NGC) use `--pretrained-weights` option.
+To start training from pretrained weights (e.g. downloaded from NGC) use `--pretrained-from-file` option.
 
 The difference between those two is that the pretrained weights contain only model weights,
 and checkpoints, apart from model weights, contain optimizer state, LR scheduler state.
@@ -454,11 +454,11 @@ To run inference on JPEG image, you have to first extract the model weights from
 
 Then run classification script:
 
-`python classify.py --arch resnext101-32x4d -c fanin --weights <path to weights from previous step> --precision AMP|FP32 --image <path to JPEG image>`
+`python classify.py --arch resnext101-32x4d --pretrained-from-file <path to weights from previous step> --precision AMP|FP32 --image <path to JPEG image>`
 
 You can also run ImageNet validation on pretrained weights:
 
-`python ./main.py --arch resnext101-32x4d --evaluate --epochs 1 --pretrained-weights <path to pretrained weights> -b <batch size> <path to imagenet>`
+`python ./main.py --arch resnext101-32x4d --evaluate --epochs 1 --pretrained-from-file <path to pretrained weights> -b <batch size> <path to imagenet>`
 
 #### NGC Pretrained weights:
 
@@ -472,14 +472,16 @@ unzip resnext101_32x4d_pyt_amp_20.06.0.zip
 
 To run inference on ImageNet, run:
 
-`python ./main.py --arch resnext101-32x4d --evaluate --epochs 1 --pretrained-weights nvidia_resnext101-32x4d_200821.pth.tar -b <batch size> <path to imagenet>`
+`python ./main.py --arch resnext101-32x4d --evaluate --epochs 1 --pretrained-from-file nvidia_resnext101-32x4d_200821.pth.tar -b <batch size> <path to imagenet>`
 
 To run inference on JPEG image using pretrained weights:
 
-`python classify.py --arch resnext101-32x4d --weights nvidia_resnext101-32x4d_200821.pth.tar --precision AMP|FP32 --image <path to JPEG image>`
+`python classify.py --arch resnext101-32x4d --pretrained-from-file nvidia_resnext101-32x4d_200821.pth.tar --precision AMP|FP32 --image <path to JPEG image>`
 
 
 ## Performance
+
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
 
 ### Benchmarking
 

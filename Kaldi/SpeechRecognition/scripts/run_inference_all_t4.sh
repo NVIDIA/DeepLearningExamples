@@ -15,7 +15,7 @@
 
 set -e
 
-if [[ "$(docker ps | grep trtis_kaldi_server | wc -l)" == "0" ]]; then
+if [[ "$(docker ps | grep triton_kaldi_server | wc -l)" == "0" ]]; then
 	printf "\nThe Triton server is currently not running. Please run scripts/docker/launch_server.sh\n\n"
 	exit 1
 fi
@@ -26,5 +26,5 @@ scripts/docker/launch_client.sh -i 5 -c 1000
 
 printf "\nOnline benchmarks:\n"
 
-scripts/docker/launch_client.sh -i 10 -c 700 -o
+scripts/docker/launch_client.sh -i 10 -c 600 -o
 scripts/docker/launch_client.sh -i 10 -c 400 -o

@@ -26,6 +26,7 @@ import dllogger
 import torch
 import numpy as np
 import torch.distributed as distrib
+import torch.nn.functional as F
 from apex import amp
 from apex.parallel import DistributedDataParallel
 from dllogger import JSONStreamBackend, StdOutBackend, Verbosity
@@ -57,10 +58,9 @@ def get_parser():
                         help='Relative path to evaluation dataset manifest files')
     parser.add_argument('--ckpt', default=None, type=str,
                         help='Path to model checkpoint')
-    parser.add_argument('--max_duration', default=None, type=float,
-                        help='Filter out longer inputs (in seconds)')
-    parser.add_argument('--pad_to_max_duration', action='store_true',
-                        help='Pads every batch to max_duration')
+    parser.add_argument('--pad_leading', type=int, default=16,
+                        help='Pads every batch with leading zeros '
+                             'to counteract conv shifts of the field of view')
     parser.add_argument('--amp', '--fp16', action='store_true',
                         help='Use FP16 precision')
     parser.add_argument('--cudnn_benchmark', action='store_true',
@@ -92,6 +92,9 @@ def get_parser():
                     help='Evaluate with a TorchScripted model')
     io.add_argument('--torchscript_export', action='store_true',
                     help='Export the model with torch.jit to the output_dir')
+    io.add_argument('--override_config', type=str, action='append',
+                    help='Overrides a value from a config .yaml.'
+                         ' Syntax: `--override_config nested.config.key=val`.')
     return parser
 
 
@@ -193,15 +196,7 @@ def main():
         print_once(f'Inference with {distrib.get_world_size()} GPUs')
 
     cfg = config.load(args.model_config)
-
-    if args.max_duration is not None:
-        cfg['input_val']['audio_dataset']['max_duration'] = args.max_duration
-        cfg['input_val']['filterbank_features']['max_duration'] = args.max_duration
-
-    if args.pad_to_max_duration:
-        assert cfg['input_val']['audio_dataset']['max_duration'] > 0
-        cfg['input_val']['audio_dataset']['pad_to_max_duration'] = True
-        cfg['input_val']['filterbank_features']['pad_to_max_duration'] = True
+    config.apply_config_overrides(cfg, args)
 
     symbols = helpers.add_ctc_blank(cfg['labels'])
 
@@ -217,7 +212,6 @@ def main():
             print("DALI supported only with input .json files; disabling")
             use_dali = False
 
-        assert not args.pad_to_max_duration
         assert not (args.transcribe_wav and args.transcribe_filelist)
 
         if args.transcribe_wav:
@@ -233,6 +227,7 @@ def main():
                                       drop_last=(True if measure_perf else False))
 
         _, features_kw = config.input(cfg, 'val')
+        assert not features_kw['pad_to_max_duration']
         feat_proc = FilterbankFeatures(**features_kw)
 
     elif use_dali:
@@ -256,7 +251,7 @@ def main():
             config_features=features_kw,
             json_names=args.val_manifests,
             batch_size=args.batch_size,
-            pipeline_type=("train" if measure_perf else "val"),  # no drop_last 
+            pipeline_type=("train" if measure_perf else "val"),  # no drop_last
             device_type=args.dali_device,
             symbols=symbols)
 
@@ -333,6 +328,9 @@ def main():
 
             if args.amp:
                 feats = feats.half()
+
+            feats = F.pad(feats, (args.pad_leading, 0))
+            feat_lens += args.pad_leading
 
             if model.encoder.use_conv_masks:
                 log_probs, log_prob_lens = model(feats, feat_lens)

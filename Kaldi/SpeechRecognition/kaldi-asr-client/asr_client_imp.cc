@@ -1,4 +1,4 @@
-// Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+// Copyright (c) 2020-2021, NVIDIA CORPORATION. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include "asr_client_imp.h"
+
 #include <unistd.h>
+
 #include <cmath>
 #include <cstring>
 #include <iomanip>
@@ -33,117 +35,179 @@
     }                                                              \
   }
 
-void TRTISASRClient::CreateClientContext() {
-  contextes_.emplace_back();
-  ClientContext& client = contextes_.back();
+void TritonASRClient::CreateClientContext() {
+  clients_.emplace_back();
+  TritonClient& client = clients_.back();
+  FAIL_IF_ERR(nic::InferenceServerGrpcClient::Create(&client.triton_client,
+                                                     url_, /*verbose*/ false),
+              "unable to create triton client");
+
   FAIL_IF_ERR(
-      nic::InferGrpcStreamContext::Create(&client.trtis_context,
-                                          /*corr_id*/ -1, url_, model_name_,
-                                          /*model_version*/ -1,
-                                          /*verbose*/ false),
-      "unable to create context");
+      client.triton_client->StartStream(
+          [&](nic::InferResult* result) {
+            double end_timestamp = gettime_monotonic();
+            std::unique_ptr<nic::InferResult> result_ptr(result);
+            FAIL_IF_ERR(result_ptr->RequestStatus(),
+                        "inference request failed");
+            std::string request_id;
+            FAIL_IF_ERR(result_ptr->Id(&request_id),
+                        "unable to get request id for response");
+            uint64_t corr_id =
+                std::stoi(std::string(request_id, 0, request_id.find("_")));
+            bool end_of_stream = (request_id.back() == '1');
+            if (!end_of_stream) {
+              if (print_partial_results_) {
+                std::vector<std::string> text;
+                FAIL_IF_ERR(result_ptr->StringData("TEXT", &text),
+                            "unable to get TEXT output");
+                std::lock_guard<std::mutex> lk(stdout_m_);
+                std::cout << "CORR_ID " << corr_id << "\t[partial]\t" << text[0]
+                          << '\n';
+              }
+              return;
+            }
+
+            double start_timestamp;
+            {
+              std::lock_guard<std::mutex> lk(start_timestamps_m_);
+              auto it = start_timestamps_.find(corr_id);
+              if (it != start_timestamps_.end()) {
+                start_timestamp = it->second;
+                start_timestamps_.erase(it);
+              } else {
+                std::cerr << "start_timestamp not found" << std::endl;
+                exit(1);
+              }
+            }
+
+            if (print_results_) {
+              std::vector<std::string> text;
+              FAIL_IF_ERR(result_ptr->StringData(ctm_ ? "CTM" : "TEXT", &text),
+                          "unable to get TEXT or CTM output");
+              std::lock_guard<std::mutex> lk(stdout_m_);
+              std::cout << "CORR_ID " << corr_id;
+              std::cout << (ctm_ ? "\n" : "\t\t");
+              std::cout << text[0] << std::endl;
+            }
+
+            std::vector<std::string> lattice_bytes;
+            FAIL_IF_ERR(result_ptr->StringData("RAW_LATTICE", &lattice_bytes),
+                        "unable to get RAW_LATTICE output");
+
+            {
+              double elapsed = end_timestamp - start_timestamp;
+              std::lock_guard<std::mutex> lk(results_m_);
+              results_.insert(
+                  {corr_id, {std::move(lattice_bytes[0]), elapsed}});
+            }
+
+            n_in_flight_.fetch_sub(1, std::memory_order_relaxed);
+          },
+          false),
+      "unable to establish a streaming connection to server");
 }
 
-void TRTISASRClient::SendChunk(ni::CorrelationID corr_id,
-                               bool start_of_sequence, bool end_of_sequence,
-                               float* chunk, int chunk_byte_size) {
-  ClientContext* client = &contextes_[corr_id % ncontextes_];
-  nic::InferContext& context = *client->trtis_context;
-  if (start_of_sequence) n_in_flight_.fetch_add(1, std::memory_order_consume);
-
+void TritonASRClient::SendChunk(uint64_t corr_id, bool start_of_sequence,
+                                bool end_of_sequence, float* chunk,
+                                int chunk_byte_size, const uint64_t index) {
   // Setting options
-  std::unique_ptr<nic::InferContext::Options> options;
-  FAIL_IF_ERR(nic::InferContext::Options::Create(&options),
-              "unable to create inference options");
-  options->SetBatchSize(1);
-  options->SetFlags(0);
-  options->SetCorrelationId(corr_id);
-  if (start_of_sequence)
-    options->SetFlag(ni::InferRequestHeader::FLAG_SEQUENCE_START,
-                     start_of_sequence);
-  if (end_of_sequence) {
-    options->SetFlag(ni::InferRequestHeader::FLAG_SEQUENCE_END,
-                     end_of_sequence);
-    for (const auto& output : context.Outputs()) {
-      if (output->Name() == "TEXT" && !print_results_)
-        continue;  // no need for text output if not printing
-      options->AddRawResult(output);
-    }
-  }
+  nic::InferOptions options(model_name_);
+  options.sequence_id_ = corr_id;
+  options.sequence_start_ = start_of_sequence;
+  options.sequence_end_ = end_of_sequence;
+  options.request_id_ = std::to_string(corr_id) + "_" + std::to_string(index) +
+                        "_" + (start_of_sequence ? "1" : "0") + "_" +
+                        (end_of_sequence ? "1" : "0");
 
-  FAIL_IF_ERR(context.SetRunOptions(*options), "unable to set context options");
-  std::shared_ptr<nic::InferContext::Input> in_wave_data, in_wave_data_dim;
-  FAIL_IF_ERR(context.GetInput("WAV_DATA", &in_wave_data),
-              "unable to get WAV_DATA");
-  FAIL_IF_ERR(context.GetInput("WAV_DATA_DIM", &in_wave_data_dim),
-              "unable to get WAV_DATA_DIM");
-
-  // Wave data input
-  FAIL_IF_ERR(in_wave_data->Reset(), "unable to reset WAVE_DATA");
+  // Initialize the inputs with the data.
+  nic::InferInput* wave_data_ptr;
+  std::vector<int64_t> wav_shape{1, samps_per_chunk_};
+  FAIL_IF_ERR(
+      nic::InferInput::Create(&wave_data_ptr, "WAV_DATA", wav_shape, "FP32"),
+      "unable to create 'WAV_DATA'");
+  std::shared_ptr<nic::InferInput> wave_data_in(wave_data_ptr);
+  FAIL_IF_ERR(wave_data_in->Reset(), "unable to reset 'WAV_DATA'");
   uint8_t* wave_data = reinterpret_cast<uint8_t*>(chunk);
   if (chunk_byte_size < max_chunk_byte_size_) {
     std::memcpy(&chunk_buf_[0], chunk, chunk_byte_size);
     wave_data = &chunk_buf_[0];
   }
-  FAIL_IF_ERR(in_wave_data->SetRaw(wave_data, max_chunk_byte_size_),
-              "unable to set data for WAVE_DATA");
+  FAIL_IF_ERR(wave_data_in->AppendRaw(wave_data, max_chunk_byte_size_),
+              "unable to set data for 'WAV_DATA'");
+
   // Dim
-  FAIL_IF_ERR(in_wave_data_dim->Reset(), "unable to reset WAVE_DATA_DIM");
+  nic::InferInput* dim_ptr;
+  std::vector<int64_t> shape{1, 1};
+  FAIL_IF_ERR(nic::InferInput::Create(&dim_ptr, "WAV_DATA_DIM", shape, "INT32"),
+              "unable to create 'WAV_DATA_DIM'");
+  std::shared_ptr<nic::InferInput> dim_in(dim_ptr);
+  FAIL_IF_ERR(dim_in->Reset(), "unable to reset WAVE_DATA_DIM");
   int nsamples = chunk_byte_size / sizeof(float);
-  FAIL_IF_ERR(in_wave_data_dim->SetRaw(reinterpret_cast<uint8_t*>(&nsamples),
-                                       sizeof(int32_t)),
-              "unable to set data for WAVE_DATA_DIM");
+  FAIL_IF_ERR(
+      dim_in->AppendRaw(reinterpret_cast<uint8_t*>(&nsamples), sizeof(int32_t)),
+      "unable to set data for WAVE_DATA_DIM");
 
-  total_audio_ += (static_cast<double>(nsamples) / 16000.);  // TODO freq
-  double start = gettime_monotonic();
-  FAIL_IF_ERR(context.AsyncRun([corr_id, end_of_sequence, start, this](
-                                   nic::InferContext* ctx,
-                                   const std::shared_ptr<
-                                       nic::InferContext::Request>& request) {
-    if (end_of_sequence) {
-      double elapsed = gettime_monotonic() - start;
-      std::map<std::string, std::unique_ptr<nic::InferContext::Result>> results;
-      ctx->GetAsyncRunResults(request, &results);
+  std::vector<nic::InferInput*> inputs = {wave_data_in.get(), dim_in.get()};
 
-      if (results.empty()) {
-        std::cerr << "Warning: Could not read "
-                     "output for corr_id "
-                  << corr_id << std::endl;
-      } else {
-        if (print_results_) {
-	  std::string text;
-	  FAIL_IF_ERR(results["TEXT"]->GetRawAtCursor(0, &text),
-			  "unable to get TEXT output");
-          std::lock_guard<std::mutex> lk(stdout_m_);
-          std::cout << "CORR_ID " << corr_id << "\t\t" << text << std::endl;
-        }
+  std::vector<const nic::InferRequestedOutput*> outputs;
+  std::shared_ptr<nic::InferRequestedOutput> raw_lattice, text;
+  outputs.reserve(2);
+  if (end_of_sequence) {
+    nic::InferRequestedOutput* raw_lattice_ptr;
+    FAIL_IF_ERR(
+        nic::InferRequestedOutput::Create(&raw_lattice_ptr, "RAW_LATTICE"),
+        "unable to get 'RAW_LATTICE'");
+    raw_lattice.reset(raw_lattice_ptr);
+    outputs.push_back(raw_lattice.get());
 
-        std::string lattice_bytes;
-        FAIL_IF_ERR(results["RAW_LATTICE"]->GetRawAtCursor(0, &lattice_bytes),
-                    "unable to get RAW_LATTICE output");
-        {
-          std::lock_guard<std::mutex> lk(results_m_);
-          results_.insert({corr_id, {std::move(lattice_bytes), elapsed}});
-        }
-      }
-      n_in_flight_.fetch_sub(1, std::memory_order_relaxed);
+    // Request the TEXT results only when required for printing
+    if (print_results_) {
+      nic::InferRequestedOutput* text_ptr;
+      FAIL_IF_ERR(
+          nic::InferRequestedOutput::Create(&text_ptr, ctm_ ? "CTM" : "TEXT"),
+          "unable to get 'TEXT' or 'CTM'");
+      text.reset(text_ptr);
+      outputs.push_back(text.get());
     }
-  }),
+  } else if (print_partial_results_) {
+    nic::InferRequestedOutput* text_ptr;
+    FAIL_IF_ERR(nic::InferRequestedOutput::Create(&text_ptr, "TEXT"),
+                "unable to get 'TEXT'");
+    text.reset(text_ptr);
+    outputs.push_back(text.get());
+  }
+
+  total_audio_ += (static_cast<double>(nsamples) / samp_freq_);
+
+  if (start_of_sequence) {
+    n_in_flight_.fetch_add(1, std::memory_order_consume);
+  }
+
+  // Record the timestamp when the last chunk was made available.
+  if (end_of_sequence) {
+    std::lock_guard<std::mutex> lk(start_timestamps_m_);
+    start_timestamps_[corr_id] = gettime_monotonic();
+  }
+
+  TritonClient* client = &clients_[corr_id % nclients_];
+  // nic::InferenceServerGrpcClient& triton_client = *client->triton_client;
+  FAIL_IF_ERR(client->triton_client->AsyncStreamInfer(options, inputs, outputs),
               "unable to run model");
 }
 
-void TRTISASRClient::WaitForCallbacks() {
-  int n;
-  while ((n = n_in_flight_.load(std::memory_order_consume))) {
+void TritonASRClient::WaitForCallbacks() {
+  while (n_in_flight_.load(std::memory_order_consume)) {
     usleep(1000);
   }
 }
 
-void TRTISASRClient::PrintStats(bool print_latency_stats) {
+void TritonASRClient::PrintStats(bool print_latency_stats,
+                                 bool print_throughput) {
   double now = gettime_monotonic();
   double diff = now - started_at_;
   double rtf = total_audio_ / diff;
-  std::cout << "Throughput:\t" << rtf << " RTFX" << std::endl;
+  if (print_throughput)
+    std::cout << "Throughput:\t" << rtf << " RTFX" << std::endl;
   std::vector<double> latencies;
   {
     std::lock_guard<std::mutex> lk(results_m_);
@@ -176,20 +240,33 @@ void TRTISASRClient::PrintStats(bool print_latency_stats) {
   }
 }
 
-TRTISASRClient::TRTISASRClient(const std::string& url,
-                               const std::string& model_name,
-                               const int ncontextes, bool print_results)
+TritonASRClient::TritonASRClient(const std::string& url,
+                                 const std::string& model_name,
+                                 const int nclients, bool print_results,
+                                 bool print_partial_results, bool ctm,
+                                 float samp_freq)
     : url_(url),
       model_name_(model_name),
-      ncontextes_(ncontextes),
-      print_results_(print_results) {
-  ncontextes_ = std::max(ncontextes_, 1);
-  for (int i = 0; i < ncontextes_; ++i) CreateClientContext();
+      nclients_(nclients),
+      print_results_(print_results),
+      print_partial_results_(print_partial_results),
+      ctm_(ctm),
+      samp_freq_(samp_freq) {
+  nclients_ = std::max(nclients_, 1);
+  for (int i = 0; i < nclients_; ++i) CreateClientContext();
 
-  std::shared_ptr<nic::InferContext::Input> in_wave_data;
-  FAIL_IF_ERR(contextes_[0].trtis_context->GetInput("WAV_DATA", &in_wave_data),
-              "unable to get WAV_DATA");
-  max_chunk_byte_size_ = in_wave_data->ByteSize();
+  inference::ModelMetadataResponse model_metadata;
+  FAIL_IF_ERR(
+      clients_[0].triton_client->ModelMetadata(&model_metadata, model_name),
+      "unable to get model metadata");
+
+  for (const auto& in_tensor : model_metadata.inputs()) {
+    if (in_tensor.name().compare("WAV_DATA") == 0) {
+      samps_per_chunk_ = in_tensor.shape()[1];
+    }
+  }
+
+  max_chunk_byte_size_ = samps_per_chunk_ * sizeof(float);
   chunk_buf_.resize(max_chunk_byte_size_);
   shape_ = {max_chunk_byte_size_};
   n_in_flight_.store(0);
@@ -197,20 +274,24 @@ TRTISASRClient::TRTISASRClient(const std::string& url,
   total_audio_ = 0;
 }
 
-void TRTISASRClient::WriteLatticesToFile(
+void TritonASRClient::WriteLatticesToFile(
     const std::string& clat_wspecifier,
-    const std::unordered_map<ni::CorrelationID, std::string>&
-        corr_id_and_keys) {
+    const std::unordered_map<uint64_t, std::string>& corr_id_and_keys) {
   kaldi::CompactLatticeWriter clat_writer;
   clat_writer.Open(clat_wspecifier);
+  std::unordered_map<std::string, size_t> key_count;
   std::lock_guard<std::mutex> lk(results_m_);
   for (auto& p : corr_id_and_keys) {
-    ni::CorrelationID corr_id = p.first;
-    const std::string& key = p.second;
+    uint64_t corr_id = p.first;
+    std::string key = p.second;
+    const auto iter = key_count[key]++;
+    if (iter > 0) {
+      key += std::to_string(iter);
+    }
     auto it = results_.find(corr_id);
-    if(it == results_.end()) {
-	    std::cerr << "Cannot find lattice for corr_id " << corr_id << std::endl;
-	    continue;
+    if (it == results_.end()) {
+      std::cerr << "Cannot find lattice for corr_id " << corr_id << std::endl;
+      continue;
     }
     const std::string& raw_lattice = it->second.raw_lattice;
     // We could in theory write directly the binary hold in raw_lattice (it is

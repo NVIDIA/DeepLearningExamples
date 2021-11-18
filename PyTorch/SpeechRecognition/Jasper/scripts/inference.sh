@@ -23,6 +23,7 @@
 : ${CUDNN_BENCHMARK:=false}
 : ${MAX_DURATION:=""}
 : ${PAD_TO_MAX_DURATION:=false}
+: ${PAD_LEADING:=16}
 : ${NUM_GPUS:=1}
 : ${NUM_STEPS:=0}
 : ${NUM_WARMUP_STEPS:=0}
@@ -46,6 +47,7 @@ ARGS+=" --seed=$SEED"
 ARGS+=" --dali_device=$DALI_DEVICE"
 ARGS+=" --steps $NUM_STEPS"
 ARGS+=" --warmup_steps $NUM_WARMUP_STEPS"
+ARGS+=" --pad_leading $PAD_LEADING"
 
 [ "$AMP" = true ] &&                 ARGS+=" --amp"
 [ "$EMA" = true ] &&                 ARGS+=" --ema"
@@ -55,7 +57,9 @@ ARGS+=" --warmup_steps $NUM_WARMUP_STEPS"
 [ -n "$PREDICTION_FILE" ] &&         ARGS+=" --save_prediction $PREDICTION_FILE"
 [ -n "$LOGITS_FILE" ] &&             ARGS+=" --logits_save_to $LOGITS_FILE"
 [ "$CPU" == "true" ] &&              ARGS+=" --cpu"
-[ -n "$MAX_DURATION" ] &&            ARGS+=" --max_duration $MAX_DURATION"
-[ "$PAD_TO_MAX_DURATION" = true ] && ARGS+=" --pad_to_max_duration"
+[ -n "$MAX_DURATION" ] &&            ARGS+=" --override_config input_val.audio_dataset.max_duration=$MAX_DURATION" \
+                                     ARGS+=" --override_config input_val.filterbank_features.max_duration=$MAX_DURATION"
+[ "$PAD_TO_MAX_DURATION" = true ] && ARGS+=" --override_config input_val.audio_dataset.pad_to_max_duration=True" \
+                                     ARGS+=" --override_config input_val.filterbank_features.pad_to_max_duration=True"
 
 python -m torch.distributed.launch --nproc_per_node=$NUM_GPUS inference.py $ARGS

@@ -283,7 +283,6 @@ The `utils/` directory contains the following utility modules:
  - `cmdline_helper.py`: helper module for command line processing
  - `data_utils.py`: module defining input data pipelines
  - `dali_utils.py`: helper module for DALI 
- - `hvd_utils.py`: helper module for Horovod
  - `image_processing.py`: image processing and data augmentation functions
  - `learning_rate.py`: definition of used learning rate schedule
  - `optimizers.py`: definition of used custom optimizers
@@ -419,6 +418,8 @@ To run inference on a single example with a checkpoint and a model script, use:
 The optional `--xla` and `--amp` flags control XLA and AMP during inference.
 
 ## Performance
+
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
 
 ### Benchmarking
 

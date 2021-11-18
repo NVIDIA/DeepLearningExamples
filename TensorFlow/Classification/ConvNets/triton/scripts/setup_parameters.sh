@@ -15,7 +15,7 @@
 export PRECISION="fp16"
 export FORMAT="tf-trt"
 export BATCH_SIZE="1,2,4,8,16,32,64,128"
-export BACKEND_ACCELERATOR="trt"
+export BACKEND_ACCELERATOR="cuda"
 export MAX_BATCH_SIZE="128"
 export NUMBER_OF_MODEL_INSTANCES="2"
 export TRITON_MAX_QUEUE_DELAY="1"

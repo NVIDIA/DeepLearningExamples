@@ -1,3 +1,4 @@
-pandas
+pandas>=0.24.2
 tqdm
--e git://github.com/NVIDIA/dllogger#egg=dllogger
+pyyaml
+git+https://github.com/NVIDIA/dllogger#egg=dllogger

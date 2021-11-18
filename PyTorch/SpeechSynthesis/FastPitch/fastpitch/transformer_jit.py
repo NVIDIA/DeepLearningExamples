@@ -21,11 +21,6 @@ import torch.nn.functional as F
 from common.utils import mask_from_lens
 
 
-class NoOp(nn.Module):
-    def forward(self, x):
-        return x
-
-
 class PositionalEmbedding(nn.Module):
     def __init__(self, demb):
         super(PositionalEmbedding, self).__init__()
@@ -221,7 +216,7 @@ class FFTransformer(nn.Module):
             self.word_emb = nn.Embedding(n_embed, d_embed or d_model,
                                          padding_idx=self.padding_idx)
         else:
-            self.word_emb = NoOp()
+            self.word_emb = nn.Identity()
 
         self.pos_emb = PositionalEmbedding(self.d_model)
         self.drop = nn.Dropout(dropemb)

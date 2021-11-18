@@ -21,21 +21,16 @@
 # limitations under the License.
 
 import numpy as np
-import torch
+from torch.utils.data import Dataset, ConcatDataset
 
-from . import data_utils, FairseqDataset
+from . import data_utils
 import itertools
 import os
 import sys
-from fairseq.data import (
-    Dictionary, IndexedInMemoryDataset,
-    IndexedRawTextDataset,
-)
+from fairseq.data import IndexedInMemoryDataset, IndexedRawTextDataset
 
 
-
-
-class LanguagePairDataset(FairseqDataset):
+class LanguagePairDataset(Dataset):
     """A pair of torch.utils.data.Datasets."""
 
     def __init__(
@@ -81,21 +76,19 @@ class LanguagePairDataset(FairseqDataset):
             pad_sequence=self.pad_sequence,
         )
 
-
     def num_tokens(self, index):
         """Return an example's length (number of tokens), used for batching."""
         orig_size = max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
         assert self.pad_sequence > 0, "Padding multiple has to be greater than 0"
         size = 0
-        if self.pad_sequence > 1 :
+        if self.pad_sequence > 1:
             size = orig_size // self.pad_sequence * self.pad_sequence
-            if orig_size % self.pad_sequence > 0 :
+            if orig_size % self.pad_sequence > 0:
                 size += self.pad_sequence
-        else :
+        else:
             size = orig_size
         return size
         #return max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
-
 
     def ordered_indices(self, seed=None, epoch=1):
         """Ordered indices for batching."""
@@ -111,8 +104,8 @@ class LanguagePairDataset(FairseqDataset):
         """Check if an example's size is valid according to max_positions."""
         max_source_positions, max_target_positions = self._get_max_positions(max_positions)
         return (
-            self.src_sizes[index] <= max_source_positions
-            and (self.tgt_sizes is None or self.tgt_sizes[index] <= max_target_positions)
+            self.src_sizes[index] <= max_source_positions and
+            (self.tgt_sizes is None or self.tgt_sizes[index] <= max_target_positions)
         )
 
     def _get_max_positions(self, max_positions):
@@ -121,6 +114,7 @@ class LanguagePairDataset(FairseqDataset):
         assert len(max_positions) == 2
         max_src_pos, max_tgt_pos = max_positions
         return min(self.max_source_positions, max_src_pos), min(self.max_target_positions, max_tgt_pos)
+
 
 def load_dataset(args, datasets, split, src_dict, tgt_dict, combine=False):
     """Load a dataset split."""
@@ -187,6 +181,7 @@ def load_dataset(args, datasets, split, src_dict, tgt_dict, combine=False):
         max_target_positions=args.max_target_positions,
         pad_sequence=args.pad_sequence,
     )
+
 
 def load_dataset_splits(args, splits, src_dict, tgt_dict):
     datasets = {}

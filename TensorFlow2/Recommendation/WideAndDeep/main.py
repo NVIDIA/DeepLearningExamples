@@ -12,8 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+
+os.environ["TF_MEMORY_ALLOCATION"] = "0.6"  # fraction of free memory
+import nvtabular as nvt
+
 from trainer.model.widedeep import wide_deep_model
-from trainer.run import train, evaluate
+from trainer.run import run
 from trainer.utils.arguments import parse_args
 from trainer.utils.setup import create_config
 
@@ -21,13 +26,9 @@ from trainer.utils.setup import create_config
 def main():
     args = parse_args()
     config = create_config(args)
-    model = wide_deep_model(args)
-
-    if args.evaluate:
-        evaluate(args, model, config)
-    else:
-        train(args, model, config)
+    model, _ = wide_deep_model(args)
+    run(args, model, config)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

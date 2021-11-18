@@ -24,7 +24,7 @@ if [[ ! -z "${BIND_TO_SOCKET}" ]]; then
 fi
 
 mpiexec --allow-run-as-root ${BIND_TO_SOCKET} -np 8 python3 main.py --arch=resnext101-32x4d \
-    --mode=train_and_evaluate --iter_unit=epoch --num_iter=250 --muxup=0.2 \
+    --mode=train_and_evaluate --iter_unit=epoch --num_iter=250 --mixup=0.2 \
     --batch_size=96 --warmup_steps=100 --cosine_lr --label_smoothing 0.1 \
     --lr_init=0.256 --lr_warmup_epochs=8 --momentum=0.875 --weight_decay=6.103515625e-05 \
     --amp --static_loss_scale 128 \

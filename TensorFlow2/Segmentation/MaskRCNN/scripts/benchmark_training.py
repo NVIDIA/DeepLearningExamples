@@ -17,6 +17,9 @@ import argparse
 import os
 import shutil
 import subprocess
+from pathlib import Path
+
+LOCK_FILE = Path('/tmp/mrcnn_tf2.lock')
 
 
 class CustomFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
@@ -45,6 +48,8 @@ if __name__ == '__main__':
                         help='Input directory containing the dataset')
     parser.add_argument('--weights_dir', type=str, metavar='DIR', default='/weights',
                         help='Directory containing pre-trained resnet weights')
+    parser.add_argument('--slurm_lock', action='store_true',
+                        help='Prevent this script from being launched multiple times when used in multi-gpu slurm setup')
 
     flags, remainder = parser.parse_known_args()
 
@@ -76,5 +81,15 @@ if __name__ == '__main__':
     line = '-' * shutil.get_terminal_size()[0]
     print(line, cmd, line, sep='\n', flush=True)
 
+    # acquire lock if --slurm_lock is provided
+    try:
+        flags.slurm_lock and LOCK_FILE.touch(exist_ok=False)
+    except FileExistsError:
+        print(f'Failed to acquire lock ({LOCK_FILE}) - skipping')
+        exit(0)
+
     # run model
-    subprocess.call(cmd, shell=True)
+    code = subprocess.call(cmd, shell=True)
+
+    flags.slurm_lock and LOCK_FILE.unlink()
+    exit(code)

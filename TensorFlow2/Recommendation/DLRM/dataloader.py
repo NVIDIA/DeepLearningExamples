@@ -17,7 +17,23 @@
 
 from distributed_utils import get_device_mapping
 import horovod.tensorflow as hvd
-from split_binary_dataset import RawBinaryDataset, DatasetMetadata, DummyDataset
+from split_binary_dataset import RawBinaryDataset, DummyDataset
+import numpy as np
+
+
+class Permuter:
+    def __init__(self, wrapped, seed):
+        self.wrapped = wrapped
+        rng = np.random.default_rng(seed=seed)
+        self.indices = rng.permutation(len(wrapped))
+        print('Permuter created, first indices: ', self.indices[:10])
+
+    def __getitem__(self, item):
+        mapped_index = self.indices[item]
+        return self.wrapped[mapped_index]
+
+    def __len__(self):
+        return len(self.wrapped)
 
 
 def create_input_pipelines(FLAGS):
@@ -57,6 +73,9 @@ def create_input_pipelines(FLAGS):
                                          categorical_feature_sizes=dataset_metadata.categorical_cardinalities,
                                          prefetch_depth=FLAGS.prefetch_batches,
                                          drop_last_batch=True)
+
+        if FLAGS.batch_shuffle:
+            train_dataset = Permuter(train_dataset, seed=FLAGS.shuffle_seed)
 
         test_dataset = RawBinaryDataset(data_path=FLAGS.dataset_path,
                                         valid=True,

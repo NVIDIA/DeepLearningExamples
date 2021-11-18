@@ -18,13 +18,16 @@ import os
 import random
 import time
 
-import pyprof
+try:
+    import nvidia_dlprof_pytorch_nvtx as pyprof
+except ModuleNotFoundError:
+    import pyprof
+
 import torch
 import numpy as np
 import torch.cuda.profiler as profiler
 import torch.distributed as dist
-from apex import amp
-from apex.parallel import DistributedDataParallel
+from contextlib import suppress as empty_context
 
 from common import helpers
 from common.dali.data_loader import DaliDataLoader
@@ -34,6 +37,7 @@ from common.helpers import (Checkpointer, greedy_wer, num_weights, print_once,
                             process_evaluation_epoch)
 from common.optimizers import AdamW, lr_policy, Novograd
 from common.tb_dllogger import flush_log, init_log, log
+from common.utils import BenchmarkStats
 from jasper import config
 from jasper.model import CTCLossNM, GreedyCTCDecoder, Jasper
 
@@ -54,7 +58,7 @@ def parse_args():
     training.add_argument('--cudnn_benchmark', action='store_true', default=True,
                           help='Enable cudnn benchmark')
     training.add_argument('--amp', '--fp16', action='store_true', default=False,
-                          help='Use mixed precision training')
+                          help='Use pytorch native mixed precision training')
     training.add_argument('--seed', default=42, type=int, help='Random seed')
     training.add_argument('--local_rank', default=os.getenv('LOCAL_RANK', 0),
                           type=int, help='GPU id used for distributed training')
@@ -107,16 +111,17 @@ def parse_args():
                     help='Paths of the training dataset manifest file')
     io.add_argument('--val_manifests', type=str, required=True, nargs='+',
                     help='Paths of the evaluation datasets manifest files')
-    io.add_argument('--max_duration', type=float,
-                    help='Discard samples longer than max_duration')
-    io.add_argument('--pad_to_max_duration', action='store_true', default=False,
-                    help='Pad training sequences to max_duration')
     io.add_argument('--dataset_dir', required=True, type=str,
                     help='Root dir of dataset')
     io.add_argument('--output_dir', type=str, required=True,
                     help='Directory for logs and checkpoints')
     io.add_argument('--log_file', type=str, default=None,
                     help='Path to save the training logfile.')
+    io.add_argument('--benchmark_epochs_num', type=int, default=1,
+                    help='Number of epochs accounted in final average throughput.')
+    io.add_argument('--override_config', type=str, action='append',
+                    help='Overrides a value from a config .yaml.'
+                         ' Syntax: `--override_config nested.config.key=val`.')
     return parser.parse_args()
 
 
@@ -152,15 +157,16 @@ def evaluate(epoch, step, val_loader, val_feat_proc, labels, model,
                 # with DALI, the data is already on GPU
                 feat, feat_lens, txt, txt_lens = batch
                 if val_feat_proc is not None:
-                    feat, feat_lens = val_feat_proc(feat, feat_lens, use_amp)
+                    feat, feat_lens = val_feat_proc(feat, feat_lens)
             else:
                 batch = [t.cuda(non_blocking=True) for t in batch]
                 audio, audio_lens, txt, txt_lens = batch
-                feat, feat_lens = val_feat_proc(audio, audio_lens, use_amp)
+                feat, feat_lens = val_feat_proc(audio, audio_lens)
 
-            log_probs, enc_lens = model.forward(feat, feat_lens)
-            loss = ctc_loss(log_probs, txt, enc_lens, txt_lens)
-            pred = greedy_decoder(log_probs)
+            with torch.cuda.amp.autocast(enabled=use_amp):
+                log_probs, enc_lens = model(feat, feat_lens)
+                loss = ctc_loss(log_probs, txt, enc_lens, txt_lens)
+                pred = greedy_decoder(log_probs)
 
             agg['losses'] += helpers.gather_losses([loss])
             agg['preds'] += helpers.gather_predictions([pred], labels)
@@ -198,7 +204,7 @@ def main():
     init_log(args)
 
     cfg = config.load(args.model_config)
-    config.apply_duration_flags(cfg, args.max_duration, args.pad_to_max_duration)
+    config.apply_config_overrides(cfg, args)
 
     symbols = helpers.add_ctc_blank(cfg['labels'])
 
@@ -317,16 +323,13 @@ def main():
     else:
         raise ValueError(f'Invalid optimizer "{args.optimizer}"')
 
+    scaler = torch.cuda.amp.GradScaler(enabled=args.amp)
+
     adjust_lr = lambda step, epoch, optimizer: lr_policy(
         step, epoch, args.lr, optimizer, steps_per_epoch=steps_per_epoch,
         warmup_epochs=args.warmup_epochs, hold_epochs=args.hold_epochs,
         num_epochs=args.epochs, policy=args.lr_policy, min_lr=args.min_lr,
         exp_gamma=args.lr_exp_gamma)
-
-    if args.amp:
-        model, optimizer = amp.initialize(
-            min_loss_scale=1.0, models=model, optimizers=optimizer,
-            opt_level='O1', max_loss_scale=512.0)
 
     if args.ema > 0:
         ema_model = copy.deepcopy(model)
@@ -334,20 +337,20 @@ def main():
         ema_model = None
 
     if multi_gpu:
-        model = DistributedDataParallel(model)
-
+        model = torch.nn.parallel.DistributedDataParallel(
+            model, device_ids=[args.local_rank], output_device=args.local_rank)
     if args.pyprof:
         pyprof.init(enable_function_stack=True)
 
     # load checkpoint
     meta = {'best_wer': 10**6, 'start_epoch': 0}
     checkpointer = Checkpointer(args.output_dir, 'Jasper',
-                                args.keep_milestones, args.amp)
+                                args.keep_milestones)
     if args.resume:
         args.ckpt = checkpointer.last_checkpoint() or args.ckpt
 
     if args.ckpt is not None:
-        checkpointer.load(args.ckpt, model, ema_model, optimizer, meta)
+        checkpointer.load(args.ckpt, model, ema_model, optimizer, scaler, meta)
 
     start_epoch = meta['start_epoch']
     best_wer = meta['best_wer']
@@ -374,25 +377,29 @@ def main():
             txt = torch.randint(high=len(symbols)-1, size=(batch_size, 100),
                                 device='cuda')
             txt_lens = torch.ones(batch_size, device='cuda').fill_(100)
-            log_probs, enc_lens = model(feat, feat_lens)
-            del feat
-            loss = ctc_loss(log_probs, txt, enc_lens, txt_lens)
+            with torch.cuda.amp.autocast(enabled=args.amp):
+                log_probs, enc_lens = model(feat, feat_lens)
+                del feat
+                loss = ctc_loss(log_probs, txt, enc_lens, txt_lens)
             loss.backward()
             model.zero_grad()
+    torch.cuda.empty_cache()
+
+    bmark_stats = BenchmarkStats()
 
     for epoch in range(start_epoch + 1, args.epochs + 1):
         if multi_gpu and not use_dali:
             train_loader.sampler.set_epoch(epoch)
 
         epoch_utts = 0
+        epoch_loss = 0
         accumulated_batches = 0
         epoch_start_time = time.time()
+        epoch_eval_time = 0
 
         for batch in train_loader:
 
             if accumulated_batches == 0:
-                adjust_lr(step, epoch, optimizer)
-                optimizer.zero_grad()
                 step_loss = 0
                 step_utts = 0
                 step_start_time = time.time()
@@ -401,36 +408,49 @@ def main():
                 # with DALI, the data is already on GPU
                 feat, feat_lens, txt, txt_lens = batch
                 if train_feat_proc is not None:
-                    feat, feat_lens = train_feat_proc(feat, feat_lens, args.amp)
+                    feat, feat_lens = train_feat_proc(feat, feat_lens)
             else:
                 batch = [t.cuda(non_blocking=True) for t in batch]
                 audio, audio_lens, txt, txt_lens = batch
-                feat, feat_lens = train_feat_proc(audio, audio_lens, args.amp)
+                feat, feat_lens = train_feat_proc(audio, audio_lens)
 
-            log_probs, enc_lens = model(feat, feat_lens)
-
-            loss = ctc_loss(log_probs, txt, enc_lens, txt_lens)
-            loss /= args.grad_accumulation_steps
-
-            if torch.isnan(loss).any():
-                print_once(f'WARNING: loss is NaN; skipping update')
+            # Use context manager to prevent redundant accumulation of gradients
+            if (multi_gpu and accumulated_batches + 1 < args.grad_accumulation_steps):
+                ctx = model.no_sync()
             else:
-                if multi_gpu:
-                    step_loss += reduce_tensor(loss.data, world_size).item()
-                else:
-                    step_loss += loss.item()
+                ctx = empty_context()
 
-                if args.amp:
-                    with amp.scale_loss(loss, optimizer) as scaled_loss:
-                        scaled_loss.backward()
+            with ctx:
+                with torch.cuda.amp.autocast(enabled=args.amp):
+                    log_probs, enc_lens = model(feat, feat_lens)
+
+                    loss = ctc_loss(log_probs, txt, enc_lens, txt_lens)
+                    loss /= args.grad_accumulation_steps
+
+                if multi_gpu:
+                    reduced_loss = reduce_tensor(loss.data, world_size)
                 else:
-                    loss.backward()
-                step_utts += batch[0].size(0) * world_size
-                epoch_utts += batch[0].size(0) * world_size
-                accumulated_batches += 1
+                    reduced_loss = loss
+
+                if torch.isnan(reduced_loss).any():
+                    print_once(f'WARNING: loss is NaN; skipping update')
+                    continue
+                else:
+                    step_loss += reduced_loss.item()
+                    step_utts += batch[0].size(0) * world_size
+                    epoch_utts += batch[0].size(0) * world_size
+                    accumulated_batches += 1
+
+                    scaler.scale(loss).backward()
 
             if accumulated_batches % args.grad_accumulation_steps == 0:
-                optimizer.step()
+                epoch_loss += step_loss
+                scaler.step(optimizer)
+                scaler.update()
+
+                adjust_lr(step, epoch, optimizer)
+                optimizer.zero_grad()
+
                 apply_ema(model, ema_model, args.ema)
 
                 if step % args.log_frequency == 0:
@@ -453,14 +473,16 @@ def main():
                 step_start_time = time.time()
 
                 if step % args.eval_frequency == 0:
+                    tik = time.time()
                     wer = evaluate(epoch, step, val_loader, val_feat_proc,
                                    symbols, model, ema_model, ctc_loss,
                                    greedy_decoder, args.amp, use_dali)
 
                     if wer < best_wer and epoch >= args.save_best_from:
-                        checkpointer.save(model, ema_model, optimizer, epoch,
-                                          step, best_wer, is_best=True)
+                        checkpointer.save(model, ema_model, optimizer, scaler,
+                                          epoch, step, best_wer, is_best=True)
                         best_wer = wer
+                    epoch_eval_time += time.time() - tik
 
                 step += 1
                 accumulated_batches = 0
@@ -472,11 +494,15 @@ def main():
                 break
 
         epoch_time = time.time() - epoch_start_time
+        epoch_loss /= steps_per_epoch
         log((epoch,), None, 'train_avg', {'throughput': epoch_utts / epoch_time,
-                                          'took': epoch_time})
+                                          'took': epoch_time,
+                                          'loss': epoch_loss})
+        bmark_stats.update(epoch_utts, epoch_time, epoch_loss)
 
         if epoch % args.save_frequency == 0 or epoch in args.keep_milestones:
-            checkpointer.save(model, ema_model, optimizer, epoch, step, best_wer)
+            checkpointer.save(model, ema_model, optimizer, scaler, epoch, step,
+                              best_wer)
 
         if 0 < args.epochs_this_job <= epoch - start_epoch:
             print_once(f'Finished after {args.epochs_this_job} epochs.')
@@ -487,13 +513,14 @@ def main():
         profiler.stop()
         torch.autograd.profiler.emit_nvtx().__exit__(None, None, None)
 
-    log((), None, 'train_avg', {'throughput': epoch_utts / epoch_time})
+    log((), None, 'train_avg', bmark_stats.get(args.benchmark_epochs_num))
 
     if epoch == args.epochs:
         evaluate(epoch, step, val_loader, val_feat_proc, symbols, model,
                  ema_model, ctc_loss, greedy_decoder, args.amp, use_dali)
 
-        checkpointer.save(model, ema_model, optimizer, epoch, step, best_wer)
+        checkpointer.save(model, ema_model, optimizer, scaler, epoch, step,
+                          best_wer)
     flush_log()
 
 

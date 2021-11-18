@@ -74,14 +74,7 @@ def get_dataloader(model_args_list):
         return None
 
     cfg = config.load(args.model_config)
-
-    if args.max_duration is not None:
-        cfg['input_val']['audio_dataset']['max_duration'] = args.max_duration
-        cfg['input_val']['filterbank_features']['max_duration'] = args.max_duration
-
-    if args.pad_to_max_duration:
-        assert cfg['input_train']['audio_dataset']['max_duration'] > 0
-        cfg['input_train']['audio_dataset']['pad_to_max_duration'] = True
+    config.apply_config_overrides(cfg, args)
 
     symbols = add_ctc_blank(cfg['labels'])
 
@@ -108,15 +101,7 @@ def init_feature_extractor(args):
     from common.features import FilterbankFeatures
 
     cfg = config.load(args.model_config)
-
-    if args.max_duration is not None:
-        cfg['input_val']['audio_dataset']['max_duration'] = args.max_duration
-        cfg['input_val']['filterbank_features']['max_duration'] = args.max_duration
-
-    if args.pad_to_max_duration:
-        assert cfg['input_train']['audio_dataset']['max_duration'] > 0
-        cfg['input_train']['audio_dataset']['pad_to_max_duration'] = True
-
+    config.apply_config_overrides(cfg, args)
     _, features_kw = config.input(cfg, 'val')
 
     feature_proc = FilterbankFeatures(**features_kw)
@@ -131,14 +116,7 @@ def init_acoustic_model(args):
     from jasper import config
 
     cfg = config.load(args.model_config)
-
-    if args.max_duration is not None:
-        cfg['input_val']['audio_dataset']['max_duration'] = args.max_duration
-        cfg['input_val']['filterbank_features']['max_duration'] = args.max_duration
-
-    if args.pad_to_max_duration:
-        assert cfg['input_train']['audio_dataset']['max_duration'] > 0
-        cfg['input_train']['audio_dataset']['pad_to_max_duration'] = True
+    config.apply_config_overrides(cfg, args)
 
     if cfg['jasper']['encoder']['use_conv_masks'] == True:
         print("[Jasper module]: Warning: setting 'use_conv_masks' \

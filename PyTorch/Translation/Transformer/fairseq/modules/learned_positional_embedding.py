@@ -29,4 +29,3 @@ class LearnedPositionalEmbedding(nn.Embedding):
         else:
             positions = utils.make_positions(input.data, self.padding_idx, self.left_pad)
         return super().forward(positions)
-

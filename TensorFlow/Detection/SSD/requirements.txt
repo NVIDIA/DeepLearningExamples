@@ -1,2 +1,4 @@
-pycocotools==2.0.0
-contextlib2
+cython==0.29.24
+pycocotools==2.0.2
+contextlib2==21.6.0
+

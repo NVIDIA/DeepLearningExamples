@@ -129,6 +129,13 @@ class ArgumentParserUtil(object):
                                   required=False,
                                   help="Enable Automatic Mixed Precision to speedup computation using tensor cores.")
 
+        goptim_group.add_argument("--cpu",
+                                  action="store_true",
+                                  dest="cpu",
+                                  default=False,
+                                  required=False,
+                                  help="Run model on CPU instead of GPU")
+
         amp_group = self.parser.add_argument_group("Automatic Mixed Precision arguments")
         amp_group.add_argument("--static_loss_scale",
                                "--loss_scale",

@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+# @package _global_
+config:
+  optimizer:
+    _target_: optimizers.optimizer_wrapped
+    lr: 1.0
+    max_iter: 20
+    max_eval: null
+    tolerance_grad: 1e-7
+    tolerance_change: 1e-9
+    history_size: 100
+    line_search_fn: null
+    name: LBFGS
+

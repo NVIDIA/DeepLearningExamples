@@ -71,4 +71,4 @@ if __name__ == '__main__':
     print(line, cmd, line, sep='\n', flush=True)
 
     # run model
-    subprocess.call(cmd, shell=True)
+    exit(subprocess.call(cmd, shell=True))

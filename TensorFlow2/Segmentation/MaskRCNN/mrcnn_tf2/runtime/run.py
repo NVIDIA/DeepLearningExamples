@@ -59,25 +59,6 @@ def run_training(dataset, params):
         verbose=0
     )
 
-    if 'eval' not in params.mode:
-        return
-
-    predictions = mask_rcnn_model.predict(
-        x=dataset.eval_fn(params.eval_batch_size * params.replicas),
-        callbacks=list(create_callbacks(params))
-    )
-
-    eval_results = evaluate(
-        predictions=predictions,
-        eval_file=params.eval_file,
-        include_mask=params.include_mask
-    )
-
-    dllogger.log(
-        step=tuple(),
-        data={k: float(v) for k, v in eval_results.items()}
-    )
-
 
 def run_evaluation(dataset, params):
     setup(params)

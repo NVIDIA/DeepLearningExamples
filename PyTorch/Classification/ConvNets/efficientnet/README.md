@@ -326,11 +326,11 @@ unzip
 
 To run inference on ImageNet, run:
 
-`python ./main.py --arch efficientnet-<version> --evaluate --epochs 1 --pretrained-from-file  -b <batch size> <path to imagenet>`
+`python ./main.py --arch efficientnet-<version> --evaluate --epochs 1 --pretrained  -b <batch size> <path to imagenet>`
 
 To run inference on JPEG image using pre-trained weights, run:
 
-`python classify.py --arch efficientnet-<version> -c fanin --weights  --precision AMP|FP32 --image <path to JPEG image>`
+`python classify.py --arch efficientnet-<version> --pretrained --precision AMP|FP32 --image <path to JPEG image>`
 
 
 ## Advanced
@@ -423,7 +423,7 @@ To run inference on JPEG image, you have to first extract the model weights from
 
 Then, run the classification script:
 
-`python classify.py --arch efficientnet-<version> --weights <path to weights from previous step> --precision AMP|FP32 --image <path to JPEG image>`
+`python classify.py --arch efficientnet-<version> --pretrained-from-file <path to weights from previous step> --precision AMP|FP32 --image <path to JPEG image>`
 
 You can also run the ImageNet validation on pretrained weights:
 
@@ -434,19 +434,27 @@ You can also run the ImageNet validation on pretrained weights:
 Pretrained weights can be downloaded from NGC:
 
 ```bash
-wget --content-disposition <ngc weights url>
+wget <ngc weights url>
 ```
 
+URL for each model can be found in the following table:
 
-
+| **Model** | **NGC weights URL** |
+|:---------:|:-------------------:|
+| efficientnet-b0 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b0_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-b0_210412.pth | 
+| efficientnet-b4 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b4_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-b4_210412.pth | 
+| efficientnet-widese-b0 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_widese_b0_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-widese-b0_210412.pth | 
+| efficientnet-widese-b4 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_widese_b4_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-widese-b4_210412.pth | 
+| efficientnet-quant-b0 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b0_pyt_qat_ckpt_fp32/versions/21.03.0/files/nvidia-efficientnet-quant-b0-130421.pth | 
+| efficientnet-quant-b4 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b4_pyt_qat_ckpt_fp32/versions/21.03.0/files/nvidia-efficientnet-quant-b4-130421.pth | 
 
 To run inference on ImageNet, run:
 
-`python ./main.py --arch efficientnet-<version> --evaluate --epochs 1 --pretrained-from-file  -b <batch size> <path to imagenet>`
+`python ./main.py --arch efficientnet-<version> --evaluate --epochs 1 --pretrained -b <batch size> <path to imagenet>`
 
 To run inference on JPEG images using pretrained weights, run:
 
-`python classify.py --arch efficientnet-<version> --weights  --precision AMP|FP32 --image <path to JPEG image>`
+`python classify.py --arch efficientnet-<version> --pretrained --precision AMP|FP32 --image <path to JPEG image>`
 
 
 ### Quantization process
@@ -456,23 +464,35 @@ EfficientNet-b0 and EfficientNet-b4 models can be quantized using the QAT proces
 `python ./quant_main.py <path to imagenet> --arch efficientnet-quant-<version> --epochs <# of QAT epochs> --pretrained-from-file <path to non-quantized model weights> <any other parameters for training such as batch, momentum etc.>`
 
 During the QAT process, evaluation is done in the same way as during standard training. `quant_main.py`  works in the same way as the original `main.py` script, but with quantized models. It means that `quant_main.py` can be used to resume the QAT process with the flag `--resume`:
+
 `python ./quant_main.py <path to imagenet> --arch efficientnet-quant-<version> --resume <path to mid-training checkpoint> ...`
+
 or to evaluate a created checkpoint with the flag `--evaluate`:
+
 `python ./quant_main.py --arch efficientnet-quant-<version> --evaluate --epochs 1 --resume <path to checkpoint> -b <batch size> <path to imagenet>` 
+
 It also can run on multi-GPU in an identical way as the standard `main.py` script:
+
 `python ./multiproc.py --nproc_per_node 8 ./quant_main.py --arch efficientnet-quant-<version> ... <path to imagenet>`
 
 There is also a possibility to transform trained models (quantized or not) into ONNX format, which is needed to convert it later into TensorRT, where quantized networks are much faster during inference. Conversion to TensorRT will be supported in the next release. The conversion to ONNX consists of two steps:
+
 * translate checkpoint to pure weights:
-`python checkpoint2model.py --checkpoint-path <path to quant checkpoint> --weight-path <path where quant weights will be stored>` 
+
+`python checkpoint2model.py --checkpoint-path <path to quant checkpoint> --weight-path <path where quant weights will be stored>`
+
 * translate pure weights to ONNX:
-`python model2onnx.py --arch efficientnet-quant-<version> --pretrained-from-file <path to model quant weights> -b <batch size>`
+
+`python model2onnx.py --arch efficientnet-quant-<version> --pretrained-from-file <path to model quant weights> -b <batch size> --trt True`
+
 
 Quantized models could also be used to classify new images using the `classify.py`  flag. For example:
-`python classify.py --arch efficientnet-quant-<version> -c fanin --pretrained-from-file <path to quant weights> --image <path to JPEG image>`
+`python classify.py --arch efficientnet-quant-<version> --pretrained-from-file <path to quant weights> --image <path to JPEG image>`
 
 
 ## Performance
+
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
 
 ### Benchmarking
 

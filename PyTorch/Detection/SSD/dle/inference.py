@@ -17,6 +17,7 @@ import skimage
 
 def load_image(image_path):
     """Code from Loading_Pretrained_Models.ipynb - a Caffe2 tutorial"""
+    mean, std = 128, 128
     img = skimage.img_as_float(skimage.io.imread(image_path))
     if len(img.shape) == 2:
         img = np.array([img, img, img]).swapaxes(0,2)

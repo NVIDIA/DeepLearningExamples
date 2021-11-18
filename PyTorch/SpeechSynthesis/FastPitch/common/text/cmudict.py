@@ -16,6 +16,13 @@ valid_symbols = [
 _valid_symbol_set = set(valid_symbols)
 
 
+def lines_to_list(filename):
+  with open(filename, encoding='utf-8') as f:
+    lines = f.readlines()
+  lines = [l.rstrip() for l in lines]
+  return lines
+
+
 class CMUDict:
   '''Thin wrapper around CMUDict data. http://www.speech.cs.cmu.edu/cgi-bin/cmudict'''
   def __init__(self, file_or_path=None, heteronyms_path=None, keep_ambiguous=True):
@@ -31,8 +38,17 @@ class CMUDict:
 
   def initialize(self, file_or_path, keep_ambiguous=True):
     if isinstance(file_or_path, str):
-      with open(file_or_path, encoding='latin-1') as f:
-        entries = _parse_cmudict(f)
+      try:
+        with open(file_or_path, encoding='latin-1') as f:
+          entries = _parse_cmudict(f)
+      except FileNotFoundError:
+        print("CMUdict missing. Download with")
+        print()
+        print("    bash scripts/download_cmudict.sh")
+        print()
+        print("and re-run the script.")
+        import sys
+        sys.exit(0)
     else:
       entries = _parse_cmudict(file_or_path)
     if not keep_ambiguous:

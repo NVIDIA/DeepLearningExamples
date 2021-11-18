@@ -235,7 +235,7 @@ bash triton/scripts/run_server.sh
 To run in the foreground interactively, for debugging purposes, run:
 
 ```bash
-DAEMON="--detach=false" bash trinton/scripts/run_server.sh
+DAEMON="--detach=false" bash triton/scripts/run_server.sh
 ```
 
 The script mounts and loads models at `$PWD/triton/deploy/model_repo` to the server with all visible GPUs. In order to selectively choose the devices, set `NVIDIA_VISIBLE_DEVICES`.
@@ -273,6 +273,8 @@ For more information about `perf_client`, refer to the [official documentation](
 
 
 ## Performance
+
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
 
 ### Inference Benchmarking in Triton Inference Server
 

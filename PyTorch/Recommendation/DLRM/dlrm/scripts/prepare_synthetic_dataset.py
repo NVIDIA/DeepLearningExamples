@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import torch
+
 from dlrm.data.datasets import SyntheticDataset
 from dlrm.data.factories import create_synthetic_datasets
 from dlrm.data.utils import write_dataset_to_disk, get_categorical_feature_sizes
@@ -27,9 +29,11 @@ flags.DEFINE_list("synthetic_dataset_table_sizes", default=','.join(26 * [str(10
                   help="Embedding table sizes to use with the synthetic dataset")
 flags.DEFINE_string("synthetic_dataset_dir", default="/tmp/dlrm_synthetic_data",
                     help="Destination of the saved synthetic dataset")
-
+flags.DEFINE_integer("seed", default=12345, help="Set a seed for generating synthetic data")
 
 def main(argv):
+    torch.manual_seed(FLAGS.seed)
+
     table_sizes = [int(s) for s in FLAGS.synthetic_dataset_table_sizes]
     train_dataset = SyntheticDataset(
         num_entries=FLAGS.synthetic_dataset_num_entries,

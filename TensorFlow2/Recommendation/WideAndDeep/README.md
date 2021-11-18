@@ -25,27 +25,24 @@ The content of the repository is tested and maintained by NVIDIA.
   * [Getting the data](#getting-the-data)
     + [Dataset guidelines](#dataset-guidelines)
     + [Dataset preprocessing](#dataset-preprocessing)
-      - [Spark CPU Dataset preprocessing](#spark-cpu-dataset-preprocessing)
       - [NVTabular GPU preprocessing](#nvtabular-gpu-preprocessing)
   * [Training process](#training-process)
   * [Evaluation process](#evaluation-process)
 - [Performance](#performance)
   * [Benchmarking](#benchmarking)
-    + [NVTabular and Spark CPU Preprocessing comparison](#nvtabular-and-spark-cpu-preprocessing-comparison)
-    + [Training and inference performance benchmark](#training-and-inference-performance-benchmark)
   * [Results](#results)
     + [Training accuracy results](#training-accuracy-results)
       - [Training accuracy: NVIDIA DGX A100 (8x A100 80GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-80gb)
-      - [Training accuracy: NVIDIA DGX-1 (8x V100 16GB)](#training-accuracy-nvidia-dgx-1-8x-v100-16gb)
+      - [Training accuracy: NVIDIA DGX-1 (8x V100 32GB)](#training-accuracy-nvidia-dgx-1-8x-v100-32gb)
       - [Training accuracy plots](#training-accuracy-plots)
       - [Training stability test](#training-stability-test)
       - [Impact of mixed precision on training accuracy](#impact-of-mixed-precision-on-training-accuracy)
     + [Training performance results](#training-performance-results)
       - [Training performance: NVIDIA DGX A100 (8x A100 80GB)](#training-performance-nvidia-dgx-a100-8x-a100-80gb)
-      - [Training performance: NVIDIA DGX-1 (8x V100 16GB)](#training-performance-nvidia-dgx-1-8x-v100-16gb)
-    + [Inference performance results](#inference-performance-results)
-      - [Inference performance: NVIDIA DGX A100 (8x A100 80GB)](#inference-performance-nvidia-dgx-a100-8x-a100-80gb)
-      - [Inference performance: NVIDIA DGX-1 (8x V100 16GB)](#inference-performance-nvidia-dgx-1-8x-v100-16gb)
+      - [Training performance: NVIDIA DGX-1 (8x V100 32GB)](#training-performance-nvidia-dgx-1-8x-v100-32gb)
+    + [Evaluation performance results](#evaluation-performance-results)
+      - [Evaluation performance: NVIDIA DGX A100 (8x A100 80GB)](#evaluation-performance-nvidia-dgx-a100-8x-a100-80gb)
+      - [Evaluation performance: NVIDIA DGX-1 (8x V100 32GB)](#evaluation-performance-nvidia-dgx-1-8x-v100-32gb)
 - [Release notes](#release-notes)
   * [Changelog](#changelog)
   * [Known issues](#known-issues)
@@ -86,21 +83,21 @@ The Outbrain Dataset is preprocessed in order to get features input to the model
 Features:
 - Request Level:
     * 5 scalar numeric features `dtype=float32`
-    * 8 categorical features (all INT32 `dtype`)
-    * 8 trainable embeddings of (dimension, cardinality of categorical variable): (128,300000), (16,4), (128,100000), (64 ,4000), (64,1000), (64,2500), (64,300), (64,2000)
+    * 8 categorical features `dtype=int32`
+    * 8 trainable embeddings of (dimension, cardinality of categorical variable): (128,300000), (19,4), (128,100000), (64,4000), (64,1000), (64,2500), (64,300), (64,2000)
     * 8  trainable embeddings for wide part of size 1 (serving as an embedding from the categorical to scalar space for input to the wide portion of the model)
 
 - Item Level:
     * 8 scalar numeric features `dtype=float32`
-    * 5 categorical features (all INT32 `dtype`)
-    * 5 trainable embeddings of dimensions (cardinality of categorical variable): 128 (250000), 64 (2500), 64 (4000), 64 (1000),64 (5000)
+    * 5 categorical features `dtype=int32`
+    * 5 trainable embeddings of  (dimension, cardinality of categorical variable): (128,250000), (64,2500), (64,4000), (64,1000), (128,5000)
     * 5 trainable embeddings for wide part of size 1 (working as trainable one-hot embeddings)
 
 Features describe both the user (Request Level features) and Item (Item Level Features).
 
 - Model:
     * Input dimension is 26 (13 categorical and 13 numerical features)
-    * Total embedding dimension is 976
+    * Total embedding dimension is 1043
     * 5 hidden layers each with size 1024
     * Total number of model parameter is ~90M
     * Output dimension is 1 (`y` is the probability of click given Request-level and Item-level features)
@@ -112,7 +109,7 @@ For more information about feature preprocessing, go to [Dataset preprocessing](
 
 Model accuracy is defined with the [MAP@12](https://en.wikipedia.org/wiki/Evaluation_measures_(information_retrieval)#Mean_average_precision) metric. This metric follows the way of assessing model accuracy in the original [Kaggle Outbrain Click Prediction Challenge](https://www.kaggle.com/c/outbrain-click-prediction/). In this repository, the leaked clicked ads are not taken into account since in industrial setup Data Scientists do not have access to leaked information when training the model. For more information about data leak in Kaggle Outbrain Click Prediction challenge, visit this  [blogpost](https://medium.com/unstructured/how-feature-engineering-can-help-you-do-well-in-a-kaggle-competition-part-ii-3645d92282b8) by the 19th place finisher in that competition.
 
-Training and inference script also reports AUC ROC, binary accuracy, and Loss (BCE) values.
+Training and evaluation script also reports Loss (BCE) values.
 
 ### Feature support matrix
 
@@ -177,7 +174,7 @@ The following section lists the requirements that you need to meet in order to s
 
 This repository contains Dockerfile which extends the TensorFlow2 NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 - [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-- [20.12-tf2-py3](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow) NGC container
+- [21.09 Merlin Tensorflow Training](https://ngc.nvidia.com/catalog/containers/nvidia:merlin:merlin-tensorflow-training) NGC container
 
 Supported GPUs:
 - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
@@ -213,57 +210,44 @@ The Outbrain dataset can be downloaded from Kaggle (requires Kaggle account). Un
 HOST_OUTBRAIN_PATH=/raid/outbrain
 ```
 
-4. Preprocess the Outbrain dataset.
-
-4.1. Build the Wide & Deep Preprocessing Container.
+4. Build the Wide & Deep Container.
 ```
 cd DeepLearningExamples/TensorFlow2/Recommendation/WideAndDeep
-docker build -f Dockerfile-preproc . -t wd2-prep
+docker build . -t wd2
 ```
 
-4.2. Start an interactive session in the Wide&Deep Preprocessing Container. Run preprocessing against the original Outbrain dataset to `tf_records`. You can run preprocessing using Spark (CPU) or NVTabular preprocessing (GPU).
+5. Preprocess the Outbrain dataset.
+
+5.1. Start an interactive session in the Wide&Deep Container. Run preprocessing against the original Outbrain dataset to `parquets`. You can run preprocessing using NVTabular preprocessing (GPU).
 ```
-nvidia-docker run --rm -it --ipc=host -v ${HOST_OUTBRAIN_PATH}:/outbrain wd2-prep bash
+docker run --runtime=nvidia --gpus=all --rm -it --ipc=host -v ${HOST_OUTBRAIN_PATH}:/outbrain wd2 bash
 ```
 
-4.3. Start preprocessing.
-You can preprocess the data using either Spark on CPU or NVTabular on GPU. For more information, go to the [Dataset preprocessing](#dataset-preprocessing) section.
-
-4.3.1. CPU Preprocessing (Spark).
-```
-cd /wd && bash scripts/preproc.sh spark 40
-```
-
-4.3.2. GPU Preprocessing (NVTabular).
-```
-cd /wd && bash scripts/preproc.sh nvtabular 40
-```
-
-The result of preprocessing scripts are prebatched TFRecords. The argument to the script is the number of TFRecords files that will be generated by the script (here 40). TFRecord files are generated in `${HOST_OUTBRAIN_PATH}/tfrecords`.
-
-4.4. Training of the model
-4.4.1. Build the Wide&Deep Training Container
-```
-cd DeepLearningExamples/TensorFlow2/Recommendation/WideAndDeep
-docker build -f Dockerfile-train . -t wd2-train
-```
-
-4.4.2. Start an interactive session in the Wide&Deep Training Container
-```
-nvidia-docker run --rm -it --privileged --ipc=host -v ${HOST_OUTBRAIN_PATH}:/outbrain wd2-train bash
-```
-
-4.4.3. Run training
-For 1 GPU:
+5.2. Start NVTabular GPU preprocessing.  For more information, go to the [Dataset preprocessing](#dataset-preprocessing) section.
 
 ```
-python main.py
+bash scripts/preproc.sh
 ```
 
-For 1 GPU with Mixed Precision training with XLA:
+The result of preprocessing script is NVTabular dataset stored in parquets. Files are generated in `${HOST_OUTBRAIN_PATH}/data`.
+
+6. Train the model
+
+6.1. Start an interactive session in the Wide & Deep Container
+```
+docker run --runtime=nvidia --gpus=all --rm -it --ipc=host -v ${HOST_OUTBRAIN_PATH}:/outbrain wd2 bash
+```
+
+6.2. Run training (`${GPU}` is a arbitrary number of gpu to be used)
 
 ```
-python main.py --xla --amp
+horovodrun -np ${GPU} sh hvd_wrapper.sh python main.py
+```
+
+Training with Mixed Precision training with XLA:
+
+```
+horovodrun -np ${GPU} sh hvd_wrapper.sh python main.py --xla --amp
 ```
 
 
@@ -272,39 +256,22 @@ For complete usage, run:
 python main.py -h
 ```
 
-For 8 GPUs:
-```
-mpiexec --allow-run-as-root --bind-to socket -np 8 python main.py
-```
 
-For 8 GPU with Mixed Precision training with XLA:
-```
-mpiexec --allow-run-as-root --bind-to socket -np 8 python main.py --xla --amp
-```
-
-
-
-5. Run validation or evaluation.
+7. Run validation or evaluation.
 If you want to run validation or evaluation, you can either:
 * use the checkpoint obtained from the training commands above, or
 * download the pretrained checkpoint from NGC.
 
 In order to download the checkpoint from NGC, visit [ngc.nvidia.com](https://ngc.nvidia.com) website and browse the available models. Download the checkpoint files and unzip them to some path, for example, to `$HOST_OUTBRAIN_PATH/checkpoints/` (which is the default path for storing the checkpoints during training). The checkpoint requires around 700MB disk space.
 
-6. Start validation/evaluation.
+8. Start validation/evaluation.
 In order to validate the checkpoint on the evaluation set, run the `main.py` script with the `--evaluate` and `--use_checkpoint` flags.
 
-For 1 GPU:
 ```
-python main.py --evaluate --use_checkpoint
-```
-
-For 8 GPUs:
-```
-mpiexec --allow-run-as-root --bind-to socket -np 8 python main.py --evaluate --use_checkpoint
+horovodrun -np ${GPU} sh hvd_wrapper.sh python main.py --evaluate --use_checkpoint
 ```
 
-Now that you have your model trained and evaluated, you can choose to compare your training results with our [Training accuracy results](#training-accuracy-results). You can also choose to benchmark yours performance to [Training and inference performance benchmark](#training-and-inference-performance-benchmark). Following the steps in these sections will ensure that you achieve the same accuracy and performance results as stated in the [Results](#results) section.
+Now that you have your model trained and evaluated, you can choose to compare your training results with our [Training accuracy results](#training-accuracy-results). You can also choose to benchmark yours performance to [Training and evaluation performance benchmark](#training-and-evaluation-performance-benchmark). Following the steps in these sections will ensure that you achieve the same accuracy and performance results as stated in the [Results](#results) section.
 
 ## Advanced
 
@@ -313,29 +280,29 @@ The following sections provide greater details of the dataset, running training,
 ### Scripts and sample code
 
 These are the important scripts in this repository:
-* `main.py` - Python script for training the Wide & Deep recommender model. This script is run inside the training container (named `wd-train` in the [Quick Start Guide](#quick-start-guide)).
-* `scripts/preproc.sh` - Bash script for Outbrain dataset preparation for training, preprocessing and saving into TFRecords format. This script is run inside a preprocessing container (named `wd-prep` in the [Quick Start Guide](#quick-start-guide)).
-* `data/outbrain/dataloader.py` - Python file containing data loaders for training and evaluation set.
+* `main.py` - Python script for training the Wide & Deep recommender model.
+* `scripts/preproc.sh` - Bash script for Outbrain dataset preparation for training, preprocessing and saving into NVTabular format.
+* `data/outbrain/dataloader.py` - Python file containing NVTabular data loaders for train and evaluation set.
 * `data/outbrain/features.py` - Python file describing the request and item level features as well as embedding dimensions and hash buckets’ sizes.
 * `trainer/model/widedeep.py` - Python file with model definition.
-* `trainer/utils/run.py` - Python file with training loop.
+* `trainer/run.py` - Python file with training and evaluation setup.
 
 ### Parameters
 
-These are the important parameters in the `main.py` script:
+These are model parameters in the `main.py` script:
 
 | Scope| parameter| Comment| Default Value |
 | -------------------- | ----------------------------------------------------- | ------------------------------------------------------------ | ------------- |
-| location of datasets | --transformed_metadata_path TRANSFORMED_METADATA_PATH | Path to transformed_metadata for feature specification reconstruction |               |
-|location of datasets| --use_checkpoint|Use checkpoint stored in model_dir path |False
+|location of datasets |--train_data_pattern TRAIN_DATA_PATTERN |Pattern of training file names |/outbrain/data/train/*.parquet |
+|location of datasets |--eval_data_pattern EVAL_DATA_PATTERN |Pattern of eval file names |/outbrain/data/valid/*.parquet |
+|location of datasets|--use_checkpoint|Use checkpoint stored in model_dir path |False
 |location of datasets|--model_dir MODEL_DIR|Destination where model checkpoint will be saved |/outbrain/checkpoints
 |location of datasets|--results_dir RESULTS_DIR|Directory to store training results | /results
 |location of datasets|--log_filename LOG_FILENAME|Name of the file to store dlloger output |log.json|
-|training parameters|--training_set_size TRAINING_SET_SIZE|Number of samples in the training set | 59761827
 |training parameters|--global_batch_size GLOBAL_BATCH_SIZE|Total size of training batch | 131072
 |training parameters|--eval_batch_size EVAL_BATCH_SIZE|Total size of evaluation batch | 131072
 |training parameters|--num_epochs NUM_EPOCHS|Number of training epochs | 20
-|training parameters|--cpu|Run computations on the CPU | False
+|training parameters|--cpu|Run computations on the CPU | Currently not supported
 |training parameters|--amp|Enable automatic mixed precision conversion | False
 |training parameters|--xla|Enable XLA conversion | False
 |training parameters|--linear_learning_rate LINEAR_LEARNING_RATE|Learning rate for linear model | 0.02
@@ -348,8 +315,6 @@ These are the important parameters in the `main.py` script:
 |run mode parameters|--benchmark_warmup_steps BENCHMARK_WARMUP_STEPS|Number of warmup steps before start of the benchmark | 500
 |run mode parameters|--benchmark_steps BENCHMARK_STEPS|Number of steps for performance benchmark | 1000
 |run mode parameters|--affinity{socket,single,single_unique,<br>socket_unique_interleaved,<br>socket_unique_continuous,disabled}|Type of CPU affinity | socket_unique_interleaved
-
-
 
 
 ### Command-line options
@@ -374,38 +339,15 @@ The original data is stored in several separate files:
 * `promoted_content.csv` - metadata about the ads
 * `document_meta.csv`, `document_topics.csv`, `document_entities.csv`, `document_categories.csv` - metadata about the documents
 
-During the preprocessing stage, the data is transformed into 87M rows tabular data of 26 features. The dataset is split into training and evaluation parts that have approx 60M and approx 27M rows, respectively. Splitting into train and eval is done in this way so that random 80% of daily events for the first 10 days of the dataset form a training set and remaining part (20% of events daily for the first 10 days and all events in the last two days) form an evaluation set. Eventually the dataset is saved in pre-batched TFRecord format.
+During the preprocessing stage, the data is transformed into 87M rows tabular data of 26 features. The dataset is split into training and evaluation parts that have approx 60M and approx 27M rows, respectively. Splitting into train and eval is done in this way so that random 80% of daily events for the first 10 days of the dataset form a training set and remaining part (20% of events daily for the first 10 days and all events in the last two days) form an evaluation set. Eventually the dataset is saved in NVTabular parquet format.
 
 #### Dataset preprocessing
 
-Dataset preprocessing aims in creating in total 26 features: 13 categorical and 13 numerical. These features are obtained from the original Outbrain dataset in preprocessing. There are 2 types of preprocessing available for the model:
-Spark CPU preprocessing
-[NVTabular](https://nvidia.github.io/NVTabular/v0.3.0/index.html) GPU preprocessing
-
-Both split the dataset into train and evaluation sets and produce the same feature set, therefore, the training is agnostic to the preprocessing step.
-
-For comparison of Spark CPU and NVTabular preprocessing go to [NVTabular and Spark CPU Preprocessing comparison](#nvtabular-and-spark-cpu-preprocessing-comparison)
-
-##### Spark CPU Dataset preprocessing
-
-The original dataset is preprocessed using the scripts provided in `data/outbrain/spark`. Preprocessing is split into 3 preprocessing steps: `preproc1.py`, `preproc2.py`, and `preproc3.py` that form a complete workflow. The workflow consists of the following operations:
-* separating out the validation set for cross-validation
-* filling missing data with mode, median, or imputed values
-* joining click data, ad metadata,  and document category, topic and entity tables to create an enriched table
-* computing  7 click-through rates (CTR) for ads grouped by 7 features
-* computing attribute cosine similarity between the landing page and ad to be featured on the page
-* math transformations of the numeric features (logarithmic, scaling, binning)
-* categorifying data using hash-bucketing
-* storing the resulting set of features in pre-batched TFRecord format
-
-The `preproc1-3.py` preprocessing scripts use PySpark. In the Docker image, we have installed Spark 2.3.1 as a standalone cluster of Spark. The `preproc1.py` script splits the data into a training set and a validation set. The `preproc2.py` script computes the click-through rates (CTR) and cosine similarities between the features. The `preproc3.py` script performs the math transformations and generates the final TFRecord files. The data in the output files is pre-batched (with the default batch size of 4096) to avoid the overhead of the TFRecord format, which otherwise is not suitable for the tabular data.
-The preprocessing includes some very resource-exhaustive operations including joining tables having over 2 billions of rows. Such operations may not fit into the RAM memory, and therefore we use Spark which is well suited for handling tabular operations on large data with limited RAM. Note that the Spark job requires about 500 GB disk space and 300 GB RAM to perform the preprocessing.
-
-For more information about Spark, refer to the [Spark documentation](https://spark.apache.org/docs/2.3.1/).
+Dataset preprocessing aims in creating in total 26 features: 13 categorical and 13 numerical. These features are obtained from the original Outbrain dataset in [NVTabular](https://nvidia.github.io/NVTabular/v0.6.1/index.html) preprocessing.
 
 ##### NVTabular GPU preprocessing
 
-The NVTabular dataset is preprocessed using the script provided in `data/outbrain/nvtabular`. The workflow consists of most of the same operations in the Spark pipeline:
+The NVTabular dataset is preprocessed using the script provided in `data/outbrain/nvtabular`. The workflow consists of:
 * separating out the validation set for cross-validation
 * filling missing data with themode, median, or imputed values most frequent value
 * joining click data, ad metadata, and document category, topic and entity tables to create an enriched table.joining the  tables for the ad clicks data
@@ -415,16 +357,14 @@ The NVTabular dataset is preprocessed using the script provided in `data/outbrai
 * categorifying data using hash-bucketing
 * storing the result in a Parquet format
 
-**Transforming the result into the pre-batched TFRecord format**
-
-Most of the code describing operations in this workflow are in `data/outbrain/nvtabular/utils/workflow.py` and leverage NVTabular v0.3. As stated in its repository, [NVTabular](https://github.com/NVIDIA/NVTabular), a component of [NVIDIA Merlin Open Beta](https://developer.nvidia.com/nvidia-merlin), is a feature engineering and preprocessing library for tabular data that is designed to quickly and easily manipulate terabyte scale datasets and train deep learning based recommender systems. It provides a high-level abstraction to simplify code and accelerates computation on the GPU using the [RAPIDS Dask-cuDF](https://github.com/rapidsai/cudf/tree/main/python/dask_cudf) library. The code to transform the NVTabular Parquet output into TFRecords is in `data/outbrain/nvtabular/utils/converter.py`.
-The NVTabular version of preprocessing is not subject to the same memory and storage constraints as its Spark counterpart, since NVTabular is able to manipulate tables on GPU and work with tables much larger than even physical RAM memory. The NVTabular Outbrain workflow has been successfully tested on DGX-1 V100 and DGX A100 for single and multigpu preprocessing.
+Most of the code describing operations in this workflow are in `data/outbrain/nvtabular/utils/workflow.py` and leverage NVTabular v0.6.1. As stated in its repository, [NVTabular](https://github.com/NVIDIA/NVTabular), a component of [NVIDIA Merlin Open Beta](https://developer.nvidia.com/nvidia-merlin), is a feature engineering and preprocessing library for tabular data that is designed to quickly and easily manipulate terabyte scale datasets and train deep learning based recommender systems. It provides a high-level abstraction to simplify code and accelerates computation on the GPU using the [RAPIDS Dask-cuDF](https://github.com/rapidsai/cudf/tree/main/python/dask_cudf) library.
+The NVTabular Outbrain workflow has been successfully tested on DGX-1 V100 and DGX A100 for single and multigpu preprocessing.
 
 For more information about NVTabular, refer to the [NVTabular documentation](https://github.com/NVIDIA/NVTabular).
 
 ### Training process
 
-The training can be started by running the `main.py` script. By default, the script is in train mode. Other training related configs are also present in the `trainer/utils/arguments.py` and can be seen using the command `python main.py -h`. Training happens on a TFRecords training dataset files that match `--train_data_pattern`.  Training is run for `--num_epochs` epochs with a global batch size of `--global_batch_size` in strong scaling mode (i.e. the effective batch size per GPU equals `global_batch_size/gpu_count`).
+The training can be started by running the `main.py` script. By default, the script is in train mode. Other training related configs are also present in the `trainer/utils/arguments.py` and can be seen using the command `python main.py -h`. Training happens with NVTabular data loader on a NVTabular training dataset files that match `--train_data_pattern`.  Training is run for `--num_epochs` epochs with a global batch size of `--global_batch_size` in strong scaling mode (i.e. the effective batch size per GPU equals `global_batch_size/gpu_count`).
 
 The model:
 `tf.keras.experimental.WideDeepModel` consists of a wide part and deep part with a sigmoid activation in the output layer (see [Figure 1](#model-architecture)) for reference and `trainer/model/widedeep.py` for model definition).
@@ -435,28 +375,26 @@ Two separate optimizers are used to optimize the wide and the deep part of the n
 * RMSProp optimizer is used to optimize the deep part of the network.
 
 Checkpoint of the model:
-* Can be loaded at the beginning of training when `--use_checkpoint` is set
+* Can be loaded at the beginning of training when `--use_checkpoint` is set.
 * is saved into `--model_dir` after each training epoch. Only the last checkpoint is kept.
-* Contains information about number of training epochs
+* Contains information about number of training epochs.
 
 The model is evaluated on an evaluation dataset after every training epoch training log is displayed in the console and stored in  `--log_filename`.
 
-Every 100 batches with training metrics:
-loss, binary accuracy, AUC ROC, MAP@12 value
+Every 100 batches with training metrics: bce loss
 
-Every epoch after training, evaluation metrics are logged:
-loss, binary accuracy, AUC ROC, MAP@12 value
+Every epoch after training, evaluation metrics are logged: bce loss and MAP@12 value
 
 ### Evaluation process
 
-The evaluation can be started by running the `main.py --evaluation` script. Evaluation is done for TFRecords dataset stored in `--eval_data_pattern`. Other evaluation related configs are also present in the `trainer/utils/arguments.py` and can be seen using the command `python main.py -h`.
+The evaluation can be started by running the `main.py --evaluation` script. Evaluation is done on NVTabular parquet dataset stored in `--eval_data_pattern`. Other evaluation related configs are also present in the `trainer/utils/arguments.py` and can be seen using the command `python main.py -h`.
 
 During evaluation (`--evaluation flag`):
-* Model is restored from checkpoint in `--model_dir` if `--use_checkpoint` is set
-* Evaluation log is displayed in console and stored in  `--log_filename`
-* Every 100 batches evaluation metrics are logged - loss, binary accuracy, AUC ROC, MAP@12 value
+* Model is restored from checkpoint in `--model_dir` if `--use_checkpoint` is set.
+* Evaluation log is displayed in console and stored in  `--log_filename`.
+* Every 100 batches evaluation metrics are logged: bce loss.
 
-After the whole evaluation, the total evaluation metrics are logged,  loss, binary accuracy, AUC ROC, MAP@12 value.
+After the whole evaluation, the total evaluation metrics are logged: bce loss and MAP@12 value.
 
 ## Performance
 
@@ -464,58 +402,19 @@ After the whole evaluation, the total evaluation metrics are logged,  loss, bina
 
 The following section shows how to run benchmarks measuring the model performance in training mode.
 
-#### NVTabular and Spark CPU Preprocessing comparison
-
-Two types of dataset preprocessing are presented in Spark-CPU and NVTabular on GPU repositories. Both of these preprocess return prebatched TFRecords files with the same structure. The following table shows the comparison of both preprocessing in terms of code complication (Lines of code), top RAM consumption, and preprocessing time.
-
-| |CPU preprocessing     | CPU Preprocessing        | GPU preprocessing        | GPU Preprocessing        | GPU preprocessing        | GPU Preprocessing        |
-| -------------------------- | ----- | --------------------- | ------------------------ | ------------------------ | ------------------------ | ------------------------|
-|| Spark on NVIDIA DGX-1 | Spark on NVIDIA DGX A100 | NVTabular on DGX-1 1 GPU | NVTabular on DGX-1 8 GPU | NVTabular DGX A100 1 GPU | NVTabular DGX A100 8 GPU |      |
-| Lines of code*             | ~1500 | ~1500| ~500| ~500| ~500| ~500|
-| Top RAM consumption \[GB\] | 167.0 | 223.4| 34.3| 48.7| 37.7 | 50.6|
-| Top VRAM consumption per GPU \[GB\] | 0 | 0 | 16 | 13 | 45 | 67|
-| Preprocessing time \[min\] |45.6|38.5|4.4|3.9|2.6| 2.3|
-
-
-To achieve the same results for Top RAM consumption and preprocessing time, run a preprocessing container (`${HOST_OUTBRAIN_PATH}` is the path with Outbrain dataset).
-```
-nvidia-docker run --rm -it --ipc=host -v ${HOST_OUTBRAIN_PATH}:/outbrain wd2-prep bash
-```
-
-In the preprocessing container, run the preprocessing benchmark.
-
-For Spark CPU preprocessing:
-```
-cd /wd && bash scripts/preproc_benchmark.sh -m spark
-```
-
-For GPU NVTabular preprocessing:
-```
-cd /wd && bash scripts/preproc_benchmark.sh -m nvtabular
-```
-
-
-#### Training and inference performance benchmark
+#### Training and evaluation performance benchmark
 
 Benchmark script is prepared to measure performance of the model during training (default configuration) and evaluation (`--evaluation`). Benchmark runs training or evaluation for `--benchmark_steps` batches, however measurement of performance starts after `--benchmark_warmup_steps`. Benchmark can be run for single and 8 GPUs and with a combination of XLA (`--xla`), AMP (`--amp`), batch sizes (`--global_batch_size` , `--eval_batch_size`) and affinity (`--affinity`).
 
 In order to run benchmark follow these steps:
-Run training container (`${HOST_OUTBRAIN_PATH}` is the path with Outbrain dataset):
-```
-nvidia-docker run --rm -it --ipc=host --privileged -v ${HOST_OUTBRAIN_PATH}:/outbrain wd2-train bash
-```
 
+Run Wide & Deep Container (`${HOST_OUTBRAIN_PATH}` is the path with Outbrain dataset):
+```
+docker run --runtime=nvidia --gpus=all --rm -it --ipc=host -v ${HOST_OUTBRAIN_PATH}:/outbrain wd2 bash
+```
 Run the benchmark script:
-For 1 GPU:
 ```
-python main.py --benchmark
-```
-
-The benchmark will be run for training with default training parameters.
-
-For 8GPUs:
-```
-mpiexec --allow-run-as-root --bind-to socket -np 8 python main.py --benchmark
+horovodrun -np ${GPU} sh hvd_wrapper.sh python main.py --benchmark
 ```
 
 ### Results
@@ -528,27 +427,27 @@ The following sections provide details on how we achieved our performance and ac
 
 Our results were obtained by running the `main.py` training script in the TensorFlow2 NGC container on NVIDIA DGX A100 with (8x A100 80GB) GPUs.
 
-| GPUs | Batch size / GPU | XLA | Accuracy - TF32 (MAP@12), Spark dataset | Accuracy - mixed precision (MAP@12),Spark Dataset | Accuracy - TF32 (MAP@12), NVTabular dataset | Accuracy - mixed precision (MAP@12), NVTabular Dataset | Time to train - TF32 (minutes) | Time to train - mixed precision (minutes) | Time to train speedup (TF32 to mixed precision) |
-| ---- | ---------------- | --- | --------------|---|------- | ----------------------------------- | ------------------------------ | ----------------------------------------- | ----------------------------------------------- |
-1|131072|Yes|0.65536|0.65537|0.65537|0.65646|16.40|13.71|1.20
-1|131072|No|0.65538|0.65533|0.65533|0.65643|19.58|18.49|1.06
-8|16384|Yes|0.65527|0.65525|0.65525|0.65638|7.77|9.71|0.80
-8|16384|No|0.65517|0.65525|0.65525|0.65638|7.84|9.48|0.83
+| GPUs | Batch size / GPU | XLA | Accuracy - TF32 (MAP@12) | Accuracy - mixed precision (MAP@12) |  Time to train - TF32 (minutes) | Time to train - mixed precision (minutes) | Time to train speedup (TF32 to mixed precision) |
+| ---- | ---------------- | --- | --------------|---|------- | ----------------------------------- |  ----------------------------------------------- |
+1|131072|Yes|0.65656|0.65654|13.40|9.48|1.41
+1|131072|No |0.65662|0.65656|17.75|13.38|1.33
+8|16384|Yes |0.65672|0.65665|4.82|4.50|1.07
+8|16384|No  |0.65671|0.65655|5.71|5.72|1.00
 
 
 To achieve the same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
-##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
+##### Training accuracy: NVIDIA DGX-1 (8x V100 32GB)
 
-Our results were obtained by running the main.py training script in the TensorFlow2 NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs.
+Our results were obtained by running the main.py training script in the TensorFlow2 NGC container on NVIDIA DGX-1 with (8x V100 32GB) GPUs.
 
 
-| GPUs | Batch size / GPU | XLA | Accuracy - TF32 (MAP@12), Spark dataset | Accuracy - mixed precision (MAP@12),Spark Dataset | Accuracy - TF32 (MAP@12), NVTabular dataset | Accuracy - mixed precision (MAP@12), NVTabular Dataset | Time to train - TF32 (minutes) | Time to train - mixed precision (minutes) | Time to train speedup (TF32 to mixed precision) |
-| ---- | ---------------- | --- | --------------|---|------- | ----------------------------------- | ------------------------------ | ----------------------------------------- | ----------------------------------------------- |
-1|131072|Yes|0.65531|0.65529|0.65529|0.65651|66.01|23.66|2.79
-1|131072|No|0.65542|0.65534|0.65534|0.65641|72.68|29.18|2.49|
-8|16384|Yes|0.65544|0.65547|0.65547|0.65642|16.28|13.90|1.17|
-8|16384|No|0.65548|0.65540|0.65540|0.65633|16.34|12.65|1.29|                                  |
+| GPUs | Batch size / GPU | XLA | Accuracy - FP32 (MAP@12) | Accuracy - mixed precision (MAP@12) |  Time to train - FP32 (minutes) | Time to train - mixed precision (minutes) | Time to train speedup (FP32 to mixed precision) |
+| ---- | ---------------- | --- | --------------|---|------- |  ----------------------------------------- | ----------------------------------------------- |
+1|131072|Yes |0.65658|0.65664|62.89|18.65|3.37
+1|131072|No  |0.65662|0.65658|71.53|25.18|2.84
+8|16384|Yes  |0.65668|0.65655|12.21|8.89|1.37
+8|16384|No   |0.65665|0.65654|14.38|7.17|2.01
 
 
 To achieve the same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
@@ -557,41 +456,23 @@ To achieve the same results, follow the steps in the [Quick Start Guide](#quick-
 
 Models trained with FP32, TF32 and Automatic Mixed Precision (AMP), with and without XLA enabled achieve similar accuracy.
 
-The plot represents MAP@12 in a function of steps (step is single batch) during training for default precision (FP32 for Volta architecture (DGX-1) and TF32 for Ampere GPU architecture (DGX-A100)) and AMP  for XLA and without it for both datasets. All other parameters of training are default.
+The plot represents MAP@12 in a function of steps (step is single batch) during training for default precision (FP32 for Volta architecture (DGX-1) and TF32 for Ampere GPU architecture (DGX-A100)) and AMP  for XLA and without it for NVTabular dataset. All other parameters of training are default.
 
 <p align="center">
-  <img width="100%" src="./img/leraning_curve_spark.svg" />
+  <img width="100%" src="./img/learning_curve.svg" />
   <br>
-  Figure 2. Learning curves for Spark dataset for different configurations.</a>
+  Figure 2. Learning curves for different configurations on single gpu.</a>
 </p>
-
-<p align="center">
-  <img width="100%" src="./img/learning_curve_nvt.svg" />
-  <br>
-  Figure 3. Learning curves for NVTabular dataset for different configurations.</a>
-</p>
-
-
-
-
-
 
 ##### Training stability test
 
-Training of the model is stable for multiple configurations achieving the standard deviation of 10e-4. The model achieves similar MAP@12 scores for A100 and V100, training precisions, XLA usage and single/multi GPU. The Wide and Deep model was trained for 9100 training steps (20 epochs, 455 batches in each epoch, every batch containing 131072), starting from 20 different initial random seeds for each setup. The training was performed in the 20.12-tf1-py3 NGC container on NVIDIA DGX A100 80GB and DGX-1 16GB machines with and without mixed precision enabled, with and without XLA enabled for Spark- and NVTabular generated datasets. The provided charts and numbers consider single and 8 GPU training. After training, the models were evaluated on the validation set. The following plots compare distributions of MAP@12 on the evaluation set. In columns there is single vs 8 GPU training, in rows DGX A100 and DGX-1 V100.
+Training of the model is stable for multiple configurations achieving the standard deviation of 10e-4. The model achieves similar MAP@12 scores for A100 and V100, training precisions, XLA usage and single/multi GPU. The Wide and Deep model was trained for 9140 training steps (20 epochs, 457 batches in each epoch, every batch containing 131072), starting from 20 different initial random seeds for each setup. The training was performed in the 21.09 Merlin Tensorflow Training NGC container on NVIDIA DGX A100 80GB and DGX-1 32GB machines with and without mixed precision enabled, with and without XLA enabled for NVTabular generated dataset. The provided charts and numbers consider single and 8 GPU training. After training, the models were evaluated on the validation set. The following plots compare distributions of MAP@12 on the evaluation set. In columns there is single vs 8 GPU training, in rows DGX A100 and DGX-1 V100.
 
 <p align="center">
-  <img width="100%" src="./img/training_stability_spark.svg" />
+  <img width="100%" src="./img/training_stability.svg" />
   <br>
-  Figure 4. Training stability for Spark dataset: distribution of MAP@12 across different configurations. 'All configurations' refer to the distribution of MAP@12 for cartesian product of architecture, training precision, XLA usage, single/multi GPU. </a>
+  Figure 3. Training stability plot, distribution of MAP@12 across different configurations. 'All configurations' refer to the distribution of MAP@12 for cartesian product of architecture, training precision, XLA usage, single/multi GPU. </a>
 </p>
-
-<p align="center">
-  <img width="100%" src="./img/training_stability_nvtabular.svg" />
-  <br>
-  Figure 5. Training stability for NVtabular dataset: distribution of MAP@12 across different configurations. 'All configurations' refer to the distribution of MAP@12 for cartesian product of architecture, training precision, XLA usage, single/multi GPU.</a>
-</p>
-
 
 
 Training stability was also compared in terms of point statistics for MAP@12 distribution for multiple configurations. Refer to the expandable table below.
@@ -599,43 +480,25 @@ Training stability was also compared in terms of point statistics for MAP@12 dis
 <details>
 <summary>Full tabular data for training stability tests</summary>
 
-||GPUs|Precicision|Dataset|XLA|mean|std|Min|Max
-|--------|-|---------|-----------|---|----|---|---|---
-DGX A100|1|TF32|Spark preprocessed|Yes|0.65536|0.00016|0.65510|0.65560|
-DGX A100|1|TF32|Spark preprocessed|No|0.65538|0.00013|0.65510|0.65570|
-DGX A100|1|TF32|NVTabular preprocessed|Yes|0.65641|0.00038|0.65530|0.65680|
-DGX A100|1|TF32|NVTabular preprocessed|No|0.65648|0.00024|0.65580|0.65690|
-DGX A100|1|AMP|Spark preprocessed|Yes|0.65537|0.00013|0.65510|0.65550|
-DGX A100|1|AMP|Spark preprocessed|No|0.65533|0.00016|0.65500|0.65550|
-DGX A100|1|AMP|NVTabular preprocessed|Yes|0.65646|0.00036|0.65530|0.65690|
-DGX A100|1|AMP|NVTabular preprocessed|No|0.65643|0.00027|0.65590|0.65690|
-DGX A100|8|TF32|Spark preprocessed|Yes|0.65527|0.00013|0.65500|0.65560|
-DGX A100|8|TF32|Spark preprocessed|No|0.65517|0.00025|0.65460|0.65560|
-DGX A100|8|TF32|NVTabular preprocessed|Yes|0.65631|0.00038|0.65550|0.65690|
-DGX A100|8|TF32|NVTabular preprocessed|No|0.65642|0.00022|0.65570|0.65680|
-DGX A100|8|AMP|Spark preprocessed|Yes|0.65525|0.00018|0.65490|0.65550|
-DGX A100|8|AMP|Spark preprocessed|No|0.65525|0.00016|0.65490|0.65550|
-DGX A100|8|AMP|NVTabular preprocessed|Yes|0.65638|0.00026|0.65580|0.65680|
-DGX A100|8|AMP|NVTabular preprocessed|No|0.65638|0.00031|0.65560|0.65700|
-DGX-1 V100|1|FP32|Spark preprocessed|Yes|0.65531|0.00017|0.65490|0.65560|
-DGX-1 V100|1|FP32|Spark preprocessed|No|0.65542|0.00012|0.65520|0.65560|
-DGX-1 V100|1|FP32|NVTabular preprocessed|Yes|0.65651|0.00019|0.65610|0.65680|
-DGX-1 V100|1|FP32|NVTabular preprocessed|No|0.65638|0.00035|0.65560|0.65680|
-DGX-1 V100|1|AMP|Spark preprocessed|Yes|0.65529|0.00015|0.65500|0.65570|
-DGX-1 V100|1|AMP|Spark preprocessed|No|0.65534|0.00015|0.65500|0.65560|
-DGX-1 V100|1|AMP|NVTabular preprocessed|Yes|0.65651|0.00028|0.65560|0.65690|
-DGX-1 V100|1|AMP|NVTabular preprocessed|No|0.65641|0.00032|0.65570|0.65680|
-DGX-1 V100|8|FP32|Spark preprocessed|Yes|0.65544|0.00019|0.65500|0.65580|
-DGX-1 V100|8|FP32|Spark preprocessed|No|0.65548|0.00013|0.65510|0.65560|
-DGX-1 V100|8|FP32|NVTabular preprocessed|Yes|0.65645|0.00012|0.65630|0.65670|
-DGX-1 V100|8|FP32|NVTabular preprocessed|No|0.65638|0.00015|0.65610|0.65670|
-DGX-1 V100|8|AMP|Spark preprocessed|Yes|0.65547|0.00015|0.65520|0.65580|
-DGX-1 V100|8|AMP|Spark preprocessed|No|0.65540|0.00019|0.65500|0.65580|
-DGX-1 V100|8|AMP|NVTabular preprocessed|Yes|0.65642|0.00028|0.65580|0.65690|
-DGX-1 V100|8|AMP|NVTabular preprocessed|No|0.65633|0.00037|0.65510|0.65680|
+| | GPUs | Precicision | XLA | Mean | Std | Min | Max | 
+| -------- | --- |  --------- | ---- | ------ | ------ | ------ | ------ |
+|DGX A100|1|TF32|Yes   |0.65656|0.00016|0.6563|0.6569
+|DGX A100|1|TF32|No    |0.65662|0.00013|0.6563|0.6568
+|DGX A100|1|AMP|Yes    |0.65654|0.00010|0.6563|0.6567
+|DGX A100|1|AMP|No     |0.65656|0.00011|0.6564|0.6568
+|DGX A100|8|TF32|Yes   |0.65672|0.00012|0.6565|0.6570
+|DGX A100|8|TF32|No    |0.65671|0.00013|0.6565|0.6569
+|DGX A100|8|AMP|Yes    |0.65665|0.00014|0.6564|0.6569
+|DGX A100|8|AMP|No     |0.65655|0.00012|0.6564|0.6568
+|DGX-1 V100|1|FP32|Yes |0.65658|0.00013|0.6563|0.6568
+|DGX-1 V100|1|FP32|No  |0.65662|0.00011|0.6564|0.6568
+|DGX-1 V100|1|AMP|Yes  |0.65664|0.00011|0.6564|0.6568
+|DGX-1 V100|1|AMP|No   |0.65658|0.00011|0.6564|0.6568
+|DGX-1 V100|8|FP32|Yes |0.65668|0.00016|0.6564|0.6570
+|DGX-1 V100|8|FP32|No  |0.65665|0.00019|0.6564|0.6570
+|DGX-1 V100|8|AMP|Yes  |0.65655|0.00012|0.6563|0.6567
+|DGX-1 V100|8|AMP|No   |0.65654|0.00013|0.6563|0.6567
 </details>
-
-
 
 
 ##### Impact of mixed precision on training accuracy
@@ -644,45 +507,29 @@ The accuracy of training, measured with [MAP@12](https://en.wikipedia.org/wiki/E
 
 The model was trained 20 times for default settings (FP32 or TF32 for Volta and Ampere architecture respectively) and 20 times for AMP. After the last epoch, the accuracy score MAP@12 was calculated on the evaluation set.
 
-Distributions for four configurations: architecture (A100, V100) and single/multi gpu for 2 datasets are presented below.
+Distributions for four configurations: architecture (A100, V100) and single/multi gpu for NVTabular dataset are presented below.
 
 <p align="center">
-  <img width="100%" src="./img/amp_influence_spark.svg" />
+  <img width="100%" src="./img/amp_influence.svg" />
   <br>
-  Figure 6. Influence of AMP on MAP@12 distribution for DGX A100 and DGX-1 V100 for single and multi gpu training on Spark dataset. </a>
+  Figure 4. Influence of AMP on MAP@12 distribution for DGX A100 and DGX-1 V100 for single and multi gpu training. </a>
 </p>
-
-<p align="center">
-  <img width="100%" src="./img/amp_influence_nvtabular.svg" />
-  <br>
-  Figure 7. Influence of AMP on MAP@12 distribution for DGX A100 and DGX-1 V100 for single and multi gpu training on NVTabular dataset.
-</p>
-
-
 
 Distribution scores for full precision training and AMP training were compared in terms of mean, variance and [Kolmogorov–Smirnov test](https://en.wikipedia.org/wiki/Kolmogorov%E2%80%93Smirnov_test) to state statistical difference between full precision and AMP results. Refer to the expandable table below.
 
 <details>
 <summary>Full tabular data for AMP influence on MAP@12</summary>
 
-|            |GPUs                   | Dataset | XLA    | Mean MAP@12 for Full precision (TF32 for A100, FP32 for V100) | Std MAP@12 for Full precision (TF32 for A100, FP32 for V100) | Mean MAP@12 for AMP | Std MAP@12 for AMP | KS test value: statistics, p-value |
-| ------------ | ---------------------- | ------- | ------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------- | ------------------ | ---------------------------------- |
-| DGX A100   | 1    | NVTabular preprocessed | No      | 0.6565 | 0.0002                                                       | 0.6564                                                       | 0.0003              | 0.2000 (0.8320)    |                                    |
-| DGX A100   | 8    | NVTabular preprocessed | No      | 0.6564 | 0.0002                                                       | 0.6564                                                       | 0.0003              | 0.1500 (0.9831)    |                                    |
-| DGX A100   | 1    | Spark preprocessed     | No      | 0.6554 | 0.0001                                                       | 0.6553                                                       | 0.0002              | 0.2500 (0.5713)    |                                    |
-| DGX A100   | 8    | Spark preprocessed     | No      | 0.6552 | 0.0002                                                       | 0.6552                                                       | 0.0002              | 0.3000 (0.3356)    |                                    |
-| DGX A100   | 1    | NVTabular preprocessed | No      | 0.6564 | 0.0004                                                       | 0.6565                                                       | 0.0004              | 0.1500 (0.9831)    |                                    |
-| DGX A100   | 8    | NVTabular preprocessed | No      | 0.6563 | 0.0004                                                       | 0.6564                                                       | 0.0003              | 0.2500 (0.5713)    |                                    |
-| DGX A100   | 1    | Spark preprocessed     | No      | 0.6554 | 0.0002                                                       | 0.6554                                                       | 0.0001              | 0.1500 (0.9831)    |                                    |
-| DGX A100   | 8    | Spark preprocessed     | No      | 0.6553 | 0.0001                                                       | 0.6552                                                       | 0.0002              | 0.1500 (0.9831))   |                                    |
-| DGX-1 V100 | 1    | NVTabular preprocessed | No      | 0.6564 | 0.0004                                                       | 0.6564                                                       | 0.0003              | 0.1000 (1.0000)    |                                    |
-| DGX-1 V100 | 8    | NVTabular preprocessed | No      | 0.6564 | 0.0001                                                       | 0.6563                                                       | 0.0004              | 0.2500 (0.5713)    |                                    |
-| DGX-1 V100 | 1    | Spark preprocessed     | No      | 0.6554 | 0.0001                                                       | 0.6553                                                       | 0.0001              | 0.2000 (0.8320)    |                                    |
-| DGX-1 V100 | 8    | Spark preprocessed     | No      | 0.6555 | 0.0001                                                       | 0.6554                                                       | 0.0002              | 0.3500 (0.1745)    |                                    |
-| DGX-1 V100 | 1    | NVTabular preprocessed | No      | 0.6565 | 0.0002                                                       | 0.6565                                                       | 0.0003              | 0.1500 (0.9831)    |                                    |
-| DGX-1 V100 | 8    | NVTabular preprocessed | No      | 0.6564 | 0.0001                                                       | 0.6564                                                       | 0.0003              | 0.2000 (0.8320)    |                                    |
-| DGX-1 V100 | 1    | Spark preprocessed     | No      | 0.6553 | 0.0002                                                       | 0.6553                                                       | 0.0002              | 0.2000 (0.8320)    |                                    |
-| DGX-1 V100 | 8    | Spark preprocessed     | No      | 0.6554 | 0.0002                                                       | 0.6555                                                       | 0.0002              | 0.1500 (0.9831)    |                                    |
+|              | GPUs                   |  XLA    | Mean MAP@12 for Full precision (TF32 for A100, FP32 for V100) | Std MAP@12 for Full precision (TF32 for A100, FP32 for V100) | Mean MAP@12 for AMP | Std MAP@12 for AMP | KS test value: statistics, p-value |
+| ------------ | ---------------------- |  ------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------- | ------------------ | ---------------------------------- |
+| DGX A100   | 1    | Yes     |0.65656|0.00016|0.65654|0.00010|0.10000 (0.99999)
+| DGX A100   | 8    | Yes     |0.65672|0.00012|0.65665|0.00014|0.40000 (0.08106)
+| DGX A100   | 1    | No      |0.65662|0.00013|0.65656|0.00011|0.35000 (0.17453)
+| DGX A100   | 8    | No      |0.65671|0.00013|0.65655|0.00012|0.35000 (0.17453)
+| DGX-1 V100 | 1    | Yes     |0.65658|0.00013|0.65664|0.00011|0.25000 (0.57134)
+| DGX-1 V100 | 8    | Yes     |0.65668|0.00016|0.65655|0.00012|0.30000 (0.33559)
+| DGX-1 V100 | 1    | No      |0.65662|0.00011|0.65658|0.00011|0.20000 (0.83197)
+| DGX-1 V100 | 8    | No      |0.65665|0.00019|0.65654|0.00013|0.40000 (0.08106)
 
 </details>
 
@@ -694,132 +541,132 @@ Our results were obtained by running the benchmark script (`main.py --benchmark`
 
 |GPUs | Batch size / GPU | XLA | Throughput - TF32 (samples/s)|Throughput - mixed precision (samples/s)|Throughput speedup (TF32 - mixed precision)| Strong scaling - TF32|Strong scaling - mixed precision
 | ---- | ---------------- | --- | ----------------------------- | ---------------------------------------- | ------------------------------------------- | --------------------- | -------------------------------- |
-|1|131,072|Yes|1642892|1997414|1.22|1.00|1.00|
-|1|131,072|No|1269638|1355523|1.07|1.00|1.00|
-|8|16,384|Yes|3376438|2508278|0.74|2.06|1.26|
-|8|16,384|No|3351118|2643009|0.79|2.64|1.07|
+|1|131,072|Yes|2026524|3069487|1.51|1.00|1.00
+|1|131,072|No |1379960|1928375|1.40|1.00|1.00
+|8|16,384|Yes |6892010|7574174|1.10|3.40|2.47
+|8|16,384|No  |5124054|5120040|1.00|3.71|2.66
 
 
-##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
+##### Training performance: NVIDIA DGX-1 (8x V100 32GB)
 
-Our results were obtained by running the benchmark script (`main.py --benchmark`) in the TensorFlow2 NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs.
+Our results were obtained by running the benchmark script (`main.py --benchmark`) in the TensorFlow2 NGC container on NVIDIA DGX-1 with (8x V100 32GB) GPUs.
 
 |GPUs | Batch size / GPU | XLA | Throughput - FP32 (samples/s)|Throughput - mixed precision (samples/s)|Throughput speedup (FP32 - mixed precision)| Strong scaling - FP32|Strong scaling - mixed precision
 | ---- | ---------------- | --- | ----------------------------- | ---------------------------------------- | ------------------------------------------- | --------------------- | -------------------------------- |
-|1|131,072|Yes|361202|1091584|3.02|1.00|1.00
-|1|131,072|No|321816|847229|2.63|1.00|1.00
-|8|16,384|Yes|1512691|1731391|1.14|4.19|1.59
-|8|16,384|No|1490044|1837962|1.23|4.63|2.17
+|1|131,072|Yes|378918|1405633|3.71|1.00|1.00
+|1|131,072|No |323817|969824|2.99|1.00|1.00
+|8|16,384|Yes |2196648|4332939|1.97|5.80|3.08
+|8|16,384|No  |1772485|3058944|1.73|5.47|3.15
 
 
-#### Inference performance results
+#### Evaluation performance results
 
-##### Inference performance: NVIDIA DGX A100 (8x A100 80GB)
+##### Evaluation performance: NVIDIA DGX A100 (8x A100 80GB)
 
 Our results were obtained by running the benchmark script (`main.py --evaluate --benchmark`) in the TensorFlow2 NGC container on NVIDIA DGX A100 with 8x A100 80GB GPUs. 
 
 
-|GPUs|Batch size / GPU|XLA|Throughput \[samples/s\] TF32|Throughput \[samples/s\]AMP|Throughput speedup AMP to TF32
+|GPUs|Batch size / GPU|XLA|Throughput \[samples/s\] TF32|Throughput \[samples/s\] AMP|Throughput speedup AMP to TF32
 |----|----------------|---|------------------------------|-----------------------------|-------------------------------
-|1|4096|NO|648058|614053|0.95|
-|1|8192|NO|1063986|1063203|1.00|
-|1|16384|NO|1506679|1573248|1.04|
-|1|32768|NO|1983238|2088212|1.05|
-|1|65536|NO|2280630|2523812|1.11|
-|1|131072|NO|2568911|2915340|1.13|
-|8|4096|NO|4516588|4374181|0.97|
-|8|8192|NO|7715609|7718173|1.00|
-|8|16384|NO|11296845|11624159|1.03|
-|8|32768|NO|14957242|15904745|1.06|
-|8|65536|NO|17671055|19332987|1.09|
-|8|131072|NO|19779711|21761656|1.10|
+|1|4096|NO    |1107650|1028782|0.93|
+|1|8192|NO    |1783848|1856528|1.04|
+|1|16384|NO   |2295874|2409601|1.05|
+|1|32768|NO   |2367142|2583293|1.09|
+|1|65536|NO   |3044662|3471619|1.14|
+|1|131072|NO  |3229625|3823612|1.18|
+|8|4096|NO    |5503985|5333228|0.97|
+|8|8192|NO    |12251675|12386870|1.01|
+|8|16384|NO   |16020973|16438269|1.03|
+|8|32768|NO   |17225168|18667798|1.08|
+|8|65536|NO   |19969248|22270424|1.12|
+|8|131072|NO  |19929457|22496045|1.13|
 
 For more results go to the expandable table below.
 
 <details>
-<summary>Full tabular data for inference performance results for DGX A100</summary>
+<summary>Full tabular data for evaluation performance results for DGX A100</summary>
 
-|GPUs|Batch size / GPU|XLA|Throughput \[samples/s\] TF32|Throughput \[samples/s\]AMP|Throughput speedup AMP to TF32
+|GPUs|Batch size / GPU|XLA|Throughput \[samples/s\] TF32|Throughput \[samples/s\] AMP|Throughput speedup AMP to TF32
 |----|----------------|---|------------------------------|-----------------------------|-------------------------------
-|1|4096|YES|621024|648441|1.04|
-|1|4096|NO|648058|614053|0.95|
-|1|8192|YES|1068943|1045790|0.98|
-|1|8192|NO|1063986|1063203|1.00|
-|1|16384|YES|1554101|1710186|1.10|
-|1|16384|NO|1506679|1573248|1.04|
-|1|32768|YES|2014216|2363490|1.17|
-|1|32768|NO|1983238|2088212|1.05|
-|1|65536|YES|2010050|2450872|1.22|
-|1|65536|NO|2280630|2523812|1.11|
-|1|131072|YES|2321543|2885393|1.24|
-|1|131072|NO|2568911|2915340|1.13|
-|8|4096|YES|4328154|4445315|1.03|
-|8|4096|NO|4516588|4374181|0.97|
-|8|8192|YES|7410554|7640191|1.03|
-|8|8192|NO|7715609|7718173|1.00|
-|8|16384|YES|11412928|12422567|1.09|
-|8|16384|NO|11296845|11624159|1.03|
-|8|32768|YES|11428369|12525670|1.10|
-|8|32768|NO|14957242|15904745|1.06|
-|8|65536|YES|13453756|15308455|1.14|
-|8|65536|NO|17671055|19332987|1.09|
-|8|131072|YES|17047482|20930042|1.23|
-|8|131072|NO|19779711|21761656|1.10|
+|1|4096|YES   |1344225|1501677|1.12|
+|1|4096|NO    |1107650|1028782|0.93|
+|1|8192|YES   |2220721|2545781|1.15|
+|1|8192|NO    |1783848|1856528|1.04|
+|1|16384|YES  |2730441|3230949|1.18|
+|1|16384|NO   |2295874|2409601|1.05|
+|1|32768|YES  |2527368|2974417|1.18|
+|1|32768|NO   |2367142|2583293|1.09|
+|1|65536|YES  |3163906|3935731|1.24|
+|1|65536|NO   |3044662|3471619|1.14|
+|1|131072|YES |3171670|4064426|1.28|
+|1|131072|NO  |3229625|3823612|1.18|
+|8|4096|YES   |6243348|6553485|1.05|
+|8|4096|NO    |5503985|5333228|0.97|
+|8|8192|YES   |14995914|16222429|1.08|
+|8|8192|NO    |12251675|12386870|1.01|
+|8|16384|YES  |14584474|16543902|1.13|
+|8|16384|NO   |16020973|16438269|1.03|
+|8|32768|YES  |17840220|21537660|1.21|
+|8|32768|NO   |17225168|18667798|1.08|
+|8|65536|YES  |20732672|24082577|1.16|
+|8|65536|NO   |19969248|22270424|1.12|
+|8|131072|YES |20104010|24157900|1.20|
+|8|131072|NO  |19929457|22496045|1.13|
  </details>
 
 
-##### Inference performance: NVIDIA DGX-1 (8x V100 16GB)
+##### Evaluation performance: NVIDIA DGX-1 (8x V100 32GB)
 
-Our results were obtained by running the benchmark script (`main.py --evaluate --benchmark`) in the TensorFlow2 NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs.
+Our results were obtained by running the benchmark script (`main.py --evaluate --benchmark`) in the TensorFlow2 NGC container on NVIDIA DGX-1 with (8x V100 32GB) GPUs.
 
-|GPUs|Batch size / GPU|XLA|Throughput \[samples/s\] TF32|Throughput \[samples/s\]AMP|Throughput speedup AMP to TF32
+|GPUs|Batch size / GPU|XLA|Throughput \[samples/s\] FP32|Throughput \[samples/s\] AMP|Throughput speedup AMP to FP32
 |----|----------------|---|------------------------------|-----------------------------|-------------------------------
-|1|4096|NO|375928|439395|1.17|
-|1|8192|NO|526780|754517|1.43|
-|1|16384|NO|673971|1133696|1.68|
-|1|32768|NO|791637|1470221|1.86|
-|1|65536|NO|842831|1753500|2.08|
-|1|131072|NO|892941|1990898|2.23|
-|8|4096|NO|2893390|3278473|1.13|
-|8|8192|NO|3881996|5337866|1.38|
-|8|16384|NO|5003135|8086178|1.62|
-|8|32768|NO|6124648|11087247|1.81|
-|8|65536|NO|6631887|13233484|2.00|
-|8|131072|NO|7030438|15081861|2.15|
+|1|4096|NO    |499442|718163|1.44|
+|1|8192|NO    |670906|1144640|1.71|
+|1|16384|NO   |802366|1599006|1.99|
+|1|32768|NO   |856130|1795285|2.10|
+|1|65536|NO   |934394|2221221|2.38|
+|1|131072|NO  |965293|2403829|2.49|
+|8|4096|NO    |2840155|3602516|1.27|
+|8|8192|NO    |4810100|7912019|1.64|
+|8|16384|NO   |5939908|10876135|1.83|
+|8|32768|NO   |6489446|12593087|1.94|
+|8|65536|NO   |6614453|14742844|2.23|
+|8|131072|NO  |7133219|15524549|2.18|
 
 
 
 For more results go to the expandable table below.
 
 <details>
-<summary>Full tabular data for inference performance for DGX-1 V100 results</summary>
+<summary>Full tabular data for evaluation performance for DGX-1 V100 results</summary>
 
-|GPUs|Batch size / GPU|XLA|Throughput \[samples/s\] TF32|Throughput \[samples/s\]AMP|Throughput speedup AMP to TF32
+|GPUs|Batch size / GPU|XLA|Throughput \[samples/s\] FP32|Throughput \[samples/s\] AMP|Throughput speedup AMP to FP32
 |----|----------------|---|------------------------------|-----------------------------|-------------------------------
-|1|4096|YES|356963|459481|1.29|
-|1|4096|NO|375928|439395|1.17|
-|1|8192|YES|517016|734515|1.42|
-|1|8192|NO|526780|754517|1.43|
-|1|16384|YES|660772|1150292|1.74|
-|1|16384|NO|673971|1133696|1.68|
-|1|32768|YES|776357|1541699|1.99|
-|1|32768|NO|791637|1470221|1.86|
-|1|65536|YES|863311|1962275|2.27|
-|1|65536|NO|842831|1753500|2.08|
-|1|131072|YES|928290|2235968|2.41|
-|1|131072|NO|892941|1990898|2.23|
-|8|4096|YES|2680961|3182591|1.19|
-|8|4096|NO|2893390|3278473|1.13|
-|8|8192|YES|3738172|5185972|1.39|
-|8|8192|NO|3881996|5337866|1.38|
-|8|16384|YES|4961435|8170489|1.65|
-|8|16384|NO|5003135|8086178|1.62|
-|8|32768|YES|6218767|11658218|1.87|
-|8|32768|NO|6124648|11087247|1.81|
-|8|65536|YES|6808677|14921211|2.19|
-|8|65536|NO|6631887|13233484|2.00|
-|8|131072|YES|7205370|16923294|2.35|
-|8|131072|NO|7030438|15081861|2.15|
+|1|4096|YES   |573285|919150|1.60|
+|1|4096|NO    |499442|718163|1.44|
+|1|8192|YES   |753993|1486867|1.97|
+|1|8192|NO    |670906|1144640|1.71|
+|1|16384|YES  |859699|1945700|2.26|
+|1|16384|NO   |802366|1599006|1.99|
+|1|32768|YES  |904255|1995194|2.21|
+|1|32768|NO   |856130|1795285|2.10|
+|1|65536|YES  |982448|2608010|2.65|
+|1|65536|NO   |934394|2221221|2.38|
+|1|131072|YES |926734|2621095|2.83|
+|1|131072|NO  |965293|2403829|2.49|
+|8|4096|YES   |3102948|4083015|1.32|
+|8|4096|NO    |2840155|3602516|1.27|
+|8|8192|YES   |5536556|10094905|1.82|
+|8|8192|NO    |4810100|7912019|1.64|
+|8|16384|YES  |5722386|10524548|1.84|
+|8|16384|NO   |5939908|10876135|1.83|
+|8|32768|YES  |6813318|14356608|2.11|
+|8|32768|NO   |6489446|12593087|1.94|
+|8|65536|YES  |6918413|16227668|2.35|
+|8|65536|NO   |6614453|14742844|2.23|
+|8|131072|YES |6910518|16423342|2.38|
+|8|131072|NO  |7133219|15524549|2.18|
  </details>
 
 ## Release notes
@@ -827,7 +674,15 @@ For more results go to the expandable table below.
 ### Changelog
 
 February 2021
-Initial release
+- Initial release
+
+November 2021
+- Refresh release with performance optimizations
+- Updated NVTabular to v0.6.1
+- Replaced native TF dataloader with NVTabular counterpart
+- Removed spark CPU preprocessing
+- Updated readme numbers
+- Changed V100 cards from 16GB to 32GB
 
 ### Known issues
 * In this model the TF32 precision can in some cases be as fast as the FP16 precision on Ampere GPUs. This is because TF32 also uses Tensor Cores and doesn't need any additional logic such as maintaining FP32 master weights and casts. However, please note that W&D is, by modern recommender standards, a very small model. Larger models should still see significant benefits of using FP16 math.

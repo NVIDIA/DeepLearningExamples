@@ -234,32 +234,29 @@ class Logger(object):
     def log_metric(self, metric_name, val, n=1):
         self.metrics[metric_name]["meter"].record(val, n=n)
 
-    def start_iteration(self, mode='train'):
-        if mode == 'val':
+    def start_iteration(self, mode="train"):
+        if mode == "val":
             self.val_iteration += 1
-        elif mode == 'train':
+        elif mode == "train":
             self.iteration += 1
-        elif mode == 'calib':
+        elif mode == "calib":
             self.calib_iteration += 1
 
-    def end_iteration(self, mode='train'):
-        if mode == 'val':
+    def end_iteration(self, mode="train"):
+        if mode == "val":
             it = self.val_iteration
-        elif mode == 'train':
+        elif mode == "train":
             it = self.iteration
-        elif mode == 'calib':
+        elif mode == "calib":
             it = self.calib_iteration
-
-        if it % self.print_interval == 0 or mode == 'calib':
-            metrics = {
-                n: m for n, m in self.metrics.items() if n.startswith(mode)
-            }
-            if mode == 'train':
+        if it % self.print_interval == 0 or mode == "calib":
+            metrics = {n: m for n, m in self.metrics.items() if n.startswith(mode)}
+            if mode == "train":
                 step = (self.epoch, self.iteration)
-            elif mode == 'val':
+            elif mode == "val":
                 step = (self.epoch, self.iteration, self.val_iteration)
-            elif mode == 'calib':
-                step = ('Calibration', self.calib_iteration)
+            elif mode == "calib":
+                step = ("Calibration", self.calib_iteration)
 
             verbositys = {m["level"] for _, m in metrics.items()}
             for ll in verbositys:
@@ -282,12 +279,12 @@ class Logger(object):
         self.val_iteration = 0
 
         for n, m in self.metrics.items():
-            if not n.startswith('calib'):
+            if not n.startswith("calib"):
                 m["meter"].reset_epoch()
 
     def end_epoch(self):
         for n, m in self.metrics.items():
-            if not n.startswith('calib'):
+            if not n.startswith("calib"):
                 m["meter"].reset_iteration()
 
         verbositys = {m["level"] for _, m in self.metrics.items()}
@@ -302,12 +299,12 @@ class Logger(object):
         self.calib_iteration = 0
 
         for n, m in self.metrics.items():
-            if n.startswith('calib'):
+            if n.startswith("calib"):
                 m["meter"].reset_epoch()
 
     def end_calibration(self):
         for n, m in self.metrics.items():
-            if n.startswith('calib'):
+            if n.startswith("calib"):
                 m["meter"].reset_iteration()
 
     def end(self):
@@ -326,7 +323,7 @@ class Logger(object):
 
         dllogger.flush()
 
-    def iteration_generator_wrapper(self, gen, mode='train'):
+    def iteration_generator_wrapper(self, gen, mode="train"):
         for g in gen:
             self.start_iteration(mode=mode)
             yield g
@@ -337,3 +334,155 @@ class Logger(object):
             self.start_epoch()
             yield g
             self.end_epoch()
+
+
+class Metrics:
+    ACC_METADATA = {"unit": "%", "format": ":.2f"}
+    IPS_METADATA = {"unit": "img/s", "format": ":.2f"}
+    TIME_METADATA = {"unit": "s", "format": ":.5f"}
+    LOSS_METADATA = {"format": ":.5f"}
+    LR_METADATA = {"format": ":.5f"}
+
+    def __init__(self, logger):
+        self.logger = logger
+        self.map = {}
+
+    def log(self, **kwargs):
+        if self.logger is None:
+            return
+        for k, v in kwargs.items():
+            tks = self.map.get(k, [k])
+            for tk in tks:
+                if isinstance(v, tuple):
+                    self.logger.log_metric(tk, v[0], v[1])
+                else:
+                    self.logger.log_metric(tk, v)
+
+
+class TrainingMetrics(Metrics):
+    def __init__(self, logger):
+        super().__init__(logger)
+        if self.logger is not None:
+            self.map = {
+                "loss": ["train.loss"],
+                "compute_ips": ["train.compute_ips"],
+                "total_ips": ["train.total_ips"],
+                "data_time": ["train.data_time"],
+                "compute_time": ["train.compute_time"],
+                "lr": ["train.lr"],
+            }
+            logger.register_metric(
+                "train.loss",
+                LOSS_METER(),
+                verbosity=dllogger.Verbosity.DEFAULT,
+                metadata=Metrics.LOSS_METADATA,
+            )
+            logger.register_metric(
+                "train.compute_ips",
+                PERF_METER(),
+                verbosity=dllogger.Verbosity.DEFAULT,
+                metadata=Metrics.IPS_METADATA,
+            )
+            logger.register_metric(
+                "train.total_ips",
+                PERF_METER(),
+                verbosity=dllogger.Verbosity.DEFAULT,
+                metadata=Metrics.IPS_METADATA,
+            )
+            logger.register_metric(
+                "train.data_time",
+                PERF_METER(),
+                verbosity=dllogger.Verbosity.VERBOSE,
+                metadata=Metrics.TIME_METADATA,
+            )
+            logger.register_metric(
+                "train.compute_time",
+                PERF_METER(),
+                verbosity=dllogger.Verbosity.VERBOSE,
+                metadata=Metrics.TIME_METADATA,
+            )
+            logger.register_metric(
+                "train.lr",
+                LR_METER(),
+                verbosity=dllogger.Verbosity.DEFAULT,
+            )
+
+
+class ValidationMetrics(Metrics):
+    def __init__(self, logger, prefix):
+        super().__init__(logger)
+        if self.logger is not None:
+            self.map = {
+                "loss": [f"{prefix}.loss"],
+                "top1": [f"{prefix}.top1"],
+                "top5": [f"{prefix}.top5"],
+                "compute_ips": [f"{prefix}.compute_ips"],
+                "total_ips": [f"{prefix}.total_ips"],
+                "data_time": [f"{prefix}.data_time"],
+                "compute_time": [
+                    f"{prefix}.compute_latency",
+                    f"{prefix}.compute_latency_at100",
+                    f"{prefix}.compute_latency_at99",
+                    f"{prefix}.compute_latency_at95",
+                ],
+            }
+            logger.register_metric(
+                f"{prefix}.top1",
+                ACC_METER(),
+                verbosity=dllogger.Verbosity.DEFAULT,
+                metadata=Metrics.ACC_METADATA,
+            )
+            logger.register_metric(
+                f"{prefix}.top5",
+                ACC_METER(),
+                verbosity=dllogger.Verbosity.DEFAULT,
+                metadata=Metrics.ACC_METADATA,
+            )
+            logger.register_metric(
+                f"{prefix}.loss",
+                LOSS_METER(),
+                verbosity=dllogger.Verbosity.DEFAULT,
+                metadata=Metrics.LOSS_METADATA,
+            )
+            logger.register_metric(
+                f"{prefix}.compute_ips",
+                PERF_METER(),
+                verbosity=dllogger.Verbosity.DEFAULT,
+                metadata=Metrics.IPS_METADATA,
+            )
+            logger.register_metric(
+                f"{prefix}.total_ips",
+                PERF_METER(),
+                verbosity=dllogger.Verbosity.DEFAULT,
+                metadata=Metrics.IPS_METADATA,
+            )
+            logger.register_metric(
+                f"{prefix}.data_time",
+                PERF_METER(),
+                verbosity=dllogger.Verbosity.VERBOSE,
+                metadata=Metrics.TIME_METADATA,
+            )
+            logger.register_metric(
+                f"{prefix}.compute_latency",
+                PERF_METER(),
+                verbosity=dllogger.Verbosity.DEFAULT,
+                metadata=Metrics.TIME_METADATA,
+            )
+            logger.register_metric(
+                f"{prefix}.compute_latency_at100",
+                LAT_100(),
+                verbosity=dllogger.Verbosity.VERBOSE,
+                metadata=Metrics.TIME_METADATA,
+            )
+            logger.register_metric(
+                f"{prefix}.compute_latency_at99",
+                LAT_99(),
+                verbosity=dllogger.Verbosity.VERBOSE,
+                metadata=Metrics.TIME_METADATA,
+            )
+            logger.register_metric(
+                f"{prefix}.compute_latency_at95",
+                LAT_95(),
+                verbosity=dllogger.Verbosity.VERBOSE,
+                metadata=Metrics.TIME_METADATA,
+            )

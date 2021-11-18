@@ -42,18 +42,17 @@ class DaliJasperIterator(object):
     Use DataLoader instead.
     """
 
-    def __init__(self, dali_pipelines, transcripts, symbols, batch_size, shard_size, train_iterator: bool):
+    def __init__(self, dali_pipelines, transcripts, symbols, batch_size, reader_name, train_iterator: bool):
         self.transcripts = transcripts
         self.symbols = symbols
         self.batch_size = batch_size
         from nvidia.dali.plugin.pytorch import DALIGenericIterator
         from nvidia.dali.plugin.base_iterator import LastBatchPolicy
 
-        # in train pipeline shard_size is set to divisable by batch_size, so PARTIAL policy is safe
         self.dali_it = DALIGenericIterator(
-            dali_pipelines, ["audio", "label", "audio_shape"], size=shard_size,
-            dynamic_shape=True, auto_reset=True, last_batch_padded=True,
-            last_batch_policy=LastBatchPolicy.PARTIAL)
+            dali_pipelines, ["audio", "label", "audio_shape"], reader_name=reader_name,
+            dynamic_shape=True, auto_reset=True,
+            last_batch_policy=(LastBatchPolicy.DROP if train_iterator else LastBatchPolicy.PARTIAL))
 
     @staticmethod
     def _str2list(s: str):

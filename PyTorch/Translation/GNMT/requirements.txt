@@ -1,4 +1,5 @@
-pytablewriter==0.47.0
+pytablewriter==0.64.0
 sacrebleu==1.2.10
 sacremoses==0.0.19
+pynvml==8.0.4
 git+git://github.com/rsennrich/subword-nmt.git@48ba99e657591c329e0003f0c6e32e493fa959ef

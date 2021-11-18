@@ -297,7 +297,7 @@ To run inference on ImageNet, run:
 
 To run inference on JPEG image using pretrained weights:
 
-`python classify.py --arch resnet50 -c fanin --weights nvidia_resnet50_200821.pth.tar --precision AMP|FP32 --image <path to JPEG image>`
+`python classify.py --arch resnet50 --pretrained-from-file nvidia_resnet50_200821.pth.tar --precision AMP|FP32 --image <path to JPEG image>`
 
 
 ## Advanced
@@ -472,7 +472,7 @@ To run inference on JPEG image, you have to first extract the model weights from
 
 Then run classification script:
 
-`python classify.py --arch resnet50 -c fanin --weights <path to weights from previous step> --precision AMP|FP32 --image <path to JPEG image>`
+`python classify.py --arch resnet50 --pretrained-from-file <path to weights from previous step> --precision AMP|FP32 --image <path to JPEG image>`
 
 You can also run ImageNet validation on pretrained weights:
 
@@ -497,6 +497,8 @@ To run inference on JPEG image using pretrained weights:
 
 
 ## Performance
+
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
 
 ### Benchmarking
 

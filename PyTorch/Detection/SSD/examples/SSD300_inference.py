@@ -18,8 +18,8 @@ import numpy as np
 from apex.fp16_utils import network_to_half
 
 from dle.inference import prepare_input
-from src.model import SSD300, ResNet
-from src.utils import dboxes300_coco, Encoder
+from ssd.model import SSD300, ResNet
+from ssd.utils import dboxes300_coco, Encoder
 
 
 def load_checkpoint(model, model_file):

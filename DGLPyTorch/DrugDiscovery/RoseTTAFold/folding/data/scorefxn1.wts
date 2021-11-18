@@ -1,0 +1,7 @@
+cen_hb  5.0
+rama    1.0
+omega   0.5
+vdw     5.0
+atom_pair_constraint  1.0
+dihedral_constraint   0.5
+angle_constraint      0.5

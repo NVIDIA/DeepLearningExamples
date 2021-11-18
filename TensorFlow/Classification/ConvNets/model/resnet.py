@@ -19,15 +19,13 @@ from __future__ import print_function
 
 import tensorflow as tf
 
-import horovod.tensorflow as hvd
+from utils import hvd_wrapper as hvd
 import dllogger
 
 from model import layers
 from model import blocks
 
 from utils import var_storage
-from utils import hvd_utils
-
 from utils.data_utils import normalized_inputs
 
 from utils.learning_rate import learning_rate_scheduler
@@ -53,6 +51,7 @@ class ResnetModel(object):
         weight_init='fan_out',
         dtype=tf.float32,
         use_dali=False,
+        use_cpu=False,
         cardinality=1,
         use_se=False,
         se_ratio=1,
@@ -68,6 +67,7 @@ class ResnetModel(object):
             expansions=expansions,
             model_name=model_name,
             use_dali=use_dali,
+            use_cpu=use_cpu,
             cardinality=cardinality,
             use_se=use_se,
             se_ratio=se_ratio
@@ -124,11 +124,13 @@ class ResnetModel(object):
                 # Stage inputs on the host
                 cpu_prefetch_op, (features, labels) = self._stage([features, labels])
 
-            with tf.device('/gpu:0'):
-                # Stage inputs to the device
-                gpu_prefetch_op, (features, labels) = self._stage([features, labels])
+            if not self.model_hparams.use_cpu:
+                with tf.device('/gpu:0'):
+                    # Stage inputs to the device
+                    gpu_prefetch_op, (features, labels) = self._stage([features, labels])
 
-        with tf.device("/gpu:0"):
+        main_device = "/gpu:0" if not self.model_hparams.use_cpu else "/cpu:0"
+        with tf.device(main_device):
 
             if features.dtype != self.model_hparams.dtype:
                 features = tf.cast(features, self.model_hparams.dtype)
@@ -237,14 +239,6 @@ class ResnetModel(object):
                 dllogger.log(data={"Restoring variables from checkpoint": params['finetune_checkpoint']}, step=tuple())
                 tf.train.init_from_checkpoint(params['finetune_checkpoint'], train_var_dict)
 
-        with tf.device("/cpu:0"):
-            if hvd_utils.is_using_hvd():
-                sync_var = tf.Variable(initial_value=[0], dtype=tf.int32, name="signal_handler_var",
-                                       trainable=False)
-                sync_var_assing = sync_var.assign([1], name="signal_handler_var_set")
-                sync_var_reset = sync_var.assign([0], name="signal_handler_var_reset")
-                sync_op = hvd.allreduce(sync_var, op=hvd.Sum, name="signal_handler_all_reduce")
-
         if mode == tf.estimator.ModeKeys.PREDICT:
 
             predictions = {'classes': y_preds, 'probabilities': probs}
@@ -257,7 +251,7 @@ class ResnetModel(object):
 
         else:
 
-            with tf.device("/gpu:0"):
+            with tf.device(main_device):
 
                 if mode == tf.estimator.ModeKeys.TRAIN:
                     acc_top1 = tf.nn.in_top_k(predictions=logits, targets=labels, k=1)
@@ -341,8 +335,8 @@ class ResnetModel(object):
                     if params["apply_loss_scaling"]:
                         optimizer = FixedLossScalerOptimizer(optimizer, scale=params["loss_scale"])
 
-                    if hvd_utils.is_using_hvd():
-                        optimizer = hvd.DistributedOptimizer(optimizer)
+                    if hvd.size() > 1:
+                        optimizer = hvd.hvd_global_object.DistributedOptimizer(optimizer)
 
                     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                     if mode != tf.estimator.ModeKeys.TRAIN:
@@ -355,6 +349,10 @@ class ResnetModel(object):
 
                     if self.model_hparams.use_dali:
                         train_ops = tf.group(backprop_op, update_ops, name='train_ops')
+                    elif self.model_hparams.use_cpu:
+                        train_ops = tf.group(
+                            backprop_op, cpu_prefetch_op, update_ops, name='train_ops'
+                        )
                     else:
                         train_ops = tf.group(
                             backprop_op, cpu_prefetch_op, gpu_prefetch_op, update_ops, name='train_ops'

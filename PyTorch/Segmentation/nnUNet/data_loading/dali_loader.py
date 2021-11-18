@@ -25,7 +25,7 @@ from nvidia.dali.plugin.pytorch import DALIGenericIterator
 
 
 def get_numpy_reader(files, shard_id, num_shards, seed, shuffle):
-    return ops.NumpyReader(
+    return ops.readers.Numpy(
         seed=seed,
         files=files,
         device="cpu",
@@ -42,6 +42,7 @@ class TrainPipeline(Pipeline):
     def __init__(self, batch_size, num_threads, device_id, **kwargs):
         super(TrainPipeline, self).__init__(batch_size, num_threads, device_id)
         self.dim = kwargs["dim"]
+        self.internal_seed = kwargs["seed"]
         self.oversampling = kwargs["oversampling"]
         self.input_x = get_numpy_reader(
             num_shards=kwargs["gpus"],
@@ -60,6 +61,7 @@ class TrainPipeline(Pipeline):
         self.patch_size = kwargs["patch_size"]
         if self.dim == 2:
             self.patch_size = [kwargs["batch_size_2d"]] + self.patch_size
+
         self.crop_shape = types.Constant(np.array(self.patch_size), dtype=types.INT64)
         self.crop_shape_float = types.Constant(np.array(self.patch_size), dtype=types.FLOAT)
 
@@ -69,7 +71,7 @@ class TrainPipeline(Pipeline):
         return img, lbl
 
     def random_augmentation(self, probability, augmented, original):
-        condition = fn.cast(fn.coin_flip(probability=probability), dtype=types.DALIDataType.BOOL)
+        condition = fn.cast(fn.random.coin_flip(probability=probability), dtype=types.DALIDataType.BOOL)
         neg_condition = condition ^ True
         return condition * augmented + neg_condition * original
 
@@ -77,45 +79,60 @@ class TrainPipeline(Pipeline):
     def slice_fn(img):
         return fn.slice(img, 1, 3, axes=[0])
 
-    def crop_fn(self, img, lbl):
-        center = fn.segmentation.random_mask_pixel(lbl, foreground=fn.coin_flip(probability=self.oversampling))
-        crop_anchor = self.slice_fn(center) - self.crop_shape // 2
-        adjusted_anchor = math.max(0, crop_anchor)
-        max_anchor = self.slice_fn(fn.shapes(lbl)) - self.crop_shape
-        crop_anchor = math.min(adjusted_anchor, max_anchor)
-        img = fn.slice(img.gpu(), crop_anchor, self.crop_shape, axis_names="DHW", out_of_bounds_policy="pad")
-        lbl = fn.slice(lbl.gpu(), crop_anchor, self.crop_shape, axis_names="DHW", out_of_bounds_policy="pad")
-        return img, lbl
+    def biased_crop_fn(self, img, label):
+        roi_start, roi_end = fn.segmentation.random_object_bbox(
+            label,
+            format="start_end",
+            foreground_prob=self.oversampling,
+            background=0,
+            seed=self.internal_seed,
+            device="cpu",
+            cache_objects=True,
+        )
+
+        anchor = fn.roi_random_crop(label, roi_start=roi_start, roi_end=roi_end, crop_shape=[1, *self.patch_size])
+        anchor = fn.slice(anchor, 1, 3, axes=[0])  # drop channels from anchor
+        img, label = fn.slice(
+            [img, label], anchor, self.crop_shape, axis_names="DHW", out_of_bounds_policy="pad", device="cpu"
+        )
+
+        return img.gpu(), label.gpu()
 
     def zoom_fn(self, img, lbl):
-        resized_shape = self.crop_shape * self.random_augmentation(0.15, fn.uniform(range=(0.7, 1.0)), 1.0)
-        img, lbl = fn.crop(img, crop=resized_shape), fn.crop(lbl, crop=resized_shape)
+        scale = self.random_augmentation(0.15, fn.random.uniform(range=(0.7, 1.0)), 1.0)
+        d, h, w = [scale * x for x in self.patch_size]
+        if self.dim == 2:
+            d = self.patch_size[0]
+        img, lbl = fn.crop(img, crop_h=h, crop_w=w, crop_d=d), fn.crop(lbl, crop_h=h, crop_w=w, crop_d=d)
         img = fn.resize(img, interp_type=types.DALIInterpType.INTERP_CUBIC, size=self.crop_shape_float)
         lbl = fn.resize(lbl, interp_type=types.DALIInterpType.INTERP_NN, size=self.crop_shape_float)
         return img, lbl
 
     def noise_fn(self, img):
-        img_noised = img + fn.random.normal(img, stddev=fn.uniform(range=(0.0, 0.33)))
+        img_noised = img + fn.random.normal(img, stddev=fn.random.uniform(range=(0.0, 0.33)))
         return self.random_augmentation(0.15, img_noised, img)
 
     def blur_fn(self, img):
-        img_blured = fn.gaussian_blur(img, sigma=fn.uniform(range=(0.5, 1.5)))
-        return self.random_augmentation(0.15, img_blured, img)
+        img_blurred = fn.gaussian_blur(img, sigma=fn.random.uniform(range=(0.5, 1.5)))
+        return self.random_augmentation(0.15, img_blurred, img)
 
     def brightness_fn(self, img):
-        brightness_scale = self.random_augmentation(0.15, fn.uniform(range=(0.7, 1.3)), 1.0)
+        brightness_scale = self.random_augmentation(0.15, fn.random.uniform(range=(0.7, 1.3)), 1.0)
         return img * brightness_scale
 
     def contrast_fn(self, img):
         min_, max_ = fn.reductions.min(img), fn.reductions.max(img)
-        scale = self.random_augmentation(0.15, fn.uniform(range=(0.65, 1.5)), 1.0)
+        scale = self.random_augmentation(0.15, fn.random.uniform(range=(0.65, 1.5)), 1.0)
         img = math.clamp(img * scale, min_, max_)
         return img
 
     def flips_fn(self, img, lbl):
-        kwargs = {"horizontal": fn.coin_flip(probability=0.33), "vertical": fn.coin_flip(probability=0.33)}
+        kwargs = {
+            "horizontal": fn.random.coin_flip(probability=0.33),
+            "vertical": fn.random.coin_flip(probability=0.33),
+        }
         if self.dim == 3:
-            kwargs.update({"depthwise": fn.coin_flip(probability=0.33)})
+            kwargs.update({"depthwise": fn.random.coin_flip(probability=0.33)})
         return fn.flip(img, **kwargs), fn.flip(lbl, **kwargs)
 
     def transpose_fn(self, img, lbl):
@@ -124,7 +141,7 @@ class TrainPipeline(Pipeline):
 
     def define_graph(self):
         img, lbl = self.load_data()
-        img, lbl = self.crop_fn(img, lbl)
+        img, lbl = self.biased_crop_fn(img, lbl)
         img, lbl = self.zoom_fn(img, lbl)
         img, lbl = self.flips_fn(img, lbl)
         img = self.noise_fn(img)
@@ -141,6 +158,30 @@ class EvalPipeline(Pipeline):
         super(EvalPipeline, self).__init__(batch_size, num_threads, device_id)
         self.input_x = get_numpy_reader(
             files=kwargs["imgs"],
+            shard_id=0,
+            num_shards=1,
+            seed=kwargs["seed"],
+            shuffle=False,
+        )
+        self.input_y = get_numpy_reader(
+            files=kwargs["lbls"],
+            shard_id=0,
+            num_shards=1,
+            seed=kwargs["seed"],
+            shuffle=False,
+        )
+
+    def define_graph(self):
+        img, lbl = self.input_x(name="ReaderX").gpu(), self.input_y(name="ReaderY").gpu()
+        img, lbl = fn.reshape(img, layout="CDHW"), fn.reshape(lbl, layout="CDHW")
+        return img, lbl
+
+
+class BermudaPipeline(Pipeline):
+    def __init__(self, batch_size, num_threads, device_id, **kwargs):
+        super(BermudaPipeline, self).__init__(batch_size, num_threads, device_id)
+        self.input_x = get_numpy_reader(
+            files=kwargs["imgs"],
             shard_id=device_id,
             num_shards=kwargs["gpus"],
             seed=kwargs["seed"],
@@ -153,10 +194,17 @@ class EvalPipeline(Pipeline):
             seed=kwargs["seed"],
             shuffle=False,
         )
+        self.patch_size = kwargs["patch_size"]
+
+    def crop_fn(self, img, lbl):
+        img = fn.crop(img, crop=self.patch_size, out_of_bounds_policy="pad")
+        lbl = fn.crop(lbl, crop=self.patch_size, out_of_bounds_policy="pad")
+        return img, lbl
 
     def define_graph(self):
-        img, lbl = self.input_x(name="ReaderX").gpu(), self.input_y(name="ReaderY").gpu()
+        img, lbl = self.input_x(name="ReaderX"), self.input_y(name="ReaderY")
         img, lbl = fn.reshape(img, layout="CDHW"), fn.reshape(lbl, layout="CDHW")
+        img, lbl = self.crop_fn(img, lbl)
         return img, lbl
 
 
@@ -249,11 +297,12 @@ def fetch_dali_loader(imgs, lbls, batch_size, mode, **kwargs):
             nbs *= batch_size
         imgs = list(itertools.chain(*(100 * [imgs])))[: nbs * kwargs["gpus"]]
         lbls = list(itertools.chain(*(100 * [lbls])))[: nbs * kwargs["gpus"]]
-    if mode == "eval":
-        reminder = len(imgs) % kwargs["gpus"]
-        if reminder != 0:
-            imgs = imgs[:-reminder]
-            lbls = lbls[:-reminder]
+
+    if mode == "eval":  # To avoid padding for the multigpu evaluation.
+        rank = int(os.getenv("LOCAL_RANK", "0"))
+        imgs, lbls = np.array_split(imgs, kwargs["gpus"]), np.array_split(lbls, kwargs["gpus"])
+        imgs, lbls = [list(x) for x in imgs], [list(x) for x in lbls]
+        imgs, lbls = imgs[rank], lbls[rank]
 
     pipe_kwargs = {
         "imgs": imgs,
@@ -284,6 +333,10 @@ def fetch_dali_loader(imgs, lbls, batch_size, mode, **kwargs):
         pipeline = EvalPipeline
         output_map = ["image", "label"]
         dynamic_shape = True
+    elif mode == "bermuda":
+        pipeline = BermudaPipeline
+        output_map = ["image", "label"]
+        dynamic_shape = False
     else:
         pipeline = TestPipeline
         output_map = ["image", "meta"]

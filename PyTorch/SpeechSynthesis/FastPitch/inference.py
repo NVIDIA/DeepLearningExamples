@@ -28,10 +28,10 @@
 import argparse
 import models
 import time
-import tqdm
 import sys
 import warnings
 from pathlib import Path
+from tqdm import tqdm
 
 import torch
 import numpy as np
@@ -45,6 +45,7 @@ from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
 from common import utils
 from common.tb_dllogger import (init_inference_metadata, stdout_metric_format,
                                 unique_log_fpath)
+from common.text import cmudict
 from common.text.text_processing import TextProcessing
 from pitch_transform import pitch_transform_custom
 from waveglow import model as glow
@@ -63,6 +64,7 @@ def parse_args(parser):
                         help='Output folder to save audio (file per phrase)')
     parser.add_argument('--log-file', type=str, default=None,
                         help='Path to a DLLogger log file')
+    parser.add_argument('--save-mels', action='store_true', help='')
     parser.add_argument('--cuda', action='store_true',
                         help='Run inference on a GPU using CUDA')
     parser.add_argument('--cudnn-benchmark', action='store_true',
@@ -82,8 +84,8 @@ def parse_args(parser):
     parser.add_argument('--amp', action='store_true',
                         help='Inference with AMP')
     parser.add_argument('-bs', '--batch-size', type=int, default=64)
-    parser.add_argument('--include-warmup', action='store_true',
-                        help='Include warmup')
+    parser.add_argument('--warmup-steps', type=int, default=0,
+                        help='Warmup iterations before measuring performance')
     parser.add_argument('--repeats', type=int, default=1,
                         help='Repeat inference for benchmarking')
     parser.add_argument('--torchscript', action='store_true',
@@ -95,6 +97,11 @@ def parse_args(parser):
     parser.add_argument('--speaker', type=int, default=0,
                         help='Speaker ID for a multi-speaker model')
 
+    parser.add_argument('--p-arpabet', type=float, default=0.0, help='')
+    parser.add_argument('--heteronyms-path', type=str, default='cmudict/heteronyms',
+                        help='')
+    parser.add_argument('--cmudict-path', type=str, default='cmudict/cmudict-0.7b',
+                        help='')
     transform = parser.add_argument_group('transform')
     transform.add_argument('--fade-out', type=int, default=10,
                            help='Number of fadeout frames at the end')
@@ -151,6 +158,7 @@ def load_model_from_ckpt(checkpoint_path, ema, model):
 def load_and_setup_model(model_name, parser, checkpoint, amp, device,
                          unk_args=[], forward_is_infer=False, ema=True,
                          jitable=False):
+
     model_parser = models.parse_model_args(model_name, parser, add_help=False)
     model_args, model_unk_args = model_parser.parse_known_args()
     unk_args[:] = list(set(unk_args) & set(model_unk_args))
@@ -165,7 +173,11 @@ def load_and_setup_model(model_name, parser, checkpoint, amp, device,
         model = load_model_from_ckpt(checkpoint, ema, model)
 
     if model_name == "WaveGlow":
+        for k, m in model.named_modules():
+            m._non_persistent_buffers_set = set()  # pytorch 1.6.0 compatability
+
         model = model.remove_weightnorm(model)
+
     if amp:
         model.half()
     model.eval()
@@ -185,8 +197,8 @@ def load_fields(fpath):
 
 def prepare_input_sequence(fields, device, symbol_set, text_cleaners,
                            batch_size=128, dataset=None, load_mels=False,
-                           load_pitch=False):
-    tp = TextProcessing(symbol_set, text_cleaners)
+                           load_pitch=False, p_arpabet=0.0):
+    tp = TextProcessing(symbol_set, text_cleaners, p_arpabet=p_arpabet)
 
     fields['text'] = [torch.LongTensor(tp.encode_text(text))
                       for text in fields['text']]
@@ -194,6 +206,9 @@ def prepare_input_sequence(fields, device, symbol_set, text_cleaners,
 
     fields['text'] = [fields['text'][i] for i in order]
     fields['text_lens'] = torch.LongTensor([t.size(0) for t in fields['text']])
+
+    for t in fields['text']:
+        print(tp.sequence_to_text(t.numpy()))
 
     if load_mels:
         assert 'mel' in fields
@@ -251,17 +266,23 @@ def build_pitch_transformation(args):
 
 
 class MeasureTime(list):
+    def __init__(self, *args, cuda=True, **kwargs):
+        super(MeasureTime, self).__init__(*args, **kwargs)
+        self.cuda = cuda
+
     def __enter__(self):
-        torch.cuda.synchronize()
+        if self.cuda:
+            torch.cuda.synchronize()
         self.t0 = time.perf_counter()
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        torch.cuda.synchronize()
+        if self.cuda:
+            torch.cuda.synchronize()
         self.append(time.perf_counter() - self.t0)
 
     def __add__(self, other):
         assert len(self) == len(other)
-        return MeasureTime(sum(ab) for ab in zip(self, other))
+        return MeasureTime((sum(ab) for ab in zip(self, other)), cuda=cuda)
 
 
 def main():
@@ -273,6 +294,9 @@ def main():
                                      allow_abbrev=False)
     parser = parse_args(parser)
     args, unk_args = parser.parse_known_args()
+
+    if args.p_arpabet > 0.0:
+        cmudict.initialize(args.cmudict_path, keep_ambiguous=True)
 
     torch.backends.cudnn.benchmark = args.cudnn_benchmark
 
@@ -317,21 +341,20 @@ def main():
     fields = load_fields(args.input)
     batches = prepare_input_sequence(
         fields, device, args.symbol_set, args.text_cleaners, args.batch_size,
-        args.dataset_path, load_mels=(generator is None))
+        args.dataset_path, load_mels=(generator is None), p_arpabet=args.p_arpabet)
 
-    if args.include_warmup:
-        # Use real data rather than synthetic - FastPitch predicts len
-        for i in range(3):
-            with torch.no_grad():
-                if generator is not None:
-                    b = batches[0]
-                    mel, *_ = generator(b['text'])
-                if waveglow is not None:
-                    audios = waveglow(mel, sigma=args.sigma_infer).float()
-                    _ = denoiser(audios, strength=args.denoising_strength)
+    # Use real data rather than synthetic - FastPitch predicts len
+    for _ in tqdm(range(args.warmup_steps), 'Warmup'):
+        with torch.no_grad():
+            if generator is not None:
+                b = batches[0]
+                mel, *_ = generator(b['text'])
+            if waveglow is not None:
+                audios = waveglow(mel, sigma=args.sigma_infer).float()
+                _ = denoiser(audios, strength=args.denoising_strength)
 
-    gen_measures = MeasureTime()
-    waveglow_measures = MeasureTime()
+    gen_measures = MeasureTime(cuda=args.cuda)
+    waveglow_measures = MeasureTime(cuda=args.cuda)
 
     gen_kw = {'pace': args.pace,
               'speaker': args.speaker,
@@ -351,21 +374,27 @@ def main():
     log_enabled = reps == 1
     log = lambda s, d: DLLogger.log(step=s, data=d) if log_enabled else None
 
-    for rep in (tqdm.tqdm(range(reps)) if reps > 1 else range(reps)):
+    for rep in (tqdm(range(reps), 'Inference') if reps > 1 else range(reps)):
         for b in batches:
             if generator is None:
                 log(rep, {'Synthesizing from ground truth mels'})
-                mel = b['mel']
+                mel, mel_lens = b['mel'], b['mel_lens']
             else:
                 with torch.no_grad(), gen_measures:
-                    mel, mel_lens, dur_pred, pitch_pred = generator(
-                        b['text'], b['text_lens'], **gen_kw)
+                    mel, mel_lens, *_ = generator(b['text'], **gen_kw)
 
                 gen_infer_perf = mel.size(0) * mel.size(2) / gen_measures[-1]
                 all_letters += b['text_lens'].sum().item()
                 all_frames += mel.size(0) * mel.size(2)
                 log(rep, {"fastpitch_frames/s": gen_infer_perf})
                 log(rep, {"fastpitch_latency": gen_measures[-1]})
+
+                if args.save_mels:
+                    for i, mel_ in enumerate(mel):
+                        m = mel_[:, :mel_lens[i].item()].permute(1, 0)
+                        fname = b['output'][i] if 'output' in b else f'mel_{i}.npy'
+                        mel_path = Path(args.output, Path(fname).stem + '.npy')
+                        np.save(mel_path, m.cpu().numpy())
 
             if waveglow is not None:
                 with torch.no_grad(), waveglow_measures:

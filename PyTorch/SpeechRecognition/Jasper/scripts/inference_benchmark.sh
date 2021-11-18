@@ -19,6 +19,7 @@ set -a
 : ${OUTPUT_DIR:=${3:-"/results"}}
 : ${CUDNN_BENCHMARK:=true}
 : ${PAD_TO_MAX_DURATION:=true}
+: ${PAD_LEADING:=0}
 : ${NUM_WARMUP_STEPS:=10}
 : ${NUM_STEPS:=500}
 

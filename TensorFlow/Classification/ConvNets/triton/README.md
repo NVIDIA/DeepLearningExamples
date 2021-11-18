@@ -196,7 +196,7 @@ processing, and training of the model.
    Generate the configuration from your model repository.
  
    ```
-    python3 triton/config_model_on_trion.py \
+    python3 triton/config_model_on_triton.py \
         --model-repository ${MODEL_REPOSITORY_PATH} \
         --model-path ${SHARED_DIR}/model \
         --model-format ${FORMAT} \
@@ -344,6 +344,8 @@ we can consider that all clients are local.
 
 
 ## Performance
+
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
 
 
 ### Offline scenario

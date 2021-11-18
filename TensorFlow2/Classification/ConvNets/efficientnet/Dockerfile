@@ -24,7 +24,6 @@ ADD . /workspace
 WORKDIR /workspace
 COPY . .
 
-RUN python -m pip install --upgrade pip && \
-    pip --no-cache-dir --no-cache install --user -r requirements.txt
+RUN pip --no-cache-dir --no-cache install --user -r requirements.txt
 
 RUN pip install git+https://github.com/NVIDIA/dllogger

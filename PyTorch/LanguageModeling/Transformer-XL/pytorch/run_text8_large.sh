@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export OMP_NUM_THREADS=1
+
 if [[ $1 == 'train' ]]; then
     echo 'Run training...'
     python train.py \

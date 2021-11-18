@@ -106,12 +106,12 @@ Ensure you have the following components:
 
 ## Quick Start Guide
 
-Running the following scripts will build and launch the container with all required dependencies for native PyTorch as well as Triton Inference Server. This is necessary for running inference and can also be used for data download, processing, and training of the model. 
- 
+Running the following scripts will build and launch the container with all required dependencies for native PyTorch as well as Triton Inference Server. This is necessary for running inference and can also be used for data download, processing, and training of the model.
+
 1. Clone the repository.
 
    IMPORTANT: This step is executed on the host computer.
- 
+
    ```
     git clone https://github.com/NVIDIA/DeepLearningExamples.git
     cd DeepLearningExamples/PyTorch/SpeechSynthesis/FastPitch
@@ -120,28 +120,28 @@ Running the following scripts will build and launch the container with all requi
 
    ```
     source triton/scripts/setup_environment.sh
-    bash triton/scripts/docker/triton_inference_server.sh 
+    bash triton/scripts/docker/triton_inference_server.sh
    ```
 
 1. Build and run a container that extends the NGC PyTorch container with the Triton Inference Server client libraries and dependencies.
- 
+
    ```
     bash triton/scripts/docker/build.sh
     bash triton/scripts/docker/interactive.sh
    ```
- 
- 
+
+
 1. Prepare the deployment configuration and create folders in Docker.
- 
+
    IMPORTANT: These and the following commands must be executed in the PyTorch NGC container.
- 
+
    ```
     source triton/scripts/setup_environment.sh
    ```
 
 1. Download and pre-process the dataset.
 
- 
+
    ```
     bash triton/scripts/download_data.sh
     bash triton/scripts/process_dataset.sh
@@ -154,8 +154,8 @@ Running the following scripts will build and launch the container with all requi
    ```
 
 1. Convert the model from training to inference format (e.g. TensorRT).
- 
- 
+
+
    ```
     python3 triton/convert_model.py \
         --input-path ./triton/model.py \
@@ -174,31 +174,34 @@ Running the following scripts will build and launch the container with all requi
         --precision ${PRECISION} \
         --ignore-unknown-parameters
    ```
- 
- 
+
+
 1. Configure the model on Triton Inference Server.
- 
+
    Generate the configuration from your model repository.
- 
+
    ```
-    python3 triton/config_model_on_triton.py \
-        --model-repository ${MODEL_REPOSITORY_PATH} \
-        --model-path ${SHARED_DIR}/model \
-        --model-format ${FORMAT} \
-        --model-name ${MODEL_NAME} \
-        --model-version 1 \
-        --max-batch-size ${MAX_BATCH_SIZE} \
-        --precision ${PRECISION} \
-        --number-of-model-instances ${NUMBER_OF_MODEL_INSTANCES} \
-        --max-queue-delay-us ${TRITON_MAX_QUEUE_DELAY} \
-        --capture-cuda-graph 0 \
-        --backend-accelerator ${BACKEND_ACCELERATOR} \
-        --load-model ${TRITON_LOAD_MODEL_METHOD} \
-        --verbose true
+   model-navigator triton-config-model \
+	   --model-repository ${MODEL_REPOSITORY_PATH} \
+	   --model-name ${MODEL_NAME} \
+	   --model-version 1 \
+	   --model-path ${SHARED_DIR}/model \
+	   --model-format ${CONFIG_FORMAT} \
+	   --model-control-mode ${TRITON_LOAD_MODEL_METHOD} \
+	   --load-model \
+	   --load-model-timeout-s 100 \
+	   --verbose \
+	   \
+	   --backend-accelerator ${BACKEND_ACCELERATOR} \
+	   --tensorrt-precision ${PRECISION} \
+	   --max-batch-size ${MAX_BATCH_SIZE} \
+	   --preferred-batch-sizes ${TRITON_PREFERRED_BATCH_SIZES} \
+	   --max-queue-delay-us ${TRITON_MAX_QUEUE_DELAY} \
+	   --engine-count-per-device gpu=${NUMBER_OF_MODEL_INSTANCES}
    ```
- 
+
 1. Run the Triton Inference Server accuracy tests.
- 
+
    ```
     python3 triton/run_inference_on_triton.py \
         --server-url localhost:8001 \
@@ -218,11 +221,11 @@ Running the following scripts will build and launch the container with all requi
         --output-used-for-metrics OUTPUT__0
 
     cat ${SHARED_DIR}/accuracy_metrics.csv
- 
+
    ```
- 
+
 1. Prepare performance input.
- 
+
    ```
     mkdir -p ${SHARED_DIR}/input_data
 
@@ -236,7 +239,7 @@ Running the following scripts will build and launch the container with all requi
 
 
 1. Run the Triton Inference Server performance online tests.
- 
+
    We want to maximize throughput within latency budget constraints.
    Dynamic batching is a feature of Triton Inference Server that allows
    inference requests to be combined by the server, so that a batch is
@@ -247,7 +250,7 @@ Running the following scripts will build and launch the container with all requi
    in the Triton Inference Server model configuration. The measurements
    presented below set the maximum latency to zero to achieve the best latency
    possible with good performance.
- 
+
 
    ```
     python triton/run_online_performance_test_on_triton.py \
@@ -262,7 +265,7 @@ Running the following scripts will build and launch the container with all requi
 
 
 1. Run the Triton Inference Server performance offline tests.
- 
+
    We want to maximize throughput. It assumes you have your data available
    for inference or that your data saturate to maximum batch size quickly.
    Triton Inference Server supports offline scenarios with static batching.
@@ -624,7 +627,7 @@ Our results were obtained using the following configuration:
 
 
 ![](plots/graph_performance_online_1.svg)
- 
+
 <details>
 
 <summary>
@@ -664,7 +667,7 @@ Our results were obtained using the following configuration:
 
 
 ![](plots/graph_performance_online_2.svg)
- 
+
 <details>
 
 <summary>
@@ -705,7 +708,7 @@ Our results were obtained using the following configuration:
 
 
 ![](plots/graph_performance_online_3.svg)
- 
+
 <details>
 
 <summary>
@@ -745,7 +748,7 @@ Our results were obtained using the following configuration:
 
 
 ![](plots/graph_performance_online_4.svg)
- 
+
 <details>
 
 <summary>
@@ -785,7 +788,7 @@ Our results were obtained using the following configuration:
 
 
 ![](plots/graph_performance_online_5.svg)
- 
+
 <details>
 
 <summary>
@@ -826,7 +829,7 @@ Our results were obtained using the following configuration:
 
 
 ![](plots/graph_performance_online_6.svg)
- 
+
 <details>
 
 <summary>
@@ -867,7 +870,7 @@ Our results were obtained using the following configuration:
 
 
 ![](plots/graph_performance_online_7.svg)
- 
+
 <details>
 
 <summary>
@@ -908,7 +911,7 @@ Our results were obtained using the following configuration:
 
 
 ![](plots/graph_performance_online_8.svg)
- 
+
 <details>
 
 <summary>
@@ -955,5 +958,3 @@ April 2021
 ### Known issues
 
 There are no known issues with this model.
-
-

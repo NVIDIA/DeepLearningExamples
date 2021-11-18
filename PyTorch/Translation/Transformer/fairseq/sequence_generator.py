@@ -24,6 +24,7 @@ import math
 
 import torch
 import torch.nn.functional as F
+from torch.cuda import amp
 
 from fairseq import utils
 from fairseq.models import FairseqIncrementalDecoder
@@ -33,7 +34,7 @@ class SequenceGenerator(object):
     def __init__(
         self, models, vocab_meta, maxlen, beam_size=1, minlen=1, stop_early=True,
         normalize_scores=True, len_penalty=1, unk_penalty=0, retain_dropout=False,
-        sampling=False, sampling_topk=-1, sampling_temperature=1,
+        sampling=False, sampling_topk=-1, sampling_temperature=1, use_amp=False
     ):
         """Generates translations of a given source sentence.
         Args:
@@ -63,6 +64,7 @@ class SequenceGenerator(object):
         self.sampling = sampling
         self.sampling_topk = sampling_topk
         self.sampling_temperature = sampling_temperature
+        self.use_amp = use_amp
 
     def cuda(self):
         for model in self.models:
@@ -96,7 +98,7 @@ class SequenceGenerator(object):
                     input['src_tokens'],
                     input['src_lengths'],
                     beam_size=beam_size,
-                    maxlen=int(maxlen_a*srclen + maxlen_b),
+                    maxlen=int(maxlen_a * srclen + maxlen_b),
                     prefix_tokens=s['target'][:, :prefix_size] if prefix_size > 0 else None,
                 )
             if timer is not None:
@@ -110,7 +112,8 @@ class SequenceGenerator(object):
     def generate(self, src_tokens, src_lengths, beam_size=None, maxlen=None, prefix_tokens=None):
         """Generate a batch of translations."""
         with torch.no_grad():
-            return self._generate(src_tokens, src_lengths, beam_size, maxlen, prefix_tokens)
+            with amp.autocast(enabled=self.use_amp):
+                return self._generate(src_tokens, src_lengths, beam_size, maxlen, prefix_tokens)
 
     def _generate(self, src_tokens, src_lengths, beam_size=None, maxlen=None, prefix_tokens=None):
         bsz, srclen = src_tokens.size()
@@ -208,10 +211,10 @@ class SequenceGenerator(object):
             tokens_clone = tokens.index_select(0, bbsz_idx)
             tokens_clone = tokens_clone[:, 1:step + 2]  # skip the first index, which is EOS
             tokens_clone[:, step] = self.eos
-            attn_clone = attn.index_select(0, bbsz_idx)[:, :, 1:step+2] if attn is not None else None
+            attn_clone = attn.index_select(0, bbsz_idx)[:, :, 1:step + 2] if attn is not None else None
 
             # compute scores per token position
-            pos_scores = scores.index_select(0, bbsz_idx)[:, :step+1]
+            pos_scores = scores.index_select(0, bbsz_idx)[:, :step + 1]
             pos_scores[:, step] = eos_scores
             # convert from cumulative to per-position scores
             pos_scores[:, 1:] = pos_scores[:, 1:] - pos_scores[:, :-1]
@@ -373,7 +376,7 @@ class SequenceGenerator(object):
                         k=min(cand_size, probs.view(bsz, -1).size(1) - 1),  # -1 so we never select pad
                         out=(cand_scores, cand_indices),
                     )
-                    torch.div(cand_indices, self.vocab_size, out=cand_beams)
+                    torch.div(cand_indices, self.vocab_size, out=cand_beams, rounding_mode='trunc')
                     cand_indices.fmod_(self.vocab_size)
             else:
                 # finalize all active hypotheses once we hit maxlen
@@ -555,7 +558,6 @@ class SequenceGenerator(object):
             if attn is not None:
                 attn = attn[:, -1, :]
 
-        #TODO: this has to be moved. Also we have to take into account adaptive softmax
         logits = decoder_out[0]
         if log_probs:
             probs = F.log_softmax(logits, dim=-1, dtype=torch.float32)

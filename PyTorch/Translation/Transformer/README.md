@@ -283,8 +283,7 @@ The following (partial) output is printed when running the sample:
 ```
 usage: train.py [-h] [--no-progress-bar] [--log-interval N]
                 [--log-format {json,none,simple,tqdm}] [--seed N] [--fp16]
-                [--profile PROFILE] [--task TASK]
-                [--skip-invalid-size-inputs-valid-test] [--max-tokens N]
+                [--task TASK] [--skip-invalid-size-inputs-valid-test] [--max-tokens N]
                 [--max-sentences N] [--sentencepiece] [--train-subset SPLIT]
                 [--valid-subset SPLIT] [--max-sentences-valid N]
                 [--gen-subset SPLIT] [--num-shards N] [--shard-id ID]
@@ -363,6 +362,8 @@ sacrebleu -t wmt14/full -l en-de --echo src | python inference.py --buffer-size 
 ```
 
 ## Performance
+
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
 
 ### Benchmarking
 

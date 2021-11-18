@@ -382,6 +382,8 @@ This script should produce the prediction results over a set of masks which will
 
 ## Performance
 
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
+
 ###  Benchmarking
 
 Starting from CuDNN 7.6.2, enhanced support for 3D convolutions in mixed precision has been introduced to our containers. This enhanced support accelerates even further both training and inference, while maintaining the reduction of the model's memory footprint characteristic of mixed precision training.

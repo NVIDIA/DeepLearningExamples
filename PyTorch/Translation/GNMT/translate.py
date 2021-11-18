@@ -33,6 +33,12 @@ import dllogger
 import numpy as np
 import torch
 
+try:
+    import pyprof
+except ModuleNotFoundError:
+    warnings.warn('PyProf is unavailable')
+
+import seq2seq.gpu_affinity as gpu_affinity
 import seq2seq.utils as utils
 from seq2seq.data.dataset import RawTextDataset
 from seq2seq.data.dataset import SyntheticDataset
@@ -136,6 +142,15 @@ def parse_args():
                          help='Name of the DLLogger output file')
     general.add_argument('--print-freq', '-p', default=1, type=int,
                          help='print log every PRINT_FREQ batches')
+    general.add_argument('--affinity', type=str,
+                         default='single_unique',
+                         choices=['socket', 'single', 'single_unique',
+                                  'socket_unique_interleaved',
+                                  'socket_unique_continuous',
+                                  'disabled'],
+                         help='type of CPU affinity')
+    general.add_argument('--profile', action='store_true',
+                         help='Enable profiling with DLProf')
 
     # benchmarking
     benchmark = parser.add_argument_group('benchmark setup')
@@ -194,6 +209,14 @@ def main():
     with length normalization and coverage penalty.
     """
     args = parse_args()
+    if args.affinity != 'disabled':
+        nproc_per_node = torch.cuda.device_count()
+        affinity = gpu_affinity.set_affinity(
+            args.local_rank,
+            nproc_per_node,
+            args.affinity
+        )
+        print(f'{args.local_rank}: thread affinity: {affinity}')
     device = utils.set_device(args.cuda, args.local_rank)
     utils.init_distributed(args.cuda)
     args.rank = utils.get_rank()
@@ -202,6 +225,12 @@ def main():
 
     dllog_file = os.path.join(args.save_dir, args.dllog_file)
     utils.setup_dllogger(enabled=True, filename=dllog_file)
+
+    if args.profile:
+        try:
+            pyprof.init(enable_function_stack=True)
+        except NameError:
+            warnings.warn('Called pyprof.init() but pyprof is not available')
 
     if args.env:
         utils.log_env_info()
@@ -288,13 +317,14 @@ def main():
             )
 
         # execute the inference
-        output, stats = translator.run(
-            calc_bleu=args.bleu,
-            eval_path=args.output,
-            summary=True,
-            warmup=args.warmup,
-            reference_path=args.reference,
-            )
+        with torch.autograd.profiler.emit_nvtx(enabled=args.profile):
+            output, stats = translator.run(
+                calc_bleu=args.bleu,
+                eval_path=args.output,
+                summary=True,
+                warmup=args.warmup,
+                reference_path=args.reference,
+                )
 
         # print translated outputs
         if not args.synthetic and (not args.output and args.rank == 0):
@@ -341,7 +371,7 @@ def main():
         'eval_avg_latency': avg_latency,
         }
     for p in args.percentiles:
-        summary[f'eval_{p}%_latency'] = 1000 * np.percentile(stats['runtimes'], p)
+        summary[f'eval_{p}%_latency'] = np.percentile(stats['runtimes'], p)
 
     dllogger.log(step=tuple(), data=summary)
 

@@ -24,24 +24,24 @@
 Train a network across multiple GPUs.
 """
 
-from collections import defaultdict, OrderedDict
-import contextlib
+import math
+from collections import defaultdict
 from itertools import chain
 
 import torch
 import torch.nn.functional as F
-from apex import amp
+from torch.cuda import amp
 from apex.parallel import DistributedDataParallel as DDP
 
 from fairseq import distributed_utils, optim, utils
 from fairseq.optim import lr_scheduler
-from fairseq.meters import TimeMeter
+from fairseq.meters import TimeMeter, AverageMeter
 from fairseq.criterions import CRITERION_REGISTRY
 
 import dllogger as DLLogger
-import math
 
-class DDPTrainer(object):
+
+class DDPTrainer():
     """Main class for data parallel training.
 
     This class supports data parallel training, where multiple workers each
@@ -60,31 +60,19 @@ class DDPTrainer(object):
         self.criterion = CRITERION_REGISTRY[args.criterion](args).cuda()
         self.optimizer = optim.build_optimizer(self.args, self.model.parameters())
         self.lr_scheduler = lr_scheduler.build_lr_scheduler(self.args, self.optimizer)
-
-        if args.amp:
-            model, optimizer = amp.initialize(
-                    self.model,
-                    self.optimizer._optimizer, 
-                    opt_level=self.args.amp_level if self.args.amp_level else 'O2',
-                    max_loss_scale=2**15,
-                    cast_model_outputs=torch.float16
-                    )
+        self.scaler = amp.GradScaler(enabled=self.args.amp, init_scale=2**15)
 
         if self.args.distributed_world_size > 1:
             self.model = DDP(model)
 
         self._buffered_stats = defaultdict(lambda: [])
-        self._flat_grads = None
         self._num_updates = 0
-        self._num_val_iterations = 0
         self._optim_history = None
         self.throughput_meter = TimeMeter()
+        self.avg_loss_meter = AverageMeter()
 
     def save_checkpoint(self, filename, extra_state):
         """Save all training state in a checkpoint file."""
-        if self.args.amp:
-            extra_state['amp_state_dict'] = amp.state_dict()
-            extra_state['amp_master_params'] = list(amp.master_params(self.optimizer.optimizer))
         if distributed_utils.is_master(self.args):  # only save one checkpoint
             utils.save_state(
                 filename, self.args, self.get_model(), self.criterion, self.optimizer,
@@ -112,15 +100,6 @@ class DDPTrainer(object):
 
                 self._num_updates = last_optim['num_updates']
 
-        if self.args.amp and extra_state is not None and 'amp_state_dict' in extra_state:
-            self.optimizer.optimizer._lazy_init_maybe_master_weights()
-            self.optimizer.optimizer._amp_stash.lazy_init_called = True
-            self.optimizer.optimizer.load_state_dict(last_optim_state)
-            for param, saved_param in zip(amp.master_params(self.optimizer.optimizer), extra_state['amp_master_params']):
-                param.data.copy_(saved_param.data)
- 
-            amp.load_state_dict(extra_state['amp_state_dict'])
-
         return extra_state
 
     def train_step(self, sample, update_params=True, last_step=False):
@@ -139,7 +118,7 @@ class DDPTrainer(object):
                 self.model.enable_allreduce()
 
         # forward and backward pass
-        sample, sample_size = self._prepare_sample(sample)
+        sample = self._prepare_sample(sample)
         loss, oom_fwd = self._forward(sample)
 
         # If this is a last batch forward pass is skipped on some workers
@@ -148,9 +127,8 @@ class DDPTrainer(object):
             'ntokens': sample['ntokens'] if sample is not None else 0,
             'nsentences': sample['target'].size(0) if sample is not None else 0,
             'loss': utils.item(loss.data) if loss is not None else 0,
-            'sample_size': sample_size
-
         }
+        sample_size = sample['ntokens'] if sample is not None else 0
         oom_bwd = self._backward(loss)
 
         # buffer stats and logging outputs
@@ -159,7 +137,7 @@ class DDPTrainer(object):
         self._buffered_stats['ooms_fwd'].append(oom_fwd)
         self._buffered_stats['ooms_bwd'].append(oom_bwd)
 
-        # update parameters 
+        # update parameters
         if update_params and not last_step:
             # gather logging outputs from all replicas
             sample_sizes = self._buffered_stats['sample_sizes']
@@ -175,7 +153,7 @@ class DDPTrainer(object):
                 )
             ooms_fwd = sum(ooms_fwd)
             ooms_bwd = sum(ooms_bwd)
-            ooms = ooms_fwd + ooms_bwd #this is always <= distributed_world_size
+            ooms = ooms_fwd + ooms_bwd  # this is always <= distributed_world_size
 
             if ooms == self.args.distributed_world_size:
                 print('| WARNING: OOM in all workers, skipping batch')
@@ -185,26 +163,26 @@ class DDPTrainer(object):
             # aggregate stats and logging outputs
             grad_denom = sum(sample_sizes)
             for p in self.model.parameters():
-                if p.requires_grad and not p.grad is None:
+                if p.requires_grad and p.grad is not None:
                     p.grad /= grad_denom
 
             self._opt()
 
             # Handle logging
-            sample_size = sum(log.get('sample_size', 0) for log in logging_outputs)
             ntokens = sum(log.get('ntokens', 0) for log in logging_outputs)
             self.throughput_meter.update(ntokens)
             info_log_data = {
-                        'tokens/s':self.throughput_meter.avg,
-                        'tokens':ntokens,
-                        'loss':sum(log.get('loss', 0) for log in logging_outputs) / sample_size / math.log(2)
-                        }
+                'tokens/s': self.throughput_meter.avg,
+                'tokens': ntokens,
+                'loss': sum(log.get('loss', 0) for log in logging_outputs) / ntokens / math.log(2)
+            }
+            self.avg_loss_meter.update(info_log_data['loss'])
             debug_log_data = {
-                        'batch_size':sum(log.get('nsentences', 0) for log in logging_outputs),
-                        'lr':self.get_lr(),
-                        'grad_denom':grad_denom,
-                        'updates':1
-                        }
+                'batch_size': sum(log.get('nsentences', 0) for log in logging_outputs),
+                'lr': self.get_lr(),
+                'grad_denom': grad_denom,
+                'updates': 1
+            }
 
             DLLogger.log(step=self._num_updates, data=info_log_data, verbosity=0)
             DLLogger.log(step=self._num_updates, data=debug_log_data, verbosity=1)
@@ -216,19 +194,16 @@ class DDPTrainer(object):
         oom = 0
         try:
             if sample is not None:
-                # calculate loss and sample size
-                logits, _ = self.model(**sample['net_input'])
-                target = sample['target']
-                if not self.args.adaptive_softmax_cutoff:
+                with amp.autocast(enabled=self.args.amp):
+                    # calculate loss and sample size
+                    logits, _ = self.model(**sample['net_input'])
+                    target = sample['target']
                     probs = F.log_softmax(logits, dim=-1, dtype=torch.float32)
-                else:
-                    #TODO: trainig crashes after couple hundred iterations because of unknown
-                    #error in the PyTorch's autograd
-                    probs, target = self.get_model().decoder.adaptive_softmax(logits, target.view(-1))
-                loss = self.criterion(probs, target)
+                    loss = self.criterion(probs, target)
         except RuntimeError as e:
-            if not eval and 'out of memory' in str(e):
-                print('| WARNING: ran out of memory in worker {}, skipping batch'.format(self.args.distributed_rank), force=True)
+            if 'out of memory' in str(e):
+                print('| WARNING: ran out of memory in worker {}, skipping batch'.format(
+                    self.args.distributed_rank), force=True)
                 oom = 1
                 loss = None
             else:
@@ -239,15 +214,11 @@ class DDPTrainer(object):
         oom = 0
         if loss is not None:
             try:
-                if self.args.amp:
-                    with amp.scale_loss(loss, self.optimizer._optimizer) as scaled_loss:
-                        scaled_loss.backward()
-                else:
-                    loss.backward()
-
+                self.scaler.scale(loss).backward()
             except RuntimeError as e:
                 if 'out of memory' in str(e):
-                    print('| WARNING: ran out of memory in worker {}, skipping batch'.format(self.args.distributed_rank), force=True)
+                    print('| WARNING: ran out of memory in worker {}, skipping batch'.format(
+                        self.args.distributed_rank), force=True)
                     oom = 1
                     self.zero_grad()
                 else:
@@ -256,7 +227,8 @@ class DDPTrainer(object):
 
     def _opt(self):
         # take an optimization step
-        self.optimizer.step()
+        self.scaler.step(self.optimizer.optimizer)
+        self.scaler.update()
         self.zero_grad()
         self._num_updates += 1
 
@@ -266,35 +238,30 @@ class DDPTrainer(object):
     def valid_step(self, sample):
         """Do forward pass in evaluation mode."""
         self.model.eval()
-        self._num_val_iterations += 1
         # forward pass
-        sample, sample_size = self._prepare_sample(sample)
+        sample = self._prepare_sample(sample)
         with torch.no_grad():
             loss, oom_fwd = self._forward(sample)
         logging_output = {
             'ntokens': sample['ntokens'] if sample is not None else 0,
             'nsentences': sample['target'].size(0) if sample is not None else 0,
-            'sample_size': sample_size
         }
         loss = loss.item() if loss is not None else 0
         assert not oom_fwd, 'Ran out of memory during validation'
 
         # gather logging outputs from all GPUs
         if self.args.distributed_world_size > 1:
-            losses, sample_sizes, logging_outputs = zip(*distributed_utils.all_gather_list(
-                (loss, sample_size, logging_output)
+            losses, logging_outputs = zip(*distributed_utils.all_gather_list(
+                (loss, logging_output)
             ))
         else:
             losses = [loss]
-            sample_sizes = [sample_size]
             logging_outputs = [logging_output]
 
-        # TODO: check when ntokens != sample_size
-        ntokens = sum(log.get('ntokens', 0) for log in logging_outputs)
-        weight = sum(log.get('sample_size', 0) for log in logging_outputs)
+        weight = sum(log.get('ntokens', 0) for log in logging_outputs)
         scaled_loss = sum(losses) / weight / math.log(2)
 
-        return scaled_loss 
+        return scaled_loss
 
     def dummy_train_step(self, dummy_batch):
         """Dummy training step for warming caching allocator."""
@@ -319,7 +286,7 @@ class DDPTrainer(object):
     def get_lr(self):
         """Get the current learning rate."""
         return self.optimizer.get_lr()
-    
+
     def get_throughput_meter(self):
         """Get the throughput meter"""
         return self.throughput_meter
@@ -333,6 +300,6 @@ class DDPTrainer(object):
         return self._num_updates
 
     def _prepare_sample(self, sample):
-        if sample is None or len(sample) == 0:
-            return None, 0
-        return utils.move_to_cuda(sample), sample['ntokens']
+        if not sample:
+            return None
+        return utils.move_to_cuda(sample)

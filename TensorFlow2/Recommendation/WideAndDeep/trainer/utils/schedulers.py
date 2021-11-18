@@ -12,29 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from tensorflow.python.keras import backend as K
+import tensorflow as tf
 
 
-def get_schedule(args, steps_per_epoch):
-    assert args.deep_warmup_epochs <= args.num_epochs, 'Number of warmup epochs cannot be higher than training epochs'
-    base_lr = args.deep_learning_rate
-    warmup_steps = args.deep_warmup_epochs * steps_per_epoch
-    bound_epoch = args.deep_warmup_epochs + (args.num_epochs - args.deep_warmup_epochs) / 2
-    boundaries = [bound_epoch * steps_per_epoch]
-    values = [base_lr / 4, base_lr / 8]
+class LearningRateScheduler:
+    def __init__(self, args, steps_per_epoch, optimizer):
+        assert (
+            args.deep_warmup_epochs <= args.num_epochs
+        ), "Number of warmup epochs cannot be higher than training epochs"
+        self.base_lr = args.deep_learning_rate
+        self.warmup_steps = args.deep_warmup_epochs * steps_per_epoch
+        bound_epoch = (
+            args.deep_warmup_epochs + (args.num_epochs - args.deep_warmup_epochs) / 2
+        )
+        self.boundaries = [bound_epoch * steps_per_epoch]
+        self.values = [self.base_lr / 4, self.base_lr / 8]
+        self.optimizer = optimizer
 
-    def schedule(optimizer, current_step):
-        current_step = max(1, current_step)
-
-        if current_step < warmup_steps:
-            warmup_lr = base_lr * current_step / warmup_steps
-            K.set_value(optimizer.lr, K.get_value(warmup_lr))
+    @tf.function
+    def __call__(self, step):
+        if step < self.warmup_steps:
+            warmup_lr = self.base_lr * step / self.warmup_steps
+            self.optimizer.lr.assign(warmup_lr)
         else:
-            for index, bound in enumerate(boundaries):
-                if current_step <= bound:
-                    K.set_value(optimizer.lr, K.get_value(values[index]))
-                    return
-            K.set_value(optimizer.lr, K.get_value(values[-1]))
-        return
-
-    return schedule
+            index = tf.reduce_sum(tf.cast(step > self.boundaries, tf.int64))
+            value = tf.gather(self.values, index)
+            self.optimizer.lr.assign(value)

@@ -68,9 +68,11 @@ def parse_quantization(parser):
         metavar="ARCH",
         default="efficientnet-quant-b0",
         choices=model_names,
-        help="model architecture: " + " | ".join(model_names) + " (default: efficientnet-quant-b0)",
+        help="model architecture: "
+        + " | ".join(model_names)
+        + " (default: efficientnet-quant-b0)",
     )
-    
+
     parser.add_argument(
         "--skip-calibration",
         action="store_true",
@@ -80,6 +82,7 @@ def parse_quantization(parser):
 
 def parse_training_args(parser):
     from main import add_parser_arguments
+
     return add_parser_arguments(parser)
 
 
@@ -92,28 +95,29 @@ def main(args, model_args, model_arch):
 
     select_default_calib_method()
 
-    model_and_loss, optimizer, lr_policy, scaler, train_loader, val_loader, logger, ema, model_ema, train_loader_len, \
-    batch_size_multiplier, start_epoch = prepare_for_training(args, model_args, model_arch)
-    
-    print(f"RUNNING QUANTIZATION")
-    
-    if not skip_calibration:      
-        calibrate(model_and_loss.model, train_loader, logger, calib_iter=10)
-    
-    train_loop(
-        model_and_loss,
-        optimizer,
-        scaler,
+    (
+        trainer,
         lr_policy,
         train_loader,
+        train_loader_len,
+        val_loader,
+        logger,
+        start_epoch,
+    ) = prepare_for_training(args, model_args, model_arch)
+
+    print(f"RUNNING QUANTIZATION")
+
+    if not skip_calibration:
+        calibrate(trainer.model_and_loss.model, train_loader, logger, calib_iter=10)
+
+    train_loop(
+        trainer,
+        lr_policy,
+        train_loader,
+        train_loader_len,
         val_loader,
         logger,
         should_backup_checkpoint(args),
-        ema=ema,
-        model_ema=model_ema,
-        steps_per_epoch=train_loader_len,
-        use_amp=args.amp,
-        batch_size_multiplier=batch_size_multiplier,
         start_epoch=start_epoch,
         end_epoch=min((start_epoch + args.run_epochs), args.epochs)
         if args.run_epochs != -1
@@ -124,7 +128,7 @@ def main(args, model_args, model_arch):
         skip_validation=args.training_only,
         save_checkpoints=args.save_checkpoints,
         checkpoint_dir=args.workspace,
-        checkpoint_filename='quantized_' + args.checkpoint_filename,
+        checkpoint_filename="quantized_" + args.checkpoint_filename,
     )
 
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
@@ -149,7 +153,7 @@ if __name__ == "__main__":
     parse_training(parser, skip_arch=True)
 
     args, rest = parser.parse_known_args()
-    
+
     model_arch = available_models()[args.arch]
     model_args, rest = model_arch.parser().parse_known_args(rest)
     print(model_args)
@@ -159,4 +163,3 @@ if __name__ == "__main__":
     cudnn.benchmark = True
 
     main(args, model_args, model_arch)
-

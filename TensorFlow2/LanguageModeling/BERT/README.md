@@ -65,7 +65,7 @@ Other publicly available implementations of BERT include:
 [gluon-nlp](https://github.com/dmlc/gluon-nlp/tree/master/scripts/bert)
 [Google's official implementation](https://github.com/google-research/bert)
 
-This model is trained with mixed precision using Tensor Cores on Volta, Turing, and the NVIDIA Ampere GPU architectures. Therefore, researchers can get results upto 4x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
+This model is trained with mixed precision using Tensor Cores on Volta, Turing, and the NVIDIA Ampere GPU architectures. Therefore, researchers can get results up to 4x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
 
 ### Model architecture
 
@@ -76,7 +76,7 @@ BERT's model architecture is a multi-layer bidirectional transformer encoder. Ba
 |BERTBASE |12 encoder| 768| 12|4 x  768|512|110M|
 |BERTLARGE|24 encoder|1024| 16|4 x 1024|512|330M|
 
-BERT training consists of two steps, pre-training the language model in an unsupervised fashion on vast amounts of unannotated datasets, and then using this pre-trained model for fine-tuning for various NLP tasks, such as question and answer, sentence classification, or sentiment analysis. Fine-tuning typically adds an extra layer or two for the specific task and further trains the model using a task-specific annotated dataset, starting from the pre-trained backbone weights. The end-to-end process in depicted in the following image:
+BERT training consists of two steps, pre-training the language model in an unsupervised fashion on vast amounts of unannotated datasets, and then using this pre-trained model for fine-tuning for various NLP tasks, such as question and answer, sentence classification, or sentiment analysis. Fine-tuning typically adds an extra layer or two for the specific task and further trains the model using a task-specific annotated dataset, starting from the pre-trained backbone weights. The end-to-end process is depicted in the following image:
 
 ![](data/images/bert_pipeline.png?raw=true)
 
@@ -625,6 +625,8 @@ I0424 23:59:50.031537 139905798453056 run_squad.py:302] ------------------------
 
 
 ## Performance
+
+The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
 
 
 ### Benchmarking

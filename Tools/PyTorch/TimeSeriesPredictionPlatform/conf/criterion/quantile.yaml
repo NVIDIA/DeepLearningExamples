@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+# @package _global_
+config:
+  criterion:
+    _target_: criterion.quantile_wrapper
+  model:
+    quantiles: [ .1,.5,.9 ]
+  evaluator:
+    output_selector: 1

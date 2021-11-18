@@ -1,4 +1,4 @@
-# FastPitch 1.0 for PyTorch
+# FastPitch 1.1 for PyTorch
 
 This repository provides a script and recipe to train the FastPitch model to achieve state-of-the-art accuracy and is tested and maintained by NVIDIA.
 
@@ -25,21 +25,20 @@ This repository provides a script and recipe to train the FastPitch model to ach
         * [Multi-dataset](#multi-dataset)
     * [Training process](#training-process)
     * [Inference process](#inference-process)
-
 - [Performance](#performance)
     * [Benchmarking](#benchmarking)
         * [Training performance benchmark](#training-performance-benchmark)
         * [Inference performance benchmark](#inference-performance-benchmark)
     * [Results](#results)
         * [Training accuracy results](#training-accuracy-results)
-            * [Training accuracy: NVIDIA DGX A100 (8x A100 40GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-40gb)
+            * [Training accuracy: NVIDIA DGX A100 (8x A100 80GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-80gb)
             * [Training accuracy: NVIDIA DGX-1 (8x V100 16GB)](#training-accuracy-nvidia-dgx-1-8x-v100-16gb)
         * [Training performance results](#training-performance-results)
-            * [Training performance: NVIDIA DGX A100 (8x A100 40GB)](#training-performance-nvidia-dgx-a100-8x-a100-40gb)
+            * [Training performance: NVIDIA DGX A100 (8x A100 80GB)](#training-performance-nvidia-dgx-a100-8x-a100-80gb)
             * [Training performance: NVIDIA DGX-1 (8x V100 16GB)](#training-performance-nvidia-dgx-1-8x-v100-16gb)
             * [Expected training time](#expected-training-time)
         * [Inference performance results](#inference-performance-results)
-            * [Inference performance: NVIDIA DGX A100 (1x A100 40GB)](#inference-performance-nvidia-dgx-a100-gpu-1x-a100-40gb)
+            * [Inference performance: NVIDIA DGX A100 (1x A100 80GB)](#inference-performance-nvidia-dgx-a100-gpu-1x-a100-80gb)
             * [Inference performance: NVIDIA DGX-1 (1x V100 16GB)](#inference-performance-nvidia-dgx-1-1x-v100-16gb)
             * [Inference performance: NVIDIA T4](#inference-performance-nvidia-t4)
 - [Release notes](#release-notes)
@@ -55,27 +54,41 @@ This repository provides a script and recipe to train the FastPitch model to ach
 
 Such two-component TTS system is able to synthesize natural sounding speech from raw transcripts.
 
-The FastPitch model generates mel-spectrograms and predicts a pitch contour from raw input text. It allows to exert additional control over the synthesized utterances, such as:
+The FastPitch model generates mel-spectrograms and predicts a pitch contour from raw input text.
+In version 1.1, it does not need any pre-trained aligning model to bootstrap from.
+It allows to exert additional control over the synthesized utterances, such as:
 * modify the pitch contour to control the prosody,
 * increase or decrease the fundamental frequency in a naturally sounding way, that preserves the perceived identity of the speaker,
-* alter the pace of speech.
+* alter the rate of speech,
+* adjust the energy,
+* specify input as graphemes or phonemes,
+* switch speakers when the model has been trained with data from multiple speakers.
 Some of the capabilities of FastPitch are presented on the website with [samples](https://fastpitch.github.io/).
 
-Speech synthesized with FastPitch has state-of-the-art quality, and does not suffer from missing/repeating phrases like Tacotron2 does.
+Speech synthesized with FastPitch has state-of-the-art quality, and does not suffer from missing/repeating phrases like Tacotron 2 does.
 This is reflected in Mean Opinion Scores ([details](https://arxiv.org/abs/2006.06873)).
 
-| Model     | Mean Opinion Score (MOS) |
-|:----------|:-------------------------|
-| Tacotron2 | 3.946 ± 0.134            |
-| FastPitch | 4.080 ± 0.133            |
+| Model          | Mean Opinion Score (MOS) |
+|:---------------|:-------------------------|
+| Tacotron 2     | 3.946 ± 0.134            |
+| FastPitch 1.0  | 4.080 ± 0.133            |
+
+The current version of the model offers even higher quality, as reflected
+in the pairwise preference scores ([details](https://arxiv.org/abs/2108.10447)).
+
+| Model          | Average preference |
+|:---------------|:-------------------|
+| FastPitch 1.0  | 0.435 ± 0.068      |
+| FastPitch 1.1  | 0.565 ± 0.068      |
 
 The FastPitch model is based on the [FastSpeech](https://arxiv.org/abs/1905.09263) model. The main differences between FastPitch and FastSpeech are that FastPitch:
+* no dependence on external aligner (Transformer TTS, Tacotron 2); in version 1.1, FastPitch aligns audio to transcriptions by itself as in [One TTS Alignment To Rule Them All](https://arxiv.org/abs/2108.10447),
 * explicitly learns to predict the pitch contour,
 * pitch conditioning removes harsh sounding artifacts and provides faster convergence,
 * no need for distilling mel-spectrograms with a teacher model,
-* [character durations](#glossary) are extracted with a pre-trained Tacotron 2 model.
+* capabilities to train a multi-speaker model.
 
-The FastPitch model is similar to [FastSpeech2](https://arxiv.org/abs/2006.04558), which has been developed concurrently. FastPitch averages pitch values over input tokens, and does not use additional conditioning such as the energy.
+The FastPitch model is similar to [FastSpeech2](https://arxiv.org/abs/2006.04558), which has been developed concurrently. FastPitch averages pitch/energy values over input tokens, and treats energy as optional.
 
 FastPitch is trained on a publicly
 available [LJ Speech dataset](https://keithito.com/LJ-Speech-Dataset/).
@@ -110,9 +123,8 @@ The following features were implemented in this model:
 training,
 * gradient accumulation for reproducible results regardless of the number of GPUs.
 
-To speed-up FastPitch training,
-reference mel-spectrograms, character durations, and pitch cues
-are generated during the pre-processing step and read
+Pitch contours and mel-spectrograms can be generated on-line during training.
+To speed-up training, those could be generated during the pre-processing step and read
 directly from the disk during training. For more information on data pre-processing refer to [Dataset guidelines
 ](#dataset-guidelines) and the [paper](https://arxiv.org/abs/2006.06873).
 
@@ -120,22 +132,20 @@ directly from the disk during training. For more information on data pre-process
 
 The following features are supported by this model.
 
-| Feature                                                            | FastPitch   |
-| :------------------------------------------------------------------|------------:|
-|[AMP](https://nvidia.github.io/apex/amp.html)                               | Yes |
-|[Apex DistributedDataParallel](https://nvidia.github.io/apex/parallel.html) | Yes |
+| Feature                         | FastPitch |
+| :-------------------------------|----------:|
+| Automatic mixed precision (AMP) | Yes       |
+| Distributed data parallel (DDP) | Yes       |
 
 #### Features
 
-AMP - a tool that enables Tensor Core-accelerated training. For more information,
-refer to [Enabling mixed precision](#enabling-mixed-precision).
+Automatic Mixed Precision (AMP) - This implementation uses native PyTorch AMP
+implementation of mixed precision training. It allows us to use FP16 training
+with FP32 master weights by modifying just a few lines of code.
 
-Apex DistributedDataParallel - a module wrapper that enables easy multiprocess
-distributed data parallel training, similar to `torch.nn.parallel.DistributedDataParallel`.
-`DistributedDataParallel` is optimized for use with NCCL. It achieves high
-performance by overlapping communication with computation during `backward()`
-and bucketing smaller gradient transfers to reduce the total number of transfers
-required.
+DistributedDataParallel (DDP) - The model uses PyTorch Lightning implementation
+of distributed data parallelism at the module level which can run across
+multiple machines.
 
 ### Mixed precision training
 
@@ -152,48 +162,9 @@ For information about:
 
 #### Enabling mixed precision
 
-Mixed precision is enabled in PyTorch by using the Automatic Mixed Precision
-(AMP)  library from [APEX](https://github.com/NVIDIA/apex) that casts variables
-to half-precision upon retrieval, while storing variables in single-precision
-format. Furthermore, to preserve small gradient magnitudes in backpropagation,
-a [loss scaling](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html#lossscaling)
-step must be included when applying gradients. In PyTorch, loss scaling can be
-easily applied by using the `scale_loss()` method provided by AMP. The scaling value
-to be used can be [dynamic](https://nvidia.github.io/apex/fp16_utils.html#apex.fp16_utils.DynamicLossScaler) or fixed.
+For training and inference, mixed precision can be enabled by adding the `--amp` flag.
+Mixed precision is using [native PyTorch implementation](https://pytorch.org/blog/accelerating-training-on-nvidia-gpus-with-pytorch-automatic-mixed-precision/).
 
-By default, the `scripts/train.sh` script will run in full precision.To launch mixed precision training with Tensor Cores, either set env variable `AMP=true`
-when using `scripts/train.sh`, or add `--amp` flag when directly executing `train.py` without the helper script.
-
-To enable mixed precision, the following steps were performed:
-* Import AMP from APEX:
-    ```bash
-    from apex import amp
-    ```
-
-* Initialize AMP:
-    ```bash
-    model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
-    ```
-
-* If running on multi-GPU, wrap the model with `DistributedDataParallel`:
-    ```bash
-    from apex.parallel import DistributedDataParallel as DDP
-    model = DDP(model)
-    ```
-
-* Scale loss before backpropagation (assuming loss is stored in a variable
-called `losses`):
-
-    * Default backpropagate for FP32:
-        ```bash
-        losses.backward()
-        ```
-
-    * Scale loss and backpropagate with AMP:
-        ```bash
-        with optimizer.scale_loss(losses) as scaled_losses:
-            scaled_losses.backward()
-        ```
 #### Enabling TF32
 
 TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs.
@@ -208,9 +179,6 @@ TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by defaul
 
 **Character duration**
 The time during which a character is being articulated. Could be measured in milliseconds, mel-spectrogram frames, etc. Some characters are not pronounced, and thus have 0 duration.
-
-**Forced alignment**
-Segmentation of a recording into lexical units like characters, words, or phonemes. The segmentation is hard and defines exact starting and ending times for every unit.
 
 **Fundamental frequency**
 The lowest vibration frequency of a periodic soundwave, for example, produced by a vibrating instrument. It is perceived as the loudest. In the context of speech, it refers to the frequency of vibration of vocal chords.  Abbreviated as *f0*.
@@ -229,7 +197,7 @@ The following section lists the requirements that you need to meet in order to s
 
 This repository contains Dockerfile which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 -   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
--   [PyTorch 20.09-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
+-   [PyTorch 21.05-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
 or newer
 - supported GPUs:
     - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
@@ -275,11 +243,9 @@ To train your model using mixed or TF32 precision with Tensor Cores or using FP3
    location in the NGC container. The complete dataset has the following structure:
    ```bash
    ./LJSpeech-1.1
-   ├── durations        # Character durations estimates for forced alignment training
-   ├── mels             # Pre-calculated target mel-spectrograms
+   ├── mels             # (optional) Pre-calculated target mel-spectrograms; may be calculated on-line
    ├── metadata.csv     # Mapping of waveforms to utterances
-   ├── pitch_char       # Average per-character fundamental frequencies for input utterances
-   ├── pitch_char_stats__ljs_audio_text_train_filelist.json    # Mean and std of pitch for training data
+   ├── pitch            # Fundamental frequency countours for input utterances; may be calculated on-line
    ├── README
    └── wavs             # Raw waveforms
    ```
@@ -308,12 +274,13 @@ To train your model using mixed or TF32 precision with Tensor Cores or using FP3
    You can perform inference using the respective `.pt` checkpoints that are passed as `--fastpitch`
    and `--waveglow` arguments:
    ```bash
-   python inference.py --cuda \
-                       --fastpitch output/<FastPitch checkpoint> \
-                       --waveglow pretrained_models/waveglow/<WaveGlow checkpoint> \
-                       --wn-channels 256 \
-                       -i phrases/devset10.tsv \
-                       -o output/wavs_devset10
+   python inference.py \
+       --cuda \
+       --fastpitch output/<FastPitch checkpoint> \
+       --waveglow pretrained_models/waveglow/<WaveGlow checkpoint> \
+       --wn-channels 256 \
+       -i phrases/devset10.tsv \
+       -o output/wavs_devset10
    ```
 
    The speech is generated from a file passed with the `-i` argument, with one utterance per line:
@@ -340,15 +307,9 @@ given model
 * `<model_name>/data_function.py` - data loading functions
 * `<model_name>/loss_function.py` - loss function for the model
 
-The common scripts contain layer definitions common to both models
-(`common/layers.py`), some utility scripts (`common/utils.py`) and scripts
-for audio processing (`common/audio_processing.py` and `common/stft.py`).
-
 In the root directory `./` of this repository, the `./train.py` script is used for
 training while inference can be executed with the `./inference.py` script. The
-scripts `./models.py`, `./data_functions.py` and `./loss_functions.py` call
-the respective scripts in the `<model_name>` directory, depending on what
-the model is trained using the `train.py` script.
+script `./models.py` is used to construct a model of requested type and properties.
 
 The repository is structured similarly to the [NVIDIA Tacotron2 Deep Learning example](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2), so that they could be combined in more advanced use cases.
 
@@ -359,13 +320,12 @@ together with their default values that are used to train FastPitch.
 
 * `--epochs` - number of epochs (default: 1500)
 * `--learning-rate` - learning rate (default: 0.1)
-* `--batch-size` - batch size (default: 32)
+* `--batch-size` - batch size for a single forward-backward step (default: 16)
+* `--grad-accumulation` - number of steps over which gradients are accumulated (default: 2)
 * `--amp` - use mixed precision training (default: disabled)
-
-* `--pitch-predictor-loss-scale` - rescale the loss of the pitch predictor module to dampen
-its influence on the shared feedforward transformer blocks
-* `--duration-predictor-loss-scale` - rescale the loss of the duration predictor module to dampen
-its influence on the shared feedforward transformer blocks
+* `--load-pitch-from-disk` - pre-calculated fundamental frequency values, estimated before training, are loaded from the disk during training (default: enabled)
+* `--energy-conditioning` - enables additional conditioning on energy (default: enabled)
+* `--p-arpabet` - probability of choosing phonemic over graphemic representation for every word, if available (default: 1.0)
 
 ### Command-line options
 
@@ -378,9 +338,9 @@ python train.py --help
 The following example output is printed when running the model:
 
 ```bash
-DLL 2020-03-30 10:41:12.562594 - epoch    1 | iter   1/19 | loss 36.99 | mel loss 35.25 |  142370.52 items/s | elapsed 2.50 s | lrate 1.00E-01 -> 3.16E-06
-DLL 2020-03-30 10:41:13.202835 - epoch    1 | iter   2/19 | loss 37.26 | mel loss 35.98 |  561459.27 items/s | elapsed 0.64 s | lrate 3.16E-06 -> 6.32E-06
-DLL 2020-03-30 10:41:13.831189 - epoch    1 | iter   3/19 | loss 36.93 | mel loss 35.41 |  583530.16 items/s | elapsed 0.63 s | lrate 6.32E-06 -> 9.49E-06
+DLL 2021-06-14 23:08:53.659718 - epoch    1 | iter   1/48 | loss 40.97 | mel loss 35.04 | kl loss 0.02240 | kl weight 0.01000 |    5730.98 frames/s | took 24.54 s | lrate 3.16e-06
+DLL 2021-06-14 23:09:28.449961 - epoch    1 | iter   2/48 | loss 41.07 | mel loss 35.12 | kl loss 0.02258 | kl weight 0.01000 |    4154.18 frames/s | took 34.79 s | lrate 6.32e-06
+DLL 2021-06-14 23:09:59.365398 - epoch    1 | iter   3/48 | loss 40.86 | mel loss 34.93 | kl loss 0.02252 | kl weight 0.01000 |    4589.15 frames/s | took 30.91 s | lrate 9.49e-06
 ```
 
 ### Getting the data
@@ -393,28 +353,21 @@ The `./scripts/download_dataset.sh` script will automatically download and extra
 The LJSpeech dataset has 13,100 clips that amount to about 24 hours of speech of a single, female speaker. Since the original dataset does not define a train/dev/test split of the data, we provide a split in the form of three file lists:
 ```bash
 ./filelists
-├── ljs_mel_dur_pitch_text_test_filelist.txt
-├── ljs_mel_dur_pitch_text_train_filelist.txt
-└── ljs_mel_dur_pitch_text_val_filelist.txt
+├── ljs_audio_pitch_text_train_v3.txt
+├── ljs_audio_pitch_text_test.txt
+└── ljs_audio_pitch_text_val.txt
 ```
 
-***NOTE: When combining FastPitch/WaveGlow with external models trained on LJSpeech-1.1, make sure that your train/dev/test split matches. Different organizations may use custom splits. A mismatch poses a risk of leaking the training data through model weights during validation and testing.***
-
 FastPitch predicts character durations just like [FastSpeech](https://arxiv.org/abs/1905.09263) does.
-This calls for training with forced alignments, expressed as the number of output mel-spectrogram frames for every input character.
-To this end, a pre-trained
-[Tacotron 2 model](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2)
-is used. Its attention matrix
-relates the input characters with the output mel-spectrogram frames.
+FastPitch 1.1 aligns input symbols to output mel-spectrogram frames automatically and does not rely
+on any external aligning model. FastPitch training can now be started on raw waveforms
+without any pre-processing: pitch values and mel-spectrograms will be calculated on-line.
 
-For every mel-spectrogram frame, its fundamental frequency in Hz is estimated with [Praat](http://praat.org).
-Those values are then averaged over every character, in order to provide sparse
-pitch cues for the model. Character boundaries are calculated from durations
-extracted previously with Tacotron 2.
-
+For every mel-spectrogram frame, its fundamental frequency in Hz is estimated with
+the Probabilistic YIN algorithm.
 
 <p align="center">
-  <img src="./img/pitch.png" alt="Pitch estimates extracted with Praat" />
+  <img src="./img/pitch.png" alt="Pitch contour estimate" />
 </p>
 <p align="center">
   <em>Figure 2. Pitch estimates for mel-spectrogram frames of phrase "in being comparatively"
@@ -434,40 +387,38 @@ Follow these steps to use datasets different from the default LJSpeech dataset.
 2. Prepare filelists with transcripts and paths to .wav files. They define training/validation split of the data (test is currently unused):
    ```bash
    ./filelists
-   ├── my_dataset_mel_ali_pitch_text_train_filelist.txt
-   └── my_dataset_mel_ali_pitch_text_val_filelist.txt
+   ├── my-dataset_audio_text_train.txt
+   └── my-dataset_audio_text_val.txt
    ```
-
-Those filelists should list a single utterance per line as:
+   Those filelists should list a single utterance per line as:
    ```bash
    `<audio file path>|<transcript>`
    ```
-The `<audio file path>` is the relative path to the path provided by the `--dataset-path` option of `train.py`.
+   The `<audio file path>` is the relative path to the path provided by the `--dataset-path` option of `train.py`.
 
-3. Run the pre-processing script to calculate mel-spectrograms, durations and pitch:
+3. Run the pre-processing script to calculate pitch:
    ```bash
-   python extract_mels.py --cuda \
-                          --dataset-path ./my_dataset \
-                          --wav-text-filelist ./filelists/my_dataset_mel_ali_pitch_text_train_filelist.txt \
-                          --extract-mels \
-                          --extract-durations \
-                          --extract-pitch-char \
-                          --tacotron2-checkpoint ./pretrained_models/tacotron2/state_dict.pt"
-
-   python extract_mels.py --cuda \
-                          --dataset-path ./my_dataset \
-                          --wav-text-filelist ./filelists/my_dataset_mel_ali_pitch_text_val_filelist.txt \
-                          --extract-mels \
-                          --extract-durations \
-                          --extract-pitch-char \
-                          --tacotron2-checkpoint ./pretrained_models/tacotron2/state_dict.pt"
+    python prepare_dataset.py \
+        --wav-text-filelists filelists/my-dataset_audio_text_train.txt \
+                             filelists/my-dataset_audio_text_val.txt \
+        --n-workers 16 \
+        --batch-size 1 \
+        --dataset-path $DATA_DIR \
+        --extract-pitch \
+        --f0-method pyin
+   ```
+4. Prepare file lists with paths to pre-calculated pitch:
+   ```bash
+   ./filelists
+   ├── my-dataset_audio_pitch_text_train.txt
+   └── my-dataset_audio_pitch_text_val.txt
    ```
 
 In order to use the prepared dataset, pass the following to the `train.py` script:
    ```bash
    --dataset-path ./my_dataset` \
-   --training-files ./filelists/my_dataset_mel_ali_pitch_text_train_filelist.txt \
-   --validation files ./filelists/my_dataset_mel_ali_pitch_text_val_filelist.txt
+   --training-files ./filelists/my-dataset_audio_pitch_text_train.txt \
+   --validation files ./filelists/my-dataset_audio_pitch_text_val.txt
    ```
 
 ### Training process
@@ -482,18 +433,15 @@ The result is averaged over an entire training epoch and summed over all GPUs th
 included in the training.
 
 The `scripts/train.sh` script is configured for 8x GPU with at least 16GB of memory:
-    ```bash
-    --batch-size 32
-    --gradient-accumulation-steps 1
-    ```
-In a single accumulated step, there are `batch_size x gradient_accumulation_steps x GPUs = 256` examples being processed in parallel. With a smaller number of GPUs, increase `--gradient_accumulation_steps` to keep this relation satisfied, e.g., through env variables
-    ```bash
-    NUM_GPUS=4 GRAD_ACCUMULATION=2 bash scripts/train.sh
-    ```
-With automatic mixed precision (AMP), a larger batch size fits in 16GB of memory:
-    ```bash
-    NUM_GPUS=4 GRAD_ACCUMULATION=1 BS=64 AMP=true bash scripts/train.sh
-    ```
+```bash
+--batch-size 16
+--grad-accumulation 2
+```
+
+In a single accumulated step, there are `batch_size x grad_accumulation x GPUs = 256` examples being processed in parallel. With a smaller number of GPUs, increase `--grad_accumulation` to keep this relation satisfied, e.g., through env variables
+```bash
+NUM_GPUS=1 GRAD_ACCUMULATION=16 bash scripts/train.sh
+```
 
 ### Inference process
 
@@ -512,7 +460,7 @@ Examine the `inference_example.sh` script to adjust paths to pre-trained models,
 and call `python inference.py --help` to learn all available options.
 By default, synthesized audio samples are saved in `./output/audio_*` folders.
 
-FastPitch allows us to linearly adjust the pace of synthesized speech like [FastSpeech](https://arxiv.org/abs/1905.09263).
+FastPitch allows us to linearly adjust the rate of synthesized speech like [FastSpeech](https://arxiv.org/abs/1905.09263).
 For instance, pass `--pace 0.5` for a twofold decrease in speed.
 
 For every input character, the model predicts a pitch cue - an average pitch over a character in Hz.
@@ -525,7 +473,7 @@ Pitch can be adjusted by transforming those pitch cues. A few simple examples ar
 | Invert pitch wrt. to the mean pitch         |`--pitch-transform-invert`     | [link](./audio/sample_fp16_invert.wav)  |
 | Raise/lower pitch by <hz>                   |`--pitch-transform-shift <hz>` | [link](./audio/sample_fp16_shift.wav)   |
 | Flatten the pitch to a constant value       |`--pitch-transform-flatten`    | [link](./audio/sample_fp16_flatten.wav) |
-| Change the pace of speech (1.0 = unchanged) |`--pace <value>`               | [link](./audio/sample_fp16_pace.wav)    |
+| Change the rate of speech (1.0 = unchanged) |`--pace <value>`               | [link](./audio/sample_fp16_pace.wav)    |
 
 The flags can be combined. Modify these functions directly in the `inference.py` script to gain more control over the final result.
 
@@ -543,20 +491,20 @@ performance in training and inference mode.
 
 To benchmark the training performance on a specific batch size, run:
 
-* NVIDIA DGX A100 (8x A100 40GB)
+* NVIDIA DGX A100 (8x A100 80GB)
     ```bash
-        AMP=true NUM_GPUS=1 BS=128 GRAD_ACCUMULATION=2 EPOCHS=10 bash scripts/train.sh
+        AMP=true NUM_GPUS=1 BS=32 GRAD_ACCUMULATION=8 EPOCHS=10 bash scripts/train.sh
         AMP=true NUM_GPUS=8 BS=32 GRAD_ACCUMULATION=1 EPOCHS=10 bash scripts/train.sh
-        NUM_GPUS=1 BS=128 GRAD_ACCUMULATION=2 EPOCHS=10 bash scripts/train.sh
-        NUM_GPUS=8 BS=32 GRAD_ACCUMULATION=1 EPOCHS=10 bash scripts/train.sh
+        AMP=false NUM_GPUS=1 BS=32 GRAD_ACCUMULATION=8 EPOCHS=10 bash scripts/train.sh
+        AMP=false NUM_GPUS=8 BS=32 GRAD_ACCUMULATION=1 EPOCHS=10 bash scripts/train.sh
     ```
 
 * NVIDIA DGX-1 (8x V100 16GB)
     ```bash
-        AMP=true NUM_GPUS=1 BS=64 GRAD_ACCUMULATION=4 EPOCHS=10 bash scripts/train.sh
-        AMP=true NUM_GPUS=8 BS=32 GRAD_ACCUMULATION=1 EPOCHS=10 bash scripts/train.sh
-        NUM_GPUS=1 BS=32 GRAD_ACCUMULATION=8 EPOCHS=10 bash scripts/train.sh
-        NUM_GPUS=8 BS=32 GRAD_ACCUMULATION=1 EPOCHS=10 bash scripts/train.sh
+        AMP=true NUM_GPUS=1 BS=16 GRAD_ACCUMULATION=16 EPOCHS=10 bash scripts/train.sh
+        AMP=true NUM_GPUS=8 BS=16 GRAD_ACCUMULATION=2 EPOCHS=10 bash scripts/train.sh
+        AMP=false NUM_GPUS=1 BS=16 GRAD_ACCUMULATION=16 EPOCHS=10 bash scripts/train.sh
+        AMP=false NUM_GPUS=8 BS=16 GRAD_ACCUMULATION=2 EPOCHS=10 bash scripts/train.sh
     ```
 
 Each of these scripts runs for 10 epochs and for each epoch measures the
@@ -574,7 +522,7 @@ To benchmark the inference performance on a specific batch size, run:
 
 * For FP32 or TF32
     ```bash
-    BS_SEQUENCE=”1 4 8” REPEATS=100 bash scripts/inference_benchmark.sh
+    AMP=false BS_SEQUENCE=”1 4 8” REPEATS=100 bash scripts/inference_benchmark.sh
     ```
 
 The output log files will contain performance numbers for the FastPitch model
@@ -591,70 +539,68 @@ and accuracy in training and inference.
 
 #### Training accuracy results
 
-##### Training accuracy: NVIDIA DGX A100 (8x A100 40GB)
+##### Training accuracy: NVIDIA DGX A100 (8x A100 80GB)
 
-Our results were obtained by running the `./platform/DGXA100_FastPitch_{AMP,TF32}_8GPU.sh` training script in the 20.06-py3 NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs.
+Our results were obtained by running the `./platform/DGXA100_FastPitch_{AMP,TF32}_8GPU.sh` training script in the 21.05-py3 NGC container on NVIDIA DGX A100 (8x A100 80GB) GPUs.
 
 | Loss (Model/Epoch)   |    50 |   250 |   500 |   750 |  1000 |  1250 |  1500 |
 |:---------------------|------:|------:|------:|------:|------:|------:|------:|
-| FastPitch AMP        | 0.503 | 0.252 | 0.214 | 0.202 | 0.193 | 0.188 | 0.184 |
-| FastPitch TF32       | 0.500 | 0.252 | 0.215 | 0.201 | 0.193 | 0.187 | 0.183 |
+| FastPitch AMP        | 3.35 |  2.89 |  2.79 |  2.71 |   2.68 |   2.64 |   2.61 |
+| FastPitch TF32       | 3.37 |  2.88 |  2.78 |  2.71 |   2.68 |   2.63 |   2.61 |
 
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
 
-Our results were obtained by running the `./platform/DGX1_FastPitch_{AMP,FP32}_8GPU.sh` training script in the PyTorch 20.06-py3 NGC container on NVIDIA DGX-1 with 8x V100 16GB GPUs.
+Our results were obtained by running the `./platform/DGX1_FastPitch_{AMP,FP32}_8GPU.sh` training script in the PyTorch 21.05-py3 NGC container on NVIDIA DGX-1 with 8x V100 16GB GPUs.
 
 All of the results were produced using the `train.py` script as described in the
 [Training process](#training-process) section of this document.
 
 | Loss (Model/Epoch)   |    50 |   250 |   500 |   750 |  1000 |  1250 |  1500 |
 |:---------------------|------:|------:|------:|------:|------:|------:|------:|
-| FastPitch AMP        | 0.499 | 0.250 | 0.211 | 0.198 | 0.190 | 0.184 | 0.180 |
-| FastPitch FP32       | 0.503 | 0.251 | 0.214 | 0.201 | 0.192 | 0.186 | 0.182 |
+| FastPitch AMP        | 3.38 |  2.88 |  2.79 |  2.71 |   2.68 |   2.64 |   2.61 |
+| FastPitch FP32       | 3.38 |  2.89 |  2.80 |  2.71 |   2.68 |   2.65 |   2.62 |
 
 
 <div style="text-align:center" align="center">
   <img src="./img/loss.png" alt="Loss curves" />
 </div>
 
-
-
-
 #### Training performance results
 
-##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
+##### Training performance: NVIDIA DGX A100 (8x A100 80GB)
 
-Our results were obtained by running the `./platform/DGXA100_FastPitch_{AMP,TF32}_8GPU.sh` training script in the 20.06-py3 NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs. Performance numbers, in output mel-scale spectrogram frames per second, were averaged over
+Our results were obtained by running the `./platform/DGXA100_FastPitch_{AMP,TF32}_8GPU.sh` training script in the 21.05-py3 NGC container on NVIDIA DGX A100 (8x A100 80GB) GPUs. Performance numbers, in output mel-scale spectrogram frames per second, were averaged over
 an entire training epoch.
 
-|Number of GPUs|Batch size per GPU|Frames/s with mixed precision|Frames/s with TF32|Speed-up with mixed precision|Multi-GPU strong scaling with mixed precision|Multi-GPU strong scaling with TF32|
-|---:|------------------:|--------:|-------:|-----:|-----:|-----:|
-|  1 | 128@AMP, 128@TF32 |  164955 | 113725 | 1.45 | 1.00 | 1.00 |
-|  4 |  64@AMP,  64@TF32 |  619527 | 435951 | 1.42 | 3.76 | 3.83 |
-|  8 |  32@AMP,  32@TF32 | 1040206 | 643569 | 1.62 | 6.31 | 5.66 |
+| Batch size / GPU | Grad accumulation | GPUs | Throughput - TF32 | Throughput - mixed precision | Throughput speedup (TF32 to mixed precision) | Weak scaling - TF32 | Weak scaling - mixed precision |
+|---:|--:|--:|--------:|--------:|-----:|-----:|-----:|
+| 32 | 8 | 1 |  97,735 | 101,730 | 1.04 | 1.00 | 1.00 |
+| 32 | 2 | 4 | 337,163 | 352,300 | 1.04 | 3.45 | 3.46 |
+| 32 | 1 | 8 | 599,221 | 623,498 | 1.04 | 6.13 | 6.13 |
 
 ###### Expected training time
 
 The following table shows the expected training time for convergence for 1500 epochs:
 
-|Number of GPUs|Batch size per GPU|Time to train with mixed precision (Hrs)|Time to train with TF32 (Hrs)|Speed-up with mixed precision|
-|---:|-----------------:|-----:|-----:|-----:|
-|  1 |128@AMP, 128@TF32 | 18.5 | 26.6 | 1.44 |
-|  4 | 64@AMP,  64@TF32 |  5.5 |  7.5 | 1.36 |
-|  8 | 32@AMP,  32@TF32 |  3.6 |  5.3 | 1.47 |
+| Batch size / GPU | GPUs | Grad accumulation | Time to train with TF32 (Hrs) | Time to train with mixed precision (Hrs) | Speed-up with mixed precision|
+|---:|--:|--:|-----:|-----:|-----:|
+| 32 | 1 | 8 | 32.8 | 31.6 | 1.04 |
+| 32 | 4 | 2 |  9.6 |  9.2 | 1.04 |
+| 32 | 8 | 1 |  5.5 |  5.3 | 1.04 |
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
 
 Our results were obtained by running the `./platform/DGX1_FastPitch_{AMP,FP32}_8GPU.sh`
-training script in the PyTorch 20.06-py3 NGC container on NVIDIA DGX-1 with
+training script in the PyTorch 21.05-py3 NGC container on NVIDIA DGX-1 with
 8x V100 16GB GPUs. Performance numbers, in output mel-scale spectrogram frames per second, were averaged over
 an entire training epoch.
 
-|Number of GPUs|Batch size per GPU|Frames/s with mixed precision|Frames/s with FP32|Speed-up with mixed precision|Multi-GPU strong scaling with mixed precision|Multi-GPU strong scaling with FP32|
-|---:|----------------:|-------:|-------:|-----:|-----:|-----:|
-|  1 | 64@AMP, 32@FP32 | 110370 |  41066 | 2.69 | 1.00 | 1.00 |
-|  4 | 64@AMP, 32@FP32 | 402368 | 153853 | 2.62 | 3.65 | 3.75 |
-|  8 | 32@AMP, 32@FP32 | 570968 | 296767 | 1.92 | 5.17 | 7.23 |
+| Batch size / GPU | GPUs | Grad accumulation | Throughput - FP32 | Throughput - mixed precision | Throughput speedup (FP32 to mixed precision) | Strong scaling - FP32 | Strong scaling - mixed precision |
+|---:|--:|---:|--------:|--------:|-----:|-----:|-----:|
+| 16 | 1 | 16 |  33,456 |  63,986 | 1.91 | 1.00 | 1.00 |
+| 16 | 4 |  4 | 120,393 | 209,335 | 1.74 | 3.60 | 3.27 |
+| 16 | 8 |  2 | 222,161 | 356,522 | 1.60 | 6.64 | 5.57 |
+
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -662,13 +608,13 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 The following table shows the expected training time for convergence for 1500 epochs:
 
-|Number of GPUs|Batch size per GPU|Time to train with mixed precision (Hrs)|Time to train with FP32 (Hrs)|Speed-up with mixed precision|
-|---:|-----------------:|-----:|-----:|-----:|
-|  1 | 64@AMP,  32@FP32 | 27.6 | 72.7 | 2.63 |
-|  4 | 64@AMP,  32@FP32 |  8.2 | 20.3 | 2.48 |
-|  8 | 32@AMP,  32@FP32 |  5.9 | 10.9 | 1.85 |
+| Batch size / GPU | GPUs | Grad accumulation | Time to train with FP32 (Hrs) | Time to train with mixed precision (Hrs) | Speed-up with mixed precision|
+|---:|--:|---:|-----:|-----:|-----:|
+| 16 | 1 | 16 | 89.3 | 47.4 | 1.91 |
+| 16 | 4 |  4 | 24.9 | 14.6 | 1.74 |
+| 16 | 8 |  2 | 13.6 |  8.6 | 1.60 |
 
-Note that most of the quality is achieved after the initial 500 epochs.
+Note that most of the quality is achieved after the initial 1000 epochs.
 
 #### Inference performance results
 
@@ -679,54 +625,64 @@ as the number of generated audio samples per second at 22KHz. RTF is the real-ti
 The used WaveGlow model is a 256-channel model.
 
 Note that performance numbers are related to the length of input. The numbers reported below were taken with a moderate length of 128 characters. Longer utterances yield higher RTF, as the generator is fully parallel.
-##### Inference performance: NVIDIA DGX A100 (1x A100 40GB)
+##### Inference performance: NVIDIA DGX A100 (1x A100 80GB)
 
-Our results were obtained by running the `./scripts/inference_benchmark.sh` inferencing benchmarking script in the 20.06-py3 NGC container on NVIDIA DGX A100 (1x A100 40GB) GPU.
+Our results were obtained by running the `./scripts/inference_benchmark.sh` inferencing benchmarking script in the 21.05-py3 NGC container on NVIDIA DGX A100 (1x A100 80GB) GPU.
 
 |Batch size|Precision|Avg latency (s)|Latency tolerance interval 90% (s)|Latency tolerance interval 95% (s)|Latency tolerance interval 99% (s)|Throughput (samples/sec)|Speed-up with mixed precision|Avg RTF|
-|------:|------------:|--------------:|--------------:|--------------:|--------------:|----------------:|---------------:|----------:|
-|    1 | FP16   |     0.106 |   0.106 |   0.106 |   0.107 |      1,636,913 |      1.60 | 74.24 |
-|    4 | FP16   |     0.390 |   0.391 |   0.391 |   0.391 |      1,780,764 |      1.55 | 20.19 |
-|    8 | FP16   |     0.758 |   0.758 |   0.758 |   0.758 |      1,832,544 |      1.52 | 10.39 |
-|    1 | TF32   |     0.170 |   0.170 |   0.170 |   0.170 |      1,020,894 |         - | 46.30 |
-|    4 | TF32   |     0.603 |   0.603 |   0.603 |   0.603 |      1,150,598 |         - | 13.05 |
-|    8 | TF32   |     1.153 |   1.154 |   1.154 |   1.154 |      1,202,463 |         - |  6.82 |
+|-----:|-------:|----------:|--------:|--------:|--------:|---------------:|----------:|------:|
+|    1 | FP16   |     0.091 |   0.092 |   0.092 |   0.092 |      1,879,189 | 1.28      | 85.22 |
+|    4 | FP16   |     0.335 |   0.337 |   0.337 |   0.338 |      2,043,641 | 1.21      | 23.17 |
+|    8 | FP16   |     0.652 |   0.654 |   0.654 |   0.655 |      2,103,765 | 1.21      | 11.93 |
+|    1 | TF32   |     0.117 |   0.117 |   0.118 |   0.118 |      1,473,838 | -         | 66.84 |
+|    4 | TF32   |     0.406 |   0.408 |   0.408 |   0.409 |      1,688,141 | -         | 19.14 |
+|    8 | TF32   |     0.792 |   0.794 |   0.794 |   0.795 |      1,735,463 | -         |  9.84 |
 
 ##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
 
 Our results were obtained by running the `./scripts/inference_benchmark.sh` script in
-the PyTorch 20.06-py3 NGC container. The input utterance has 128 characters, synthesized audio has 8.05 s.
+the PyTorch 21.05-py3 NGC container. The input utterance has 128 characters, synthesized audio has 8.05 s.
 
 
 |Batch size|Precision|Avg latency (s)|Latency tolerance interval 90% (s)|Latency tolerance interval 95% (s)|Latency tolerance interval 99% (s)|Throughput (samples/sec)|Speed-up with mixed precision|Avg RTF|
-|------:|------------:|--------------:|--------------:|--------------:|--------------:|----------------:|---------------:|----------:|
-|    1 | FP16   |     0.193 |   0.194 |   0.194 |   0.194 |       902,960 |      2.35 | 40.95 |
-|    4 | FP16   |     0.610 |   0.613 |   0.613 |   0.614 |     1,141,207 |      2.78 | 12.94 |
-|    8 | FP16   |     1.157 |   1.161 |   1.161 |   1.162 |     1,201,684 |      2.68 |  6.81 |
-|    1 | FP32   |     0.453 |   0.455 |   0.456 |   0.457 |       385,027 |         - | 17.46 |
-|    4 | FP32   |     1.696 |   1.703 |   1.705 |   1.707 |       411,124 |         - |  4.66 |
-|    8 | FP32   |     3.111 |   3.118 |   3.120 |   3.122 |       448,275 |         - |  2.54 |
+|-----:|-------:|----------:|--------:|--------:|--------:|---------------:|----------:|------:|
+|    1 | FP16   |     0.149 |   0.150 |   0.150 |   0.151 |      1,154,061 | 2.64      | 52.34 |
+|    4 | FP16   |     0.535 |   0.538 |   0.538 |   0.539 |      1,282,680 | 2.71      | 14.54 |
+|    8 | FP16   |     1.055 |   1.058 |   1.059 |   1.060 |      1,300,261 | 2.71      |  7.37 |
+|    1 | FP32   |     0.393 |   0.395 |   0.395 |   0.396 |        436,961 | -         | 19.82 |
+|    4 | FP32   |     1.449 |   1.452 |   1.452 |   1.453 |        473,515 | -         |  5.37 |
+|    8 | FP32   |     2.861 |   2.865 |   2.866 |   2.867 |        479,642 | -         |  2.72 |
 
 ##### Inference performance: NVIDIA T4
 
 Our results were obtained by running the `./scripts/inference_benchmark.sh` script in
-the PyTorch 20.06-py3 NGC container.
+the PyTorch 21.05-py3 NGC container.
 The input utterance has 128 characters, synthesized audio has 8.05 s.
 
 |Batch size|Precision|Avg latency (s)|Latency tolerance interval 90% (s)|Latency tolerance interval 95% (s)|Latency tolerance interval 99% (s)|Throughput (samples/sec)|Speed-up with mixed precision|Avg RTF|
-|-----:|-------:|----------:|--------:|--------:|--------:|-------------:|----------:|------:|
-|    1 | FP16   |     0.533 |   0.540 |   0.541 |   0.543 |      326,471 |      2.56 | 14.81 |
-|    4 | FP16   |     2.292 |   2.302 |   2.304 |   2.308 |      304,283 |      2.38 |  3.45 |
-|    8 | FP16   |     4.564 |   4.578 |   4.580 |   4.585 |      305,568 |      1.99 |  1.73 |
-|    1 | FP32   |     1.365 |   1.383 |   1.387 |   1.394 |      127,765 |         - |  5.79 |
-|    4 | FP32   |     5.192 |   5.214 |   5.218 |   5.226 |      134,309 |         - |  1.52 |
-|    8 | FP32   |     9.09  |   9.11  |   9.114 |   9.122 |      153,434 |         - |  0.87 |
+|-----:|-------:|----------:|--------:|--------:|--------:|--------------:|----------:|------:|
+|    1 | FP16   |     0.446 |   0.449 |   0.449 |   0.450 |       384,743 | 2.72      | 17.45 |
+|    4 | FP16   |     1.822 |   1.826 |   1.827 |   1.828 |       376,480 | 2.70      |  4.27 |
+|    8 | FP16   |     3.656 |   3.662 |   3.664 |   3.666 |       375,329 | 2.70      |  2.13 |
+|    1 | FP32   |     1.213 |   1.218 |   1.219 |   1.220 |       141,403 | -         |  6.41 |
+|    4 | FP32   |     4.928 |   4.937 |   4.939 |   4.942 |       139,208 | -         |  1.58 |
+|    8 | FP32   |     9.853 |   9.868 |   9.871 |   9.877 |       139,266 | -         |  0.79 |
 
 ## Release notes
 
 We're constantly refining and improving our performance on AI and HPC workloads even on the same hardware with frequent updates to our software stack. For our latest performance data please refer to these pages for AI and HPC benchmarks.
 
 ### Changelog
+
+August 2021
+- Improved quality of synthesized audio
+- Added capability to automatically align audio to transcripts during training without a pre-trained Tacotron 2 aligning model
+- Added capability to train on both graphemes and phonemes
+- Added conditioning on energy
+- Faster training recipe
+- F0 is now estimated with Probabilistic YIN (PYIN)
+- Updated performance tables
+- Changed version of FastPitch from 1.0 to 1.1
 
 October 2020
 - Added multispeaker capabilities

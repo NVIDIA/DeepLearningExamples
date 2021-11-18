@@ -19,4 +19,5 @@ docker run --rm -it \
     --ulimit memlock=-1 \
     --ulimit stack=67108864 \
     -v $PWD/data:/data \
-    trtis_kaldi_client /workspace/scripts/docker/run_client.sh $@
+    --entrypoint /bin/bash \
+    triton_kaldi_client /workspace/scripts/docker/run_client.sh $@

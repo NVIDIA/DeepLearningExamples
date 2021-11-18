@@ -54,7 +54,6 @@ class TimeMeter(object):
         return self.n / (self.last_update - self.start)
 
 
-     
 class StopwatchMeter(object):
     """Computes the sum/avg duration of some event in seconds"""
     def __init__(self):

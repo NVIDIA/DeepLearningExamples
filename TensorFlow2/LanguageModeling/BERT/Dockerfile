@@ -41,7 +41,6 @@ RUN pip3 install \
   tensorflow_hub \
   pynvml \
   wget \
-  html2text \
   progressbar \
   git+https://github.com/NVIDIA/dllogger
 
