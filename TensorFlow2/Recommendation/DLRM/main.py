@@ -22,7 +22,8 @@ import sys
 # Define the flags first before importing TensorFlow.
 # Otherwise, enabling XLA-Lite would be impossible with a command-line flag
 def define_command_line_flags():
-    flags.DEFINE_enum("mode", default="train", enum_values=['inference', 'eval', 'train'],
+    flags.DEFINE_enum("mode", default="train",
+                      enum_values=['eval', 'train', 'inference'],
                       help='Choose "train" to train the model, "inference" to benchmark inference'
                       ' and "eval" to run validation')
     flags.DEFINE_float("learning_rate", default=24, help="Learning rate")
@@ -44,6 +45,11 @@ def define_command_line_flags():
     flags.DEFINE_string("restore_checkpoint_path", default=None,
                         help="Path from which to restore a checkpoint before training")
 
+    flags.DEFINE_string("saved_model_output_path", default=None,
+                        help='Path for storing the model in TensorFlow SavedModel format')
+    flags.DEFINE_string("saved_model_input_path", default=None,
+                        help='Path for loading the model in TensorFlow SavedModel format')
+
     flags.DEFINE_enum("dataset_type", default="raw", enum_values=['raw', 'synthetic'],
                       help='The type of the dataset to use')
     flags.DEFINE_integer("num_numerical_features", default=13,
@@ -58,10 +64,14 @@ def define_command_line_flags():
     flags.DEFINE_list('synthetic_dataset_cardinalities', default=26*[1000],
                          help='Number of categories for each embedding table of the synthetic dataset')
 
+
     flags.DEFINE_bool("amp", default=False, help="Enable automatic mixed precision")
     flags.DEFINE_bool("xla", default=False, help="Enable XLA")
 
     flags.DEFINE_integer("loss_scale", default=1024, help="Static loss scale to use with mixed precision training")
+
+    flags.DEFINE_bool("batch_shuffle", default=False, help="Shuffle the order of the batches")
+    flags.DEFINE_integer("shuffle_seed", default=None, help="Random seed for dataset shuffling")
 
     flags.DEFINE_integer("prefetch_batches", default=10,
                          help="The number of batches to prefetch for the dataloader")
@@ -72,8 +82,6 @@ def define_command_line_flags():
     flags.DEFINE_integer("epochs", default=1, help="Number of epochs to train for")
     flags.DEFINE_integer("max_steps", default=-1, help="Stop the training/inference after this many optimiation steps")
 
-    flags.DEFINE_string("embedding_type", default="split_embedding",
-                        help="Embedding type to use, possible choices: embedding, split_embedding")
     flags.DEFINE_bool("embedding_trainable", default=True, help="If True the embeddings will be trainable, otherwise frozen")
 
     flags.DEFINE_string("dot_interaction", default="custom_cuda",
@@ -98,7 +106,7 @@ def define_command_line_flags():
     flags.DEFINE_integer("inter_op_parallelism", default=None, help='Number of inter op threads')
     flags.DEFINE_integer("intra_op_parallelism", default=None, help='Number of intra op threads')
 
-    flags.DEFINE_integer("tf_gpu_memory_limit_gb", default=24,
+    flags.DEFINE_integer("tf_gpu_memory_limit_gb", default=26,
                          help='Gigabytes of GPU memory reserved for TensorFlow. Only applied in multiGPU/multiNode to leave'
                               ' enough memory for NCCL to operate properly.')
 
@@ -178,10 +186,15 @@ def inference_benchmark(validation_pipeline, dlrm, timer, splitter, FLAGS):
     if FLAGS.max_steps == -1:
         FLAGS.max_steps = 1000
 
-    _, _, latencies = evaluate(validation_pipeline, dlrm,
-                               timer, auc_thresholds=None,
+    if FLAGS.saved_model_input_path:
+        cast_dtype = tf.float16 if FLAGS.amp else tf.float32
+    else:
+        cast_dtype = None
+
+    auc, test_loss, latencies = evaluate(validation_pipeline, dlrm,
+                               timer, auc_thresholds=FLAGS.auc_thresholds,
                                data_parallel_splitter=splitter,
-                               max_steps=FLAGS.max_steps)
+                               max_steps=FLAGS.max_steps, cast_dtype=cast_dtype)
 
     # don't benchmark the first few warmup steps
     latencies = latencies[10:]
@@ -192,17 +205,37 @@ def inference_benchmark(validation_pipeline, dlrm, timer, splitter, FLAGS):
 
     for percentile in [90, 95, 99]:
         result_data[f'p{percentile}_inference_latency'] = np.percentile(latencies, percentile)
+    result_data['auc'] = auc
     dllogger.log(data=result_data, step=tuple())
 
 
-def main(argv):
+def validate_cmd_line_flags():
     if FLAGS.experimental_columnwise_split and not FLAGS.data_parallel_bottom_mlp and FLAGS.num_numerical_features > 0:
-        raise ValueError('Currently you when using the --experimenal_columnwise_split option '
+        raise ValueError('Currently when using the --experimenal_columnwise_split option '
                          'you must either set --data_parallel_bottom_mlp or --num_numerical_features=0')
 
     if FLAGS.batch_size != FLAGS.valid_batch_size:
         raise ValueError('For now, validation batch size must be the same as training batch size')
 
+    if FLAGS.batch_shuffle and FLAGS.prefetch_batches > 1:
+        raise ValueError('When using batch shuffle --prefetch_batches must be set to 1')
+
+    if FLAGS.batch_shuffle and FLAGS.shuffle_seed is None:
+        raise ValueError('When using batch shuffle --shuffle_seed must be set')
+
+    if FLAGS.restore_checkpoint_path is not None and FLAGS.saved_model_input_path is not None:
+        raise ValueError('Incompatible cmd-line flags.'
+                         'You can only specify one of --restore_checkpoint_path'
+                         'and --saved_model_input_path at a time.')
+
+    if FLAGS.saved_model_input_path is not None and FLAGS.mode == 'train':
+        raise ValueError('Training from a SavedModel is not supported.'
+                         'To train from a checkpoint please specify the '
+                         '--restore_checkpoint_path cmd-line flag.')
+
+
+def main(argv):
+    validate_cmd_line_flags()
     hvd.init()
     init_logging(log_path=FLAGS.log_path, FLAGS=FLAGS)
     init_tf(FLAGS)
@@ -217,7 +250,7 @@ def main(argv):
                     multi_gpu_metadata=multi_gpu_metadata)
 
     if FLAGS.optimizer == 'sgd':
-        embedding_optimizer = tf.keras.optimizers.SGD(lr=FLAGS.learning_rate, momentum=0)
+        embedding_optimizer = tf.keras.optimizers.SGD(learning_rate=FLAGS.learning_rate, momentum=0)
         if FLAGS.amp:
             embedding_optimizer = LossScaleOptimizer(embedding_optimizer,
                                                      initial_scale=FLAGS.loss_scale,
@@ -226,9 +259,8 @@ def main(argv):
         optimizers = [mlp_optimizer]
 
     elif FLAGS.optimizer == 'adam':
-        embedding_optimizer = tfa.optimizers.LazyAdam(lr=FLAGS.learning_rate)
-
-        mlp_optimizer = tf.keras.optimizers.Adam(lr=FLAGS.learning_rate)
+        embedding_optimizer = tfa.optimizers.LazyAdam(learning_rate=FLAGS.learning_rate)
+        mlp_optimizer = tf.keras.optimizers.Adam(learning_rate=FLAGS.learning_rate)
         if FLAGS.amp:
             embedding_optimizer = LossScaleOptimizer(embedding_optimizer,
                                                      initial_scale=FLAGS.loss_scale,
@@ -249,7 +281,8 @@ def main(argv):
 
     splitter = DataParallelSplitter(batch_size=FLAGS.batch_size)
 
-    dlrm.maybe_restore_checkpoint(FLAGS.restore_checkpoint_path)
+    dlrm = dlrm.restore_checkpoint_if_path_exists(FLAGS.restore_checkpoint_path)
+    dlrm = dlrm.load_model_if_path_exists(FLAGS.saved_model_input_path)
 
     if FLAGS.mode == 'inference':
         inference_benchmark(validation_pipeline, dlrm, timer, splitter, FLAGS)
@@ -300,7 +333,8 @@ def main(argv):
                 best_auc = max(best_auc, test_auc)
 
     elapsed = time.time() - train_begin
-    dlrm.maybe_save_checkpoint(FLAGS.save_checkpoint_path)
+    dlrm.save_checkpoint_if_path_exists(FLAGS.save_checkpoint_path)
+    dlrm.save_model_if_path_exists(FLAGS.saved_model_output_path)
 
     if hvd.rank() == 0:
         dist_print(f'Training run completed, elapsed: {elapsed:.0f} [s]')

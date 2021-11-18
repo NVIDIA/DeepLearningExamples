@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+# @package _global_
+config:
+  evaluator:
+    checkpoint: ???
+  inference:
+    _target_: inference.deployer.run_deployment
+    batch_size: 64
+    precision: fp32
+    optimize: False
+    skip_conversion: False
+    just_deploy: False
+    accelerator: none
+    gpu: 0
+

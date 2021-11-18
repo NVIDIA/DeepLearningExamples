@@ -203,7 +203,7 @@ We tested this approach by training a DLRM model on the Criteo Terabyte dataset 
 
 # build and run the training container same as in the Quick Start Guide
 # then append options necessary for training very large embedding tables:
-horovodrun -np 8 -H localhost:8 --mpi-args=--oversubscribe numactl --interleave=all -- python -u main.py --dataset_path /data/dlrm/ --amp --tf_gpu_memory_limit_gb 73 --experimental_columnwise_split --data_parallel_bottom_mlp --xla
+horovodrun -np 8 -H localhost:8 --mpi-args=--oversubscribe numactl --interleave=all -- python -u main.py --dataset_path /data/dlrm/ --amp --tf_gpu_memory_limit_gb 72 --experimental_columnwise_split --data_parallel_bottom_mlp --xla
 ```
 
 When using this method on a DGX A100 with 8 A100-80GB GPUs and a large-enough dataset, it is possible to train a single embedding table of up to 600 GB. You can also use multi-node training (described below) to train even larger recommender systems.
@@ -214,7 +214,7 @@ Multi-node training is supported. Depending on the exact interconnect hardware a
 
 ```
 cmd='numactl --interleave=all -- python -u main.py --dataset_path /data/dlrm/full_criteo_data --amp \
---tf_gpu_memory_limit_gb 73 --experimental_columnwise_split --data_parallel_bottom_mlp \
+--tf_gpu_memory_limit_gb 72 --experimental_columnwise_split --data_parallel_bottom_mlp \
 --embedding_dim 512 --bottom_mlp_dims 512,256,512' \
 srun_flags='--mpi=pmix' \
 cont=nvidia_dlrm_tf \
@@ -303,7 +303,7 @@ docker run --runtime=nvidia -it --rm --ipc=host  -v ${PWD}/data:/data nvidia_dlr
 
 - single-GPU A100-80GB:
 ```bash
-horovodrun -np 1 -H localhost:1 --mpi-args=--oversubscribe numactl --interleave=all -- python -u main.py --dataset_path /data/dlrm/ --amp --tf_gpu_memory_limit_gb 73 --xla --save_checkpoint_path /data/dlrm/checkpoint/dlrm
+horovodrun -np 1 -H localhost:1 --mpi-args=--oversubscribe numactl --interleave=all -- python -u main.py --dataset_path /data/dlrm/ --amp --tf_gpu_memory_limit_gb 72 --xla --save_checkpoint_path /data/dlrm/checkpoint/dlrm
 ```
 
 - single-GPU V100-32GB:
@@ -313,7 +313,7 @@ horovodrun -np 1 -H localhost:1 --mpi-args=--oversubscribe numactl --interleave=
 
 - multi-GPU for DGX A100:
 ```bash
-horovodrun -np 8 -H localhost:8 --mpi-args=--oversubscribe numactl --interleave=all -- python -u main.py --dataset_path /data/dlrm/ --amp --tf_gpu_memory_limit_gb 73 --xla --save_checkpoint_path /data/dlrm/checkpoint/dlrm
+horovodrun -np 8 -H localhost:8 --mpi-args=--oversubscribe numactl --interleave=all -- python -u main.py --dataset_path /data/dlrm/ --amp --tf_gpu_memory_limit_gb 72 --xla --save_checkpoint_path /data/dlrm/checkpoint/dlrm
 ```
 
 - multi-GPU for DGX2:
@@ -331,7 +331,7 @@ horovodrun -np 8 -H localhost:8 --mpi-args=--oversubscribe numactl --interleave=
 To evaluate a previously trained checkpoint, append `--restore_checkpoint_path <path> --mode eval` to the command used for training. For example, to test a checkpoint trained on 8x A100 80GB, run:
 
 ```bash
-horovodrun -np 8 -H localhost:8 --mpi-args=--oversubscribe numactl --interleave=all -- python -u main.py --dataset_path /data/dlrm/ --amp --tf_gpu_memory_limit_gb 73 --xla --restore_checkpoint_path /data/dlrm/checkpoint/dlrm --mode eval
+horovodrun -np 8 -H localhost:8 --mpi-args=--oversubscribe numactl --interleave=all -- python -u main.py --dataset_path /data/dlrm/ --amp --tf_gpu_memory_limit_gb 72 --xla --restore_checkpoint_path /data/dlrm/checkpoint/dlrm --mode eval
 ```
 
 ## Advanced
@@ -570,8 +570,8 @@ in the DLRM Docker container on NVIDIA DGX A100 (8x A100 80GB) GPUs. Performance
 
 | GPUs   | Model size    | Batch size / GPU   | Throughput - TF32    | Throughput - mixed precision    | Throughput speedup (TF32 - mixed precision)
 |----:|----|----|---:|---:|---:|
-| 1 | small | 64k | 2.09M | 2.93M | 1.40|
-| 8 | large | 8k | 8.93M | 12.05M | 1.35|
+| 1 | small | 64k | 1.99M | 2.78M | 1.40|
+| 8 | large | 8k | 8.41M | 12.6M | 1.50|
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -580,8 +580,8 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 | GPUs   | Model size    | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)   |
 |----:|----|----|---:|---:|---:|
-| 1 | small | 64k | 0.56M| 1.46M| 2.60|
-| 8 | large | 8k | 2.44M| 5.95M | 2.44|
+| 1 | small | 64k | 0.52M| 2.27M| 3.11|
+| 8 | large | 8k | 2.27M| 5.46M | 2.41|
 
 To achieve the same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -590,9 +590,9 @@ To achieve the same results, follow the steps in the [Quick Start Guide](#quick-
 
 | GPUs   | Model size   | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)
 |----:|----|---|---:|---:|---:|
-| 1 | small | 64k | 0.64M| 1.70M | 2.68|
-| 8 | large | 8k | 3.16M| 8.18M| 2.59|
-| 16 | large | 4k | 4.37M| 9.52M| 2.18|
+| 1 | small | 64k | 0.64M| 1.65M | 2.58|
+| 8 | large | 8k | 3.05M| 7.98M| 2.61|
+| 16 | large | 4k | 4.30M| 9.21M| 2.14|
 
 
 To achieve the same results, follow the steps in the [Quick Start Guide](#quick-start-guide).

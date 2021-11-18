@@ -364,7 +364,7 @@ def _all_gather_predictions(predictions):
 
 
 def save_checkpoint(args, trainer, epoch_itr, val_loss):
-    if epoch_itr.epoch % args.save_interval == 0:
+    if epoch_itr.epoch % args.save_interval != 0:
         return
     if args.no_save or not distributed_utils.is_master(args):
         return

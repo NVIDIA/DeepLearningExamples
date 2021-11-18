@@ -14,39 +14,32 @@
 
 import argparse
 
-DEFAULT_DIR = '/outbrain'
+DEFAULT_DIR = "/outbrain"
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        '--data_path',
-        help='Path with the data required for NVTabular preprocessing. '
-             'If stats already exists under metadata_path preprocessing phase will be skipped.',
+        "--data_path",
+        help="Path with the data required for NVTabular preprocessing. "
+             "If stats already exists under metadata_path preprocessing phase will be skipped.",
         type=str,
-        default=f'{DEFAULT_DIR}/orig',
-        nargs='+'
+        default=f"{DEFAULT_DIR}/orig",
+        nargs="+",
     )
     parser.add_argument(
-        '--metadata_path',
-        help='Path with preprocessed NVTabular stats',
+        "--metadata_path",
+        help="Path with preprocessed NVTabular stats",
         type=str,
-        default=f'{DEFAULT_DIR}/data',
-        nargs='+'
+        default=f"{DEFAULT_DIR}/data",
+        nargs="+",
     )
     parser.add_argument(
-        '--tfrecords_path',
-        help='Path where converted tfrecords will be stored',
-        type=str,
-        default=f'{DEFAULT_DIR}/tfrecords',
-        nargs='+'
-    )
-    parser.add_argument(
-        '--workers',
-        help='Number of TfRecords files to be created',
-        type=int,
-        default=40
+        '--use_dask',
+        default=False,
+        action='store_true',
+        help='Use multi-gpu preprocessing for nvTabular workflow'
     )
 
     return parser.parse_args()

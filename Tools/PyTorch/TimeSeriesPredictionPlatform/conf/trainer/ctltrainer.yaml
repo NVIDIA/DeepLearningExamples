@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+config:
+  trainer:
+    batch_size: 32
+    num_workers: 3
+    num_epochs: 15
+    log_interval: 25

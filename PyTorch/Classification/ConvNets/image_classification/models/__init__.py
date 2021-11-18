@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from .entrypoints import nvidia_efficientnet, nvidia_resneXt, nvidia_resnet50, nvidia_convnets_processing_utils
 from .resnet import resnet50, resnext101_32x4d, se_resnext101_32x4d
 from .efficientnet import (
     efficientnet_b0,

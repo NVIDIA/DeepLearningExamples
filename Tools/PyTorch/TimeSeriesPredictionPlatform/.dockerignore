@@ -1,0 +1,8 @@
+.idea
+**/.ipynb_checkpoints
+**/__pycache__
+**/.gitkeep
+.git
+.gitignore
+Dockerfile
+.dockerignore

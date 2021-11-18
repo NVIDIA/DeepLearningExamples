@@ -16,7 +16,7 @@
 
 
 import tensorflow as tf
-from embedding import Embedding, SplitEmbedding
+from embedding import Embedding
 import interaction
 import tensorflow.keras.initializers as initializers
 import math
@@ -25,6 +25,8 @@ from distributed_utils import BroadcastingInitializer
 import numpy as np
 import time
 from utils import dist_print
+from tensorflow.python.saved_model import signature_constants
+from tensorflow.python.framework import convert_to_constants
 
 try:
     from tensorflow_dot_based_interact.python.ops import dot_based_interact_ops
@@ -130,22 +132,24 @@ class DlrmTrainer:
         return mean_loss
 
 
+
 def evaluate(validation_pipeline, dlrm, timer, auc_thresholds,
-             data_parallel_splitter, max_steps=None):
+             data_parallel_splitter, max_steps=None, cast_dtype=None):
 
-    if auc_thresholds is not None:
-        auc_metric = tf.keras.metrics.AUC(num_thresholds=auc_thresholds,
-                                          curve='ROC', summation_method='interpolation',
-                                          name='my_auc')
-    else:
-        auc_metric = None
-
-    bce_op = tf.keras.losses.BinaryCrossentropy(reduction=tf.keras.losses.Reduction.NONE,
-                                                from_logits=False)
     auc, test_loss = 0, 0
     latencies, all_test_losses = [], []
     distributed = hvd.size() != 1
     iterator = enumerate(validation_pipeline)
+
+    if hasattr(dlrm, 'auc_metric') and isinstance(dlrm.auc_metric, tf.keras.metrics.AUC):
+        auc_metric = dlrm.auc_metric
+        bce_op = dlrm.compute_bce_loss
+    else:
+        auc_metric = tf.keras.metrics.AUC(num_thresholds=auc_thresholds,
+                                          curve='ROC', summation_method='interpolation',
+                                          from_logits=True)
+        bce_op = tf.keras.losses.BinaryCrossentropy(reduction=tf.keras.losses.Reduction.NONE,
+                                                    from_logits=True)
     while True:
         begin = time.time()
 
@@ -154,13 +158,16 @@ def evaluate(validation_pipeline, dlrm, timer, auc_thresholds,
         except StopIteration:
             break
 
-        if dlrm.data_parallel_bottom_mlp:
+        if hasattr(dlrm, 'data_parallel_bottom_mlp') and dlrm.data_parallel_bottom_mlp:
             numerical_features = data_parallel_splitter(numerical_features)
+
+        if cast_dtype is not None:
+            numerical_features = tf.cast(numerical_features, cast_dtype)
 
         if max_steps is not None and eval_step >= max_steps:
             break
 
-        y_pred = dlrm((numerical_features, categorical_features), sigmoid=True)
+        y_pred = dlrm((numerical_features, categorical_features), False)
         end = time.time()
         latency = end - begin
         latencies.append(latency)
@@ -174,10 +181,11 @@ def evaluate(validation_pipeline, dlrm, timer, auc_thresholds,
             test_loss = bce_op(labels, y_pred)
             all_test_losses.append(test_loss)
 
-    if hvd.rank() == 0 and auc_metric is not None:
+    if hvd.rank() == 0 and dlrm.auc_metric is not None:
         auc = auc_metric.result().numpy().item()
         test_loss = tf.reduce_mean(all_test_losses).numpy().item()
 
+    auc_metric.reset_state()
     return auc, test_loss, latencies
 
 
@@ -215,7 +223,6 @@ class Dlrm(tf.keras.Model):
         else:
             self.local_embedding_dim = self.embedding_dim
 
-        self.embedding_type = FLAGS.embedding_type
         self.embedding_trainable = FLAGS.embedding_trainable
 
         self.bottom_mlp_dims = [int(d) for d in FLAGS.bottom_mlp_dims]
@@ -239,6 +246,9 @@ class Dlrm(tf.keras.Model):
 
         # write embedding checkpoints of 1M rows at a time
         self.embedding_checkpoint_batch = 1024 * 1024
+
+        # create once to avoid tf.function recompilation at each eval
+        self.create_eval_metrics(FLAGS)
 
     def _create_bottom_mlp_padding(self, multiple=8):
         num_features = self.dataset_metadata.num_numerical_features
@@ -306,21 +316,31 @@ class Dlrm(tf.keras.Model):
 
     def _create_embeddings(self):
         self.embedding_layers = []
-        if self.embedding_type == 'embedding':
-            for i, table_size in enumerate(self.table_sizes):
-                l = Embedding(input_dim=table_size,
-                              output_dim=self.local_embedding_dim,
-                              trainable=self.embedding_trainable)
-                self.embedding_layers.append(l)
+        for i, table_size in enumerate(self.table_sizes):
+            l = Embedding(input_dim=table_size,
+                          output_dim=self.local_embedding_dim,
+                          trainable=self.embedding_trainable)
+            self.embedding_layers.append(l)
 
-        elif self.embedding_type == 'split_embedding':
-            for i, table_size in enumerate(self.table_sizes):
-                l = SplitEmbedding(input_dim=table_size,
-                                   output_dim=self.local_embedding_dim,
-                                   trainable=self.embedding_trainable)
-                self.embedding_layers.append(l)
+    def create_eval_metrics(self, FLAGS):
+        if FLAGS.auc_thresholds is not None:
+            self.auc_metric = tf.keras.metrics.AUC(num_thresholds=FLAGS.auc_thresholds,
+                                                   curve='ROC', summation_method='interpolation',
+                                                   from_logits=True)
         else:
-            raise ValueError(f'Unknown embedding type {self.embedding_type}')
+            self.auc_metric = None
+
+        self.bce_op = tf.keras.losses.BinaryCrossentropy(reduction=tf.keras.losses.Reduction.NONE,
+                                                         from_logits=True)
+
+    # wrap metric computations in tf.function
+    @tf.function
+    def update_auc_metric(self, labels, y_pred):
+        self.auc_metric.update_state(labels, y_pred)
+
+    @tf.function
+    def compute_bce_loss(self, labels, y_pred):
+        return self.bce_op(labels, y_pred)
 
     def _partition_variables(self):
         self.bottom_variables = [v for v in self.trainable_variables if 'bottom_model' in v.name]
@@ -343,7 +363,7 @@ class Dlrm(tf.keras.Model):
     def force_initialization(self):
         if self.running_bottom_mlp:
             if self.data_parallel_bottom_mlp:
-                numerical_features = tf.zeros(shape=[self.batch_size / hvd.size(),
+                numerical_features = tf.zeros(shape=[self.batch_size // hvd.size(),
                                                      self.dataset_metadata.num_numerical_features])
             else:
                 numerical_features = tf.zeros(shape=[self.batch_size,
@@ -447,7 +467,7 @@ class Dlrm(tf.keras.Model):
 
         splits = [tf.shape(alltoall_input)[0] // world_size] * world_size
 
-        alltoall_output = hvd.alltoall(tensor=alltoall_input, splits=splits, ignore_name_scope=True)
+        alltoall_output = hvd.alltoall(tensor=alltoall_input, splits=splits, ignore_name_scope=True)[0]
 
         vectors_per_worker = [x * local_batch for x in self.rank_to_feature_count]
         alltoall_output = tf.split(alltoall_output,
@@ -475,7 +495,7 @@ class Dlrm(tf.keras.Model):
 
         splits = [tf.shape(alltoall_input)[0] // world_size] * world_size
 
-        alltoall_output = hvd.alltoall(tensor=alltoall_input, splits=splits, ignore_name_scope=True)
+        alltoall_output = hvd.alltoall(tensor=alltoall_input, splits=splits, ignore_name_scope=True)[0]
 
         alltoall_output = tf.split(alltoall_output,
                                    num_or_size_splits=hvd.size(),
@@ -509,7 +529,7 @@ class Dlrm(tf.keras.Model):
         name = v.name.replace('/', '_').replace(':', '_')
         return checkpoint_path + '_' + name + f'_{i}' + '.npy'
 
-    def maybe_save_checkpoint(self, checkpoint_path):
+    def save_checkpoint_if_path_exists(self, checkpoint_path):
         if checkpoint_path is None:
             return
 
@@ -535,9 +555,9 @@ class Dlrm(tf.keras.Model):
 
         dist_print('Saved a checkpoint to ', checkpoint_path)
 
-    def maybe_restore_checkpoint(self, checkpoint_path):
+    def restore_checkpoint_if_path_exists(self, checkpoint_path):
         if checkpoint_path is None:
-            return
+            return self
 
         dist_print('Restoring a checkpoint...')
         self.force_initialization()
@@ -561,6 +581,26 @@ class Dlrm(tf.keras.Model):
                 v.scatter_update(sparse_delta=update)
 
         dist_print('Restored a checkpoint from', checkpoint_path)
+        return self
+
+    def save_model_if_path_exists(self, path):
+        if not path:
+            return
+
+        if hvd.size() > 1:
+            raise ValueError('SavedModel conversion not supported in HybridParallel mode')
+
+        tf.keras.models.save_model(model=self, filepath=path, overwrite=True)
+
+    def load_model_if_path_exists(self, path):
+        if not path:
+            return self
+
+        if hvd.size() > 1:
+            raise ValueError('Loading a SavedModel not supported in HybridParallel mode')
+
+        loaded = tf.saved_model.load(path)
+        return loaded
 
 
 # dummy model for profiling and debugging

@@ -1,0 +1,5 @@
+TFT for PyTorch
+
+This repository includes software from https://github.com/google-research/google-research/tree/master/tft licensed under the Apache 2.0 License.
+
+This repository contains code from https://github.com/rwightman/pytorch-image-models/blob/master/timm/utils/model_ema.py under the Apache 2.0 License.
