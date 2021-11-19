@@ -47,6 +47,8 @@ def define_command_line_flags():
 
     flags.DEFINE_string("saved_model_output_path", default=None,
                         help='Path for storing the model in TensorFlow SavedModel format')
+    flags.DEFINE_bool("save_input_signature", default=False,
+                      help="Save input signature in the SavedModel")
     flags.DEFINE_string("saved_model_input_path", default=None,
                         help='Path for loading the model in TensorFlow SavedModel format')
 
@@ -334,7 +336,8 @@ def main(argv):
 
     elapsed = time.time() - train_begin
     dlrm.save_checkpoint_if_path_exists(FLAGS.save_checkpoint_path)
-    dlrm.save_model_if_path_exists(FLAGS.saved_model_output_path)
+    dlrm.save_model_if_path_exists(FLAGS.saved_model_output_path,
+                                   save_input_signature=FLAGS.save_input_signature)
 
     if hvd.rank() == 0:
         dist_print(f'Training run completed, elapsed: {elapsed:.0f} [s]')

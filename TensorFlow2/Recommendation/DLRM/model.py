@@ -27,6 +27,8 @@ import time
 from utils import dist_print
 from tensorflow.python.saved_model import signature_constants
 from tensorflow.python.framework import convert_to_constants
+from tensorflow.python.keras.saving.saving_utils import model_input_signature
+from collections import OrderedDict
 
 try:
     from tensorflow_dot_based_interact.python.ops import dot_based_interact_ops
@@ -43,6 +45,21 @@ def scale_grad(grad, factor):
         # dense gradient
         return grad * factor
 
+def _create_inputs_dict(numerical_features, categorical_features):
+    # Passing inputs as (numerical_features, categorical_features) changes the model
+    # input signature to (<tensor, [list of tensors]>).
+    # This leads to errors while loading the saved model.
+    # TF flattens the inputs while loading the model,
+    # so the inputs are converted from (<tensor, [list of tensors]>) -> [list of tensors]
+    # see _set_inputs function in training_v1.py:
+    # https://github.com/tensorflow/tensorflow/blob/7628750678786f1b65e8905fb9406d8fbffef0db/tensorflow/python/keras/engine/training_v1.py#L2588)
+    inputs = OrderedDict()
+    inputs['numerical_features'] = numerical_features
+
+    if categorical_features != -1:
+        for count, c_feature in enumerate(categorical_features):
+            inputs["categorical_features_" + str(count)] = c_feature
+    return inputs
 
 class DataParallelSplitter:
     def __init__(self, batch_size):
@@ -104,9 +121,9 @@ class DlrmTrainer:
     def train_step(self, numerical_features, categorical_features, labels):
         self.lr_scheduler()
 
+        inputs = _create_inputs_dict(numerical_features, categorical_features)
         with tf.GradientTape() as tape:
-            predictions = self.dlrm(inputs=(numerical_features, categorical_features),
-                                    training=True)
+            predictions = self.dlrm(inputs=inputs, training=True)
 
             unscaled_loss = self.bce(labels, predictions)
             # tf keras doesn't reduce the loss when using a Custom Training Loop
@@ -130,7 +147,6 @@ class DlrmTrainer:
             mean_loss = unscaled_loss
 
         return mean_loss
-
 
 
 def evaluate(validation_pipeline, dlrm, timer, auc_thresholds,
@@ -167,7 +183,8 @@ def evaluate(validation_pipeline, dlrm, timer, auc_thresholds,
         if max_steps is not None and eval_step >= max_steps:
             break
 
-        y_pred = dlrm((numerical_features, categorical_features), False)
+        inputs = _create_inputs_dict(numerical_features, categorical_features)
+        y_pred = dlrm(inputs, False)
         end = time.time()
         latency = end - begin
         latencies.append(latency)
@@ -376,7 +393,8 @@ class Dlrm(tf.keras.Model):
 
     @tf.function
     def call(self, inputs, sigmoid=False):
-        numerical_features, cat_features = inputs
+        vals = list(inputs.values())
+        numerical_features, cat_features = vals[0], vals[1:]
         embedding_outputs = self._call_embeddings(cat_features)
 
         if self.running_bottom_mlp:
@@ -583,14 +601,25 @@ class Dlrm(tf.keras.Model):
         dist_print('Restored a checkpoint from', checkpoint_path)
         return self
 
-    def save_model_if_path_exists(self, path):
+    def save_model_if_path_exists(self, path, save_input_signature=False):
         if not path:
             return
 
         if hvd.size() > 1:
             raise ValueError('SavedModel conversion not supported in HybridParallel mode')
 
-        tf.keras.models.save_model(model=self, filepath=path, overwrite=True)
+        if save_input_signature:
+            input_sig = model_input_signature(self, keep_original_batch_size=True)
+            call_graph = tf.function(self)
+            signatures = call_graph.get_concrete_function(input_sig[0])
+        else:
+            signatures = None
+
+        tf.keras.models.save_model(
+            model=self,
+            filepath=path,
+            overwrite=True,
+            signatures=signatures)
 
     def load_model_if_path_exists(self, path):
         if not path:
