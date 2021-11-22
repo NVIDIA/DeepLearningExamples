@@ -95,41 +95,45 @@ For those unable to set up the required environment or create your own container
 ## Quick start guide
 
 ### Getting Started
-1. Create a dataset directory.  The directory can be arbitrary, and it is recommended not to include it in the TimeSeriesPredictionPlatform directory.  This arbitrary directory will be mounted to the TSPP container later.  In the following steps this directory will be referred to as /your/datasets/.
+1. Clone the NVIDIA Deep Learning Examples repository:
+```
+git clone https://github.com/NVIDIA/DeepLearningExamples.git
+```
+2. Create a dataset directory.  The directory can be arbitrary, and it is recommended not to include it in the TimeSeriesPredictionPlatform directory.  This arbitrary directory will be mounted to the TSPP container later.  In the following steps this directory will be referred to as /your/datasets/.
 
-2. Enter the Deep Learning Examples TSPP repository:
+3. Enter the Deep Learning Examples TSPP repository:
 
 ```
 cd DeeplearningExamples/Tools/PyTorch/TimeSeriesPredictionPlatform
 ```
-3. Run repository setup
+4. Run repository setup
 ```
 source scripts/setup.sh
 ```
 
-3. Build the docker image:
+5. Build the docker image:
 ```
 docker build -t tspp .
 ```
 
-4. Next we will start our container and mount the dataset directory, which means that /workspace/datasets/ points to /your/datasets/.  Any changes made to this folder in the docker container are reflected in the original directory and vice versa.  If we want to mount additional folders we can add ‘-v /path/on/local/:/path/in/container/’ to the run command.  This will be useful if we want to save the outputs from training or inference once we close the container. To start the docker container:
+6. Next we will start our container and mount the dataset directory, which means that /workspace/datasets/ points to /your/datasets/.  Any changes made to this folder in the docker container are reflected in the original directory and vice versa.  If we want to mount additional folders we can add ‘-v /path/on/local/:/path/in/container/’ to the run command.  This will be useful if we want to save the outputs from training or inference once we close the container. To start the docker container:
 ```
 docker run -it --gpus all --ipc=host --network=host -v /your/datasets/:/workspace/datasets/ tspp bash
 ```
 
-5. After running the previous command you will be placed inside the docker container in the /workspace directory.  Inside the container, download either the electricity or traffic dataset:
+7. After running the previous command you will be placed inside the docker container in the /workspace directory.  Inside the container, download either the electricity or traffic dataset:
 ```
 python data/script_download_data.py --dataset {dataset_name} --output_dir /workspace/datasets/
 ```
 The raw electricity dataset is the 15 minute electricity consumption of 370 customers from the UCI Electricity Load Diagrams.  We aggregate to an hourly forecast and use the previous week to predict the following day.
 The raw traffic dataset is the 10 minute occupancy rate of San Francisco freeways from 440 sensors downloaded from the UCI PEMS-SF Data Set.  We again aggregate to an hourly forecast and use the previous week to predict the following day.  
 
-6. Preprocess the dataset:
+8. Preprocess the dataset:
 ```
 python launch_preproc.py dataset={dataset}
 ```
 
-7. Launch the training, validation, and testing process using the temporal fusion transformer model:
+9. Launch the training, validation, and testing process using the temporal fusion transformer model:
 ```
 python launch_tspp.py model=tft dataset={dataset} criterion=quantile
 ```
