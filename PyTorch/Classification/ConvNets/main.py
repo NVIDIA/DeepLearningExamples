@@ -27,10 +27,13 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+import os
+
+os.environ["KMP_AFFINITY"] = "disabled" # We need to do this before importing anything else as a workaround for this bug: https://github.com/pytorch/pytorch/issues/28389
+
 import argparse
 import random
 from copy import deepcopy
-import signal
 
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
@@ -38,9 +41,6 @@ import torch.nn.parallel
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
-import torchvision.transforms as transforms
-import torchvision.datasets as datasets
-from torch.nn.parallel import DistributedDataParallel as DDP
 
 import image_classification.logger as log
 
@@ -64,6 +64,7 @@ from image_classification.optimizers import (
     lr_linear_policy,
     lr_step_policy,
 )
+from image_classification.gpu_affinity import set_affinity, AffinityMode
 import dllogger
 
 
@@ -120,6 +121,13 @@ def add_parser_arguments(parser, skip_arch=False):
         type=int,
         metavar="N",
         help="number of data loading workers (default: 5)",
+    )
+    parser.add_argument(
+        "--prefetch",
+        default=2,
+        type=int,
+        metavar="N",
+        help="number of samples prefetched by each loader",
     )
     parser.add_argument(
         "--epochs",
@@ -301,9 +309,9 @@ def add_parser_arguments(parser, skip_arch=False):
     parser.add_argument(
         "--jit",
         type=str,
-        default = "no",
+        default="no",
         choices=["no", "script"],
-        help="no -> do not use torch.jit; script -> use torch.jit.script"
+        help="no -> do not use torch.jit; script -> use torch.jit.script",
     )
 
     parser.add_argument("--checkpoint-filename", default="checkpoint.pth.tar", type=str)
@@ -338,9 +346,16 @@ def add_parser_arguments(parser, skip_arch=False):
         help="number of classes",
     )
 
+    parser.add_argument(
+        "--gpu-affinity",
+        type=str,
+        default="none",
+        required=False,
+        choices=[am.name for am in AffinityMode],
+    )
+
 
 def prepare_for_training(args, model_args, model_arch):
-
     args.distributed = False
     if "WORLD_SIZE" in os.environ:
         args.distributed = int(os.environ["WORLD_SIZE"]) > 1
@@ -357,6 +372,9 @@ def prepare_for_training(args, model_args, model_arch):
         dist.init_process_group(backend="nccl", init_method="env://")
         args.world_size = torch.distributed.get_world_size()
 
+    affinity = set_affinity(args.gpu, mode=args.gpu_affinity)
+    print(f"Training process {args.local_rank} affinity: {affinity}")
+
     if args.seed is not None:
         print("Using seed = {}".format(args.seed))
         torch.manual_seed(args.seed + args.local_rank)
@@ -365,13 +383,19 @@ def prepare_for_training(args, model_args, model_arch):
         random.seed(args.seed + args.local_rank)
 
         def _worker_init_fn(id):
+            # Worker process should inherit its affinity from parent
+            affinity = os.sched_getaffinity(0) 
+            print(f"Process {args.local_rank} Worker {id} set affinity to: {affinity}")
+
             np.random.seed(seed=args.seed + args.local_rank + id)
             random.seed(args.seed + args.local_rank + id)
 
     else:
 
         def _worker_init_fn(id):
-            pass
+            # Worker process should inherit its affinity from parent
+            affinity = os.sched_getaffinity(0)
+            print(f"Process {args.local_rank} Worker {id} set affinity to: {affinity}")
 
     if args.static_loss_scale != 1.0:
         if not args.amp:
@@ -464,7 +488,7 @@ def prepare_for_training(args, model_args, model_arch):
         amp=args.amp,
         scaler=scaler,
         divide_loss=batch_size_multiplier,
-        ts_script = args.jit == "script",
+        ts_script=args.jit == "script",
     )
 
     # Create data loaders and optimizers as needed
@@ -494,7 +518,9 @@ def prepare_for_training(args, model_args, model_arch):
         augmentation=args.augmentation,
         start_epoch=start_epoch,
         workers=args.workers,
+        _worker_init_fn=_worker_init_fn,
         memory_format=memory_format,
+        prefetch_factor=args.prefetch,
     )
     if args.mixup != 0.0:
         train_loader = MixUpWrapper(args.mixup, train_loader)
@@ -507,7 +533,9 @@ def prepare_for_training(args, model_args, model_arch):
         False,
         interpolation=args.interpolation,
         workers=args.workers,
+        _worker_init_fn=_worker_init_fn,
         memory_format=memory_format,
+        prefetch_factor=args.prefetch,
     )
 
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
@@ -566,7 +594,15 @@ def prepare_for_training(args, model_args, model_arch):
     if (args.use_ema is not None) and (model_state_ema is not None):
         trainer.ema_executor.model.load_state_dict(model_state_ema)
 
-    return (trainer, lr_policy, train_loader, train_loader_len, val_loader, logger, start_epoch)
+    return (
+        trainer,
+        lr_policy,
+        train_loader,
+        train_loader_len,
+        val_loader,
+        logger,
+        start_epoch,
+    )
 
 
 def main(args, model_args, model_arch):

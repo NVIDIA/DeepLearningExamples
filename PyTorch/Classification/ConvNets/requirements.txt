@@ -1,1 +1,2 @@
 nvidia-dllogger==0.1.0
+pynvml==11.0.0

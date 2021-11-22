@@ -235,6 +235,7 @@ def get_dali_train_loader(dali_cpu=False):
         workers=5,
         _worker_init_fn=None,
         memory_format=torch.contiguous_format,
+        **kwargs,
     ):
         if torch.distributed.is_initialized():
             rank = torch.distributed.get_rank()
@@ -284,6 +285,7 @@ def get_dali_val_loader():
         workers=5,
         _worker_init_fn=None,
         memory_format=torch.contiguous_format,
+        **kwargs,
     ):
         if torch.distributed.is_initialized():
             rank = torch.distributed.get_rank()
@@ -413,6 +415,7 @@ def get_pytorch_train_loader(
     start_epoch=0,
     workers=5,
     _worker_init_fn=None,
+    prefetch_factor=2,
     memory_format=torch.contiguous_format,
 ):
     interpolation = {"bicubic": Image.BICUBIC, "bilinear": Image.BILINEAR}[
@@ -445,6 +448,7 @@ def get_pytorch_train_loader(
         collate_fn=partial(fast_collate, memory_format),
         drop_last=True,
         persistent_workers=True,
+        prefetch_factor=prefetch_factor,
     )
 
     return (
@@ -464,6 +468,7 @@ def get_pytorch_val_loader(
     _worker_init_fn=None,
     crop_padding=32,
     memory_format=torch.contiguous_format,
+    prefetch_factor=2,
 ):
     interpolation = {"bicubic": Image.BICUBIC, "bilinear": Image.BILINEAR}[
         interpolation
@@ -499,6 +504,7 @@ def get_pytorch_val_loader(
         collate_fn=partial(fast_collate, memory_format),
         drop_last=False,
         persistent_workers=True,
+        prefetch_factor=prefetch_factor,
     )
 
     return PrefetchedWrapper(val_loader, 0, num_classes, one_hot), len(val_loader)
@@ -548,6 +554,7 @@ def get_syntetic_loader(
     workers=None,
     _worker_init_fn=None,
     memory_format=torch.contiguous_format,
+    **kwargs,
 ):
     return (
         SynteticDataLoader(

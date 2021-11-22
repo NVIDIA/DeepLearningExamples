@@ -10,16 +10,26 @@ precision:
 platform:
     DGX1V-16G:
         workers: 8
+        prefetch: 4
+        gpu_affinity: socket_unique_contiguous
     DGX1V-32G:
         workers: 8
+        prefetch: 4
+        gpu_affinity: socket_unique_contiguous
     T4:
         workers: 8
     DGX1V:
         workers: 8
+        prefetch: 4
+        gpu_affinity: socket_unique_contiguous
     DGX2V:
         workers: 8
+        prefetch: 4
+        gpu_affinity: socket_unique_contiguous
     DGXA100:
-        workers: 16
+        workers: 10
+        prefetch: 4
+        gpu_affinity: socket_unique_contiguous
 
 mode:
     benchmark_training: &benchmark_training
