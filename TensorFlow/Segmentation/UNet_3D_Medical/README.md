@@ -1,6 +1,7 @@
 # 3D-UNet Medical Image Segmentation for TensorFlow 1.x
  
-This repository provides a script and recipe to train 3D-UNet to achieve state of the art accuracy, and is tested and maintained by NVIDIA.
+This repository provides a script and recipe to train the 3D-UNet model to achieve state-of-the-art accuracy.
+The content of this repository is tested and maintained by NVIDIA.
  
 ## Table of Contents
  
@@ -30,13 +31,14 @@ This repository provides a script and recipe to train 3D-UNet to achieve state o
      * [Inference performance benchmark](#inference-performance-benchmark)
    * [Results](#results)
      * [Training accuracy results](#training-accuracy-results) 
-       * [Training accuracy: NVIDIA DGX-1 (8x V100 32GB)](#training-accuracy-nvidia-dgx-1-8x-v100-16gb)
+       * [Training accuracy: NVIDIA DGX A100 (8x A100 80G)](#training-accuracy-nvidia-dgx-a100-8x-a100-80g)
+       * [Training accuracy: NVIDIA DGX-1 (8x V100 16G)](#training-accuracy-nvidia-dgx-1-8x-v100-16g)
      * [Training performance results](#training-performance-results)
-       * [Training performance: NVIDIA DGX-1 (8x V100 16GB)](#training-performance-nvidia-dgx-1-8x-v100-16gb)
-       * [Training performance: NVIDIA DGX-1 (8x V100 32GB)](#training-performance-nvidia-dgx-1-8x-v100-32gb)
+       * [Training performance: NVIDIA DGX A100 (8x A100 80G)](#training-performance-nvidia-dgx-a100-8x-a100-80g)
+       * [Training performance: NVIDIA DGX-1 (8x V100 16G)](#training-performance-nvidia-dgx-1-8x-v100-16g)
      * [Inference performance results](#inference-performance-results)
-        * [Inference performance: NVIDIA DGX-1 (1x V100 16GB)](#inference-performance-nvidia-dgx-1-1x-v100-16gb)
-        * [Inference performance: NVIDIA DGX-1 (1x V100 32GB)](#inference-performance-nvidia-dgx-1-1x-v100-32gb)
+        * [Inference performance: NVIDIA DGX A100 (1x A100 80G)](#inference-performance-nvidia-dgx-a100-1x-a100-80g)
+        * [Inference performance: NVIDIA DGX-1 (1x V100 16G)](#inference-performance-nvidia-dgx-1-1x-v100-16g)
 - [Release notes](#release-notes)
    * [Changelog](#changelog)
    * [Known issues](#known-issues)
@@ -120,7 +122,7 @@ if params.amp:
 ```
 
 
- #### Enabling TF32
+#### Enabling TF32
 
 TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](#https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
 
@@ -138,11 +140,11 @@ The following section lists the requirements that you need to meet in order to s
  
 This repository contains Dockerfile which extends the TensorFlow NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 - [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-- TensorFlow 20.06-tf1-py3 [NGC container](https://ngc.nvidia.com/registry/nvidia-tensorflow)
+- TensorFlow 21.10-tf1-py3 [NGC container](https://ngc.nvidia.com/registry/nvidia-tensorflow)
 -   GPU-based architecture:
     - [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
     - [NVIDIA Turing](https://www.nvidia.com/en-us/geforce/turing/)
-    - [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
+    - [NVIDIA Ampere](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
 
  
 For more information about how to get started with NGC containers, see the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
@@ -204,19 +206,19 @@ To train your model using mixed or TF32 precision with Tensor Cores or using FP3
     After the Docker container is launched, the training of a single fold (fold 0) with the [default hyperparameters](#default-parameters) (for example 1/8 GPUs TF-AMP/FP32/TF32) can be started with:
     
     ```bash
-    bash examples/unet3d_train_single{_TF-AMP}.sh <number/of/gpus> <path/to/dataset> <path/to/checkpoint> <batch/size>
+    bash scripts/unet3d_train_single{_TF-AMP}.sh <number/of/gpus> <path/to/dataset> <path/to/checkpoint> <batch/size>
     ```
     
     For example, to run with 32-bit precision (FP32 or TF32) with batch size 2 on 1 GPU, simply use:
     
     ```bash
-    bash examples/unet3d_train_single.sh 1 /data/preprocessed /results 2
+    bash scripts/unet3d_train_single.sh 1 /data/preprocessed /results 2
     ```
     
     to train a single fold with mixed precision (TF-AMP) with on 8 GPUs batch size 2 per GPU, use:
     
     ```bash
-    bash examples/unet3d_train_single_TF-AMP.sh 8 /data/preprocessed /results 2
+    bash scripts/unet3d_train_single_TF-AMP.sh 8 /data/preprocessed /results 2
     ```
     The obtained dice scores will be reported after the training has finished.
  
@@ -225,19 +227,19 @@ To train your model using mixed or TF32 precision with Tensor Cores or using FP3
     The training performance can be evaluated by using benchmarking scripts, such as:
     
     ```bash
-    bash examples/unet3d_{train,infer}_benchmark{_TF-AMP}.sh <number/of/gpus/for/training> <path/to/dataset> <path/to/checkpoint> <batch/size>
+    bash scripts/unet3d_{train,infer}_benchmark{_TF-AMP}.sh <number/of/gpus/for/training> <path/to/dataset> <path/to/checkpoint> <batch/size>
     ```
     
     which will make the model run and report the performance. For example, to benchmark training with TF-AMP with batch size 2 on 4 GPUs, use:
     
     ```bash
-    bash examples/unet3d_train_benchmark_TF-AMP.sh 4 /data/preprocessed /results 2
+    bash scripts/unet3d_train_benchmark_TF-AMP.sh 4 /data/preprocessed /results 2
     ```
     
     to obtain inference performance with 32-bit precision (FP32 or TF32) with batch size 1, use:
     
     ```bash
-    bash examples/unet3d_infer_benchmark.sh /data/preprocessed /results 1
+    bash scripts/unet3d_infer_benchmark.sh /data/preprocessed /results 1
     ```
 
 ## Advanced
@@ -270,7 +272,7 @@ The `runtime/` folder contains scripts with training and inference logic. Its co
 * `unet3d.py`: Defines the model architecture using the blocks from the `layers.py` file.
 
 Other folders included in the root directory are:
-* `examples/`: Provides examples for training and benchmarking U-Net
+* `scripts/`: Provides examples for training and benchmarking U-Net
 * `images/`: Contains the model diagram
  
 ### Parameters
@@ -347,6 +349,8 @@ optional arguments:
  --amp                 Train using TF-AMP
  --xla                 Train using XLA
 ```
+
+### Getting the data
  
 The 3D-UNet model was trained in the [Brain Tumor Segmentation 2019 dataset](https://www.med.upenn.edu/cbica/brats-2019/). Test images provided by the organization were used to produce the resulting masks for submission. Upon registration, the challenge's data is made available through the https//ipp.cbica.upenn.edu service.
  
@@ -432,13 +436,13 @@ The following section shows how to run benchmarks measuring the model performanc
  
 #### Training performance benchmark
  
-To benchmark training, run one of the `train_benchmark` scripts in `./examples/`:
+To benchmark training, run one of the `train_benchmark` scripts in `./scripts/`:
 ```bash
-bash examples/unet3d_train_benchmark{_TF-AMP}.sh <num/of/gpus> <path/to/dataset> <path/to/checkpoints> <batch/size>
+bash scripts/unet3d_train_benchmark{_TF-AMP}.sh <num/of/gpus> <path/to/dataset> <path/to/checkpoints> <batch/size>
 ```
 For example, to benchmark training using mixed-precision on 4 GPUs with batch size of 2 use:
 ```bash
-bash examples/unet3d_train_benchmark_TF-AMP.sh 4 <path/to/dataset> <path/to/checkpoints> 2
+bash scripts/unet3d_train_benchmark_TF-AMP.sh 4 <path/to/dataset> <path/to/checkpoints> 2
 ```
  
 Each of these scripts will by default run 40 warm-up iterations and benchmark the performance during training in the next 40 iterations.
@@ -452,14 +456,14 @@ At the end of the script, a line reporting the best train throughput will be pri
  
 #### Inference performance benchmark
  
-To benchmark inference, run one of the scripts in `./examples/`:
+To benchmark inference, run one of the scripts in `./scripts/`:
 ```bash
-bash examples/unet3d_infer_benchmark{_TF-AMP}.sh <path/to/dataset> <path/to/checkpoints> <batch/size>
+bash scripts/unet3d_infer_benchmark{_TF-AMP}.sh <path/to/dataset> <path/to/checkpoints> <batch/size>
 ```
  
 For example, to benchmark inference using mixed-precision with batch size 4:
 ```bash
-bash examples/unet3d_infer_benchmark_TF-AMP.sh <path/to/dataset> <path/to/checkpoints> 4
+bash scripts/unet3d_infer_benchmark_TF-AMP.sh <path/to/dataset> <path/to/checkpoints> 4
 ```
  
 Each of these scripts will by default run 20 warm-up iterations and benchmark the performance during inference in the next 20 iterations.
@@ -476,22 +480,14 @@ At the end of the script, a line reporting the best inference throughput will be
 The following sections provide details on how we achieved our performance and accuracy of training and inference.
  
 #### Training accuracy results
-
-##### Training accuracy: NVIDIA DGX-1 (8x V100 32GB)
- 
-The following table lists the average DICE score across 5-fold cross-validation. Our results were obtained by running the `examples/unet3d_train_full{_TF-AMP}.sh` training script in the `tensorflow:20.06-tf1-py3` NGC container on NVIDIA DGX-1 (8x V100 32GB) GPUs.
- 
-| GPUs | Batch size / GPU | DICE - FP32 | DICE - mixed precision | Time to train - FP32 | Time to train - mixed precision | Time to train speedup (FP32 to mixed precision) |
-|---|---|--------|--------|--------|--------|------|
-| 8 | 2 | 0.8818 | 0.8819 | 41 min | 23 min | 1.78 |
  
 To reproduce this result, start the Docker container interactively and run one of the train scripts:
 ```bash
-bash examples/unet3d_train_full{_TF-AMP}.sh <num/of/gpus> <path/to/dataset> <path/to/checkpoint> <batch/size>
+bash scripts/unet3d_train_full{_TF-AMP}.sh <num/of/gpus> <path/to/dataset> <path/to/checkpoint> <batch/size>
 ```
  for example to train using 8 GPUs and batch size of 2:
 ```bash
-bash examples/unet3d_train_full_TF-AMP.sh 8 /data/preprocessed /results 2
+bash scripts/unet3d_train_full_TF-AMP.sh 8 /data/preprocessed /results 2
 ```
 
 This command will launch a script which will run 5-fold cross-validation training for 16,000 iterations on each fold and print:
@@ -501,82 +497,104 @@ This command will launch a script which will run 5-fold cross-validation trainin
  
 The time reported is for one fold, which means that the training of 5 folds will take 5 times longer. The default batch size is 2, however if you have less than 16 GB memory card and you encounter GPU memory issues you should decrease the batch size. The logs of the runs can be found in the `/results` directory once the script is finished.
 
+##### Training accuracy: NVIDIA DGX A100 (8x A100 80G)
+ 
+The following table lists the average DICE score across 5-fold cross-validation. Our results were obtained by running the `scripts/unet3d_train_full{_TF-AMP}.sh` training script in the `tensorflow:21.10-tf1-py3` NGC container on NVIDIA DGX A100 (8x A100 80G) GPUs.
+ 
+| GPUs | Batch size / GPU | DICE - TF32 | DICE - mixed precision | Time to train - FP32 | Time to train - mixed precision | Time to train speedup (FP32 to mixed precision) |
+|---|---|--------|--------|--------|--------|------|
+| 8 | 2 | 0.8818 | 0.8819 |  8 min |  7 min | 1.14 |
+
+##### Training accuracy: NVIDIA DGX-1 (8x V100 16G)
+ 
+The following table lists the average DICE score across 5-fold cross-validation. Our results were obtained by running the `scripts/unet3d_train_full{_TF-AMP}.sh` training script in the `tensorflow:21.10-tf1-py3` NGC container on NVIDIA DGX-1 (8x V100 16G) GPUs.
+ 
+| GPUs | Batch size / GPU | DICE - FP32 | DICE - mixed precision | Time to train - FP32 | Time to train - mixed precision | Time to train speedup (FP32 to mixed precision) |
+|---|---|--------|--------|--------|--------|------|
+| 8 | 2 | 0.8818 | 0.8819 | 33 min | 13 min | 2.54 |
+
 #### Training performance results
 
-##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
+##### Training performance: NVIDIA DGX A100 (8x A100 80G)
  
-Our results were obtained by running the `examples/unet3d_train_benchmark{_TF-AMP}.sh` training script in the `tensorflow:20.06-tf1-py3` NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs. Performance numbers (in volumes per second) were averaged over 80 iterations, excluding the first 40 warm-up steps.
+Our results were obtained by running the `scripts/unet3d_train_benchmark{_TF-AMP}.sh` training script in the `tensorflow:21.10-tf1-py3` NGC container on NVIDIA DGX A100 with (8x A100 80G) GPUs. Performance numbers (in volumes per second) were averaged over 80 iterations, excluding the first 40 warm-up steps.
+ 
+| GPUs | Batch size / GPU | Throughput - TF32 [img/s] | Throughput - mixed precision [img/s] | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision |       
+|---|---|--------|--------|------|------|------|
+| 1 | 2 | 10.40  |  17.91 | 1.72 | N/A  | N/A  |
+| 1 | 4 | 10.66  |  19.88 | 1.86 | N/A  | N/A  |
+| 1 | 8 |  3.99  |  20.89 | 5.23 | N/A  | N/A  |
+| 8 | 2 | 81.71  | 100.24 | 1.23 | 7.85 | 5.60 |
+| 8 | 4 | 80.65  | 140.44 | 1.74 | 7.56 | 7.06 |
+| 8 | 8 | 29.79  | 137.61 | 4.62 | 7.47 | 6.59 |
+
+##### Training performance: NVIDIA DGX-1 (8x V100 16G)
+ 
+Our results were obtained by running the `scripts/unet3d_train_benchmark{_TF-AMP}.sh` training script in the `tensorflow:21.10-tf1-py3` NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs. Performance numbers (in volumes per second) were averaged over 80 iterations, excluding the first 40 warm-up steps.
  
 | GPUs | Batch size / GPU | Throughput - FP32 [img/s] | Throughput - mixed precision [img/s] | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision |       
-|---|---|--------|--------|-------|-------|-------|
-| 1 | 2 | 1.987  | 4.381  | 2.205 | N/A   | N/A   |
-| 8 | 2 | 14.843 | 28.948 | 1.950 | 7.471 | 6.608 |
+|---|---|-------|-------|------|------|------|
+| 1 | 1 |  1.87 |  7.45 | 3.98 | N/A  | N/A  |
+| 1 | 2 |  2.32 |  8.79 | 3.79 | N/A  | N/A  |
+| 8 | 1 | 14.49 | 46.88 | 3.23 | 7.75 | 6.29 |
+| 8 | 2 | 18.06 | 58.30 | 3.23 | 7.78 | 6.63 |
 
-##### Training performance: NVIDIA DGX-1 (8x V100 32GB)
- 
-Our results were obtained by running the `examples/unet3d_train_benchmark{_TF-AMP}.sh` training script in the `tensorflow:20.06-tf1-py3` NGC container on NVIDIA DGX-1 with (8x V100 32GB) GPUs. Performance numbers (in volumes per second) were averaged over 80 iterations, excluding the first 40 warm-up steps.
- 
-| GPUs | Batch size / GPU | Throughput - FP32 [img/s] | Throughput - mixed precision [img/s] | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision |       
-|---|---|--------|--------|-------|-------|-------|
-| 1 | 2 | 2.002  | 4.360  | 2.177 | N/A   | N/A   |
-| 1 | 4 | 2.160  | 4.407  | 2.041 | N/A   | N/A   |
-| 8 | 2 | 14.781 | 26.694 | 1.806 | 7.381 | 6.123 |
-| 8 | 4 | 16.013 | 28.423 | 1.775 | 7.414 | 6.449 |
-
- 
 To achieve these same results, follow the steps in the [Training performance benchmark](#training-performance-benchmark) section.
  
 #### Inference performance results
 
-##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
+##### Inference performance: NVIDIA DGX A100 (1x A100 80G)
  
-Our results were obtained by running the `examples/unet3d_infer_benchmark{_TF-AMP}.sh` inferencing benchmarking script in the `tensorflow:20.06-tf1-py3` NGC container on NVIDIA DGX-1 with (1x V100 16GB) GPU. Performance numbers (in volumes per second) were averaged over 40 iterations, excluding the first 20 warm-up steps.
+Our results were obtained by running the `scripts/unet3d_infer_benchmark{_TF-AMP}.sh` inference benchmarking script in the `tensorflow:21.10-tf1-py3` NGC container on NVIDIA DGX A100 with (1x A100 80G) GPU. Performance numbers (in volumes per second) were averaged over 40 iterations, excluding the first 20 warm-up steps.
  
 FP16
  
 | Batch size | Resolution | Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
-|---|---------------|-------|----------|----------|----------|----------|
-| 1 | 224x224x160x4 | 2.546 | 392.803  | 393.031  | 393.075  | 393.160  |
-| 2 | 224x224x160x4 | 2.923 | 684.363  | 684.806  | 684.891  | 685.056  |
-| 4 | 224x224x160x4 | 3.408 | 1173.739 | 1174.369 | 1174.489 | 1174.725 |
- 
-FP32
- 
-| Batch size | Resolution | Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
-|---|---------------|-------|----------|----------|----------|----------|
-| 1 | 224x224x160x4 | 1.527 | 654.911  | 655.180  | 655.232  | 655.333  |
-| 2 | 224x224x160x4 | 1.554 | 1287.376 | 1287.997 | 1288.116 | 1288.348 |
-| 4 | 224x224x160x4 | OOM   |          |          |          |          |
- 
- 
-##### Inference performance: NVIDIA DGX-1 (1x V100 32GB)
- 
-Our results were obtained by running the `examples/unet3d_infer_benchmark{_TF-AMP}.sh` inferencing benchmarking script in the `tensorflow:20.06-tf1-py3` NGC container on NVIDIA DGX-1 with (1x V100 32GB) GPU. Performance numbers (in volumes per second) were averaged over 40 iterations, excluding the first 20 warm-up steps.
+|---|---------------|-------|--------|--------|--------|--------|
+| 1 | 224x224x160x4 | 15.58 |  67.32 |  68.63 |  78.00 | 109.42 |
+| 2 | 224x224x160x4 | 15.81 | 129.06 | 129.93 | 135.31 | 166.62 |
+| 4 | 224x224x160x4 |  8.34 | 479.47 | 482.55 | 487.68 | 494.80 |
 
+TF32
+ 
+| Batch size | Resolution | Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
+|---|---------------|-------|---------|---------|---------|---------|
+| 1 | 224x224x160x4 |  9.42 |  106.22 |  106.68 |  107.67 |  122.73 |
+| 2 | 224x224x160x4 |  4.69 |  427.13 |  428.33 |  428.76 |  429.19 |
+| 4 | 224x224x160x4 |  2.32 | 1723.79 | 1725.77 | 1726.30 | 1728.23 |
+  
+To achieve these same results, follow the steps in the [Inference performance benchmark](#inference-performance-benchmark) section.
+
+##### Inference performance: NVIDIA DGX-1 (1x V100 16G)
+ 
+Our results were obtained by running the `scripts/unet3d_infer_benchmark{_TF-AMP}.sh` inference benchmarking script in the `tensorflow:21.10-tf1-py3` NGC container on NVIDIA DGX-1 with (1x V100 16G) GPU. Performance numbers (in volumes per second) were averaged over 40 iterations, excluding the first 20 warm-up steps.
  
 FP16
  
 | Batch size | Resolution | Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
-|---|---------------|-------|----------|----------|----------|----------|
-| 1 | 224x224x160x4 | 2.576 | 388.276  | 388.400  | 388.423  | 388.470  |
-| 2 | 224x224x160x4 | 2.861 | 699.078  | 699.567  | 699.660  | 699.843  |
-| 4 | 224x224x160x4 | 3.333 | 1200.198 | 1200.631 | 1200.714 | 1200.877 |
+|---|---------------|------|--------|--------|--------|--------|
+| 1 | 224x224x160x4 | 7.64 | 136.81 | 138.94 | 143.59 | 152.74 |
+| 2 | 224x224x160x4 | 7.75 | 260.66 | 267.07 | 270.88 | 274.44 |
+| 4 | 224x224x160x4 | 4.78 | 838.52 | 842.88 | 843.30 | 844.62 |
  
 FP32
  
 | Batch size | Resolution | Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
-|---|---------------|-------|----------|----------|----------|----------|
-| 1 | 224x224x160x4 | 1.990 | 502.485  | 502.550  | 502.563  | 502.587  |
-| 2 | 224x224x160x4 | 2.013 | 993.650  | 993.982  | 994.046  | 994.170  |
-| 4 | 224x224x160x4 | 2.435 | 1642.637 | 1643.058 | 1643.139 | 1643.297 |
+|---|---------------|------|--------|--------|--------|--------|
+| 1 | 224x224x160x4 | 2.30 | 434.95 | 436.82 | 437.40 | 438.48 |
+| 2 | 224x224x160x4 | 2.40 | 834.99 | 837.22 | 837.51 | 838.18 |
+| 4 | 224x224x160x4 | OOM  |        |        |        |        |
+ 
  
 To achieve these same results, follow the steps in the [Inference performance benchmark](#inference-performance-benchmark) section.
- 
 
  
 ## Release notes
  
 ### Changelog
+
+November 2021
+* Updated README tables
  
 June 2020
 * Initial release

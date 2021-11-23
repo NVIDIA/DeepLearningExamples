@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,98 +12,85 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+""" Entry point of the application.
+
+This file serves as entry point to the implementation of UNet3D for
+medical image segmentation.
+
+Example usage:
+    $ python main.py --exec_mode train --data_dir ./data --batch_size 2
+    --max_steps 1600 --amp
+
+All arguments are listed under `python main.py -h`.
+Full argument definition can be found in `arguments.py`.
+
+"""
 import os
-import logging
 
 import numpy as np
-import tensorflow as tf
 import horovod.tensorflow as hvd
 
+from model.model_fn import unet_3d
 from dataset.data_loader import Dataset, CLASSES
-from runtime.hooks import get_hooks, ProfilingHook, TrainingHook
+from runtime.hooks import get_hooks
 from runtime.arguments import PARSER
-from runtime.setup import prepare_model_dir, build_estimator, set_flags, get_logger
+from runtime.setup import build_estimator, set_flags, get_logger
 
 
-def parse_evaluation_results(result):
-    data = {CLASSES[i]: result[CLASSES[i]] for i in range(len(CLASSES))}
+def parse_evaluation_results(result, logger, step=()):
+    """
+    Parse DICE scores from the evaluation results
+
+    :param result: Dictionary with metrics collected by the optimizer
+    :param logger: Logger object
+    :return:
+    """
+    data = {CLASSES[i]: float(result[CLASSES[i]]) for i in range(len(CLASSES))}
     data['MeanDice'] = sum([result[CLASSES[i]] for i in range(len(CLASSES))]) / len(CLASSES)
-    data['WholeTumor'] = result['WholeTumor']
+    data['WholeTumor'] = float(result['WholeTumor'])
+
+    if hvd.rank() == 0:
+        logger.log(step=step, data=data)
+
     return data
 
 
 def main():
-    tf.get_logger().setLevel(logging.ERROR)
+    """ Starting point of the application """
     hvd.init()
+    set_flags()
     params = PARSER.parse_args()
-    model_dir = prepare_model_dir(params)
     logger = get_logger(params)
 
     dataset = Dataset(data_dir=params.data_dir,
                       batch_size=params.batch_size,
                       fold_idx=params.fold,
                       n_folds=params.num_folds,
+                      input_shape=params.input_shape,
                       params=params)
 
-    estimator = build_estimator(params=params, model_dir=model_dir)
-
-    max_steps = params.max_steps // (1 if params.benchmark else hvd.size())
+    estimator = build_estimator(params=params, model_fn=unet_3d)
+    hooks = get_hooks(params, logger)
 
     if 'train' in params.exec_mode:
-        training_hooks = get_hooks(params, logger)
+        max_steps = params.max_steps // (1 if params.benchmark else hvd.size())
         estimator.train(
             input_fn=dataset.train_fn,
             steps=max_steps,
-            hooks=training_hooks)
-
+            hooks=hooks)
     if 'evaluate' in params.exec_mode:
         result = estimator.evaluate(input_fn=dataset.eval_fn, steps=dataset.eval_size)
-        data = parse_evaluation_results(result)
+        _ = parse_evaluation_results(result, logger)
+    if params.exec_mode == 'predict':
         if hvd.rank() == 0:
-            logger.log(step=(), data=data)
-
-    if 'predict' == params.exec_mode:
-        inference_hooks = get_hooks(params, logger)
-        if hvd.rank() == 0:
-            count = 1 if not params.benchmark else 2 * params.warmup_steps * params.batch_size // dataset.test_size
             predictions = estimator.predict(
-                input_fn=lambda: dataset.test_fn(count=count,
-                                                 drop_remainder=params.benchmark), hooks=inference_hooks)
+                input_fn=dataset.test_fn, hooks=hooks)
 
-            for idx, p in enumerate(predictions):
-                volume = p['predictions']
+            for idx, pred in enumerate(predictions):
+                volume = pred['predictions']
                 if not params.benchmark:
                     np.save(os.path.join(params.model_dir, "vol_{}.npy".format(idx)), volume)
 
-    if 'debug_train' == params.exec_mode:
-        hooks = [hvd.BroadcastGlobalVariablesHook(0)]
-        if hvd.rank() == 0:
-            hooks += [TrainingHook(log_every=params.log_every,
-                                   logger=logger,
-                                   tensor_names=['total_loss_ref:0']),
-                      ProfilingHook(warmup_steps=params.warmup_steps,
-                                    global_batch_size=hvd.size() * params.batch_size,
-                                    logger=logger,
-                                    mode='train')]
-
-        estimator.train(
-            input_fn=dataset.synth_train_fn,
-            steps=max_steps,
-            hooks=hooks)
-
-    if 'debug_predict' == params.exec_mode:
-        if hvd.rank() == 0:
-            hooks = [ProfilingHook(warmup_steps=params.warmup_steps,
-                                   global_batch_size=params.batch_size,
-                                   logger=logger,
-                                   mode='inference')]
-            count = 2 * params.warmup_steps
-            predictions = estimator.predict(input_fn=lambda: dataset.synth_predict_fn(count=count),
-                                            hooks=hooks)
-            for p in predictions:
-                _ = p['predictions']
-
 
 if __name__ == '__main__':
-    set_flags()
     main()

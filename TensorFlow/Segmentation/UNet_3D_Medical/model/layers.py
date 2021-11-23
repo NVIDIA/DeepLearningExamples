@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+""" High level definition of layers for model construction """
 import tensorflow as tf
 
 
 def _normalization(inputs, name, mode):
+    """ Choose a normalization layer
+
+    :param inputs: Input node from the graph
+    :param name: Name of layer
+    :param mode: Estimator's execution mode
+    :return: Normalized output
+    """
     training = mode == tf.estimator.ModeKeys.TRAIN
 
     if name == 'instancenorm':
@@ -45,28 +53,34 @@ def _normalization(inputs, name, mode):
         return tf.keras.layers.BatchNormalization(axis=-1,
                                                   trainable=True,
                                                   virtual_batch_size=None)(inputs, training=training)
-    elif name == 'none':
+    if name == 'none':
         return inputs
-    else:
-        raise ValueError('Invalid normalization layer')
+
+    raise ValueError('Invalid normalization layer')
 
 
-def _activation(x, activation):
+def _activation(out, activation):
+    """ Choose an activation layer
+
+    :param out: Input node from the graph
+    :param activation: Name of layer
+    :return: Activation output
+    """
     if activation == 'relu':
-        return tf.nn.relu(x)
-    elif activation == 'leaky_relu':
-        return tf.nn.leaky_relu(x, alpha=0.01)
-    elif activation == 'sigmoid':
-        return tf.nn.sigmoid(x)
-    elif activation == 'softmax':
-        return tf.nn.softmax(x, axis=-1)
-    elif activation == 'none':
-        return x
-    else:
-        raise ValueError("Unknown activation {}".format(activation))
+        return tf.nn.relu(out)
+    if activation == 'leaky_relu':
+        return tf.nn.leaky_relu(out, alpha=0.01)
+    if activation == 'sigmoid':
+        return tf.nn.sigmoid(out)
+    if activation == 'softmax':
+        return tf.nn.softmax(out, axis=-1)
+    if activation == 'none':
+        return out
+
+    raise ValueError("Unknown activation {}".format(activation))
 
 
-def convolution(x,
+def convolution(inputs,  # pylint: disable=R0913
                 out_channels,
                 kernel_size=3,
                 stride=1,
@@ -74,62 +88,94 @@ def convolution(x,
                 normalization='batchnorm',
                 activation='leaky_relu',
                 transpose=False):
+    """ Create a convolution layer
 
+    :param inputs: Input node from graph
+    :param out_channels: Output number of channels
+    :param kernel_size: Size of the kernel
+    :param stride: Stride of the kernel
+    :param mode: Estimator's execution mode
+    :param normalization: Name of the normalization layer
+    :param activation: Name of the activation layer
+    :param transpose: Select between regular and transposed convolution
+    :return: Convolution output
+    """
     if transpose:
         conv = tf.keras.layers.Conv3DTranspose
     else:
         conv = tf.keras.layers.Conv3D
-    regularizer = None#tf.keras.regularizers.l2(1e-5)
+    regularizer = None  # tf.keras.regularizers.l2(1e-5)
 
-    x = conv(filters=out_channels,
-             kernel_size=kernel_size,
-             strides=stride,
-             activation=None,
-             padding='same',
-             data_format='channels_last',
-             kernel_initializer=tf.glorot_uniform_initializer(),
-             kernel_regularizer=regularizer,
-             bias_initializer=tf.zeros_initializer(),
-             bias_regularizer=regularizer)(x)
+    use_bias = normalization == "none"
+    inputs = conv(filters=out_channels,
+                  kernel_size=kernel_size,
+                  strides=stride,
+                  activation=None,
+                  padding='same',
+                  data_format='channels_last',
+                  kernel_initializer=tf.compat.v1.glorot_uniform_initializer(),
+                  kernel_regularizer=regularizer,
+                  bias_initializer=tf.zeros_initializer(),
+                  bias_regularizer=regularizer,
+                  use_bias=use_bias)(inputs)
 
-    x = _normalization(x, normalization, mode)
+    inputs = _normalization(inputs, normalization, mode)
 
-    return _activation(x, activation)
-
-
-def upsample_block(x, skip_connection, out_channels, normalization, mode):
-    x = convolution(x, kernel_size=2, out_channels=out_channels, stride=2,
-                    normalization='none', activation='none', transpose=True)
-    x = tf.keras.layers.Concatenate(axis=-1)([x, skip_connection])
-
-    x = convolution(x, out_channels=out_channels, normalization=normalization, mode=mode)
-    x = convolution(x, out_channels=out_channels, normalization=normalization, mode=mode)
-    return x
+    return _activation(inputs, activation)
 
 
-def input_block(x, out_channels, normalization, mode):
-    x = convolution(x, out_channels=out_channels, normalization=normalization, mode=mode)
-    x = convolution(x, out_channels=out_channels, normalization=normalization, mode=mode)
-    return x
+def upsample_block(inputs, skip_connection, out_channels, normalization, mode):
+    """ Create a block for upsampling
+
+    :param inputs: Input node from the graph
+    :param skip_connection: Choose whether or not to use skip connection
+    :param out_channels: Number of output channels
+    :param normalization: Name of the normalizaiton layer
+    :param mode: Estimator's execution mode
+    :return: Output from the upsample block
+    """
+    inputs = convolution(inputs, kernel_size=2, out_channels=out_channels, stride=2,
+                         normalization='none', activation='none', transpose=True)
+    inputs = tf.keras.layers.Concatenate(axis=-1)([inputs, skip_connection])
+
+    inputs = convolution(inputs, out_channels=out_channels, normalization=normalization, mode=mode)
+    inputs = convolution(inputs, out_channels=out_channels, normalization=normalization, mode=mode)
+    return inputs
 
 
-def downsample_block(x, out_channels, normalization, mode):
-    x = convolution(x, out_channels=out_channels, normalization=normalization, mode=mode, stride=2)
-    return convolution(x, out_channels=out_channels, normalization=normalization, mode=mode)
+def input_block(inputs, out_channels, normalization, mode):
+    """ Create the input block
+
+    :param inputs: Input node from the graph
+    :param out_channels: Number of output channels
+    :param normalization:  Name of the normalization layer
+    :param mode: Estimator's execution mode
+    :return: Output from the input block
+    """
+    inputs = convolution(inputs, out_channels=out_channels, normalization=normalization, mode=mode)
+    inputs = convolution(inputs, out_channels=out_channels, normalization=normalization, mode=mode)
+    return inputs
 
 
-def linear_block(x, out_channels, mode, activation='leaky_relu', normalization='none'):
-    x = convolution(x, out_channels=out_channels, normalization=normalization, mode=mode)
-    return convolution(x, out_channels=out_channels, activation=activation, mode=mode, normalization=normalization)
+def downsample_block(inputs, out_channels, normalization, mode):
+    """ Create a downsample block
+
+    :param inputs: Input node from the graph
+    :param out_channels: Number of output channels
+    :param normalization:  Name of the normalization layer
+    :param mode: Estimator's execution mode
+    :return: Output from the downsample block
+    """
+    inputs = convolution(inputs, out_channels=out_channels, normalization=normalization, mode=mode, stride=2)
+    return convolution(inputs, out_channels=out_channels, normalization=normalization, mode=mode)
 
 
-def output_layer(x, out_channels, activation):
-    x = tf.keras.layers.Conv3D(out_channels,
-                               kernel_size=3,
-                               activation=None,
-                               padding='same',
-                               kernel_regularizer=None,
-                               kernel_initializer=tf.glorot_uniform_initializer(),
-                               bias_initializer=tf.zeros_initializer(),
-                               bias_regularizer=None)(x)
-    return _activation(x, activation)
+def output_layer(inputs, out_channels, activation):
+    """ Create the output layer
+
+    :param inputs: Input node from the graph
+    :param out_channels: Number of output channels
+    :param activation:  Name of the activation layer
+    :return: Output from the output block
+    """
+    return convolution(inputs, out_channels=out_channels, kernel_size=3, normalization='none', activation=activation)

@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,11 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+""" Parsing of results"""
 import os
 import argparse
 
 
 def parse_convergence_results(path, environment):
+    """ Parse convergence results utility
+
+    :param path: Path to results
+    :param environment: System environment
+    """
     whole_tumor = []
     tumor_core = []
     peritumoral_edema = []
@@ -26,8 +32,8 @@ def parse_convergence_results(path, environment):
     if not logfiles:
         raise FileNotFoundError("No logfile found at {}".format(path))
     for logfile in logfiles:
-        with open(os.path.join(path, logfile), "r") as f:
-            content = f.readlines()
+        with open(os.path.join(path, logfile), "r") as file_item:
+            content = file_item.readlines()
         if "TumorCore" not in content[-1]:
             print("Evaluation score not found. The file", logfile, "might be corrupted.")
             continue
