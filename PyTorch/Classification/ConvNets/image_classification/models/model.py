@@ -39,14 +39,28 @@ class Model:
     checkpoint_url: Optional[str] = None
 
 
+def torchhub_docstring(name: str):
+    return f"""Constructs a {name} model.
+    For detailed information on model input and output, training recipies, inference and performance
+    visit: github.com/NVIDIA/DeepLearningExamples and/or ngc.nvidia.com
+    Args:
+        pretrained (bool, True): If True, returns a model pretrained on IMAGENET dataset.
+    """
+
 class EntryPoint:
+    @staticmethod
+    def create(name: str, model: Model):
+        ep = EntryPoint(name, model)
+        ep.__doc__ = torchhub_docstring(name)
+        return ep
+
     def __init__(self, name: str, model: Model):
         self.name = name
         self.model = model
 
     def __call__(
         self,
-        pretrained=False,
+        pretrained=True,
         pretrained_from_file=None,
         state_dict_key_map_fn=None,
         **kwargs,
@@ -60,7 +74,9 @@ class EntryPoint:
         if pretrained:
             assert self.model.checkpoint_url is not None
             state_dict = torch.hub.load_state_dict_from_url(
-                self.model.checkpoint_url, map_location=torch.device("cpu"), progress=True
+                self.model.checkpoint_url,
+                map_location=torch.device("cpu"),
+                progress=True,
             )
 
         if pretrained_from_file is not None:

@@ -27,18 +27,6 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-def nvidia_resnet50(pretrained=True, **kwargs):
-    """Constructs a ResNet50 model.
-    For detailed information on model input and output, training recipies, inference and performance
-    visit: github.com/NVIDIA/DeepLearningExamples and/or ngc.nvidia.com
-    Args:
-        pretrained (bool, True): If True, returns a model pretrained on IMAGENET dataset.
-    """
-
-    from . import resnet50
-
-    return resnet50(pretrained=pretrained)
-
 def nvidia_efficientnet(type='efficient-b0', pretrained=True, **kwargs):
     """Constructs a EfficientNet model.
     For detailed information on model input and output, training recipies, inference and performance
@@ -51,17 +39,6 @@ def nvidia_efficientnet(type='efficient-b0', pretrained=True, **kwargs):
 
     return _ce(type)(pretrained=pretrained, **kwargs)
 
-def nvidia_resneXt(pretrained=True, **kwargs):
-    """Constructs a ResNeXt model.
-    For detailed information on model input and output, training recipies, inference and performance
-    visit: github.com/NVIDIA/DeepLearningExamples and/or ngc.nvidia.com
-    Args:
-        pretrained (bool, True): If True, returns a model pretrained on IMAGENET dataset.
-    """
-
-    from . import resnext101_32x4d
-
-    return resnext101_32x4d(pretrained=pretrained)
 
 def nvidia_convnets_processing_utils():
     import numpy as np

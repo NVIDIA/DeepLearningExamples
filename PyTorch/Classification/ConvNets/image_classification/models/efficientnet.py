@@ -573,7 +573,7 @@ architectures = {
 
 # }}}
 
-_ce = lambda n: EntryPoint(n, architectures[n])
+_ce = lambda n: EntryPoint.create(n, architectures[n])
 efficientnet_b0 = _ce("efficientnet-b0")
 efficientnet_b4 = _ce("efficientnet-b4")
 

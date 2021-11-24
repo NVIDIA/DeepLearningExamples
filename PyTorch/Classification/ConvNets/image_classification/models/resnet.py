@@ -450,7 +450,7 @@ __models: Dict[str, Model] = {
     ),
 }
 
-_ce = lambda n: EntryPoint(n, __models[n])
+_ce = lambda n: EntryPoint.create(n, __models[n])
 resnet50 = _ce("resnet50")
 resnext101_32x4d = _ce("resnext101-32x4d")
 se_resnext101_32x4d = _ce("se-resnext101-32x4d")
