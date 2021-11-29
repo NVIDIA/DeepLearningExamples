@@ -69,11 +69,11 @@ The following figure shows the architecture of the 3D U-Net model and its differ
 
 All convolution blocks in U-Net in both encoder and decoder are using two convolution layers followed by instance normalization and a leaky ReLU nonlinearity. For downsampling we are using stride convolution whereas transposed convolution for upsampling.
 
-All models were trained with Adam optimizer, learning rate 0.0008 and weight decay 0.0001. For loss function we use the average of [cross-entropy](https://en.wikipedia.org/wiki/Cross_entropy) and [dice coefficient](https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient).
+All models were trained with Adam optimizer. For loss function we use the average of [cross-entropy](https://en.wikipedia.org/wiki/Cross_entropy) and [dice coefficient](https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient).
 
 Early stopping is triggered if validation dice score wasn't improved during the last 100 epochs.
 
-Used data augmentation: crop with oversampling the foreground class, mirroring, zoom, Gaussian noise, Gaussian blur, brightness.
+Used data augmentation: crop with oversampling the foreground class, mirroring, zoom, Gaussian noise, Gaussian blur, brightness, contrast.
 
 ### Feature support matrix
 
@@ -142,7 +142,7 @@ The following section lists the requirements that you need to meet in order to s
 
 This repository contains Dockerfile which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 -   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
--   PyTorch 21.02 NGC container
+-   PyTorch 21.11 NGC container
 -   Supported GPUs:
     - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
     - [NVIDIA Turing architecture](https://www.nvidia.com/en-us/geforce/turing/)
@@ -272,28 +272,27 @@ The `data_loading` folder contains information about the data pipeline used by n
 * `data_module.py`: Defines `LightningDataModule` used by PyTorch Lightning.
 * `dali_loader.py`: Implements DALI data loader.
     
-The `models` folder contains information about the building blocks of nnU-Net and the way they are assembled. Its contents are:
+The `nnunet` folder contains information about the building blocks of nnU-Net and the way they are assembled. Its contents are:
     
-* `layers.py`: Implements convolution blocks used by U-Net template.
 * `metrics.py`: Implements dice metric
 * `loss.py`: Implements loss function.
 * `nn_unet.py`: Implements training/validation/test logic and dynamic creation of U-Net architecture used by nnU-Net.
-* `unet.py`: Implements the U-Net template.
     
 The `utils` folder includes:
 
-* `utils.py`: Defines some utility functions e.g. parser initialization.
+* `args.py`: Defines command line arguments.
+* `utils.py`: Defines utility functions.
 * `logger.py`: Defines logging callback for performance benchmarking.
 
 The `notebooks` folder includes:
 
-* `custom_dataset.ipynb`: Shows instructions how to use nnU-Net for custom dataset.
+* `BraTS21.ipynb`: Notebook with our solution for BraTS21 challenge.
+* `custom_dataset.ipynb`: Notebook which demonstrates how to use nnU-Net with custom dataset.
 
 Other folders included in the root directory are:
 
 * `images/`: Contains a model diagram.
 * `scripts/`: Provides scripts for training, benchmarking and inference of nnU-Net.
-
 
 ### Command-line options
 
@@ -304,7 +303,7 @@ To see the full list of available options and their descriptions, use the `-h` o
 The following example output is printed when running the model:
 
 ```
-usage: main.py [-h] [--exec_mode {train,evaluate,predict}] [--data DATA] [--results RESULTS] [--logname LOGNAME] [--task TASK] [--gpus GPUS] [--learning_rate LEARNING_RATE] [--gradient_clip_val GRADIENT_CLIP_VAL] [--negative_slope NEGATIVE_SLOPE] [--tta] [--amp] [--benchmark] [--residual] [--focal] [--sync_batchnorm] [--save_ckpt] [--nfolds NFOLDS] [--seed SEED] [--skip_first_n_eval SKIP_FIRST_N_EVAL] [--ckpt_path CKPT_PATH] [--fold FOLD] [--patience PATIENCE] [--lr_patience LR_PATIENCE] [--batch_size BATCH_SIZE] [--val_batch_size VAL_BATCH_SIZE] [--steps STEPS [STEPS ...]] [--profile] [--momentum MOMENTUM] [--weight_decay WEIGHT_DECAY]  [--save_preds] [--dim {2,3}] [--resume_training] [--factor FACTOR] [--num_workers NUM_WORKERS] [--min_epochs MIN_EPOCHS] [--max_epochs MAX_EPOCHS] [--warmup WARMUP] [--norm {instance,batch,group}] [--nvol NVOL] [--data2d_dim {2,3}] [--oversampling OVERSAMPLING] [--overlap OVERLAP] [--affinity {socket,single,single_unique,socket_unique_interleaved,socket_unique_continuous,disabled}] [--scheduler {none,multistep,cosine,plateau}] [--optimizer {sgd,adam}] [--blend {gaussian,constant}] [--train_batches TRAIN_BATCHES] [--test_batches TEST_BATCHES]
+usage: main.py [-h] [--exec_mode {train,evaluate,predict}] [--data DATA] [--results RESULTS] [--logname LOGNAME] [--task TASK] [--gpus GPUS] [--learning_rate LEARNING_RATE] [--gradient_clip_val GRADIENT_CLIP_VAL] [--negative_slope NEGATIVE_SLOPE] [--tta] [--brats] [--deep_supervision] [--more_chn] [--invert_resampled_y] [--amp] [--benchmark] [--focal] [--sync_batchnorm] [--save_ckpt] [--nfolds NFOLDS] [--seed SEED] [--skip_first_n_eval SKIP_FIRST_N_EVAL] [--ckpt_path CKPT_PATH] [--fold FOLD] [--patience PATIENCE] [--batch_size BATCH_SIZE] [--val_batch_size VAL_BATCH_SIZE] [--profile] [--momentum MOMENTUM] [--weight_decay WEIGHT_DECAY] [--save_preds] [--dim {2,3}] [--resume_training] [--num_workers NUM_WORKERS] [--epochs EPOCHS] [--warmup WARMUP] [--norm {instance,batch,group}] [--nvol NVOL] [--depth DEPTH] [--min_fmap MIN_FMAP] [--deep_supr_num DEEP_SUPR_NUM] [--res_block] [--filters FILTERS [FILTERS ...]] [--data2d_dim {2,3}] [--oversampling OVERSAMPLING] [--overlap OVERLAP] [--affinity {socket,single_single,single_single_unique,socket_unique_interleaved,socket_unique_continuous,disabled}] [--scheduler] [--optimizer {sgd,adam}] [--blend {gaussian,constant}] [--train_batches TRAIN_BATCHES] [--test_batches TEST_BATCHES]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -316,15 +315,18 @@ optional arguments:
   --task TASK           Task number. MSD uses numbers 01-10 (default: None)
   --gpus GPUS           Number of gpus (default: 1)
   --learning_rate LEARNING_RATE
-                        Learning rate (default: 0.001)
+                        Learning rate (default: 0.0008)
   --gradient_clip_val GRADIENT_CLIP_VAL
                         Gradient clipping norm value (default: 0)
   --negative_slope NEGATIVE_SLOPE
                         Negative slope for LeakyReLU (default: 0.01)
   --tta                 Enable test time augmentation (default: False)
+  --brats               Enable BraTS specific training and inference (default: False)
+  --deep_supervision    Enable deep supervision (default: False)
+  --more_chn            Create encoder with more channels (default: False)
+  --invert_resampled_y  Resize predictions to match label size before resampling (default: False)
   --amp                 Enable automatic mixed precision (default: False)
   --benchmark           Run model benchmarking (default: False)
-  --residual            Enable residual block in encoder (default: False)
   --focal               Use focal loss instead of cross entropy (default: False)
   --sync_batchnorm      Enable synchronized batchnorm (default: False)
   --save_ckpt           Enable saving checkpoint (default: False)
@@ -336,14 +338,10 @@ optional arguments:
                         Path to checkpoint (default: None)
   --fold FOLD           Fold number (default: 0)
   --patience PATIENCE   Early stopping patience (default: 100)
-  --lr_patience LR_PATIENCE
-                        Patience for ReduceLROnPlateau scheduler (default: 70)
   --batch_size BATCH_SIZE
                         Batch size (default: 2)
   --val_batch_size VAL_BATCH_SIZE
                         Validation batch size (default: 4)
-  --steps STEPS [STEPS ...]
-                        Steps for multistep scheduler (default: None)
   --profile             Run dlprof profiling (default: False)
   --momentum MOMENTUM   Momentum factor (default: 0.99)
   --weight_decay WEIGHT_DECAY
@@ -351,25 +349,27 @@ optional arguments:
   --save_preds          Enable prediction saving (default: False)
   --dim {2,3}           UNet dimension (default: 3)
   --resume_training     Resume training from the last checkpoint (default: False)
-  --factor FACTOR       Scheduler factor (default: 0.3)
   --num_workers NUM_WORKERS
                         Number of subprocesses to use for data loading (default: 8)
-  --min_epochs MIN_EPOCHS
-                        Force training for at least these many epochs (default: 30)
-  --max_epochs MAX_EPOCHS
-                        Stop training after this number of epochs (default: 10000)
+  --epochs EPOCHS       Number of training epochs (default: 1000)
   --warmup WARMUP       Warmup iterations before collecting statistics (default: 5)
   --norm {instance,batch,group}
                         Normalization layer (default: instance)
-  --nvol NVOL           Number of volumes which come into single batch size for 2D model (default: 1)
+  --nvol NVOL           Number of volumes which come into single batch size for 2D model (default: 4)
+  --depth DEPTH         The depth of the encoder (default: 5)
+  --min_fmap MIN_FMAP   Minimal dimension of feature map in the bottleneck (default: 4)
+  --deep_supr_num DEEP_SUPR_NUM
+                        Number of deep supervision heads (default: 2)
+  --res_block           Enable residual blocks (default: False)
+  --filters FILTERS [FILTERS ...]
+                        [Optional] Set U-Net filters (default: None)
   --data2d_dim {2,3}    Input data dimension for 2d model (default: 3)
   --oversampling OVERSAMPLING
-                        Probability of crop to have some region with positive label (default: 0.33)
+                        Probability of crop to have some region with positive label (default: 0.4)
   --overlap OVERLAP     Amount of overlap between scans during sliding window inference (default: 0.5)
-  --affinity {socket,single,single_unique,socket_unique_interleaved,socket_unique_continuous,disabled}
-                        type of CPU affinity (default: socket_unique_interleaved)
-  --scheduler {none,multistep,cosine,plateau}
-                        Learning rate scheduler (default: none)
+  --affinity {socket,single_single,single_single_unique,socket_unique_interleaved,socket_unique_continuous,disabled}
+                        type of CPU affinity (default: socket_unique_contiguous)
+  --scheduler           Enable cosine rate scheduler with warmup (default: False)
   --optimizer {sgd,adam}
                         Optimizer (default: adam)
   --blend {gaussian,constant}
@@ -502,26 +502,25 @@ The following sections provide details on how to achieve the same performance an
 
 ##### Training accuracy: NVIDIA DGX A100 (8x A100 80G)
 
-Our results were obtained by running the `python scripts/train.py --gpus {1,8} --fold {0,1,2,3,4} --dim {2,3} [--amp]` training scripts and averaging results in the PyTorch 21.02 NGC container on NVIDIA DGX with (8x A100 80G) GPUs.
+Our results were obtained by running the `python scripts/train.py --gpus {1,8} --fold {0,1,2,3,4} --dim {2,3} [--amp]` training scripts and averaging results in the PyTorch 21.11 NGC container on NVIDIA DGX with (8x A100 80G) GPUs.
 
-| Dimension | GPUs | Batch size / GPU  | Accuracy - mixed precision | Accuracy - FP32 | Time to train - mixed precision | Time to train - TF32|  Time to train speedup (TF32 to mixed precision)        
+| Dimension | GPUs | Batch size / GPU  | Accuracy - mixed precision | Accuracy - TF32 | Time to train - mixed precision | Time to train - TF32|  Time to train speedup (TF32 to mixed precision)        
 |:-:|:-:|:--:|:-----:|:-----:|:-----:|:-----:|:----:|
-| 2 | 1 | 64 | 73.002 | 73.390 | 98 min  | 150 min | 1.536 |
-| 2 | 8 | 64 | 72.916 | 73.054 | 17 min  | 23 min  | 1.295 |
-| 3 | 1 | 2  | 74.408 | 74.402 | 118 min | 221 min | 1.869 |
-| 3 | 8 | 2  | 74.350 | 74.292 | 27 min  | 46 min  | 1.775 |
-
+| 2 | 1 | 2  | 73.21 | 73.11 | 33 min| 48 min| 1.46 |
+| 2 | 8 | 2  | 73.15 | 73.16 |  9 min| 13 min| 1.44 |
+| 3 | 1 | 2  | 74.35 | 74.34 |104 min|167 min| 1.61 |
+| 3 | 8 | 2  | 74.30 | 74.32 |  23min| 36 min| 1.57 |
 
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 16G)
 
-Our results were obtained by running the `python scripts/train.py --gpus {1,8} --fold {0,1,2,3,4} --dim {2,3} [--amp]` training scripts and averaging results in the PyTorch 21.02 NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs.
+Our results were obtained by running the `python scripts/train.py --gpus {1,8} --fold {0,1,2,3,4} --dim {2,3} [--amp]` training scripts and averaging results in the PyTorch 21.11 NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs.
 
 | Dimension | GPUs | Batch size / GPU | Accuracy - mixed precision |  Accuracy - FP32 |  Time to train - mixed precision | Time to train - FP32  | Time to train speedup (FP32 to mixed precision)        
 |:-:|:-:|:--:|:-----:|:-----:|:-----:|:-----:|:----:|
-| 2 | 1 | 64 | 73.316 | 73.200 | 175 min | 342 min | 1.952 |
-| 2 | 8 | 64 | 72.886 | 72.954 | 43 min  | 52 min  | 1.230 |
-| 3 | 1 | 2  | 74.378 | 74.324 | 228 min | 667 min | 2.935 |
-| 3 | 8 | 2  | 74.29  | 74.378 | 62 min  | 141 min | 2.301 |
+| 2 | 1 | 2  | 73.18 | 73.22 | 60 min|114 min| 1.90 |
+| 2 | 8 | 2  | 73.15 | 73.18 | 13 min| 19 min| 1.46 |
+| 3 | 1 | 2  | 74.31 | 74.33 |201 min|680 min| 3.38 |
+| 3 | 8 | 2  | 74.35 | 74.39 | 41 min|153 min| 3.73 |
 
 #### Training performance results
 
@@ -531,38 +530,35 @@ Our results were obtained by running the `python scripts/benchmark.py --mode tra
 
 | Dimension | GPUs | Batch size / GPU  | Throughput - mixed precision [img/s] | Throughput - TF32 [img/s] | Throughput speedup (TF32 - mixed precision) | Weak scaling - mixed precision | Weak scaling - TF32 |
 |:-:|:-:|:--:|:------:|:------:|:-----:|:-----:|:-----:|
-| 2 | 1 | 64 | 1064.46 | 678.86 | 1.568 | N/A | N/A |
-| 2 | 1 | 128 | 1129.09 | 710.09 | 1.59 | N/A | N/A |
-| 2 | 8 | 64 | 6477.99 | 4780.3 | 1.355 | 6.086 | 7.042 |
-| 2 | 8 | 128 | 8163.67 | 5342.49 | 1.528 | 7.23 | 7.524 |
-| 3 | 1 | 1 | 13.39 | 8.46 | 1.583 | N/A | N/A |
-| 3 | 1 | 2 | 15.97 | 9.52 | 1.678 | N/A | N/A |
-| 3 | 1 | 4 | 17.84 | 5.16 | 3.457 | N/A | N/A |
-| 3 | 8 | 1 | 92.93 | 61.68 | 1.507 | 6.94 | 7.291 |
-| 3 | 8 | 2 | 113.51 | 72.23 | 1.572 | 7.108 | 7.587 |
-| 3 | 8 | 4 | 129.91 | 38.26 | 3.395 | 7.282 | 7.415 |
-
+| 2 | 1 | 64 | 1129.48 | 702.82 | 1.607 | N/A | N/A |
+| 2 | 1 | 128 | 1234.69 | 741.01 | 1.666 | N/A | N/A |
+| 2 | 8 | 64 | 7015.45 | 4613.27 | 1.521 | 6.211 | 6.564 |
+| 2 | 8 | 128 | 8293.61 | 5498.78 | 1.508 | 6.717 | 7.421 |
+| 3 | 1 | 1 | 13.92 | 9.22 | 1.509 | N/A | N/A |
+| 3 | 1 | 2 | 17.68 | 10.72 | 1.649 | N/A | N/A |
+| 3 | 1 | 4 | 20.56 | 11.5 | 1.787 | N/A | N/A |
+| 3 | 8 | 1 | 92.97 | 61.68 | 1.416 | 6.679 | 7.119 |
+| 3 | 8 | 2 | 114.47 | 72.23 | 1.475 | 6.475 | 7.242 |
+| 3 | 8 | 4 | 140.55 | 85.53 | 1.643 | 6.836 | 7.437 |
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
-
 ##### Training performance: NVIDIA DGX-1 (8x V100 16G)
 
-Our results were obtained by running the `python scripts/benchmark.py --mode train --gpus {1,8} --dim {2,3} --batch_size <bsize> [--amp]` training script in the PyTorch 21.02 NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs. Performance numbers (in volumes per second) were averaged over an entire training epoch.
+Our results were obtained by running the `python scripts/benchmark.py --mode train --gpus {1,8} --dim {2,3} --batch_size <bsize> [--amp]` training script in the PyTorch 21.11 NGC container on NVIDIA DGX-1 with (8x V100 16G) GPUs. Performance numbers (in volumes per second) were averaged over an entire training epoch.
 
 | Dimension | GPUs | Batch size / GPU | Throughput - mixed precision [img/s] | Throughput - FP32 [img/s] | Throughput speedup (FP32 - mixed precision) | Weak scaling - mixed precision | Weak scaling - FP32 |
 |:-:|:-:|:---:|:---------:|:-----------:|:--------:|:---------:|:-------------:|
-| 2 | 1 | 64 | 575.11 | 277.93 | 2.069 | N/A | N/A |
-| 2 | 1 | 128 | 612.32 | 268.28 | 2.282 | N/A | N/A |
-| 2 | 8 | 64 | 4178.94 | 2149.46 | 1.944 | 7.266 | 7.734 |
-| 2 | 8 | 128 | 4629.01 | 2087.25 | 2.218 | 7.56 | 7.78 |
-| 3 | 1 | 1 | 7.68 | 2.11 | 3.64 | N/A | N/A |
-| 3 | 1 | 2 | 8.27 | 2.49 | 3.321 | N/A | N/A |
-| 3 | 1 | 4 | 8.5 | OOM | N/A | N/A | N/A |
-| 3 | 8 | 1 | 56.4 | 16.42 | 3.435 | 7.344 | 7.782 |
-| 3 | 8 | 2 | 62.46 | 19.46 | 3.21 | 7.553 | 7.815 |
-| 3 | 8 | 4 | 64.46 | OOM | N/A | 7.584 | N/A |
-
+| 2 | 1 | 64 | 607.16 | 298.84 | 2.032 | N/A | N/A |
+| 2 | 1 | 128 | 653.44 | 307.01 | 2.128 | N/A | N/A |
+| 2 | 8 | 64 | 4058.79 | 2196.05 | 1.848 | 6.685 | 7.349 |
+| 2 | 8 | 128 | 4649.37 | 2388.46 | 1.848 | 7.115 | 7.779 |
+| 3 | 1 | 1 | 8.66 | 1.99 | 4.352 | N/A | N/A |
+| 3 | 1 | 2 | 9.65 | 2.07 | 4.662 | N/A | N/A |
+| 3 | 1 | 4 | 9.99 | OOM | N/A | N/A | N/A |
+| 3 | 8 | 1 | 58.45 | 15.55 | 3.756 | 6.749 | 7.819 |
+| 3 | 8 | 2 | 66.03 | 16.22 | 4.071 | 6.842 | 7.835 |
+| 3 | 8 | 4 | 67.37 | OOM | N/A | 6.743 | N/A |
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -570,29 +566,27 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 ##### Inference performance: NVIDIA DGX A100 (1x A100 80G)
 
-Our results were obtained by running the `python scripts/benchmark.py --mode predict --dim {2,3} --batch_size <bsize> [--amp]` inferencing benchmarking script in the PyTorch 21.02 NGC container on NVIDIA DGX A100 (1x A100 80G) GPU.
-
+Our results were obtained by running the `python scripts/benchmark.py --mode predict --dim {2,3} --batch_size <bsize> [--amp]` inferencing benchmarking script in the PyTorch 21.11 NGC container on NVIDIA DGX A100 (1x A100 80G) GPU.
 
 FP16
 
 | Dimension | Batch size |  Resolution  | Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
 |:----------:|:---------:|:-------------:|:----------------------:|:----------------:|:----------------:|:----------------:|:----------------:|
-| 2 | 64 | 4x192x160 | 3198.8 | 20.01 | 24.1 | 30.5 | 33.75 |
-| 2 | 128 | 4x192x160 | 3587.89 | 35.68 | 36.0 | 36.08 | 36.16 |
-| 3 | 1 | 4x128x128x128 | 47.16 | 21.21 | 21.56 | 21.7 | 22.5 |
-| 3 | 2 | 4x128x128x128 | 47.59 | 42.02 | 53.9 | 56.97 | 77.3 |
-| 3 | 4 | 4x128x128x128 | 53.98 | 74.1 | 91.18 | 106.13 | 143.18 |
-
+| 2 | 64 | 4x192x160 | 3211.23 | 19.93 | 20.24 | 20.38 | 20.84 |
+| 2 | 128 | 4x192x160 | 3465.45 | 36.94 | 38.35 | 38.72 | 38.95 |
+| 3 | 1 | 4x128x128x128 | 41.93 | 23.85 | 24.40 | 24.61 | 24.99 |
+| 3 | 2 | 4x128x128x128 | 44.24 | 45.21 | 47.08 | 47.38 | 48.24 |
+| 3 | 4 | 4x128x128x128 | 45.81 | 87.31 | 88.13 | 88.56 | 89.69 |
 
 TF32
 
 | Dimension | Batch size |  Resolution  | Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
 |:----------:|:---------:|:-------------:|:----------------------:|:----------------:|:----------------:|:----------------:|:----------------:|
-| 2 | 64 | 4x192x160 | 2353.27 | 27.2 | 27.43 | 27.53 | 27.7 |
-| 2 | 128 | 4x192x160 | 2492.78 | 51.35 | 51.54 | 51.59 | 51.73 |
-| 3 | 1 | 4x128x128x128 | 34.33 | 29.13 | 29.41 | 29.52 | 29.67 |
-| 3 | 2 | 4x128x128x128 | 37.29 | 53.63 | 52.41 | 60.12 | 84.92 |
-| 3 | 4 | 4x128x128x128 | 22.98 | 174.09 | 173.02 | 196.04 | 231.03 |
+| 2 | 64 | 4x192x160 | 2172.38 | 29.46 | 29.94 | 30.03 | 30.19 |
+| 2 | 128 | 4x192x160 | 1769.56 | 72.34 | 72.84 | 73.04 | 74.79 |
+| 3 | 1 | 4x128x128x128 | 23.83 | 41.97 | 42.71 | 42.76 | 42.87 |
+| 3 | 2 | 4x128x128x128 | 26.75 | 74.77 | 75.79 | 76.06 | 77.04 |
+| 3 | 4 | 4x128x128x128 | 27.10 | 147.62 | 147.81 | 149.14 | 190.08 |
 
 
 Throughput is reported in images per second. Latency is reported in milliseconds per batch.
@@ -601,27 +595,27 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 ##### Inference performance: NVIDIA DGX-1 (1x V100 16G)
 
-Our results were obtained by running the `python scripts/benchmark.py --mode predict --dim {2,3} --batch_size <bsize> [--amp]` inferencing benchmarking script in the PyTorch 21.02 NGC container on NVIDIA DGX-1 with (1x V100 16G) GPU.
+Our results were obtained by running the `python scripts/benchmark.py --mode predict --dim {2,3} --batch_size <bsize> [--amp]` inferencing benchmarking script in the PyTorch 21.11 NGC container on NVIDIA DGX-1 with (1x V100 16G) GPU.
 
 FP16
  
 | Dimension | Batch size |Resolution| Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
 |:----------:|:---------:|:-------------:|:----------------------:|:----------------:|:----------------:|:----------------:|:----------------:|
-| 2 | 64 | 4x192x160 | 1866.52 | 34.29 | 34.7 | 48.87 | 52.44 |
-| 2 | 128 | 4x192x160 | 2032.74 | 62.97 | 63.21 | 63.25 | 63.32 |
-| 3 | 1 | 4x128x128x128 | 27.52 | 36.33 | 37.03 | 37.25 | 37.71 |
-| 3 | 2 | 4x128x128x128 | 29.04 | 68.87 | 68.09 | 76.48 | 112.4 |
-| 3 | 4 | 4x128x128x128 | 30.23 | 132.33 | 131.59 | 165.57 | 191.64 |
+| 2 | 64 | 4x192x160 | 1809.79 | 35.36 | 35.75 | 35.84 | 36.21 |
+| 2 | 128 | 4x192x160 | 1987.91 | 64.39 | 64.79 | 64.87 | 65.01 |
+| 3 | 1 | 4x128x128x128 | 26.75 | 37.38 | 37.66 | 37.74 | 38.17 |
+| 3 | 2 | 4x128x128x128 | 23.28 | 85.91 | 86.77 | 87.39 | 89.54 |
+| 3 | 4 | 4x128x128x128 | 23.83 | 167.83 | 169.41 | 170.30 | 173.47 |
 
 FP32
  
 | Dimension | Batch size |Resolution| Throughput Avg [img/s] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
 |:----------:|:---------:|:-------------:|:----------------------:|:----------------:|:----------------:|:----------------:|:----------------:|
-| 2 | 64 | 4x192x160 | 1051.46 | 60.87 | 61.21 | 61.48 | 62.87 |
-| 2 | 128 | 4x192x160 | 1051.68 | 121.71 | 122.29 | 122.44 | 122.6 |
-| 3 | 1 | 4x128x128x128 | 9.87 | 101.34 | 102.33 | 102.52 | 102.86 |
-| 3 | 2 | 4x128x128x128 | 9.91 | 201.91 | 202.36 | 202.77 | 240.45 |
-| 3 | 4 | 4x128x128x128 | 10.0 | 399.91 | 400.94 | 430.72 | 466.62 |
+| 2 | 64 | 4x192x160 | 1007.91 | 63.50 | 63.93 | 64.03 | 64.19 |
+| 2 | 128 | 4x192x160 | 812.08 | 157.62 | 159.02 | 159.72 | 161.24 |
+| 3 | 1 | 4x128x128x128 | 8.23 | 121.45 | 122.84 | 123.93 | 124.69 |
+| 3 | 2 | 4x128x128x128 | 8.42 | 237.65 | 239.90 | 240.60 | 242.85 |
+| 3 | 4 | 4x128x128x128 | 8.37 | 478.01 | 482.70 | 483.43 | 484.84 |
 
 
 Throughput is reported in images per second. Latency is reported in milliseconds per batch.
@@ -631,10 +625,17 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 ### Changelog
 
+December 2021
+- Container updated to 21.11
+- Use MONAI DynUNet instead of custom U-Net implementation
+- Add balanced multi-gpu evaluation
+- Support for evaluation with resampled volumes to original shape
+
 October 2021
 - Add Jupyter Notebook with BraTS solution
 
 May 2021
+
 - Add Triton Inference Server support
 - Removed deep supervision, attention and drop block
 

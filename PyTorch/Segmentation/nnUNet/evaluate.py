@@ -26,10 +26,10 @@ parser.add_argument("--lbls", type=str, required=True, help="Path to labels")
 
 
 def get_stats(pred, targ, class_idx):
-    tp_ = np.logical_and(pred == class_idx, targ == class_idx).sum()
-    fn_ = np.logical_and(pred != class_idx, targ == class_idx).sum()
-    fp_ = np.logical_and(pred == class_idx, targ != class_idx).sum()
-    return tp_, fn_, fp_
+    tp = np.logical_and(pred == class_idx, targ == class_idx).sum()
+    fn = np.logical_and(pred != class_idx, targ == class_idx).sum()
+    fp = np.logical_and(pred == class_idx, targ != class_idx).sum()
+    return tp, fn, fp
 
 
 if __name__ == "__main__":

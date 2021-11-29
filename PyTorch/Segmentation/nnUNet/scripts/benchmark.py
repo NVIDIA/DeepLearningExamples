@@ -15,7 +15,7 @@
 import os
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from os.path import dirname
-from subprocess import call
+from subprocess import run
 
 parser = ArgumentParser(ArgumentDefaultsHelpFormatter)
 parser.add_argument("--mode", type=str, required=True, choices=["train", "predict"], help="Benchmarking mode")
@@ -50,4 +50,4 @@ if __name__ == "__main__":
         cmd += f"--batch_size {args.batch_size} "
     else:
         cmd += f"--val_batch_size {args.batch_size} "
-    call(cmd, shell=True)
+    run(cmd, shell=True)

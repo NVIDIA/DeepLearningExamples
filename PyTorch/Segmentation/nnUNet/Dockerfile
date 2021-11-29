@@ -1,11 +1,10 @@
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.02-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.11-py3
 FROM ${FROM_IMAGE_NAME} 
 
-ADD ./requirements.txt /
-RUN pip install --disable-pip-version-check -r /requirements.txt
-RUN pip install monai==0.7.0 --no-dependencies
-RUN pip install numpy --upgrade
-RUN pip install --extra-index-url https://developer.download.nvidia.com/compute/redist/ nvidia-dali-cuda110==1.5.0
+RUN pip install nvidia-pyindex
+ADD ./requirements.txt .
+RUN pip install --disable-pip-version-check -r requirements.txt
+RUN pip install monai==0.8.0 --no-dependencies
 
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 RUN unzip -qq awscliv2.zip

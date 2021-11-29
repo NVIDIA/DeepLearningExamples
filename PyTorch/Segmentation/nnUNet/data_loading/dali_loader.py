@@ -14,6 +14,8 @@
 
 import itertools
 import os
+from functools import partial
+from multiprocessing import Pool
 
 import numpy as np
 import nvidia.dali.fn as fn
@@ -22,122 +24,127 @@ import nvidia.dali.ops as ops
 import nvidia.dali.types as types
 from nvidia.dali.pipeline import Pipeline
 from nvidia.dali.plugin.pytorch import DALIGenericIterator
+from utils.utils import print0
 
 
-def get_numpy_reader(files, shard_id, num_shards, seed, shuffle):
-    return ops.readers.Numpy(
-        seed=seed,
-        files=files,
-        device="cpu",
-        read_ahead=True,
-        shard_id=shard_id,
-        pad_last_batch=True,
-        num_shards=num_shards,
-        dont_use_mmap=True,
-        shuffle_after_epoch=shuffle,
-    )
+def random_augmentation(probability, augmented, original):
+    condition = fn.cast(fn.random.coin_flip(probability=probability), dtype=types.DALIDataType.BOOL)
+    neg_condition = condition ^ True
+    return condition * augmented + neg_condition * original
 
 
-class TrainPipeline(Pipeline):
+class GenericPipeline(Pipeline):
     def __init__(self, batch_size, num_threads, device_id, **kwargs):
-        super(TrainPipeline, self).__init__(batch_size, num_threads, device_id)
+        super().__init__(batch_size, num_threads, device_id)
+        self.kwargs = kwargs
         self.dim = kwargs["dim"]
-        self.internal_seed = kwargs["seed"]
-        self.oversampling = kwargs["oversampling"]
-        self.input_x = get_numpy_reader(
-            num_shards=kwargs["gpus"],
-            files=kwargs["imgs"],
-            seed=kwargs["seed"],
-            shard_id=device_id,
-            shuffle=True,
-        )
-        self.input_y = get_numpy_reader(
-            num_shards=kwargs["gpus"],
-            files=kwargs["lbls"],
-            seed=kwargs["seed"],
-            shard_id=device_id,
-            shuffle=True,
-        )
+        self.device = device_id
         self.patch_size = kwargs["patch_size"]
-        if self.dim == 2:
-            self.patch_size = [kwargs["batch_size_2d"]] + self.patch_size
+        self.load_to_gpu = kwargs["load_to_gpu"]
+        self.input_x = self.get_reader(kwargs["imgs"])
+        self.input_y = self.get_reader(kwargs["lbls"]) if "lbls" in kwargs else None
 
-        self.crop_shape = types.Constant(np.array(self.patch_size), dtype=types.INT64)
-        self.crop_shape_float = types.Constant(np.array(self.patch_size), dtype=types.FLOAT)
+    def get_reader(self, data):
+        return ops.readers.Numpy(
+            files=data,
+            device="cpu",
+            read_ahead=True,
+            dont_use_mmap=True,
+            pad_last_batch=True,
+            shard_id=self.device,
+            seed=self.kwargs["seed"],
+            num_shards=self.kwargs["gpus"],
+            shuffle_after_epoch=self.kwargs["shuffle"],
+        )
 
     def load_data(self):
-        img, lbl = self.input_x(name="ReaderX"), self.input_y(name="ReaderY")
-        img, lbl = fn.reshape(img, layout="CDHW"), fn.reshape(lbl, layout="CDHW")
+        img = self.input_x(name="ReaderX")
+        if self.load_to_gpu:
+            img = img.gpu()
+        img = fn.reshape(img, layout="CDHW")
+        if self.input_y is not None:
+            lbl = self.input_y(name="ReaderY")
+            if self.load_to_gpu:
+                lbl = lbl.gpu()
+            lbl = fn.reshape(lbl, layout="CDHW")
+            return img, lbl
+        return img
+
+    def crop(self, data):
+        return fn.crop(data, crop=self.patch_size, out_of_bounds_policy="pad")
+
+    def crop_fn(self, img, lbl):
+        img, lbl = self.crop(img), self.crop(lbl)
         return img, lbl
 
-    def random_augmentation(self, probability, augmented, original):
-        condition = fn.cast(fn.random.coin_flip(probability=probability), dtype=types.DALIDataType.BOOL)
-        neg_condition = condition ^ True
-        return condition * augmented + neg_condition * original
+    def transpose_fn(self, img, lbl):
+        img, lbl = fn.transpose(img, perm=(1, 0, 2, 3)), fn.transpose(lbl, perm=(1, 0, 2, 3))
+        return img, lbl
+
+
+class TrainPipeline(GenericPipeline):
+    def __init__(self, batch_size, num_threads, device_id, **kwargs):
+        super().__init__(batch_size, num_threads, device_id, **kwargs)
+        self.oversampling = kwargs["oversampling"]
+        self.crop_shape = types.Constant(np.array(self.patch_size), dtype=types.INT64)
+        self.crop_shape_float = types.Constant(np.array(self.patch_size), dtype=types.FLOAT)
 
     @staticmethod
     def slice_fn(img):
         return fn.slice(img, 1, 3, axes=[0])
 
+    def resize(self, data, interp_type):
+        return fn.resize(data, interp_type=interp_type, size=self.crop_shape_float)
+
     def biased_crop_fn(self, img, label):
         roi_start, roi_end = fn.segmentation.random_object_bbox(
             label,
-            format="start_end",
-            foreground_prob=self.oversampling,
-            background=0,
-            seed=self.internal_seed,
             device="cpu",
+            background=0,
+            format="start_end",
             cache_objects=True,
+            foreground_prob=self.oversampling,
         )
-
         anchor = fn.roi_random_crop(label, roi_start=roi_start, roi_end=roi_end, crop_shape=[1, *self.patch_size])
         anchor = fn.slice(anchor, 1, 3, axes=[0])  # drop channels from anchor
         img, label = fn.slice(
             [img, label], anchor, self.crop_shape, axis_names="DHW", out_of_bounds_policy="pad", device="cpu"
         )
-
         return img.gpu(), label.gpu()
 
     def zoom_fn(self, img, lbl):
-        scale = self.random_augmentation(0.15, fn.random.uniform(range=(0.7, 1.0)), 1.0)
+        scale = random_augmentation(0.15, fn.random.uniform(range=(0.7, 1.0)), 1.0)
         d, h, w = [scale * x for x in self.patch_size]
         if self.dim == 2:
             d = self.patch_size[0]
         img, lbl = fn.crop(img, crop_h=h, crop_w=w, crop_d=d), fn.crop(lbl, crop_h=h, crop_w=w, crop_d=d)
-        img = fn.resize(img, interp_type=types.DALIInterpType.INTERP_CUBIC, size=self.crop_shape_float)
-        lbl = fn.resize(lbl, interp_type=types.DALIInterpType.INTERP_NN, size=self.crop_shape_float)
+        img, lbl = self.resize(img, types.DALIInterpType.INTERP_CUBIC), self.resize(lbl, types.DALIInterpType.INTERP_NN)
         return img, lbl
 
     def noise_fn(self, img):
         img_noised = img + fn.random.normal(img, stddev=fn.random.uniform(range=(0.0, 0.33)))
-        return self.random_augmentation(0.15, img_noised, img)
+        return random_augmentation(0.15, img_noised, img)
 
     def blur_fn(self, img):
         img_blurred = fn.gaussian_blur(img, sigma=fn.random.uniform(range=(0.5, 1.5)))
-        return self.random_augmentation(0.15, img_blurred, img)
+        return random_augmentation(0.15, img_blurred, img)
 
     def brightness_fn(self, img):
-        brightness_scale = self.random_augmentation(0.15, fn.random.uniform(range=(0.7, 1.3)), 1.0)
+        brightness_scale = random_augmentation(0.15, fn.random.uniform(range=(0.7, 1.3)), 1.0)
         return img * brightness_scale
 
     def contrast_fn(self, img):
-        min_, max_ = fn.reductions.min(img), fn.reductions.max(img)
-        scale = self.random_augmentation(0.15, fn.random.uniform(range=(0.65, 1.5)), 1.0)
-        img = math.clamp(img * scale, min_, max_)
-        return img
+        scale = random_augmentation(0.15, fn.random.uniform(range=(0.65, 1.5)), 1.0)
+        return math.clamp(img * scale, fn.reductions.min(img), fn.reductions.max(img))
 
     def flips_fn(self, img, lbl):
         kwargs = {
-            "horizontal": fn.random.coin_flip(probability=0.33),
-            "vertical": fn.random.coin_flip(probability=0.33),
+            "horizontal": fn.random.coin_flip(probability=0.5),
+            "vertical": fn.random.coin_flip(probability=0.5),
         }
         if self.dim == 3:
-            kwargs.update({"depthwise": fn.random.coin_flip(probability=0.33)})
+            kwargs.update({"depthwise": fn.random.coin_flip(probability=0.5)})
         return fn.flip(img, **kwargs), fn.flip(lbl, **kwargs)
-
-    def transpose_fn(self, img, lbl):
-        img, lbl = fn.transpose(img, perm=(1, 0, 2, 3)), fn.transpose(lbl, perm=(1, 0, 2, 3))
-        return img, lbl
 
     def define_graph(self):
         img, lbl = self.load_data()
@@ -153,120 +160,47 @@ class TrainPipeline(Pipeline):
         return img, lbl
 
 
-class EvalPipeline(Pipeline):
+class EvalPipeline(GenericPipeline):
     def __init__(self, batch_size, num_threads, device_id, **kwargs):
-        super(EvalPipeline, self).__init__(batch_size, num_threads, device_id)
-        self.input_x = get_numpy_reader(
-            files=kwargs["imgs"],
-            shard_id=0,
-            num_shards=1,
-            seed=kwargs["seed"],
-            shuffle=False,
-        )
-        self.input_y = get_numpy_reader(
-            files=kwargs["lbls"],
-            shard_id=0,
-            num_shards=1,
-            seed=kwargs["seed"],
-            shuffle=False,
-        )
+        super().__init__(batch_size, num_threads, device_id, **kwargs)
+        self.invert_resampled_y = kwargs["invert_resampled_y"]
+        if self.invert_resampled_y:
+            self.input_meta = self.get_reader(kwargs["meta"])
+            self.input_orig_y = self.get_reader(kwargs["orig_lbl"])
 
     def define_graph(self):
-        img, lbl = self.input_x(name="ReaderX").gpu(), self.input_y(name="ReaderY").gpu()
-        img, lbl = fn.reshape(img, layout="CDHW"), fn.reshape(lbl, layout="CDHW")
+        img, lbl = self.load_data()
+        if self.invert_resampled_y:
+            meta = self.input_meta(name="ReaderM")
+            orig_lbl = self.input_orig_y(name="ReaderO")
+            return img, lbl, meta, orig_lbl
         return img, lbl
 
 
-class BermudaPipeline(Pipeline):
+class TritonPipeline(GenericPipeline):
     def __init__(self, batch_size, num_threads, device_id, **kwargs):
-        super(BermudaPipeline, self).__init__(batch_size, num_threads, device_id)
-        self.input_x = get_numpy_reader(
-            files=kwargs["imgs"],
-            shard_id=device_id,
-            num_shards=kwargs["gpus"],
-            seed=kwargs["seed"],
-            shuffle=False,
-        )
-        self.input_y = get_numpy_reader(
-            files=kwargs["lbls"],
-            shard_id=device_id,
-            num_shards=kwargs["gpus"],
-            seed=kwargs["seed"],
-            shuffle=False,
-        )
-        self.patch_size = kwargs["patch_size"]
-
-    def crop_fn(self, img, lbl):
-        img = fn.crop(img, crop=self.patch_size, out_of_bounds_policy="pad")
-        lbl = fn.crop(lbl, crop=self.patch_size, out_of_bounds_policy="pad")
-        return img, lbl
+        super().__init__(batch_size, num_threads, device_id, **kwargs)
 
     def define_graph(self):
-        img, lbl = self.input_x(name="ReaderX"), self.input_y(name="ReaderY")
-        img, lbl = fn.reshape(img, layout="CDHW"), fn.reshape(lbl, layout="CDHW")
+        img, lbl = self.load_data()
         img, lbl = self.crop_fn(img, lbl)
         return img, lbl
 
 
-class TestPipeline(Pipeline):
+class TestPipeline(GenericPipeline):
     def __init__(self, batch_size, num_threads, device_id, **kwargs):
-        super(TestPipeline, self).__init__(batch_size, num_threads, device_id)
-        self.input_x = get_numpy_reader(
-            files=kwargs["imgs"],
-            shard_id=device_id,
-            num_shards=kwargs["gpus"],
-            seed=kwargs["seed"],
-            shuffle=False,
-        )
-        self.input_meta = get_numpy_reader(
-            files=kwargs["meta"],
-            shard_id=device_id,
-            num_shards=kwargs["gpus"],
-            seed=kwargs["seed"],
-            shuffle=False,
-        )
+        super().__init__(batch_size, num_threads, device_id, **kwargs)
+        self.input_meta = self.get_reader(kwargs["meta"])
 
     def define_graph(self):
-        img, meta = self.input_x(name="ReaderX").gpu(), self.input_meta(name="ReaderY").gpu()
-        img = fn.reshape(img, layout="CDHW")
+        img = self.load_data()
+        meta = self.input_meta(name="ReaderM")
         return img, meta
 
 
-class BenchmarkPipeline(Pipeline):
+class BenchmarkPipeline(GenericPipeline):
     def __init__(self, batch_size, num_threads, device_id, **kwargs):
-        super(BenchmarkPipeline, self).__init__(batch_size, num_threads, device_id)
-        self.input_x = get_numpy_reader(
-            files=kwargs["imgs"],
-            shard_id=device_id,
-            seed=kwargs["seed"],
-            num_shards=kwargs["gpus"],
-            shuffle=False,
-        )
-        self.input_y = get_numpy_reader(
-            files=kwargs["lbls"],
-            shard_id=device_id,
-            num_shards=kwargs["gpus"],
-            seed=kwargs["seed"],
-            shuffle=False,
-        )
-        self.dim = kwargs["dim"]
-        self.patch_size = kwargs["patch_size"]
-        if self.dim == 2:
-            self.patch_size = [kwargs["batch_size_2d"]] + self.patch_size
-
-    def load_data(self):
-        img, lbl = self.input_x(name="ReaderX").gpu(), self.input_y(name="ReaderY").gpu()
-        img, lbl = fn.reshape(img, layout="CDHW"), fn.reshape(lbl, layout="CDHW")
-        return img, lbl
-
-    def transpose_fn(self, img, lbl):
-        img, lbl = fn.transpose(img, perm=(1, 0, 2, 3)), fn.transpose(lbl, perm=(1, 0, 2, 3))
-        return img, lbl
-
-    def crop_fn(self, img, lbl):
-        img = fn.crop(img, crop=self.patch_size, out_of_bounds_policy="pad")
-        lbl = fn.crop(lbl, crop=self.patch_size, out_of_bounds_policy="pad")
-        return img, lbl
+        super().__init__(batch_size, num_threads, device_id, **kwargs)
 
     def define_graph(self):
         img, lbl = self.load_data()
@@ -276,74 +210,61 @@ class BenchmarkPipeline(Pipeline):
         return img, lbl
 
 
+PIPELINES = {
+    "train": TrainPipeline,
+    "eval": EvalPipeline,
+    "test": TestPipeline,
+    "benchmark": BenchmarkPipeline,
+    "triton": TritonPipeline,
+}
+
+
 class LightningWrapper(DALIGenericIterator):
     def __init__(self, pipe, **kwargs):
         super().__init__(pipe, **kwargs)
 
     def __next__(self):
-        out = super().__next__()
-        out = out[0]
+        out = super().__next__()[0]
         return out
 
 
 def fetch_dali_loader(imgs, lbls, batch_size, mode, **kwargs):
-    assert len(imgs) > 0, "Got empty list of images"
+    assert len(imgs) > 0, "Empty list of images!"
     if lbls is not None:
-        assert len(imgs) == len(lbls), f"Got {len(imgs)} images but {len(lbls)} lables"
+        assert len(imgs) == len(lbls), f"Number of images ({len(imgs)}) not matching number of labels ({len(lbls)})"
 
     if kwargs["benchmark"]:  # Just to make sure the number of examples is large enough for benchmark run.
-        nbs = kwargs["test_batches"] if mode == "test" else kwargs["train_batches"]
-        if kwargs["dim"] == 3:
-            nbs *= batch_size
-        imgs = list(itertools.chain(*(100 * [imgs])))[: nbs * kwargs["gpus"]]
-        lbls = list(itertools.chain(*(100 * [lbls])))[: nbs * kwargs["gpus"]]
+        batches = kwargs["test_batches"] if mode == "test" else kwargs["train_batches"]
+        examples = batches * batch_size * kwargs["gpus"]
+        imgs = list(itertools.chain(*(100 * [imgs])))[:examples]
+        lbls = list(itertools.chain(*(100 * [lbls])))[:examples]
+        mode = "benchmark"
 
-    if mode == "eval":  # To avoid padding for the multigpu evaluation.
-        rank = int(os.getenv("LOCAL_RANK", "0"))
-        imgs, lbls = np.array_split(imgs, kwargs["gpus"]), np.array_split(lbls, kwargs["gpus"])
-        imgs, lbls = [list(x) for x in imgs], [list(x) for x in lbls]
-        imgs, lbls = imgs[rank], lbls[rank]
+    pipeline = PIPELINES[mode]
+    shuffle = True if mode == "train" else False
+    dynamic_shape = True if mode in ["eval", "test"] else False
+    load_to_gpu = True if mode in ["eval", "test", "benchmark"] else False
+    pipe_kwargs = {"imgs": imgs, "lbls": lbls, "load_to_gpu": load_to_gpu, "shuffle": shuffle, **kwargs}
+    output_map = ["image", "meta"] if mode == "test" else ["image", "label"]
 
-    pipe_kwargs = {
-        "imgs": imgs,
-        "lbls": lbls,
-        "dim": kwargs["dim"],
-        "gpus": kwargs["gpus"],
-        "seed": kwargs["seed"],
-        "meta": kwargs["meta"],
-        "patch_size": kwargs["patch_size"],
-        "oversampling": kwargs["oversampling"],
-    }
+    rank = int(os.getenv("LOCAL_RANK", "0"))
+    if mode == "eval":  # To avoid padding for the multi-gpu evaluation.
+        if kwargs["invert_resampled_y"]:
+            assert len(kwargs["orig_lbl"]) == len(imgs), f"""{len(kwargs["orig_lbl"])}, {len(imgs)}"""
+            output_map.extend(["meta", "orig_lbl"])
+            meta, orig = kwargs["meta"], kwargs["orig_lbl"]
+        else:
+            meta, orig = None, None
+        imgs, lbls, meta, orig = shard_val_data(
+            imgs, lbls, meta, orig, kwargs["gpus"], kwargs["patch_size"], kwargs["overlap"]
+        )
 
-    if kwargs["benchmark"]:
-        pipeline = BenchmarkPipeline
-        output_map = ["image", "label"]
-        dynamic_shape = False
-        if kwargs["dim"] == 2:
-            pipe_kwargs.update({"batch_size_2d": batch_size})
-            batch_size = 1
-    elif mode == "train":
-        pipeline = TrainPipeline
-        output_map = ["image", "label"]
-        dynamic_shape = False
-        if kwargs["dim"] == 2:
-            pipe_kwargs.update({"batch_size_2d": batch_size // kwargs["nvol"]})
-            batch_size = kwargs["nvol"]
-    elif mode == "eval":
-        pipeline = EvalPipeline
-        output_map = ["image", "label"]
-        dynamic_shape = True
-    elif mode == "bermuda":
-        pipeline = BermudaPipeline
-        output_map = ["image", "label"]
-        dynamic_shape = False
-    else:
-        pipeline = TestPipeline
-        output_map = ["image", "meta"]
-        dynamic_shape = True
+    if kwargs["dim"] == 2 and mode in ["train", "benchmark"]:
+        batch_size_2d = batch_size // kwargs["nvol"] if mode == "train" else batch_size
+        batch_size = kwargs["nvol"] if mode == "train" else 1
+        pipe_kwargs.update({"patch_size": [batch_size_2d] + kwargs["patch_size"]})
 
-    device_id = int(os.getenv("LOCAL_RANK", "0"))
-    pipe = pipeline(batch_size, kwargs["num_workers"], device_id, **pipe_kwargs)
+    pipe = pipeline(batch_size, kwargs["num_workers"], rank, **pipe_kwargs)
     return LightningWrapper(
         pipe,
         auto_reset=True,
@@ -351,3 +272,43 @@ def fetch_dali_loader(imgs, lbls, batch_size, mode, **kwargs):
         output_map=output_map,
         dynamic_shape=dynamic_shape,
     )
+
+
+def calculate_inference_cost(img, intervals):
+    shapes = list(np.load(img).shape[1:])
+    cost = np.prod([(s + i - 1) // i for s, i in zip(shapes, intervals)])
+    return cost
+
+
+def shard_val_data(imgs, lbls, meta, orig, gpus, patch_size, overlap):
+    if gpus == 1:
+        return imgs, lbls, meta, orig
+
+    rank = int(os.getenv("LOCAL_RANK", "0"))
+    intervals = [d * overlap for d in patch_size]
+    print0("Balancing evaluation mode...")
+    pool = Pool(processes=8)
+    work = np.array(pool.map(partial(calculate_inference_cost, intervals=intervals), lbls))
+
+    sort_idx = np.argsort(work)[::-1]
+    imgs, lbls = np.array(imgs), np.array(lbls)
+    work = work[sort_idx]
+    imgs, lbls = imgs[sort_idx], lbls[sort_idx]
+    if meta is not None:
+        meta, orig = np.array(meta), np.array(orig)
+        meta, orig = meta[sort_idx], orig[sort_idx]
+
+    imgs_balanced, lbls_balanced, meta_balanced, orig_balanced = ([[]] * gpus,) * 4
+    curr_work_per_shard = np.zeros((gpus,))
+
+    for w_idx, w in enumerate(work):
+        idx = np.argmin(curr_work_per_shard)
+        curr_work_per_shard[idx] += w
+        imgs_balanced[idx].append(imgs[w_idx])
+        lbls_balanced[idx].append(lbls[w_idx])
+        if meta is not None:
+            meta_balanced[idx].append(meta[w_idx])
+            orig_balanced[idx].append(orig[w_idx])
+
+    print0("Done!")
+    return imgs_balanced[rank], lbls_balanced[rank], meta_balanced[rank], orig_balanced[rank]

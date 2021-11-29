@@ -15,7 +15,7 @@
 import os
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from os.path import dirname
-from subprocess import call
+from subprocess import run
 
 parser = ArgumentParser(ArgumentDefaultsHelpFormatter)
 parser.add_argument("--task", type=str, default="01", help="Path to data")
@@ -24,9 +24,12 @@ parser.add_argument("--fold", type=int, required=True, choices=[0, 1, 2, 3, 4], 
 parser.add_argument("--dim", type=int, required=True, choices=[2, 3], help="Dimension of UNet")
 parser.add_argument("--amp", action="store_true", help="Enable automatic mixed precision")
 parser.add_argument("--tta", action="store_true", help="Enable test time augmentation")
+parser.add_argument("--deep_supervision", action="store_true", help="Enable deep supervision loss")
 parser.add_argument("--resume_training", action="store_true", help="Resume training from checkpoint")
 parser.add_argument("--results", type=str, default="/results", help="Path to results directory")
 parser.add_argument("--logname", type=str, default="log", help="Name of dlloger output")
+parser.add_argument("--epochs", type=int, default=600, help="Number of epochs to train")
+parser.add_argument("--learning_rate", type=float, default=8e-4, help="Learning rate")
 
 if __name__ == "__main__":
     args = parser.parse_args()
@@ -39,7 +42,10 @@ if __name__ == "__main__":
     cmd += f"--val_batch_size {4 if args.dim == 3 else 64} "
     cmd += f"--fold {args.fold} "
     cmd += f"--gpus {args.gpus} "
+    cmd += f"--epochs {args.epochs} "
+    cmd += f"--learning_rate {args.learning_rate} "
     cmd += "--amp " if args.amp else ""
     cmd += "--tta " if args.tta else ""
     cmd += "--resume_training " if args.resume_training else ""
-    call(cmd, shell=True)
+    cmd += "--deep_supervision " if args.deep_supervision else ""
+    run(cmd, shell=True)

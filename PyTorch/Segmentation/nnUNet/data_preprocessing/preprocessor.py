@@ -31,10 +31,6 @@ from data_preprocessing.configs import ct_max, ct_mean, ct_min, ct_std, patch_si
 class Preprocessor:
     def __init__(self, args):
         self.args = args
-        self.ct_min = 0
-        self.ct_max = 0
-        self.ct_mean = 0
-        self.ct_std = 0
         self.target_spacing = None
         self.task = args.task
         self.task_code = get_task_code(args)
@@ -46,6 +42,7 @@ class Preprocessor:
         self.metadata = json.load(open(metadata_path, "r"))
         self.modality = self.metadata["modality"]["0"]
         self.results = os.path.join(args.results, self.task_code)
+        self.ct_min, self.ct_max, self.ct_mean, self.ct_std = (0,) * 4
         if not self.training:
             self.results = os.path.join(self.results, self.args.exec_mode)
         self.crop_foreg = transforms.CropForegroundd(keys=["image", "label"], source_key="image")
@@ -96,17 +93,16 @@ class Preprocessor:
     def preprocess_pair(self, pair):
         fname = os.path.basename(pair["image"] if isinstance(pair, dict) else pair)
         image, label, image_spacings = self.load_pair(pair)
-        if self.training:
-            data = self.crop_foreg({"image": image, "label": label})
-            image, label = data["image"], data["label"]
-            test_metadata = None
-        else:
-            orig_shape = image.shape[1:]
-            bbox = transforms.utils.generate_spatial_bounding_box(image)
-            image = transforms.SpatialCrop(roi_start=bbox[0], roi_end=bbox[1])(image)
-            test_metadata = np.vstack([bbox, orig_shape, image.shape[1:]])
-            if label is not None:
-                label = transforms.SpatialCrop(roi_start=bbox[0], roi_end=bbox[1])(label)
+
+        # Crop foreground and store original shapes.
+        orig_shape = image.shape[1:]
+        bbox = transforms.utils.generate_spatial_bounding_box(image)
+        image = transforms.SpatialCrop(roi_start=bbox[0], roi_end=bbox[1])(image)
+        image_metadata = np.vstack([bbox, orig_shape, image.shape[1:]])
+        if label is not None:
+            label = transforms.SpatialCrop(roi_start=bbox[0], roi_end=bbox[1])(label)
+            self.save_npy(label, fname, "_orig_lbl.npy")
+
         if self.args.dim == 3:
             image, label = self.resample(image, label, image_spacings)
         if self.modality == "CT":
@@ -124,7 +120,7 @@ class Preprocessor:
             mask = np.expand_dims(mask, 0)
             image = np.concatenate([image, mask])
 
-        self.save(image, label, fname, test_metadata)
+        self.save(image, label, fname, image_metadata)
 
     def resample(self, image, label, image_spacings):
         if self.target_spacing != image_spacings:
@@ -151,15 +147,15 @@ class Preprocessor:
             return (image - self.ct_mean) / self.ct_std
         return self.normalize_intensity(image)
 
-    def save(self, image, label, fname, test_metadata):
+    def save(self, image, label, fname, image_metadata):
         mean, std = np.round(np.mean(image, (1, 2, 3)), 2), np.round(np.std(image, (1, 2, 3)), 2)
         if self.verbose:
             print(f"Saving {fname} shape {image.shape} mean {mean} std {std}")
         self.save_npy(image, fname, "_x.npy")
         if label is not None:
             self.save_npy(label, fname, "_y.npy")
-        if test_metadata is not None:
-            self.save_npy(test_metadata, fname, "_meta.npy")
+        if image_metadata is not None:
+            self.save_npy(image_metadata, fname, "_meta.npy")
 
     def load_pair(self, pair):
         image = self.load_nifty(pair["image"] if isinstance(pair, dict) else pair)
