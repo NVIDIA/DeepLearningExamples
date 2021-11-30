@@ -1,9 +1,0 @@
-hbond_sr_bb  3.0
-hbond_lr_bb  3.0
-rama         1.0
-omega        0.5
-vdw          5.0
-cart_bonded  5.0
-atom_pair_constraint  1.0
-dihedral_constraint   0.5
-angle_constraint      0.5
