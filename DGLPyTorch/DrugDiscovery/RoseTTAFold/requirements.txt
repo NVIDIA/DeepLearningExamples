@@ -1,4 +1,0 @@
-pandas==1.1.4
-scikit-learn==0.24
-packaging==21.0
-py3Dmol==1.7.0
