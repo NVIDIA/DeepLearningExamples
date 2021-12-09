@@ -152,4 +152,5 @@ cython_debug/
 *.swp
 # logs
 *.log
+*.logs
 tracking.csv
