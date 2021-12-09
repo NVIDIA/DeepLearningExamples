@@ -1,0 +1,618 @@
+data:
+  bert-nfs: /mnt/data/data/bert/
+  coco-nfs: /mnt/data/data/coco/
+  criteo-nfs: /mnt/data/data/criteo/
+  imagenet-nfs: /mnt/data/data/imagenet/LSVRC/2012/
+  imagenet: /root/data/imagenet/LSVRC/2012/
+  coco-nfs: /mnt/data/data/coco/
+  coco: /root/coco/
+  kits19-nfs: /mnt/data/data/kits19/
+  librispeech-nfs: /mnt/data/data/librispeech/
+  squad-nfs: /mnt/data/data/squad/
+  results-nfs: /mnt/data/results/
+  results: /root/data/results/
+  pretrained-models: /mnt/data/models/
+  xsum-nfs: /mnt/data/data/xsum
+  xsum: /root/data/xsum
+wandb:
+  active: true
+  key: 0dd9f3c9ec3c8e35fcfea39b24fe8ba4a297f8ea
+  project: benchmark
+  user: jilijeanlouis
+  additional-tags: 
+    - "nvme=True"
+systems:
+  OVHA40x1:
+    active: true
+    devices-ids:
+      - 0
+    compute-capabilities:
+      AMP: true
+      FP32: true
+      TF32: true
+  OVHA100x1:
+    active: true
+    devices-ids:
+      - 1
+    compute-capabilities:
+      AMP: true
+      FP32: true
+      TF32: true
+  OVHA30x1:
+    active: true
+    devices-ids:
+      - 2
+    compute-capabilities:
+      AMP: true
+      FP32: true
+      TF32: true
+benchmarks-template:
+  resnet50v1.5:
+    params:
+      model: [resnet50]
+      mode: [convergence]
+      static-loss-scale: [256]
+      label-smoothing: [0.1]
+      learning-rate: [0.1]
+      epochs: [90]
+      batch-size: [128]
+    preparation:
+      - 'mkdir -p /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/'
+    docker:
+      path: PyTorch/Classification/ConvNets/
+      dockerfile: Dockerfile
+      mounts:
+        imagenet: /imagenet/
+        results: /results/
+      executable:
+        path: /workspace/rn50
+        commands:
+          AMP: >-
+            python ./multiproc.py 
+            --nproc_per_node {NB_CUDA_DEVICES} 
+            ./launch.py
+            --model {model} 
+            --mode {mode} 
+            --precision {CAPABILITY} 
+            --platform {SYSTEM_NAME} 
+            --memory-format nhwc 
+            --static-loss-scale
+            {static-loss-scale} 
+            --label-smoothing {label-smoothing} 
+            --epochs {epochs} 
+            --batch-size {batch-size} 
+            --learning-rate {learning-rate}
+            --raport_file /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/raport_file_E{epochs}_B{batch-size}_LR{learning-rate}.json
+            /imagenet
+          FP32: >-
+            python ./multiproc.py 
+            --nproc_per_node {NB_CUDA_DEVICES} 
+            ./launch.py
+            --model {model} 
+            --mode {mode} 
+            --precision {CAPABILITY} 
+            --platform {SYSTEM_NAME} 
+            --static-loss-scale {static-loss-scale}
+            --label-smoothing {label-smoothing} 
+            --epochs {epochs} 
+            --batch-size {batch-size} 
+            --learning-rate {learning-rate} 
+            --raport_file /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/raport_file_E{epochs}_B{batch-size}_LR{learning-rate}.json
+            /imagenet
+          TF32: >-
+            python ./multiproc.py 
+            --nproc_per_node {NB_CUDA_DEVICES} 
+            ./launch.py 
+            --model {model} 
+            --mode {mode} 
+            --precision {CAPABILITY} 
+            --platform {SYSTEM_NAME} 
+            --static-loss-scale {static-loss-scale}
+            --label-smoothing {label-smoothing} 
+            --epochs {epochs} 
+            --batch-size {batch-size} 
+            --learning-rate {learning-rate} 
+            --raport_file /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/raport_file_E{epochs}_B{batch-size}_LR{learning-rate}.json
+            /imagenet
+  resnext101-32x4d:
+    params:
+      model: [resnext101-32x4d]
+      mode: [convergence]
+      static-loss-scale: [256]
+      label-smoothing: [0.1]
+      learning-rate: [0.1]
+      epochs: [90]
+      batch-size: [128]
+    preparation:
+      - 'mkdir -p /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/'
+    docker:
+      path: PyTorch/Classification/ConvNets/
+      dockerfile: Dockerfile
+      mounts:
+        imagenet: /imagenet/
+        results: /results/
+      executable:
+        path: /workspace/rn50
+        commands:
+          AMP: >-
+            python ./multiproc.py 
+            --nproc_per_node {NB_CUDA_DEVICES} 
+            ./launch.py
+            --model {model} 
+            --mode {mode} 
+            --precision {CAPABILITY} 
+            --platform {SYSTEM_NAME} 
+            --memory-format nhwc 
+            --static-loss-scale {static-loss-scale} 
+            --label-smoothing {label-smoothing} 
+            --epochs {epochs} 
+            --batch-size {batch-size} 
+            --learning-rate {learning-rate}
+            --raport_file /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/raport_file_E{epochs}_B{batch-size}_LR{learning-rate}.json
+            /imagenet
+          FP32: >-
+            python ./multiproc.py 
+            --nproc_per_node {NB_CUDA_DEVICES} 
+            ./launch.py
+            --model {model} 
+            --mode {mode} --precision {CAPABILITY} --platform
+            {SYSTEM_NAME} --static-loss-scale {static-loss-scale}
+            --label-smoothing {label-smoothing} --epochs {epochs} --batch-size
+            {batch-size} --learning-rate {learning-rate} --raport_file
+            /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/raport_file_E{epochs}_B{batch-size}_LR{learning-rate}.json
+            /imagenet
+          TF32: >-
+            python ./multiproc.py --nproc_per_node {NB_CUDA_DEVICES} ./launch.py
+            --model {model} --mode {mode} --precision {CAPABILITY} --platform
+            {SYSTEM_NAME} --static-loss-scale {static-loss-scale}
+            --label-smoothing {label-smoothing} --epochs {epochs} --batch-size
+            {batch-size} --learning-rate {learning-rate} --raport_file
+            /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/raport_file_E{epochs}_B{batch-size}_LR{learning-rate}.json
+            /imagenet
+  se-resnext101-32x4d:
+    params:
+      model: [se-resnext101-32x4d]
+      mode: [convergence]
+      static-loss-scale: [256]
+      label-smoothing: [0.1]
+      learning-rate: [0.1]
+      epochs: [5]
+      batch-size: [112]
+    preparation:
+      - 'mkdir -p /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/'
+    docker:
+      path: PyTorch/Classification/ConvNets/
+      dockerfile: Dockerfile
+      mounts:
+        imagenet: /imagenet/
+        results: /results/
+      executable:
+        path: /workspace/rn50
+        commands:
+          AMP: >-
+            python ./multiproc.py --nproc_per_node {NB_CUDA_DEVICES} ./launch.py
+            --model {model} --mode {mode} --precision {CAPABILITY} --platform
+            {SYSTEM_NAME} --memory-format nhwc --static-loss-scale
+            {static-loss-scale} --label-smoothing {label-smoothing} --epochs
+            {epochs} --batch-size {batch-size} --learning-rate {learning-rate}
+            --raport_file
+            /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/raport_file_E{epochs}_B{batch-size}_LR{learning-rate}.json
+            /imagenet
+          FP32: >-
+            python ./multiproc.py --nproc_per_node {NB_CUDA_DEVICES} ./launch.py
+            --model {model} --mode {mode} --precision {CAPABILITY} --platform
+            {SYSTEM_NAME} --static-loss-scale {static-loss-scale}
+            --label-smoothing {label-smoothing} --epochs {epochs} --batch-size
+            {batch-size} --learning-rate {learning-rate} --raport_file
+            /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/raport_file_E{epochs}_B{batch-size}_LR{learning-rate}.json
+            /imagenet
+          TF32: >-
+            python ./multiproc.py --nproc_per_node {NB_CUDA_DEVICES} ./launch.py
+            --model {model} --mode {mode} --precision {CAPABILITY} --platform
+            {SYSTEM_NAME} --static-loss-scale {static-loss-scale}
+            --label-smoothing {label-smoothing} --epochs {epochs} --batch-size
+            {batch-size} --learning-rate {learning-rate} --raport_file
+            /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/raport_file_E{epochs}_B{batch-size}_LR{learning-rate}.json
+            /imagenet
+  efficientnet-b0:
+    params:
+      model: [efficientnet-b0]
+      mode: [convergence]
+      static-loss-scale: [256]
+      label-smoothing: [0.1]
+      learning-rate: [0.1]
+      epochs: [10]
+      batch-size: [128]
+    preparation:
+      - 'mkdir -p /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/'
+    docker:
+      path: PyTorch/Classification/ConvNets/
+      dockerfile: Dockerfile
+      mounts:
+        imagenet: /imagenet
+        results: /results/
+      executable:
+        path: /workspace/rn50
+        commands:
+          AMP: >-
+            python ./multiproc.py --nproc_per_node {NB_CUDA_DEVICES} ./launch.py
+            --model {model} --mode {mode} --precision {CAPABILITY} --platform
+            {SYSTEM_NAME} --memory-format nhwc --static-loss-scale
+            {static-loss-scale} --label-smoothing {label-smoothing} --epochs
+            {epochs} --batch-size {batch-size} --learning-rate {learning-rate}
+            --raport_file
+            /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/raport_file_E{epochs}_B{batch-size}_LR{learning-rate}.json
+            /imagenet
+          FP32: >-
+            python ./multiproc.py --nproc_per_node {NB_CUDA_DEVICES} ./launch.py
+            --model {model} --mode {mode} --precision {CAPABILITY} --platform
+            {SYSTEM_NAME} --static-loss-scale {static-loss-scale}
+            --label-smoothing {label-smoothing} --epochs {epochs} --batch-size
+            {batch-size} --learning-rate {learning-rate} --raport_file
+            /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/raport_file_E{epochs}_B{batch-size}_LR{learning-rate}.json
+            /imagenet
+          TF32: >-
+            python ./multiproc.py --nproc_per_node {NB_CUDA_DEVICES} ./launch.py
+            --model {model} --mode {mode} --precision {CAPABILITY} --platform
+            {SYSTEM_NAME} --static-loss-scale {static-loss-scale}
+            --label-smoothing {label-smoothing} --epochs {epochs} --batch-size
+            {batch-size} --learning-rate {learning-rate} --raport_file
+            /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/raport_file_E{epochs}_B{batch-size}_LR{learning-rate}.json
+            /imagenet
+  efficientnet-b4:
+    params:
+      model: [efficientnet-b4]
+      mode: [convergence]
+      static-loss-scale: [256]
+      label-smoothing: [0.1]
+      learning-rate: [0.1]
+      epochs: [10]
+      batch-size: [128]
+    preparation:
+      - 'mkdir -p /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/'
+    docker:
+      path: PyTorch/Classification/ConvNets/
+      dockerfile: Dockerfile
+      mounts:
+        imagenet: /imagenet
+        results: /results/
+      executable:
+        path: /workspace/rn50
+        commands:
+          AMP: >-
+            python ./multiproc.py --nproc_per_node {NB_CUDA_DEVICES} ./launch.py
+            --model {model} --mode {mode} --precision {CAPABILITY} --platform
+            {SYSTEM_NAME} --memory-format nhwc --static-loss-scale
+            {static-loss-scale} --label-smoothing {label-smoothing} --epochs
+            {epochs} --batch-size {batch-size} --learning-rate {learning-rate}
+            --raport_file
+            /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/raport_file_E{epochs}_B{batch-size}_LR{learning-rate}.json
+            /imagenet
+          FP32: >-
+            python ./multiproc.py --nproc_per_node {NB_CUDA_DEVICES} ./launch.py
+            --model {model} --mode {mode} --precision {CAPABILITY} --platform
+            {SYSTEM_NAME} --static-loss-scale {static-loss-scale}
+            --label-smoothing {label-smoothing} --epochs {epochs} --batch-size
+            {batch-size} --learning-rate {learning-rate} --raport_file
+            /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/raport_file_E{epochs}_B{batch-size}_LR{learning-rate}.json
+            /imagenet
+          TF32: >-
+            python ./multiproc.py --nproc_per_node {NB_CUDA_DEVICES} ./launch.py
+            --model {model} --mode {mode} --precision {CAPABILITY} --platform
+            {SYSTEM_NAME} --static-loss-scale {static-loss-scale}
+            --label-smoothing {label-smoothing} --epochs {epochs} --batch-size
+            {batch-size} --learning-rate {learning-rate} --raport_file
+            /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/raport_file_E{epochs}_B{batch-size}_LR{learning-rate}.json
+            /imagenet
+  efficientdet:
+    params:
+      # efficientdet_d0, efficientdet_d1, efficientdet_d2, efficientdet_d3, efficientdet_d4
+      # efficientdet_w0
+      # mixnet_m, mixdet_l
+      # mobiledetv2_110d, mobiledetv2_120d, mobiledetv3_large
+      # tf_efficientdet_d0, tf_efficientdet_d2, tf_efficientdet_d3,
+      # tf_efficientdet_d4, tf_efficientdet_d5, tf_efficientdet_d6, tf_efficientdet_d7
+      # tf_efficientdet_lite0, tf_efficientdet_lite1, tf_efficientdet_lite2
+      # tf_efficientdet_lite3, tf_efficientdet_lite4
+      model: [efficientdet_d0]
+      warmup-epochs: [50]
+      lr-noise: [0.4 0.9]
+      fill-color: [mean]
+      model-ema-decay: [0.999]
+      eval-after: [200]
+      epochs: [300]
+      smoothing: [0.0]
+      seed: [12711]
+      benchmark-steps: [500]
+      learning-rate: [0.01]
+      batch-size: [32]
+      # momentum, adam, adamw, fusedsgd, fusedmomentum, fusedadam, fusedadamw
+      # fusedlamb, fusednovograd
+      optimizer: [fusedmomentum]
+    preparation:
+      - 'mkdir -p /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/'
+    docker:
+      path: PyTorch/Detection/Efficientdet/
+      dockerfile: Dockerfile
+      mounts:
+        coco: /dataset/coco
+        results: /results/
+      executable:
+        path: /workspace/object_detection
+        commands:
+          AMP: >-
+            python train.py 
+            /dataset/coco --model {model} 
+            --batch-size {batch-size} 
+            --amp
+            --opt {optimizer} --seed {seed} --fused-focal-loss --sync-bn
+            --lr-noise {lr-noise} --lr {learning-rate} 
+            --epochs {epochs} --warmup-epochs {warmup-epochs} --eval-after {eval-after} 
+            --fill-color {fill-color} 
+            --model-ema --model-ema-decay {model-ema-decay} 
+            --smoothing {smoothing} --memory-format nchw
+            --output /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/
+            --benchmark-steps {benchmark-steps}
+            --benchmark
+          FP32: >-
+            python train.py 
+            /dataset/coco --model {model} 
+            --batch-size {batch-size} 
+            --opt {optimizer} --seed {seed} --fused-focal-loss --sync-bn
+            --lr-noise {lr-noise} --lr {learning-rate} 
+            --epochs {epochs} --warmup-epochs {warmup-epochs} --eval-after {eval-after} 
+            --fill-color {fill-color} 
+            --model-ema --model-ema-decay {model-ema-decay} 
+            --smoothing {smoothing} --memory-format nchw
+            --output /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/
+            --benchmark-steps {benchmark-steps}
+            --benchmark
+          TF32: >-
+            python train.py 
+            /dataset/coco --model {model} 
+            --batch-size {batch-size} 
+            --opt {optimizer} --seed {seed} --fused-focal-loss --sync-bn
+            --lr-noise {lr-noise} --lr {learning-rate} 
+            --epochs {epochs} --warmup-epochs {warmup-epochs} --eval-after {eval-after} 
+            --fill-color {fill-color} 
+            --model-ema --model-ema-decay {model-ema-decay} 
+            --smoothing {smoothing} --memory-format nchw
+            --output /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/
+            --benchmark-steps {benchmark-steps}
+            --benchmark
+  ssd:
+    params:
+      epochs: [65]
+      batch-size: [32]
+      seed: [12711]
+      # training / benchmark-training
+      mode: [benchmark-training]
+      learning-rate: [0.01]
+      momentum: [0.9]
+      weight-decay: [0.0005]
+      benchmark-warmup: [20]
+      benchmark-iterations: [20]
+      # 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152'
+      backbone: [resnet50]
+    preparation:
+      - 'mkdir -p /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/{backbone}/'
+    docker:
+      path: PyTorch/Detection/SSD/
+      dockerfile: Dockerfile
+      mounts:
+        coco: /dataset/coco
+        results: /results/
+      executable:
+        path: /workspace/object_detection
+        commands:
+          AMP: >-
+            python main.py 
+            --data /dataset/coco 
+            --epochs {epochs}
+            --batch-size {batch-size}
+            --seed {seed}
+            --mode {mode}
+            --learning-rate {learning-rate}
+            --momentum {momentum}
+            --weight-decay {weight-decay}
+            --benchmark-warmup {benchmark-warmup}
+            --benchmark-iterations {benchmark-iterations}
+            --backbone {backbone}
+            --num-workers {NB_CUDA_DEVICES}
+            --amp 
+            --log-interval 1
+            --json-summary /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/B{batch-size}xE{epochs}xLR{learning-rate}.json
+          FP32: >-
+            python main.py 
+            --data /dataset/coco 
+            --epochs {epochs}
+            --batch-size {batch-size}
+            --seed {seed}
+            --mode {mode}
+            --learning-rate {learning-rate}
+            --momentum {momentum}
+            --weight-decay {weight-decay}
+            --benchmark-warmup {benchmark-warmup}
+            --benchmark-iterations {benchmark-iterations}
+            --backbone {backbone}
+            --num-workers {NB_CUDA_DEVICES}
+            --log-interval 1
+            --json-summary /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/B{batch-size}xE{epochs}xLR{learning-rate}.json
+  bart:
+    params:
+      learning-rate: [1e-4]
+      n_val: [-1]
+      batch-size: [8]
+      gradient_accumulation_steps: [1]
+      eval_batch_size: [128]
+      max_steps: [20000]
+      warmup_steps: [500]
+      epochs: [1]
+      min_epochs: [0]
+      val_check_interval: [0.1]
+      max_source_length: [1024]
+      max_target_length: [142]
+      val_max_target_length: [142]
+      eval_max_gen_length: [142]
+      lr_scheduler: [polynomial]
+      label_smoothing: [0.1]
+      weight_decay: [0.1]
+      dropout: [0.1]
+      attention_dropout: [0.1]
+      gradient_clip_val: [0.1]
+      early_stopping_patience: [2]
+      num_sanity_val_steps: [0]
+      eval_beams: [0]
+      amp_level: [01]
+      seed: [42]
+    preparation:
+      - 'mkdir -p /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/B{batch-size}xE{epochs}xLR{learning-rate}/best_tfmr/'
+    docker:
+      path: PyTorch/LanguageModeling/BART/
+      dockerfile: Dockerfile
+      mounts:
+        xsum: /dataset/
+        results: /results/
+      executable:
+        path: /workspace/bart
+        commands:
+          AMP: >-
+            python finetune.py
+            --data_dir=/dataset/
+            --config_path=configs/config_xsum.json
+            --json-summary /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/B{batch-size}xE{epochs}xLR{learning-rate}/dllogger.json
+            --output_dir /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/B{batch-size}xE{epochs}xLR{learning-rate}/
+            --gpus {NB_CUDA_DEVICES}
+            --learning_rate {learning-rate}
+            --fp16
+            --do_train
+            --n_val {n_val}
+            --train_batch_size {batch-size}
+            --gradient_accumulation_steps {gradient_accumulation_steps}
+            --eval_batch_size {eval_batch_size}
+            --max_steps {max_steps}
+            --warmup_steps {warmup_steps}
+            --min_epochs {min_epochs}
+            --max_epochs {epochs}
+            --val_check_interval {val_check_interval}
+            --max_source_length {max_source_length}
+            --max_target_length {max_target_length}
+            --val_max_target_length {val_max_target_length}
+            --eval_max_gen_length {val_max_target_length}
+            --sortish_sampler
+            --lr_scheduler {lr_scheduler}
+            --label_smoothing {label_smoothing}
+            --weight_decay {weight_decay}
+            --dropout {dropout}
+            --attention_dropout {attention_dropout}
+            --gradient_clip_val {gradient_clip_val}
+            --early_stopping_patience {early_stopping_patience}
+            --num_sanity_val_steps {num_sanity_val_steps}
+            --eval_beams {eval_beams}
+            --freeze_embeds
+            --amp_level {amp_level}
+            --seed {seed}
+            --logger_name wandb
+          FP32: >-
+            python finetune.py
+            --data_dir=/dataset/
+            --config_path=configs/config_xsum.json
+            --json-summary /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/B{batch-size}xE{epochs}xLR{learning-rate}/dllogger.json
+            --output_dir /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/B{batch-size}xE{epochs}xLR{learning-rate}/
+            --gpus {NB_CUDA_DEVICES}
+            --learning_rate {learning-rate}
+            --do_train
+            --n_val {n_val}
+            --train_batch_size {batch-size}
+            --gradient_accumulation_steps {gradient_accumulation_steps}
+            --eval_batch_size {eval_batch_size}
+            --max_steps {max_steps}
+            --warmup_steps {warmup_steps}
+            --min_epochs {min_epochs}
+            --max_epochs {epochs}
+            --val_check_interval {val_check_interval}
+            --max_source_length {max_source_length}
+            --max_target_length {max_target_length}
+            --val_max_target_length {val_max_target_length}
+            --eval_max_gen_length {val_max_target_length}
+            --sortish_sampler
+            --lr_scheduler {lr_scheduler}
+            --label_smoothing {label_smoothing}
+            --weight_decay {weight_decay}
+            --dropout {dropout}
+            --attention_dropout {attention_dropout}
+            --gradient_clip_val {gradient_clip_val}
+            --early_stopping_patience {early_stopping_patience}
+            --num_sanity_val_steps {num_sanity_val_steps}
+            --eval_beams {eval_beams}
+            --freeze_embeds
+            --amp_level {amp_level}
+            --seed {seed}
+            --logger_name wandb
+benchmarks:
+  resnet50v1.5:
+    benchmark-template: resnet50v1.5
+    active: false
+    params:
+      learning-rate: [0.1]
+      epochs: [1]
+      batch-size: [128]
+  resnext101-32x4d:
+    benchmark-template: resnext101-32x4d
+    active: false
+    params:
+      learning-rate: [0.1, 0.3]
+      epochs: [5, 10]
+      batch-size: [128, 256]
+  resnext101-32x4d:
+    benchmark-template: resnext101-32x4d
+    active: false
+    params:
+      learning-rate: [0.1, 0.3]
+      epochs: [5, 10]
+      batch-size: [128, 256]
+  se-resnext101-32x4d:
+    benchmark-template: resnext101-32x4d
+    active: false
+    params:
+      learning-rate: [0.1, 0.3]
+      epochs: [5, 10]
+      batch-size: [128, 256]
+  efficientnet-b0:
+    benchmark-template: efficientnet-b0
+    active: false
+    params:
+      learning-rate: [0.1, 0.3]
+      epochs: [5, 10]
+      batch-size: [128, 256]
+  efficientnet-b4:
+    benchmark-template: efficientnet-b4
+    active: false
+    params:
+      learning-rate: [0.1, 0.3]
+      epochs: [5, 10]
+      batch-size: [128, 256]
+  efficientdet:
+    benchmark-template: efficientdet
+    active: false
+    params:
+      model: [efficientdet_d0]
+      learning-rate: [0.1]
+      epochs: [5]
+      batch-size: [64, 128]
+  ssd:
+    benchmark-template: ssd
+    active: false
+    params:
+      mode: [training]
+      backbone: [resnet18, resnet34, resnet50, resnet101, resnet152]
+      epochs: [5]
+      batch-size: [64, 128]
+  bart:
+    benchmark-template: bart
+    active: true
+    params:
+      epochs: [2]
+      batch-size: [8]
+      learning-rate: [1e-4]
+  
