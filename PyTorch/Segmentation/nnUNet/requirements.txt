@@ -6,3 +6,4 @@ scikit-learn==1.0
 scikit-image==0.18.3
 pynvml==11.0.0
 numpy==1.21.3
+nvidia_dlprof_pytorch_nvtx==1.7.0
