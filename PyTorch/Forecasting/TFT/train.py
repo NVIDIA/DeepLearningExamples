@@ -78,6 +78,16 @@ def print_once(*args, **kwargs):
 
 
 def main(args):
+    ### INIT DISTRIBUTED
+    args.distributed_world_size = int(os.environ.get('WORLD_SIZE', 1))
+    args.local_rank = int(os.environ.get('LOCAL_RANK', 0))
+    if args.distributed_world_size > 1:
+        dist.init_process_group(backend='nccl', init_method='env://')
+        print_once(f'Distributed training with {args.distributed_world_size} GPUs')
+        args.distributed_rank = dist.get_rank()
+        torch.cuda.set_device(args.local_rank)
+        torch.cuda.synchronize()
+
     # Enable CuDNN autotuner
     nproc_per_node = torch.cuda.device_count()
     if args.affinity != 'disabled':
@@ -88,18 +98,7 @@ def main(args):
             )
         print(f'{args.local_rank}: thread affinity: {affinity}')
 
-
     torch.backends.cudnn.benchmark = True
-
-    ### INIT DISTRIBUTED
-    if args.distributed_world_size > 1:
-        args.local_rank = int(os.environ.get('LOCAL_RANK', args.local_rank))
-        torch.cuda.set_device(args.local_rank)
-        dist.init_process_group(backend='nccl', init_method='env://')
-        args.distributed_world_size = int(os.environ['WORLD_SIZE'])
-        args.distributed_rank = dist.get_rank()
-        print_once(f'Distributed training with {args.distributed_world_size} GPUs')
-        torch.cuda.synchronize()
 
     if args.seed:
         np.random.seed(args.seed)
@@ -271,13 +270,6 @@ if __name__ == '__main__':
                         help='Directory in which results are stored')
     parser.add_argument('--log_file', type=str, default='dllogger.json',
                         help='Name of dllogger output file')
-    parser.add_argument('--distributed_world_size', type=int, metavar='N',
-                       default=torch.cuda.device_count(),
-                       help='total number of GPUs across all nodes (default: all visible GPUs)')
-    parser.add_argument('--distributed_rank', default=os.getenv('LOCAL_RANK', 0), type=int,
-                       help='rank of the current worker')
-    parser.add_argument('--local_rank', default=0, type=int,
-                       help='rank of the current worker')
     parser.add_argument('--overwrite_config', type=str, default='',
                        help='JSON string used to overload config')
     parser.add_argument('--affinity', type=str,
