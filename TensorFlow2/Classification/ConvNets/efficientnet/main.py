@@ -71,3 +71,6 @@ if __name__ == "__main__":
 
         elif not hvd_utils.is_using_hvd() or hvd.rank() == 0:
             runner.predict(FLAGS.to_predict, FLAGS.inference_checkpoint)
+
+    if FLAGS.mode == 'savemodel_as_backbone':
+        runner.savemodel_as_backbone()

@@ -294,3 +294,12 @@ class Runner(object):
             print("Keyboard interrupt")
 
         print('Ending Inference ...')
+
+    def savemodel_as_backbone(self):
+
+        latest_checkpoint = tf.train.latest_checkpoint(self.params.model_dir)
+        self.model.load_weights(latest_checkpoint).expect_partial()
+        
+        model_as_backbone = tf.keras.models.Model(inputs=self.model.input, outputs=self.model.get_layer('stack_6/block_0/id').output)
+        tf.keras.models.save_model(model_as_backbone, os.path.join(self.params.model_dir, 'efficientnet_as_backbone'))
+

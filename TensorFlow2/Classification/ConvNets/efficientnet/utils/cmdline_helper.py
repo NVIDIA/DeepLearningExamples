@@ -88,7 +88,7 @@ def parse_cmdline():
         type=str,
         default='train_and_eval',
         required=False,
-        help='Mode to run: `train`, `eval`, `train_and_eval` or `export`.')
+        help='Mode to run: `train`, `eval`, `train_and_eval`, `export` or `savemodel_as_backbone`.')
     
     p.add_argument(
         '--arch',
