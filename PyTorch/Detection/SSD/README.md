@@ -316,7 +316,7 @@ python ./main.py --backbone resnet50 --checkpoint ./models/epoch_*.pt --data /co
 You can check your trained model with a Jupyter notebook provided in the examples directory.
 Start with running a Docker container with a Jupyter notebook server:
 ```
-docker run --rm -it --gpus=all --ipc=host -v $SSD_CHECKPINT_PATH:/checkpoints/SSD300v1.1.pt -v $COCO_PATH:/datasets/coco2017 -p 8888:8888 nvidia_ssd jupyter-notebook --ip 0.0.0.0 --allow-root
+docker run --rm -it --gpus=all --ipc=host -v $SSD_CHECKPOINT_PATH:/checkpoints/SSD300v1.1.pt -v $COCO_PATH:/datasets/coco2017 -p 8888:8888 nvidia_ssd jupyter-notebook --ip 0.0.0.0 --allow-root
 ```
 
 ## Advanced
