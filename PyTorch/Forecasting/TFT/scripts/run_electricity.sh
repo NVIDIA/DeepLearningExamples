@@ -18,7 +18,7 @@
 : ${BATCH_SIZE:=1024}
 : ${EPOCHS:=30}
 
-python -m torch.distributed.launch --nproc_per_node=${NGPU} train.py \
+python -m torch.distributed.run --nproc_per_node=${NGPU} train.py \
         --dataset electricity \
         --data_path /data/processed/electricity_bin \
         --batch_size=${BATCH_SIZE} \
