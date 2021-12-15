@@ -210,8 +210,6 @@ def save_checkpoint(model, optimizer, epoch, config, amp_run, output_dir, model_
                       'config': config,
                       'state_dict': model.state_dict(),
                       'optimizer': optimizer.state_dict()}
-        if amp_run:
-            checkpoint['amp'] = amp.state_dict()
 
         checkpoint_filename = "checkpoint_{}_{}.pt".format(model_name, epoch)
         checkpoint_path = os.path.join(output_dir, checkpoint_filename)
@@ -255,9 +253,6 @@ def load_checkpoint(model, optimizer, epoch, config, amp_run, filepath, local_ra
     config = checkpoint['config']
     model.load_state_dict(checkpoint['state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer'])
-
-    if amp_run:
-        amp.load_state_dict(checkpoint['amp'])
 
 
 # adapted from: https://discuss.pytorch.org/t/opinion-eval-should-be-a-context-manager/18998/3
