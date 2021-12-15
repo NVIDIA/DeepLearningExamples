@@ -148,9 +148,20 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 #
-# Swap
+# Swap files
 *.swp
+
 # logs
 *.log
 *.logs
+*log.json
+
+# Pytorch / TF checkpoints
+*.pth.tar
+
+# specific application custom files
 tracking.csv
+
+# wandb local run folder
+wandb/
+

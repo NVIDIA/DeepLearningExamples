@@ -552,67 +552,66 @@ benchmarks-template:
 benchmarks:
   resnet50v1.5:
     benchmark-template: resnet50v1.5
-    active: false
+    active: true
     params:
-      learning-rate: [0.1]
-      epochs: [1]
+      learning-rate: [0.3]
+      epochs: [5]
       batch-size: [128]
   resnext101-32x4d:
     benchmark-template: resnext101-32x4d
-    active: false
+    active: true
     params:
-      learning-rate: [0.1, 0.3]
-      epochs: [5, 10]
-      batch-size: [128, 256]
+      learning-rate: [0.3]
+      epochs: [5]
+      batch-size: [128]
   resnext101-32x4d:
     benchmark-template: resnext101-32x4d
-    active: false
+    active: true
     params:
-      learning-rate: [0.1, 0.3]
-      epochs: [5, 10]
-      batch-size: [128, 256]
+      learning-rate: [0.3]
+      epochs: [5]
+      batch-size: [128]
   se-resnext101-32x4d:
     benchmark-template: resnext101-32x4d
-    active: false
+    active: true
     params:
-      learning-rate: [0.1, 0.3]
-      epochs: [5, 10]
-      batch-size: [128, 256]
+      learning-rate: [0.3]
+      epochs: [5]
+      batch-size: [128]
   efficientnet-b0:
     benchmark-template: efficientnet-b0
-    active: false
+    active: true
     params:
-      learning-rate: [0.1, 0.3]
-      epochs: [5, 10]
-      batch-size: [128, 256]
+      learning-rate: [0.3]
+      epochs: [5]
+      batch-size: [128]
   efficientnet-b4:
     benchmark-template: efficientnet-b4
-    active: false
+    active: true
     params:
-      learning-rate: [0.1, 0.3]
-      epochs: [5, 10]
-      batch-size: [128, 256]
+      learning-rate: [0.3]
+      epochs: [5]
+      batch-size: [128]
   efficientdet:
     benchmark-template: efficientdet
-    active: false
+    active: true
     params:
       model: [efficientdet_d0]
       learning-rate: [0.1]
       epochs: [5]
-      batch-size: [64, 128]
+      batch-size: [64]
   ssd:
     benchmark-template: ssd
-    active: false
+    active: true
     params:
       mode: [training]
       backbone: [resnet18, resnet34, resnet50, resnet101, resnet152]
       epochs: [5]
-      batch-size: [64, 128]
+      batch-size: [64]
   bart:
     benchmark-template: bart
     active: true
     params:
-      epochs: [2]
+      epochs: [5]
       batch-size: [8]
       learning-rate: [1e-4]
-  

@@ -21,6 +21,12 @@ ENV IBV_DRIVERS /usr/lib/libibverbs/libmlx5
 RUN pip install --no-cache-dir git+https://github.com/NVIDIA/dllogger.git#egg=dllogger
 RUN pip install --upgrade --pre omegaconf
 RUN pip install --upgrade --pre tabulate
+RUN pip install wandb
+RUN pip install nvidia-pyindex
+RUN pip install nvidia-dllogger
+RUN pip install py-cpuinfo
+RUN apt-get update
+RUN apt-get install -y dmidecode
 
 WORKDIR /workspace/object_detection
 ENV PYTHONPATH "${PYTHONPATH}:/workspace/object_detection"

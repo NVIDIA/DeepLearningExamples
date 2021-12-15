@@ -30,7 +30,10 @@
 import os
 
 os.environ["KMP_AFFINITY"] = "disabled" # We need to do this before importing anything else as a workaround for this bug: https://github.com/pytorch/pytorch/issues/28389
-
+import psutil
+import subprocess
+import platform
+import cpuinfo
 import argparse
 import random
 from copy import deepcopy
@@ -66,7 +69,11 @@ from image_classification.optimizers import (
 )
 from image_classification.gpu_affinity import set_affinity, AffinityMode
 import dllogger
+from pathlib import Path
+import wandb
 
+global wandb_instance
+wandb_instance = wandb.init()
 
 def available_models():
     models = {
@@ -433,6 +440,7 @@ def prepare_for_training(args, model_args, model_arch):
                     args.resume, checkpoint["epoch"]
                 )
             )
+
             if start_epoch >= args.epochs:
                 print(
                     f"Launched training for {args.epochs}, checkpoint already run {start_epoch}"
@@ -507,6 +515,66 @@ def prepare_for_training(args, model_args, model_arch):
     else:
         print("Bad databackend picked")
         exit(1)
+
+
+    uname = platform.uname()
+    cpu = cpuinfo.get_cpu_info()
+    extra_tags = list()
+    if os.environ.get('WANDB_TAGS') is not None:
+        extra_tags = os.environ.get('WANDB_TAGS').split(',')
+
+    wandb_instance.tags = (
+            f"precision={os.environ.get('PRECISION', 'FP32')}",
+            f"learning_rate={args.lr}",
+            f"epochs={args.epochs}",
+            f"batch_size={args.batch_size}",
+            f"mixup={args.mixup}",
+            f"interpolation={args.interpolation}",
+            f"memory_format={args.memory_format}",
+            f"prefetch_factor={args.prefetch}",
+            f"data-backend={args.data_backend}",
+            f"architecture={args.arch}",
+            f"device={torch.cuda.get_device_properties(0).name}",
+            f"device_cuda_major={torch.cuda.get_device_properties(0).major}",
+            f"device_cuda_minor={torch.cuda.get_device_properties(0).minor}",
+            f"device_cuda_capability={torch.cuda.get_device_properties(0).major}.{torch.cuda.get_device_properties(0).minor}",
+            f"device_cuda_total_memory={torch.cuda.get_device_properties(0).total_memory}",
+            f"device_cuda_multi_processor_count={torch.cuda.get_device_properties(0).multi_processor_count}",
+            f"device_count={torch.cuda.device_count()}",
+            f"cpu_count_physical={psutil.cpu_count(logical = False)}",
+            f"cpu_count_logical={psutil.cpu_count(logical = True)}",
+            f"cpu_max_freq_mhz={psutil.cpu_freq().max:.2f}",
+            f"cpu_min_freq_mhz={psutil.cpu_freq().min:.2f}",
+            f"cpu_version={cpu['cpuinfo_version_string']}",
+            f"cpu_arch={cpu['arch']}",
+            f"cpu_vendor={cpu['vendor_id_raw']}",
+            f"cpu_brand={cpu['brand_raw']}",
+            f"cpu_stepping={cpu['stepping']}",
+            f"cpu_model={cpu['model']}",
+            f"cpu_family={cpu['family']}",
+            f"cpu_l3_cache_size={cpu['l3_cache_size']}",
+            f"cpu_l2_cache_size_MiB={cpu['l2_cache_size'].replace('MiB', '').strip()}",
+            f"cpu_l1_data_cache_size_KiB={cpu['l1_data_cache_size'].replace('KiB', '').strip()}",
+            f"cpu_l1_instruction_cache_size_KiB={cpu['l1_instruction_cache_size'].replace('KiB', '').strip()}",
+            f"cpu_l2_cache_line_size={cpu['l2_cache_line_size']}",
+            f"cpu_l2_cache_associativity={cpu['l2_cache_associativity']}",
+            f"mem_total_GB={psutil.virtual_memory().total >> 30}",
+            f"platform_system={uname.system.replace('platform_system', '')}",
+            f"platform_node={uname.node}",
+            f"platform_release={uname.release}",
+            f"platform_version={uname.version}",
+            f"platform_machine={uname.machine}",
+            f"platform_processor={uname.processor}",
+            *extra_tags
+            )
+
+    config_wandb_dict = dict()
+    for i in wandb_instance.tags:
+        k,v = i.split("=", 1)
+        config_wandb_dict[k] = v
+    
+    wandb_instance.config.update(config_wandb_dict)
+
 
     train_loader, train_loader_len = get_train_loader(
         args.data,
@@ -640,6 +708,7 @@ def main(args, model_args, model_arch):
         save_checkpoints=args.save_checkpoints and not args.evaluate,
         checkpoint_dir=args.workspace,
         checkpoint_filename=args.checkpoint_filename,
+        custom_wandb=wandb_instance
     )
     exp_duration = time.time() - exp_start_time
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
@@ -663,10 +732,11 @@ if __name__ == "__main__":
     add_parser_arguments(parser)
 
     args, rest = parser.parse_known_args()
+    #print(args)
 
     model_arch = available_models()[args.arch]
     model_args, rest = model_arch.parser().parse_known_args(rest)
-    print(model_args)
+    #print(model_args)
 
     assert len(rest) == 0, f"Unknown args passed: {rest}"
 

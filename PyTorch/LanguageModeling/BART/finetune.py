@@ -60,7 +60,74 @@ from utils.distributed_utils import get_rank
 import dllogger
 import time
 
-logger = logging.getLogger(__name__)
+import psutil
+import subprocess
+import platform
+import cpuinfo
+
+def get_wb_tags_and_config(args):
+    uname = platform.uname()
+    cpu = cpuinfo.get_cpu_info()
+    extra_tags = list()
+    if os.environ.get('WANDB_TAGS') is not None:
+        extra_tags = os.environ.get('WANDB_TAGS').split(',')
+
+    for arg in vars(args):
+        k = arg
+        v = getattr(args, arg)
+        if v is None:
+            v = "None"
+        if isinstance(v, str):
+            v = v.replace('=', '_')
+        extra_tags.append(f"{k}={v}")
+    
+    tags = [       
+            f"precision={os.environ.get('PRECISION', 'FP32')}",
+            f"device={torch.cuda.get_device_properties(0).name}",
+            f"device_cuda_major={torch.cuda.get_device_properties(0).major}",
+            f"device_cuda_minor={torch.cuda.get_device_properties(0).minor}",
+            f"device_cuda_capability={torch.cuda.get_device_properties(0).major}.{torch.cuda.get_device_properties(0).minor}",
+            f"device_cuda_total_memory={torch.cuda.get_device_properties(0).total_memory}",
+            f"device_cuda_multi_processor_count={torch.cuda.get_device_properties(0).multi_processor_count}",
+            f"device_count={torch.cuda.device_count()}",
+            f"cpu_count_physical={psutil.cpu_count(logical = False)}",
+            f"cpu_count_logical={psutil.cpu_count(logical = True)}",
+            f"cpu_max_freq_mhz={psutil.cpu_freq().max:.2f}",
+            f"cpu_min_freq_mhz={psutil.cpu_freq().min:.2f}",
+            f"cpu_version={cpu['cpuinfo_version_string']}",
+            f"cpu_arch={cpu['arch']}",
+            f"cpu_vendor={cpu['vendor_id_raw']}",
+            f"cpu_brand={cpu['brand_raw']}",
+            f"cpu_stepping={cpu['stepping']}",
+            f"cpu_model={cpu['model']}",
+            f"cpu_family={cpu['family']}",
+            f"cpu_l3_cache_size={cpu['l3_cache_size']}",
+            f"cpu_l2_cache_size_MiB={cpu['l2_cache_size'].replace('MiB', '').strip()}",
+            f"cpu_l1_data_cache_size_KiB={cpu['l1_data_cache_size'].replace('KiB', '').strip()}",
+            f"cpu_l1_instruction_cache_size_KiB={cpu['l1_instruction_cache_size'].replace('KiB', '').strip()}",
+            f"cpu_l2_cache_line_size={cpu['l2_cache_line_size']}",
+            f"cpu_l2_cache_associativity={cpu['l2_cache_associativity']}",
+            f"mem_total_GB={psutil.virtual_memory().total >> 30}",
+            f"platform_system={uname.system.replace('platform_system', '')}",
+            f"platform_node={uname.node}",
+            f"platform_release={uname.release}",
+            f"platform_version={uname.version}",
+            f"platform_machine={uname.machine}",
+            f"platform_processor={uname.processor}",
+            *extra_tags
+    ]
+
+    clean_tags = list()
+    for tag in tags:
+        if len(tag) <= 64:
+            clean_tags.append(tag)
+
+    config_wandb_dict = dict()
+    for i in tags:
+        k,v = i.split("=", 1)
+        config_wandb_dict[k] = v
+
+    return clean_tags, config_wandb_dict
 
 
 class SummarizationModule(BaseTransformer):
@@ -446,11 +513,13 @@ def distill_sft(model):
     return model
 
 def main(args, model=None) -> SummarizationModule:
-    print(args)
+    
     Path(args.output_dir).mkdir(exist_ok=True)
-
+    
     if model is None:
         if "summarization" in args.task:
+            
+            
             ### Define BART model
             # Config from "https://s3.amazonaws.com/models.huggingface.co/bert/facebook/bart-large-cnn/config.json
             # Vocab modified to 50265 to be consistent with facebook/bart-large default
@@ -464,6 +533,10 @@ def main(args, model=None) -> SummarizationModule:
                     checkpoint = 'facebook/bart-large-xsum'
             else:
                 checkpoint = 'facebook/bart-large' #Start from pretrained checkpoint otherwise
+            
+            args.checkpoint = checkpoint
+            args.model = checkpoint.replace('facebook/', '')
+            
 
             if args.resume_from_checkpoint:
                 print("Resuming from checkpoint, make sure checkpoint is finetuned for best results")
@@ -503,8 +576,13 @@ def main(args, model=None) -> SummarizationModule:
     elif args.logger_name == "wandb":
         from pytorch_lightning.loggers import WandbLogger
 
-        project = os.environ.get("WANDB_PROJECT", dataset)
-        logger = WandbLogger(name=model.output_dir.name, project=project)
+        wb_tags, wb_config = get_wb_tags_and_config(args)
+        logger = WandbLogger(
+            name=os.environ.get("WANDB_PROJECT",model.output_dir.name), 
+            project=os.environ.get("WANDB_PROJECT", dataset),
+            tags=wb_tags,
+            config=wb_config
+            )
 
     elif args.logger_name == "wandb_shared":
         from pytorch_lightning.loggers import WandbLogger

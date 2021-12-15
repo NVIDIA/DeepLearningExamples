@@ -18,7 +18,10 @@ import time
 
 from apex import amp
 
-def train_loop(model, loss_func, scaler, epoch, optim, train_dataloader, val_dataloader, encoder, iteration, logger, args, mean, std):
+import wandb
+
+def train_loop(model, loss_func, scaler, epoch, optim, train_dataloader, val_dataloader, 
+encoder, iteration, logger, args, mean, std, wandb_instance=None):
     for nbatch, data in enumerate(train_dataloader):
         img = data[0][0][0]
         bbox = data[0][1][0]
@@ -62,13 +65,21 @@ def train_loop(model, loss_func, scaler, epoch, optim, train_dataloader, val_dat
         optim.zero_grad()
 
         if args.local_rank == 0:
+            if wandb_instance is not None:
+                wandb_log = {
+                    "epoch": epoch,
+                    "iteration": iteration,
+                    "loss": loss.item()
+                }
+                print(wandb_log)
+                wandb_instance.log(wandb_log)
             logger.update_iter(epoch, iteration, loss.item())
         iteration += 1
 
     return iteration
 
 
-def benchmark_train_loop(model, loss_func, scaler, epoch, optim, train_dataloader, val_dataloader, encoder, iteration, logger, args, mean, std):
+def benchmark_train_loop(model, loss_func, scaler, epoch, optim, train_dataloader, val_dataloader, encoder, iteration, logger, args, mean, std, wandb_instance=None):
     start_time = None
     # tensor for results
     result = torch.zeros((1,)).cuda()
@@ -124,6 +135,15 @@ def benchmark_train_loop(model, loss_func, scaler, epoch, optim, train_dataloade
         if nbatch >= args.benchmark_warmup:
             torch.cuda.synchronize()
             logger.update(args.batch_size*args.N_gpu, time.time() - start_time)
+
+        if wandb_instance is not None:
+            wandb_log = {
+                "epoch": epoch,
+                "iteration": iteration,
+                "loss": loss.item()
+            }
+            print(wandb_log)
+            wandb_instance.log(wandb_log)
 
     result.data[0] = logger.print_result()
     if args.N_gpu > 1:

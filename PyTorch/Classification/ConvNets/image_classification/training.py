@@ -41,8 +41,9 @@ from . import logger as log
 from . import utils
 from .logger import TrainingMetrics, ValidationMetrics
 from .models.common import EMA
+import wandb
 
-
+training_wandb_instance = None
 class Executor:
     def __init__(
         self,
@@ -166,6 +167,8 @@ class Trainer:
 
     def train_step(self, input, target, step=None):
         loss = self.executor.forward_backward(input, target)
+#        if training_wandb_instance is not None:
+#            training_wandb_instance.log({"loss": loss})
 
         self.steps_since_update += 1
 
@@ -230,6 +233,16 @@ def train(
                 reduced_loss = utils.reduce_tensor(loss.detach())
             else:
                 reduced_loss = loss.detach()
+        
+        if training_wandb_instance is not None:
+            training_wandb_instance.log({
+                'loss': reduced_loss.item(),
+                'lr': lr,
+                'images_per_seconds': utils.calc_ips(bs, it_time - data_time),
+                'total_images_per_seconds': utils.calc_ips(bs, it_time),
+                'data_time': data_time,
+                'compute_time': it_time - data_time
+                })
 
         log_fn(
             compute_ips=utils.calc_ips(bs, it_time - data_time),
@@ -332,7 +345,10 @@ def train_loop(
     save_checkpoints=True,
     checkpoint_dir="./",
     checkpoint_filename="checkpoint.pth.tar",
+    custom_wandb=None
 ):
+    global training_wandb_instance
+    training_wandb_instance=custom_wandb
     train_metrics = TrainingMetrics(logger)
     val_metrics = {
         k: ValidationMetrics(logger, k) for k in trainer.validation_steps().keys()

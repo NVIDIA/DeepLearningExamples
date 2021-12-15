@@ -20,11 +20,13 @@ RUN apt-get update && apt-get install -y pbzip2
 RUN pip install --no-cache-dir tokenizers==0.8.0 dataclasses gitpython rouge-score pynvml==8.0.4 \
  git+https://github.com/NVIDIA/dllogger pytorch-lightning==1.1.5 gdown
 
-RUN pip install tqdm --upgrade
+RUN pip install tqdm py-cpuinfo==8.0.0 wandb --upgrade
+
 
 WORKDIR /workspace
 RUN git clone https://github.com/artmatsak/cnn-dailymail.git
 RUN git clone https://github.com/gcunhase/AMICorpusXML.git
+
 
 WORKDIR /workspace/bart
 
