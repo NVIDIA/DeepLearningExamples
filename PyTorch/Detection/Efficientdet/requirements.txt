@@ -1,0 +1,5 @@
+nvidia-pyindex==1.0.9
+nvidia-dllogger==0.0.1.dev5
+pynvml==11.0.0
+py-cpuinfo==8.0.0
+wandb

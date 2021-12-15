@@ -31,7 +31,7 @@ from collections import OrderedDict
 from numbers import Number
 import dllogger
 import numpy as np
-
+import wandb
 
 def format_step(step):
     if isinstance(step, str):
@@ -211,7 +211,7 @@ class AverageMeter(object):
 
 
 class Logger(object):
-    def __init__(self, print_interval, backends, start_epoch=-1, verbose=False):
+    def __init__(self, print_interval, backends, start_epoch=-1, verbose=False, wandb_instance=None):
         self.epoch = start_epoch
         self.iteration = -1
         self.val_iteration = -1
@@ -221,6 +221,7 @@ class Logger(object):
         self.print_interval = print_interval
         self.verbose = verbose
         dllogger.init(backends)
+        self.wandb = wandb_instance
 
     def log_parameter(self, data, verbosity=0):
         dllogger.log(step="PARAMETER", data=data, verbosity=verbosity)
@@ -232,6 +233,9 @@ class Logger(object):
         dllogger.metadata(metric_name, metadata)
 
     def log_metric(self, metric_name, val, n=1):
+        if self.wandb is not None:
+            self.wandb.log({metric_name: val})
+
         self.metrics[metric_name]["meter"].record(val, n=n)
 
     def start_iteration(self, mode="train"):
@@ -360,7 +364,7 @@ class Metrics:
 
 
 class TrainingMetrics(Metrics):
-    def __init__(self, logger):
+    def __init__(self, logger, wandb_instance=None):
         super().__init__(logger)
         if self.logger is not None:
             self.map = {

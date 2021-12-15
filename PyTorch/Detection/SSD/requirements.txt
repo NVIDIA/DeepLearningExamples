@@ -1,3 +1,5 @@
 Cython>=0.28.4
 scikit-image>=0.15.0
 ujson>=4.0.2
+py-cpuinfo==8.0.0
+wandb

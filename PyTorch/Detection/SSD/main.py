@@ -29,6 +29,78 @@ from ssd.data import get_train_loader, get_val_dataset, get_val_dataloader, get_
 
 import dllogger as DLLogger
 
+import wandb
+import psutil
+import subprocess
+import platform
+import cpuinfo
+
+global wandb_instance
+wandb_instance = wandb.init()
+
+def set_wandb(args):
+    uname = platform.uname()
+    cpu = cpuinfo.get_cpu_info()
+    extra_tags = list()
+    if os.environ.get('WANDB_TAGS') is not None:
+        extra_tags = os.environ.get('WANDB_TAGS').split(',')
+
+    for arg in vars(args):
+        k = arg
+        v = getattr(args, arg)
+        if v is None:
+            v = "None"
+        if isinstance(v, str):
+            v = v.replace('=', '_')
+        extra_tags.append(f"{k}={v}")
+    
+
+    wandb_instance.tags = (       
+            f"precision={os.environ.get('PRECISION', 'FP32')}",
+            f"model=SSD300v1.1-{args.backbone}",
+            f"device={torch.cuda.get_device_properties(0).name}",
+            f"device_cuda_major={torch.cuda.get_device_properties(0).major}",
+            f"device_cuda_minor={torch.cuda.get_device_properties(0).minor}",
+            f"device_cuda_capability={torch.cuda.get_device_properties(0).major}.{torch.cuda.get_device_properties(0).minor}",
+            f"device_cuda_total_memory={torch.cuda.get_device_properties(0).total_memory}",
+            f"device_cuda_multi_processor_count={torch.cuda.get_device_properties(0).multi_processor_count}",
+            f"device_count={torch.cuda.device_count()}",
+            f"cpu_count_physical={psutil.cpu_count(logical = False)}",
+            f"cpu_count_logical={psutil.cpu_count(logical = True)}",
+            f"cpu_max_freq_mhz={psutil.cpu_freq().max:.2f}",
+            f"cpu_min_freq_mhz={psutil.cpu_freq().min:.2f}",
+            f"cpu_version={cpu['cpuinfo_version_string']}",
+            f"cpu_arch={cpu['arch']}",
+            f"cpu_vendor={cpu['vendor_id_raw']}",
+            f"cpu_brand={cpu['brand_raw']}",
+            f"cpu_stepping={cpu['stepping']}",
+            f"cpu_model={cpu['model']}",
+            f"cpu_family={cpu['family']}",
+            f"cpu_l3_cache_size={cpu['l3_cache_size']}",
+            f"cpu_l2_cache_size_MiB={cpu['l2_cache_size'].replace('MiB', '').strip()}",
+            f"cpu_l1_data_cache_size_KiB={cpu['l1_data_cache_size'].replace('KiB', '').strip()}",
+            f"cpu_l1_instruction_cache_size_KiB={cpu['l1_instruction_cache_size'].replace('KiB', '').strip()}",
+            f"cpu_l2_cache_line_size={cpu['l2_cache_line_size']}",
+            f"cpu_l2_cache_associativity={cpu['l2_cache_associativity']}",
+            f"mem_total_GB={psutil.virtual_memory().total >> 30}",
+            f"platform_system={uname.system.replace('platform_system', '')}",
+            f"platform_node={uname.node}",
+            f"platform_release={uname.release}",
+            f"platform_version={uname.version}",
+            f"platform_machine={uname.machine}",
+            f"platform_processor={uname.processor}",
+            *extra_tags
+            )
+
+    config_wandb_dict = dict()
+    for i in wandb_instance.tags:
+        k,v = i.split("=", 1)
+        config_wandb_dict[k] = v
+
+    wandb_instance.config.update(config_wandb_dict)
+
+    return wandb_instance
+
 # Apex imports
 try:
     from apex.parallel import DistributedDataParallel as DDP
@@ -139,6 +211,7 @@ def train(train_loop_func, logger, args):
     torch.manual_seed(args.seed)
     np.random.seed(seed=args.seed)
 
+    
 
     # Setup data, defaults
     dboxes = dboxes300_coco()
@@ -155,6 +228,9 @@ def train(train_loop_func, logger, args):
     start_epoch = 0
     iteration = 0
     loss_func = Loss(dboxes)
+
+    global wandb_instance
+    wandb_instance = set_wandb(args)
 
     if use_cuda:
         ssd300.cuda()
@@ -197,7 +273,7 @@ def train(train_loop_func, logger, args):
         start_epoch_time = time.time()
         iteration = train_loop_func(ssd300, loss_func, scaler,
                                     epoch, optimizer, train_loader, val_dataloader, encoder, iteration,
-                                    logger, args, mean, std)
+                                    logger, args, mean, std, wandb_instance=wandb_instance)
         if args.mode in ["training", "benchmark-training"]:
             scheduler.step()
         end_epoch_time = time.time() - start_epoch_time
@@ -280,7 +356,7 @@ if __name__ == "__main__":
         train_loop_func = train_loop
         logger = Logger('Training logger', log_interval=args.log_interval,
                         json_output=args.json_summary)
-
+    
     log_params(logger, args)
 
     train(train_loop_func, logger, args)

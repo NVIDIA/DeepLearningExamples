@@ -49,6 +49,78 @@ from utils.optimizers import create_optimizer, clip_grad_norm_2
 from utils.scheduler import create_scheduler
 from utils.model_ema import ModelEma
 
+import wandb
+import psutil
+import subprocess
+import platform
+import cpuinfo
+
+global wandb_instance
+wandb_instance = wandb.init()
+
+def set_wandb(args):
+    uname = platform.uname()
+    cpu = cpuinfo.get_cpu_info()
+    extra_tags = list()
+    if os.environ.get('WANDB_TAGS') is not None:
+        extra_tags = os.environ.get('WANDB_TAGS').split(',')
+
+    for arg in vars(args):
+        k = arg
+        v = getattr(args, arg)
+        if v is None:
+            v = "None"
+        if isinstance(v, str):
+            v = v.replace('=', '_')
+        extra_tags.append(f"{k}={v}")
+        
+    wandb_instance.tags = (
+            f"precision={os.environ.get('PRECISION', 'FP32')}",
+            f"learning_rate={args.lr}",
+            f"memory_format={args.memory_format}",
+            f"device={torch.cuda.get_device_properties(0).name}",
+            f"device_cuda_major={torch.cuda.get_device_properties(0).major}",
+            f"device_cuda_minor={torch.cuda.get_device_properties(0).minor}",
+            f"device_cuda_capability={torch.cuda.get_device_properties(0).major}.{torch.cuda.get_device_properties(0).minor}",
+            f"device_cuda_total_memory={torch.cuda.get_device_properties(0).total_memory}",
+            f"device_cuda_multi_processor_count={torch.cuda.get_device_properties(0).multi_processor_count}",
+            f"device_count={torch.cuda.device_count()}",
+            f"cpu_count_physical={psutil.cpu_count(logical = False)}",
+            f"cpu_count_logical={psutil.cpu_count(logical = True)}",
+            f"cpu_max_freq_mhz={psutil.cpu_freq().max:.2f}",
+            f"cpu_min_freq_mhz={psutil.cpu_freq().min:.2f}",
+            f"cpu_version={cpu['cpuinfo_version_string']}",
+            f"cpu_arch={cpu['arch']}",
+            f"cpu_vendor={cpu['vendor_id_raw']}",
+            f"cpu_brand={cpu['brand_raw']}",
+            f"cpu_stepping={cpu['stepping']}",
+            f"cpu_model={cpu['model']}",
+            f"cpu_family={cpu['family']}",
+            f"cpu_l3_cache_size={cpu['l3_cache_size']}",
+            f"cpu_l2_cache_size_MiB={cpu['l2_cache_size'].replace('MiB', '').strip()}",
+            f"cpu_l1_data_cache_size_KiB={cpu['l1_data_cache_size'].replace('KiB', '').strip()}",
+            f"cpu_l1_instruction_cache_size_KiB={cpu['l1_instruction_cache_size'].replace('KiB', '').strip()}",
+            f"cpu_l2_cache_line_size={cpu['l2_cache_line_size']}",
+            f"cpu_l2_cache_associativity={cpu['l2_cache_associativity']}",
+            f"mem_total_GB={psutil.virtual_memory().total >> 30}",
+            f"platform_system={uname.system.replace('platform_system', '')}",
+            f"platform_node={uname.node}",
+            f"platform_release={uname.release}",
+            f"platform_version={uname.version}",
+            f"platform_machine={uname.machine}",
+            f"platform_processor={uname.processor}",
+            *extra_tags
+            )
+
+    config_wandb_dict = dict()
+    for i in wandb_instance.tags:
+        k,v = i.split("=", 1)
+        config_wandb_dict[k] = v
+
+    wandb_instance.config.update(config_wandb_dict)
+
+    return wandb_instance
+
 torch.backends.cudnn.benchmark = True
 _libcudart = ctypes.CDLL('libcudart.so')
 
@@ -246,6 +318,9 @@ def get_outdirectory(path, *paths):
 def main():
     setup_default_logging()  ## TODO(sugh) replace
     args, args_text = _parse_args()
+    
+    wandb_instance = set_wandb(args)
+
     set_affinity(args.local_rank)
     random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -459,7 +534,8 @@ def main():
 
             train_metrics = train_epoch(
                 epoch, steps_per_epoch, model, loader_train_iter, optimizer, args,
-                lr_scheduler=lr_scheduler, output_dir=output_dir, use_amp=args.amp, scaler=scaler, model_ema=model_ema)
+                lr_scheduler=lr_scheduler, output_dir=output_dir, use_amp=args.amp, scaler=scaler, model_ema=model_ema,
+                wandb_instance=wandb_instance)
 
             if args.distributed and args.dist_bn in ('broadcast', 'reduce'):
                 if args.local_rank == 0:
@@ -505,7 +581,7 @@ def main():
 
 def train_epoch(
         epoch, steps_per_epoch, model, loader_iter, optimizer, args,
-        lr_scheduler=None, output_dir='', use_amp=False, scaler=None, model_ema=None):
+        lr_scheduler=None, output_dir='', use_amp=False, scaler=None, model_ema=None, wandb_instance=None):
 
     batch_time_m = AverageMeter()
     data_time_m = AverageMeter()
@@ -558,11 +634,23 @@ def train_epoch(
                 losses_m.update(reduced_loss.item(), input.size(0))
 
             if args.rank == 0:
+                
                 dllogger_data = {'train_batch_time': batch_time_m.avg, 
                 'train_loss': losses_m.avg,
                 'throughput': throughput_m.avg,
                 'lr': lr,
                 'train_data_time': data_time_m.avg}
+
+                wandb_data = {
+                    "batch_time": batch_time_m.avg, 
+                    "loss": losses_m.avg,
+                    "throughput": throughput_m.avg,
+                    "lr": lr,
+                    "data_time": data_time_m.avg,
+                    "epoch": epoch
+                }
+                if wandb_instance is not None:
+                    wandb_instance.log(wandb_data)
                 dllogger.log(step=(epoch, steps_per_epoch, batch_idx), data=dllogger_data, verbosity=0)
 
         if lr_scheduler is not None:
