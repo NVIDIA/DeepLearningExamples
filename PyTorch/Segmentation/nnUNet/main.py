@@ -15,7 +15,6 @@
 import ctypes
 import os
 
-import nvidia_dlprof_pytorch_nvtx
 import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, early_stopping
@@ -29,10 +28,6 @@ from utils.utils import make_empty_dir, set_cuda_devices, verify_ckpt_path
 
 if __name__ == "__main__":
     args = get_main_args()
-
-    if args.profile:
-        nvidia_dlprof_pytorch_nvtx.init()
-        print("Profiling enabled")
 
     if args.affinity != "disabled":
         set_affinity(int(os.getenv("LOCAL_RANK", "0")), args.gpus, mode=args.affinity)
@@ -67,7 +62,6 @@ if __name__ == "__main__":
                 mode=args.exec_mode,
                 warmup=args.warmup,
                 dim=args.dim,
-                profile=args.profile,
             )
         ]
     elif args.exec_mode == "train":
@@ -108,11 +102,7 @@ if __name__ == "__main__":
 
     if args.benchmark:
         if args.exec_mode == "train":
-            if args.profile:
-                with torch.autograd.profiler.emit_nvtx():
-                    trainer.fit(model, train_dataloader=data_module.train_dataloader())
-            else:
-                trainer.fit(model, train_dataloader=data_module.train_dataloader())
+            trainer.fit(model, train_dataloader=data_module.train_dataloader())
         else:
             # warmup
             trainer.test(model, test_dataloaders=data_module.test_dataloader())
