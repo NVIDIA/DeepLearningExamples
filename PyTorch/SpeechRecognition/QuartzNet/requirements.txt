@@ -1,6 +1,10 @@
-tqdm==4.53.0
+inflect==5.3.0
+ipdb
 librosa==0.8.0
+pandas==1.1.4
+pycuda==2020.1
+pyyaml>=5.4
 soundfile
 sox==1.4.1
-pyyaml
+tqdm==4.53.0
 git+git://github.com/NVIDIA/dllogger.git@26a0f8f1958de2c0c460925ff6102a4d2486d6cc#egg=dllogger
