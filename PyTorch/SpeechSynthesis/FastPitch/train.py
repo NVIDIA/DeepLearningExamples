@@ -34,17 +34,8 @@ import time
 import warnings
 from collections import defaultdict, OrderedDict
 
-try:
-    import nvidia_dlprof_pytorch_nvtx as pyprof
-except ModuleNotFoundError:
-    try:
-        import pyprof
-    except ModuleNotFoundError:
-        warnings.warn('PyProf is unavailable')
-
 import numpy as np
 import torch
-import torch.cuda.profiler as profiler
 import torch.distributed as dist
 import amp_C
 from apex.optimizers import FusedAdam, FusedLAMB
@@ -69,8 +60,6 @@ def parse_args(parser):
                         help='Path to dataset')
     parser.add_argument('--log-file', type=str, default=None,
                         help='Path to a DLLogger log file')
-    parser.add_argument('--pyprof', action='store_true',
-                        help='Enable pyprof profiling')
 
     train = parser.add_argument_group('training setup')
     train.add_argument('--epochs', type=int, required=True,
@@ -423,9 +412,6 @@ def main():
             model, device_ids=[args.local_rank], output_device=args.local_rank,
             find_unused_parameters=True)
 
-    if args.pyprof:
-        pyprof.init(enable_function_stack=True)
-
     start_epoch = [1]
     start_iter = [0]
 
@@ -473,10 +459,6 @@ def main():
         mt_ema_params = init_multi_tensor_ema(model, ema_model)
 
     model.train()
-
-    if args.pyprof:
-        torch.autograd.profiler.emit_nvtx().__enter__()
-        profiler.start()
 
     bmark_stats = BenchmarkStats()
 
@@ -631,10 +613,6 @@ def main():
         logger.flush()
 
     # Finished training
-    if args.pyprof:
-        profiler.stop()
-        torch.autograd.profiler.emit_nvtx().__exit__(None, None, None)
-
     if len(bmark_stats) > 0:
         log((), tb_total_steps=None, subset='train_avg', data=bmark_stats.get(args.benchmark_epochs_num))
 
