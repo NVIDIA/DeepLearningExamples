@@ -87,6 +87,56 @@ $ ./benchmark.py --help
 This command will build and run the benchmarks for AMP (Automatic Mixed Precision), FP32 and TF32.
 
 
+# Work Status
+| Framework   | Domain            | Task              | Model               | Status |
+| ----------- | ----------------- | ----------------- | ------------------- | ------ |
+| PyTorch     | Image             | Classification    | efficientnet        | Ok     |
+| PyTorch     | Image             | Classification    | resnet50v1.5        | Ok     |
+| PyTorch     | Image             | Classification    | resnext101-32x4d    | Ok     |
+| PyTorch     | Image             | Classification    | se-resnext101-32x4d | Ok     |
+| PyTorch     | Image             | Detection         | Efficientdet        | Ok     |
+| PyTorch     | Image             | Detection         | SSD                 | Ok     |
+| PyTorch     | DrugDiscovery     | SE3Transformer    | SE3Transformer      |
+| PyTorch     | Forecasting       | TFT               | TFT                 |        |
+| PyTorch     | LanguageModeling  | BART              | BART                | Ok     |
+| PyTorch     | LanguageModeling  | BERT              | BERT                |        |
+| PyTorch     | LanguageModeling  | Transformer-XL    | Transformer-XL      |
+| PyTorch     | Recommendation    | DLRM              | DLRM                |        |
+| PyTorch     | Recommendation    | NCF               | NCF                 |        |
+| PyTorch     | Segmentation      | MaskRCNN          | MaskRCNN            |        |
+| PyTorch     | Segmentation      | nnUNet            | nnUNet              |        |
+| PyTorch     | SpeechRecognition | Jasper            | Jasper              |        |
+| PyTorch     | SpeechRecognition | QuartzNet         | QuartzNet           |        |
+| PyTorch     | SpeechSynthesis   | FastPitch         | FastPitch           |        |
+| PyTorch     | SpeechSynthesis   | Tacotron2         | Tacotron2           |        |
+| PyTorch     | Translation       | GNMT              | GNMT                |        |
+| PyTorch     | Translation       | Transformer       | Transformer         |
+| TensorFlow  | Image             | Classification    | resnet50v1.5        |
+| TensorFlow  | Image             | Classification    | resnext101-32x4d    |
+| TensorFlow  | Image             | Classification    | se-resnext101-32x4d |
+| TensorFlow  | Image             | Detection         | SSD                 |        |
+| TensorFlow  | LanguageModeling  | BERT              | BERT                |        |
+| TensorFlow  | LanguageModeling  | Transformer-XL    | Transformer-XL      |
+| TensorFlow  | Recommendation    | VAE-CF            | VAE-CF              |        |
+| TensorFlow  | Recommendation    | NCF               | NCF                 |        |
+| TensorFlow  | Recommendation    | WideAndDeep       | WideAndDeep         |
+| TensorFlow  | Segmentation      | MaskRCNN          | MaskRCNN            |        |
+| TensorFlow  | Segmentation      | UNet\_3D\_Medical | UNet\_3D\_Medical   |
+| TensorFlow  | Segmentation      | UNet\_Industrial  | UNet\_Industrial    |
+| TensorFlow  | Segmentation      | UNet\_Medical     | UNet\_Medical       |
+| TensorFlow  | Segmentation      | Vnet              | Vnet                |        |
+| TensorFlow  | Translation       | GNMT              | GNMT                |        |
+| TensorFlow2 | Image             | Classification    | efficientnet        |        |
+| TensorFlow2 | LanguageModeling  | BERT              | BERT                |        |
+| TensorFlow2 | LanguageModeling  | ELECTRA           | ELECTRA             |        |
+| TensorFlow2 | Recommendation    | DLRM              | DLRM                |        |
+| TensorFlow2 | Recommendation    | WideAndDeep       | WideAndDeep         |
+| TensorFlow2 | Segmentation      | MaskRCNN          | MaskRCNN            |        |
+| TensorFlow2 | Segmentation      | UNet\_Medical     | UNet\_Medical       |
+| DGLPyTorch  | DrugDiscovery     | SE3Transformer    | SE3Transformer      |
+| MxNet       | Image             | Classification    | resnet50v1.5        |
+
+
 
 # ORIGINALLY : NVIDIA Deep Learning Examples for Tensor Cores
 
