@@ -140,6 +140,10 @@ def generate_docker(system_name, system_config, benchmark_name, benchmark_config
                     'CAPABILITY': capability
                     }
 
+
+            if 'backbone' in benchmark_config['params'] and 'model' not in benchmark_config['params']:
+                benchmark_config['params']['model'] = benchmark_config['params']['backbone']
+
             cmd_replacements = {**benchmark_config['params'], **extra_replacements}
         
             benchmark_cmd = ""
