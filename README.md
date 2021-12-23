@@ -1,4 +1,94 @@
-# NVIDIA Deep Learning Examples for Tensor Cores
+# BENCHMARK ANY NVIDIA GPU CARD
+
+## Quickstart
+### General workflow
+1) replace the wandb api key by yours
+3) define the GPU setup you have
+4) set the benchmark you want to explore
+5) run the shell
+
+### Before you start
+We highly suggest to setup and pipenv isolated environment
+```shell
+$ pip install --user pipenv
+```
+
+then
+```
+$ git clone git@github.com:theunifai/DeepLearningExamples.git
+```
+
+```shell
+$ cd DeepLearningExamples
+
+$ pipenv shell
+
+$ pipenv install -r requirements.txt
+```
+
+### Setup the wandb key
+you can either set it in the benchmark.yml file 
+or use the shell 
+```shell
+$ wandb login
+```
+if the API Key for wandb is not set in the benchmark.yml file 
+the system will look into your environment to fetch your api key
+
+### Define the GPU topology to benchmark
+in the Yaml file set the topology using you GPU configuration:
+```shell
+$ nvidia-smi
+```
+
+<img width="577" alt="Capture d’écran 2021-12-23 à 13 13 27" src="https://user-images.githubusercontent.com/690878/147239024-df41cc89-1cee-4a20-aacf-098b84b43e92.png">
+nvidia-smi will help you see the ids of the GPU to analyse.
+
+
+as presented above in the example with nvidia-smi here is the corresponding configuration in the yaml file.
+<img width="232" alt="Capture d’écran 2021-12-23 à 13 14 32" src="https://user-images.githubusercontent.com/690878/147239140-54873109-7e63-46eb-aedb-e1dae4722862.png">
+
+you can activate the capabilities to explore for each GPU (for instance V100s doesnt support AMP so it should be set to false).
+
+### setup of the benchmarks to explore
+
+<img width="323" alt="Capture d’écran 2021-12-23 à 13 16 08" src="https://user-images.githubusercontent.com/690878/147239334-38b9e762-a4d8-4ebe-9b0a-e078574d4e67.png">
+In the above example we can see that the benchmarks to explore are based on template already structure by UnifAI's team.
+all you have to set is (if needed) overwrite the hyperparameters you want to explore.
+
+Everything param value should be an array following this standard:
+```yaml
+benchmarks
+  benchmark-name
+    benchmark-template: <template on which you want to base your benchmark on>
+    active: <boolean status of the benchmark to explore : false means skip the benchmark>
+    params:
+      param1: [<custom value1=a>, <custom value2=b>]
+      param2: [<custom value1=c>, <custom value2=d>] <- this must be an array
+```
+
+the system will do the cartesian exploration of the benchmark meaning in our example exploring 4 parameters combination:
+ - a.c
+ - a.d
+ - b.c
+ - b.d
+
+
+### Running the benchmarks
+You are now ready to run the benchmarks
+you have many options that can be set
+```shell
+$ ./benchmark.py --help
+```
+
+```shell
+# ./benchmark.py --run
+```
+This command will build and run the benchmarks for AMP (Automatic Mixed Precision), FP32 and TF32.
+
+
+
+# ORIGINALLY : NVIDIA Deep Learning Examples for Tensor Cores
 
 ## Introduction
 This repository provides State-of-the-Art Deep Learning examples that are easy to train and deploy, achieving the best reproducible accuracy and performance with NVIDIA CUDA-X software stack running on NVIDIA Volta, Turing and Ampere GPUs.
