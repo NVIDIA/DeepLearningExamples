@@ -394,6 +394,8 @@ benchmarks-template:
       benchmark-iterations: [20]
       # 'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152'
       backbone: [resnet50]
+      # model should equals backbone
+      model: [resnet50]
     preparation:
       - 'mkdir -p /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/{backbone}/'
     docker:
@@ -440,6 +442,7 @@ benchmarks-template:
             --json-summary /results/{BENCHMARK_NAME}/{SYSTEM_NAME}/{CAPABILITY}/B{batch-size}xE{epochs}xLR{learning-rate}.json
   bart:
     params:
+      model: [bart]
       learning-rate: [1e-4]
       n_val: [-1]
       batch-size: [8]
@@ -564,15 +567,8 @@ benchmarks:
       learning-rate: [0.3]
       epochs: [5]
       batch-size: [128]
-  resnext101-32x4d:
-    benchmark-template: resnext101-32x4d
-    active: true
-    params:
-      learning-rate: [0.3]
-      epochs: [5]
-      batch-size: [128]
   se-resnext101-32x4d:
-    benchmark-template: resnext101-32x4d
+    benchmark-template: se-resnext101-32x4d
     active: true
     params:
       learning-rate: [0.3]

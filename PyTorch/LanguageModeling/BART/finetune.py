@@ -578,8 +578,8 @@ def main(args, model=None) -> SummarizationModule:
 
         wb_tags, wb_config = get_wb_tags_and_config(args)
         logger = WandbLogger(
-            name=os.environ.get("WANDB_PROJECT",model.output_dir.name), 
-            project=os.environ.get("WANDB_PROJECT", dataset),
+            name=os.environ.get("run_name", "bart"), 
+            project=os.environ.get("WANDB_PROJECT", "benchmark"),
             tags=wb_tags,
             config=wb_config
             )
