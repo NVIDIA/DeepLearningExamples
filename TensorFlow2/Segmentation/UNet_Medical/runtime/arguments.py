@@ -100,8 +100,11 @@ PARSER.add_argument('--use_amp', '--amp', dest='use_amp', action='store_true',
 PARSER.add_argument('--use_xla', '--xla', dest='use_xla', action='store_true',
                     help="""Train using XLA""")
 
-PARSER.add_argument('--use_trt', dest='use_trt', action='store_true',
+PARSER.add_argument('--use_tftrt', dest='use_tftrt', action='store_true',
                     help="""Use TF-TRT""")
+
+PARSER.add_argument('--use_savedmodel', dest='use_savedmodel', action='store_true',
+                    help="""Use SavedModel""")
 
 PARSER.add_argument('--resume_training', dest='resume_training', action='store_true',
                     help="""Resume training from a checkpoint""")
@@ -125,7 +128,8 @@ def parse_args(flags):
         'benchmark': flags.benchmark,
         'seed': flags.seed,
         'use_amp': flags.use_amp,
-        'use_trt': flags.use_trt,
+        'use_tftrt': flags.use_tftrt,
+        'use_savedmodel': flags.use_savedmodel,
         'use_xla': flags.use_xla,
         'resume_training': flags.resume_training,
     })

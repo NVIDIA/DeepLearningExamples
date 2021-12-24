@@ -35,10 +35,6 @@ try:
     from apex import amp
 except ModuleNotFoundError:
     warnings.warn('APEX AMP is unavailable')
-try:
-    import pyprof
-except ModuleNotFoundError:
-    warnings.warn('PyProf is unavailable')
 
 from torch.nn.parallel import DistributedDataParallel
 
@@ -122,8 +118,6 @@ def parse_args():
                                   'socket_unique_continuous',
                                   'disabled'],
                          help='type of CPU affinity')
-    general.add_argument('--profile', action='store_true',
-                         help='Enable profiling with DLProf')
 
     dataset = parser.add_argument_group('dataset setup')
     dataset.add_argument('--data', type=str, default='../data/wikitext-103',
@@ -748,12 +742,6 @@ def main():
             raise RuntimeError('Batch size needs to be divisible by '
                                'batch chunk')
 
-    if args.profile:
-        try:
-            pyprof.init(enable_function_stack=True)
-        except NameError:
-            warnings.warn('Called pyprof.init() but pyprof is not available')
-
     logging.info(args)
     dllogger.log(step='PARAMETER', data=vars(args))
 
@@ -1007,30 +995,28 @@ def main():
     # Loop over epochs.
     # At any point you can hit Ctrl + C to break out of training early.
     start_time = time.time()
-    with torch.autograd.profiler.emit_nvtx(enabled=args.profile):
-        with TimeoutHandler() as timeout_handler:
-            try:
-                for epoch in itertools.count(start=start_epoch):
-                    if args.roll:
-                        tr_iter.roll(seed=args.seed + epoch)
-                    train_step, best_val_loss = train(
-                        tr_iter, va_iter, model, para_model, model_config,
-                        optimizer, optimizer_sparse, scheduler,
-                        scheduler_sparse, scaler, vocab, epoch, last_batch,
-                        last_iter, train_step, best_val_loss, meters,
-                        timeout_handler, device, args
-                        )
+    with TimeoutHandler() as timeout_handler:
+        try:
+            for epoch in itertools.count(start=start_epoch):
+                if args.roll:
+                    tr_iter.roll(seed=args.seed + epoch)
+                train_step, best_val_loss = train(
+                    tr_iter, va_iter, model, para_model, model_config,
+                    optimizer, optimizer_sparse, scheduler, scheduler_sparse,
+                    scaler, vocab, epoch, last_batch, last_iter, train_step,
+                    best_val_loss, meters, timeout_handler, device, args
+                    )
 
-                    last_batch = 0
-                    last_iter = 0
+                last_batch = 0
+                last_iter = 0
 
-                    if train_step == args.max_step:
-                        logging.info('-' * 100)
-                        logging.info('End of training')
-                        break
-            except KeyboardInterrupt:
-                logging.info('-' * 100)
-                logging.info('Exiting from training early')
+                if train_step == args.max_step:
+                    logging.info('-' * 100)
+                    logging.info('End of training')
+                    break
+        except KeyboardInterrupt:
+            logging.info('-' * 100)
+            logging.info('Exiting from training early')
     elapsed = time.time() - start_time
 
     ###########################################################################
@@ -1045,9 +1031,8 @@ def main():
 
         # Run on test data.
         test_start_time = time.time()
-        with torch.autograd.profiler.emit_nvtx(enabled=args.profile):
-            test_loss = evaluate(te_iter, model, args)
-            test_loss = utils.distributed.all_reduce_item(test_loss, 'mean')
+        test_loss = evaluate(te_iter, model, args)
+        test_loss = utils.distributed.all_reduce_item(test_loss, 'mean')
         test_elapsed = time.time() - test_start_time
 
         logging.info('=' * 100)

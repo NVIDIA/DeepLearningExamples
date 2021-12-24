@@ -322,7 +322,7 @@ Additionally, you must specify a configuration of the network, including a data 
 
 The `train.py` script is an entry point for a training procedure. Refined recipes can be found in the `scripts` directory.
 The model trains for at most `--epochs` epochs. If option `--early_stopping N` is set, then training will end if for N subsequent epochs validation loss hadn’t improved.
-The details of the architecture and the dataset configuration are encapsulated by the `--dataset` option. This option chooses one of the configurations stored in the `configuration.py` file. You can enable mixed precision training by providing the `--use_amp` option. The training script supports multi-GPU training with the APEX package. To enable distributed training prepend training command with `python -m torch.distributed.launch --nproc_per_node=${NGPU}`.
+The details of the architecture and the dataset configuration are encapsulated by the `--dataset` option. This option chooses one of the configurations stored in the `configuration.py` file. You can enable mixed precision training by providing the `--use_amp` option. The training script supports multi-GPU training with the APEX package. To enable distributed training prepend training command with `python -m torch.distributed.run --nproc_per_node=${NGPU}`.
 
 Example command:
 ```

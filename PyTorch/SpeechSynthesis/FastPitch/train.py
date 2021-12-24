@@ -34,17 +34,8 @@ import time
 import warnings
 from collections import defaultdict, OrderedDict
 
-try:
-    import nvidia_dlprof_pytorch_nvtx as pyprof
-except ModuleNotFoundError:
-    try:
-        import pyprof
-    except ModuleNotFoundError:
-        warnings.warn('PyProf is unavailable')
-
 import numpy as np
 import torch
-import torch.cuda.profiler as profiler
 import torch.distributed as dist
 import amp_C
 from apex.optimizers import FusedAdam, FusedLAMB
@@ -54,8 +45,9 @@ from torch.utils.data.distributed import DistributedSampler
 
 import common.tb_dllogger as logger
 import models
+from common.tb_dllogger import log
 from common.text import cmudict
-from common.utils import prepare_tmp
+from common.utils import BenchmarkStats, prepare_tmp
 from fastpitch.attn_loss_function import AttentionBinarizationLoss
 from fastpitch.data_function import batch_to_gpu, TTSCollate, TTSDataset
 from fastpitch.loss_function import FastPitchLoss
@@ -68,8 +60,6 @@ def parse_args(parser):
                         help='Path to dataset')
     parser.add_argument('--log-file', type=str, default=None,
                         help='Path to a DLLogger log file')
-    parser.add_argument('--pyprof', action='store_true',
-                        help='Enable pyprof profiling')
 
     train = parser.add_argument_group('training setup')
     train.add_argument('--epochs', type=int, required=True,
@@ -98,6 +88,8 @@ def parse_args(parser):
                        help='Gradually increase the hard attention loss term')
     train.add_argument('--kl-loss-weight', type=float, default=1.0,
                        help='Gradually increase the hard attention loss term')
+    train.add_argument('--benchmark-epochs-num', type=int, default=20,
+                        help='Number of epochs for calculating final stats')
 
     opt = parser.add_argument_group('optimization setup')
     opt.add_argument('--optimizer', type=str, default='lamb',
@@ -302,15 +294,14 @@ def validate(model, epoch, total_iter, criterion, valset, batch_size,
 
     val_meta['took'] = time.perf_counter() - tik
 
-    logger.log((epoch,) if epoch is not None else (),
-               tb_total_steps=total_iter,
-               subset='val_ema' if ema else 'val',
-               data=OrderedDict([
-                   ('loss', val_meta['loss'].item()),
-                   ('mel_loss', val_meta['mel_loss'].item()),
-                   ('frames/s', num_frames.item() / val_meta['took']),
-                   ('took', val_meta['took'])]),
-               )
+    log((epoch,) if epoch is not None else (), tb_total_steps=total_iter,
+        subset='val_ema' if ema else 'val',
+        data=OrderedDict([
+            ('loss', val_meta['loss'].item()),
+            ('mel_loss', val_meta['mel_loss'].item()),
+            ('frames/s', num_frames.item() / val_meta['took']),
+            ('took', val_meta['took'])]),
+        )
 
     if was_training:
         model.train()
@@ -421,9 +412,6 @@ def main():
             model, device_ids=[args.local_rank], output_device=args.local_rank,
             find_unused_parameters=True)
 
-    if args.pyprof:
-        pyprof.init(enable_function_stack=True)
-
     start_epoch = [1]
     start_iter = [0]
 
@@ -472,24 +460,16 @@ def main():
 
     model.train()
 
-    if args.pyprof:
-        torch.autograd.profiler.emit_nvtx().__enter__()
-        profiler.start()
-
-    epoch_loss = []
-    epoch_mel_loss = []
-    epoch_num_frames = []
-    epoch_frames_per_sec = []
-    epoch_time = []
+    bmark_stats = BenchmarkStats()
 
     torch.cuda.synchronize()
     for epoch in range(start_epoch, args.epochs + 1):
         epoch_start_time = time.perf_counter()
 
-        epoch_loss += [0.0]
-        epoch_mel_loss += [0.0]
-        epoch_num_frames += [0]
-        epoch_frames_per_sec += [0.0]
+        epoch_loss = 0.0
+        epoch_mel_loss = 0.0
+        epoch_num_frames = 0
+        epoch_frames_per_sec = 0.0
 
         if distributed_run:
             train_loader.sampler.set_epoch(epoch)
@@ -498,7 +478,7 @@ def main():
         iter_loss = 0
         iter_num_frames = 0
         iter_meta = {}
-        iter_start_time = None
+        iter_start_time = time.perf_counter()
 
         epoch_iter = 0
         num_iters = len(train_loader) // args.grad_accumulation
@@ -509,8 +489,6 @@ def main():
                     break
                 total_iter += 1
                 epoch_iter += 1
-                if iter_start_time is None:
-                    iter_start_time = time.perf_counter()
 
                 adjust_learning_rate(total_iter, optimizer, args.learning_rate,
                                      args.warmup_steps)
@@ -582,26 +560,24 @@ def main():
                 if args.ema_decay > 0.0:
                     apply_multi_tensor_ema(args.ema_decay, *mt_ema_params)
 
-                iter_time = time.perf_counter() - iter_start_time
                 iter_mel_loss = iter_meta['mel_loss'].item()
                 iter_kl_loss = iter_meta['kl_loss'].item()
-                epoch_frames_per_sec[-1] += iter_num_frames / iter_time
-                epoch_loss[-1] += iter_loss
-                epoch_num_frames[-1] += iter_num_frames
-                epoch_mel_loss[-1] += iter_mel_loss
+                iter_time = time.perf_counter() - iter_start_time
+                epoch_frames_per_sec += iter_num_frames / iter_time
+                epoch_loss += iter_loss
+                epoch_num_frames += iter_num_frames
+                epoch_mel_loss += iter_mel_loss
 
-                logger.log((epoch, epoch_iter, num_iters),
-                           tb_total_steps=total_iter,
-                           subset='train',
-                           data=OrderedDict([
-                               ('loss', iter_loss),
-                               ('mel_loss', iter_mel_loss),
-                               ('kl_loss', iter_kl_loss),
-                               ('kl_weight', kl_weight),
-                               ('frames/s', iter_num_frames / iter_time),
-                               ('took', iter_time),
-                               ('lrate', optimizer.param_groups[0]['lr'])]),
-                           )
+                log((epoch, epoch_iter, num_iters), tb_total_steps=total_iter,
+                    subset='train', data=OrderedDict([
+                        ('loss', iter_loss),
+                        ('mel_loss', iter_mel_loss),
+                        ('kl_loss', iter_kl_loss),
+                        ('kl_weight', kl_weight),
+                        ('frames/s', iter_num_frames / iter_time),
+                        ('took', iter_time),
+                        ('lrate', optimizer.param_groups[0]['lr'])]),
+                )
 
                 accumulated_steps = 0
                 iter_loss = 0
@@ -610,20 +586,19 @@ def main():
                 iter_start_time = time.perf_counter()
 
         # Finished epoch
-        epoch_loss[-1] /= epoch_iter
-        epoch_mel_loss[-1] /= epoch_iter
-        epoch_time += [time.perf_counter() - epoch_start_time]
-        iter_start_time = None
+        epoch_loss /= epoch_iter
+        epoch_mel_loss /= epoch_iter
+        epoch_time = time.perf_counter() - epoch_start_time
 
-        logger.log((epoch,),
-                   tb_total_steps=None,
-                   subset='train_avg',
-                   data=OrderedDict([
-                       ('loss', epoch_loss[-1]),
-                       ('mel_loss', epoch_mel_loss[-1]),
-                       ('frames/s', epoch_num_frames[-1] / epoch_time[-1]),
-                       ('took', epoch_time[-1])]),
-                   )
+        log((epoch,), tb_total_steps=None, subset='train_avg',
+            data=OrderedDict([
+                ('loss', epoch_loss),
+                ('mel_loss', epoch_mel_loss),
+                ('frames/s', epoch_num_frames / epoch_time),
+                ('took', epoch_time)]),
+        )
+        bmark_stats.update(epoch_num_frames, epoch_loss, epoch_mel_loss,
+                           epoch_time)
 
         validate(model, epoch, total_iter, criterion, valset, args.batch_size,
                  collate_fn, distributed_run, batch_to_gpu)
@@ -638,26 +613,8 @@ def main():
         logger.flush()
 
     # Finished training
-    if args.pyprof:
-        profiler.stop()
-        torch.autograd.profiler.emit_nvtx().__exit__(None, None, None)
-
-    if len(epoch_loss) > 0:
-        # Was trained - average the last 20 measurements
-        last_ = lambda l: np.asarray(l[-20:])
-        epoch_loss = last_(epoch_loss)
-        epoch_mel_loss = last_(epoch_mel_loss)
-        epoch_num_frames = last_(epoch_num_frames)
-        epoch_time = last_(epoch_time)
-        logger.log((),
-                   tb_total_steps=None,
-                   subset='train_avg',
-                   data=OrderedDict([
-                       ('loss', epoch_loss.mean()),
-                       ('mel_loss', epoch_mel_loss.mean()),
-                       ('frames/s', epoch_num_frames.sum() / epoch_time.sum()),
-                       ('took', epoch_time.mean())]),
-                   )
+    if len(bmark_stats) > 0:
+        log((), tb_total_steps=None, subset='train_avg', data=bmark_stats.get(args.benchmark_epochs_num))
 
     validate(model, None, total_iter, criterion, valset, args.batch_size,
              collate_fn, distributed_run, batch_to_gpu)

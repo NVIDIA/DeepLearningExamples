@@ -66,8 +66,11 @@ class MaskedConv1d(nn.Conv1d):
         self.masked = masked
 
     def get_seq_len(self, lens):
-        return ((lens + 2 * self.padding[0] - self.dilation[0]
-                 * (self.kernel_size[0] - 1) - 1) // self.stride[0] + 1)
+        # rounding_mode not available in 20.10 container
+        # return torch.div((lens + 2 * self.padding[0] - self.dilation[0]
+        #                   * (self.kernel_size[0] - 1) - 1), self.stride[0], rounding_mode="floor") + 1
+        return torch.floor((lens + 2 * self.padding[0] - self.dilation[0]
+                            * (self.kernel_size[0] - 1) - 1) / self.stride[0]).long() + 1
 
     def forward(self, x, x_lens=None):
         if self.masked:

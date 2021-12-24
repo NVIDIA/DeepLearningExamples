@@ -51,7 +51,8 @@ def main():
                       augment=params.augment,
                       gpu_id=hvd.rank(),
                       num_gpus=hvd.size(),
-                      seed=params.seed)
+                      seed=params.seed,
+                      amp=params.use_amp)
 
     if 'train' in params.exec_mode:
         train(params, model, dataset, logger)

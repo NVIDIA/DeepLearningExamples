@@ -29,7 +29,6 @@ parser.add_argument("--test_batches", type=int, default=150, help="Number of bat
 parser.add_argument("--warmup", type=int, default=50, help="Warmup iterations before collecting statistics")
 parser.add_argument("--results", type=str, default="/results", help="Path to results directory")
 parser.add_argument("--logname", type=str, default="perf.json", help="Name of dlloger output")
-parser.add_argument("--profile", action="store_true", help="Enable dlprof profiling")
 
 if __name__ == "__main__":
     args = parser.parse_args()
@@ -45,7 +44,6 @@ if __name__ == "__main__":
     cmd += f"--test_batches {args.test_batches} "
     cmd += f"--warmup {args.warmup} "
     cmd += "--amp " if args.amp else ""
-    cmd += "--profile " if args.profile else ""
     if args.mode == "train":
         cmd += f"--batch_size {args.batch_size} "
     else:

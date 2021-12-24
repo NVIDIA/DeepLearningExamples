@@ -15,7 +15,6 @@
 import ctypes
 import os
 
-import nvidia_dlprof_pytorch_nvtx
 import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, early_stopping
@@ -30,12 +29,8 @@ from utils.utils import make_empty_dir, set_cuda_devices, verify_ckpt_path
 if __name__ == "__main__":
     args = get_main_args()
 
-    if args.profile:
-        nvidia_dlprof_pytorch_nvtx.init()
-        print("Profiling enabled")
-
     if args.affinity != "disabled":
-        affinity = set_affinity(int(os.getenv("LOCAL_RANK", "0")), args.gpus, mode=args.affinity)
+        set_affinity(int(os.getenv("LOCAL_RANK", "0")), args.gpus, mode=args.affinity)
 
     # Limit number of CPU threads
     os.environ["OMP_NUM_THREADS"] = "1"
@@ -67,7 +62,6 @@ if __name__ == "__main__":
                 mode=args.exec_mode,
                 warmup=args.warmup,
                 dim=args.dim,
-                profile=args.profile,
             )
         ]
     elif args.exec_mode == "train":
@@ -100,6 +94,7 @@ if __name__ == "__main__":
         default_root_dir=args.results,
         resume_from_checkpoint=ckpt_path,
         accelerator="ddp" if args.gpus > 1 else None,
+        checkpoint_callback=args.save_ckpt,
         limit_train_batches=1.0 if args.train_batches == 0 else args.train_batches,
         limit_val_batches=1.0 if args.test_batches == 0 else args.test_batches,
         limit_test_batches=1.0 if args.test_batches == 0 else args.test_batches,
@@ -107,11 +102,7 @@ if __name__ == "__main__":
 
     if args.benchmark:
         if args.exec_mode == "train":
-            if args.profile:
-                with torch.autograd.profiler.emit_nvtx():
-                    trainer.fit(model, train_dataloader=data_module.train_dataloader())
-            else:
-                trainer.fit(model, train_dataloader=data_module.train_dataloader())
+            trainer.fit(model, train_dataloader=data_module.train_dataloader())
         else:
             # warmup
             trainer.test(model, test_dataloaders=data_module.test_dataloader())
