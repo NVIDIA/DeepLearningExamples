@@ -63,7 +63,7 @@ benchmarks
     benchmark-template: <template on which you want to base your benchmark on>
     active: <boolean status of the benchmark to explore : false means skip the benchmark>
     params:
-      param1: [<custom value1=a>, <custom value2=b>]
+      param1: [<custom value1=a>, <custom value2=b>] <- this must be an array
       param2: [<custom value1=c>, <custom value2=d>] <- this must be an array
 ```
 
@@ -78,7 +78,7 @@ the system will do the cartesian exploration of the benchmark meaning in our exa
 You are now ready to run the benchmarks
 you have many options that can be set
 ```shell
-$ ./benchmark.py --help
+# ./benchmark.py --help
 ```
 
 ```shell
