@@ -87,7 +87,7 @@ you have many options that can be set
 This command will build and run the benchmarks for AMP (Automatic Mixed Precision), FP32 and TF32.
 
 
-# Work Status
+# Work Benchmark Implementation Status
 | Framework   | Domain            | Task              | Model               | Status |
 | ----------- | ----------------- | ----------------- | ------------------- | ------ |
 | PyTorch     | Image             | Classification    | efficientnet        | Ok     |
