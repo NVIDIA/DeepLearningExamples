@@ -19,6 +19,7 @@ import wandb
 import sqlite3
 from sqlite3 import Error
 from sqlalchemy import create_engine
+from alive_progress import alive_it
 
 def create_connection(db_file):
     """ create a database connection to the SQLite database
@@ -140,6 +141,10 @@ def generate_docker(system_name, system_config, benchmark_name, benchmark_config
                     'CAPABILITY': capability
                     }
 
+
+            if 'backbone' in benchmark_config['params'] and 'model' not in benchmark_config['params']:
+                benchmark_config['params']['model'] = benchmark_config['params']['backbone']
+
             cmd_replacements = {**benchmark_config['params'], **extra_replacements}
         
             benchmark_cmd = ""
@@ -204,7 +209,11 @@ def get_docker_status(docker_name):
 def runner(tracking_db, interactive_mode, show_cmd):
     db_conn = create_connection(tracking_db)
     while True:
-        run_cycle(db_conn, interactive_mode, show_cmd)
+        try:
+            run_cycle(db_conn, interactive_mode, show_cmd)
+        except Exception as e:
+            print("Error while running the run_cycle")
+            print(e)
         time.sleep(60)
 
 def run_cycle(db_conn, interactive_mode, show_cmd):
@@ -222,8 +231,9 @@ def run_cycle(db_conn, interactive_mode, show_cmd):
         update_task_status(db_conn, container.name, 'RUNNING')
         running_containers_list.append(container.name)
 
-    for index, row in df.iterrows():
-        print(f"{row['docker_name']}1: {row['status']}")
+    bar = alive_it(it=df.iterrows(), total=df.shape[0])
+    for index, row in bar:
+        bar.text(f"{row['docker_name']}: {row['status']}")
         if row['status'] == 'RUNNING' and row['docker_name'] not in running_containers_list:
             update_task_status(db_conn, container.name, 'STOPPED')
 
@@ -233,15 +243,14 @@ def run_cycle(db_conn, interactive_mode, show_cmd):
             for gpu in gpus_status['gpus']:
                 gpus_status_dict[gpu['index']] = len(gpu['processes'])
 
-            gpus = str(row['devices']).split(',')
+            gpus_for_run = str(row['devices']).split(',')
 
-            nb_processes = 0
-            for gpu in gpus:
-                nb_processes += gpus_status_dict[int(gpu)]
-                print(gpus_status_dict)
-
+            nb_processes_for_run = 0
+            for gpu in gpus_for_run:
+                nb_processes_for_run += gpus_status_dict[int(gpu)]
+           #     print(gpus_status_dict)
             
-            if nb_processes == 0:
+            if nb_processes_for_run == 0:
                 print(f"STARTING: {row['docker_name']}")
                 cmd = row['cmd']
                 if interactive_mode:
