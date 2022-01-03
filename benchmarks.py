@@ -48,6 +48,7 @@ def update_task_status(conn, benchmark_name, status):
     try:
         c = conn.cursor()
         c.execute("""UPDATE tasks SET status = ? WHERE benchmark_name = ?""", (status, benchmark_name))
+        conn.commit()
     except Error as e:
         print(e)
 
@@ -207,16 +208,16 @@ def get_docker_status(docker_name):
     status = None
 
 def runner(tracking_db, interactive_mode, show_cmd):
-    db_conn = create_connection(tracking_db)
     while True:
         try:
-            run_cycle(db_conn, interactive_mode, show_cmd)
+            run_cycle(interactive_mode, show_cmd, tracking_db)
         except Exception as e:
             print("Error while running the run_cycle")
             print(e)
         time.sleep(60)
 
-def run_cycle(db_conn, interactive_mode, show_cmd):
+def run_cycle(interactive_mode, show_cmd, tracking_db):
+    db_conn = create_connection(tracking_db)
     df = pd.read_sql_query("SELECT * FROM tasks", db_conn)
     client = docker.from_env()
     running_containers_list = list()
@@ -235,7 +236,7 @@ def run_cycle(db_conn, interactive_mode, show_cmd):
     for index, row in bar:
         bar.text(f"{row['docker_name']}: {row['status']}")
         if row['status'] == 'RUNNING' and row['docker_name'] not in running_containers_list:
-            update_task_status(db_conn, container.name, 'STOPPED')
+            update_task_status(db_conn, container.name, 'DONE')
 
         if row['status'] == 'PENDING':
             gpus_status = GPUStatCollection.new_query().jsonify()
