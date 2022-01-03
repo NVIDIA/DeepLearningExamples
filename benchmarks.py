@@ -236,7 +236,7 @@ def run_cycle(interactive_mode, show_cmd, tracking_db):
     for index, row in bar:
         bar.text(f"{row['docker_name']}: {row['status']}")
         if row['status'] == 'RUNNING' and row['docker_name'] not in running_containers_list:
-            update_task_status(db_conn, container.name, 'DONE')
+            update_task_status(db_conn, container.name, 'FINISHED')
 
         if row['status'] == 'PENDING':
             gpus_status = GPUStatCollection.new_query().jsonify()
