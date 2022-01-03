@@ -16,9 +16,9 @@ data:
   xsum: /root/data/xsum
 wandb:
   active: true
-  key: 0dd9f3c9ec3c8e35fcfea39b24fe8ba4a297f8ea
+  key: YOUR-WANDB-KEY-HERE
   project: benchmark
-  user: jilijeanlouis
+  user: YOUR-WANDB-USER-HERE
   additional-tags: 
     - "nvme=True"
 systems:
