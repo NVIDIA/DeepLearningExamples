@@ -20,10 +20,9 @@ ENV HOROVOD_CYCLE_TIME=0.1
 ENV HOROVOD_FUSION_THRESHOLD=67108864
 ENV HOROVOD_NUM_STREAMS=2
 
-
-USER root
-
-RUN pip install --no-cache-dir -e git+https://github.com/NVIDIA/dllogger#egg=dllogger
+RUN pip install --no-cache-dir nvidia-pyindex
+ADD requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 WORKDIR  /wd
 

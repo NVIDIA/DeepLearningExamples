@@ -1,0 +1,5 @@
+tensorflow-transform==0.24.1
+apache-beam==2.14
+tensorflow-metadata==0.14.0
+pydot
+dill
