@@ -120,7 +120,7 @@ def parse_args(parser):
 
     text_processing = parser.add_argument_group('Text processing parameters')
     text_processing.add_argument('--text-cleaners', nargs='*',
-                                 default=['english_cleaners'], type=str,
+                                 default=['english_cleaners_v2'], type=str,
                                  help='Type of text cleaners for input text')
     text_processing.add_argument('--symbol-set', type=str, default='english_basic',
                                  help='Define symbol set for input text')

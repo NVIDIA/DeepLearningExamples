@@ -277,6 +277,7 @@ To train your model using mixed or TF32 precision with Tensor Cores or using FP3
    python inference.py \
        --cuda \
        --fastpitch output/<FastPitch checkpoint> \
+       --energy-conditioning \
        --waveglow pretrained_models/waveglow/<WaveGlow checkpoint> \
        --wn-channels 256 \
        -i phrases/devset10.tsv \
