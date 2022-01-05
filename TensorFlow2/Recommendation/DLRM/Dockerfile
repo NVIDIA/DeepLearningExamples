@@ -18,11 +18,13 @@
 ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:21.06-tf2-py3
 FROM ${FROM_IMAGE_NAME}
 
-RUN pip install -e git+https://github.com/NVIDIA/dllogger#egg=dllogger
+WORKDIR /dlrm
+
+ADD requirements.txt .
+
+RUN pip install -r requirements.txt
 
 ENV HOROVOD_CYCLE_TIME=0.1
-
-WORKDIR /dlrm
 
 ADD . .
 
