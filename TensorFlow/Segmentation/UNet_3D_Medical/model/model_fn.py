@@ -13,7 +13,6 @@
 # limitations under the License.
 
 """ Model function in charge to collect metrics and feed them to the optimizer """
-import horovod.tensorflow as hvd
 import tensorflow as tf
 
 from model.unet3d import Builder
@@ -71,9 +70,9 @@ def unet_3d(features, labels, mode, params):
     loss = tf.identity(loss, name="total_loss_ref")
 
     global_step = tf.compat.v1.train.get_or_create_global_step()
-    boundaries = [params.max_steps // (2 * hvd.size()),
-                  params.max_steps // (2 * hvd.size()),
-                  3 * params.max_steps // (4 * hvd.size())]
+    boundaries = [params.max_steps // 2,
+                  params.max_steps // 2,
+                  3 * params.max_steps // 4]
 
     lr = params.learning_rate
     values = [lr / 4, lr, lr / 5, lr / 20]
@@ -83,8 +82,6 @@ def unet_3d(features, labels, mode, params):
     if params.use_amp:
         loss_scale = tf.train.experimental.DynamicLossScale()
         optimizer = tf.compat.v1.train.experimental.MixedPrecisionLossScaleOptimizer(optimizer, loss_scale)
-
-    optimizer = hvd.DistributedOptimizer(optimizer)
 
     with tf.control_dependencies(tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.UPDATE_OPS)):
         train_op = optimizer.minimize(loss, global_step=global_step)

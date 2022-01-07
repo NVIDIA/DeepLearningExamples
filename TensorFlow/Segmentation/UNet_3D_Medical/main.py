@@ -28,7 +28,6 @@ Full argument definition can be found in `arguments.py`.
 import os
 
 import numpy as np
-import horovod.tensorflow as hvd
 
 from model.model_fn import unet_3d
 from dataset.data_loader import Dataset, CLASSES
@@ -49,15 +48,13 @@ def parse_evaluation_results(result, logger, step=()):
     data['MeanDice'] = sum([result[CLASSES[i]] for i in range(len(CLASSES))]) / len(CLASSES)
     data['WholeTumor'] = float(result['WholeTumor'])
 
-    if hvd.rank() == 0:
-        logger.log(step=step, data=data)
+    logger.log(step=step, data=data)
 
     return data
 
 
 def main():
     """ Starting point of the application """
-    hvd.init()
     set_flags()
     params = PARSER.parse_args()
     logger = get_logger(params)
@@ -73,7 +70,7 @@ def main():
     hooks = get_hooks(params, logger)
 
     if 'train' in params.exec_mode:
-        max_steps = params.max_steps // (1 if params.benchmark else hvd.size())
+        max_steps = params.max_steps
         estimator.train(
             input_fn=dataset.train_fn,
             steps=max_steps,
@@ -82,14 +79,13 @@ def main():
         result = estimator.evaluate(input_fn=dataset.eval_fn, steps=dataset.eval_size)
         _ = parse_evaluation_results(result, logger)
     if params.exec_mode == 'predict':
-        if hvd.rank() == 0:
-            predictions = estimator.predict(
-                input_fn=dataset.test_fn, hooks=hooks)
+        predictions = estimator.predict(
+            input_fn=dataset.test_fn, hooks=hooks)
 
-            for idx, pred in enumerate(predictions):
-                volume = pred['predictions']
-                if not params.benchmark:
-                    np.save(os.path.join(params.model_dir, "vol_{}.npy".format(idx)), volume)
+        for idx, pred in enumerate(predictions):
+            volume = pred['predictions']
+            if not params.benchmark:
+                np.save(os.path.join(params.model_dir, "vol_{}.npy".format(idx)), volume)
 
 
 if __name__ == '__main__':

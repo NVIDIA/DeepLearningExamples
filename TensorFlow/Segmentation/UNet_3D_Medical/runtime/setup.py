@@ -21,8 +21,6 @@ import dllogger as logger
 from dllogger import StdOutBackend, Verbosity, JSONStreamBackend
 
 import tensorflow as tf
-import horovod.tensorflow as hvd
-
 
 def set_flags():
     """ Set necessary flags for execution """
@@ -47,7 +45,7 @@ def prepare_model_dir(params):
     :return: Path to model dir
     """
     model_dir = os.path.join(params.model_dir, "model_checkpoint")
-    model_dir = model_dir if (hvd.rank() == 0 and not params.benchmark) else None
+    model_dir = model_dir if (not params.benchmark) else None
     if model_dir is not None:
         os.makedirs(model_dir, exist_ok=True)
         if ('train' in params.exec_mode) and (not params.resume_training):
@@ -72,14 +70,13 @@ def build_estimator(params, model_fn):
         config.graph_options.optimizer_options.global_jit_level = tf.compat.v1.OptimizerOptions.ON_1
 
     config.gpu_options.allow_growth = True
-    config.gpu_options.visible_device_list = str(hvd.local_rank())
+    config.gpu_options.visible_device_list = "0"
     config.intra_op_parallelism_threads = 1
-    config.inter_op_parallelism_threads = max(2, (multiprocessing.cpu_count() // hvd.size()) - 2)
 
     if params.use_amp:
         config.graph_options.rewrite_options.auto_mixed_precision = 1
 
-    checkpoint_steps = (params.max_steps // hvd.size()) if hvd.rank() == 0 else None
+    checkpoint_steps = params.max_steps
     checkpoint_steps = checkpoint_steps if not params.benchmark else None
     run_config = tf.estimator.RunConfig(
         save_summary_steps=params.max_steps,
@@ -100,10 +97,8 @@ def get_logger(params):
     :param params: Dict with additional parameters
     :return: logger
     """
-    backends = []
-    if hvd.rank() == 0:
-        backends += [StdOutBackend(Verbosity.VERBOSE)]
-        if params.log_dir:
-            backends += [JSONStreamBackend(Verbosity.VERBOSE, params.log_dir)]
+    backends = [StdOutBackend(Verbosity.VERBOSE)]
+    if params.log_dir:
+        backends += [JSONStreamBackend(Verbosity.VERBOSE, params.log_dir)]
     logger.init(backends=backends)
     return logger

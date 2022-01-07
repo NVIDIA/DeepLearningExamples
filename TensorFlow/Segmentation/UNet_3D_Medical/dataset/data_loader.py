@@ -16,7 +16,6 @@
 import os
 
 import numpy as np
-import horovod.tensorflow as hvd
 import tensorflow as tf
 
 from dataset.transforms import NormalizeImages, OneHotLabels, apply_transforms, PadXYZ, RandomCrop3D, \
@@ -128,7 +127,6 @@ class Dataset: # pylint: disable=R0902
 
         dataset = tf.data.TFRecordDataset(filenames=self._train)
 
-        dataset = dataset.shard(hvd.size(), hvd.rank())
         dataset = dataset.cache()
         dataset = dataset.shuffle(buffer_size=self._batch_size * 8, seed=self._seed)
         dataset = dataset.repeat()

@@ -17,7 +17,6 @@ import time
 
 import numpy as np
 import tensorflow as tf
-import horovod.tensorflow as hvd
 
 
 def get_hooks(params, logger):
@@ -52,12 +51,10 @@ def get_debug_predict_hooks(logger, params):
     :param params: Dict with additional parameters
     :return: Estimator hooks
     """
-    hooks = []
-    if hvd.rank() == 0:
-        hooks += [ProfilingHook(warmup_steps=params.warmup_steps,
-                                global_batch_size=params.batch_size,
-                                logger=logger,
-                                mode='inference')]
+    hooks = [ProfilingHook(warmup_steps=params.warmup_steps,
+                            global_batch_size=params.batch_size,
+                            logger=logger,
+                            mode='inference')]
     return hooks
 
 
@@ -68,15 +65,13 @@ def get_debug_training_hooks(logger, params):
     :param params: Dict with additional parameters
     :return: Estimator hooks
     """
-    hooks = [hvd.BroadcastGlobalVariablesHook(0)]
-    if hvd.rank() == 0:
-        hooks += [TrainingHook(log_every=params.log_every,
-                               logger=logger,
-                               tensor_names=['total_loss_ref:0']),
-                  ProfilingHook(warmup_steps=params.warmup_steps,
-                                global_batch_size=hvd.size() * params.batch_size,
-                                logger=logger,
-                                mode='train')]
+    hooks = [TrainingHook(log_every=params.log_every,
+                            logger=logger,
+                            tensor_names=['total_loss_ref:0']),
+                ProfilingHook(warmup_steps=params.warmup_steps,
+                            global_batch_size=params.batch_size,
+                            logger=logger,
+                            mode='train')]
     return hooks
 
 
@@ -89,12 +84,11 @@ def get_predict_hooks(logger, params):
     """
     hooks = []
 
-    if hvd.rank() == 0:
-        if params.benchmark:
-            hooks = [ProfilingHook(warmup_steps=params.warmup_steps,
-                                   global_batch_size=params.batch_size,
-                                   logger=logger,
-                                   mode='test')]
+    if params.benchmark:
+        hooks = [ProfilingHook(warmup_steps=params.warmup_steps,
+                                global_batch_size=params.batch_size,
+                                logger=logger,
+                                mode='test')]
     return hooks
 
 
@@ -105,20 +99,17 @@ def get_training_hooks(logger, params):
     :param params: Dict with additional parameters
     :return: Estimator hooks
     """
-    hooks = [hvd.BroadcastGlobalVariablesHook(0)]
+    hooks = [OomReportingHook()]
 
-    if hvd.rank() == 0:
-        hooks += [OomReportingHook()]
-
-        if params.benchmark:
-            hooks += [ProfilingHook(warmup_steps=params.warmup_steps,
-                                    global_batch_size=hvd.size() * params.batch_size,
-                                    logger=logger,
-                                    mode='train')]
-        else:
-            hooks += [TrainingHook(log_every=params.log_every,
-                                   logger=logger,
-                                   tensor_names=['total_loss_ref:0'])]
+    if params.benchmark:
+        hooks += [ProfilingHook(warmup_steps=params.warmup_steps,
+                                global_batch_size= params.batch_size,
+                                logger=logger,
+                                mode='train')]
+    else:
+        hooks += [TrainingHook(log_every=params.log_every,
+                                logger=logger,
+                                tensor_names=['total_loss_ref:0'])]
 
     return hooks
 
