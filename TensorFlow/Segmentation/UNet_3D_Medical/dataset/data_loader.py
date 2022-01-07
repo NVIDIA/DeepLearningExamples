@@ -58,7 +58,7 @@ class Dataset: # pylint: disable=R0902
         :param params: Dictionary with additional configuration parameters
         """
         self._folders = np.array([os.path.join(data_dir, path) for path in os.listdir(data_dir)
-                                  if path.endswith(".tfrecords")])
+                                  if path.endswith(".tfrecord")])
         assert len(self._folders) > 0, "No matching data found at {}".format(data_dir)
         self._train, self._eval = cross_validation(self._folders, fold_idx=fold_idx, n_folds=n_folds)
         self._input_shape = input_shape
