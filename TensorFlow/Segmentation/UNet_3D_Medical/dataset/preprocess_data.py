@@ -53,7 +53,7 @@ def load_features(path):
     """
     data = np.zeros((240, 240, 155, 4), dtype=np.uint8)
     name = os.path.basename(path)
-    for i, modality in enumerate(["_t1.nii.gz", "_t1ce.nii.gz", "_t2.nii.gz", "_flair.nii.gz"]):
+    for i, modality in enumerate(["_t1.nii", "_t1ce.nii", "_t2.nii", "_flair.nii"]):
         vol = load_single_nifti(os.path.join(path, name + modality)).astype(np.float32)
         vol[vol > 0.85 * vol.max()] = 0.85 * vol.max()
         vol = 255 * vol / vol.max()
@@ -68,7 +68,7 @@ def load_segmentation(path):
     :param path: Path to dataset
     :return: Loaded data
     """
-    path = os.path.join(path, os.path.basename(path)) + "_seg.nii.gz"
+    path = os.path.join(path, os.path.basename(path)) + "_seg.nii"
     return load_single_nifti(path).astype(np.uint8)
 
 
