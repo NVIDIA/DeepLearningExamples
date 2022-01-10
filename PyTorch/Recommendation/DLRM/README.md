@@ -1,55 +1,65 @@
 # DLRM For PyTorch
 
-This repository provides a script and recipe to train the Deep Learning Recommendation Model (DLRM) to achieve state-of-the-art accuracy and is tested and maintained by NVIDIA.
+This repository provides a script and recipe to train the Deep Learning Recommendation Model (DLRM)
+to achieve state-of-the-art accuracy and is tested and maintained by NVIDIA.
 
-## Table Of Contents	
+## Table Of Contents
 
-  * [Model overview](#model-overview)
-    + [Model architecture](#model-architecture)
-    + [Default configuration](#default-configuration)
-    + [Feature support matrix](#feature-support-matrix)
-      - [Features](#features)
-    + [Mixed precision training](#mixed-precision-training)
-      - [Enabling mixed precision](#enabling-mixed-precision)
-      - [Enabling TF32](#enabling-tf32)
-    + [Hybrid-parallel multi-GPU with all-2-all communication](#hybrid-parallel-multi-gpu-with-all-2-all-communication)
-      - [Embedding table placement and load balancing](#embedding-table-placement-and-load-balancing)
-    + [Preprocessing on GPU](#preprocessing-on-gpu)
-  * [Setup](#setup)
-    + [Requirements](#requirements)
-  * [Quick Start Guide](#quick-start-guide)
-  * [Advanced](#advanced)
-    + [Scripts and sample code](#scripts-and-sample-code)
-    + [Parameters](#parameters)
-    + [Command-line options](#command-line-options)
-    + [Getting the data](#getting-the-data)
-      - [Dataset guidelines](#dataset-guidelines)
-      - [Multi-dataset](#multi-dataset)
-      - [Preprocessing](#preprocessing)
-        * [NVTabular](#nvtabular)
-        * [Spark](#spark)
-    + [Training process](#training-process)
-    + [Inference process](#inference-process)
-    + [Deploying DLRM Using NVIDIA Triton Inference Server](#deploying-dlrm-using-nvidia-triton-inference-server)
-  * [Performance](#performance)
-    + [Benchmarking](#benchmarking)
-      - [Training performance benchmark](#training-performance-benchmark)
-      - [Inference performance benchmark](#inference-performance-benchmark)
-    + [Results](#results)
-      - [Training accuracy results](#training-accuracy-results)
-        * [Training accuracy: NVIDIA DGX A100 (8x A100 80GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-80gb)
-        * [Training accuracy: NVIDIA DGX-1 (8x V100 32GB)](#training-accuracy-nvidia-dgx-1-8x-v100-32gb)
-        * [Training accuracy plots](#training-accuracy-plots)
-        * [Training stability test](#training-stability-test)
-        * [Impact of mixed precision on training accuracy](#impact-of-mixed-precision-on-training-accuracy)
-      - [Training performance results](#training-performance-results)
-        * [Training performance: NVIDIA DGX A100 (8x A100 80GB)](#training-performance-nvidia-dgx-a100-8x-a100-80gb)
-        * [Training performance: NVIDIA DGX A100 (8x A100 40GB)](#training-performance-nvidia-dgx-a100-8x-a100-40gb)
-        * [Training performance: NVIDIA DGX-1 (8x V100 32GB)](#training-performance-nvidia-dgx-1-8x-v100-32gb)
-        * [Training performance: NVIDIA DGX-2 (16x V100 32GB)](#training-performance-nvidia-dgx-2-16x-v100-32gb)
-  * [Release notes](#release-notes)
-    + [Changelog](#changelog)
-    + [Known issues](#known-issues)
+- [Model overview](#model-overview)
+    * [Model architecture](#model-architecture)
+    * [Default configuration](#default-configuration)
+    * [Feature support matrix](#feature-support-matrix)
+        * [Features](#features)
+    * [Mixed precision training](#mixed-precision-training)
+        * [Enabling mixed precision](#enabling-mixed-precision)
+        * [Enabling TF32](#enabling-tf32)
+    * [Hybrid-parallel multi-GPU with all-2-all communication](#hybrid-parallel-multi-gpu-with-all-2-all-communication)
+        * [Embedding table placement and load balancing](#embedding-table-placement-and-load-balancing)
+    * [Preprocessing on GPU](#preprocessing-on-gpu)
+    * [BYO dataset functionality overview](#byo-dataset-functionality-overview)
+        * [Glossary](#glossary)
+        * [Dataset feature specification](#dataset-feature-specification)
+        * [Data flow in NVIDIA Deep Learning Examples recommendation models](#data-flow-in-nvidia-deep-learning-examples-recommendation-models)
+        * [Example of dataset feature specification](#example-of-dataset-feature-specification)
+        * [BYO dataset functionality](#byo-dataset-functionality)
+- [Setup](#setup)
+    * [Requirements](#requirements)
+- [Quick Start Guide](#quick-start-guide)
+- [Advanced](#advanced)
+    * [Scripts and sample code](#scripts-and-sample-code)
+    * [Command-line options](#command-line-options)
+    * [Getting the data](#getting-the-data)
+        * [Dataset guidelines](#dataset-guidelines)
+        * [BYO dataset](#byo-dataset)
+          * [Channel definitions and requirements](#channel-definitions-and-requirements)
+          * [BYO dataset constraints for the model](#BYO-dataset-constraints-for-the-model)
+        * [Preprocessing](#preprocessing)
+            * [NVTabular](#nvtabular)
+            * [Spark](#spark)
+    * [Training process](#training-process)
+    * [Inference process](#inference-process)
+    * [Deploying DLRM Using NVIDIA Triton Inference Server](#deploying-dlrm-using-nvidia-triton-inference-server)
+- [Performance](#performance)
+    * [Benchmarking](#benchmarking)
+        * [Training performance benchmark](#training-performance-benchmark)
+        * [Inference performance benchmark](#inference-performance-benchmark)
+    * [Results](#results)
+        * [Training accuracy results](#training-accuracy-results)
+            * [Training accuracy: NVIDIA DGX A100 (8x A100 80GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-80gb)
+            * [Training accuracy: NVIDIA DGX-1 (8x V100 32GB)](#training-accuracy-nvidia-dgx-1-8x-v100-32gb)
+            * [Training accuracy plots](#training-accuracy-plots)
+            * [Training stability test](#training-stability-test)
+            * [Impact of mixed precision on training accuracy](#impact-of-mixed-precision-on-training-accuracy)
+        * [Training performance results](#training-performance-results)
+            * [Training performance: NVIDIA DGX A100 (8x A100 80GB)](#training-performance-nvidia-dgx-a100-8x-a100-80gb)
+            * [Training performance: NVIDIA DGX-1 (8x V100 32GB)](#training-performance-nvidia-dgx-1-8x-v100-32gb)
+            * [Training performance: NVIDIA DGX-2 (16x V100 32GB)](#training-performance-nvidia-dgx-2-16x-v100-32gb)
+        * [Inference performance results](#inference-performance-results)
+            * [Inference performance: NVIDIA DGX A100 (1x A100 80GB)](#inference-performance-nvidia-dgx-a100-1x-a100-80gb)
+            * [Inference performance: NVIDIA DGX-1 (1x V100 32GB)](#inference-performance-nvidia-dgx-1-1x-v100-32gb)
+- [Release notes](#release-notes)
+    * [Changelog](#changelog)
+    * [Known issues](#known-issues)
 
 ## Model overview
 
@@ -98,11 +108,12 @@ The following features were implemented in this model:
     
 ### Feature support matrix
 
-The following features are supported by this model: 
+This model supports the following features:
 
 | Feature                                 | DLRM                
 |-----------------------------------------|-----
 |Automatic mixed precision (AMP)          | yes
+|CUDA Graphs                              | yes
 |Hybrid-parallel multi-GPU with all-2-all | yes
 |Preprocessing on GPU with NVTabular      | yes
 |Preprocessing on GPU with Spark 3        | yes
@@ -111,6 +122,8 @@ The following features are supported by this model:
 #### Features
 
 Automatic Mixed Precision (AMP) - enables mixed precision training without any changes to the code-base by performing automatic graph rewrites and loss scaling controlled by an environmental variable.
+
+CUDA Graphs - This feature allows to launch multiple GPU operations through a single CPU operation. The result is a vast reduction in CPU overhead. The benefits are particularly pronounced when training with relatively small batch sizes. The CUDA Graphs feature has been available through a [native PyTorch API](https://pytorch.org/docs/master/notes/cuda.html#cuda-graphs) starting from PyTorch v1.10. 
 
 Multi-GPU training with PyTorch distributed - our model uses `torch.distributed` to implement efficient multi-GPU training with NCCL. For details, see example sources in this repository or see the [PyTorch Tutorial](https://pytorch.org/tutorials/intermediate/dist_tuto.html).
 
@@ -176,6 +189,176 @@ We use the following heuristic for dividing the work between the GPUs:
 
 Please refer to [the "Preprocessing" section](#preprocessing) for a detailed description of the Apache Spark 3.0 and NVTabular GPU functionality 
 
+### BYO dataset functionality overview
+
+This section describes how you can train the DeepLearningExamples RecSys models on your own datasets without changing
+the model or data loader and with similar performance to the one published in each repository.
+This can be achieved thanks to Dataset Feature Specification, which describes how the dataset, data loader and model
+interact with each other during training, inference and evaluation.
+Dataset Feature Specification has a consistent format across all recommendation models in NVIDIA’s DeepLearningExamples
+repository, regardless of dataset file type and the data loader,
+giving you the flexibility to train RecSys models on your own datasets.
+
+- [Glossary](#glossary)
+- [Dataset Feature Specification](#dataset-feature-specification)
+- [Data Flow in Recommendation Models in DeepLearning examples](#data-flow-in-nvidia-deep-learning-examples-recommendation-models)
+- [Example of Dataset Feature Specification](#example-of-dataset-feature-specification)
+- [BYO dataset functionality](#byo-dataset-functionality)
+
+#### Glossary
+
+The Dataset Feature Specification consists of three mandatory and one optional section:
+
+<b>feature_spec </b> provides a base of features that may be referenced in other sections, along with their metadata.
+	Format: dictionary (feature name) => (metadata name => metadata value)<br>
+
+<b>source_spec </b> provides information necessary to extract features from the files that store them. 
+	Format: dictionary (mapping name) => (list of chunks)<br>
+
+* <i>Mappings</i> are used to represent different versions of the dataset (think: train/validation/test, k-fold splits). A mapping is a list of chunks.<br>
+* <i>Chunks</i> are subsets of features that are grouped together for saving. For example, some formats may constrain data saved in one file to a single data type. In that case, each data type would correspond to at least one chunk. Another example where this might be used is to reduce file size and enable more parallel loading. Chunk description is a dictionary of three keys:<br>
+  * <i>type</i> provides information about the format in which the data is stored. Not all formats are supported by all models.<br>
+  * <i>features</i> is a list of features that are saved in a given chunk. Order of this list may matter: for some formats, it is crucial for assigning read data to the proper feature.<br>
+  * <i>files</i> is a list of paths to files where the data is saved. For Feature Specification in yaml format, these paths are assumed to be relative to the yaml file’s directory (basename). <u>Order of this list matters:</u> It is assumed that rows 1 to i appear in the first file, rows i+1 to j in the next one, etc. <br>
+
+<b>channel_spec</b> determines how features are used. It is a mapping (channel name) => (list of feature names). 
+
+Channels are model specific magic constants. In general, data within a channel is processed using the same logic. Example channels: model output (labels), categorical ids, numerical inputs, user data, and item data.
+
+<b>metadata</b> is a catch-all, wildcard section: If there is some information about the saved dataset that does not fit into the other sections, you can store it here.
+
+#### Dataset feature specification
+
+Data flow can be described abstractly:
+Input data consists of a list of rows. Each row has the same number of columns; each column represents a feature.
+The columns are retrieved from the input files, loaded, aggregated into channels and supplied to the model/training script. 
+
+FeatureSpec contains metadata to configure this process and can be divided into three parts:
+
+* Specification of how data is organized on disk (source_spec). It describes which feature (from feature_spec) is stored in which file and how files are organized on disk.
+
+* Specification of features (feature_spec). Describes a dictionary of features, where key is feature name and values are features’ characteristics such as  dtype and other metadata (for example, cardinalities for categorical features)
+
+* Specification of model’s inputs and outputs (channel_spec). Describes a dictionary of model’s inputs where keys specify model channel’s names and values specify lists of features to be loaded into that channel. Model’s channels are groups of data streams to which common model logic is applied, for example categorical/continuous data, user/item ids. Required/available channels depend on the model
+
+
+The FeatureSpec is a common form of description regardless of underlying dataset format, dataset data loader form and model. 
+
+
+#### Data flow in NVIDIA Deep Learning Examples recommendation models
+
+The typical data flow is as follows:
+* <b>S.0.</b> Original dataset is downloaded to a specific folder.
+* <b>S.1.</b> Original dataset is preprocessed into Intermediary Format. For each model, the preprocessing is done differently, using different tools. The Intermediary Format also varies (for example, for DLRM PyTorch, the Intermediary Format is a custom binary one.)
+* <b>S.2.</b> The Preprocessing Step outputs Intermediary Format with dataset split into training and validation/testing parts along with the Dataset Feature Specification yaml file. Metadata in the preprocessing step is automatically calculated.
+* <b>S.3.</b> Intermediary Format data together with Dataset Feature Specification are fed into training/evaluation scripts. Data loader reads Intermediary Format and feeds the data into the model according to the description in the Dataset Feature Specification.
+* <b>S.4.</b> The model is trained and evaluated
+
+
+
+<p align="center">
+  <img width="70%" src="./img/df_diagram.png" />
+  <br>
+
+Fig.1. Data flow in Recommender models in NVIDIA Deep Learning Examples repository. Channels of the model are drawn in green</a>.
+</p>
+
+
+#### Example of dataset feature specification
+
+As an example, let’s consider a Dataset Feature Specification for a small CSV dataset for some abstract model.
+
+```yaml
+feature_spec:
+  user_gender:
+    dtype: torch.int8
+    cardinality: 3 #M,F,Other
+  user_age: #treated as numeric value
+    dtype: torch.int8
+  user_id:
+    dtype: torch.int32
+    cardinality: 2655
+  item_id:
+    dtype: torch.int32
+    cardinality: 856
+  label:
+    dtype: torch.float32
+
+source_spec:
+  train:
+    - type: csv
+      features:
+        - user_gender
+        - user_age
+      files:
+        - train_data_0_0.csv
+        - train_data_0_1.csv
+    - type: csv
+      features:
+        - user_id
+        - item_id
+        - label
+      files:
+        - train_data_1.csv
+  test:
+    - type: csv
+      features:
+        - user_id
+        - item_id
+        - label
+        - user_gender
+        - user_age
+        
+      files:
+        - test_data.csv
+
+channel_spec:
+  numeric_inputs: 
+    - user_age
+  categorical_user_inputs: 
+    - user_gender
+    - user_id
+  categorical_item_inputs: 
+    - item_id
+  label_ch: 
+    - label
+```
+
+
+The data contains five features: (user_gender, user_age, user_id, item_id, label). Their data types and necessary metadata are described in the feature specification section.
+
+In the source mapping section, two mappings are provided: one describes the layout of the training data, the other of the testing data. The layout for training data has been chosen arbitrarily to showcase the flexibility.
+The train mapping consists of two chunks. The first one contains user_gender and user_age, saved as a CSV, and is further broken down into two files. For specifics of the layout, refer to the following example and consult the glossary. The second chunk contains the remaining columns and is saved in a single file. Notice that the order of columns is different in the second chunk - this is alright, as long as the order matches the order in that file (that is, columns in the .csv are also switched)
+
+
+Let’s break down the train source mapping. The table contains example data color-paired to the files containing it.
+
+<p align="center">
+<img width="70%" src="./img/layout_example.png" />
+</p>
+
+
+
+The channel spec describes how the data will be consumed. Four streams will be produced and available to the script/model.
+The feature specification does not specify what happens further: names of these streams are only lookup constants defined by the model/script.
+Based on this example, we can speculate that the model has three  input channels: numeric_inputs, categorical_user_inputs,
+categorical_item_inputs, and one  output channel: label.
+Feature names are internal to the FeatureSpec and can be freely modified.
+
+
+#### BYO dataset functionality
+
+In order to train any Recommendation model in NVIDIA Deep Learning Examples one can follow one of three possible ways:
+* One delivers already preprocessed dataset in the Intermediary Format supported by data loader used by the training script
+(different models use different data loaders) together with FeatureSpec yaml file describing at least specification of dataset, features and model channels
+
+* One uses a transcoding script
+
+* One delivers dataset in non-preprocessed form and uses preprocessing scripts that are a part of the model repository.
+In order to use already existing preprocessing scripts, the format of the dataset needs to match the one of the original datasets.
+This way, the FeatureSpec file will be generated automatically, but the user will have the same preprocessing as in the original model repository.
+
+
 ## Setup
 
 The following section lists the requirements for training DLRM.
@@ -184,7 +367,7 @@ The following section lists the requirements for training DLRM.
 
 This repository contains Dockerfile which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 - [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-- [PyTorch 21.04-py3](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch/tags) NGC container
+- [PyTorch 21.10-py3](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch/tags) NGC container
 - Supported GPUs:
     - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
     - [NVIDIA Turing architecture](https://www.nvidia.com/en-us/design-visualization/technologies/turing-architecture/)
@@ -233,9 +416,10 @@ docker run --runtime=nvidia -it --rm --ipc=host  -v ${CRITEO_DATASET_PARENT_DIRE
 
 4.  Preprocess the dataset.
 
-Here are a few examples of different preprocessing commands. For the details on how those scripts work and detailed description of dataset types (small FL=15, large FL=3, xlarge FL=2), training possibilities and all the parameters consult the [preprocessing section](#preprocessing). 
+Here are a few examples of different preprocessing commands. Out of the box, we support preprocessing  on DGX-2 and DGX A100 systems. For the details on how those scripts work and detailed description of dataset types (small FL=15, large FL=3, xlarge FL=2), system requirements, setup instructions for different systems  and all the parameters consult the [preprocessing section](#preprocessing).
+For an explanation of the `FL` parameter, see the [Dataset Guidelines](#dataset-guidelines) and [Preprocessing](#preprocessing) sections. 
 
-Depending on datastet type (small FL=15, large FL=3, xlarge FL=2) run one of following command:
+Depending on dataset type (small FL=15, large FL=3, xlarge FL=2) run one of following command:
 
 4.1. Preprocess to small dataset (FL=15) with Spark GPU:
 ```bash
@@ -265,21 +449,21 @@ docker run --security-opt seccomp=unconfined --runtime=nvidia -it --rm --ipc=hos
 
 - single-GPU:
 ```bash
-python -m dlrm.scripts.main --mode train --dataset /data/dlrm/binary_dataset/
+python -m dlrm.scripts.main --mode train --dataset /data/dlrm/binary_dataset/ --amp --cuda_graphs
 ```
 
 - multi-GPU for DGX A100:
 ```bash
 python -m torch.distributed.launch --no_python --use_env --nproc_per_node 8 \
-          bash  -c './bind.sh --cpu=dgxa100_ccx.sh --mem=dgxa100_ccx.sh python -m dlrm.scripts.dist_main \
-          --dataset /data/dlrm/binary_dataset/ --seed 0 --epochs 1 --amp'
+          bash  -c './bind.sh --cpu=dgxa100_ccx.sh --mem=dgxa100_ccx.sh python -m dlrm.scripts.main \
+          --dataset /data/dlrm/binary_dataset/ --seed 0 --epochs 1 --amp --cuda_graphs'
 ```
 
 - multi-GPU for DGX-1 and DGX-2:
 ```bash
 python -m torch.distributed.launch --no_python --use_env --nproc_per_node 8 \
-          bash  -c './bind.sh  --cpu=exclusive -- python -m dlrm.scripts.dist_main \
-          --dataset /data/dlrm/binary_dataset/ --seed 0 --epochs 1 --amp'
+          bash  -c './bind.sh  --cpu=exclusive -- python -m dlrm.scripts.main \
+          --dataset /data/dlrm/binary_dataset/ --seed 0 --epochs 1 --amp --cuda_graphs'
 ```
 
 6. Start validation/evaluation. If you want to run validation or evaluation, you can either:
@@ -297,14 +481,14 @@ python -m dlrm.scripts.main --mode test --dataset /data/dlrm/binary_dataset/ --l
 - multi-GPU for DGX A100:
 ```bash
 python -m torch.distributed.launch --no_python --use_env --nproc_per_node 8 \
-          bash  -c './bind.sh --cpu=dgxa100_ccx.sh --mem=dgxa100_ccx.sh python -m dlrm.scripts.dist_main \
+          bash  -c './bind.sh --cpu=dgxa100_ccx.sh --mem=dgxa100_ccx.sh python -m dlrm.scripts.main \
           --dataset /data/dlrm/binary_dataset/ --seed 0 --epochs 1 --amp --load_checkpoint_path `$CRITEO_DATASET_PARENT_DIRECTORY/checkpoints/checkpoint`'
 ```
 
 - multi-GPU for DGX-1 and DGX-2:
 ```bash
 python -m torch.distributed.launch --no_python --use_env --nproc_per_node 8 \
-          bash  -c './bind.sh  --cpu=exclusive -- python -m dlrm.scripts.dist_main \
+          bash  -c './bind.sh  --cpu=exclusive -- python -m dlrm.scripts.main \
           --dataset /data/dlrm/binary_dataset/ --seed 0 --epochs 1 --amp --load_checkpoint_path `$CRITEO_DATASET_PARENT_DIRECTORY/checkpoints/checkpoint`'
 ```
 
@@ -314,145 +498,14 @@ The following sections provide greater details of the dataset, running training 
 
 ### Scripts and sample code
 
-The `dlrm/scripts/main.py` script provides an entry point to most of the functionality in a single-GPU setting. Using different command-line flags allows you to run training, validation, and benchmark both training and inference on real or synthetic data.
+The `dlrm/scripts/main.py` script provides an entry point to most of the functionality. Using different command-line flags allows you to run training, validation, and benchmark both training and inference on real or synthetic data.
 
-Analogously, the `dlrm/scripts/dist_main.py` script provides an entry point for the functionality in a multi-GPU setting. It uses the same flags as in the single-GPU case with the defaults tuned to large model training.
+Utilities related to loading the data reside in the `data` directory.
 
-The `dlrm/model/single.py` file provides the definition of the DLRM neural network for single-GPU, whereas `dlrm/model/distributed.py` contains DLRM definition for multi-GPU case.
-
-Utilities connected to loading the data reside in the `data` directory.
-
-### Parameters
 
 ### Command-line options
 
-The `dlrm/scripts/main.py` script supports a number of command-line flags. You can get the descriptions of those by running `python -m dlrm.scripts.main --help`. Running this command will output:
-
-```        
-USAGE: /workspace/dlrm/scripts/main.py [flags]
-flags:
-
-/workspace/dlrm/dlrm/scripts/main.py:
-  --[no]amp: If True the script will use Automatic Mixed Precision
-    (default: 'false')
-  --auc_threshold: Stop the training after achieving this AUC
-    (a number)
-  --base_device: Device to run the majority of the model operations
-    (default: 'cuda')
-  --batch_size: Batch size used for training
-    (default: '32768')
-    (an integer)
-  --benchmark_warmup_steps: Number of initial iterations to exclude from throughput measurements
-    (default: '0')
-    (an integer)
-  --bottom_mlp_sizes: Linear layer sizes for the bottom MLP
-    (default: '512,256,128')
-    (a comma separated list)
-  --dataset: Path to dataset
-  --dataset_type: <binary|split|synthetic_gpu>: The type of the dataset to use
-    (default: 'split')
-  --decay_end_lr: LR after the decay ends
-    (default: '0.0')
-    (a number)
-  --decay_power: Polynomial learning rate decay power
-    (default: '2')
-    (an integer)
-  --decay_start_step: Optimization step after which to start decaying the learning rate, if None will start decaying right after the warmup phase is completed
-    (default: '64000')
-    (an integer)
-  --decay_steps: Polynomial learning rate decay steps. If equal to 0 will not do any decaying
-    (default: '80000')
-    (an integer)
-  --embedding_dim: Dimensionality of embedding space for categorical features
-    (default: '128')
-    (an integer)
-  --embedding_type: <joint|joint_fused|joint_sparse|multi_table>: The type of the embedding operation to use
-    (default: 'joint_fused')
-  --epochs: Number of epochs to train for
-    (default: '1')
-    (an integer)
-  --[no]hash_indices: If True the model will compute `index := index % table size` to ensure that the indices match table sizes
-    (default: 'false')
-  --inference_benchmark_batch_sizes: Batch sizes for inference throughput and latency measurements
-    (default: '1,64,4096')
-    (a comma separated list)
-  --inference_benchmark_steps: Number of steps for measuring inference latency and throughput
-    (default: '200')
-    (an integer)
-  --interaction_op: <cuda_dot|dot|cat>: Type of interaction operation to perform.
-    (default: 'cuda_dot')
-  --load_checkpoint_path: Path from which to load a checkpoint
-  --log_path: Destination for the log file with various results and statistics
-    (default: './log.json')
-  --loss_scale: Static loss scale for Mixed Precision Training
-    (default: '1024.0')
-    (a number)
-  --lr: Base learning rate
-    (default: '28.0')
-    (a number)
-  --max_steps: Stop training after doing this many optimization steps
-    (an integer)
-  --max_table_size: Maximum number of rows per embedding table, by default equal to the number of unique values for each categorical variable
-    (an integer)
-  --mode: <train|test|inference_benchmark|prof-train>: Select task to be performed
-    (default: 'train')
-  --num_numerical_features: Number of numerical features in the dataset. Defaults to 13 for the Criteo Terabyte Dataset
-    (default: '13')
-    (an integer)
-  --[no]optimized_mlp: Use an optimized implementation of MLP from apex
-    (default: 'true')
-  --output_dir: Path where to save the checkpoints
-    (default: '/tmp')
-  --print_freq: Number of optimizations steps between printing training status to stdout
-    (default: '200')
-    (an integer)
-  --save_checkpoint_path: Path to which to save the training checkpoints
-  --seed: Random seed
-    (default: '12345')
-    (an integer)
-  -shuffle,--[no]shuffle_batch_order: Read batch in train dataset by random order
-    (default: 'false')
-  --synthetic_dataset_num_entries: Number of samples per epoch for the synthetic dataset
-    (default: '33554432')
-    (an integer)
-  --synthetic_dataset_table_sizes: Embedding table sizes to use with the synthetic dataset
-    (default: '100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,10
-    0000,100000,100000,100000')
-    (a comma separated list)
-  --test_after: Don't test the model unless this many epochs has been completed
-    (default: '0.0')
-    (a number)
-  --test_batch_size: Batch size used for testing/validation
-    (default: '32768')
-    (an integer)
-  --test_freq: Number of optimization steps between validations. If None will test after each epoch
-    (an integer)
-  --top_mlp_sizes: Linear layer sizes for the top MLP
-    (default: '1024,1024,512,256,1')
-    (a comma separated list)
-  --warmup_factor: Learning rate warmup factor. Must be a non-negative integer
-    (default: '0')
-    (an integer)
-  --warmup_steps: Number of warmup optimization steps
-    (default: '6400')
-    (an integer)
-``` 
-The multi-GPU training script, `dlrm/scripts/dist_main.py` has also a few, specific for itself, option, that you can get by running `python -m dlrm.scripts.dist_main --help`:
-```
-USAGE: /workspace/dlrm/dlrm/scripts/dist_main.py [flags]
-flags:
-
-/workspace/dlrm/dlrm/scripts/dist_main.py:
-  --[no]Adam_MLP_optimizer: Swaps MLP optimizer to Adam
-    (default: 'false')
-  --[no]Adam_embedding_optimizer: Swaps embedding optimizer to Adam
-    (default: 'false')
-  --backend: Backend to use for distributed training. Default nccl
-    (default: 'nccl')
-  --[no]bottom_features_ordered: Sort features from the bottom model, useful when using saved checkpoint in different
-    device configurations
-    (default: 'false')
-```
+The `dlrm/scripts/main.py` script supports a number of command-line flags. You can get the descriptions of those by running `python -m dlrm.scripts.main --help`.
 
 
 The following example output is printed when running the model:
@@ -473,26 +526,159 @@ Epoch:[0/1] [2200/128028]  eta: 1:21:15  loss: 0.1305  step_time: 0.038430  lr: 
 ### Getting the data
 
 This example uses the [Criteo Terabyte Dataset](https://labs.criteo.com/2013/12/download-terabyte-click-logs/).
-The first 23 days are used as the training set. The last day is split in half. The first part is used as a validation set and the second one as a hold-out test set.
+The first 23 days are used as the training set. The last day is split in half. The first part, referred to as "test", is used for validating training results. The second one, referred to as "validation", is unused.
 
 
 #### Dataset guidelines
 
 The preprocessing steps applied to the raw data include:
 - Replacing the missing values with `0`
-- Replacing the categorical values that exist fewer than `T` times with a special value (T value is called a frequency threshold or a frequency limit)
+- Replacing the categorical values that exist fewer than `FL` times with a special value (FL value is called a frequency threshold or a frequency limit)
 - Converting the hash values to consecutive integers
 - Adding 3 to all the numerical features so that all of them are greater or equal to 1
 - Taking a natural logarithm of all numerical features
 
-#### Multi-dataset
 
-Our preprocessing scripts are designed for the Criteo Terabyte Dataset and should work with any other dataset with the same format. The data should be split into text files. Each line of those text files should contain a single training example. An example should consist of multiple fields separated by tabulators:
-- The first field is the label – `1` for a positive example and `0` for negative.
-- The next `N` tokens should contain the numerical features separated by tabs.
-- The next `M` tokens should contain the hashed categorical features separated by tabs.
+#### BYO dataset 
+
+This implementation supports using other datasets thanks to BYO dataset functionality. 
+The BYO dataset functionality allows users to plug in their dataset in a common fashion for all Recommender models 
+that support this functionality. Using BYO dataset functionality, the user does not have to modify the source code of 
+the model thanks to the Feature Specification file. For general information on how BYO dataset works, refer to the 
+[BYO dataset overview section](#byo-dataset-functionality-overview).
+
+There are three ways to plug in user's dataset:
+<details>
+<summary><b>1. Provide an unprocessed dataset in a format matching the one used by Criteo 1TB, then use Criteo 1TB's preprocessing. Feature Specification file is then generated automatically.</b></summary>
+The required format of the user's dataset is:
+
+The data should be split into text files. Each line of those text files should contain a single training example. 
+An example should consist of multiple fields separated by tabulators:
+
+* The first field is the label – 1 for a positive example and 0 for negative.
+* The next N tokens should contain the numerical features separated by tabs.
+* The next M tokens should contain the hashed categorical features separated by tabs.
+
+The correct dataset files together with the Feature Specification yaml file will be generated automatically by preprocessing script.
+
+For an example of using this process, refer to the [Quick Start Guide](#quick-start-guide)
+
+</details>
+
+<details>
+<summary><b>2. Provide a CSV containing preprocessed data and a simplified Feature Specification yaml file, then transcode the data with `transcode.py` script </b> </summary>
+This option should be used if the user has their own CSV file with a preprocessed dataset they want to train on.
+
+The required format of the user's dataset is:
+* CSV files containing the data, already split into train and test sets. 
+* Feature Specification yaml file describing the layout of the CSV data
+
+For an example of a feature specification file, refer to the `tests/transcoding` folder.
+
+The CSV containing the data:
+* should be already split into train and test
+* should contain no header
+* should contain one column per feature, in the order specified by the list of features for that chunk 
+  in the source_spec section of the feature specification file
+* categorical features should be non-negative integers in the range [0,cardinality-1] if cardinality is specified
+
+The Feature Specification yaml file:
+* needs to describe the layout of data in CSV files
+* may contain information about cardinalities. However, if set to `auto`, they will be inferred from the data by the transcoding script.
+
+Refer to `tests/transcoding/small_csv.yaml` for an example of the yaml Feature Specification.
+
+The following example shows how to use this way of plugging user's dataset:
+
+Prepare your data and save the path:
+```bash
+DATASET_PARENT_DIRECTORY=/raid/dlrm
+```
+
+Build the DLRM image with:
+```bash
+docker build -t nvidia_dlrm_pyt .
+```
+Launch the container with:
+```bash
+docker run --runtime=nvidia -it --rm --ipc=host  -v ${DATASET_PARENT_DIRECTORY}:/data nvidia_dlrm_preprocessing bash
+```
+
+If you are just testing the process, you can create synthetic csv data:
+```bash
+python -m dlrm.scripts.gen_csv --feature_spec_in tests/transcoding/small_csv.yaml
+```
+
+Convert the data:
+```bash
+mkdir /data/conversion_output
+python -m dlrm.scripts.transcode --input /data --output /data/converted
+```
+You may need to tune the --chunk_size parameter. Higher values speed up the conversion but require more RAM.
+
+This will convert the data from `/data` and save the output in `/data/converted`.
+A feature specification file describing the new data will be automatically generated.
+
+To run the training on 1 GPU:
+```bash
+python -m dlrm.scripts.main --mode train --dataset /data/converted --amp --cuda_graphs
+```
+
+- multi-GPU for DGX A100:
+```bash
+python -m torch.distributed.launch --no_python --use_env --nproc_per_node 8 \
+          bash  -c './bind.sh --cpu=dgxa100_ccx.sh --mem=dgxa100_ccx.sh python -m dlrm.scripts.main \
+          --dataset /data/converted --seed 0 --epochs 1 --amp --cuda_graphs'
+```
+
+- multi-GPU for DGX-1 and DGX-2:
+```bash
+python -m torch.distributed.launch --no_python --use_env --nproc_per_node 8 \
+          bash  -c './bind.sh  --cpu=exclusive -- python -m dlrm.scripts.main \
+          --dataset /data/converted --seed 0 --epochs 1 --amp --cuda_graphs'
+```
+</details>
+<details>
+<summary><b>3. Provide a fully preprocessed dataset, saved in split binary files, and a Feature Specification yaml file</b></summary>
+This is the option to choose if you want full control over preprocessing and/or want to preprocess data directly to the target format.
+
+Your final output will need to contain a Feature Specification yaml describing data and file layout. 
+For an example feature specification file, refer to `tests/feature_specs/criteo_f15.yaml`
+
+For details, refer to the [BYO dataset overview section](#byo-dataset-functionality-overview).
+</details>
 
 
+
+##### Channel definitions and requirements
+
+This model defines three channels:
+
+- categorical, accepting an arbitrary number of features
+- numerical, accepting an arbitrary number of features
+- label, accepting a single feature
+
+
+The training script expects two mappings:
+
+- train
+- test
+
+For performance reasons:
+* The only supported dataset type is split binary
+* Splitting chunks into multiple files is not supported.
+* Each categorical feature has to be provided in a separate chunk
+* All numerical features have to be provided in a single chunk
+* All numerical features have to appear in the same order in channel_spec and source_spec
+* Only integer types are supported for categorical features
+* Only float16 is supported for numerical features
+
+##### BYO dataset constraints for the model
+
+There are the following constraints of BYO dataset functionality for this model:
+1. The performance of the model depends on the dataset size. Generally, the model should scale better for datasets containing more data points. For a smaller dataset, you might experience slower performance than the one reported for Criteo
+2. Using other datasets might require tuning some hyperparameters (for example, learning rate, beta1 and beta2) to reach desired accuracy.
+3. The optimized cuda interaction kernels for FP16 and TF32 assume that the number of categorical variables is smaller than WARP_SIZE=32 and embedding size is <=128
 #### Preprocessing 
 
 The preprocessing scripts provided in this repository support running both on CPU and GPU using [NVtabular](https://developer.nvidia.com/blog/announcing-the-nvtabular-open-beta-with-multi-gpu-support-and-new-data-loaders/) (GPU only) and [Apache Spark 3.0](https://www.nvidia.com/en-us/deep-learning-ai/solutions/data-science/apache-spark-3/).
@@ -506,11 +692,11 @@ cd /workspace/dlrm/preproc
 ./prepare_dataset.sh <frequency_threshold> <GPU|CPU> <NVTabular|Spark>
 ```
 
-For the Criteo Terabyte dataset, we recommend a frequency threshold of `T=3`(when using A100 40GB or V100 32 GB) or `T=2`(when using A100 80GB) if you intend to run the hybrid-parallel mode
-on multiple GPUs. If you want to make the model fit into a single NVIDIA Tesla V100-32GB, you can set `T=15`. 
+For the Criteo Terabyte dataset, we recommend a frequency threshold of `FL=3`(when using A100 40GB or V100 32 GB) or `FL=2`(when using A100 80GB) if you intend to run the hybrid-parallel mode
+on multiple GPUs. If you want to make the model fit into a single NVIDIA Tesla V100-32GB, you can set `FL=15`. 
 
-The first argument means the frequency threshold to apply to the categorical variables. For a frequency threshold `T`, the categorical values that occur less 
-often than `T` will be replaced with one special value for each category. Thus, a larger value of `T` will require smaller embedding tables 
+The first argument means the frequency threshold to apply to the categorical variables. For a frequency threshold `FL`, the categorical values that occur less 
+often than `FL` will be replaced with one special value for each category. Thus, a larger value of `FL` will require smaller embedding tables 
 and will substantially reduce the overall size of the model.
 
 The second argument is the hardware to use (either GPU or CPU).  
@@ -547,7 +733,7 @@ NVTabular preprocessing is calibrated to run on [DGX A100](https://www.nvidia.co
 
 The script `spark_data_utils.py` is a PySpark application, which is used to preprocess the Criteo Terabyte Dataset. In the Docker image, we have installed Spark 3.0.1, which will start a standalone cluster of Spark. The scripts `run_spark_cpu.sh` and `run_spark_gpu.sh` start Spark, then run several PySpark jobs with `spark_data_utils.py`. 
 
-Note that the Spark job requires about 3TB disk space used for data shuffle.
+Note that the Spark job requires about 3TB disk space used for data shuffling.
 
 Spark preprocessing is calibrated to run on [DGX A100](https://www.nvidia.com/en-us/data-center/dgx-a100/) and [DGX-2](https://www.nvidia.com/en-us/data-center/dgx-2/) AI systems. However, it should be possible to change the values in `preproc/DGX-2_config.sh` or `preproc/DGX-A100_config.sh`
 so that they'll work on also on other hardware platforms such as DGX-1 or a custom one. 
@@ -555,7 +741,7 @@ so that they'll work on also on other hardware platforms such as DGX-1 or a cust
 ### Training process
 
 The main training script resides in `dlrm/scripts/main.py`. Once the training is completed, it stores the checkpoint
-in the path specified by `--save_checkpoint_path` and a training log in `--log_path`. The quality of the predictions 
+in the path specified by `--save_checkpoint_path` and a JSON training log in `--log_path`. The quality of the predictions 
 generated by the model is measured by the [ROC AUC metric](https://scikit-learn.org/stable/modules/model_evaluation.html#roc-metrics).
 The speed of training and inference is measured by throughput i.e., the number 
 of samples processed per second. We use mixed precision training with static loss scaling for the bottom and top MLPs while embedding tables are stored in FP32 format.
@@ -566,8 +752,8 @@ This section describes inference with PyTorch in Python. If you're interested in
 
 Two modes for inference are currently supported by the `dlrm/scripts/main.py` script:
 
-1. Inference benchmark – this mode will measure and print out throughput and latency numbers for multiple batch sizes. You can activate it by setting the batch sizes to be tested with the `inference_benchmark_batch_sizes` command-line argument.
-2. Test-only – this mode can be used to run a full validation on a checkpoint to measure ROC AUC. You can enable it by passing the `--mode test` flag.
+1. Inference benchmark – this mode will measure and print out throughput and latency numbers for multiple batch sizes. You can activate it by passing the `--mode inference_benchmark` command line flag. The batch sizes to be tested can be set with the `--inference_benchmark_batch_sizes` command-line argument.
+2. Test-only – this mode can be used to run a full validation on a checkpoint to measure ROC AUC. You can enable it by passing `--mode test`.
 
 ### Deploying DLRM Using NVIDIA Triton Inference Server
 The NVIDIA Triton Inference Server provides a cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any model being managed by the server. More information on how to perform inference using NVIDIA Triton Inference Server can be found in [triton/README.md](triton/README.md).
@@ -586,7 +772,7 @@ To benchmark the training performance on a specific batch size, please follow th
 in the [Quick Start Guide](#quick-start-guide). You can also add the `--max_steps 1000 --benchmark_warmup_steps 500`
 if you want to get a reliable throughput measurement without running the entire training. 
 
-You can also create a synthetic dataset by running `python -m dlrm.scripts.prepare_synthetic_dataset --synthetic_dataset_dir /tmp/dlrm_synthetic_data` if you haven't yet downloaded the dataset.
+You can create a synthetic dataset by running `python -m dlrm.scripts.prepare_synthetic_dataset --synthetic_dataset_dir /tmp/dlrm_synthetic_data` if you haven't yet downloaded the dataset.
 
 #### Inference performance benchmark
 
@@ -603,36 +789,34 @@ You can also create a synthetic dataset by running `python -m dlrm.scripts.prepa
 The following sections provide details on how we achieved our performance and accuracy in training and inference. 
 
 We used three model size variants to show memory scalability in a multi-GPU setup:
-- small - refers to a model trained on Criteo dataset with frequency thresholding set to 15 resulting in smaller embedding tables - total model size: ~15 GB
-- large - refers to a model trained on Criteo dataset with frequency thresholding set to 3 resulting in larger embedding tables - total model size: ~82 GB
-- xlarge -  refers to a model trained on Criteo dataset with frequency thresholding set to 2 resulting in larger embedding tables - total model size: ~142 GB
+
+| Model variant | Frequency threshold | Model size
+|---:|---|---|
+|small | 15 | 15 GB |
+|large | 3 | 82 GB |
+|xlarge| 2 | 142 GB|
 
 #### Training accuracy results
 
 
 ##### Training accuracy: NVIDIA DGX A100 (8x A100 80GB)
 
-Our results were obtained by running training scripts as described in the Quick Start Guide in the DLRM Docker container in two configurations:
-- on a single NVIDIA A100 80GB GPU (`dlrm/scripts/main.py`)
-- in multi-GPU setup on DGX A100 with 8x Ampere A100 80GB (`dlrm/scripts/dist_main.py`)
+Our results were obtained by running `dlrm/scripts/main.py` script as described in the Quick Start Guide in the DLRM Docker container using NVIDIA A100 80GB GPUs.
 
-| GPUs    | Model size    | Batch size / GPU    | Accuracy (AUC) - TF32  | Accuracy (AUC) - mixed precision  |   Time to train - TF32 [minutes]  |  Time to train - mixed precision [minutes] | Time to train speedup (TF32 to mixed precision)        
-|----:|----|----|----:|----:|---:|---:|---:|
-| 8 | xlarge | 64k | 0.8026 | 0.8026 |  6.75 |  4.73 | 1.43 |
-| 8 |  large | 64k | 0.8027 | 0.8027 |  6.98 |  4.72 | 1.48 |
-| 1 |  small | 32k | 0.8036 | 0.8036 | 25.88 | 17.17 | 1.51 |
+|   GPUs | Model size   | Batch size / GPU   |   Accuracy (AUC) - TF32 |   Accuracy (AUC) - mixed precision | Time to train - TF32]   | Time to train - mixed precision   |   Time to train speedup (TF32 to mixed precision) |
+|-------:|:-------------|:-------------------|------------------------:|-----------------------------------:|:------------------------|:----------------------------------|--------------------------------------------------:|
+|      8 | large        | 8k                 |                0.802509 |                           0.802528 | 0:06:27                 | 0:04:36                           |                                           1.40217 |
+|      1 | small        | 64k                |                0.802537 |                           0.802521 | 0:24:26                 | 0:17:47                           |                                           1.37395 |
 
 
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 32GB)
 
-Our results were obtained by running training scripts as described in the Quick Start Guide in the DLRM Docker container in two configurations:
-- on a single Tesla V100 32GB GPU (`dlrm/scripts/main.py`)
-- in multi-GPU setup on DGX-1 8 x Tesla V100 32 GPU (`dlrm/scripts/dist_main.py`)
+Our results were obtained by running `dlrm/scripts/main.py` script as described in the Quick Start Guide in the DLRM Docker container using NVIDIA V100 32GB GPUs.
 
-| GPUs    | Model size    | Batch size / GPU    | Accuracy (AUC) - FP32  | Accuracy (AUC) - mixed precision  |   Time to train - FP32  [minutes] |  Time to train - mixed precision  [minutes] | Time to train speedup (FP32 to mixed precision)        
-|----:|----|----|----:|----:|---:|---:|---:|
-| 8 | large | 64k | 0.8026 | 0.8026 | 25.05 | 9.87 | 2.54 |
-| 1 | small | 32k | 0.8036 | 0.8036 | 106.6 | 32.6 | 3.27 |
+|   GPUs | Model size   | Batch size / GPU   |   Accuracy (AUC) - FP32 |   Accuracy (AUC) - mixed precision | Time to train - FP32]   | Time to train - mixed precision   |   Time to train speedup (FP32 to mixed precision) |
+|-------:|:-------------|:-------------------|------------------------:|-----------------------------------:|:------------------------|:----------------------------------|--------------------------------------------------:|
+|      8 | large        | 8k                 |                0.802568 |                           0.802562 | 0:28:24                 | 0:11:45                           |                                           2.41702 |
+|      1 | small        | 64k                |                0.802784 |                           0.802723 | 1:58:10                 | 0:38:17                           |                                           3.08663 |
 
 
 ##### Training accuracy plots
@@ -643,78 +827,57 @@ The plot represents ROC AUC metric as a function of steps (step is single batch)
 All other parameters of training are default.
 
 <p align="center">
-  <img width="100%" src="./img/learning_curve_FL2.svg" />
-  <br>
-  Figure 1. Training stability for a FL2 dataset: distribution of ROC AUC across different configurations. 'All configurations' refer to the distribution of ROC AUC for cartesian product of architecture, training precision. </a>
-</p>
-
-<p align="center">
   <img width="100%" src="./img/learning_curve_FL3.svg" />
   <br>
-  Figure 2. Training stability for a FL3 dataset: distribution of ROC AUC across different configurations. 'All configurations' refer to the distribution of ROC AUC for cartesian product of architecture, training precision. </a>
+  Figure 1. Training stability for a FL3 dataset: distribution of ROC AUC across different configurations. 'All configurations' refer to the distribution of ROC AUC for cartesian product of architecture, training precision. </a>
 </p>
 
 <p align="center">
   <img width="100%" src="./img/learning_curve_FL15.svg" />
   <br>
-  Figure 3. Training stability for a FL15 dataset: distribution of ROC AUC across different configurations. 'All configurations' refer to the distribution of ROC AUC for cartesian product of architecture, training precision. </a>
+  Figure 2. Training stability for a FL15 dataset: distribution of ROC AUC across different configurations. 'All configurations' refer to the distribution of ROC AUC for cartesian product of architecture, training precision. </a>
 </p>
 
 
 ##### Training stability test
 
-Training of the model is stable for multiple configurations achieving the standard deviation of 10e-4. 
+Training of the model is stable for multiple configurations achieving a standard deviation of 10e-4. 
 The model achieves similar ROC AUC scores for A100 and V100, training precisions. 
-The DLRM model was trained for one epoch (roughly 4 billion samples, 128028 batches for single-GPU and 64014 for multi-GPU training), starting from 20 different initial random seeds for each setup.
-The training was performed in the pytorch:21.04-py3 NGC container with and without mixed precision enabled.
-The provided charts and numbers consider single and 8 GPU training. After training, the models were evaluated on the test set. 
-The following plots compare distributions of ROC AUC on the test set. 
-In columns there is single vs 8 GPU training, in rows type of hardware: A100 and V100.
+It was trained for one epoch (roughly 4 billion samples, 64014 batches), starting from 10 different initial random seeds for each setup.
+The training was performed in the pytorch:21.10-py3 NGC container with and without mixed precision enabled.
+The provided charts and numbers consider single and multi GPU training. After training, the models were evaluated on the test set. 
+The following plots compare distributions of ROC AUC on the test set.
 
 <p align="center">
-  <img width="100%" src="./img/training_stability_FL2.svg" />
+  <img width="100%" height="50%" src="./img/training_stability_FL3_21_10.svg" />
   <br>
-  Figure 4. Training stability for a FL2 dataset: distribution of ROC AUC across different configurations. 'All configurations' refer to the distribution of ROC AUC for cartesian product of architecture, training precision. Single distribution is presented since only DGX A100 80GB is large enought to support dataset with FL=2. See [Preprocessing section](#preprocessing) for more details</a>
+  Figure 3. Training stability for a FL3 dataset: distribution of ROC AUC across different configurations. 'All configurations' refer to the distribution of ROC AUC for cartesian product of architecture, training precision. </a>
 </p>
 
 <p align="center">
-  <img width="100%" src="./img/training_stability_FL3.svg" />
+  <img width="100%" src="./img/training_stability_FL15_21_10.svg" />
   <br>
-  Figure 5. Training stability for a FL3 dataset: distribution of ROC AUC across different configurations. 'All configurations' refer to the distribution of ROC AUC for cartesian product of architecture, training precision. </a>
+  Figure 4. Training stability for a FL15 dataset: distribution of ROC AUC across different configurations. 'All configurations' refer to the distribution of ROC AUC for cartesian product of architecture, training precision. </a>
 </p>
-
-<p align="center">
-  <img width="100%" src="./img/training_stability_FL15.svg" />
-  <br>
-  Figure 6. Training stability for a FL15 dataset: distribution of ROC AUC across different configurations. 'All configurations' refer to the distribution of ROC AUC for cartesian product of architecture, training precision. </a>
-</p>
-
-Training stability was also compared in terms of point statistics for ROC AUC distribution for multiple configurations. Refer to the expandable table below.
 
 ##### Impact of mixed precision on training accuracy
 
 The accuracy of training, measured with ROC AUC on the test set after the final epoch metric was not impacted by enabling mixed precision. The obtained results were statistically similar. The similarity was measured according to the following procedure:
 
-The model was trained 20 times for default settings (FP32 or TF32 for Volta and Ampere architecture respectively) and 20 times for AMP. After the last epoch, the accuracy score ROC AUC was calculated on the test set.
+The model was trained 10 times for default settings (FP32 or TF32 for Volta and Ampere architecture respectively) and 10 times for AMP. After the last epoch, the accuracy score ROC AUC was calculated on the test set.
 
-Distributions for two hardware configurations (A100, V100) for 3 datasets are presented below.
+Distributions for two hardware configurations (A100, V100) for 2 datasets are presented below.
 
 <p align="center">
-  <img width="100%" src="./img/amp_impact_FL2.svg" />
+  <img width="100%" src="./img/amp_impact_fl3_21_10.svg" />
   <br>
-  Figure 7. Influence of AMP on ROC AUC distribution for A100 and V100 GPUs for single- and multi-gpu training on a dataset with a frequency threshold of 2. </a>
+  Figure 5. Impact of AMP on ROC AUC distribution for A100 and V100 GPUs for single- and multi-gpu training on a dataset with a frequency threshold of 3. </a>
 </p>
 
 <p align="center">
-  <img width="100%" src="./img/amp_impact_FL3.svg" />
+  <img width="100%" src="./img/amp_impact_fl15_21_10.svg" />
   <br>
-  Figure 8. Influence of AMP on ROC AUC distribution for A100 and V100 GPUs for single- and multi-gpu training on a dataset with a frequency threshold of 3. </a>
-</p>
-
-<p align="center">
-  <img width="100%" src="./img/amp_impact_FL15.svg" />
-  <br>
-  Figure 9. Influence of AMP on ROC AUC distribution for A100 and V100 GPUs for single- and multi-gpu training on a dataset with a frequency threshold of 15. </a>
+  Figure 6. Impact of AMP on ROC AUC distribution for A100 and V100 GPUs for single- and multi-gpu training on a dataset with a frequency threshold of 15. </a>
 </p>
 
 
@@ -723,16 +886,11 @@ Distribution of AUC ROC for single precision training (TF32 for A100, FP32 for V
 <details>
 <summary>Full tabular data for AMP influence on AUC ROC</summary>
 
-| Supercomputer | Dataset | GPUs | mean AUC ROC for TF32 (DGX A100)/ FP32 (DGX-1,DGX-2) | std AUC ROC for TF32 (DGX A100)/ FP32 (DGX-1,DGX-2) |mean AUC ROC for AMP | std AUC ROC for AMP | KS test value: statistics, p-value |
-| ------------- | -----| ------- | ---------------------------------------------------- | ----------------------------------------------------|---------------------|-------------------- | -----------------------------------|
-DGX A100|FL2|8|0.80262|0.00006|0.80262|0.00005|0.30000 (0.33559)|
-DGX A100|FL3|8|0.80266|0.00008|0.80265|0.00006|0.20000 (0.83197)|
-DGX A100|FL15|1|0.80360|0.00007|0.80359|0.00006|0.20000 (0.83197)|
-DGX-2 / DGX-1|FL3|8|0.80259|0.00009|0.80257|0.00008|0.20000 (0.83197)|
-DGX-2 / DGX-1|FL3|16|0.80262|0.00006|0.80261|0.00007|0.20000 (0.83197)|
-DGX-2 / DGX-1|FL15|1|0.80362|0.00009|0.80361|0.00006|0.25000 (0.57134)|
-
-Sample size was set to 20 experiments for each training setup.
+| Hardware   | Dataset   | GPUs   | mean AUC ROC for full precision   | std AUC ROC for full precision   | mean AUC ROC for AMP   | std AUC ROC for AMP   | KS test value: statictics, p-value   |
+|:-----------|:----------|:-------|:----------------------------------|:---------------------------------|:-----------------------|:----------------------|:-------------------------------------|
+| DGX A100   | FL3       | 8      | 0.802681                          | 0.000073                         | 0.802646               | 0.000063              | ('0.400', '0.418')                   |
+| DGX-2      | FL3       | 16     | 0.802614                          | 0.000073                         | 0.802623               | 0.000122              | ('0.267', '0.787')                   |
+Sample size was set to 10 experiments for each training setup.
 
 </details>
 
@@ -747,67 +905,47 @@ We used throughput in items processed per second as the performance metric.
 Our results were obtained by running the following commands:
 - for single-GPU setup:
 ```
-python -m dlrm.scripts.main --dataset /data [--amp]
+python -m dlrm.scripts.main --dataset /data --amp --cuda_graphs
 ```
 - for multi-GPU setup:
 ```
 python -m torch.distributed.launch --no_python --use_env --nproc_per_node 8 \
-          bash  -c './bind.sh --cpu=dgxa100_ccx.sh --mem=dgxa100_ccx.sh python -m dlrm.scripts.dist_main \
-          --dataset /data [--amp]'
+          bash  -c './bind.sh --cpu=dgxa100_ccx.sh --mem=dgxa100_ccx.sh python -m dlrm.scripts.main \
+          --dataset /data --amp --cuda_graphs'
 ```
 
 in the DLRM Docker container on NVIDIA DGX A100 (8x A100 80GB) GPUs. Performance numbers (in records of data per second) were averaged over an entire training epoch.
 
-| GPUs   | Model size    | Batch size / GPU   | Throughput - TF32    | Throughput - mixed precision    | Throughput speedup (TF32 - mixed precision)      
-|----:|----|----|---:|---:|---:|
-| 8 | xlarge | 64k | 10,700,000 | 16,400,000 | 1.53 |
-| 8 |  large | 64k | 10,600,000 | 16,200,000 | 1.53 |
-| 1 |  small | 32k |  2,740,000 |  4,180,000 | 1.53 |
+
+
+|   GPUs | Model size   | Batch size / GPU   |   Throughput - TF32 |   Throughput - mixed precision |   Throughput speedup (TF32 to mixed precision) |
+|-------:|:-------------|:-------------------|--------------------:|-------------------------------:|-----------------------------------------------:|
+|      8 | large        | 8k                 |          11,400,000 |                     16,500,000 |                                          1.447 |
+|      1 | small        | 64k                |           2,880,000 |                      4,020,000 |                                          1.396 |
+
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
-
-##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
-
-Our results were obtained by running the following commands:
-- for single-GPU setup:
-```
-python -m dlrm.scripts.main --dataset /data [--amp]
-```
-- for multi-GPU setup:
-```
-python -m torch.distributed.launch --no_python --use_env --nproc_per_node 8 \
-          bash  -c './bind.sh --cpu=dgxa100_ccx.sh --mem=dgxa100_ccx.sh python -m dlrm.scripts.dist_main \
-          --dataset /data/ [--amp]'
-```
-
-in the DLRM Docker container on NVIDIA DGX A100 (8x A100 40GB) GPUs. Performance numbers (in records of data per second) were averaged over an entire training epoch.
-
-| GPUs   | Model size    | Batch size / GPU   | Throughput - TF32    | Throughput - mixed precision    | Throughput speedup (TF32 - mixed precision)      
-|----:|----|----|---:|---:|---:|
-| 8 | large | 64k | 9,980,000 | 15,400,000 | 1.54 |
-| 1 | small | 32k | 2,530,000 |  3,970,000 | 1.57 |
-
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 32GB)
 
 Our results were obtained by running the following commands:
-- for single-GPU setup:
+- for single-GPU:
 ```
-python -m dlrm.scripts.main --mode train --dataset /data [--amp]
+python -m dlrm.scripts.main --mode train --dataset /data --amp --cuda_graphs
 ```
-- for multi-GPU setup:
+- for multi-GPU :
 ```
 python -m torch.distributed.launch --no_python --use_env --nproc_per_node 8 \
-          bash  -c './bind.sh  --cpu=exclusive -- python -m dlrm.scripts.dist_main \
-          --dataset /data [--amp]'
+          bash  -c './bind.sh  --cpu=exclusive -- python -m dlrm.scripts.main \
+          --dataset /data --amp --cuda_graphs'
 ```
 
  in the DLRM Docker container on NVIDIA DGX-1 with (8x V100 32GB) GPUs. Performance numbers (in records of data per second) were averaged over an entire training epoch.
 
-| GPUs   | Model size    | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)   |     
-|----:|----|----|---:|---:|---:|
-| 8 | large | 64k | 2,830,000 | 7,480,000 | 2.64 |
-| 1 | small | 32k |   667,000 | 2,200,000 | 3.30 |
+|   GPUs | Model size   | Batch size / GPU   |   Throughput - FP32 |   Throughput - mixed precision |   Throughput speedup (FP32 to mixed precision) |
+|-------:|:-------------|:-------------------|--------------------:|-------------------------------:|-----------------------------------------------:|
+|      8 | large        | 8k                 |           2,880,000 |                      6,920,000 |                                          2.403 |
+|      1 | small        | 64k                |             672,000 |                      2,090,000 |                                          3.110 |
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -815,47 +953,106 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 ##### Training performance: NVIDIA DGX-2 (16x V100 32GB)
 
 Our results were obtained by running the following commands:
-- for single-GPU setup:
+- for single-GPU:
 ```
-python -m dlrm.scripts.main --dataset /data [--amp] 
+python -m dlrm.scripts.main --dataset /data --amp --cuda_graphs 
 ```
-- for multi-GPU setup:
+- for multi-GPU:
 ```
 python -m torch.distributed.launch --no_python --use_env --nproc_per_node [8/16] \
-          bash  -c './bind.sh  --cpu=exclusive -- python -m dlrm.scripts.dist_main \
-          --dataset /data [--amp]'
+          bash  -c './bind.sh  --cpu=exclusive -- python -m dlrm.scripts.main \
+          --dataset /data --amp --cuda_graphs'
 ```
  in the DLRM Docker container on NVIDIA DGX-2 with (16x V100 32GB) GPUs. Performance numbers (in records of data per second) were averaged over an entire training epoch.
 
-| GPUs   | Model size   | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)     
-|----:|----|---|---:|---:|---:|
-| 16 | large | 64k | 4,690,000 | 11,100,000 | 2.37 |
-| 8  | large | 64k | 3,280,000 |  8,480,000 | 2.59 |
-| 1  | small | 32k |   713,000 |  2,330,000 | 3.27 |
+|   GPUs | Model size   | Batch size / GPU   |   Throughput - FP32 |   Throughput - mixed precision |   Throughput speedup (FP32 to mixed precision) |
+|-------:|:-------------|:-------------------|--------------------:|-------------------------------:|-----------------------------------------------:|
+|     16 | large        | 4k                 |           4,740,000 |                     10,800,000 |                                          2.278 |
+|      8 | large        | 8k                 |           3,330,000 |                      7,930,000 |                                          2.381 |
+|      1 | small        | 64k                |             717,000 |                      2,250,000 |                                          3.138 |
 
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
+#### Inference performance results
+
+
+##### Inference performance: NVIDIA A100 (1x A100 80GB)
+
+Our results were obtained by running the --inference_benchmark mode
+in the DLRM Docker container on on the NVIDIA A100 (1x A100 80GB) GPU.
+
+<table>
+<tbody>
+<tr><td></td><td colspan="4" style="text-align:center"><b>Mixed Precision</b></td><td colspan="4" style="text-align:center"><b>TF32</b></td></tr>
+<tr><td></td><td colspan="2" style="text-align:center"><b>CUDA Graphs ON</b></td><td colspan="2" style="text-align:center"><b>CUDA Graphs OFF</b></td><td colspan="2" style="text-align:center"><b>CUDA Graphs ON</b></td><td colspan="2" style="text-align:center"><b>CUDA Graphs OFF</b></td></tr>
+<tr><td><b>Batch size</b></td><td><b>Throughput Avg</b></td><td><b>Latency Avg</b></td><td><b>Throughput Avg</b></td><td><b>Latency Avg</b></td><td><b>Throughput Avg</b></td><td><b>Latency Avg</b></td><td><b>Throughput Avg</b></td><td><b>Latency Avg</b></td></tr>
+<tr><td style="text-align: right;">32768</td><td style="text-align: right;">14,796,024</td><td style="text-align: right;">0.00221</td><td style="text-align: right;">14,369,047</td><td style="text-align: right;">0.00228</td><td style="text-align: right;">8,832,225</td><td style="text-align: right;">0.00371</td><td style="text-align: right;">8,637,000</td><td style="text-align: right;">0.00379</td></tr>
+<tr><td style="text-align: right;">16384</td><td style="text-align: right;">14,217,340</td><td style="text-align: right;">0.00115</td><td style="text-align: right;">13,673,623</td><td style="text-align: right;">0.00120</td><td style="text-align: right;">8,540,191</td><td style="text-align: right;">0.00192</td><td style="text-align: right;">8,386,694</td><td style="text-align: right;">0.00195</td></tr>
+<tr><td style="text-align: right;"> 8192</td><td style="text-align: right;">12,769,583</td><td style="text-align: right;">0.00064</td><td style="text-align: right;">11,336,204</td><td style="text-align: right;">0.00072</td><td style="text-align: right;">7,658,459</td><td style="text-align: right;">0.00107</td><td style="text-align: right;">7,463,740</td><td style="text-align: right;">0.00110</td></tr>
+<tr><td style="text-align: right;"> 4096</td><td style="text-align: right;">10,556,140</td><td style="text-align: right;">0.00039</td><td style="text-align: right;"> 8,203,285</td><td style="text-align: right;">0.00050</td><td style="text-align: right;">6,777,965</td><td style="text-align: right;">0.00060</td><td style="text-align: right;">6,142,076</td><td style="text-align: right;">0.00067</td></tr>
+<tr><td style="text-align: right;"> 2048</td><td style="text-align: right;"> 8,415,889</td><td style="text-align: right;">0.00024</td><td style="text-align: right;"> 4,785,479</td><td style="text-align: right;">0.00043</td><td style="text-align: right;">5,214,990</td><td style="text-align: right;">0.00039</td><td style="text-align: right;">4,365,954</td><td style="text-align: right;">0.00047</td></tr>
+<tr><td style="text-align: right;"> 1024</td><td style="text-align: right;"> 5,045,754</td><td style="text-align: right;">0.00020</td><td style="text-align: right;"> 2,357,953</td><td style="text-align: right;">0.00043</td><td style="text-align: right;">3,854,504</td><td style="text-align: right;">0.00027</td><td style="text-align: right;">2,615,601</td><td style="text-align: right;">0.00039</td></tr>
+<tr><td style="text-align: right;">  512</td><td style="text-align: right;"> 3,168,261</td><td style="text-align: right;">0.00016</td><td style="text-align: right;"> 1,190,989</td><td style="text-align: right;">0.00043</td><td style="text-align: right;">2,441,310</td><td style="text-align: right;">0.00021</td><td style="text-align: right;">1,332,944</td><td style="text-align: right;">0.00038</td></tr>
+<tr><td style="text-align: right;">  256</td><td style="text-align: right;"> 1,711,749</td><td style="text-align: right;">0.00015</td><td style="text-align: right;">   542,310</td><td style="text-align: right;">0.00047</td><td style="text-align: right;">1,365,320</td><td style="text-align: right;">0.00019</td><td style="text-align: right;">  592,034</td><td style="text-align: right;">0.00043</td></tr>
+<tr><td style="text-align: right;">  128</td><td style="text-align: right;">   889,777</td><td style="text-align: right;">0.00014</td><td style="text-align: right;">   274,223</td><td style="text-align: right;">0.00047</td><td style="text-align: right;">  790,984</td><td style="text-align: right;">0.00016</td><td style="text-align: right;">  300,908</td><td style="text-align: right;">0.00043</td></tr>
+<tr><td style="text-align: right;">   64</td><td style="text-align: right;">   459,728</td><td style="text-align: right;">0.00014</td><td style="text-align: right;">   136,180</td><td style="text-align: right;">0.00047</td><td style="text-align: right;">  416,463</td><td style="text-align: right;">0.00015</td><td style="text-align: right;">  150,382</td><td style="text-align: right;">0.00043</td></tr>
+<tr><td style="text-align: right;">   32</td><td style="text-align: right;">   222,386</td><td style="text-align: right;">0.00014</td><td style="text-align: right;">    70,107</td><td style="text-align: right;">0.00046</td><td style="text-align: right;">  174,163</td><td style="text-align: right;">0.00018</td><td style="text-align: right;">   75,768</td><td style="text-align: right;">0.00042</td></tr>
+<tr><td style="text-align: right;">   16</td><td style="text-align: right;">   117,386</td><td style="text-align: right;">0.00014</td><td style="text-align: right;">    34,983</td><td style="text-align: right;">0.00046</td><td style="text-align: right;">  108,992</td><td style="text-align: right;">0.00015</td><td style="text-align: right;">   38,369</td><td style="text-align: right;">0.00042</td></tr>
+<tr><td style="text-align: right;">    8</td><td style="text-align: right;">    59,200</td><td style="text-align: right;">0.00014</td><td style="text-align: right;">    18,852</td><td style="text-align: right;">0.00042</td><td style="text-align: right;">   55,661</td><td style="text-align: right;">0.00014</td><td style="text-align: right;">   19,440</td><td style="text-align: right;">0.00041</td></tr>
+<tr><td style="text-align: right;">    4</td><td style="text-align: right;">    29,609</td><td style="text-align: right;">0.00014</td><td style="text-align: right;">     8,505</td><td style="text-align: right;">0.00047</td><td style="text-align: right;">   27,957</td><td style="text-align: right;">0.00014</td><td style="text-align: right;">   10,206</td><td style="text-align: right;">0.00039</td></tr>
+<tr><td style="text-align: right;">    2</td><td style="text-align: right;">    14,066</td><td style="text-align: right;">0.00014</td><td style="text-align: right;">     4,610</td><td style="text-align: right;">0.00043</td><td style="text-align: right;">   13,010</td><td style="text-align: right;">0.00015</td><td style="text-align: right;">    5,229</td><td style="text-align: right;">0.00038</td></tr>
+</tbody>
+</table>
+
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+
+##### Inference performance: NVIDIA DGX-1 (1x V100 32GB)
+
+
+Our results were obtained by running the `--inference_benchmark` mode
+in the DLRM Docker container on NVIDIA DGX-1 with (1x V100 32GB) GPU.
+
+<table>
+<tbody>
+<tr><td></td><td colspan="4" style="text-align:center"><b>Mixed Precision</b></td><td colspan="4" style="text-align:center"><b>FP32</b></td></tr>
+<tr><td></td><td colspan="2" style="text-align:center"><b>CUDA Graphs ON</b></td><td colspan="2" style="text-align:center"><b>CUDA Graphs OFF</b></td><td colspan="2" style="text-align:center"><b>CUDA Graphs ON</b></td><td colspan="2" style="text-align:center"><b>CUDA Graphs OFF</b></td></tr>
+<tr><td><b>Batch size</b></td><td><b>Throughput Avg</b></td><td><b>Latency Avg</b></td><td><b>Throughput Avg</b></td><td><b>Latency Avg</b></td><td><b>Throughput Avg</b></td><td><b>Latency Avg</b></td><td><b>Throughput Avg</b></td><td><b>Latency Avg</b></td></tr>
+<tr><td style="text-align: right;">32768</td><td style="text-align: right;">6,716,240</td><td style="text-align: right;">0.00488</td><td style="text-align: right;">6,792,739</td><td style="text-align: right;">0.00482</td><td style="text-align: right;">1,809,345</td><td style="text-align: right;">0.01811</td><td style="text-align: right;">1,802,851</td><td style="text-align: right;">0.01818</td></tr>
+<tr><td style="text-align: right;">16384</td><td style="text-align: right;">6,543,544</td><td style="text-align: right;">0.00250</td><td style="text-align: right;">6,520,519</td><td style="text-align: right;">0.00251</td><td style="text-align: right;">1,754,713</td><td style="text-align: right;">0.00934</td><td style="text-align: right;">1,745,214</td><td style="text-align: right;">0.00939</td></tr>
+<tr><td style="text-align: right;"> 8192</td><td style="text-align: right;">6,215,194</td><td style="text-align: right;">0.00132</td><td style="text-align: right;">6,074,446</td><td style="text-align: right;">0.00135</td><td style="text-align: right;">1,669,188</td><td style="text-align: right;">0.00491</td><td style="text-align: right;">1,656,393</td><td style="text-align: right;">0.00495</td></tr>
+<tr><td style="text-align: right;"> 4096</td><td style="text-align: right;">5,230,443</td><td style="text-align: right;">0.00078</td><td style="text-align: right;">4,901,451</td><td style="text-align: right;">0.00084</td><td style="text-align: right;">1,586,666</td><td style="text-align: right;">0.00258</td><td style="text-align: right;">1,574,068</td><td style="text-align: right;">0.00260</td></tr>
+<tr><td style="text-align: right;"> 2048</td><td style="text-align: right;">4,261,124</td><td style="text-align: right;">0.00048</td><td style="text-align: right;">3,523,239</td><td style="text-align: right;">0.00058</td><td style="text-align: right;">1,462,006</td><td style="text-align: right;">0.00140</td><td style="text-align: right;">1,416,985</td><td style="text-align: right;">0.00145</td></tr>
+<tr><td style="text-align: right;"> 1024</td><td style="text-align: right;">3,306,724</td><td style="text-align: right;">0.00031</td><td style="text-align: right;">2,047,274</td><td style="text-align: right;">0.00050</td><td style="text-align: right;">1,277,860</td><td style="text-align: right;">0.00080</td><td style="text-align: right;">1,161,032</td><td style="text-align: right;">0.00088</td></tr>
+<tr><td style="text-align: right;">  512</td><td style="text-align: right;">2,049,382</td><td style="text-align: right;">0.00025</td><td style="text-align: right;">1,005,919</td><td style="text-align: right;">0.00051</td><td style="text-align: right;">1,016,186</td><td style="text-align: right;">0.00050</td><td style="text-align: right;">  841,732</td><td style="text-align: right;">0.00061</td></tr>
+<tr><td style="text-align: right;">  256</td><td style="text-align: right;">1,149,997</td><td style="text-align: right;">0.00022</td><td style="text-align: right;">  511,102</td><td style="text-align: right;">0.00050</td><td style="text-align: right;">  726,349</td><td style="text-align: right;">0.00035</td><td style="text-align: right;">  485,162</td><td style="text-align: right;">0.00053</td></tr>
+<tr><td style="text-align: right;">  128</td><td style="text-align: right;">  663,048</td><td style="text-align: right;">0.00019</td><td style="text-align: right;">  264,015</td><td style="text-align: right;">0.00048</td><td style="text-align: right;">  493,878</td><td style="text-align: right;">0.00026</td><td style="text-align: right;">  238,936</td><td style="text-align: right;">0.00054</td></tr>
+<tr><td style="text-align: right;">   64</td><td style="text-align: right;">  359,505</td><td style="text-align: right;">0.00018</td><td style="text-align: right;">  132,913</td><td style="text-align: right;">0.00048</td><td style="text-align: right;">  295,273</td><td style="text-align: right;">0.00022</td><td style="text-align: right;">  124,120</td><td style="text-align: right;">0.00052</td></tr>
+<tr><td style="text-align: right;">   32</td><td style="text-align: right;">  175,465</td><td style="text-align: right;">0.00018</td><td style="text-align: right;">   64,287</td><td style="text-align: right;">0.00050</td><td style="text-align: right;">  157,629</td><td style="text-align: right;">0.00020</td><td style="text-align: right;">   63,919</td><td style="text-align: right;">0.00050</td></tr>
+<tr><td style="text-align: right;">   16</td><td style="text-align: right;">   99,207</td><td style="text-align: right;">0.00016</td><td style="text-align: right;">   31,062</td><td style="text-align: right;">0.00052</td><td style="text-align: right;">   83,019</td><td style="text-align: right;">0.00019</td><td style="text-align: right;">   34,660</td><td style="text-align: right;">0.00046</td></tr>
+<tr><td style="text-align: right;">    8</td><td style="text-align: right;">   52,532</td><td style="text-align: right;">0.00015</td><td style="text-align: right;">   16,492</td><td style="text-align: right;">0.00049</td><td style="text-align: right;">   43,289</td><td style="text-align: right;">0.00018</td><td style="text-align: right;">   17,893</td><td style="text-align: right;">0.00045</td></tr>
+<tr><td style="text-align: right;">    4</td><td style="text-align: right;">   27,626</td><td style="text-align: right;">0.00014</td><td style="text-align: right;">    8,391</td><td style="text-align: right;">0.00048</td><td style="text-align: right;">   22,692</td><td style="text-align: right;">0.00018</td><td style="text-align: right;">    8,923</td><td style="text-align: right;">0.00045</td></tr>
+<tr><td style="text-align: right;">    2</td><td style="text-align: right;">   13,791</td><td style="text-align: right;">0.00015</td><td style="text-align: right;">    4,146</td><td style="text-align: right;">0.00048</td><td style="text-align: right;">   11,747</td><td style="text-align: right;">0.00017</td><td style="text-align: right;">    4,487</td><td style="text-align: right;">0.00045</td></tr>
+</tbody>
+</table>
+
+To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
 ## Release notes
 
 ### Changelog
 
-April 2020
-- Initial release
+October 2021
+- Added support for CUDA Graphs
+- Switched to PyTorch native AMP for mixed precision training
+- Unified the single-GPU and multi-GPU training scripts
+- Added support for BYO dataset
+- Updated performance results
+- Updated container version
 
-May 2020
-- Performance optimizations
-
-June 2020
-- Updated performance tables to include A100 results and multi-GPU setup
-- Multi-GPU optimizations
-
-August 2020
-- Preprocessing with Spark 3 on GPU
-- Multiple performance optimizations
-- Automatic placement and load balancing of embedding tables
-- Improved README
+June 2021
+- Updated container version
+- Updated performance results
 
 March 2021
 - Added NVTabular as a new preprocessing option
@@ -865,11 +1062,26 @@ March 2021
 - Added Adam as an optional optimizer for embedding and MLPs, for multi-GPU training
 - Improved README
 
-June 2021
-- Updated container version
-- Updated performance results
+August 2020
+- Preprocessing with Spark 3 on GPU
+- Multiple performance optimizations
+- Automatic placement and load balancing of embedding tables
+- Improved README
+
+June 2020
+- Updated performance tables to include A100 results and multi-GPU setup
+- Multi-GPU optimizations
+
+May 2020
+- Performance optimizations
+
+April 2020
+- Initial release
 
 ### Known issues
 
-- Adam performance is not optimized.  
-- For some seeds, the model's loss can become NaN due to aggressive scheduling rate policy.
+- Adam optimizer performance is not optimized.  
+- For some seeds, the model's loss can become NaN due to aggressive learning rate schedule.
+- Custom dot interaction kernels for FP16 and TF32 assume that embedding size <= 128 and number of categorical variables < 32.
+  Pass `--interaction_op dot` to use the slower native operation in those cases.
+

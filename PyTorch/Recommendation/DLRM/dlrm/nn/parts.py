@@ -27,16 +27,16 @@ from dlrm.nn.interactions import Interaction
 class DlrmBottom(nn.Module):
 
     def __init__(
-        self,
-        num_numerical_features: int,
-        categorical_feature_sizes: Sequence[int],
-        bottom_mlp_sizes: Optional[Sequence[int]] = None,
-        embedding_type: str = "multi_table",
-        embedding_dim: int = 128,
-        hash_indices: bool = False,
-        use_cpp_mlp: bool = False,
-        fp16: bool = False,
-        device: str = "cuda"
+            self,
+            num_numerical_features: int,
+            categorical_feature_sizes: Sequence[int],
+            bottom_mlp_sizes: Optional[Sequence[int]] = None,
+            embedding_type: str = "multi_table",
+            embedding_dim: int = 128,
+            hash_indices: bool = False,
+            use_cpp_mlp: bool = False,
+            fp16: bool = False,
+            device: str = "cuda"
     ):
         super().__init__()
         assert bottom_mlp_sizes is None or embedding_dim == bottom_mlp_sizes[-1], "The last bottom MLP layer must" \
@@ -94,6 +94,7 @@ class DlrmBottom(nn.Module):
                 bottom_mlp_output = bottom_mlp_output.half()
 
             # reshape bottom mlp to concatenate with embeddings
+            # this order with bottom_mlp at the front is assumed by custom kernels
             bottom_output.append(bottom_mlp_output.view(-1, 1, self._embedding_dim))
 
         if self.num_categorical_features > 0:

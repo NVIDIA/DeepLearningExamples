@@ -30,13 +30,13 @@ class BottomToTop(torch.autograd.Function):
 
     @staticmethod
     def forward(
-        ctx,
-        local_bottom_outputs: torch.Tensor,
-        batch_sizes_per_gpu: Sequence[int],
-        vector_dim: int,
-        vectors_per_gpu: Sequence[int],
-        feature_order: Optional[torch.Tensor] = None,
-        device_feature_order: Optional[torch.Tensor] = None
+            ctx,
+            local_bottom_outputs: torch.Tensor,
+            batch_sizes_per_gpu: Sequence[int],
+            vector_dim: int,
+            vectors_per_gpu: Sequence[int],
+            feature_order: Optional[torch.Tensor] = None,
+            device_feature_order: Optional[torch.Tensor] = None
     ):
         """
         Args:
@@ -104,35 +104,40 @@ bottom_to_top = BottomToTop.apply
 class DistributedDlrm(nn.Module):
 
     def __init__(
-        self,
-        vectors_per_gpu: Sequence[int],
-        embedding_device_mapping: Sequence[Sequence[int]],
-        world_num_categorical_features: int,
-        num_numerical_features: int,
-        categorical_feature_sizes: Sequence[int],
-        bottom_mlp_sizes: Sequence[int],
-        top_mlp_sizes: Sequence[int],
-        embedding_type: str = "multi_table",
-        embedding_dim: int = 128,
-        interaction_op: str = "dot",
-        hash_indices: bool = False,
-        use_cpp_mlp: bool = False,
-        fp16: bool = False,
-        bottom_features_ordered: bool = False,
-        device: str = "cuda"
+            self,
+            num_numerical_features: int,
+            categorical_feature_sizes: Sequence[int],
+            bottom_mlp_sizes: Sequence[int],
+            top_mlp_sizes: Sequence[int],
+            vectors_per_gpu: Sequence[int] = None,
+            embedding_device_mapping: Sequence[Sequence[int]] = None,
+            world_num_categorical_features: int = None,
+            embedding_type: str = "multi_table",
+            embedding_dim: int = 128,
+            interaction_op: str = "dot",
+            hash_indices: bool = False,
+            use_cpp_mlp: bool = False,
+            fp16: bool = False,
+            bottom_features_ordered: bool = False,
+            device: str = "cuda"
     ):
         super().__init__()
+
+        self.distributed = dist.get_world_size() > 1
 
         self._vectors_per_gpu = vectors_per_gpu
         self._embedding_dim = embedding_dim
         self._interaction_op = interaction_op
         self._hash_indices = hash_indices
 
-        # TODO: take bottom_mlp GPU from device mapping, do not assume it's always first
-        self._device_feature_order = torch.tensor(
-            [-1] + [i for bucket in embedding_device_mapping for i in bucket], dtype=torch.long, device=device
-        ) + 1 if bottom_features_ordered else None
-        self._feature_order = self._device_feature_order.argsort() if bottom_features_ordered else None
+        if self.distributed:
+            # TODO: take bottom_mlp GPU from device mapping, do not assume it's always first
+            self._device_feature_order = torch.tensor(
+                [-1] + [i for bucket in embedding_device_mapping for i in bucket], dtype=torch.long, device=device
+            ) + 1 if bottom_features_ordered else None
+            self._feature_order = self._device_feature_order.argsort() if bottom_features_ordered else None
+        else:
+            world_num_categorical_features = len(categorical_feature_sizes)
 
         interaction = create_interaction(interaction_op, world_num_categorical_features, embedding_dim)
 
@@ -142,8 +147,6 @@ class DistributedDlrm(nn.Module):
             fp16=fp16, device=device
         )
         self.top_model = DlrmTop(top_mlp_sizes, interaction, use_cpp_mlp=use_cpp_mlp).to(device)
-
-        self.distributed = dist.get_world_size() > 1
 
     def extra_repr(self):
         return f"interaction_op={self._interaction_op}, hash_indices={self._hash_indices}"
@@ -155,7 +158,7 @@ class DistributedDlrm(nn.Module):
         """Create from json str"""
         return cls(**obj_dict, **kwargs)
 
-    def forward(self, numerical_input, categorical_inputs, batch_sizes_per_gpu: Sequence[int]):
+    def forward(self, numerical_input, categorical_inputs, batch_sizes_per_gpu: Sequence[int] = None):
         """
         Args:
             numerical_input (Tensor): with shape [batch_size, num_numerical_features]

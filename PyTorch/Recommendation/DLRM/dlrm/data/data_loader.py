@@ -19,12 +19,14 @@ from typing import Tuple, Optional
 
 from torch.utils.data import DataLoader
 
-from dlrm.data.datasets import CriteoBinDataset
+from dlrm.data.datasets import ParametricDataset
 from dlrm.data.factories import create_dataset_factory
+from dlrm.data.feature_spec import FeatureSpec
 
 
-def get_data_loaders(flags, device_mapping: Optional[dict] = None) -> Tuple[DataLoader, DataLoader]:
-    dataset_factory = create_dataset_factory(flags, device_mapping=device_mapping)
+def get_data_loaders(flags, feature_spec: FeatureSpec, device_mapping: Optional[dict] = None) -> \
+        Tuple[DataLoader, DataLoader]:
+    dataset_factory = create_dataset_factory(flags, feature_spec=feature_spec, device_mapping=device_mapping)
 
     dataset_train, dataset_test = dataset_factory.create_datasets()
     train_sampler = dataset_factory.create_sampler(dataset_train) if flags.shuffle_batch_order else None
@@ -39,13 +41,13 @@ if __name__ == '__main__':
     print('Dataloader benchmark')
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--file', type=str)
+    parser.add_argument('--fspec_path', type=str)
     parser.add_argument('--batch_size', type=int)
     parser.add_argument('--steps', type=int, default=1000)
     args = parser.parse_args()
-
-    dataset = CriteoBinDataset(data_path=args.file, batch_size=args.batch_size)
-
+    fspec = FeatureSpec.from_yaml(args.fspec_path)
+    dataset = ParametricDataset(fspec, args.mapping, batch_size=args.batch_size, numerical_features_enabled=True,
+                                categorical_features_to_read=fspec.get_categorical_feature_names())
     begin = time.time()
     for i in range(args.steps):
         _ = dataset[i]

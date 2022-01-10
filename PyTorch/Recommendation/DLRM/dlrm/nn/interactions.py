@@ -17,6 +17,11 @@ import torch
 from dlrm.cuda_ext import dotBasedInteract
 
 
+def padding_size(n: int) -> int:
+    nearest_multiple = ((n - 1) // 8 + 1) * 8
+    return nearest_multiple - n
+
+
 class Interaction:
 
     @property
@@ -45,12 +50,17 @@ class DotInteraction(Interaction):
         self._tril_indices = torch.tensor([[i for i in range(self._num_interaction_inputs)
                                             for _ in range(i)],
                                            [j for i in range(self._num_interaction_inputs)
-                                            for j in range(i)]])
+                                            for j in range(i)]]).cuda()
+        # THIS IS NOT A REGULAR TRIANGULAR LOWER MATRIX! THE MAIN DIAGONAL IS NOT INCLUDED
+
+    @property
+    def _raw_num_interactions(self) -> int:
+        return (self._num_interaction_inputs * (self._num_interaction_inputs - 1)) // 2 + self._embedding_dim
 
     @property
     def num_interactions(self) -> int:
-        n = (self._num_interaction_inputs * (self._num_interaction_inputs - 1)) // 2 + self._embedding_dim
-        return n + 1  # pad 1 to be multiple of 8
+        n = self._raw_num_interactions
+        return n + padding_size(n)
 
     def interact(self, bottom_output, bottom_mlp_output):
         """
@@ -64,7 +74,8 @@ class DotInteraction(Interaction):
         interaction_flat = interaction[:, self._tril_indices[0], self._tril_indices[1]]
 
         # concatenate dense features and interactions
-        zeros_padding = torch.zeros(batch_size, 1, dtype=bottom_output.dtype, device=bottom_output.device)
+        padding_dim = padding_size(self._raw_num_interactions)
+        zeros_padding = torch.zeros(batch_size, padding_dim, dtype=bottom_output.dtype, device=bottom_output.device)
         interaction_output = torch.cat(
             (bottom_mlp_output, interaction_flat, zeros_padding), dim=1)
 
@@ -86,6 +97,7 @@ class CudaDotInteraction(Interaction):
         :param bottom_mlp_output
         :return:
         """
+
         return dotBasedInteract(bottom_output, bottom_mlp_output)
 
 

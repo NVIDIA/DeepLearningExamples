@@ -20,6 +20,29 @@ import torch
 from torch import nn
 
 
+class AmpMlpFunction(torch.autograd.Function):
+    @staticmethod
+    @torch.cuda.amp.custom_fwd(cast_inputs=torch.half)
+    def forward(*args, **kwargs):
+        return apex.mlp.MlpFunction.forward(*args, **kwargs)
+
+    @staticmethod
+    @torch.cuda.amp.custom_fwd(cast_inputs=torch.half)
+    def backward(*args, **kwargs):
+        return apex.mlp.MlpFunction.backward(*args, **kwargs)
+
+
+mlp_function = AmpMlpFunction.apply
+
+
+class AmpMlp(apex.mlp.MLP):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def forward(self, input):
+        return mlp_function(self.bias, self.activation, input, *self.weights, *self.biases)
+
+
 class AbstractMlp(nn.Module):
     """
     MLP interface used for configuration-agnostic checkpointing (`dlrm.utils.checkpointing`)
@@ -96,7 +119,7 @@ class CppMlp(AbstractMlp):
     def __init__(self, input_dim: int, sizes: Sequence[int]):
         super().__init__()
 
-        self.mlp = apex.mlp.MLP([input_dim] + list(sizes))
+        self.mlp = AmpMlp([input_dim] + list(sizes))
 
     @property
     def weights(self):

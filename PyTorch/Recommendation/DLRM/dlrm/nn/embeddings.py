@@ -42,11 +42,11 @@ class Embeddings(nn.Module):
 class MultiTableEmbeddings(Embeddings):
 
     def __init__(
-        self,
-        categorical_feature_sizes: Sequence[int],
-        embedding_dim: int,
-        hash_indices: bool = False,
-        device: str = "cuda"
+            self,
+            categorical_feature_sizes: Sequence[int],
+            embedding_dim: int,
+            hash_indices: bool = False,
+            device: str = "cuda"
     ):
         super().__init__()
         self._categorical_feature_sizes = copy.copy(categorical_feature_sizes)
@@ -110,12 +110,13 @@ class JointEmbedding(Embeddings):
         embedding_dim (int): the size of each embedding vector
         device (torch.device): where to create the embedding. Default "cuda"
     """
+
     def __init__(
-        self,
-        categorical_feature_sizes: Sequence[int],
-        embedding_dim: int,
-        device: str = "cuda",
-        hash_indices: bool = False
+            self,
+            categorical_feature_sizes: Sequence[int],
+            embedding_dim: int,
+            device: str = "cuda",
+            hash_indices: bool = False
     ):
         super().__init__()
         self._categorical_feature_sizes = copy.copy(categorical_feature_sizes)
@@ -138,6 +139,7 @@ class JointEmbedding(Embeddings):
     def extra_repr(self):
         s = f"offsets={self.offsets.cpu().numpy()}"
         return s
+
     # pylint:enable=missing-docstring
 
     @property
@@ -157,6 +159,7 @@ class JointEmbedding(Embeddings):
 # the custom cuda kernel code to accommodate the new number, then change this value accordingly
 FUSED_JOINT_EMBEDDING_NUMBER_OF_CATEGORICAL_VARIABLES = 26
 
+
 class FusedJointEmbedding(Embeddings):
     """
     Buckle multiple one hot embedding together
@@ -169,12 +172,12 @@ class FusedJointEmbedding(Embeddings):
     """
 
     def __init__(
-        self,
-        categorical_feature_sizes: Sequence[int],
-        embedding_dim: int,
-        device: str = "cuda",
-        hash_indices: bool = False,
-        amp_train: bool = False
+            self,
+            categorical_feature_sizes: Sequence[int],
+            embedding_dim: int,
+            device: str = "cuda",
+            hash_indices: bool = False,
+            amp_train: bool = False
     ):
         super().__init__()
         self._categorical_feature_sizes = copy.copy(categorical_feature_sizes)
@@ -189,8 +192,11 @@ class FusedJointEmbedding(Embeddings):
             torch.empty((self.offsets[-1].item(), embedding_dim), device=device), requires_grad=True))
 
         if len(categorical_feature_sizes) != FUSED_JOINT_EMBEDDING_NUMBER_OF_CATEGORICAL_VARIABLES:
-            raise ValueError(  f"Number of categorical features must be equal to {FUSED_JOINT_EMBEDDING_NUMBER_OF_CATEGORICAL_VARIABLES}, got {len(categorical_feature_sizes)}\n"
-                             + f"If you want to train on a different number, you need to recompile cuda kernels to support it or use different embedding type.")
+            raise ValueError(
+                f"Number of categorical features must be equal to"
+                f" {FUSED_JOINT_EMBEDDING_NUMBER_OF_CATEGORICAL_VARIABLES}, got {len(categorical_feature_sizes)}\n"
+                f"If you want to train on a different number, you need to recompile cuda kernels to support it or "
+                f"use different embedding type.")
 
     def forward(self, categorical_inputs) -> List[torch.Tensor]:
         # Check input has the right shape
@@ -221,11 +227,11 @@ class FusedJointEmbedding(Embeddings):
 class JointSparseEmbedding(Embeddings):
 
     def __init__(
-        self,
-        categorical_feature_sizes: List[int],
-        embedding_dim: int,
-        device: str = "cuda",
-        hash_indices: bool = False
+            self,
+            categorical_feature_sizes: List[int],
+            embedding_dim: int,
+            device: str = "cuda",
+            hash_indices: bool = False
     ):
         super().__init__()
         self._categorical_feature_sizes = categorical_feature_sizes

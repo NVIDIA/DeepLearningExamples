@@ -41,6 +41,7 @@ class DlrmCheckpointWriter:
     Depends on `dlrm.nn.embeddings.Embeddings` and `dlrm.nn.mlps.AbstractMlp` interfaces
     (for handling multiple model configurations)
     """
+
     def __init__(self, embedding_indices: Sequence[int], config: Dict[str, Any]):
         self._embedding_indices = embedding_indices
         self._config = config
@@ -88,6 +89,7 @@ class DlrmCheckpointLoader:
     Depends on `dlrm.nn.embeddings.Embeddings` and `dlrm.nn.mlps.AbstractMlp` interfaces
     (for handling multiple model configurations)
     """
+
     def __init__(self, embedding_indices: Sequence[int], device: str = "cpu"):
         self._embedding_indices = embedding_indices
         self._device = device

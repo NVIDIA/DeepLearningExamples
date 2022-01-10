@@ -13,65 +13,17 @@
 # limitations under the License.
 
 import functools
-import os
-from typing import Tuple, Optional, Callable, Dict, Sequence
+from typing import Tuple, Optional, Callable, Dict
 
 import torch
 from torch.utils.data import Dataset, Sampler, RandomSampler
 
-from dlrm.data.datasets import CriteoBinDataset, SyntheticDataset, SplitCriteoDataset
+from dlrm.data.datasets import SyntheticDataset, ParametricDataset
+from dlrm.data.defaults import TEST_MAPPING, TRAIN_MAPPING
+from dlrm.data.feature_spec import FeatureSpec
 from dlrm.data.samplers import RandomDistributedSampler
-from dlrm.data.utils import collate_array, write_dataset_to_disk, get_categorical_feature_sizes, \
-    collate_split_tensors
-from dlrm.utils.distributed import is_distributed, is_main_process, get_rank
-
-
-def create_synthetic_datasets(flags, device_mapping: Optional[Dict] = None):
-    dataset_train = SyntheticDataset(num_entries=flags.synthetic_dataset_num_entries,
-                                     batch_size=flags.batch_size,
-                                     numerical_features=flags.num_numerical_features,
-                                     categorical_feature_sizes=get_categorical_feature_sizes(flags),
-                                     device_mapping=device_mapping)
-
-    dataset_test = SyntheticDataset(num_entries=flags.synthetic_dataset_num_entries,
-                                    batch_size=flags.test_batch_size,
-                                    numerical_features=flags.num_numerical_features,
-                                    categorical_feature_sizes=get_categorical_feature_sizes(flags),
-                                    device_mapping=device_mapping)
-    return dataset_train, dataset_test
-
-
-def create_real_datasets(
-    flags,
-    path,
-    dataset_class: type = SplitCriteoDataset,
-    train_dataset_path="train",
-    test_dataset_path="test",
-    **kwargs
-):
-    train_dataset = os.path.join(path, train_dataset_path)
-    test_dataset = os.path.join(path, test_dataset_path)
-    categorical_sizes = get_categorical_feature_sizes(flags)
-
-    dataset_train = dataset_class(
-        data_path=train_dataset,
-        batch_size=flags.batch_size,
-        numerical_features=flags.num_numerical_features,
-        categorical_features=range(len(categorical_sizes)),
-        categorical_feature_sizes=categorical_sizes,
-        **kwargs
-    )
-
-    dataset_test = dataset_class(
-        data_path=test_dataset,
-        batch_size=flags.test_batch_size,
-        numerical_features=flags.num_numerical_features,
-        categorical_features=range(len(categorical_sizes)),
-        categorical_feature_sizes=categorical_sizes,
-        **kwargs
-    )
-
-    return dataset_train, dataset_test
+from dlrm.data.utils import collate_split_tensors
+from dlrm.utils.distributed import is_distributed, get_rank
 
 
 class DatasetFactory:
@@ -81,71 +33,30 @@ class DatasetFactory:
         self._device_mapping = device_mapping
 
     def create_collate_fn(self) -> Optional[Callable]:
-        if self._device_mapping is not None:
-            # selection of categorical features assigned to this device
-            device_cat_features = torch.tensor(
-                self._device_mapping["embedding"][get_rank()], device=self._flags.base_device,
-                dtype=torch.long)
-        else:
-            device_cat_features = None
-
-        orig_stream = torch.cuda.current_stream() if self._flags.base_device == 'cuda' else None
-        return functools.partial(
-            collate_array,
-            device=self._flags.base_device,
-            orig_stream=orig_stream,
-            num_numerical_features=self._flags.num_numerical_features,
-            selected_categorical_features=device_cat_features
-        )
-
-    def create_sampler(self, dataset: Dataset) -> Optional[Sampler]:
-        return RandomDistributedSampler(dataset) if is_distributed() else RandomSampler(dataset)
+        raise NotImplementedError()
 
     def create_datasets(self) -> Tuple[Dataset, Dataset]:
         raise NotImplementedError()
 
+    def create_sampler(self, dataset: Dataset) -> Optional[Sampler]:
+        return RandomDistributedSampler(dataset) if is_distributed() else RandomSampler(dataset)
+
     def create_data_loader(
-        self,
-        dataset,
-        collate_fn: Optional[Callable] = None,
-        sampler: Optional[Sampler] = None
-    ):
+            self,
+            dataset,
+            collate_fn: Optional[Callable] = None,
+            sampler: Optional[Sampler] = None):
         return torch.utils.data.DataLoader(
             dataset, collate_fn=collate_fn, sampler=sampler, batch_size=None,
             num_workers=0, pin_memory=False
         )
 
 
-class SyntheticDiskDatasetFactory(DatasetFactory):
-
-    def create_sampler(self, dataset: Dataset) -> Optional[Sampler]:
-        return None
-
-    def create_datasets(self) -> Tuple[Dataset, Dataset]:
-        synthetic_train, synthetic_test = create_synthetic_datasets(self._flags)
-
-        if is_distributed():
-            self._synchronized_write(synthetic_train, synthetic_test)
-        else:
-            self._write(synthetic_train, synthetic_test)
-
-        return create_real_datasets(
-            self._flags, self._flags.synthetic_dataset_dir,
-            SplitCriteoDataset, "train", "test",
-            prefetch_depth=10
-        )
-
-    def _synchronized_write(self, train_dataset: Dataset, test_dataset: Dataset):
-        if is_main_process():
-            self._write(train_dataset, test_dataset)
-        torch.distributed.barrier()
-
-    def _write(self, train_dataset: Dataset, test_dataset: Dataset):
-        write_dataset_to_disk(self._flags.synthetic_dataset_dir, train_dataset, test_dataset,
-                              self._flags.synthetic_dataset_table_sizes)
-
-
 class SyntheticGpuDatasetFactory(DatasetFactory):
+    def __init__(self, flags, local_numerical_features_num, local_categorical_feature_sizes):
+        self.local_numerical_features = local_numerical_features_num
+        self.local_categorical_features = local_categorical_feature_sizes
+        super().__init__(flags)
 
     def create_collate_fn(self) -> Optional[Callable]:
         return None
@@ -154,66 +65,65 @@ class SyntheticGpuDatasetFactory(DatasetFactory):
         return None
 
     def create_datasets(self) -> Tuple[Dataset, Dataset]:
-        return create_synthetic_datasets(self._flags, self._device_mapping)
+        flags = self._flags
+        dataset_train = SyntheticDataset(num_entries=flags.synthetic_dataset_num_entries,
+                                         batch_size=flags.batch_size,
+                                         numerical_features=self.local_numerical_features,
+                                         categorical_feature_sizes=self.local_categorical_features)
+
+        dataset_test = SyntheticDataset(num_entries=flags.synthetic_dataset_num_entries,
+                                        batch_size=flags.test_batch_size,
+                                        numerical_features=self.local_numerical_features,
+                                        categorical_feature_sizes=self.local_categorical_features)
+        return dataset_train, dataset_test
 
 
-class BinaryDatasetFactory(DatasetFactory):
+class ParametricDatasetFactory(DatasetFactory):
 
-    def create_datasets(self) -> Tuple[Dataset, Dataset]:
-        return create_real_datasets(
-            self._flags,
-            self._flags.dataset,
-            dataset_class=CriteoBinDataset,
-            train_dataset_path="train_data.bin",
-            test_dataset_path="test_data.bin"
-        )
-
-class SplitBinaryDatasetFactory(DatasetFactory):
-
-    def __init__(self, flags, numerical_features: bool,
-                 categorical_features: Sequence[int]):
+    def __init__(self, flags, feature_spec: FeatureSpec, numerical_features_enabled, categorical_features_to_read):
         super().__init__(flags)
-        self._numerical_features = numerical_features
-        self._categorical_features = categorical_features
+        self._base_device = flags.base_device
+        self._train_batch_size = flags.batch_size
+        self._test_batch_size = flags.test_batch_size
+        self._feature_spec = feature_spec
+        self._numerical_features_enabled = numerical_features_enabled
+        self._categorical_features_to_read = categorical_features_to_read
 
     def create_collate_fn(self):
-        orig_stream = torch.cuda.current_stream() if self._flags.base_device == 'cuda' else None
+        orig_stream = torch.cuda.current_stream() if self._base_device == 'cuda' else None
         return functools.partial(
             collate_split_tensors,
-            device=self._flags.base_device,
+            device=self._base_device,
             orig_stream=orig_stream,
-            numerical_type=torch.float16 if self._flags.amp else torch.float32
+            numerical_type=torch.float32
         )
 
     def create_datasets(self) -> Tuple[Dataset, Dataset]:
-        train_dataset_path = os.path.join(self._flags.dataset, "train")
-        test_dataset_path = os.path.join(self._flags.dataset, "test")
-        categorical_sizes = get_categorical_feature_sizes(self._flags)
-
         # prefetching is currently unsupported if using the batch-wise shuffle
         prefetch_depth = 0 if self._flags.shuffle_batch_order else 10
 
-        dataset_train = SplitCriteoDataset(
-            data_path=train_dataset_path,
-            batch_size=self._flags.batch_size,
-            numerical_features=self._numerical_features,
-            categorical_features=self._categorical_features,
-            categorical_feature_sizes=categorical_sizes,
+        dataset_train = ParametricDataset(
+            feature_spec=self._feature_spec,
+            mapping=TRAIN_MAPPING,
+            batch_size=self._train_batch_size,
+            numerical_features_enabled=self._numerical_features_enabled,
+            categorical_features_to_read=self._categorical_features_to_read,
             prefetch_depth=prefetch_depth
         )
 
-        dataset_test = SplitCriteoDataset(
-            data_path=test_dataset_path,
-            batch_size=self._flags.test_batch_size,
-            numerical_features=self._numerical_features,
-            categorical_features=self._categorical_features,
-            categorical_feature_sizes=categorical_sizes,
+        dataset_test = ParametricDataset(
+            feature_spec=self._feature_spec,
+            mapping=TEST_MAPPING,
+            batch_size=self._test_batch_size,
+            numerical_features_enabled=self._numerical_features_enabled,
+            categorical_features_to_read=self._categorical_features_to_read,
             prefetch_depth=prefetch_depth
         )
 
         return dataset_train, dataset_test
 
-def create_dataset_factory(flags, device_mapping: Optional[dict] = None) -> DatasetFactory:
+
+def create_dataset_factory(flags, feature_spec: FeatureSpec, device_mapping: Optional[dict] = None) -> DatasetFactory:
     """
     By default each dataset can be used in single GPU or distributed setting - please keep that in mind when adding
     new datasets. Distributed case requires selection of categorical features provided in `device_mapping`
@@ -224,29 +134,27 @@ def create_dataset_factory(flags, device_mapping: Optional[dict] = None) -> Data
     :return:
     """
     dataset_type = flags.dataset_type
+    num_numerical_features = feature_spec.get_number_of_numerical_features()
+    if is_distributed() or device_mapping:
+        assert device_mapping is not None, "Distributed dataset requires information about model device mapping."
+        rank = get_rank()
+        local_categorical_positions = device_mapping["embedding"][rank]
+        numerical_features_enabled = device_mapping["bottom_mlp"] == rank
+    else:
+        local_categorical_positions = list(range(len(feature_spec.get_categorical_feature_names())))
+        numerical_features_enabled = True
 
-    if dataset_type == "binary":
-        return BinaryDatasetFactory(flags, device_mapping)
-
-    if dataset_type == "split":
-        if is_distributed() or device_mapping:
-            assert device_mapping is not None, "Distributed dataset requires information about model device mapping."
-            rank = get_rank()
-            return SplitBinaryDatasetFactory(
-                flags=flags,
-                numerical_features=device_mapping["bottom_mlp"] == rank,
-                categorical_features=device_mapping["embedding"][rank]
-            )
-        return SplitBinaryDatasetFactory(
-            flags=flags,
-            numerical_features=True,
-            categorical_features=range(len(get_categorical_feature_sizes(flags)))
-        )
-
+    if dataset_type == "parametric":
+        local_categorical_names = feature_spec.cat_positions_to_names(local_categorical_positions)
+        return ParametricDatasetFactory(flags=flags, feature_spec=feature_spec,
+                                        numerical_features_enabled=numerical_features_enabled,
+                                        categorical_features_to_read=local_categorical_names
+                                        )
     if dataset_type == "synthetic_gpu":
-        return SyntheticGpuDatasetFactory(flags, device_mapping)
-
-    if dataset_type == "synthetic_disk":
-        return SyntheticDiskDatasetFactory(flags, device_mapping)
+        local_numerical_features = num_numerical_features if numerical_features_enabled else 0
+        world_categorical_sizes = feature_spec.get_categorical_sizes()
+        local_categorical_sizes = [world_categorical_sizes[i] for i in local_categorical_positions]
+        return SyntheticGpuDatasetFactory(flags, local_numerical_features_num=local_numerical_features,
+                                          local_categorical_feature_sizes=local_categorical_sizes)
 
     raise NotImplementedError(f"unknown dataset type: {dataset_type}")

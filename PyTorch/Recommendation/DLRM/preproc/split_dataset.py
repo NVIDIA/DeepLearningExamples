@@ -16,21 +16,16 @@ import argparse
 import json
 import os
 import math
-from shutil import copyfile
 
 from tqdm import tqdm
 import numpy as np
 from typing import Sequence
 
-
-def get_categorical_feature_type(size: int):
-    types = (np.int8, np.int16, np.int32)
-
-    for numpy_type in types:
-        if size < np.iinfo(numpy_type).max:
-            return numpy_type
-
-    raise RuntimeError(f"Categorical feature of size {size} is too big for defined types")
+# Workaround to avoid duplicating code from the main module, without building it outright.
+import sys
+sys.path.append('/workspace/dlrm')
+from dlrm.data.defaults import get_categorical_feature_type
+from dlrm.data.feature_spec import FeatureSpec
 
 
 def split_binary_file(
@@ -89,7 +84,9 @@ def split_binary_file(
 def split_dataset(dataset_dir: str, output_dir: str, batch_size: int, numerical_features: int):
     categorical_sizes_file = os.path.join(dataset_dir, "model_size.json")
     with open(categorical_sizes_file) as f:
-        categorical_sizes = [int(v) for v in json.load(f).values()]
+        # model_size.json contains the max value of each feature instead of the cardinality.
+        # For feature spec this is changed for consistency and clarity.
+        categorical_cardinalities = [int(v)+1 for v in json.load(f).values()]
 
     train_file = os.path.join(dataset_dir, "train_data.bin")
     test_file = os.path.join(dataset_dir, "test_data.bin")
@@ -104,10 +101,13 @@ def split_dataset(dataset_dir: str, output_dir: str, batch_size: int, numerical_
     os.makedirs(target_test, exist_ok=True)
     os.makedirs(target_val, exist_ok=True)
 
-    copyfile(categorical_sizes_file, os.path.join(output_dir, "model_size.json"))
-    split_binary_file(test_file, target_test, categorical_sizes, numerical_features, batch_size)
-    split_binary_file(train_file, target_train, categorical_sizes, numerical_features, batch_size)
-    split_binary_file(val_file, target_val, categorical_sizes, numerical_features, batch_size)
+    # VALIDATION chunk is ignored in feature spec on purpose
+    feature_spec = FeatureSpec.get_default_feature_spec(number_of_numerical_features=numerical_features,
+                                                        categorical_feature_cardinalities=categorical_cardinalities)
+    feature_spec.to_yaml(os.path.join(output_dir, 'feature_spec.yaml'))
+    split_binary_file(test_file, target_test, categorical_cardinalities, numerical_features, batch_size)
+    split_binary_file(train_file, target_train, categorical_cardinalities, numerical_features, batch_size)
+    split_binary_file(val_file, target_val, categorical_cardinalities, numerical_features, batch_size)
 
 
 if __name__ == '__main__':

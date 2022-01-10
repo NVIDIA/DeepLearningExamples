@@ -22,168 +22,134 @@ import torch
 
 import numpy as np
 from torch.utils.data import Dataset
-from typing import Optional, Sequence, Tuple, Any, Dict
+from typing import Optional, Sequence, Tuple, List
 
-from dlrm.data.utils import get_categorical_feature_type
-from dlrm.utils.distributed import get_rank
+from dlrm.data.defaults import CATEGORICAL_CHANNEL, NUMERICAL_CHANNEL, LABEL_CHANNEL, \
+    DTYPE_SELECTOR, FEATURES_SELECTOR, FILES_SELECTOR
+from dlrm.data.feature_spec import FeatureSpec
 
 
 class SyntheticDataset(Dataset):
     """Synthetic dataset version of criteo dataset."""
 
     def __init__(
-        self,
-        num_entries: int,
-        device: str = 'cuda',
-        batch_size: int = 32768,
-        numerical_features: Optional[int] = None,
-        categorical_feature_sizes: Optional[Sequence[int]] = None,
-        device_mapping: Optional[Dict[str, Any]] = None
+            self,
+            num_entries: int,
+            device: str = 'cuda',
+            batch_size: int = 32768,
+            numerical_features: Optional[int] = None,
+            categorical_feature_sizes: Optional[Sequence[int]] = None  # features are returned in this order
     ):
-        if device_mapping:
-            # distributed setting
-            rank = get_rank()
-            numerical_features = numerical_features if device_mapping["bottom_mlp"] == rank else None
-            categorical_feature_sizes = device_mapping["embedding"][rank]
+        cat_features_count = len(categorical_feature_sizes) if categorical_feature_sizes is not None else 0
+        num_features_count = numerical_features if numerical_features is not None else 0
 
-        self.cat_features_count = len(categorical_feature_sizes) if categorical_feature_sizes is not None else 0
-        self.num_features_count = numerical_features if numerical_features is not None else 0
-
-        self.tot_fea = 1 + self.num_features_count + self.cat_features_count
-        self.batch_size = batch_size
-        self.batches_per_epoch = math.ceil(num_entries / batch_size)
-        self.categorical_feature_sizes = categorical_feature_sizes
-        self.device = device
-
-        self.tensor = torch.randint(low=0, high=2, size=(self.batch_size, self.tot_fea), device=self.device)
-        self.tensor = self.tensor.float()
+        self._batches_per_epoch = math.ceil(num_entries / batch_size)
+        self._num_tensor = torch.rand(size=(batch_size, num_features_count), device=device, dtype=torch.float32) \
+            if num_features_count > 0 else None
+        self._label_tensor = torch.randint(low=0, high=2, size=(batch_size,), device=device, dtype=torch.float32)
+        self._cat_tensor = torch.cat(
+            [torch.randint(low=0, high=cardinality, size=(batch_size, 1), device=device, dtype=torch.long)
+             for cardinality in categorical_feature_sizes], dim=1) if cat_features_count > 0 else None
 
     def __len__(self):
-        return self.batches_per_epoch
+        return self._batches_per_epoch
 
     def __getitem__(self, idx: int):
-        if idx >= self.batches_per_epoch:
+        if idx >= self._batches_per_epoch:
             raise IndexError()
 
-        numerical_features = (self.tensor[:, 1: 1 + self.num_features_count].to(torch.float32)
-                              if self.num_features_count > 0 else None)
-        categorical_features = (self.tensor[:, 1 + self.num_features_count:].to(torch.long)
-                                if self.cat_features_count > 0 else None)
-        target = self.tensor[:, 0].to(torch.float32)
-
-        return numerical_features, categorical_features, target
+        return self._num_tensor, self._cat_tensor, self._label_tensor
 
 
-class CriteoBinDataset(Dataset):
-    """Simple dataloader for a recommender system. Designed to work with a single binary file."""
-
+class ParametricDataset(Dataset):
     def __init__(
-        self,
-        data_path: str,
-        batch_size: int = 1,
-        numerical_features: int = 13,
-        categorical_features: int = 26,
-        data_type: str = 'int32',
-        **kwargs
+            self,
+            feature_spec: FeatureSpec,
+            mapping: str,
+            batch_size: int = 1,
+            numerical_features_enabled: bool = False,
+            categorical_features_to_read: List[str] = None,  # This parameter dictates order of returned features
+            prefetch_depth: int = 10,
+            drop_last_batch: bool = False,
+            **kwargs
     ):
-        self.data_type = np.__dict__[data_type]
-        bytes_per_feature = self.data_type().nbytes
-
-        self.tad_fea = 1 + numerical_features
-        self.tot_fea = 1 + numerical_features + categorical_features
-
-        self.batch_size = batch_size
-        self.bytes_per_entry = (bytes_per_feature * self.tot_fea * batch_size)
-        self.num_entries = math.ceil(os.path.getsize(data_path) / self.bytes_per_entry)
-
-        self.file = open(data_path, 'rb')
-        self._last_read_idx = -1
-
-    def __len__(self):
-        return self.num_entries
-
-    def __getitem__(self, idx):
-        if idx >= self.num_entries:
-            raise IndexError()
-
-        if idx == 0:
-            self.file.seek(0, 0)
-        elif self._last_read_idx != (idx - 1):
-            self.file.seek(idx * self.bytes_per_entry, 0)
-
-        raw_data = self.file.read(self.bytes_per_entry)
-        self._last_read_idx = idx
-
-        array = np.frombuffer(raw_data, dtype=self.data_type).reshape(-1, self.tot_fea)
-        return array
-
-    def __del__(self):
-        self.file.close()
-
-
-class SplitCriteoDataset(Dataset):
-    """Split version of Criteo dataset
-
-    Args:
-        data_path (str): Full path to split binary file of dataset. It must contain numerical.bin, label.bin and
-            cat_0 ~ cat_25.bin
-        batch_size (int):
-        numerical_features(boolean): If True, load numerical features for bottom_mlp. Default False
-        categorical_features (list or None): categorical features used by the rank
-        prefetch_depth (int): How many samples to prefetch. Default 10.
-    """
-    def __init__(
-        self,
-        data_path: str,
-        batch_size: int = 1,
-        numerical_features: bool = False,
-        number_of_numerical_features: int = 13,
-        categorical_features: Optional[Sequence[int]] = None,
-        categorical_feature_sizes: Optional[Sequence[int]] = None,
-        prefetch_depth: int = 10,
-        drop_last_batch: bool = False,
-        **kwargs
-    ):
-        self._label_bytes_per_batch = np.dtype(np.bool).itemsize * batch_size
-        self._number_of_numerical_features = number_of_numerical_features
-        self._numerical_bytes_per_batch = self._number_of_numerical_features * np.dtype(np.float16).itemsize * batch_size if numerical_features else 0
-        self._categorical_feature_types = [
-            get_categorical_feature_type(size) for size in categorical_feature_sizes
-        ] if categorical_feature_sizes else []
-        self._categorical_bytes_per_batch = [
-            np.dtype(cat_type).itemsize * batch_size for cat_type in self._categorical_feature_types
-        ]
-        self._categorical_features = categorical_features
+        self._feature_spec = feature_spec
         self._batch_size = batch_size
-        self._label_file = os.open(os.path.join(data_path, f"label.bin"), os.O_RDONLY)
-        self._num_entries = int(math.ceil(os.fstat(self._label_file).st_size
-                                          / self._label_bytes_per_batch)) if not drop_last_batch \
-                            else int(math.floor(os.fstat(self._label_file).st_size / self._label_bytes_per_batch))
+        self._mapping = mapping
+        feature_spec.check_feature_spec()
+        categorical_features = feature_spec.channel_spec[CATEGORICAL_CHANNEL]
+        numerical_features = feature_spec.channel_spec[NUMERICAL_CHANNEL]
+        label_features = feature_spec.channel_spec[LABEL_CHANNEL]
 
-        if numerical_features:
-            self._numerical_features_file = os.open(os.path.join(data_path, "numerical.bin"), os.O_RDONLY)
-            number_of_numerical_batches = math.ceil(os.fstat(self._numerical_features_file).st_size
-                                                    / self._numerical_bytes_per_batch) if not drop_last_batch \
-                                          else math.floor(os.fstat(self._numerical_features_file).st_size
-                                                          / self._numerical_bytes_per_batch)
-            if number_of_numerical_batches != self._num_entries:
-                raise ValueError("Size mismatch in data files")
-        else:
-            self._numerical_features_file = None
+        set_of_categorical_features = set(categorical_features)
+        set_of_numerical_features = set(numerical_features)
+        set_of_label_features = set(label_features)
 
-        if categorical_features:
-            self._categorical_features_files = []
-            for cat_id in categorical_features:
-                cat_file = os.open(os.path.join(data_path, f"cat_{cat_id}.bin"), os.O_RDONLY)
-                cat_bytes = self._categorical_bytes_per_batch[cat_id]
-                number_of_categorical_batches = math.ceil(os.fstat(cat_file).st_size / cat_bytes) if not drop_last_batch \
-                                                else math.floor(os.fstat(cat_file).st_size / cat_bytes)
-                if number_of_categorical_batches != self._num_entries:
+        set_of_categoricals_to_read = set(categorical_features_to_read)
+        bytes_per_feature = {feature_name: np.dtype(feature_spec.feature_spec[feature_name][DTYPE_SELECTOR]).itemsize
+                             for feature_name in feature_spec.feature_spec.keys()}
+
+        self._numerical_features_file = None
+        self._label_file = None
+        self._numerical_bytes_per_batch = bytes_per_feature[numerical_features[0]] * \
+                                          len(numerical_features) * batch_size
+        self._label_bytes_per_batch = np.dtype(np.bool).itemsize * batch_size
+        self._number_of_numerical_features = len(numerical_features)
+
+        chosen_mapping = feature_spec.source_spec[mapping]
+        categorical_feature_files = {}
+        root_path = feature_spec.base_directory
+        number_of_batches = None
+        for chunk in chosen_mapping:
+            contained_features = chunk[FEATURES_SELECTOR]
+            containing_file = chunk[FILES_SELECTOR][0]
+            first_feature = contained_features[0]
+
+            if first_feature in set_of_categorical_features:
+                # Load categorical
+                if first_feature not in set_of_categoricals_to_read:
+                    continue  # skip chunk
+
+                path_to_open = os.path.join(root_path, containing_file)
+                cat_file = os.open(path_to_open, os.O_RDONLY)
+                bytes_per_batch = bytes_per_feature[first_feature] * self._batch_size
+                batch_num_float = os.fstat(cat_file).st_size / bytes_per_batch
+                categorical_feature_files[first_feature] = cat_file
+
+            elif first_feature in set_of_numerical_features:
+                # Load numerical
+                if not numerical_features_enabled:
+                    continue  # skip chunk
+
+                path_to_open = os.path.join(root_path, containing_file)
+                self._numerical_features_file = os.open(path_to_open, os.O_RDONLY)
+                batch_num_float = os.fstat(self._numerical_features_file).st_size / self._numerical_bytes_per_batch
+
+            elif first_feature in set_of_label_features:
+                # Load label
+                path_to_open = os.path.join(root_path, containing_file)
+                self._label_file = os.open(path_to_open, os.O_RDONLY)
+                batch_num_float = os.fstat(self._label_file).st_size / self._label_bytes_per_batch
+
+            else:
+                raise ValueError("Unknown chunk type")
+
+            local_number_of_batches = math.ceil(batch_num_float) if not drop_last_batch else math.floor(batch_num_float)
+            if number_of_batches is not None:
+                if local_number_of_batches != number_of_batches:
                     raise ValueError("Size mismatch in data files")
-                self._categorical_features_files.append(cat_file)
-        else:
-            self._categorical_features_files = None
+            else:
+                number_of_batches = local_number_of_batches
 
+        self._categorical_features_files = None
+        if len(categorical_features_to_read) > 0:
+            self._categorical_features_files = [categorical_feature_files[feature] for feature in
+                                                categorical_features_to_read]
+            self._categorical_bytes_per_batch = [bytes_per_feature[feature] * self._batch_size for feature in
+                                                 categorical_features_to_read]
+            self._categorical_types = [feature_spec.feature_spec[feature][DTYPE_SELECTOR] for feature in
+                                       categorical_features_to_read]
+        self._num_entries = number_of_batches
         self._prefetch_depth = min(prefetch_depth, self._num_entries)
         self._prefetch_queue = queue.Queue()
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
@@ -192,15 +158,22 @@ class SplitCriteoDataset(Dataset):
         return self._num_entries
 
     def __getitem__(self, idx: int):
+        """ Numerical features are returned in the order they appear in the channel spec section
+        For performance reasons, this is required to be the order they are saved in, as specified
+        by the relevant chunk in source spec.
+
+        Categorical features are returned in the order they appear in the channel spec section """
         if idx >= self._num_entries:
             raise IndexError()
 
         if self._prefetch_depth <= 1:
             return self._get_item(idx)
 
+        # At the start, fill up the prefetching queue
         if idx == 0:
             for i in range(self._prefetch_depth):
                 self._prefetch_queue.put(self._executor.submit(self._get_item, (i)))
+        # Extend the prefetching window by one if not at the end of the dataset
         if idx < self._num_entries - self._prefetch_depth:
             self._prefetch_queue.put(self._executor.submit(self._get_item, (idx + self._prefetch_depth)))
         return self._prefetch_queue.get().result()
@@ -231,9 +204,9 @@ class SplitCriteoDataset(Dataset):
             return None
 
         categorical_features = []
-        for cat_id, cat_file in zip(self._categorical_features, self._categorical_features_files):
-            cat_bytes = self._categorical_bytes_per_batch[cat_id]
-            cat_type = self._categorical_feature_types[cat_id]
+        for cat_bytes, cat_type, cat_file in zip(self._categorical_bytes_per_batch,
+                                                 self._categorical_types,
+                                                 self._categorical_features_files):
             raw_cat_data = os.pread(cat_file, cat_bytes, idx * cat_bytes)
             array = np.frombuffer(raw_cat_data, dtype=cat_type)
             tensor = torch.from_numpy(array).unsqueeze(1).to(torch.long)
