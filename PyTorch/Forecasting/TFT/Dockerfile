@@ -24,11 +24,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /workspace
 
+RUN pip install --no-cache-dir nvidia-pyindex
+
 COPY requirements.txt .
 
 RUN pip uninstall -y typing && \
-    pip install --no-cache-dir --ignore-installed -r requirements.txt && \
-    pip install --no-cache-dir -e git+https://github.com/NVIDIA/dllogger#egg=dllogger
+    pip install --no-cache-dir --ignore-installed -r requirements.txt
 
 COPY . .
 
