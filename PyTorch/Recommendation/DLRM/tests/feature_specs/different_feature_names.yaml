@@ -1,0 +1,434 @@
+channel_spec:
+  categorical:
+  - 65ytfg.bin
+  - dgtwrg.bin
+  - hmfgd.bin
+  - 6tyjgh.bin
+  - 67yu.bin
+  - l6rtd.bin
+  - ouikjhfg.bin
+  - 65ry.bin
+  - 5yhtrfg.bin
+  - 65rty.bin
+  - 34ywesh5rtg.bin
+  - w4su6js.bin
+  - 45wyhtr.bin
+  - u65rhty.bin
+  - tujy.bin
+  - tyjdh.bin
+  - ujtyesh.bin
+  - 5e7tdyj.bin
+  - 46rjydh.bin
+  - 8kiujynrht.bin
+  - fsgh.bin
+  - 34eyr.bin
+  - we5etydj.bin
+  - fsghfsdgh.bin
+  - hrthshs.bin
+  - tujyhfg.bin
+  label:
+  - qwer
+  numerical: &id001
+  - gadsfgsdfg
+  - 5yrthf
+  - 45ryhtf
+  - u5j6yrhtfd
+  - u5rtg3qq
+  - j65ee5he5
+  - yhe5h
+  - 4y5e6ru
+  - 5yfwerf
+  - g53g6y635
+  - 42c524
+  - bge5v6gve5
+  - jhw5rf
+feature_spec:
+  65ytfg.bin:
+    cardinality: 100000
+    dtype: int32
+  dgtwrg.bin:
+    cardinality: 100000
+    dtype: int32
+  34ywesh5rtg.bin:
+    cardinality: 100000
+    dtype: int32
+  w4su6js.bin:
+    cardinality: 100000
+    dtype: int32
+  45wyhtr.bin:
+    cardinality: 100000
+    dtype: int32
+  u65rhty.bin:
+    cardinality: 100000
+    dtype: int32
+  tujy.bin:
+    cardinality: 100000
+    dtype: int32
+  tyjdh.bin:
+    cardinality: 100000
+    dtype: int32
+  ujtyesh.bin:
+    cardinality: 100000
+    dtype: int32
+  5e7tdyj.bin:
+    cardinality: 100000
+    dtype: int32
+  46rjydh.bin:
+    cardinality: 100000
+    dtype: int32
+  8kiujynrht.bin:
+    cardinality: 100000
+    dtype: int32
+  hmfgd.bin:
+    cardinality: 100000
+    dtype: int32
+  fsgh.bin:
+    cardinality: 100000
+    dtype: int32
+  34eyr.bin:
+    cardinality: 100000
+    dtype: int32
+  we5etydj.bin:
+    cardinality: 100000
+    dtype: int32
+  fsghfsdgh.bin:
+    cardinality: 100000
+    dtype: int32
+  hrthshs.bin:
+    cardinality: 100000
+    dtype: int32
+  tujyhfg.bin:
+    cardinality: 100000
+    dtype: int32
+  6tyjgh.bin:
+    cardinality: 100000
+    dtype: int32
+  67yu.bin:
+    cardinality: 100000
+    dtype: int32
+  l6rtd.bin:
+    cardinality: 100000
+    dtype: int32
+  ouikjhfg.bin:
+    cardinality: 100000
+    dtype: int32
+  65ry.bin:
+    cardinality: 100000
+    dtype: int32
+  5yhtrfg.bin:
+    cardinality: 100000
+    dtype: int32
+  65rty.bin:
+    cardinality: 100000
+    dtype: int32
+  qwer:
+    dtype: bool
+  gadsfgsdfg:
+    dtype: float16
+  5yrthf:
+    dtype: float16
+  42c524:
+    dtype: float16
+  bge5v6gve5:
+    dtype: float16
+  jhw5rf:
+    dtype: float16
+  45ryhtf:
+    dtype: float16
+  u5j6yrhtfd:
+    dtype: float16
+  u5rtg3qq:
+    dtype: float16
+  j65ee5he5:
+    dtype: float16
+  yhe5h:
+    dtype: float16
+  4y5e6ru:
+    dtype: float16
+  5yfwerf:
+    dtype: float16
+  g53g6y635:
+    dtype: float16
+metadata: {}
+source_spec:
+  test:
+  - features: *id001
+    files:
+    - test/numerical.bin
+    type: split_binary
+  - features:
+    - qwer
+    files:
+    - test/label.bin
+    type: split_binary
+  - features:
+    - 65ytfg.bin
+    files:
+    - test/65ytfg.bin
+    type: split_binary
+  - features:
+    - dgtwrg.bin
+    files:
+    - test/dgtwrg.bin
+    type: split_binary
+  - features:
+    - hmfgd.bin
+    files:
+    - test/hmfgd.bin
+    type: split_binary
+  - features:
+    - 6tyjgh.bin
+    files:
+    - test/6tyjgh.bin
+    type: split_binary
+  - features:
+    - 67yu.bin
+    files:
+    - test/67yu.bin
+    type: split_binary
+  - features:
+    - l6rtd.bin
+    files:
+    - test/l6rtd.bin
+    type: split_binary
+  - features:
+    - ouikjhfg.bin
+    files:
+    - test/ouikjhfg.bin
+    type: split_binary
+  - features:
+    - 65ry.bin
+    files:
+    - test/65ry.bin
+    type: split_binary
+  - features:
+    - 5yhtrfg.bin
+    files:
+    - test/5yhtrfg.bin
+    type: split_binary
+  - features:
+    - 65rty.bin
+    files:
+    - test/65rty.bin
+    type: split_binary
+  - features:
+    - 34ywesh5rtg.bin
+    files:
+    - test/34ywesh5rtg.bin
+    type: split_binary
+  - features:
+    - w4su6js.bin
+    files:
+    - test/w4su6js.bin
+    type: split_binary
+  - features:
+    - 45wyhtr.bin
+    files:
+    - test/45wyhtr.bin
+    type: split_binary
+  - features:
+    - u65rhty.bin
+    files:
+    - test/u65rhty.bin
+    type: split_binary
+  - features:
+    - tujy.bin
+    files:
+    - test/tujy.bin
+    type: split_binary
+  - features:
+    - tyjdh.bin
+    files:
+    - test/tyjdh.bin
+    type: split_binary
+  - features:
+    - ujtyesh.bin
+    files:
+    - test/ujtyesh.bin
+    type: split_binary
+  - features:
+    - 5e7tdyj.bin
+    files:
+    - test/5e7tdyj.bin
+    type: split_binary
+  - features:
+    - 46rjydh.bin
+    files:
+    - test/46rjydh.bin
+    type: split_binary
+  - features:
+    - 8kiujynrht.bin
+    files:
+    - test/8kiujynrht.bin
+    type: split_binary
+  - features:
+    - fsgh.bin
+    files:
+    - test/fsgh.bin
+    type: split_binary
+  - features:
+    - 34eyr.bin
+    files:
+    - test/34eyr.bin
+    type: split_binary
+  - features:
+    - we5etydj.bin
+    files:
+    - test/we5etydj.bin
+    type: split_binary
+  - features:
+    - fsghfsdgh.bin
+    files:
+    - test/fsghfsdgh.bin
+    type: split_binary
+  - features:
+    - hrthshs.bin
+    files:
+    - test/hrthshs.bin
+    type: split_binary
+  - features:
+    - tujyhfg.bin
+    files:
+    - test/tujyhfg.bin
+    type: split_binary
+  train:
+  - features: *id001
+    files:
+    - train/numerical.bin
+    type: split_binary
+  - features:
+    - qwer
+    files:
+    - train/label.bin
+    type: split_binary
+  - features:
+    - 65ytfg.bin
+    files:
+    - train/65ytfg.bin
+    type: split_binary
+  - features:
+    - dgtwrg.bin
+    files:
+    - train/dgtwrg.bin
+    type: split_binary
+  - features:
+    - hmfgd.bin
+    files:
+    - train/hmfgd.bin
+    type: split_binary
+  - features:
+    - 6tyjgh.bin
+    files:
+    - train/6tyjgh.bin
+    type: split_binary
+  - features:
+    - 67yu.bin
+    files:
+    - train/67yu.bin
+    type: split_binary
+  - features:
+    - l6rtd.bin
+    files:
+    - train/l6rtd.bin
+    type: split_binary
+  - features:
+    - ouikjhfg.bin
+    files:
+    - train/ouikjhfg.bin
+    type: split_binary
+  - features:
+    - 65ry.bin
+    files:
+    - train/65ry.bin
+    type: split_binary
+  - features:
+    - 5yhtrfg.bin
+    files:
+    - train/5yhtrfg.bin
+    type: split_binary
+  - features:
+    - 65rty.bin
+    files:
+    - train/65rty.bin
+    type: split_binary
+  - features:
+    - 34ywesh5rtg.bin
+    files:
+    - train/34ywesh5rtg.bin
+    type: split_binary
+  - features:
+    - w4su6js.bin
+    files:
+    - train/w4su6js.bin
+    type: split_binary
+  - features:
+    - 45wyhtr.bin
+    files:
+    - train/45wyhtr.bin
+    type: split_binary
+  - features:
+    - u65rhty.bin
+    files:
+    - train/u65rhty.bin
+    type: split_binary
+  - features:
+    - tujy.bin
+    files:
+    - train/tujy.bin
+    type: split_binary
+  - features:
+    - tyjdh.bin
+    files:
+    - train/tyjdh.bin
+    type: split_binary
+  - features:
+    - ujtyesh.bin
+    files:
+    - train/ujtyesh.bin
+    type: split_binary
+  - features:
+    - 5e7tdyj.bin
+    files:
+    - train/5e7tdyj.bin
+    type: split_binary
+  - features:
+    - 46rjydh.bin
+    files:
+    - train/46rjydh.bin
+    type: split_binary
+  - features:
+    - 8kiujynrht.bin
+    files:
+    - train/8kiujynrht.bin
+    type: split_binary
+  - features:
+    - fsgh.bin
+    files:
+    - train/fsgh.bin
+    type: split_binary
+  - features:
+    - 34eyr.bin
+    files:
+    - train/34eyr.bin
+    type: split_binary
+  - features:
+    - we5etydj.bin
+    files:
+    - train/we5etydj.bin
+    type: split_binary
+  - features:
+    - fsghfsdgh.bin
+    files:
+    - train/fsghfsdgh.bin
+    type: split_binary
+  - features:
+    - hrthshs.bin
+    files:
+    - train/hrthshs.bin
+    type: split_binary
+  - features:
+    - tujyhfg.bin
+    files:
+    - train/tujyhfg.bin
+    type: split_binary
+

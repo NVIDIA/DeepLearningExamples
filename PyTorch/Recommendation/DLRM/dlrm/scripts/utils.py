@@ -232,6 +232,7 @@ class LearningRateScheduler:
             lr_scheduler.step()
             # foward, backward, weight update
     """
+
     def __init__(self, optimizers, base_lrs, warmup_steps, warmup_factor,
                  decay_steps, decay_start_step, decay_power=2, end_lr_factor=0):
         self.current_step = 0

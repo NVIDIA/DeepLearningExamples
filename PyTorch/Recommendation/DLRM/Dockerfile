@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.04-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.10-py3
 FROM ${FROM_IMAGE_NAME}
 
 ADD requirements.txt .

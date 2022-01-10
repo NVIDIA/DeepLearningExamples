@@ -20,3 +20,7 @@ template <>
 struct Log2<1> {
   static constexpr uint value = 0;
 };
+
+struct __align__(8) half4 {
+  half2 vals[2];
+};
