@@ -5,7 +5,7 @@ RUN pip install nvidia-pyindex
 ADD ./requirements.txt .
 RUN pip install --disable-pip-version-check -r requirements.txt
 RUN pip install monai==0.8.0 --no-dependencies
-RUN yes | pip uninstall torchtext
+RUN pip uninstall -y torchtext
 
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 RUN unzip -qq awscliv2.zip

@@ -42,7 +42,7 @@ class GenericPipeline(Pipeline):
         self.patch_size = kwargs["patch_size"]
         self.load_to_gpu = kwargs["load_to_gpu"]
         self.input_x = self.get_reader(kwargs["imgs"])
-        self.input_y = self.get_reader(kwargs["lbls"]) if "lbls" in kwargs else None
+        self.input_y = self.get_reader(kwargs["lbls"]) if kwargs["lbls"] is not None else None
 
     def get_reader(self, data):
         return ops.readers.Numpy(
