@@ -1,4 +1,0 @@
-numpy
-pandas
-joblib==0.16
-tqdm

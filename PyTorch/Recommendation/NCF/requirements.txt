@@ -1,4 +1,0 @@
-pandas>=0.24.2
-tqdm
-pyyaml
-git+https://github.com/NVIDIA/dllogger#egg=dllogger
