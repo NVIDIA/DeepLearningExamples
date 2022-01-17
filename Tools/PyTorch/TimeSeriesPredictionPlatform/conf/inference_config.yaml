@@ -1,6 +1,0 @@
-# SPDX-License-Identifier: Apache-2.0
-defaults:
-  - inference: native
-  - device: cuda
-_target_: ???
-

@@ -1,5 +1,0 @@
-# SPDX-License-Identifier: Apache-2.0
-defaults:
-  - dataset: electricity
-_target_: data.data_utils.preprocess
-
