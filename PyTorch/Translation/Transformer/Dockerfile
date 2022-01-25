@@ -44,5 +44,4 @@ RUN git clone https://github.com/rsennrich/subword-nmt.git /workspace/translatio
 RUN git clone https://github.com/NVIDIA/cutlass.git && cd cutlass && git checkout ed2ed4d6 && cd ..
 COPY . .
 RUN pip install -e .
-RUN pip install nvidia-pyindex
-RUN pip install nvidia-dllogger
+RUN pip install git+https://github.com/NVIDIA/dllogger@v0.1.0#egg=dllogger

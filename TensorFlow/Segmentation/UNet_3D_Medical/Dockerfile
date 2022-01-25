@@ -4,8 +4,7 @@ FROM ${FROM_IMAGE_NAME}
 ADD . /workspace/unet3d
 WORKDIR /workspace/unet3d
 
-RUN pip install nvidia-pyindex
-RUN pip install nvidia-dllogger==0.1.0
+RUN pip install git+https://github.com/NVIDIA/dllogger@v1.0.0#egg=dllogger
 RUN pip install --disable-pip-version-check -r requirements.txt
 
 ENV TF_GPU_HOST_MEM_LIMIT_IN_MB=120000

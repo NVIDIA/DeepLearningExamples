@@ -1,7 +1,6 @@
 ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.11-py3
 FROM ${FROM_IMAGE_NAME} 
 
-RUN pip install nvidia-pyindex
 ADD ./requirements.txt .
 RUN pip install --disable-pip-version-check -r requirements.txt
 RUN pip install monai==0.8.0 --no-dependencies

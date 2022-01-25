@@ -44,8 +44,7 @@ ADD requirements.txt /workspace/requirements.txt
 ADD triton/requirements.txt /workspace/triton/requirements.txt
 RUN pip install -r /workspace/requirements.txt
 RUN pip install -r /workspace/triton/requirements.txt
-RUN pip install nvidia-pyindex
-RUN pip install nvidia-dllogger
+RUN pip install git+https://github.com/NVIDIA/dllogger#egg=dllogger
 RUN pip install --no-cache-dir -r requirements.txt -f https://data.dgl.ai/wheels/repo.html
 
 # Add model files to workspace

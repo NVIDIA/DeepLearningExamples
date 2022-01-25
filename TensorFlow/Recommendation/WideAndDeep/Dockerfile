@@ -39,8 +39,6 @@ ENV SPARK_HOME /usr/local/spark
 ENV PYTHONPATH $SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-0.10.7-src.zip
 ENV SPARK_OPTS --driver-java-options=-Xms1024M --driver-java-options=-Xmx4096M --driver-java-options=-Dlog4j.logLevel=info
 
-RUN pip install --no-cache-dir nvidia-pyindex
-
 COPY requirements* ./
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install --no-cache-dir --no-deps -r requirements-no-deps.txt

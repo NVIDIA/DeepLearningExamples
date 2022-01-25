@@ -1,2 +1,2 @@
-nvidia-dllogger==0.1.0
+git+https://github.com/NVIDIA/dllogger@v1.0.0#egg=dllogger
 pynvml==11.0.0

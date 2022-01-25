@@ -24,7 +24,7 @@ FROM ${FROM_IMAGE_NAME}
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
-RUN pip install --global-option="--cpp_ext" --global-option="--cuda_ext" git+git://github.com/NVIDIA/apex.git#egg=apex
+RUN pip install --global-option="--cpp_ext" --global-option="--cuda_ext" git+https://github.com/NVIDIA/apex.git#egg=apex
 
 WORKDIR /workspace/gnmt
 

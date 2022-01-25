@@ -1,7 +1,6 @@
 ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.11-py3
 FROM ${FROM_IMAGE_NAME} 
 
-RUN pip install nvidia-pyindex
 ADD ./triton/requirements.txt .
 RUN pip install --disable-pip-version-check -r requirements.txt
 RUN apt-get update && apt-get install -y libb64-dev libb64-0d

@@ -20,7 +20,6 @@ ENV HOROVOD_CYCLE_TIME=0.1
 ENV HOROVOD_FUSION_THRESHOLD=67108864
 ENV HOROVOD_NUM_STREAMS=2
 
-RUN pip install --no-cache-dir nvidia-pyindex
 ADD requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
