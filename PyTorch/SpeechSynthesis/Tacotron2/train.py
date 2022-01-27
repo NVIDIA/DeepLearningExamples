@@ -528,7 +528,7 @@ def main():
                                                batch_to_gpu,
                                                args.amp)
 
-        if (epoch % args.epochs_per_checkpoint == 0) and args.bench_class == "":
+        if (epoch % args.epochs_per_checkpoint == 0) and (args.bench_class == "" or args.bench_class == "train"):
             save_checkpoint(model, optimizer, scaler, epoch, model_config,
                             args.output, args.model_name, local_rank, world_size)
         if local_rank == 0:
