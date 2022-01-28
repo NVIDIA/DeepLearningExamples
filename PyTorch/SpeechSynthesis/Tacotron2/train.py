@@ -68,6 +68,8 @@ def parse_args(parser):
 
     parser.add_argument('--config-file', action=ParseFromConfigFile,
                          type=str, help='Path to configuration file')
+    parser.add_argument('--seed', default=None, type=int,
+                        help='Seed for random number generators')
 
     # training
     training = parser.add_argument_group('training setup')
@@ -352,6 +354,10 @@ def main():
 
     distributed_run = world_size > 1
 
+    if args.seed is not None:
+        torch.manual_seed(args.seed + local_rank)
+        np.random.seed(args.seed + local_rank)
+
     if local_rank == 0:
         log_file = os.path.join(args.output, args.log_file)
         DLLogger.init(backends=[JSONStreamBackend(Verbosity.DEFAULT, log_file),
@@ -417,7 +423,7 @@ def main():
     trainset = data_functions.get_data_loader(
         model_name, args.dataset_path, args.training_files, args)
     if distributed_run:
-        train_sampler = DistributedSampler(trainset)
+        train_sampler = DistributedSampler(trainset, seed=(args.seed or 0))
         shuffle = False
     else:
         train_sampler = None

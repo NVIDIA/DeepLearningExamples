@@ -25,8 +25,6 @@
 #
 # *****************************************************************************
 
-import random
-import numpy as np
 import torch
 import torch.utils.data
 
@@ -50,8 +48,6 @@ class TextMelLoader(torch.utils.data.Dataset):
             args.filter_length, args.hop_length, args.win_length,
             args.n_mel_channels, args.sampling_rate, args.mel_fmin,
             args.mel_fmax)
-        random.seed(1234)
-        random.shuffle(self.audiopaths_and_text)
 
     def get_mel_text_pair(self, audiopath_and_text):
         # separate filename and text
