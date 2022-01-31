@@ -26,7 +26,8 @@ from monai.optimizers.lr_scheduler import WarmupCosineSchedule
 from scipy.special import expit, softmax
 from skimage.transform import resize
 from utils.logger import DLLogger
-from utils.utils import get_config_file, print0
+from utils.utils import get_config_file, print0, rank_zero
+
 
 from nnunet.loss import Loss, LossBraTS
 from nnunet.metrics import Dice
@@ -54,7 +55,7 @@ class NNUnet(pl.LightningModule):
                 self.tta_flips = [[2], [3], [4], [2, 3], [2, 4], [3, 4], [2, 3, 4]]
             self.dice = Dice(self.n_class, self.args.brats)
             if self.args.exec_mode in ["train", "evaluate"] and not self.args.benchmark:
-                self.dllogger = DLLogger(args.results)
+                self.dllogger = DLLogger(args.results, args.logname)
 
     def forward(self, img):
         return torch.argmax(self.model(img), 1)
@@ -237,6 +238,15 @@ class NNUnet(pl.LightningModule):
     def test_epoch_end(self, outputs):
         if self.args.exec_mode == "evaluate":
             self.eval_dice, _ = self.dice.compute()
+            
+    @rank_zero
+    def on_fit_end(self):
+        if not self.args.benchmark:
+            metrics = {}
+            metrics["dice_score"] = round(self.best_mean.item(), 2)
+            metrics["Epoch"] = self.best_mean_epoch
+            self.dllogger.log_metrics(step=(), metrics=metrics)
+            self.dllogger.flush()            
 
     def configure_optimizers(self):
         optimizer = {

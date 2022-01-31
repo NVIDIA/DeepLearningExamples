@@ -70,7 +70,7 @@ if __name__ == "__main__":
         callbacks = [early_stopping]
         if args.save_ckpt:
             model_ckpt = ModelCheckpoint(
-                filename="{epoch}-{dice_mean:.2f}", monitor="dice_mean", mode="max", save_last=True
+                dirpath=f"{args.ckpt_store_dir}/checkpoints", filename="{epoch}-{dice_mean:.2f}", monitor="dice_mean", mode="max", save_last=True
             )
             callbacks.append(model_ckpt)
     else:  # Evaluation or inference

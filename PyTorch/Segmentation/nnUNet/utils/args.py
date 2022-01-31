@@ -31,7 +31,7 @@ def get_main_args(strings=None):
     )
     arg("--data", type=str, default="/data", help="Path to data directory")
     arg("--results", type=str, default="/results", help="Path to results directory")
-    arg("--logname", type=str, default=None, help="Name of dlloger output")
+    arg("--logname", type=str, default="logs.json", help="Name of dlloger output")
     arg("--task", type=str, help="Task number. MSD uses numbers 01-10")
     arg("--gpus", type=non_negative_int, default=1, help="Number of gpus")
     arg("--learning_rate", type=float, default=0.0008, help="Learning rate")
@@ -71,6 +71,7 @@ def get_main_args(strings=None):
     arg("--deep_supr_num", type=non_negative_int, default=2, help="Number of deep supervision heads")
     arg("--res_block", action="store_true", help="Enable residual blocks")
     arg("--filters", nargs="+", help="[Optional] Set U-Net filters", default=None, type=int)
+    arg("--ckpt_store_dir", type=str, default="/results", help="Path for saving checkpoint")
     arg(
         "--data2d_dim",
         choices=[2, 3],

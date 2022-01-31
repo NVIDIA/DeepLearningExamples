@@ -24,7 +24,7 @@ from utils.utils import rank_zero
 
 
 class DLLogger:
-    def __init__(self, log_dir, filename="logs.json", append=True):
+    def __init__(self, log_dir, filename, append=True):
         super().__init__()
         self._initialize_dllogger(log_dir, filename, append)
 
