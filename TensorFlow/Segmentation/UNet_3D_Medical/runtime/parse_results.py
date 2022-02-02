@@ -34,20 +34,20 @@ def parse_convergence_results(path, environment):
     for logfile in logfiles:
         with open(os.path.join(path, logfile), "r") as file_item:
             content = file_item.readlines()
-        if "TumorCore" not in content[-1]:
+        if "tumor_core" not in content[-1]:
             print("Evaluation score not found. The file", logfile, "might be corrupted.")
             continue
         content = content[-1].split("()")[1]
         whole_tumor.append(float([val for val in content.split("  ")
-                                  if "WholeTumor" in val][0].split()[-1]))
+                                  if "whole_tumor" in val][0].split()[-1]))
         tumor_core.append(float([val for val in content.split("  ")
-                                 if "TumorCore" in val][0].split()[-1]))
+                                 if "tumor_core" in val][0].split()[-1]))
         peritumoral_edema.append(float([val for val in content.split("  ")
-                                        if "PeritumoralEdema" in val][0].split()[-1]))
+                                        if "peritumoral_edema" in val][0].split()[-1]))
         enhancing_tumor.append(float([val for val in content.split("  ")
-                                      if "EnhancingTumor" in val][0].split()[-1]))
+                                      if "enhancing_tumor" in val][0].split()[-1]))
         mean_dice.append(float([val for val in content.split("  ")
-                                if "MeanDice" in val][0].split()[-1]))
+                                if "mean_dice" in val][0].split()[-1]))
 
     if whole_tumor:
         print("Evaluation average dice score:", sum(mean_dice) / len(mean_dice))

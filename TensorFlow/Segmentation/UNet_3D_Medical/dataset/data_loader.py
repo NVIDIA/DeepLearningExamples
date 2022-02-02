@@ -23,7 +23,7 @@ from dataset.transforms import NormalizeImages, OneHotLabels, apply_transforms, 
     RandomHorizontalFlip, RandomBrightnessCorrection, CenterCrop, \
     apply_test_transforms, Cast
 
-CLASSES = {0: "TumorCore", 1: "PeritumoralEdema", 2: "EnhancingTumor"}
+CLASSES = {0: "tumor_core", 1: "peritumoral_edema", 2: "enhancing_tumor"}
 
 
 def cross_validation(arr: np.ndarray, fold_idx: int, n_folds: int):
