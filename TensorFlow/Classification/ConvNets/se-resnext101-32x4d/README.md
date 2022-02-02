@@ -789,6 +789,8 @@ April 2020
 August 2020
    - Updated command line argument names
    - Added support for syntetic dataset with different image size
+January 2022
+   - Added barrier at the end of multiprocess run
 
 ### Known issues
 Performance without XLA enabled is low due to BN + ReLU fusion bug.
