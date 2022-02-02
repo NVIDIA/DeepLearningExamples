@@ -56,7 +56,7 @@ from fastpitch.loss_function import FastPitchLoss
 def parse_args(parser):
     parser.add_argument('-o', '--output', type=str, required=True,
                         help='Directory to save checkpoints')
-    parser.add_argument('-d', '--dataset-path', type=str, default='./',
+    parser.add_argument('-d', '--dataset-path', type=str, default=None,
                         help='Path to dataset')
     parser.add_argument('--log-file', type=str, default=None,
                         help='Path to a DLLogger log file')

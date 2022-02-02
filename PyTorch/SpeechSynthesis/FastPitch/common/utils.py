@@ -67,19 +67,23 @@ def load_wav_to_torch(full_path, force_sampling_rate=None):
     return torch.FloatTensor(data.astype(np.float32)), sampling_rate
 
 
-def load_filepaths_and_text(dataset_path, fnames, has_speakers=False, split="|"):
-    def split_line(root, line):
+def load_filepaths_and_text(fnames, dataset_path=None, has_speakers=False,
+                            split="|"):
+    def split_line(line, root=None):
         parts = line.strip().split(split)
         if has_speakers:
             paths, non_paths = parts[:-2], parts[-2:]
         else:
             paths, non_paths = parts[:-1], parts[-1:]
-        return tuple(str(Path(root, p)) for p in paths) + tuple(non_paths)
+        if root:
+            return tuple(str(Path(root, p)) for p in paths) + tuple(non_paths)
+        else:
+            return tuple(str(Path(p)) for p in paths) + tuple(non_paths)
 
     fpaths_and_text = []
     for fname in fnames:
         with open(fname, encoding='utf-8') as f:
-            fpaths_and_text += [split_line(dataset_path, line) for line in f]
+            fpaths_and_text += [split_line(line, dataset_path) for line in f]
     return fpaths_and_text
 
 
