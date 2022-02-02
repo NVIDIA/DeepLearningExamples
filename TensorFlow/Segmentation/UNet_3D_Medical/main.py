@@ -46,8 +46,8 @@ def parse_evaluation_results(result, logger, step=()):
     :return:
     """
     data = {CLASSES[i]: float(result[CLASSES[i]]) for i in range(len(CLASSES))}
-    data['MeanDice'] = sum([result[CLASSES[i]] for i in range(len(CLASSES))]) / len(CLASSES)
-    data['WholeTumor'] = float(result['WholeTumor'])
+    data['mean_dice'] = sum([result[CLASSES[i]] for i in range(len(CLASSES))]) / len(CLASSES)
+    data['whole_tumor'] = float(result['whole_tumor'])
 
     if hvd.rank() == 0:
         logger.log(step=step, data=data)

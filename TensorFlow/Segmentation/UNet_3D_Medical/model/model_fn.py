@@ -59,7 +59,7 @@ def unet_3d(features, labels, mode, params):
         eval_acc = eval_dice(y_true=labels, y_pred=prediction)
         total_eval_acc = total_dice(prediction, labels)
         metrics = {CLASSES[i]: tf.compat.v1.metrics.mean(eval_acc[i]) for i in range(eval_acc.shape[-1])}
-        metrics['WholeTumor'] = tf.compat.v1.metrics.mean(total_eval_acc)
+        metrics['whole_tumor'] = tf.compat.v1.metrics.mean(total_eval_acc)
         return tf.estimator.EstimatorSpec(mode=mode, loss=tf.reduce_mean(eval_acc),
                                           eval_metric_ops=metrics)
 
