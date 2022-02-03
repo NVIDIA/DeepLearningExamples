@@ -15,7 +15,6 @@
 #include <ATen/ATen.h>
 #include <ATen/AccumulateType.h>
 #include <ATen/cuda/CUDAContext.h>
-#include <THC/THC.h>
 
 thread_local int multiProcessorCount=0;
 
@@ -256,7 +255,7 @@ std::vector<at::Tensor> focal_loss_forward_cuda(
         });
   }
 
-  THCudaCheck(cudaGetLastError());
+  C10_CUDA_CHECK(cudaGetLastError());
   return {loss, partial_grad};
 }
 
@@ -281,6 +280,6 @@ at::Tensor focal_loss_backward_cuda(const at::Tensor &grad_output,
                                          partial_grad.numel());
       });
 
-  THCudaCheck(cudaGetLastError());
+  C10_CUDA_CHECK(cudaGetLastError());
   return partial_grad;
 }
