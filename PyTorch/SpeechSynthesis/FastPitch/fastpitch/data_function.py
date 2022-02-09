@@ -161,7 +161,7 @@ class TTSDataset(torch.utils.data.Dataset):
 
         self.dataset_path = dataset_path
         self.audiopaths_and_text = load_filepaths_and_text(
-            dataset_path, audiopaths_and_text,
+            audiopaths_and_text, dataset_path,
             has_speakers=(n_speakers > 1))
         self.load_mel_from_disk = load_mel_from_disk
         if not load_mel_from_disk:
@@ -271,7 +271,7 @@ class TTSDataset(torch.utils.data.Dataset):
 
         if self.betabinomial_tmp_dir is not None:
             audiopath, *_ = self.audiopaths_and_text[index]
-            fname = Path(audiopath).relative_to(self.dataset_path)
+            fname = Path(audiopath).relative_to(self.dataset_path) if self.dataset_path else Path(audiopath)
             fname = fname.with_suffix('.pt')
             cached_fpath = Path(self.betabinomial_tmp_dir, fname)
 
@@ -303,7 +303,7 @@ class TTSDataset(torch.utils.data.Dataset):
             return pitch
 
         if self.pitch_tmp_dir is not None:
-            fname = Path(audiopath).relative_to(self.dataset_path)
+            fname = Path(audiopath).relative_to(self.dataset_path) if self.dataset_path else Path(audiopath)
             fname_method = fname.with_suffix('.pt')
             cached_fpath = Path(self.pitch_tmp_dir, fname_method)
             if cached_fpath.is_file():
