@@ -42,6 +42,9 @@ from . import utils
 from .logger import TrainingMetrics, ValidationMetrics
 from .models.common import EMA
 
+import lazy_tensor_core
+lazy_tensor_core._LAZYC._ltc_init_ts_backend()
+import lazy_tensor_core.core.lazy_model as ltm
 
 class Executor:
     def __init__(
@@ -54,11 +57,14 @@ class Executor:
         scaler: Optional[torch.cuda.amp.GradScaler] = None,
         divide_loss: int = 1,
         ts_script: bool = False,
+        ltc: bool = False,
     ):
         assert not (amp and scaler is None), "Gradient Scaler is needed for AMP"
 
         def xform(m: nn.Module) -> nn.Module:
-            if cuda:
+            if ltc:
+                m = m.to(device="lazy")
+            elif cuda:
                 m = m.cuda()
             m.to(memory_format=memory_format)
             return m
@@ -210,6 +216,7 @@ def train(
     timeout_handler,
     prof=-1,
     step=0,
+    ltc=False,
 ):
     interrupted = False
 
@@ -218,11 +225,18 @@ def train(
     data_iter = enumerate(train_loader)
 
     for i, (input, target) in data_iter:
+        print(f"i={i}")
+        print(f"input.device={input.device}")
+        print(f"target.device={target.device}")
         bs = input.size(0)
         lr = lr_scheduler(i)
         data_time = time.time() - end
 
         loss = train_step(input, target, step=step + i)
+
+        if ltc:
+            ltm.mark_step()
+
         it_time = time.time() - end
 
         with torch.no_grad():
@@ -252,7 +266,7 @@ def train(
     return interrupted
 
 
-def validate(infer_fn, val_loader, log_fn, prof=-1, with_loss=True):
+def validate(infer_fn, val_loader, log_fn, prof=-1, with_loss=True, ltc=False):
     top1 = log.AverageMeter()
     # switch to evaluate mode
 
@@ -268,6 +282,10 @@ def validate(infer_fn, val_loader, log_fn, prof=-1, with_loss=True):
             loss, output = infer_fn(input, target)
         else:
             output = infer_fn(input)
+
+
+        if ltc:
+            ltm.mark_step()
 
         with torch.no_grad():
             prec1, prec5 = utils.accuracy(output.data, target, topk=(1, 5))
@@ -332,6 +350,7 @@ def train_loop(
     save_checkpoints=True,
     checkpoint_dir="./",
     checkpoint_filename="checkpoint.pth.tar",
+    ltc=False,
 ):
     train_metrics = TrainingMetrics(logger)
     val_metrics = {
@@ -372,6 +391,7 @@ def train_loop(
                     timeout_handler,
                     prof=prof,
                     step=epoch * train_loader_len,
+                    ltc=ltc,
                 )
 
             if not skip_validation:
@@ -389,6 +409,7 @@ def train_loop(
                         data_iter,
                         val_metrics[k].log,
                         prof=prof,
+                        ltc=ltc,
                     )
 
                     if k == "val":
@@ -436,8 +457,8 @@ def train_loop(
                     epochs_since_improvement = 0
                 if epochs_since_improvement >= early_stopping_patience:
                     break
+
             if interrupted:
                 break
-
 
 # }}}

@@ -354,6 +354,11 @@ def add_parser_arguments(parser, skip_arch=False):
         choices=[am.name for am in AffinityMode],
     )
 
+    parser.add_argument(
+        "--ltc",
+        action="store_true",
+        help="Run with Lazy Tensor",
+    )
 
 def prepare_for_training(args, model_args, model_arch):
     args.distributed = False
@@ -480,6 +485,9 @@ def prepare_for_training(args, model_args, model_arch):
         enabled=args.amp,
     )
 
+    if args.ltc:
+        os.environ["LTC_TS_CUDA"] = '1'
+
     executor = Executor(
         model,
         loss(),
@@ -489,6 +497,7 @@ def prepare_for_training(args, model_args, model_arch):
         scaler=scaler,
         divide_loss=batch_size_multiplier,
         ts_script=args.jit == "script",
+        ltc=args.ltc,
     )
 
     # Create data loaders and optimizers as needed
@@ -521,6 +530,7 @@ def prepare_for_training(args, model_args, model_arch):
         _worker_init_fn=_worker_init_fn,
         memory_format=memory_format,
         prefetch_factor=args.prefetch,
+        ltc=args.ltc,
     )
     if args.mixup != 0.0:
         train_loader = MixUpWrapper(args.mixup, train_loader)
@@ -640,6 +650,7 @@ def main(args, model_args, model_arch):
         save_checkpoints=args.save_checkpoints and not args.evaluate,
         checkpoint_dir=args.workspace,
         checkpoint_filename=args.checkpoint_filename,
+        ltc=args.ltc,
     )
     exp_duration = time.time() - exp_start_time
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
