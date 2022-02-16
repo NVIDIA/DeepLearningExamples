@@ -14,9 +14,10 @@ while getopts "cu:" opt; do
 
 if [ "$CONDA" = "true" ]
 then
+  cd /disk/scratch1/${USER}/
   wget https://repo.anaconda.com/miniconda/Miniconda3-py39_4.9.2-Linux-x86_64.sh
   echo "Change install location to /disk/scratch1/${USER}"
-  /disk/scratch1/${USER}/Miniconda3-py39_4.9.2-Linux-x86_64.sh
+  ./Miniconda3-py39_4.9.2-Linux-x86_64.sh
   source ~/.bashrc
 fi
 
