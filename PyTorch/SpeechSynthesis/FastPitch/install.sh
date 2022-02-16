@@ -18,13 +18,15 @@ then
   wget https://repo.anaconda.com/miniconda/Miniconda3-py39_4.9.2-Linux-x86_64.sh
   echo "Change install location to /disk/scratch1/${USER}"
   bash ./Miniconda3-py39_4.9.2-Linux-x86_64.sh
+  rm Miniconda3-py39_4.9.2-Linux-x86_64.sh*
   source ~/.bashrc
 fi
 
 source /disk/scratch1/${USER}/miniconda3/bin/activate
 
 SERVERNAME=`hostname -s`
-conda create -n fastpitch_${SERVERNAME} python=3.8 source activate fastpitch_${SERVERNAME}
+conda create -n fastpitch_${SERVERNAME} python=3.8
+source activate fastpitch_${SERVERNAME}
 
 ## Get a version of gcc > 5.0. The current anaconda default (June 2021) is 9.3 which seems to work (so far!)
 conda install gcc_linux-64 gxx_linux-64
