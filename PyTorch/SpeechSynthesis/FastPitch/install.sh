@@ -20,7 +20,7 @@ then
   source ~/.bashrc
 fi
 
-source miniconda3/bin/activate
+source ./disk/scratch1/${USER}/miniconda3/bin/activate
 
 SERVERNAME=`hostname -s`
 conda create -n fastpitch_${SERVERNAME} python=3.8 source activate fastpitch_${SERVERNAME}
