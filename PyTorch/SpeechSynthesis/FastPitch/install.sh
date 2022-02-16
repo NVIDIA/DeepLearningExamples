@@ -16,7 +16,7 @@ if [ "$CONDA" = "true" ]
 then
   cd /disk/scratch1/${USER}/
   wget https://repo.anaconda.com/miniconda/Miniconda3-py39_4.9.2-Linux-x86_64.sh
-  echo "Change install location to /disk/scratch1/${USER}"
+  echo "!! Change install location to /disk/scratch1/${USER}/miniconda3 !!"
   bash ./Miniconda3-py39_4.9.2-Linux-x86_64.sh
   rm Miniconda3-py39_4.9.2-Linux-x86_64.sh*
   source ~/.bashrc
