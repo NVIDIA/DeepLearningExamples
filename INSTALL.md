@@ -1,34 +1,51 @@
 ## Installation
 
-Head to server
+1. Head to server
 
 ```bash
-ssh dudley
+ssh server_name
 ```
 
-Go to your own directory or make a new one in scratch
+2. Go to your own directory or make a new one in scratch
 
 ```bash
-cd /disk/scratch/s2132904
+cd /disk/scratch/UUN
 ```
 
-Install miniconda
+3. Install miniconda
+```bash
+  wget https://repo.anaconda.com/miniconda/Miniconda3-py39_4.9.2-Linux-x86_64.sh
+  echo "Change install location to /disk/scratch..."
+  ./Miniconda3-py39_4.9.2-Linux-x86_64.sh
+  source ~/.bashrc
+  ```
 
-Activate conda
+4. Activate conda
 
 ```bash
-source miniconda_22/bin/activate
+source miniconda3/bin/activate
 ```
 
 5. Clone repo
 
+```bash
 git clone https://github.com/NVIDIA/DeepLearningExamples.git
+```
 
-6. Create conda environement
+Alternative with SSH:
+```bash
+cd ~/.ssh && ssh-keygen -o && cat ~/.ssh/id_rsa.pub
+# add the ssh key here: https://github.com/settings/ssh/new
+git clone git@github.com:evdv/FastPitches.git
+```
 
+6. Create conda environment
+```bash
 conda create -n fastpitch_dudley python=3.8 
 source activate fastpitch_dudley
+```
 
+7. Install GCC
 ```bash
 ## Get a version of gcc > 5.0. The current anaconda default (June 2021) is 9.3 which seems to work (so far!)
 conda install gcc_linux-64 gxx_linux-64
@@ -38,6 +55,7 @@ alias gcc=x86_64-conda_cos6-linux-gnu-cc
 alias g++=x86_64-conda_cos6-linux-gnu-c++
 ```
 
+8. Install PyTorch with CUDA
 ```bash
 export CUDA_HOME=/opt/cuda-10.2.89_440_33
 ```
@@ -54,13 +72,14 @@ Then we reinstall and this for some reason downgrades the gcc to 7 and then inst
 conda install pytorch torchvision cudatoolkit=10.2 -c pytorch 
 ```
 
-
+9. Install Apex
 ```bash
+cd FastPitches/PyTorch/SpeechSynthesis/FastPitch/
 git clone https://github.com/NVIDIA/apex
 pip install -v --disable-pip-version-check --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
 ```
 
-
+10. Install additional Python requirements
 ```bash
 pip install -r requirements.txt
 pip install tqdm tensorboard 
@@ -69,12 +88,13 @@ pip install llvmlite==0.35.0
 pip install numba==0.49.1
 ```
 
+11. Test installation
 ```bash
 export CUDA_VISIBLE_DEVICES=1
 python inference.py --cuda   --fastpitch pretrained_models/fastpitch/nvidia_fastpitch_210824.pt   --waveglow pretrained_models/waveglow/nvidia_waveglow256pyt_fp16.pt   --wn-channels 256   -i phrases/devset10.tsv   -o output/wavs_devset10
 ```
 
-
+12. Prepare LJ dataset
 ```bash
 bash scripts/download_dataset.sh
 bash scripts/prepare_dataset.sh
