@@ -20,7 +20,7 @@ then
   source ~/.bashrc
 fi
 
-source ./disk/scratch1/${USER}/miniconda3/bin/activate
+source /disk/scratch1/${USER}/miniconda3/bin/activate
 
 SERVERNAME=`hostname -s`
 conda create -n fastpitch_${SERVERNAME} python=3.8 source activate fastpitch_${SERVERNAME}
@@ -41,7 +41,7 @@ conda uninstall pytorch
 conda install pytorch torchvision cudatoolkit=10.2 -c pytorch
 
 ## Apex
-cd ./disk/scratch1/${USER}/FastPitches/PyTorch/SpeechSynthesis/FastPitch/
+cd /disk/scratch1/${USER}/FastPitches/PyTorch/SpeechSynthesis/FastPitch/
 git clone https://github.com/NVIDIA/apex
 cd apex
 pip install -v --disable-pip-version-check --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
