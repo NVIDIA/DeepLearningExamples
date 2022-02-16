@@ -16,7 +16,7 @@ if [ "$CONDA" = "true" ]
 then
   wget https://repo.anaconda.com/miniconda/Miniconda3-py39_4.9.2-Linux-x86_64.sh
   echo "Change install location to /disk/scratch1/${USER}"
-  ./disk/scratch1/${USER}/Miniconda3-py39_4.9.2-Linux-x86_64.sh
+  /disk/scratch1/${USER}/Miniconda3-py39_4.9.2-Linux-x86_64.sh
   source ~/.bashrc
 fi
 
@@ -41,10 +41,13 @@ conda uninstall pytorch
 conda install pytorch torchvision cudatoolkit=10.2 -c pytorch
 
 ## Apex
-cd FastPitches/PyTorch/SpeechSynthesis/FastPitch/
+cd ./disk/scratch1/${USER}/FastPitches/PyTorch/SpeechSynthesis/FastPitch/
 git clone https://github.com/NVIDIA/apex
+cd apex
 pip install -v --disable-pip-version-check --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
+cd ../
 
+## Python requirements
 pip install -r requirements.txt
 pip install tqdm tensorboard
 pip install librosa
