@@ -1,0 +1,125 @@
+checkpoints:
+- name: electricity_bin
+  url: https://api.ngc.nvidia.com/v2/models/nvidia/tft_pyt_ckpt_base_eletricity_amp/versions/21.06.0/zip
+- name: traffic_bin
+  url: https://api.ngc.nvidia.com/v2/models/nvidia/tft_pyt_ckpt_base_traffic_amp/versions/21.06.0/zip
+configurations:
+- accelerator: none
+  batch_size:
+  - 1
+  - 2
+  - 4
+  - 8
+  - 16
+  - 32
+  - 64
+  - 128
+  - 256
+  - 512
+  - 1024
+  batch_sizes: 1 2 4 8 16 32 64 128 256 512 1024
+  capture_cuda_graph: 0
+  checkpoint_variant: electricity_bin
+  dataset: electricity_bin
+  device: gpu
+  export_format: onnx
+  export_precision: fp32
+  format: trt
+  max_batch_size: 1024
+  precision: fp16
+  request_count: 500
+  triton_gpu_engine_count: 2
+  triton_max_queue_delay: 1
+  triton_preferred_batch_sizes: 512 1024
+- accelerator: none
+  batch_size:
+  - 1
+  - 2
+  - 4
+  - 8
+  - 16
+  - 32
+  - 64
+  - 128
+  - 256
+  - 512
+  - 1024
+  batch_sizes: 1 2 4 8 16 32 64 128 256 512 1024
+  capture_cuda_graph: 0
+  checkpoint_variant: traffic_bin
+  dataset: traffic_bin
+  device: gpu
+  export_format: onnx
+  export_precision: fp32
+  format: trt
+  max_batch_size: 1024
+  precision: fp16
+  request_count: 500
+  triton_gpu_engine_count: 2
+  triton_max_queue_delay: 1
+  triton_preferred_batch_sizes: 512 1024
+- accelerator: none
+  batch_size:
+  - 1
+  - 2
+  - 4
+  - 8
+  - 16
+  - 32
+  - 64
+  - 128
+  - 256
+  - 512
+  - 1024
+  batch_sizes: 1 2 4 8 16 32 64 128 256 512 1024
+  capture_cuda_graph: 0
+  checkpoint_variant: electricity_bin
+  dataset: electricity_bin
+  device: gpu
+  export_format: ts-trace
+  export_precision: fp32
+  format: ts-trace
+  max_batch_size: 1024
+  precision: fp16
+  request_count: 500
+  triton_gpu_engine_count: 2
+  triton_max_queue_delay: 1
+  triton_preferred_batch_sizes: 512 1024
+- accelerator: none
+  batch_size:
+  - 1
+  - 2
+  - 4
+  - 8
+  - 16
+  - 32
+  - 64
+  - 128
+  - 256
+  - 512
+  - 1024
+  batch_sizes: 1 2 4 8 16 32 64 128 256 512 1024
+  capture_cuda_graph: 0
+  checkpoint_variant: traffic_bin
+  dataset: traffic_bin
+  device: gpu
+  export_format: ts-trace
+  export_precision: fp32
+  format: ts-trace
+  max_batch_size: 1024
+  precision: fp16
+  request_count: 500
+  triton_gpu_engine_count: 2
+  triton_max_queue_delay: 1
+  triton_preferred_batch_sizes: 512 1024
+container_version: '21.12'
+datasets:
+- name: electricity_bin
+- name: traffic_bin
+datasets_dir: datasets
+framework: PyTorch
+model_name: TFT
+triton_container_image: null
+triton_custom_operations: null
+triton_dockerfile: null
+triton_load_model_method: explicit

@@ -24,6 +24,7 @@ This repository provides a script and recipe to train the Temporal Fusion Transf
         * [Multi-dataset](#multi-dataset)
     * [Training process](#training-process)
     * [Inference process](#inference-process)
+    * [Triton deployment](#triton-deployment)
 - [Performance](#performance)
     * [Benchmarking](#benchmarking)
         * [Training performance benchmark](#training-performance-benchmark)
@@ -168,7 +169,7 @@ The following section lists the requirements that you need to meet in order to s
 
 This repository contains Dockerfile, which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 -   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
--   [PyTorch 21.06 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
+-   [PyTorch 21.12 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
 -   Supported GPUs:
 - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
 - [NVIDIA Turing architecture](https://www.nvidia.com/en-us/design-visualization/technologies/turing-architecture/)
@@ -267,13 +268,13 @@ To view the full list of available options and their descriptions, use the `-h` 
 
 The following example output is printed when running the model:
 ```
-usage: train.py [-h] --data_path DATA_PATH --dataset {electricity,volatility,traffic,favorita} [--epochs EPOCHS] [--sample_data SAMPLE_DATA SAMPLE_DATA] [--batch_size BATCH_SIZE] [--lr LR] [--seed SEED] [--use_amp] [--clip_grad CLIP_GRAD]
+usage: train.py [-h] --data_path DATA_PATH --dataset {electricity,traffic} [--epochs EPOCHS] [--sample_data SAMPLE_DATA SAMPLE_DATA] [--batch_size BATCH_SIZE] [--lr LR] [--seed SEED] [--use_amp] [--clip_grad CLIP_GRAD]
                 [--early_stopping EARLY_STOPPING] [--results RESULTS] [--log_file LOG_FILE] [--distributed_world_size N] [--distributed_rank DISTRIBUTED_RANK] [--local_rank LOCAL_RANK] [--overwrite_config OVERWRITE_CONFIG]
 
 optional arguments:
   -h, --help            show this help message and exit
   --data_path DATA_PATH
-  --dataset {electricity,volatility,traffic,favorita}
+  --dataset {electricity,traffic}
   --epochs EPOCHS
   --sample_data SAMPLE_DATA SAMPLE_DATA
   --batch_size BATCH_SIZE
@@ -326,7 +327,7 @@ The details of the architecture and the dataset configuration are encapsulated b
 
 Example command:
 ```
-python -m torch.distributed.launch --nproc_per_node=8 train.py \
+python -m torch.distributed.run --nproc_per_node=8 train.py \
         --dataset electricity \
         --data_path /data/processed/electricity_bin \
         --batch_size=1024 \
@@ -356,11 +357,16 @@ python inference.py \
 --visualize \
 --save_predictions \
 --joint_visualization \
---results /results \
---use_amp
+--results /results
 ```
 
 In the default setting, it performs the evaluation of the model on a specified dataset and prints q-risk evaluated on this dataset. In order to save the predictions, use the `--save_predictions` option. Predictions will be stored in the directory specified by the `--results` option in the csv format. Option `--joint_visualization` allows us to plot graphs in TensorBoard format, allowing us to inspect the results and compare them to true values. Using `--visualize`, you can save plots for each example in a separate file.
+
+
+### Triton deployment
+
+The [NVIDIA Triton Inference Server](https://github.com/triton-inference-server/server) provides a cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or GRPC endpoint, allowing remote clients to request inferencing for any model being managed by the server. More information on how to perform inference using NVIDIA Triton Inference Server can be found in [triton/README.md](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Forecasting/TFT/triton).
+
 ## Performance
 
 ### Benchmarking
@@ -457,38 +463,42 @@ The performance metrics used were items per second.
 
 ##### Inference Performance: NVIDIA DGX A100
 
-Our results were obtained by running the `inference.py` script in the [PyTorch 21.06 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA DGX A100.  Throughput is measured in items per second and latency is measured in milliseconds.
+Our results were obtained by running the `inference.py` script in the [PyTorch 21.12 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA DGX A100.  Throughput is measured in items per second and latency is measured in milliseconds.
 To benchmark the inference performance on a specific batch size and dataset, run the `inference.py` script.
 | Dataset | GPUs   | Batch size / GPU   | Throughput - mixed precision (item/s)    | Average Latency (ms) | Latency p90 (ms) | Latency p95 (ms) | Latency p99 (ms)
 |-------------|--------|-----|---------------------------------|-----------------|-------------|-------------|------------
-| Electricity | 1      | 1   | 152.179  | 6.571 | 6.658 | 6.828 | 8.234
-| Electricity | 1      | 2   | 295.82   | 6.76  | 6.776 | 6.967 | 8.595
-| Electricity | 1      | 4   | 596.93   | 6.7   | 6.7   | 6.802 | 8.627
-| Electricity | 1      | 8   | 1464.526 | 5.461 | 5.467 | 5.638 | 7.432
-| Traffic     | 1      | 1   | 152.462  | 6.559 | 6.649 | 6.832 | 7.393
-| Traffic     | 1      | 2   | 297.852  | 6.715 | 6.738 | 6.878 | 8.233
-| Traffic     | 1      | 4   | 598.016  | 6.688 | 6.71  | 6.814 | 7.915
-| Traffic     | 1      | 8   | 1455.163 | 5.497 | 5.54  | 5.832 | 7.571
+| Electricity | 1      | 1   | 144.37   | 6.93 | 7.00 | 7.04 | 7.25
+| Electricity | 1      | 2   | 277.53   | 7.21 | 7.25 | 7.27 | 7.48
+| Electricity | 1      | 4   | 564.37   | 7.09 | 7.13 | 7.15 | 7.64
+| Electricity | 1      | 8   | 1399.25  | 5.72 | 5.71 | 5.77 | 7.51
+| Traffic     | 1      | 1   | 145.26   | 6.88 | 6.91 | 6.95 | 7.60
+| Traffic     | 1      | 2   | 277.97   | 7.19 | 7.28 | 7.30 | 7.46
+| Traffic     | 1      | 4   | 563.05   | 7.10 | 7.14 | 7.16 | 7.42
+| Traffic     | 1      | 8   | 1411.62  | 5.67 | 5.69 | 5.79 | 6.21
 
 
 ##### Inference Performance: NVIDIA DGX-1 V100
 
-Our results were obtained by running the `inference.py` script in the [PyTorch 21.06 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA DGX-1 V100.  Throughput is measured in items per second and latency is measured in milliseconds.
+Our results were obtained by running the `inference.py` script in the [PyTorch 21.12 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA DGX-1 V100.  Throughput is measured in items per second and latency is measured in milliseconds.
 To benchmark the inference performance on a specific batch size and dataset, run the `inference.py` script.
 | Dataset | GPUs   | Batch size / GPU   | Throughput - mixed precision (item/s)    | Average Latency (ms) | Latency p90 (ms) | Latency p95 (ms) | Latency p99 (ms)
 |-------------|--------|-----|---------------------------------|-----------------|-------------|-------------|------------
-| Electricity | 1      | 1   | 113.613  | 8.801 | 9.055  | 10.015 | 10.764 
-| Electricity | 1      | 2   | 227.097  | 8.812 | 9.065  | 9.825  | 10.983 
-| Electricity | 1      | 4   | 464.545  | 8.611 | 8.696  | 8.815  | 11.105
-| Electricity | 1      | 8   | 1040.154 | 7.689 | 7.819  | 7.908  | 10.38
-| Traffic     | 1      | 1   | 115.724  | 8.643 | 8.855  | 9.693  | 9.966
-| Traffic     | 1      | 2   | 218.775  | 9.147 | 10.778 | 10.93  | 11.176
-| Traffic     | 1      | 4   | 447.603  | 8.936 | 9.149  | 9.233  | 11.316
-| Traffic     | 1      | 8   | 1042.663 | 7.673 | 7.962  | 8.04   | 9.988
+| Electricity | 1      | 1   | 95.65  | 10.45 | 11.30 | 11.95 | 12.13 
+| Electricity | 1      | 2   | 193.15  | 10.35 | 10.80 | 11.46 | 12.16 
+| Electricity | 1      | 4   | 381.09  | 10.49 | 10.75 | 12.29 | 12.41
+| Electricity | 1      | 8   | 805.49 | 9.93 | 10.41 | 10.48 | 10.91
+| Traffic     | 1      | 1   | 96.72  | 10.34 | 10.53 | 11.99 | 12.13
+| Traffic     | 1      | 2   | 192.93  | 10.37 | 10.80 | 11.97 | 12.12
+| Traffic     | 1      | 4   | 379.00  | 10.55 | 10.88 | 11.09 | 11.96
+| Traffic     | 1      | 8   | 859.69 | 9.30 | 10.58 | 10.65 | 11.28
 ## Release notes
 The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to https://developer.nvidia.com/deep-learning-performance-training-inference.
 
 ### Changelog
+
+February 2022
+- 21.12 Container Update
+- Triton Inference Performance Numbers
 
 November 2021
 - Initial release
