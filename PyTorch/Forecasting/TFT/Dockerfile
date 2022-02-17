@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,23 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.06-py3
-
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.12-py3
 FROM ${FROM_IMAGE_NAME}
 
-RUN apt-get update && apt-get install -y \
-    libb64-dev \
-    libb64-0d \
-    p7zip-full \
-    && rm -rf /var/lib/apt/lists/*
-
+# Set workdir and python path
 WORKDIR /workspace
+ENV PYTHONPATH /workspace
 
-COPY requirements.txt .
+RUN apt update && apt install -y p7zip-full
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN pip uninstall -y typing && \
-    pip install --no-cache-dir --ignore-installed -r requirements.txt
+# Install requirements
 
-COPY . .
+ADD requirements.txt /workspace/requirements.txt
+RUN pip install --no-cache-dir -r /workspace/requirements.txt
 
-ENV PYTHONPATH="${PYTHONPATH}:/workspace"
+# Add model files to workspace
+ADD . /workspace
+
+
