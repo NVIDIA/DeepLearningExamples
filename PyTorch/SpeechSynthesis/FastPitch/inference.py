@@ -296,7 +296,7 @@ def main():
     args, unk_args = parser.parse_known_args()
 
     if args.p_arpabet > 0.0:
-        cmudict.initialize(args.cmudict_path, keep_ambiguous=True)
+        cmudict.initialize(args.cmudict_path, args.heteronyms_path)
 
     torch.backends.cudnn.benchmark = args.cudnn_benchmark
 

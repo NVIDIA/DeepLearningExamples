@@ -148,7 +148,7 @@ def main():
 
             if args.p_arpabet > 0.0:
                 from common.text import cmudict
-                cmudict.initialize(args.cmudict_path, keep_ambiguous=True)
+                cmudict.initialize(args.cmudict_path, args.heteronyms_path)
 
             get_dataloader_fn = load_from_file(args.dataloader, label="dataloader", target=DATALOADER_FN_NAME)
             dataloader_fn = ArgParserGenerator(get_dataloader_fn).from_args(args)

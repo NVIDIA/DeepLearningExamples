@@ -29,14 +29,9 @@ class CMUDict:
     if file_or_path is None:
       self._entries = {}
     else:
-      self.initialize(file_or_path, keep_ambiguous)
+      self.initialize(file_or_path, heteronyms_path, keep_ambiguous)
 
-    if heteronyms_path is None:
-      self.heteronyms = []
-    else:
-      self.heteronyms = set(lines_to_list(heteronyms_path))
-
-  def initialize(self, file_or_path, keep_ambiguous=True):
+  def initialize(self, file_or_path, heteronyms_path, keep_ambiguous=True):
     if isinstance(file_or_path, str):
       try:
         with open(file_or_path, encoding='latin-1') as f:
@@ -54,6 +49,12 @@ class CMUDict:
     if not keep_ambiguous:
       entries = {word: pron for word, pron in entries.items() if len(pron) == 1}
     self._entries = entries
+
+    if heteronyms_path is None:
+      self.heteronyms = []
+    else:
+      self.heteronyms = set(lines_to_list(heteronyms_path))
+
 
   def __len__(self):
     if len(self._entries) == 0:
