@@ -89,17 +89,17 @@ pip install numba==0.49.1
 pip install wandb  # for train logging
 ```
 
-11. Test installation
+11. Prepare LJ dataset
+```bash
+bash scripts/download_dataset.sh
+bash scripts/prepare_dataset.sh
+```
+
+12. Test installation
 ```bash
 export CUDA_VISIBLE_DEVICES=1
 mkdir output
 python inference.py --cuda   --fastpitch pretrained_models/fastpitch/nvidia_fastpitch_210824.pt   --waveglow pretrained_models/waveglow/nvidia_waveglow256pyt_fp16.pt   --wn-channels 256   -i phrases/devset10.tsv   -o output/wavs_devset10
-```
-
-12. Prepare LJ dataset
-```bash
-bash scripts/download_dataset.sh
-bash scripts/prepare_dataset.sh
 ```
 
 13. Weights and Biases login
