@@ -34,7 +34,7 @@ git clone https://github.com/NVIDIA/DeepLearningExamples.git
 
 Alternative with SSH:
 ```bash
-cd ~/.ssh && ssh-keygen -o && cat ~/.ssh/id_rsa.pub
+cd ~/.ssh && ssh-keygen -o && cat ~/.ssh/id_rsa.pub && cd /disk/scratch1/UUN
 # add the ssh key here: https://github.com/settings/ssh/new
 git clone git@github.com:evdv/FastPitches.git
 ```
