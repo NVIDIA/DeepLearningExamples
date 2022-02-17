@@ -60,7 +60,7 @@ pip install llvmlite==0.35.0
 pip install numba==0.49.1
 
 ## for logging
-## if needed, create a free account here:
+## if needed, create a free account here: https://app.wandb.ai/login?signup=true
 wandb login
 
 export CUDA_VISIBLE_DEVICES=1
