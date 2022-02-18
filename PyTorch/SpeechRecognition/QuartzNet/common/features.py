@@ -237,7 +237,7 @@ class FilterbankFeatures(BaseFeatures):
         window_tensor = window_fn(self.win_length,
                                   periodic=False) if window_fn else None
         filterbanks = torch.tensor(
-            librosa.filters.mel(sample_rate, self.n_fft, n_mels=n_filt,
+            librosa.filters.mel(sr=sample_rate, n_fft=self.n_fft, n_mels=n_filt,
                                 fmin=lowfreq, fmax=highfreq),
             dtype=torch.float).unsqueeze(0)
         # torchscript
