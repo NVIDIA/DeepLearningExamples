@@ -65,12 +65,14 @@ wandb login
 
 export CUDA_VISIBLE_DEVICES=1
 
-## Get set up with LJ
-./scripts/download_dataset.sh
-./scripts/prepare_dataset.sh
 
 ## Test installation
+./scripts/download_fastpitch.sh
+./scripts/download_waveglow.sh
 mkdir output
 python inference.py --cuda   --fastpitch pretrained_models/fastpitch/nvidia_fastpitch_210824.pt   --waveglow pretrained_models/waveglow/nvidia_waveglow256pyt_fp16.pt   --wn-channels 256   -i phrases/devset10.tsv   -o output/wavs_devset10
 
 
+## Get set up with LJ
+./scripts/download_dataset.sh
+./scripts/prepare_dataset.sh
