@@ -21,9 +21,12 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import os
+
+os.environ['KMP_AFFINITY'] = 'disabled'
+
 import argparse
 import logging
-import os
 import sys
 import time
 from ast import literal_eval
