@@ -47,7 +47,7 @@ from common.tb_dllogger import (init_inference_metadata, stdout_metric_format,
                                 unique_log_fpath)
 from common.text import cmudict
 from common.text.text_processing import TextProcessing
-from pitch_transform import pitch_transform_custom
+from fastpitch.pitch_transform import pitch_transform_custom
 from waveglow import model as glow
 from waveglow.denoiser import Denoiser
 
