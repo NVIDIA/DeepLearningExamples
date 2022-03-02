@@ -1,5 +1,0 @@
-cffi
-numpy
-torch
-tqdm
-tensorboardX

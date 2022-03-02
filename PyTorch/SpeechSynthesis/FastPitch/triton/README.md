@@ -52,7 +52,7 @@ allowing remote clients to request inferencing for any number of GPU
 or CPU models being managed by the server.
 
 This README provides step-by-step deployment instructions for models generated
-during training (as described in the [model README](../README.md)).
+during training (as described in the [model README](../../../../README.md)).
 Additionally, this README provides the corresponding deployment scripts that
 ensure optimal GPU utilization during inferencing on Triton Inference Server.
 
