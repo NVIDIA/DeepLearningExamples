@@ -35,10 +35,10 @@ warmup_proportion_phase2=${18:-"0.128"}
 train_steps_phase2=${19:-1563}
 gradient_accumulation_steps_phase2=${20:-512}
 #change this for other datasets
-DATASET=pretrain/phase1/parquet
+DATASET=pretrain/phase1/unbinned/parquet
 DATA_DIR_PHASE1=${21:-$BERT_PREP_WORKING_DIR/${DATASET}/}
 #change this for other datasets
-DATASET2=pretrain/phase2/parquet
+DATASET2=pretrain/phase2/bin_size_64/parquet
 DATA_DIR_PHASE2=${22:-$BERT_PREP_WORKING_DIR/${DATASET2}/}
 CODEDIR=${23:-"/workspace/bert"}
 init_checkpoint=${24:-"None"}
@@ -51,7 +51,7 @@ num_shards_per_worker=${27:-128}
 num_workers=${28:-4}
 num_nodes=1
 sample_ratio=${29:-0.9}
-phase2_bin_size=${30:-none}
+phase2_bin_size=${30:-64}
 masking=${31:-static}
 BERT_CONFIG=${32:-bert_configs/large.json}
 

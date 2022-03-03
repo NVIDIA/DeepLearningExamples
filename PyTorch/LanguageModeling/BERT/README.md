@@ -344,10 +344,10 @@ out_dir=${5:-"/workspace/bert/results/SST-2"} # For SST-2.
 This repository contains a number of predefined configurations to run the SQuAD, GLUE and pre-training on NVIDIA DGX-1, NVIDIA DGX-2H or NVIDIA DGX A100 nodes in `scripts/configs/squad_config.sh`, `scripts/configs/glue_config.sh` and `scripts/configs/pretrain_config.sh`. For example, to use the default DGX A100 8 gpu config, run:
 
 ```
-bash scripts/run_squad.sh $(source scripts/configs/squad_config.sh && dgxa10080g_8gpu_fp16_p2binned)  # For the SQuAD v1.1 dataset.
-bash scripts/run_glue.sh $(source scripts/configs/glue_config.sh && mrpc_dgxa10080g_8gpu_fp16_p2binned)  # For the MRPC dataset.
-bash scripts/run_glue.sh $(source scripts/configs/glue_config.sh && sst-2_dgxa10080g_8gpu_fp16_p2binned)  # For the SST-2 dataset.
-bash scripts/run_pretraining.sh $(source scripts/configs/pretrain_config.sh && dgxa10080g_8gpu_fp16) # For pre-training
+bash scripts/run_squad.sh $(source scripts/configs/squad_config.sh && dgxa100-80g_8gpu_fp16)  # For the SQuAD v1.1 dataset.
+bash scripts/run_glue.sh $(source scripts/configs/glue_config.sh && mrpc_dgxa100-80g_8gpu_fp16)  # For the MRPC dataset.
+bash scripts/run_glue.sh $(source scripts/configs/glue_config.sh && sst-2_dgxa100-80g_8gpu_fp16)  # For the SST-2 dataset.
+bash scripts/run_pretraining.sh $(source scripts/configs/pretrain_config.sh && dgxa100-80g_8gpu_fp16) # For pre-training
 ```
 
 ## Advanced
@@ -891,6 +891,7 @@ January 2022
 - Knowledge Distillation support
 - Pre-training with native AMP, native DDP, and TorchScript with NVFuser backend
 - Pre-training using [Language Datasets and Data Loaders (LDDL)](../../../Tools/lddl)
+- Binned pretraining for phase2 with LDDL using a bin size of 64
 
 July 2020
 -  Updated accuracy and performance tables to include A100 results

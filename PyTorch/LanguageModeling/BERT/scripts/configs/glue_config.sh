@@ -28,7 +28,7 @@ batch_size_and_gradient_accumulation_steps() {
 commons () {
   init_checkpoint=/workspace/bert/checkpoints/bert_uncased.pt
   vocab_file=${BERT_PREP_WORKING_DIR}/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt
-  config_file=/workspace/bert/bert_config.json
+  config_file=/workspace/bert/bert_configs/large.json
   max_steps=-1.0
 }
 
@@ -37,57 +37,37 @@ mrpc_commons () {
   out_dir=/workspace/bert/results/MRPC
   task_name=mrpc
   global_batch_size=128
-  learning_rate=2.4e-5
-  warmup_proportion=0.1
-  epochs=3
-}
-
-mrpc_commons_p2binned () {
-  mrpc_commons
   learning_rate=1.8e-5
   warmup_proportion=0.3
+  epochs=3
 }
 
 sst-2_commons () {
   data_dir=${BERT_PREP_WORKING_DIR}/download/glue/SST-2/
   out_dir=/workspace/bert/results/SST-2
   task_name=sst-2
+  global_batch_size=1024
+  learning_rate=1e-5
   warmup_proportion=0.1
   epochs=3
 }
 
-sst-2_commons_p2binned () {
-  sst-2_commons
-  global_batch_size=1024
-  learning_rate=1e-5
-}
-
-dgxa10080g_fp16_commons () {
+dgxa100-80g_fp16_commons () {
   batch_size_capacity=256
   precision=fp16
 }
 
-dgxa10080g_tf32_commons () {
+dgxa100-80g_tf32_commons () {
   batch_size_capacity=128
   precision=tf32
 }
 
-dgxa100_fp16_commons () {
+dgx1-32g_fp16_commons () {
   batch_size_capacity=128
   precision=fp16
 }
 
-dgxa100_tf32_commons () {
-  batch_size_capacity=64
-  precision=tf32
-}
-
-dgx2_fp16_commons () {
-  batch_size_capacity=128
-  precision=fp16
-}
-
-dgx2_fp32_commons () {
+dgx1-32g_fp32_commons () {
   batch_size_capacity=64
   precision=fp32
 }
@@ -110,9 +90,9 @@ print_arguments_in_order () {
     $precision
 }
 
-##############################################################
-#   DGXA100 80G with Binned Phase 2 Pretraining Checkpoint   #
-##############################################################
+##########################################
+#             DGXA100 80G                #
+##########################################
 
 ##########################
 #          MRPC          #
@@ -120,37 +100,37 @@ print_arguments_in_order () {
 
 # AMP
 
-mrpc_dgxa10080g_1gpu_fp16_p2binned () {
+mrpc_dgxa100-80g_1gpu_fp16 () {
   commons
-  mrpc_commons_p2binned
-  dgxa10080g_fp16_commons
+  mrpc_commons
+  dgxa100-80g_fp16_commons
   num_gpu=1
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-mrpc_dgxa10080g_2gpu_fp16_p2binned () {
+mrpc_dgxa100-80g_2gpu_fp16 () {
   commons
-  mrpc_commons_p2binned
-  dgxa10080g_fp16_commons
+  mrpc_commons
+  dgxa100-80g_fp16_commons
   num_gpu=2
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-mrpc_dgxa10080g_4gpu_fp16_p2binned () {
+mrpc_dgxa100-80g_4gpu_fp16 () {
   commons
-  mrpc_commons_p2binned
-  dgxa10080g_fp16_commons
+  mrpc_commons
+  dgxa100-80g_fp16_commons
   num_gpu=4
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-mrpc_dgxa10080g_8gpu_fp16_p2binned () {
+mrpc_dgxa100-80g_8gpu_fp16 () {
   commons
-  mrpc_commons_p2binned
-  dgxa10080g_fp16_commons
+  mrpc_commons
+  dgxa100-80g_fp16_commons
   num_gpu=8
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
@@ -158,37 +138,37 @@ mrpc_dgxa10080g_8gpu_fp16_p2binned () {
 
 # TF32
 
-mrpc_dgxa10080g_1gpu_tf32_p2binned () {
+mrpc_dgxa100-80g_1gpu_tf32 () {
   commons
-  mrpc_commons_p2binned
-  dgxa10080g_tf32_commons
+  mrpc_commons
+  dgxa100-80g_tf32_commons
   num_gpu=1
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-mrpc_dgxa10080g_2gpu_tf32_p2binned () {
+mrpc_dgxa100-80g_2gpu_tf32 () {
   commons
-  mrpc_commons_p2binned
-  dgxa10080g_tf32_commons
+  mrpc_commons
+  dgxa100-80g_tf32_commons
   num_gpu=2
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-mrpc_dgxa10080g_4gpu_tf32_p2binned () {
+mrpc_dgxa100-80g_4gpu_tf32 () {
   commons
-  mrpc_commons_p2binned
-  dgxa10080g_tf32_commons
+  mrpc_commons
+  dgxa100-80g_tf32_commons
   num_gpu=4
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-mrpc_dgxa10080g_8gpu_tf32_p2binned () {
+mrpc_dgxa100-80g_8gpu_tf32 () {
   commons
-  mrpc_commons_p2binned
-  dgxa10080g_tf32_commons
+  mrpc_commons
+  dgxa100-80g_tf32_commons
   num_gpu=8
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
@@ -200,37 +180,37 @@ mrpc_dgxa10080g_8gpu_tf32_p2binned () {
 
 # AMP
 
-sst-2_dgxa10080g_1gpu_fp16_p2binned () {
+sst-2_dgxa100-80g_1gpu_fp16 () {
   commons
-  sst-2_commons_p2binned
-  dgxa10080g_fp16_commons
+  sst-2_commons
+  dgxa100-80g_fp16_commons
   num_gpu=1
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-sst-2_dgxa10080g_2gpu_fp16_p2binned () {
+sst-2_dgxa100-80g_2gpu_fp16 () {
   commons
-  sst-2_commons_p2binned
-  dgxa10080g_fp16_commons
+  sst-2_commons
+  dgxa100-80g_fp16_commons
   num_gpu=2
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-sst-2_dgxa10080g_4gpu_fp16_p2binned () {
+sst-2_dgxa100-80g_4gpu_fp16 () {
   commons
-  sst-2_commons_p2binned
-  dgxa10080g_fp16_commons
+  sst-2_commons
+  dgxa100-80g_fp16_commons
   num_gpu=4
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-sst-2_dgxa10080g_8gpu_fp16_p2binned () {
+sst-2_dgxa100-80g_8gpu_fp16 () {
   commons
-  sst-2_commons_p2binned
-  dgxa10080g_fp16_commons
+  sst-2_commons
+  dgxa100-80g_fp16_commons
   num_gpu=8
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
@@ -238,44 +218,44 @@ sst-2_dgxa10080g_8gpu_fp16_p2binned () {
 
 # TF32
 
-sst-2_dgxa10080g_1gpu_tf32_p2binned () {
+sst-2_dgxa100-80g_1gpu_tf32 () {
   commons
-  sst-2_commons_p2binned
-  dgxa10080g_tf32_commons
+  sst-2_commons
+  dgxa100-80g_tf32_commons
   num_gpu=1
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-sst-2_dgxa10080g_2gpu_tf32_p2binned () {
+sst-2_dgxa100-80g_2gpu_tf32 () {
   commons
-  sst-2_commons_p2binned
-  dgxa10080g_tf32_commons
+  sst-2_commons
+  dgxa100-80g_tf32_commons
   num_gpu=2
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-sst-2_dgxa10080g_4gpu_tf32_p2binned () {
+sst-2_dgxa100-80g_4gpu_tf32 () {
   commons
-  sst-2_commons_p2binned
-  dgxa10080g_tf32_commons
+  sst-2_commons
+  dgxa100-80g_tf32_commons
   num_gpu=4
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-sst-2_dgxa10080g_8gpu_tf32_p2binned () {
+sst-2_dgxa100-80g_8gpu_tf32 () {
   commons
-  sst-2_commons_p2binned
-  dgxa10080g_tf32_commons
+  sst-2_commons
+  dgxa100-80g_tf32_commons
   num_gpu=8
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
 ##########################################
-#                 DGXA100                #
+#                DGX1 32G                #
 ##########################################
 
 ##########################
@@ -284,390 +264,165 @@ sst-2_dgxa10080g_8gpu_tf32_p2binned () {
 
 # AMP
 
-mrpc_dgxa100_1gpu_fp16 () {
+mrpc_dgx1-32g_1gpu_fp16 () {
   commons
   mrpc_commons
-  dgxa100_fp16_commons
+  dgx1-32g_fp16_commons
   num_gpu=1
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-mrpc_dgxa100_2gpu_fp16 () {
+mrpc_dgx1-32g_2gpu_fp16 () {
   commons
   mrpc_commons
-  dgxa100_fp16_commons
+  dgx1-32g_fp16_commons
   num_gpu=2
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-mrpc_dgxa100_4gpu_fp16 () {
+mrpc_dgx1-32g_4gpu_fp16 () {
   commons
   mrpc_commons
-  dgxa100_fp16_commons
+  dgx1-32g_fp16_commons
   num_gpu=4
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-mrpc_dgxa100_8gpu_fp16 () {
+mrpc_dgx1-32g_8gpu_fp16 () {
   commons
   mrpc_commons
-  dgxa100_fp16_commons
+  dgx1-32g_fp16_commons
   num_gpu=8
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-# TF32
-
-mrpc_dgxa100_1gpu_tf32 () {
-  commons
-  mrpc_commons
-  dgxa100_tf32_commons
-  num_gpu=1
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-mrpc_dgxa100_2gpu_tf32 () {
-  commons
-  mrpc_commons
-  dgxa100_tf32_commons
-  num_gpu=2
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-
-}
-
-mrpc_dgxa100_4gpu_tf32 () {
-  commons
-  mrpc_commons
-  dgxa100_tf32_commons
-  num_gpu=4
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-mrpc_dgxa100_8gpu_tf32 () {
-  commons
-  mrpc_commons
-  dgxa100_tf32_commons
-  num_gpu=8
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-##########################
-#          SST-2         #
-##########################
-
-# AMP
-
-sst-2_dgxa100_fp16_commons () {
-  global_batch_size=1024
-  learning_rate=3e-5
-}
-
-sst-2_dgxa100_1gpu_fp16 () {
-  commons
-  sst-2_commons
-  dgxa100_fp16_commons
-  sst-2_dgxa100_fp16_commons
-  num_gpu=1
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-sst-2_dgxa100_2gpu_fp16 () {
-  commons
-  sst-2_commons
-  dgxa100_fp16_commons
-  sst-2_dgxa100_fp16_commons
-  num_gpu=2
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-sst-2_dgxa100_4gpu_fp16 () {
-  commons
-  sst-2_commons
-  dgxa100_fp16_commons
-  sst-2_dgxa100_fp16_commons
-  num_gpu=4
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-sst-2_dgxa100_8gpu_fp16 () {
-  commons
-  sst-2_commons
-  dgxa100_fp16_commons
-  sst-2_dgxa100_fp16_commons
-  num_gpu=8
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-# TF32
-
-sst-2_dgxa100_tf32_commons () {
-  global_batch_size=512
-  learning_rate=2e-5
-}
-
-sst-2_dgxa100_1gpu_tf32 () {
-  commons
-  sst-2_commons
-  dgxa100_tf32_commons
-  sst-2_dgxa100_tf32_commons
-  num_gpu=1
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-sst-2_dgxa100_2gpu_tf32 () {
-  commons
-  sst-2_commons
-  dgxa100_tf32_commons
-  sst-2_dgxa100_tf32_commons
-  num_gpu=2
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-sst-2_dgxa100_4gpu_tf32 () {
-  commons
-  sst-2_commons
-  dgxa100_tf32_commons
-  sst-2_dgxa100_tf32_commons
-  num_gpu=4
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-sst-2_dgxa100_8gpu_tf32 () {
-  commons
-  sst-2_commons
-  dgxa100_tf32_commons
-  sst-2_dgxa100_tf32_commons
-  num_gpu=8
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-##########################################
-#                 DGX2                   #
-##########################################
-
-##########################
-#          MRPC          #
-##########################
-
-# AMP
-
-mrpc_dgx2_1gpu_fp16 () {
-  commons
-  mrpc_commons
-  dgx2_fp16_commons
-  num_gpu=1
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-mrpc_dgx2_2gpu_fp16 () {
-  commons
-  mrpc_commons
-  dgx2_fp16_commons
-  num_gpu=2
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-mrpc_dgx2_4gpu_fp16 () {
-  commons
-  mrpc_commons
-  dgx2_fp16_commons
-  num_gpu=4
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-mrpc_dgx2_8gpu_fp16 () {
-  commons
-  mrpc_commons
-  dgx2_fp16_commons
-  num_gpu=8
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-mrpc_dgx2_16gpu_fp16 () {
-  commons
-  mrpc_commons
-  dgx2_fp16_commons
-  num_gpu=16
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-# FP32.
-
-mrpc_dgx2_1gpu_fp32 () {
-  commons
-  mrpc_commons
-  dgx2_fp32_commons
-  num_gpu=1
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-mrpc_dgx2_2gpu_fp32 () {
-  commons
-  mrpc_commons
-  dgx2_fp32_commons
-  num_gpu=2
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-mrpc_dgx2_4gpu_fp32 () {
-  commons
-  mrpc_commons
-  dgx2_fp32_commons
-  num_gpu=4
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-mrpc_dgx2_8gpu_fp32 () {
-  commons
-  mrpc_commons
-  dgx2_fp32_commons
-  num_gpu=8
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-mrpc_dgx2_16gpu_fp32 () {
-  commons
-  mrpc_commons
-  dgx2_fp32_commons
-  num_gpu=16
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-##########################
-#          SST-2         #
-##########################
-
-sst-2_dgx2_commons () {
-  global_batch_size=1024
-  learning_rate=3e-5
-}
-
-# AMP
-
-sst-2_dgx2_1gpu_fp16 () {
-  commons
-  sst-2_commons
-  dgx2_fp16_commons
-  sst-2_dgx2_commons
-  num_gpu=1
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-sst-2_dgx2_2gpu_fp16 () {
-  commons
-  sst-2_commons
-  dgx2_fp16_commons
-  sst-2_dgx2_commons
-  num_gpu=2
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-sst-2_dgx2_4gpu_fp16 () {
-  commons
-  sst-2_commons
-  dgx2_fp16_commons
-  sst-2_dgx2_commons
-  num_gpu=4
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-sst-2_dgx2_8gpu_fp16 () {
-  commons
-  sst-2_commons
-  dgx2_fp16_commons
-  sst-2_dgx2_commons
-  num_gpu=8
-  batch_size_and_gradient_accumulation_steps
-  print_arguments_in_order
-}
-
-sst-2_dgx2_16gpu_fp16 () {
-  commons
-  sst-2_commons
-  dgx2_fp16_commons
-  sst-2_dgx2_commons
-  num_gpu=16
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
 # FP32
 
-sst-2_dgx2_1gpu_fp32 () {
+mrpc_dgx1-32g_1gpu_fp32 () {
   commons
-  sst-2_commons
-  dgx2_fp32_commons
-  sst-2_dgx2_commons
+  mrpc_commons
+  dgx1-32g_fp32_commons
   num_gpu=1
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-sst-2_dgx2_2gpu_fp32 () {
+mrpc_dgx1-32g_2gpu_fp32 () {
   commons
-  sst-2_commons
-  dgx2_fp32_commons
-  sst-2_dgx2_commons
+  mrpc_commons
+  dgx1-32g_fp32_commons
   num_gpu=2
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
+
 }
 
-sst-2_dgx2_4gpu_fp32 () {
+mrpc_dgx1-32g_4gpu_fp32 () {
   commons
-  sst-2_commons
-  dgx2_fp32_commons
-  sst-2_dgx2_commons
+  mrpc_commons
+  dgx1-32g_fp32_commons
   num_gpu=4
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-sst-2_dgx2_8gpu_fp32 () {
+mrpc_dgx1-32g_8gpu_fp32 () {
   commons
-  sst-2_commons
-  dgx2_fp32_commons
-  sst-2_dgx2_commons
+  mrpc_commons
+  dgx1-32g_fp32_commons
   num_gpu=8
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
 
-sst-2_dgx2_16gpu_fp32 () {
+##########################
+#          SST-2         #
+##########################
+
+# AMP
+
+sst-2_dgx1-32g_1gpu_fp16 () {
   commons
   sst-2_commons
-  dgx2_fp32_commons
-  sst-2_dgx2_commons
-  num_gpu=16
+  dgx1-32g_fp16_commons
+  num_gpu=1
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+sst-2_dgx1-32g_2gpu_fp16 () {
+  commons
+  sst-2_commons
+  dgx1-32g_fp16_commons
+  num_gpu=2
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+sst-2_dgx1-32g_4gpu_fp16 () {
+  commons
+  sst-2_commons
+  dgx1-32g_fp16_commons
+  num_gpu=4
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+sst-2_dgx1-32g_8gpu_fp16 () {
+  commons
+  sst-2_commons
+  dgx1-32g_fp16_commons
+  num_gpu=8
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+# FP32
+
+sst-2_dgx1-32g_fp32_commons () {
+  global_batch_size=512
+}
+
+sst-2_dgx1-32g_1gpu_fp32 () {
+  commons
+  sst-2_commons
+  dgx1-32g_fp32_commons
+  sst-2_dgx1-32g_fp32_commons
+  num_gpu=1
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+sst-2_dgx1-32g_2gpu_fp32 () {
+  commons
+  sst-2_commons
+  dgx1-32g_fp32_commons
+  sst-2_dgx1-32g_fp32_commons
+  num_gpu=2
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+sst-2_dgx1-32g_4gpu_fp32 () {
+  commons
+  sst-2_commons
+  dgx1-32g_fp32_commons
+  sst-2_dgx1-32g_fp32_commons
+  num_gpu=4
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+sst-2_dgx1-32g_8gpu_fp32 () {
+  commons
+  sst-2_commons
+  dgx1-32g_fp32_commons
+  sst-2_dgx1-32g_fp32_commons
+  num_gpu=8
   batch_size_and_gradient_accumulation_steps
   print_arguments_in_order
 }
