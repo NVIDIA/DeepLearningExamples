@@ -9,7 +9,6 @@ ipdb
 #Data processing
 h5py
 nltk
-progressbar
 #Others
 onnxruntime
 git+https://github.com/NVIDIA/dllogger

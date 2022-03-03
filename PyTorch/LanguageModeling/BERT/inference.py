@@ -272,8 +272,10 @@ def main():
     parser.add_argument('--fp16',
                         action='store_true',
                         help="use mixed-precision")
-    parser.add_argument("--local_rank", default=-1, help="ordinal of the GPU to use")
-    
+    parser.add_argument("--local_rank",
+                        type=int,
+                        default=os.getenv('LOCAL_RANK', -1),
+                        help="local_rank for distributed training on gpus")    
     args = parser.parse_args()
     random.seed(args.seed)
     np.random.seed(args.seed)

@@ -208,8 +208,8 @@ def main():
     parser.add_argument("--batch_size", default=32, type=int, help="Batch size for predictions.")
     parser.add_argument("--local_rank",
                         type=int,
-                        default=-1,
-                        help = "local_rank for distributed training on gpus")
+                        default=os.getenv('LOCAL_RANK', -1),
+                        help="local_rank for distributed training on gpus")
     parser.add_argument("--no_cuda",
                         action='store_true',
                         help="Whether not to use CUDA when available")

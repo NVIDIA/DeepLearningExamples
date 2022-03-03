@@ -119,6 +119,7 @@ class BertAdam(Optimizer):
         loss = None
         if closure is not None:
             loss = closure()
+                       
         for group in self.param_groups:
             for p in group['params']:
                 if p.grad is None:
@@ -142,8 +143,8 @@ class BertAdam(Optimizer):
 
                 # Add grad clipping
                 if group['max_grad_norm'] > 0:
-                    clip_grad_norm_(p, group['max_grad_norm'])
-
+                    clip_grad_norm_(p, group['max_grad_norm'], error_if_nonfinite=False)
+                    
                 # Decay the first and second moment running average coefficient
                 # In-place operations to update the averages at the same time
                 next_m.mul_(beta1).add_(1 - beta1, grad)

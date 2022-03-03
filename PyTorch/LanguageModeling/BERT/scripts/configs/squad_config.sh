@@ -13,19 +13,56 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-dgxa100_8gpu_fp16 ()
+dgxa10080g_8gpu_fp16_p2binned ()
 {
     init_checkpoint="/workspace/bert/checkpoints/bert_uncased.pt"
     epochs="2.0"
     batch_size="32"
-    learning_rate="3e-5"
+    learning_rate="4.6e-5"
+    warmup_proportion="0.2"
     precision="fp16"
     num_gpu="8"
     seed="1"
     squad_dir="$BERT_PREP_WORKING_DIR/download/squad/v1.1"
     vocab_file="$BERT_PREP_WORKING_DIR/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt"
     OUT_DIR="/workspace/bert/results/SQuAD"
-    echo $init_checkpoint $epochs $batch_size $learning_rate \
+    echo $init_checkpoint $epochs $batch_size $learning_rate $warmup_proportion \
+     $precision $num_gpu $seed $squad_dir $vocab_file \
+     $OUT_DIR
+}
+
+dgxa10080g_8gpu_tf32_p2binned ()
+{
+    init_checkpoint="/workspace/bert/checkpoints/bert_uncased.pt"
+    epochs="2.0"
+    batch_size="32"
+    learning_rate="4.6e-5"
+    warmup_proportion="0.2"
+    precision="tf32"
+    num_gpu="8"
+    seed="1"
+    squad_dir="$BERT_PREP_WORKING_DIR/download/squad/v1.1"
+    vocab_file="$BERT_PREP_WORKING_DIR/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt"
+    OUT_DIR="/workspace/bert/results/SQuAD"
+    echo $init_checkpoint $epochs $batch_size $learning_rate $warmup_proportion \
+     $precision $num_gpu $seed $squad_dir $vocab_file \
+     $OUT_DIR
+}
+
+dgxa100_8gpu_fp16 ()
+{
+    init_checkpoint="/workspace/bert/checkpoints/bert_uncased.pt"
+    epochs="2.0"
+    batch_size="32"
+    learning_rate="3e-5"
+    warmup_proportion="0.1"
+    precision="fp16"
+    num_gpu="8"
+    seed="1"
+    squad_dir="$BERT_PREP_WORKING_DIR/download/squad/v1.1"
+    vocab_file="$BERT_PREP_WORKING_DIR/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt"
+    OUT_DIR="/workspace/bert/results/SQuAD"
+    echo $init_checkpoint $epochs $batch_size $learning_rate $warmup_proportion \
      $precision $num_gpu $seed $squad_dir $vocab_file \
      $OUT_DIR
 }
@@ -36,18 +73,37 @@ dgxa100_8gpu_tf32 ()
     epochs="2.0"
     batch_size="16"
     learning_rate="3e-5"
+    warmup_proportion="0.1"
     precision="tf32"
     num_gpu="8"
     seed="1"
     squad_dir="$BERT_PREP_WORKING_DIR/download/squad/v1.1"
     vocab_file="$BERT_PREP_WORKING_DIR/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt"
     OUT_DIR="/workspace/bert/results/SQuAD"
-    echo $init_checkpoint $epochs $batch_size $learning_rate \
+    echo $init_checkpoint $epochs $batch_size $learning_rate $warmup_proportion \
      $precision $num_gpu $seed $squad_dir $vocab_file \
      $OUT_DIR
 }
 
 # Full SQuAD training configs for NVIDIA DGX-2H (16x NVIDIA V100 32GB GPU)
+
+dgx2_16gpu_fp16_p2binned ()
+{
+    init_checkpoint="/workspace/bert/checkpoints/bert_uncased.pt"
+    epochs="2.0"
+    batch_size="16"
+    learning_rate="4.6e-5"
+    warmup_proportion="0.2"
+    precision="fp16"
+    num_gpu="16"
+    seed="1"
+    squad_dir="$BERT_PREP_WORKING_DIR/download/squad/v1.1"
+    vocab_file="$BERT_PREP_WORKING_DIR/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt"
+    OUT_DIR="/workspace/bert/results/SQuAD"
+    echo $init_checkpoint $epochs $batch_size $learning_rate $warmup_proportion \
+     $precision $num_gpu $seed $squad_dir $vocab_file \
+     $OUT_DIR
+}
 
 dgx2_16gpu_fp16 ()
 {
@@ -55,13 +111,14 @@ dgx2_16gpu_fp16 ()
     epochs="2.0"
     batch_size="16"
     learning_rate="3e-5"
+    warmup_proportion="0.1"
     precision="fp16"
     num_gpu="16"
     seed="1"
     squad_dir="$BERT_PREP_WORKING_DIR/download/squad/v1.1"
     vocab_file="$BERT_PREP_WORKING_DIR/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt"
     OUT_DIR="/workspace/bert/results/SQuAD"
-    echo $init_checkpoint $epochs $batch_size $learning_rate \
+    echo $init_checkpoint $epochs $batch_size $learning_rate $warmup_proportion \
      $precision $num_gpu $seed $squad_dir $vocab_file \
      $OUT_DIR
 }
@@ -72,32 +129,52 @@ dgx2_16gpu_fp32 ()
     epochs="2.0"
     batch_size="8"
     learning_rate="3e-5"
-    precision="fp16"
+    warmup_proportion="0.1"
+    precision="fp32"
     num_gpu="16"
     seed="1"
     squad_dir="$BERT_PREP_WORKING_DIR/download/squad/v1.1"
     vocab_file="$BERT_PREP_WORKING_DIR/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt"
     OUT_DIR="/workspace/bert/results/SQuAD"
-    echo $init_checkpoint $epochs $batch_size $learning_rate \
+    echo $init_checkpoint $epochs $batch_size $learning_rate $warmup_proportion \
      $precision $num_gpu $seed $squad_dir $vocab_file \
      $OUT_DIR
 }
 
-# Full SQuAD training configs for NVIDIA DGX-1 (8x NVIDIA V100 16GB GPU)
+# Full SQuAD training configs for NVIDIA DGX-1 (8x NVIDIA V100 32GB GPU)
 
-dgx1_8gpu_fp16 ()
+dgx1_8gpu_fp16_p2binned ()
 {
     init_checkpoint="/workspace/bert/checkpoints/bert_uncased.pt"
     epochs="2.0"
-    batch_size="10"
-    learning_rate="3e-5"
+    batch_size="16"
+    learning_rate="4.6e-5"
+    warmup_proportion="0.2"
     precision="fp16"
     num_gpu="8"
     seed="1"
     squad_dir="$BERT_PREP_WORKING_DIR/download/squad/v1.1"
     vocab_file="$BERT_PREP_WORKING_DIR/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt"
     OUT_DIR="/workspace/bert/results/SQuAD"
-    echo $init_checkpoint $epochs $batch_size $learning_rate \
+    echo $init_checkpoint $epochs $batch_size $learning_rate $warmup_proportion \
+     $precision $num_gpu $seed $squad_dir $vocab_file \
+     $OUT_DIR
+}
+
+dgx1_8gpu_fp16 ()
+{
+    init_checkpoint="/workspace/bert/checkpoints/bert_uncased.pt"
+    epochs="2.0"
+    batch_size="16"
+    learning_rate="3e-5"
+    warmup_proportion="0.1"
+    precision="fp16"
+    num_gpu="8"
+    seed="1"
+    squad_dir="$BERT_PREP_WORKING_DIR/download/squad/v1.1"
+    vocab_file="$BERT_PREP_WORKING_DIR/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt"
+    OUT_DIR="/workspace/bert/results/SQuAD"
+    echo $init_checkpoint $epochs $batch_size $learning_rate $warmup_proportion \
      $precision $num_gpu $seed $squad_dir $vocab_file \
      $OUT_DIR
 }
@@ -106,15 +183,16 @@ dgx1_8gpu_fp32 ()
 {
     init_checkpoint="/workspace/bert/checkpoints/bert_uncased.pt"
     epochs="2.0"
-    batch_size="4"
+    batch_size="8"
     learning_rate="3e-5"
+    warmup_proportion="0.1"
     precision="fp32"
     num_gpu="8"
     seed="1"
     squad_dir="$BERT_PREP_WORKING_DIR/download/squad/v1.1"
     vocab_file="$BERT_PREP_WORKING_DIR/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt"
     OUT_DIR="/workspace/bert/results/SQuAD"
-    echo $init_checkpoint $epochs $batch_size $learning_rate \
+    echo $init_checkpoint $epochs $batch_size $learning_rate $warmup_proportion \
      $precision $num_gpu $seed $squad_dir $vocab_file \
      $OUT_DIR
 }

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2019-2020 NVIDIA CORPORATION. All rights reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -20,7 +20,7 @@ echo "Container nvidia build = " $NVIDIA_BUILD_ID
 init_checkpoint=${1:-"/workspace/bert/checkpoints/bert_uncased.pt"}
 data_dir=${2:-"$BERT_PREP_WORKING_DIR/download/glue/MRPC/"}
 vocab_file=${3:-"$BERT_PREP_WORKING_DIR/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt"}
-config_file=${4:-"/workspace/bert/bert_config.json"}
+config_file=${4:-"/workspace/bert/bert_configs/large.json"}
 out_dir=${5:-"/workspace/bert/results/MRPC"}
 task_name=${6:-"mrpc"}
 num_gpu=${7:-"8"}

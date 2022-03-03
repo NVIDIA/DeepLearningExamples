@@ -42,12 +42,34 @@ mrpc_commons () {
   epochs=3
 }
 
+mrpc_commons_p2binned () {
+  mrpc_commons
+  learning_rate=1.8e-5
+  warmup_proportion=0.3
+}
+
 sst-2_commons () {
   data_dir=${BERT_PREP_WORKING_DIR}/download/glue/SST-2/
   out_dir=/workspace/bert/results/SST-2
   task_name=sst-2
   warmup_proportion=0.1
   epochs=3
+}
+
+sst-2_commons_p2binned () {
+  sst-2_commons
+  global_batch_size=1024
+  learning_rate=1e-5
+}
+
+dgxa10080g_fp16_commons () {
+  batch_size_capacity=256
+  precision=fp16
+}
+
+dgxa10080g_tf32_commons () {
+  batch_size_capacity=128
+  precision=tf32
 }
 
 dgxa100_fp16_commons () {
@@ -86,6 +108,170 @@ print_arguments_in_order () {
     $epochs \
     $max_steps \
     $precision
+}
+
+##############################################################
+#   DGXA100 80G with Binned Phase 2 Pretraining Checkpoint   #
+##############################################################
+
+##########################
+#          MRPC          #
+##########################
+
+# AMP
+
+mrpc_dgxa10080g_1gpu_fp16_p2binned () {
+  commons
+  mrpc_commons_p2binned
+  dgxa10080g_fp16_commons
+  num_gpu=1
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+mrpc_dgxa10080g_2gpu_fp16_p2binned () {
+  commons
+  mrpc_commons_p2binned
+  dgxa10080g_fp16_commons
+  num_gpu=2
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+mrpc_dgxa10080g_4gpu_fp16_p2binned () {
+  commons
+  mrpc_commons_p2binned
+  dgxa10080g_fp16_commons
+  num_gpu=4
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+mrpc_dgxa10080g_8gpu_fp16_p2binned () {
+  commons
+  mrpc_commons_p2binned
+  dgxa10080g_fp16_commons
+  num_gpu=8
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+# TF32
+
+mrpc_dgxa10080g_1gpu_tf32_p2binned () {
+  commons
+  mrpc_commons_p2binned
+  dgxa10080g_tf32_commons
+  num_gpu=1
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+mrpc_dgxa10080g_2gpu_tf32_p2binned () {
+  commons
+  mrpc_commons_p2binned
+  dgxa10080g_tf32_commons
+  num_gpu=2
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+mrpc_dgxa10080g_4gpu_tf32_p2binned () {
+  commons
+  mrpc_commons_p2binned
+  dgxa10080g_tf32_commons
+  num_gpu=4
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+mrpc_dgxa10080g_8gpu_tf32_p2binned () {
+  commons
+  mrpc_commons_p2binned
+  dgxa10080g_tf32_commons
+  num_gpu=8
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+##########################
+#          SST-2         #
+##########################
+
+# AMP
+
+sst-2_dgxa10080g_1gpu_fp16_p2binned () {
+  commons
+  sst-2_commons_p2binned
+  dgxa10080g_fp16_commons
+  num_gpu=1
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+sst-2_dgxa10080g_2gpu_fp16_p2binned () {
+  commons
+  sst-2_commons_p2binned
+  dgxa10080g_fp16_commons
+  num_gpu=2
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+sst-2_dgxa10080g_4gpu_fp16_p2binned () {
+  commons
+  sst-2_commons_p2binned
+  dgxa10080g_fp16_commons
+  num_gpu=4
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+sst-2_dgxa10080g_8gpu_fp16_p2binned () {
+  commons
+  sst-2_commons_p2binned
+  dgxa10080g_fp16_commons
+  num_gpu=8
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+# TF32
+
+sst-2_dgxa10080g_1gpu_tf32_p2binned () {
+  commons
+  sst-2_commons_p2binned
+  dgxa10080g_tf32_commons
+  num_gpu=1
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+sst-2_dgxa10080g_2gpu_tf32_p2binned () {
+  commons
+  sst-2_commons_p2binned
+  dgxa10080g_tf32_commons
+  num_gpu=2
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+sst-2_dgxa10080g_4gpu_tf32_p2binned () {
+  commons
+  sst-2_commons_p2binned
+  dgxa10080g_tf32_commons
+  num_gpu=4
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
+}
+
+sst-2_dgxa10080g_8gpu_tf32_p2binned () {
+  commons
+  sst-2_commons_p2binned
+  dgxa10080g_tf32_commons
+  num_gpu=8
+  batch_size_and_gradient_accumulation_steps
+  print_arguments_in_order
 }
 
 ##########################################
@@ -434,7 +620,7 @@ sst-2_dgx2_16gpu_fp16 () {
   print_arguments_in_order
 }
 
-# TF32
+# FP32
 
 sst-2_dgx2_1gpu_fp32 () {
   commons

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2019-2020 NVIDIA CORPORATION. All rights reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -19,15 +19,16 @@ init_checkpoint=${1:-"/workspace/bert/checkpoints/bert_uncased.pt"}
 epochs=${2:-"2.0"}
 batch_size=${3:-"4"}
 learning_rate=${4:-"3e-5"}
-precision=${5:-"fp16"}
-num_gpu=${6:-"8"}
-seed=${7:-"1"}
-squad_dir=${8:-"$BERT_PREP_WORKING_DIR/download/squad/v1.1"}
-vocab_file=${9:-"$BERT_PREP_WORKING_DIR/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt"}
-OUT_DIR=${10:-"/workspace/bert/results/SQuAD"}
-mode=${11:-"train eval"}
-CONFIG_FILE=${12:-"/workspace/bert/bert_config.json"}
-max_steps=${13:-"-1"} 
+warmup_proportion=${5:-"0.1"}
+precision=${6:-"fp16"}
+num_gpu=${7:-"8"}
+seed=${8:-"1"}
+squad_dir=${9:-"$BERT_PREP_WORKING_DIR/download/squad/v1.1"}
+vocab_file=${10:-"$BERT_PREP_WORKING_DIR/download/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt"}
+OUT_DIR=${11:-"/workspace/bert/results/SQuAD"}
+mode=${12:-"train eval"}
+CONFIG_FILE=${13:-"/workspace/bert/bert_configs/large.json"}
+max_steps=${14:-"-1"}
 
 echo "out dir is $OUT_DIR"
 mkdir -p $OUT_DIR
@@ -80,6 +81,7 @@ fi
 CMD+=" --do_lower_case "
 CMD+=" --bert_model=bert-large-uncased "
 CMD+=" --learning_rate=$learning_rate "
+CMD+=" --warmup_proportion=$warmup_proportion"
 CMD+=" --seed=$seed "
 CMD+=" --num_train_epochs=$epochs "
 CMD+=" --max_seq_length=384 "

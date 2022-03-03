@@ -1,0 +1,12 @@
+{"distillation": true,
+ "distillation_config": {"use_attention_scores": true,
+			 "use_hidden_states": true,
+			 "use_value_states": true,
+			 "use_embedding_states": false,
+ 			 "use_pred_states": false,
+ 			 "attention_loss": "kld",
+ 			 "hidden_state_loss": "cosine",
+ 			 "embedding_state_loss": "cosine",
+  			 "value_state_loss": "kld",
+			 "student_teacher_layer_mapping": "last_layer"}
+}

@@ -34,6 +34,38 @@ import requests
 from botocore.exceptions import ClientError
 from tqdm import tqdm
 
+logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+
+try:
+    USE_TF = os.environ.get("USE_TF", "AUTO").upper()
+    USE_TORCH = os.environ.get("USE_TORCH", "AUTO").upper()
+    if USE_TORCH in ("1", "ON", "YES", "AUTO") and USE_TF not in ("1", "ON", "YES"):
+        import torch
+
+        _torch_available = True  # pylint: disable=invalid-name
+        logger.info("PyTorch version {} available.".format(torch.__version__))
+    else:
+        logger.info("Disabling PyTorch because USE_TF is set")
+        _torch_available = False
+except ImportError:
+    _torch_available = False  # pylint: disable=invalid-name
+
+try:
+    USE_TF = os.environ.get("USE_TF", "AUTO").upper()
+    USE_TORCH = os.environ.get("USE_TORCH", "AUTO").upper()
+
+    if USE_TF in ("1", "ON", "YES", "AUTO") and USE_TORCH not in ("1", "ON", "YES"):
+        import tensorflow as tf
+
+        assert hasattr(tf, "__version__") and int(tf.__version__[0]) >= 2
+        _tf_available = True  # pylint: disable=invalid-name
+        logger.info("TensorFlow version {} available.".format(tf.__version__))
+    else:
+        logger.info("Disabling Tensorflow because USE_TORCH is set")
+        _tf_available = False
+except ImportError:
+    _tf_available = False  # pylint: disable=invalid-name
+
 try:
     from urllib.parse import urlparse
 except ImportError:
@@ -47,8 +79,11 @@ except AttributeError:
     PYTORCH_PRETRAINED_BERT_CACHE = os.getenv('PYTORCH_PRETRAINED_BERT_CACHE',
                                               os.path.join(os.path.expanduser("~"), '.pytorch_pretrained_bert'))
 
-logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
+def is_torch_available():
+    return _torch_available
 
+def is_tf_available():
+    return _tf_available
 
 def url_to_filename(url, etag=None):
     """
@@ -223,7 +258,7 @@ def get_from_cache(url, cache_dir=None):
             if url.startswith("s3://"):
                 s3_get(url, temp_file)
             else:
-                http_get(url, temp_file)
+                http_get_tokenization_utils(url, temp_file)
 
             # we are copying the file before closing it, so flush to avoid truncation
             temp_file.flush()
@@ -261,3 +296,45 @@ def get_file_extension(path, dot=True, lower=True):
     ext = os.path.splitext(path)[1]
     ext = ext if dot else ext[1:]
     return ext.lower() if lower else ext
+
+def hf_bucket_url(model_id: str, filename: str, use_cdn=True) -> str:
+    """
+    Resolve a model identifier, and a file name, to a HF-hosted url
+    on either S3 or Cloudfront (a Content Delivery Network, or CDN).
+
+    Cloudfront is replicated over the globe so downloads are way faster
+    for the end user (and it also lowers our bandwidth costs). However, it
+    is more aggressively cached by default, so may not always reflect the
+    latest changes to the underlying file (default TTL is 24 hours).
+
+    In terms of client-side caching from this library, even though
+    Cloudfront relays the ETags from S3, using one or the other
+    (or switching from one to the other) will affect caching: cached files
+    are not shared between the two because the cached file's name contains
+    a hash of the url.
+    """
+    S3_BUCKET_PREFIX = "https://s3.amazonaws.com/models.huggingface.co/bert"
+    CLOUDFRONT_DISTRIB_PREFIX = "https://cdn.huggingface.co"
+    endpoint = CLOUDFRONT_DISTRIB_PREFIX if use_cdn else S3_BUCKET_PREFIX
+    legacy_format = "/" not in model_id
+    if legacy_format:
+        return f"{endpoint}/{model_id}-{filename}"
+    else:
+        return f"{endpoint}/{model_id}/{filename}"
+
+
+def torch_required(func):
+    # Chose a different decorator name than in tests so it's clear they are not the same.
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if is_torch_available():
+            return func(*args, **kwargs)
+        else:
+            raise ImportError(f"Method `{func.__name__}` requires PyTorch.")
+
+    return wrapper
+
+def is_remote_url(url_or_filename):
+    parsed = urlparse(url_or_filename)
+    return parsed.scheme in ("http", "https")
+
