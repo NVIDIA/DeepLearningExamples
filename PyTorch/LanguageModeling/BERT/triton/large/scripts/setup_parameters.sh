@@ -25,9 +25,7 @@ export CAPTURE_CUDA_GRAPH="0"
 export BATCH_SIZE="16"
 export MAX_BATCH_SIZE="16"
 export MAX_SEQ_LENGTH="384"
-export DATASET="squad"
-export CHECKPOINT="large-qa-score-91.4"
-export CHECKPOINT_VARIANT="max_seq_length_384-dataset_squad-checkpoint_large-qa-score-91.4"
+export CHECKPOINT_VARIANT="large-qa"
 export CHECKPOINT_DIR=${CHECKPOINTS_DIR}/${CHECKPOINT_VARIANT}
 export TRITON_MAX_QUEUE_DELAY="1"
 export TRITON_GPU_ENGINE_COUNT="1"
@@ -55,4 +53,10 @@ if [[ "${FORMAT}" == "trt" ]]; then
     export MBS="0"
 else
     export MBS="${MAX_BATCH_SIZE}"
+fi
+
+if [[ "${EXPORT_FORMAT}" == "ts-trace" || "${EXPORT_FORMAT}" == "ts-script" ]]; then
+    export FORMAT_SUFFIX="pt"
+else
+    export FORMAT_SUFFIX="${EXPORT_FORMAT}"
 fi

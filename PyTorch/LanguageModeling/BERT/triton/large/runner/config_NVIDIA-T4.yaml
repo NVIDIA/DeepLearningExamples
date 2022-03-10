@@ -1,6 +1,6 @@
 checkpoints:
-- name: max_seq_length_384-dataset_squad-checkpoint_large-qa-score-91.4
-  url: ''
+- name: large-qa
+  url: https://api.ngc.nvidia.com/v2/models/nvidia/bert_pyt_ckpt_large_qa_squad11_amp/versions/19.09.0/zip
 configurations:
 - accelerator: none
   accelerator_precision: fp16
@@ -8,9 +8,7 @@ configurations:
   - 1
   batch_sizes: '1'
   capture_cuda_graph: 0
-  checkpoint: large-qa-score-91.4
-  checkpoint_variant: max_seq_length_384-dataset_squad-checkpoint_large-qa-score-91.4
-  dataset: squad
+  checkpoint_variant: large-qa
   export_format: onnx
   export_precision: fp16
   format: onnx
@@ -26,9 +24,7 @@ configurations:
   - 16
   batch_sizes: '16'
   capture_cuda_graph: 0
-  checkpoint: large-qa-score-91.4
-  checkpoint_variant: max_seq_length_384-dataset_squad-checkpoint_large-qa-score-91.4
-  dataset: squad
+  checkpoint_variant: large-qa
   export_format: onnx
   export_precision: fp16
   format: onnx
@@ -44,9 +40,7 @@ configurations:
   - 8
   batch_sizes: '8'
   capture_cuda_graph: 0
-  checkpoint: large-qa-score-91.4
-  checkpoint_variant: max_seq_length_384-dataset_squad-checkpoint_large-qa-score-91.4
-  dataset: squad
+  checkpoint_variant: large-qa
   export_format: onnx
   export_precision: fp16
   format: onnx
@@ -62,9 +56,7 @@ configurations:
   - 1
   batch_sizes: '1'
   capture_cuda_graph: 0
-  checkpoint: large-qa-score-91.4
-  checkpoint_variant: max_seq_length_384-dataset_squad-checkpoint_large-qa-score-91.4
-  dataset: squad
+  checkpoint_variant: large-qa
   export_format: onnx
   export_precision: fp16
   format: onnx
@@ -80,9 +72,7 @@ configurations:
   - 8
   batch_sizes: '8'
   capture_cuda_graph: 0
-  checkpoint: large-qa-score-91.4
-  checkpoint_variant: max_seq_length_384-dataset_squad-checkpoint_large-qa-score-91.4
-  dataset: squad
+  checkpoint_variant: large-qa
   export_format: onnx
   export_precision: fp16
   format: onnx
@@ -98,9 +88,7 @@ configurations:
   - 1
   batch_sizes: '1'
   capture_cuda_graph: 0
-  checkpoint: large-qa-score-91.4
-  checkpoint_variant: max_seq_length_384-dataset_squad-checkpoint_large-qa-score-91.4
-  dataset: squad
+  checkpoint_variant: large-qa
   export_format: onnx
   export_precision: fp16
   format: trt
@@ -116,9 +104,7 @@ configurations:
   - 16
   batch_sizes: '16'
   capture_cuda_graph: 0
-  checkpoint: large-qa-score-91.4
-  checkpoint_variant: max_seq_length_384-dataset_squad-checkpoint_large-qa-score-91.4
-  dataset: squad
+  checkpoint_variant: large-qa
   export_format: onnx
   export_precision: fp16
   format: trt
@@ -134,9 +120,7 @@ configurations:
   - 8
   batch_sizes: '8'
   capture_cuda_graph: 0
-  checkpoint: large-qa-score-91.4
-  checkpoint_variant: max_seq_length_384-dataset_squad-checkpoint_large-qa-score-91.4
-  dataset: squad
+  checkpoint_variant: large-qa
   export_format: onnx
   export_precision: fp16
   format: trt
@@ -154,9 +138,7 @@ configurations:
   - 16
   batch_sizes: 1 8 16
   capture_cuda_graph: 0
-  checkpoint: large-qa-score-91.4
-  checkpoint_variant: max_seq_length_384-dataset_squad-checkpoint_large-qa-score-91.4
-  dataset: squad
+  checkpoint_variant: large-qa
   export_format: ts-trace
   export_precision: fp16
   format: ts-trace

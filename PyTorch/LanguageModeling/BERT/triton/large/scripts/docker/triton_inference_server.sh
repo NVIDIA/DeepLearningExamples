@@ -13,15 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Install Docker
-. /etc/os-release && \
-curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add - && \
-echo "deb [arch=amd64] https://download.docker.com/linux/debian buster stable" > /etc/apt/sources.list.d/docker.list && \
-curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey| apt-key add - && \
-curl -s -L https://nvidia.github.io/nvidia-docker/$ID$VERSION_ID/nvidia-docker.list > /etc/apt/sources.list.d/nvidia-docker.list && \
-apt-get update && \
-apt-get install -y docker-ce docker-ce-cli containerd.io nvidia-docker2
-
 NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:=all}
 
 docker run --rm -d \
@@ -32,6 +23,7 @@ docker run --rm -d \
   -e NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES} \
   -e ORT_TENSORRT_FP16_ENABLE=1 \
   -v ${MODEL_REPOSITORY_PATH}:${MODEL_REPOSITORY_PATH} \
+  --ipc=host \
   --shm-size=1g \
   --ulimit memlock=-1 \
   --ulimit stack=67108864 \

@@ -20,8 +20,8 @@ bash run_e2e_distillation.sh
 `run_e2e_distillation.sh` contains 8 command lines to obtain fully distilled BERT models for SQuADv1.1 and SST-2. The distilled BERT model has a config (N=4, D=312, Di=1200 , H=12). To distill knowledge into models of different sizes, a new `BERT_4L_312D/config.json` can be created and passed as a starting point in `run_e2e_distillation.sh`
 
 `run_e2e_distillation.sh` contains the following:
-- Generic distillation on Wikipedia and BooksCorpus dataset(BooksCorpus is optional) of maximum sequence length 128. `--input_dir` needs to be update respectively.
-- Generic distillation on Wikipedia and BooksCorpus dataset(BooksCorpus is optional) of maximum sequence length 512. `--input_dir` needs to be update respectively.
+- Phase1 distillation: Generic distillation on Wikipedia dataset of maximum sequence length 128. `--input_dir` needs to be update respectively.
+- Phase2 distillation: Generic distillation on Wikipedia dataset of maximum sequence length 512. `--input_dir` needs to be update respectively.
 
 *Task specific distillation: SQuAD v1.1* (maximum sequence length 384)
 - Data augmentation
@@ -35,25 +35,27 @@ bash run_e2e_distillation.sh
 
 ![BERT Distillation Flow](https://developer.nvidia.com/sites/default/files/akamai/joc_model.png)
 
-Note: Distillation for SST-2 uses as output of step 1. as starting point in 7, whereas SQuaD v1.1 uses output of step 2. as a starting point in 4.
+Note: Task specific distillation for SST-2 uses as output checkpoint of phase1 distillation as starting point, whereas task specific distillation of SQuAD v1.1 uses output checkpoint of phase2 distillation as a starting point.
 
 One can download different general and task-specific distilled checkpoints from NGC:
 | Model                  | Description                                                               |
 |------------------------|---------------------------------------------------------------------------|
-| [bert-dist-4L-288D-uncased-qa](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_distilled_4l_288d_qa_squad11_amp/files) | 4 layer distilled model fine-tuned on SQuAD v1.1                                         |
-| [bert-dist-4L-288D-uncased-sst2](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_distilled_4l_288d_ft_sst2_amp/files) | 4 layer distilled model fine-tuned on GLUE SST-2                                       |
-| [bert-dist-4L-288D-uncased-pretrained](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_distilled_4l_288d_pretraining_amp/files) | 4 layer distilled model pretrained checkpoint on Generic corpora like Wikipedia. |
-| [bert-dist-6L-768D-uncased-qa](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_distill_6l_768d_3072di_12h_squad/files) | 6 layer distilled model fine-tuned on SQuAD v1.1                                         |
-| [bert-dist-6L-768D-uncased-sst2](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_distill_6l_768d_3072di_12h_sst2/files) | 6 layer distilled model fine-tuned on GLUE SST-2                                       |
-| [bert-dist-6L-768D-uncased-pretrained](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_distill_6l_768d_3072di_12h_p2/files) | 6 layer distilled model pretrained checkpoint on Generic corpora like Wikipedia. |
+| [bert-dist-4L-288D-uncased-qa](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/bert_pyt_ckpt_distilled_4l_288d_qa_squad11_amp/files) | 4 layer distilled model fine-tuned on SQuAD v1.1                                         |
+| [bert-dist-4L-288D-uncased-sst2](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/bert_pyt_ckpt_distilled_4l_288d_ft_sst2_amp/files) | 4 layer distilled model fine-tuned on GLUE SST-2                                       |
+| [bert-dist-4L-288D-uncased-pretrained](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/bert_pyt_ckpt_distilled_4l_288d_pretraining_amp/files) | 4 layer distilled model pretrained checkpoint on Generic corpora like Wikipedia. |
+| [bert-dist-6L-768D-uncased-qa](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/bert_pyt_ckpt_distilled_6l_768d_qa_squad11_amp/files) | 6 layer distilled model fine-tuned on SQuAD v1.1                                         |
+| [bert-dist-6L-768D-uncased-sst2](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/bert_pyt_ckpt_distilled_6l_768d_ft_sst2_amp/files) | 6 layer distilled model fine-tuned on GLUE SST-2                                       |
+| [bert-dist-6L-768D-uncased-pretrained](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/bert_pyt_ckpt_distilled_6l_768d_pretraining_amp/files) | 6 layer distilled model pretrained checkpoint on Generic corpora like Wikipedia. |
 
+
+Following results were obtained on NVIDIA DGX-1 with 32G on pytorch:20.12-py3 NGC container.
 
 *Accuracy achieved and E2E time to train on NVIDIA DGX-1 With 32G:*
 
 | Student         | Task             | SubTask          | Time(hrs)  | Total Time (hrs)| Accuracy | BERT Base Accuracy  |
 | --------------- |:----------------:| :---------------:| :--------: | :-------------: | :------: | ------------------: |
-| 4 Layers; H=288 | Distil Phase 1   |                  | 1.399      |                 |          |                     |
-| 4 Layers; H=288 | Distil Phase 2   |                  | 0.649      |                 |          |                     |
+| 4 Layers; H=288 | Distil Phase 1   | backbone loss    | 1.399      |                 |          |                     |
+| 4 Layers; H=288 | Distil Phase 2   | backbone loss    | 0.649      |                 |          |                     |
 | 4 Layers; H=288 | Distil SST-2     | backbone loss    | 1.615      |                 |          |                     |
 | 4 Layers; H=288 | Distil SST-2     | final layer loss | 0.469      | 3.483           | 90.82    | 91.51               |
 | 4 Layers; H=288 | Distil SQuADv1.1 | backbone loss    | 3.471      |                 |          |                     |

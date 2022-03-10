@@ -46,7 +46,7 @@ pipeline.model_export(
             --checkpoint ${CHECKPOINT_DIR}/pytorch_model.bin \
             --precision ${EXPORT_PRECISION} \
             \
-            --vocab-file ${DATASETS_DIR}/data/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt \
+            --vocab-file ${CHECKPOINT_DIR}/vocab.txt \
             --max-seq-length ${MAX_SEQ_LENGTH} \
             --predict-file ${DATASETS_DIR}/data/squad/v1.1/dev-v1.1.json \
             --batch-size ${MAX_BATCH_SIZE}
@@ -148,7 +148,7 @@ pipeline.triton_prepare_performance_profiling_data(
             --batch-size ${MAX_BATCH_SIZE} \
             --max-seq-length ${MAX_SEQ_LENGTH} \
             --predict-file ${DATASETS_DIR}/data/squad/v1.1/dev-v1.1.json \
-            --vocab-file ${DATASETS_DIR}/data/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt
+            --vocab-file ${CHECKPOINT_DIR}/vocab.txt
         """,
     )
 )
@@ -168,8 +168,8 @@ pipeline.triton_performance_offline_tests(
             --batching-mode static \
             --evaluation-mode offline \
             --performance-tool perf_analyzer \
-            --result-path ${SHARED_DIR}/triton_performance_offline
+            --result-path ${SHARED_DIR}/triton_performance_offline.csv
         """,
     ),
-    result_path="${SHARED_DIR}/triton_performance_offline",
+    result_path="${SHARED_DIR}/triton_performance_offline.csv",
 )

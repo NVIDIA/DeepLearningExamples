@@ -22,7 +22,7 @@ export SHARED_DIR=${WORKSPACE_DIR}/shared_dir
 echo "Preparing directories"
 mkdir -p ${WORKSPACE_DIR}
 mkdir -p ${DATASETS_DIR}
-mkdir -p ${CHECKPOINT_DIR}
+mkdir -p ${CHECKPOINTS_DIR}
 mkdir -p ${MODEL_REPOSITORY_PATH}
 mkdir -p ${SHARED_DIR}
 

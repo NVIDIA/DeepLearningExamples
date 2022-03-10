@@ -12,8 +12,6 @@
 # limitations under the License.
 
 ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.10-py3
-ARG TRITON_CLIENT_IMAGE_NAME=nvcr.io/nvidia/tritonserver:21.10-py3-sdk
-FROM ${TRITON_CLIENT_IMAGE_NAME} as triton-client
 FROM ${FROM_IMAGE_NAME}
 
 # Ensure apt-get won't prompt for selecting options
@@ -22,7 +20,7 @@ ENV DCGM_VERSION=2.0.13
 
 # Install perf_client required library
 RUN apt-get update && \
-    apt-get install -y libb64-dev libb64-0d curl pbzip2 pv bzip2 cabextract && \
+    apt-get install -y libb64-dev libb64-0d curl pbzip2 pv bzip2 cabextract wget libb64-dev libb64-0d && \
     curl -s -L -O https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/datacenter-gpu-manager_${DCGM_VERSION}_amd64.deb && \
     dpkg -i datacenter-gpu-manager_${DCGM_VERSION}_amd64.deb && \
     rm datacenter-gpu-manager_${DCGM_VERSION}_amd64.deb && \
@@ -35,19 +33,10 @@ WORKDIR /workspace
 RUN git clone https://github.com/attardi/wikiextractor.git && cd wikiextractor && git checkout 6408a430fc504a38b04d37ce5e7fc740191dee16 && cd ..
 RUN git clone https://github.com/soskek/bookcorpus.git
 
-# Install Perf Client required library
-RUN apt-get update && apt-get install -y libb64-dev libb64-0d
-
-# Install Triton Client Python API and copy Perf Client
-COPY --from=triton-client /workspace/install/ /workspace/install/
-RUN find /workspace/install/python/ -iname triton*manylinux*.whl -exec pip install {}[all] \;
-
 # Setup environment variables to access Triton Client binaries and libs
 ENV PATH /workspace/install/bin:${PATH}
 ENV LD_LIBRARY_PATH /workspace/install/lib:${LD_LIBRARY_PATH}
 ENV PYTHONPATH /workspace/bert
-
-RUN apt-get install -y iputils-ping
 
 WORKDIR /workspace/bert
 ADD requirements.txt /workspace/bert/requirements.txt

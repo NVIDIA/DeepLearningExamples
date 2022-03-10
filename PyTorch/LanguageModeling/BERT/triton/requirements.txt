@@ -21,3 +21,4 @@ pycuda>=2019.1.2
 PyYAML>=5.2
 tabulate>=0.8.7
 tqdm>=4.44.1
+wget

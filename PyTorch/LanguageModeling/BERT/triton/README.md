@@ -62,14 +62,14 @@ After deployment, the Triton inference server is used for evaluation of the conv
   and online (dynamic batching) scenarios.
  
  
-All steps are executed by the provided  runner script. Refer to [Quick Start Guide](#quick-start-guide)
+All steps are executed by the provided runner script. Refer to [Quick Start Guide](#quick-start-guide)
  
  
 ## Setup
 Ensure you have the following components:
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PyTorch NGC container 21.07](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch)
-* [Triton Inference Server NGC container 21.07](https://ngc.nvidia.com/catalog/containers/nvidia:tritonserver)
+* [PyTorch NGC container 21.10](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch)
+* [Triton Inference Server NGC container 21.10](https://ngc.nvidia.com/catalog/containers/nvidia:tritonserver)
 * [NVIDIA CUDA](https://docs.nvidia.com/cuda/archive//index.html)
 * [NVIDIA Ampere](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/), [Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
  
@@ -93,6 +93,3 @@ and [HPC](https://developer.nvidia.com/hpc-application-performance) benchmarks.
 ### Known issues
  
 - There are no known issues with this model.
- 
-
-

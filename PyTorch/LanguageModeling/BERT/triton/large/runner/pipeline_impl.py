@@ -42,8 +42,8 @@ pipeline.model_export(
             --onnx-opset 13 \
             ${FLAG} \
             \
-            --config-file ${CHECKPOINT_DIR}/config.json \
-            --checkpoint ${CHECKPOINT_DIR}/pytorch_model.bin \
+            --config-file bert_configs/large.json \
+            --checkpoint ${CHECKPOINT_DIR}/bert_large_qa.pt \
             --precision ${EXPORT_PRECISION} \
             \
             --vocab-file ${DATASETS_DIR}/data/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt \
@@ -168,8 +168,8 @@ pipeline.triton_performance_offline_tests(
             --batching-mode static \
             --evaluation-mode offline \
             --performance-tool perf_analyzer \
-            --result-path ${SHARED_DIR}/triton_performance_offline
+            --result-path ${SHARED_DIR}/triton_performance_offline.csv
         """,
     ),
-    result_path="${SHARED_DIR}/triton_performance_offline",
+    result_path="${SHARED_DIR}/triton_performance_offline.csv",
 )

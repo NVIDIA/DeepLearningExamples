@@ -11,7 +11,6 @@ the best inference performance.
     - [Deployment process](#deployment-process)
   - [Setup](#setup)
   - [Quick Start Guide](#quick-start-guide)
-  - [Deployment on Production](#deployment-on-production)
   - [Performance](#performance)
     - [Offline scenario](#offline-scenario)
         - [Offline: NVIDIA A30, ONNX Runtime with FP16](#offline-nvidia-a30-onnx-runtime-with-fp16)
@@ -108,19 +107,19 @@ git clone https://github.com/NVIDIA/DeepLearningExamples.git
 cd DeepLearningExamples/PyTorch/LanguageModeling/BERT/
 ```
 
-2. Prepare dataset.
-Runner requires script downloading and preparing publicly available datasets to run the process.
-Scripts should download datasets to {model-directory}/datasets catalog.
-
-```
-./triton/dist6l/runner/prepare_datasets.sh
-```
-
-3. Build and run a container that extends NGC PyTorch with the Triton client libraries and necessary dependencies.
+2. Build and run a container that extends NGC PyTorch with the Triton client libraries and necessary dependencies.
 
 ```
 ./triton/dist6l/scripts/docker/build.sh
 ./triton/dist6l/scripts/docker/interactive.sh
+```
+
+3. Prepare dataset.
+Runner requires script downloading and preparing publicly available datasets to run the process.
+Script will download necessary data to DeepLearningExamples/PyTorch/LanguageModeling/BERT/datasets catalog.
+
+```
+./triton/dist6l/runner/prepare_datasets.sh
 ```
 
 4. Execute runner script (please mind, the run scripts are prepared per NVIDIA GPU).
@@ -134,58 +133,7 @@ NVIDIA DGX A100 (1x A100 80GB): ./triton/dist6l/runner/start_NVIDIA-DGX-A100-\(1
 
 NVIDIA T4: ./triton/dist6l/runner/start_NVIDIA-T4.sh
 ```
-## Deployment on Production
 
-In order to achieve the best performance results on production use [Triton Model Navigator](https://github.com/triton-inference-server/model_navigator).
-The Triton Model Navigator is a tool that provides the ability to automate the process of a model deployment on
-the NVIDIA [Triton Inference Server](https://github.com/triton-inference-server).
-The tool optimize models running conversion to available formats and applying addition Triton backends optimizations.
-Then it uses [Triton Model Analyzer](https://github.com/triton-inference-server/model_analyzer) to find the best Triton Model configuration,
-matches the provided constraints, and optimize performance.
-
-1. Export Model
-
-Export model from Python source to desired format (e.g. Savedmodel or TorchScript)
-
-<details>
-<summary>Export Model Command</summary>
-
-```shell
-python3 triton/export_model.py \
-    --input-path triton/model.py \
-    --input-type pyt \
-    --output-path ./exported_model.onnx \
-    --output-type onnx \
-    --dataloader triton/dataloader.py \
-    --ignore-unknown-parameters \
-    --onnx-opset 13 \
-    ${FLAG} \
-    \
-    --config-file ${CHECKPOINT_DIR}/config.json \
-    --checkpoint ${CHECKPOINT_DIR}/pytorch_model.bin \
-    --precision ${EXPORT_PRECISION} \
-    \
-    --vocab-file ${DATASETS_DIR}/data/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt \
-    --max-seq-length ${MAX_SEQ_LENGTH} \
-    --predict-file ${DATASETS_DIR}/data/squad/v1.1/dev-v1.1.json \
-    --batch-size ${MAX_BATCH_SIZE}
-````
-</details>
-
-
-2. Use Model Navigator to find best model configuration. 
-The following command should be run from within the Model Navigator docker container. 
-In order to build it follow the steps described [here](https://github.com/triton-inference-server/model_navigator/blob/main/docs/quick_start.md#install-the-triton-model-navigator-and-run-container). 
-
-<details>
-<summary>Model Navigator Command</summary>
-
-```shell
-model-navigator run --model-name BERT --model-path ./exported_model.onnx
-```
-</details>
-
-Read more about Triton Model Navigator usage in [documentation](https://github.com/triton-inference-server/model_navigator)
 ## Performance
 The performance measurements in this document were conducted at the time of publication and may not reflect
 the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to
@@ -201,20 +149,18 @@ The offline scenario assumes the client and server are located on the same host.
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA A30            |
-| Backend                      |ONNX Runtime        |
-| Backend accelerator          |-|
-| Precision                    |FP16      |
-| Model format                 |ONNX   |
-| Max batch size               |16 |
-| Number of model instances    |1|
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
-
+| Parameter Name               | Parameter Value |
+|:-----------------------------|:----------------|
+| GPU                          | NVIDIA A30      |
+| Backend                      | ONNX Runtime    |
+| Backend accelerator          | -               |
+| Precision                    | FP16            |
+| Model format                 | ONNX            |
+| Max batch size               | 16              |
+| Number of model instances    | 1               |
+| Accelerator Precision | -               |
+| Max Seq Length | 384             |
+| SQuAD v1.1 F1 Score       | 88.49           |
 
 <summary>Results Table</summary>
 
@@ -229,20 +175,18 @@ Our results were obtained using the following configuration:
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA A30            |
-| Backend                      |ONNX Runtime        |
-| Backend accelerator          |NVIDIA TensorRT|
-| Precision                    |FP16      |
-| Model format                 |ONNX   |
-| Max batch size               |16 |
-| Number of model instances    |1|
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
-
+| Parameter Name               | Parameter Value        |
+|:-----------------------------|:-----------------------|
+| GPU                          | NVIDIA A30             |
+| Backend                      | ONNX Runtime           |
+| Backend accelerator          | NVIDIA TensorRT        |
+| Precision                    | FP16                   |
+| Model format                 | ONNX                   |
+| Max batch size               | 16                     |
+| Number of model instances    | 1                      |
+| Accelerator Precision | FP16                   |
+| Max Seq Length | 384                    |
+| SQuAD v1.1 F1 Score       | 88.48                  |
 
 <summary>Results Table</summary>
 
@@ -257,21 +201,19 @@ Our results were obtained using the following configuration:
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA A30            |
-| Backend                      |NVIDIA TensorRT        |
-| Backend accelerator          |-|
-| Precision                    |FP16      |
-| Model format                 |NVIDIA TensorRT   |
-| Max batch size               |16 |
-| Number of model instances    |1|
-| NVIDIA TensorRT Capture CUDA Graph | Disabled    |
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
-
+| Parameter Name               | Parameter Value |
+|:-----------------------------|:----------------|
+| GPU                          | NVIDIA A30      |
+| Backend                      | NVIDIA TensorRT |
+| Backend accelerator          | -               |
+| Precision                    | FP16            |
+| Model format                 | NVIDIA TensorRT |
+| Max batch size               | 16              |
+| Number of model instances    | 1               |
+| NVIDIA TensorRT Capture CUDA Graph | Disabled        |
+| Accelerator Precision | -               |
+| Max Seq Length | 384             |
+| SQuAD v1.1 F1 Score       | 88.48           |
 
 <summary>Results Table</summary>
 
@@ -286,20 +228,18 @@ Our results were obtained using the following configuration:
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA A30            |
-| Backend                      |PyTorch        |
-| Backend accelerator          |-|
-| Precision                    |FP16      |
-| Model format                 |TorchScript Trace   |
-| Max batch size               |16 |
-| Number of model instances    |1|
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
-
+| Parameter Name               | Parameter Value   |
+|:-----------------------------|:------------------|
+| GPU                          | NVIDIA A30        |
+| Backend                      | PyTorch           |
+| Backend accelerator          | -                 |
+| Precision                    | FP16              |
+| Model format                 | TorchScript Trace |
+| Max batch size               | 16                |
+| Number of model instances    | 1                 |
+| Accelerator Precision | -                 |
+| Max Seq Length | 384               |
+| SQuAD v1.1 F1 Score       | 88.48             |
 
 <summary>Results Table</summary>
 
@@ -314,19 +254,18 @@ Our results were obtained using the following configuration:
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA DGX-1 (1x V100 32GB)            |
-| Backend                      |ONNX Runtime        |
-| Backend accelerator          |-|
-| Precision                    |FP16      |
-| Model format                 |ONNX   |
-| Max batch size               |16 |
-| Number of model instances    |1|
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
+| Parameter Name               | Parameter Value             |
+|:-----------------------------|:----------------------------|
+| GPU                          | NVIDIA DGX-1 (1x V100 32GB) |
+| Backend                      | ONNX Runtime                |
+| Backend accelerator          | -                           |
+| Precision                    | FP16                        |
+| Model format                 | ONNX                        |
+| Max batch size               | 16                          |
+| Number of model instances    | 1                           |
+| Accelerator Precision | -                           |
+| Max Seq Length | 384                         |
+| SQuAD v1.1 F1 Score       | 88.49                       |
 
 <summary>Results Table</summary>
 
@@ -341,20 +280,18 @@ Our results were obtained using the following configuration:
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA DGX-1 (1x V100 32GB)            |
-| Backend                      |ONNX Runtime        |
-| Backend accelerator          |NVIDIA TensorRT|
-| Precision                    |FP16      |
-| Model format                 |ONNX   |
-| Max batch size               |16 |
-| Number of model instances    |1|
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
-
+| Parameter Name               | Parameter Value             |
+|:-----------------------------|:----------------------------|
+| GPU                          | NVIDIA DGX-1 (1x V100 32GB) |
+| Backend                      | ONNX Runtime                |
+| Backend accelerator          | NVIDIA TensorRT             |
+| Precision                    | FP16                        |
+| Model format                 | ONNX                        |
+| Max batch size               | 16                          |
+| Number of model instances    | 1                           |
+| Accelerator Precision | FP16                        |
+| Max Seq Length | 384                         |
+| SQuAD v1.1 F1 Score       | 88.48                  |
 
 <summary>Results Table</summary>
 
@@ -369,21 +306,19 @@ Our results were obtained using the following configuration:
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA DGX-1 (1x V100 32GB)            |
-| Backend                      |NVIDIA TensorRT        |
-| Backend accelerator          |-|
-| Precision                    |FP16      |
-| Model format                 |NVIDIA TensorRT   |
-| Max batch size               |16 |
-| Number of model instances    |1|
-| NVIDIA TensorRT Capture CUDA Graph | Disabled    |
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
-
+| Parameter Name               | Parameter Value             |
+|:-----------------------------|:----------------------------|
+| GPU                          | NVIDIA DGX-1 (1x V100 32GB) |
+| Backend                      | NVIDIA TensorRT             |
+| Backend accelerator          | -                           |
+| Precision                    | FP16                        |
+| Model format                 | NVIDIA TensorRT             |
+| Max batch size               | 16                          |
+| Number of model instances    | 1                           |
+| NVIDIA TensorRT Capture CUDA Graph | Disabled                    |
+| Accelerator Precision | -                           |
+| Max Seq Length | 384                         |
+| SQuAD v1.1 F1 Score       | 88.48                       |
 
 <summary>Results Table</summary>
 
@@ -398,20 +333,18 @@ Our results were obtained using the following configuration:
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA DGX-1 (1x V100 32GB)            |
-| Backend                      |PyTorch        |
-| Backend accelerator          |-|
-| Precision                    |FP16      |
-| Model format                 |TorchScript Trace   |
-| Max batch size               |16 |
-| Number of model instances    |1|
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
-
+| Parameter Name               | Parameter Value             |
+|:-----------------------------|:----------------------------|
+| GPU                          | NVIDIA DGX-1 (1x V100 32GB) |
+| Backend                      | PyTorch                     |
+| Backend accelerator          | -                           |
+| Precision                    | FP16                        |
+| Model format                 | TorchScript Trace           |
+| Max batch size               | 16                          |
+| Number of model instances    | 1                           |
+| Accelerator Precision | -                           |
+| Max Seq Length | 384                         |
+| SQuAD v1.1 F1 Score       | 88.49                       |
 
 <summary>Results Table</summary>
 
@@ -426,19 +359,18 @@ Our results were obtained using the following configuration:
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA DGX A100 (1x A100 80GB)            |
-| Backend                      |ONNX Runtime        |
-| Backend accelerator          |-|
-| Precision                    |FP16      |
-| Model format                 |ONNX   |
-| Max batch size               |16 |
-| Number of model instances    |1|
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
+| Parameter Name               | Parameter Value                |
+|:-----------------------------|:-------------------------------|
+| GPU                          | NVIDIA DGX A100 (1x A100 80GB) |
+| Backend                      | ONNX Runtime                   |
+| Backend accelerator          | -                              |
+| Precision                    | FP16                           |
+| Model format                 | ONNX                           |
+| Max batch size               | 16                             |
+| Number of model instances    | 1                              |
+| Accelerator Precision | -                              |
+| Max Seq Length | 384                            |
+| SQuAD v1.1 F1 Score       | 88.50                          |
 
 <summary>Results Table</summary>
 
@@ -453,20 +385,18 @@ Our results were obtained using the following configuration:
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA DGX A100 (1x A100 80GB)            |
-| Backend                      |ONNX Runtime        |
-| Backend accelerator          |NVIDIA TensorRT|
-| Precision                    |FP16      |
-| Model format                 |ONNX   |
-| Max batch size               |16 |
-| Number of model instances    |1|
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
-
+| Parameter Name               | Parameter Value                |
+|:-----------------------------|:-------------------------------|
+| GPU                          | NVIDIA DGX A100 (1x A100 80GB) |
+| Backend                      | ONNX Runtime                   |
+| Backend accelerator          | NVIDIA TensorRT                |
+| Precision                    | FP16                           |
+| Model format                 | ONNX                           |
+| Max batch size               | 16                             |
+| Number of model instances    | 1                              |
+| Accelerator Precision | FP16                           |
+| Max Seq Length | 384                            |
+| SQuAD v1.1 F1 Score       | 88.48                          |
 
 <summary>Results Table</summary>
 
@@ -481,21 +411,21 @@ Our results were obtained using the following configuration:
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA DGX A100 (1x A100 80GB)            |
-| Backend                      |NVIDIA TensorRT        |
-| Backend accelerator          |-|
-| Precision                    |FP16      |
-| Model format                 |NVIDIA TensorRT   |
-| Max batch size               |16 |
-| Number of model instances    |1|
-| NVIDIA TensorRT Capture CUDA Graph | Disabled    |
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
+| Parameter Name               | Parameter Value                |
+|:-----------------------------|:-------------------------------|
+| GPU                          | NVIDIA DGX A100 (1x A100 80GB) |
+| Backend                      | NVIDIA TensorRT                |
+| Backend accelerator          | -                              |
+| Precision                    | FP16                           |
+| Model format                 | NVIDIA TensorRT                |
+| Max batch size               | 16                             |
+| Number of model instances    | 1                              |
+| NVIDIA TensorRT Capture CUDA Graph | Disabled                       |
+| Accelerator Precision | -                              |
+| Max Seq Length | 384                            |
+| SQuAD v1.1 F1 Score       | 88.48                          |
 
+<summary>Results Table</summary>
 
 |   Batch |   Concurrency |   Inferences/Second |   Client Send (ms) |   Network+Server Send/Recv (ms) |   Server Queue (ms) |   Server Compute Input (ms) |   Server Compute Infer (ms) |   Server Compute Output (ms) |   Client Recv (ms) |   p50 latency (ms) |   p90 latency (ms) |   p95 latency (ms) |   p99 latency (ms) |   avg latency (ms) |
 |--------:|--------------:|--------------------:|-------------------:|--------------------------------:|--------------------:|----------------------------:|----------------------------:|-----------------------------:|-------------------:|-------------------:|-------------------:|-------------------:|-------------------:|-------------------:|
@@ -508,19 +438,18 @@ Our results were obtained using the following configuration:
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA DGX A100 (1x A100 80GB)            |
-| Backend                      |PyTorch        |
-| Backend accelerator          |-|
-| Precision                    |FP16      |
-| Model format                 |TorchScript Trace   |
-| Max batch size               |16 |
-| Number of model instances    |1|
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
+| Parameter Name               | Parameter Value                |
+|:-----------------------------|:-------------------------------|
+| GPU                          | NVIDIA DGX A100 (1x A100 80GB) |
+| Backend                      | PyTorch                        |
+| Backend accelerator          | -                              |
+| Precision                    | FP16                           |
+| Model format                 | TorchScript Trace              |
+| Max batch size               | 16                             |
+| Number of model instances    | 1                              |
+| Accelerator Precision | -                              |
+| Max Seq Length | 384                            |
+| SQuAD v1.1 F1 Score       | 88.48                          |
 
 <summary>Results Table</summary>
 
@@ -537,19 +466,18 @@ Our results were obtained using the following configuration:
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA T4            |
-| Backend                      |ONNX Runtime        |
-| Backend accelerator          |-|
-| Precision                    |FP16      |
-| Model format                 |ONNX   |
-| Max batch size               |1 |
-| Number of model instances    |1|
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
+| Parameter Name               | Parameter Value |
+|:-----------------------------|:----------------|
+| GPU                          | NVIDIA T4       |
+| Backend                      | ONNX Runtime    |
+| Backend accelerator          | -               |
+| Precision                    | FP16            |
+| Model format                 | ONNX            |
+| Max batch size               | 1               |
+| Number of model instances    | 1               |
+| Accelerator Precision | -               |
+| Max Seq Length | 384             |
+| SQuAD v1.1 F1 Score       | 88.49           |
 
 <summary>Results Table</summary>
 
@@ -564,20 +492,18 @@ Our results were obtained using the following configuration:
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA T4            |
-| Backend                      |ONNX Runtime        |
-| Backend accelerator          |NVIDIA TensorRT|
-| Precision                    |FP16      |
-| Model format                 |ONNX   |
-| Max batch size               |16 |
-| Number of model instances    |1|
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
-
+| Parameter Name               | Parameter Value        |
+|:-----------------------------|:-----------------------|
+| GPU                          | NVIDIA T4              |
+| Backend                      | ONNX Runtime           |
+| Backend accelerator          | NVIDIA TensorRT        |
+| Precision                    | FP16                   |
+| Model format                 | ONNX                   |
+| Max batch size               | 16                     |
+| Number of model instances    | 1                      |
+| Accelerator Precision | FP16                   |
+| Max Seq Length | 384                    |
+| SQuAD v1.1 F1 Score       | 88.47                  |
 
 <summary>Results Table</summary>
 
@@ -591,21 +517,19 @@ Our results were obtained using the following configuration:
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA T4            |
-| Backend                      |NVIDIA TensorRT        |
-| Backend accelerator          |-|
-| Precision                    |FP16      |
-| Model format                 |NVIDIA TensorRT   |
-| Max batch size               |16 |
-| Number of model instances    |1|
-| NVIDIA TensorRT Capture CUDA Graph | Disabled    |
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
-
+| Parameter Name               | Parameter Value |
+|:-----------------------------|:----------------|
+| GPU                          | NVIDIA T4       |
+| Backend                      | NVIDIA TensorRT |
+| Backend accelerator          | -               |
+| Precision                    | FP16            |
+| Model format                 | NVIDIA TensorRT |
+| Max batch size               | 16              |
+| Number of model instances    | 1               |
+| NVIDIA TensorRT Capture CUDA Graph | Disabled        |
+| Accelerator Precision | -               |
+| Max Seq Length | 384             |
+| SQuAD v1.1 F1 Score       | 88.47           |
 
 <summary>Results Table</summary>
 
@@ -620,20 +544,18 @@ Our results were obtained using the following configuration:
 
 Our results were obtained using the following configuration:
 
-| Parameter Name               | Parameter Value              |
-|:-----------------------------|:-----------------------------|
-| GPU                          |NVIDIA T4            |
-| Backend                      |PyTorch        |
-| Backend accelerator          |-|
-| Precision                    |FP16      |
-| Model format                 |TorchScript Trace   |
-| Max batch size               |16 |
-| Number of model instances    |1|
-| Accelerator Precision | fp16                 |
-| Max Seq Length | 384                 |
-| Dataset | squad                 |
-| Checkpoint | dist-6l-qa-score-88.08                 |
-
+| Parameter Name               | Parameter Value   |
+|:-----------------------------|:------------------|
+| GPU                          | NVIDIA T4         |
+| Backend                      | PyTorch           |
+| Backend accelerator          | -                 |
+| Precision                    | FP16              |
+| Model format                 | TorchScript Trace |
+| Max batch size               | 16                |
+| Number of model instances    | 1                 |
+| Accelerator Precision | -                 |
+| Max Seq Length | 384               |
+| SQuAD v1.1 F1 Score       | 88.48             |
 
 <summary>Results Table</summary>
 
@@ -666,9 +588,7 @@ CAPTURE_CUDA_GRAPH="0"
 BATCH_SIZE="16"
 MAX_BATCH_SIZE="16"
 MAX_SEQ_LENGTH="384"
-DATASET="squad"
-CHECKPOINT="dist-6l-qa-score-88.08"
-CHECKPOINT_VARIANT="max_seq_length_384-dataset_squad-checkpoint_dist-6l-qa-score-88.08"
+CHECKPOINT_VARIANT="dist-6l-qa"
 CHECKPOINT_DIR=${CHECKPOINTS_DIR}/${CHECKPOINT_VARIANT}
 TRITON_MAX_QUEUE_DELAY="1"
 TRITON_GPU_ENGINE_COUNT="1"
@@ -731,14 +651,48 @@ Build and run a container that extends the NGC PyTorch container with the Triton
 ```
 </details>
 
-#### Setup Parameters
-Setup the deployment parameters on the host computer. 
+#### Setup Parameters and Environment
+Setup the environment and deployment parameters inside interactive container. 
+
+<details>
+<summary>Setup Environment Command</summary>
+
+```shell
+source ./triton/dist6l/scripts/setup_environment.sh
+```
+</details>
 
 <details>
 <summary>Setup Parameters Command</summary>
 
 ```shell
 source ./triton/dist6l/scripts/setup_parameters.sh
+```
+</details>
+
+#### Prepare Dataset and Checkpoint
+Prepare datasets and checkpoint if not run automatic evaluation scripts.
+
+<details>
+<summary>Prepare Datasets Command</summary>
+
+```shell
+./triton/dist6l/runner/prepare_datasets.sh
+```
+</details>
+
+<details>
+<summary>Prepare Checkpoint Command</summary>
+
+Download checkpoint from
+```
+https://catalog.ngc.nvidia.com/orgs/nvidia/dle/models/bert_pyt_ckpt_distill_6l_768d_3072di_12h_squad
+```
+
+Create the directory for checkpoint and copy the downloaded checkpoint content:
+
+```shell
+mkdir -p ${CHECKPOINTS_DIR}/dist-6l-qa
 ```
 </details>
 
@@ -751,7 +705,7 @@ Export model from Python source to desired format (e.g. Savedmodel or TorchScrip
 python3 triton/export_model.py \
     --input-path triton/model.py \
     --input-type pyt \
-    --output-path ${SHARED_DIR}/exported_model \
+    --output-path ${SHARED_DIR}/exported_model.${FORMAT_SUFFIX} \
     --output-type ${EXPORT_FORMAT} \
     --dataloader triton/dataloader.py \
     --ignore-unknown-parameters \
@@ -762,7 +716,7 @@ python3 triton/export_model.py \
     --checkpoint ${CHECKPOINT_DIR}/pytorch_model.bin \
     --precision ${EXPORT_PRECISION} \
     \
-    --vocab-file ${DATASETS_DIR}/data/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt \
+    --vocab-file ${CHECKPOINT_DIR}/vocab.txt \
     --max-seq-length ${MAX_SEQ_LENGTH} \
     --predict-file ${DATASETS_DIR}/data/squad/v1.1/dev-v1.1.json \
     --batch-size ${MAX_BATCH_SIZE}
@@ -777,7 +731,7 @@ Convert the model from training to inference format (e.g. TensorRT).
 ```shell
 model-navigator convert \
         --model-name ${MODEL_NAME} \
-        --model-path ${SHARED_DIR}/exported_model \
+        --model-path ${SHARED_DIR}/exported_model.${FORMAT_SUFFIX} \
         --output-path ${SHARED_DIR}/converted_model \
         --target-formats ${FORMAT} \
         --target-precisions ${PRECISION} \
@@ -852,7 +806,7 @@ python triton/prepare_input_data.py \
     --batch-size ${MAX_BATCH_SIZE} \
     --max-seq-length ${MAX_SEQ_LENGTH} \
     --predict-file ${DATASETS_DIR}/data/squad/v1.1/dev-v1.1.json \
-    --vocab-file ${DATASETS_DIR}/data/google_pretrained_weights/uncased_L-24_H-1024_A-16/vocab.txt
+    --vocab-file ${CHECKPOINT_DIR}/vocab.txt
 ```
 </details>
 
@@ -883,7 +837,7 @@ python triton/run_performance_on_triton.py \
     --batching-mode static \
     --evaluation-mode offline \
     --performance-tool perf_analyzer \
-    --result-path ${SHARED_DIR}/triton_performance_offline
+    --result-path ${SHARED_DIR}/triton_performance_offline.csv
 ```
 </details>
 

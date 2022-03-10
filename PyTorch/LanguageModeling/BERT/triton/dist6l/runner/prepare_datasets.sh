@@ -13,10 +13,8 @@
 # limitations under the License.
 #!/usr/bin/env bash
 
-mkdir -p dataset/data/squad/v1.1
+mkdir -p datasets/data/squad/v1.1
 
-wget https://rajpurkar.github.io/SQuAD-explorer/dataset/train-v1.1.json -O dataset/data/squad/v1.1/train-v1.1.json
-wget https://rajpurkar.github.io/SQuAD-explorer/dataset/dev-v1.1.json -O dataset/data/squad/v1.1/dev-v1.1.json
-wget https://worksheets.codalab.org/rest/bundles/0xbcd57bee090b421c982906709c8c27e1/contents/blob/ -P dataset/data/squad/v1.1/evaluate-v1.1.py
-
-ln -s data/download/google_pretrained_weights datasets/data/google_pretrained_weights
+wget https://rajpurkar.github.io/SQuAD-explorer/dataset/train-v1.1.json -O datasets/data/squad/v1.1/train-v1.1.json
+wget https://rajpurkar.github.io/SQuAD-explorer/dataset/dev-v1.1.json -O datasets/data/squad/v1.1/dev-v1.1.json
+wget https://worksheets.codalab.org/rest/bundles/0xbcd57bee090b421c982906709c8c27e1/contents/blob/ -O datasets/data/squad/v1.1/evaluate-v1.1.py

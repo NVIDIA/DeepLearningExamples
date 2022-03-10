@@ -239,17 +239,18 @@ Find all trained and available checkpoints in the table below:
 | Model                  | Description                                                               |
 |------------------------|---------------------------------------------------------------------------|
 | [bert-large-uncased-qa](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_large_qa_squad11_amp/files) | Large model fine-tuned on SQuAD v1.1                                       |
-| [bert-large-uncased-sst2](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_large_ft_sst2_amp) |Large model fine-tuned on GLUE SST-2                                      |
+| [bert-large-uncased-sst2](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/bert_pyt_ckpt_large_ft_sst2_amp) |Large model fine-tuned on GLUE SST-2                                      |
 | [bert-large-uncased-pretrained](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_large_pretraining_amp_lamb/files?version=20.03.0) | Large model pretrained checkpoint on Generic corpora like Wikipedia|
 | [bert-base-uncased-qa](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_base_qa_squad11_amp/files) | Base model fine-tuned on SQuAD v1.1                                         |
 | [bert-base-uncased-sst2](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_base_ft_sst2_amp_128/files) | Base model fine-tuned on GLUE SST-2                                       |
 | [bert-base-uncased-pretrained](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_base_pretraining_amp_lamb/files) | Base model pretrained checkpoint on Generic corpora like Wikipedia. |
-| [bert-dist-4L-288D-uncased-qa](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_distilled_4l_288d_qa_squad11_amp/files) | 4 layer distilled model fine-tuned on SQuAD v1.1                                         |
-| [bert-dist-4L-288D-uncased-sst2](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_distilled_4l_288d_ft_sst2_amp/files) | 4 layer distilled model fine-tuned on GLUE SST-2                                       |
-| [bert-dist-4L-288D-uncased-pretrained](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_distilled_4l_288d_pretraining_amp/files) | 4 layer distilled model pretrained checkpoint on Generic corpora like Wikipedia. |
-| [bert-dist-6L-768D-uncased-qa](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_distill_6l_768d_3072di_12h_squad/files) | 6 layer distilled model fine-tuned on SQuAD v1.1                                         |
-| [bert-dist-6L-768D-uncased-sst2](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_distill_6l_768d_3072di_12h_sst2/files) | 6 layer distilled model fine-tuned on GLUE SST-2                                       |
-| [bert-dist-6L-768D-uncased-pretrained](https://catalog.ngc.nvidia.com/orgs/nvidia/models/bert_pyt_ckpt_distill_6l_768d_3072di_12h_p2/files) | 6 layer distilled model pretrained checkpoint on Generic corpora like Wikipedia. |
+| [bert-dist-4L-288D-uncased-qa](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/bert_pyt_ckpt_distilled_4l_288d_qa_squad11_amp/files) | 4 layer distilled model fine-tuned on SQuAD v1.1                                         |
+| [bert-dist-4L-288D-uncased-sst2](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/bert_pyt_ckpt_distilled_4l_288d_ft_sst2_amp/files) | 4 layer distilled model fine-tuned on GLUE SST-2                                       |
+| [bert-dist-4L-288D-uncased-pretrained](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/bert_pyt_ckpt_distilled_4l_288d_pretraining_amp/files) | 4 layer distilled model pretrained checkpoint on Generic corpora like Wikipedia. |
+| [bert-dist-6L-768D-uncased-qa](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/bert_pyt_ckpt_distilled_6l_768d_qa_squad11_amp/files) | 6 layer distilled model fine-tuned on SQuAD v1.1                                         |
+| [bert-dist-6L-768D-uncased-sst2](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/bert_pyt_ckpt_distilled_6l_768d_ft_sst2_amp/files) | 6 layer distilled model fine-tuned on GLUE SST-2                                       |
+| [bert-dist-6L-768D-uncased-pretrained](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/bert_pyt_ckpt_distilled_6l_768d_pretraining_amp/files) | 6 layer distilled model pretrained checkpoint on Generic corpora like Wikipedia. |
+
 
 
 
