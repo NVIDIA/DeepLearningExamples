@@ -14,7 +14,7 @@
 #
 # -----------------------------------------------------------------------
 #
-# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,22 +34,26 @@ set -e
 set -x
 
 DATASET_NAME=${1:-'ml-20m'}
-RAW_DATADIR=${2:-'/data'}
-CACHED_DATADIR=${3:-"${RAW_DATADIR}/cache/${DATASET_NAME}"}
+RAW_DATADIR=${2:-"/data/${DATASET_NAME}"}
+CACHED_DATADIR=${3:-"/data/cache/${DATASET_NAME}"}
 
 # you can add another option to this case in order to support other datasets
 case ${DATASET_NAME} in
     'ml-20m')
 	ZIP_PATH=${RAW_DATADIR}/'ml-20m.zip'
+	SHOULD_UNZIP=1
 	RATINGS_PATH=${RAW_DATADIR}'/ml-20m/ratings.csv'
 	;;
     'ml-1m')
 	ZIP_PATH=${RAW_DATADIR}/'ml-1m.zip'
+	SHOULD_UNZIP=1
 	RATINGS_PATH=${RAW_DATADIR}'/ml-1m/ratings.dat'
 	;;
-	*)
-	echo "Unsupported dataset name: $DATASET_NAME"
-	exit 1
+	  *)
+	echo "Using unknown dataset: $DATASET_NAME."
+	RATINGS_PATH=${RAW_DATADIR}'/ratings.csv'
+	echo "Expecting file at ${RATINGS_PATH}"
+	SHOULD_UNZIP=0
 esac
 
 if [ ! -d ${RAW_DATADIR} ]; then
@@ -64,16 +68,21 @@ if [ -f log ]; then
     rm -f log
 fi
 
-if [ ! -f ${ZIP_PATH} ]; then
-    echo "Dataset not found. Please download it from: https://grouplens.org/datasets/movielens/20m/ and put it in ${ZIP_PATH}"
-    exit 1
-fi
-
 if [ ! -f ${RATINGS_PATH} ]; then
-    unzip -u ${ZIP_PATH}  -d ${RAW_DATADIR}
+    if [ $SHOULD_UNZIP == 1 ]; then
+        if [ ! -f ${ZIP_PATH} ]; then
+          echo "Dataset not found. Please download it from: https://grouplens.org/datasets/movielens/20m/ and put it in ${ZIP_PATH}"
+          exit 1
+        fi
+        unzip -u ${ZIP_PATH}  -d ${RAW_DATADIR}
+    else
+      echo "File not found at ${RATINGS_PATH}. Aborting."
+      exit 1
+    fi
 fi
 
-if [ ! -f ${CACHED_DATADIR}/train_ratings.pt ]; then
+
+if [ ! -f ${CACHED_DATADIR}/feature_spec.yaml ]; then
     echo "preprocessing ${RATINGS_PATH} and save to disk"
     t0=$(date +%s)
     python convert.py --path ${RATINGS_PATH} --output ${CACHED_DATADIR}
@@ -84,7 +93,7 @@ else
     echo 'Using cached preprocessed data'
 fi
 
-echo "Dataset $DATASET_NAME successfully prepared at: $CACHED_DATADIR\n"
+echo "Dataset $DATASET_NAME successfully prepared at: $CACHED_DATADIR"
 echo "You can now run the training with: python -m torch.distributed.launch --nproc_per_node=<number_of_GPUs> --use_env ncf.py --data ${CACHED_DATADIR}"
 
 

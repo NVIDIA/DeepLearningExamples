@@ -1,4 +1,4 @@
 mlperf-compliance==0.0.10
-opencv-python==3.4.1.15
+opencv-python==4.4.0.42
 yacs
 git+https://github.com/NVIDIA/cocoapi.git@nvidia/master#egg=cocoapi&subdirectory=PythonAPI

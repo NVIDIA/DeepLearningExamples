@@ -1,8 +1,15 @@
 from dataclasses import dataclass, asdict, replace
+from .common import (
+    SequentialSqueezeAndExcitationTRT,
+    SequentialSqueezeAndExcitation,
+    SqueezeAndExcitation,
+    SqueezeAndExcitationTRT,
+)
 from typing import Optional, Callable
 import os
 import torch
 import argparse
+from functools import partial
 
 
 @dataclass
@@ -32,12 +39,32 @@ class Model:
     checkpoint_url: Optional[str] = None
 
 
+def torchhub_docstring(name: str):
+    return f"""Constructs a {name} model.
+    For detailed information on model input and output, training recipies, inference and performance
+    visit: github.com/NVIDIA/DeepLearningExamples and/or ngc.nvidia.com
+    Args:
+        pretrained (bool, True): If True, returns a model pretrained on IMAGENET dataset.
+    """
+
 class EntryPoint:
+    @staticmethod
+    def create(name: str, model: Model):
+        ep = EntryPoint(name, model)
+        ep.__doc__ = torchhub_docstring(name)
+        return ep
+
     def __init__(self, name: str, model: Model):
         self.name = name
         self.model = model
 
-    def __call__(self, pretrained=False, pretrained_from_file=None, **kwargs):
+    def __call__(
+        self,
+        pretrained=True,
+        pretrained_from_file=None,
+        state_dict_key_map_fn=None,
+        **kwargs,
+    ):
         assert not (pretrained and (pretrained_from_file is not None))
         params = replace(self.model.params, **kwargs)
 
@@ -47,7 +74,9 @@ class EntryPoint:
         if pretrained:
             assert self.model.checkpoint_url is not None
             state_dict = torch.hub.load_state_dict_from_url(
-                self.model.checkpoint_url, map_location=torch.device("cpu")
+                self.model.checkpoint_url,
+                map_location=torch.device("cpu"),
+                progress=True,
             )
 
         if pretrained_from_file is not None:
@@ -66,7 +95,7 @@ class EntryPoint:
                         pretrained_from_file
                     )
                 )
-        # Temporary fix to allow NGC checkpoint loading
+
         if state_dict is not None:
             state_dict = {
                 k[len("module.") :] if k.startswith("module.") else k: v
@@ -85,12 +114,32 @@ class EntryPoint:
                     else:
                         return t
 
+            if state_dict_key_map_fn is not None:
+                state_dict = {
+                    state_dict_key_map_fn(k): v for k, v in state_dict.items()
+                }
+
+            if hasattr(model, "ngc_checkpoint_remap"):
+                remap_fn = model.ngc_checkpoint_remap(url=self.model.checkpoint_url)
+                state_dict = {remap_fn(k): v for k, v in state_dict.items()}
+
+            def _se_layer_uses_conv(m):
+                return any(
+                    map(
+                        partial(isinstance, m),
+                        [
+                            SqueezeAndExcitationTRT,
+                            SequentialSqueezeAndExcitationTRT,
+                        ],
+                    )
+                )
+
             state_dict = {
                 k: reshape(
                     v,
-                    conv=dict(model.named_modules())[
-                        ".".join(k.split(".")[:-2])
-                    ].use_conv,
+                    conv=_se_layer_uses_conv(
+                        dict(model.named_modules())[".".join(k.split(".")[:-2])]
+                    ),
                 )
                 if is_se_weight(k, v)
                 else v
@@ -123,7 +172,8 @@ class EntryPoint:
 
 
 def is_se_weight(key, value):
-    return (key.endswith("squeeze.weight") or key.endswith("expand.weight"))
+    return key.endswith("squeeze.weight") or key.endswith("expand.weight")
+
 
 def create_entrypoint(m: Model):
     def _ep(**kwargs):

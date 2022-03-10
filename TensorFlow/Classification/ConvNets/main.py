@@ -15,35 +15,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from utils.cmdline_helper import parse_cmdline
+from model.resnet import model_architectures
+from runtime import Runner
+import dllogger
+from utils import hvd_wrapper as hvd
+import tensorflow as tf
 import os
 
 import warnings
 warnings.simplefilter("ignore")
 
-import tensorflow as tf
-
-import horovod.tensorflow as hvd
-import dllogger
-
-from utils import hvd_utils
-from runtime import Runner
-from model.resnet import model_architectures
-
-from utils.cmdline_helper import parse_cmdline
 
 if __name__ == "__main__":
 
     tf.logging.set_verbosity(tf.logging.ERROR)
 
     FLAGS = parse_cmdline(model_architectures.keys())
-    hvd.init()
+    hvd.init(True)
 
     if hvd.rank() == 0:
         log_path = os.path.join(FLAGS.results_dir, FLAGS.log_filename)
         os.makedirs(FLAGS.results_dir, exist_ok=True)
 
         dllogger.init(backends=[
-            dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE, filename=log_path),
+            dllogger.JSONStreamBackend(
+                verbosity=dllogger.Verbosity.VERBOSE, filename=log_path),
             dllogger.StdOutBackend(verbosity=dllogger.Verbosity.VERBOSE)
         ])
     else:
@@ -100,11 +97,11 @@ if __name__ == "__main__":
 
     if FLAGS.mode in ["train_and_evaluate", 'evaluate', 'inference_benchmark']:
 
-        if FLAGS.mode == 'inference_benchmark' and hvd_utils.is_using_hvd():
-            raise NotImplementedError("Only single GPU inference is implemented.")
+        if FLAGS.mode == 'inference_benchmark' and hvd.size() > 1:
+            raise NotImplementedError(
+                "Only single GPU inference is implemented.")
 
-        elif not hvd_utils.is_using_hvd() or hvd.rank() == 0:
-
+        elif hvd.rank() == 0:
             runner.evaluate(iter_unit=FLAGS.iter_unit if FLAGS.mode != "train_and_evaluate" else "epoch",
                             num_iter=FLAGS.num_iter if FLAGS.mode != "train_and_evaluate" else 1,
                             warmup_steps=FLAGS.warmup_steps,
@@ -116,6 +113,10 @@ if __name__ == "__main__":
                             symmetric=FLAGS.symmetric,
                             use_final_conv=FLAGS.use_final_conv,
                             use_qdq=FLAGS.use_qdq)
+        if hvd.size() > 1:
+            # Wait for all processes to finish
+            from mpi4py import MPI
+            MPI.COMM_WORLD.Barrier()
 
     if FLAGS.mode == 'predict':
         if FLAGS.to_predict is None:
@@ -124,10 +125,11 @@ if __name__ == "__main__":
         if not os.path.isfile(FLAGS.to_predict):
             raise ValueError("Only prediction on single images is supported!")
 
-        if hvd_utils.is_using_hvd():
-            raise NotImplementedError("Only single GPU inference is implemented.")
+        if hvd.size() > 1:
+            raise NotImplementedError(
+                "Only single GPU inference is implemented.")
 
-        elif not hvd_utils.is_using_hvd() or hvd.rank() == 0:
+        else:
             runner.predict(FLAGS.to_predict,
                            quantize=FLAGS.quantize,
                            symmetric=FLAGS.symmetric,

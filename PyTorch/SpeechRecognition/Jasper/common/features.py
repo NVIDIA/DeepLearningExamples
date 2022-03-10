@@ -5,8 +5,6 @@ import librosa
 import torch
 import torch.nn as nn
 
-from apex import amp
-
 
 class BaseFeatures(nn.Module):
     """Base class for GPU accelerated audio preprocessing."""
@@ -42,14 +40,10 @@ class BaseFeatures(nn.Module):
     def calculate_features(self, audio, audio_lens):
         return audio, audio_lens
 
-    def __call__(self, audio, audio_lens, optim_level=0):
+    def __call__(self, audio, audio_lens):
         dtype = audio.dtype
         audio = audio.float()
-        if optim_level == 1:
-            with amp.disable_casts():
-                feat, feat_lens = self.calculate_features(audio, audio_lens)
-        else:
-            feat, feat_lens = self.calculate_features(audio, audio_lens)
+        feat, feat_lens = self.calculate_features(audio, audio_lens)
 
         feat = self.apply_padding(feat)
 

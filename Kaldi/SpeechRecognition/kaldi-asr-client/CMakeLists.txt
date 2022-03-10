@@ -1,70 +1,78 @@
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#  * Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#  * Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#  * Neither the name of NVIDIA CORPORATION nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+# OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+cmake_minimum_required(VERSION 3.17..3.20)
+
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-cmake_minimum_required (VERSION 3.5)
-
-add_executable(kaldi_asr_parallel_client kaldi_asr_parallel_client.cc asr_client_imp.cc) 
-
-target_link_libraries(
-   kaldi_asr_parallel_client
-   PRIVATE request
-)
-
-target_link_libraries(
-  kaldi_asr_parallel_client
-  PRIVATE protobuf::libprotobuf
-)
-
-target_include_directories(
-  kaldi_asr_parallel_client 
+# gRPC client for custom Kaldi backend
+#
+add_executable(kaldi-asr-parallel-client)
+add_executable(TritonKaldiGrpcClient::kaldi-asr-parallel-client ALIAS kaldi-asr-parallel-client)
+target_sources(kaldi-asr-parallel-client
   PRIVATE
-  /opt/kaldi/src/
+    kaldi_asr_parallel_client.cc
+    asr_client_imp.cc
 )
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w") # openfst yields many warnings
-target_include_directories(
-  kaldi_asr_parallel_client 
+target_include_directories(kaldi-asr-parallel-client SYSTEM
   PRIVATE
-  /opt/kaldi/tools/openfst-1.6.7/include/
+    /opt/kaldi/src
+    /opt/kaldi/tools/openfst/include
+)
+target_include_directories(kaldi-asr-parallel-client
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_compile_features(kaldi-asr-parallel-client PRIVATE cxx_std_17)
+target_compile_options(kaldi-asr-parallel-client
+  PRIVATE
+    $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:-Wall -Wextra -Wno-unused-parameter -Wno-type-limits -Werror>
+)
+target_link_directories(kaldi-asr-parallel-client
+  PRIVATE
+    /opt/kaldi/src/lib
+)
+target_link_libraries(kaldi-asr-parallel-client
+  PRIVATE
+    TritonClient::grpcclient_static
+    -lkaldi-base
+    -lkaldi-util
+    -lkaldi-matrix
+    -lkaldi-feat
+    -lkaldi-lat
 )
 
-target_link_libraries(
-  kaldi_asr_parallel_client
-  PRIVATE /opt/kaldi/src/lib/libkaldi-feat.so
-)
-
-target_link_libraries(
-  kaldi_asr_parallel_client
-  PRIVATE /opt/kaldi/src/lib/libkaldi-util.so
-)
-
-target_link_libraries(
-   kaldi_asr_parallel_client
-   PRIVATE /opt/kaldi/src/lib/libkaldi-matrix.so
-)
-
-target_link_libraries(
-  kaldi_asr_parallel_client
-  PRIVATE /opt/kaldi/src/lib/libkaldi-base.so
-)
-
-target_link_libraries(
-  kaldi_asr_parallel_client
-  PRIVATE /opt/kaldi/src/lat/libkaldi-lat.so
-)
+#
+# Install
+#
+include(GNUInstallDirs)
 
 install(
-  TARGETS kaldi_asr_parallel_client
-  RUNTIME DESTINATION bin
+  TARGETS
+    kaldi-asr-parallel-client
+  EXPORT
+    kaldi-asr-parallel-client-targets
+  RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin
 )

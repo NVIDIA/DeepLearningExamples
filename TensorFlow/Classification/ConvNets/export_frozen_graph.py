@@ -22,7 +22,7 @@ import os
 
 import tensorflow as tf
 
-import horovod.tensorflow as hvd
+from utils import hvd_wrapper as hvd
 from model import resnet
 
 tf.app.flags.DEFINE_string(
@@ -75,8 +75,6 @@ FLAGS = tf.app.flags.FLAGS
 
 
 def main(_):
-  
-  # Initialize Horovod (TODO: Remove dependency of horovod for freezing graphs)
   hvd.init()
 
   if not FLAGS.output_file:

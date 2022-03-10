@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+""" Command line argument parsing """
 import argparse
 
 PARSER = argparse.ArgumentParser(description="UNet-3D")
@@ -33,12 +34,14 @@ PARSER.add_argument('--normalization', choices=['instancenorm', 'batchnorm', 'gr
                     default='instancenorm', type=str)
 PARSER.add_argument('--include_background', dest='include_background', action='store_true', default=False)
 PARSER.add_argument('--resume_training', dest='resume_training', action='store_true', default=False)
+PARSER.add_argument('--seed', default=0, type=int)
 
 # Augmentations
 PARSER.add_argument('--augment', dest='augment', action='store_true', default=False)
 
 # Dataset flags
 PARSER.add_argument('--data_dir', required=True, type=str)
+PARSER.add_argument('--input_shape', nargs='+', type=int, default=[128, 128, 128])
 PARSER.add_argument('--batch_size', default=1, type=int)
 PARSER.add_argument('--fold', default=0, type=int)
 PARSER.add_argument('--num_folds', default=5, type=int)

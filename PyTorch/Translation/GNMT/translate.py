@@ -21,10 +21,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import os
+
+os.environ['KMP_AFFINITY'] = 'disabled'
+
 import argparse
 import itertools
 import logging
-import os
 import sys
 import warnings
 from itertools import product
@@ -32,11 +35,6 @@ from itertools import product
 import dllogger
 import numpy as np
 import torch
-
-try:
-    import pyprof
-except ModuleNotFoundError:
-    warnings.warn('PyProf is unavailable')
 
 import seq2seq.gpu_affinity as gpu_affinity
 import seq2seq.utils as utils
@@ -149,8 +147,6 @@ def parse_args():
                                   'socket_unique_continuous',
                                   'disabled'],
                          help='type of CPU affinity')
-    general.add_argument('--profile', action='store_true',
-                         help='Enable profiling with DLProf')
 
     # benchmarking
     benchmark = parser.add_argument_group('benchmark setup')
@@ -225,12 +221,6 @@ def main():
 
     dllog_file = os.path.join(args.save_dir, args.dllog_file)
     utils.setup_dllogger(enabled=True, filename=dllog_file)
-
-    if args.profile:
-        try:
-            pyprof.init(enable_function_stack=True)
-        except NameError:
-            warnings.warn('Called pyprof.init() but pyprof is not available')
 
     if args.env:
         utils.log_env_info()
@@ -317,14 +307,13 @@ def main():
             )
 
         # execute the inference
-        with torch.autograd.profiler.emit_nvtx(enabled=args.profile):
-            output, stats = translator.run(
-                calc_bleu=args.bleu,
-                eval_path=args.output,
-                summary=True,
-                warmup=args.warmup,
-                reference_path=args.reference,
-                )
+        output, stats = translator.run(
+            calc_bleu=args.bleu,
+            eval_path=args.output,
+            summary=True,
+            warmup=args.warmup,
+            reference_path=args.reference,
+            )
 
         # print translated outputs
         if not args.synthetic and (not args.output and args.rank == 0):

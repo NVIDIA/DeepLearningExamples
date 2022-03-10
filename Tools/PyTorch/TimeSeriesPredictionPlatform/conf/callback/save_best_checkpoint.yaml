@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# @package _global_
+config:
+  trainer:
+    callback:
+      save_best_checkpoint:
+        _target_: callbacks.ctl_callbacks.SaveBestCheckpoint
+        metric: val_loss

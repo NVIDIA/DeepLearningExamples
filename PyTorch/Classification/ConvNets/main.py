@@ -27,10 +27,13 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+import os
+
+os.environ["KMP_AFFINITY"] = "disabled" # We need to do this before importing anything else as a workaround for this bug: https://github.com/pytorch/pytorch/issues/28389
+
 import argparse
 import random
 from copy import deepcopy
-import signal
 
 import torch.backends.cudnn as cudnn
 import torch.distributed as dist
@@ -38,9 +41,6 @@ import torch.nn.parallel
 import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
-import torchvision.transforms as transforms
-import torchvision.datasets as datasets
-from torch.nn.parallel import DistributedDataParallel as DDP
 
 import image_classification.logger as log
 
@@ -58,6 +58,13 @@ from image_classification.models import (
     efficientnet_widese_b0,
     efficientnet_widese_b4,
 )
+from image_classification.optimizers import (
+    get_optimizer,
+    lr_cosine_policy,
+    lr_linear_policy,
+    lr_step_policy,
+)
+from image_classification.gpu_affinity import set_affinity, AffinityMode
 import dllogger
 
 
@@ -102,7 +109,9 @@ def add_parser_arguments(parser, skip_arch=False):
             metavar="ARCH",
             default="resnet50",
             choices=model_names,
-            help="model architecture: " + " | ".join(model_names) + " (default: resnet50)",
+            help="model architecture: "
+            + " | ".join(model_names)
+            + " (default: resnet50)",
         )
 
     parser.add_argument(
@@ -112,6 +121,13 @@ def add_parser_arguments(parser, skip_arch=False):
         type=int,
         metavar="N",
         help="number of data loading workers (default: 5)",
+    )
+    parser.add_argument(
+        "--prefetch",
+        default=2,
+        type=int,
+        metavar="N",
+        help="number of samples prefetched by each loader",
     )
     parser.add_argument(
         "--epochs",
@@ -290,6 +306,13 @@ def add_parser_arguments(parser, skip_arch=False):
         dest="save_checkpoints",
         help="do not store any checkpoints, useful for benchmarking",
     )
+    parser.add_argument(
+        "--jit",
+        type=str,
+        default="no",
+        choices=["no", "script"],
+        help="no -> do not use torch.jit; script -> use torch.jit.script",
+    )
 
     parser.add_argument("--checkpoint-filename", default="checkpoint.pth.tar", type=str)
 
@@ -320,12 +343,19 @@ def add_parser_arguments(parser, skip_arch=False):
         type=int,
         default=None,
         required=False,
-        help="number of classes"
+        help="number of classes",
+    )
+
+    parser.add_argument(
+        "--gpu-affinity",
+        type=str,
+        default="none",
+        required=False,
+        choices=[am.name for am in AffinityMode],
     )
 
 
 def prepare_for_training(args, model_args, model_arch):
-
     args.distributed = False
     if "WORLD_SIZE" in os.environ:
         args.distributed = int(os.environ["WORLD_SIZE"]) > 1
@@ -342,6 +372,9 @@ def prepare_for_training(args, model_args, model_arch):
         dist.init_process_group(backend="nccl", init_method="env://")
         args.world_size = torch.distributed.get_world_size()
 
+    affinity = set_affinity(args.gpu, mode=args.gpu_affinity)
+    print(f"Training process {args.local_rank} affinity: {affinity}")
+
     if args.seed is not None:
         print("Using seed = {}".format(args.seed))
         torch.manual_seed(args.seed + args.local_rank)
@@ -350,13 +383,19 @@ def prepare_for_training(args, model_args, model_arch):
         random.seed(args.seed + args.local_rank)
 
         def _worker_init_fn(id):
+            # Worker process should inherit its affinity from parent
+            affinity = os.sched_getaffinity(0) 
+            print(f"Process {args.local_rank} Worker {id} set affinity to: {affinity}")
+
             np.random.seed(seed=args.seed + args.local_rank + id)
             random.seed(args.seed + args.local_rank + id)
 
     else:
 
         def _worker_init_fn(id):
-            pass
+            # Worker process should inherit its affinity from parent
+            affinity = os.sched_getaffinity(0)
+            print(f"Process {args.local_rank} Worker {id} set affinity to: {affinity}")
 
     if args.static_loss_scale != 1.0:
         if not args.amp:
@@ -432,13 +471,25 @@ def prepare_for_training(args, model_args, model_arch):
         if args.image_size is not None
         else model.arch.default_image_size
     )
-    model_and_loss = ModelAndLoss(model, loss, cuda=True, memory_format=memory_format)
-    if args.use_ema is not None:
-        model_ema = deepcopy(model_and_loss)
-        ema = EMA(args.use_ema)
-    else:
-        model_ema = None
-        ema = None
+
+    scaler = torch.cuda.amp.GradScaler(
+        init_scale=args.static_loss_scale,
+        growth_factor=2,
+        backoff_factor=0.5,
+        growth_interval=100 if args.dynamic_loss_scale else 1000000000,
+        enabled=args.amp,
+    )
+
+    executor = Executor(
+        model,
+        loss(),
+        cuda=True,
+        memory_format=memory_format,
+        amp=args.amp,
+        scaler=scaler,
+        divide_loss=batch_size_multiplier,
+        ts_script=args.jit == "script",
+    )
 
     # Create data loaders and optimizers as needed
     if args.data_backend == "pytorch":
@@ -463,11 +514,13 @@ def prepare_for_training(args, model_args, model_arch):
         args.batch_size,
         model_args.num_classes,
         args.mixup > 0.0,
-        interpolation = args.interpolation,
+        interpolation=args.interpolation,
         augmentation=args.augmentation,
         start_epoch=start_epoch,
         workers=args.workers,
+        _worker_init_fn=_worker_init_fn,
         memory_format=memory_format,
+        prefetch_factor=args.prefetch,
     )
     if args.mixup != 0.0:
         train_loader = MixUpWrapper(args.mixup, train_loader)
@@ -478,9 +531,11 @@ def prepare_for_training(args, model_args, model_arch):
         args.batch_size,
         model_args.num_classes,
         False,
-        interpolation = args.interpolation,
+        interpolation=args.interpolation,
         workers=args.workers,
+        _worker_init_fn=_worker_init_fn,
         memory_format=memory_format,
+        prefetch_factor=args.prefetch,
     )
 
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
@@ -508,41 +563,46 @@ def prepare_for_training(args, model_args, model_arch):
     )
 
     optimizer = get_optimizer(
-        list(model_and_loss.model.named_parameters()),
+        list(executor.model.named_parameters()),
         args.lr,
         args=args,
         state=optimizer_state,
     )
 
     if args.lr_schedule == "step":
-        lr_policy = lr_step_policy(
-            args.lr, [30, 60, 80], 0.1, args.warmup, logger=logger
-        )
+        lr_policy = lr_step_policy(args.lr, [30, 60, 80], 0.1, args.warmup)
     elif args.lr_schedule == "cosine":
         lr_policy = lr_cosine_policy(
-            args.lr, args.warmup, args.epochs, end_lr=args.end_lr, logger=logger
+            args.lr, args.warmup, args.epochs, end_lr=args.end_lr
         )
     elif args.lr_schedule == "linear":
-        lr_policy = lr_linear_policy(args.lr, args.warmup, args.epochs, logger=logger)
-
-    scaler = torch.cuda.amp.GradScaler(
-        init_scale=args.static_loss_scale,
-        growth_factor=2,
-        backoff_factor=0.5,
-        growth_interval=100 if args.dynamic_loss_scale else 1000000000,
-        enabled=args.amp,
-    )
+        lr_policy = lr_linear_policy(args.lr, args.warmup, args.epochs)
 
     if args.distributed:
-        model_and_loss.distributed(args.gpu)
+        executor.distributed(args.gpu)
 
-    model_and_loss.load_model_state(model_state)
-    if (ema is not None) and (model_state_ema is not None):
-        print("load ema")
-        ema.load_state_dict(model_state_ema)
+    if model_state is not None:
+        executor.model.load_state_dict(model_state)
 
-    return (model_and_loss, optimizer, lr_policy, scaler, train_loader, val_loader, logger, ema, model_ema,
-            train_loader_len, batch_size_multiplier, start_epoch)
+    trainer = Trainer(
+        executor,
+        optimizer,
+        grad_acc_steps=batch_size_multiplier,
+        ema=args.use_ema,
+    )
+
+    if (args.use_ema is not None) and (model_state_ema is not None):
+        trainer.ema_executor.model.load_state_dict(model_state_ema)
+
+    return (
+        trainer,
+        lr_policy,
+        train_loader,
+        train_loader_len,
+        val_loader,
+        logger,
+        start_epoch,
+    )
 
 
 def main(args, model_args, model_arch):
@@ -550,23 +610,24 @@ def main(args, model_args, model_arch):
     global best_prec1
     best_prec1 = 0
 
-    model_and_loss, optimizer, lr_policy, scaler, train_loader, val_loader, logger, ema, model_ema, train_loader_len, \
-        batch_size_multiplier, start_epoch = prepare_for_training(args, model_args, model_arch)
-
-    train_loop(
-        model_and_loss,
-        optimizer,
-        scaler,
+    (
+        trainer,
         lr_policy,
         train_loader,
+        train_loader_len,
+        val_loader,
+        logger,
+        start_epoch,
+    ) = prepare_for_training(args, model_args, model_arch)
+
+    train_loop(
+        trainer,
+        lr_policy,
+        train_loader,
+        train_loader_len,
         val_loader,
         logger,
         should_backup_checkpoint(args),
-        ema=ema,
-        model_ema=model_ema,
-        steps_per_epoch=train_loader_len,
-        use_amp=args.amp,
-        batch_size_multiplier=batch_size_multiplier,
         start_epoch=start_epoch,
         end_epoch=min((start_epoch + args.run_epochs), args.epochs)
         if args.run_epochs != -1
@@ -587,7 +648,6 @@ def main(args, model_args, model_arch):
 
 
 if __name__ == "__main__":
-
     epilog = [
         "Based on the architecture picked by --arch flag, you may use the following options:\n"
     ]
@@ -603,7 +663,7 @@ if __name__ == "__main__":
     add_parser_arguments(parser)
 
     args, rest = parser.parse_known_args()
-    
+
     model_arch = available_models()[args.arch]
     model_args, rest = model_arch.parser().parse_known_args(rest)
     print(model_args)

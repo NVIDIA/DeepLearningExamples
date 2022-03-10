@@ -15,7 +15,7 @@
 import os
 from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 from os.path import dirname
-from subprocess import call
+from subprocess import run
 
 parser = ArgumentParser(ArgumentDefaultsHelpFormatter)
 parser.add_argument("--mode", type=str, required=True, choices=["train", "predict"], help="Benchmarking mode")
@@ -29,13 +29,12 @@ parser.add_argument("--test_batches", type=int, default=150, help="Number of bat
 parser.add_argument("--warmup", type=int, default=50, help="Warmup iterations before collecting statistics")
 parser.add_argument("--results", type=str, default="/results", help="Path to results directory")
 parser.add_argument("--logname", type=str, default="perf.json", help="Name of dlloger output")
-parser.add_argument("--profile", action="store_true", help="Enable dlprof profiling")
 
 if __name__ == "__main__":
     args = parser.parse_args()
     path_to_main = os.path.join(dirname(dirname(os.path.realpath(__file__))), "main.py")
     cmd = ""
-    cmd += f"python main.py --task {args.task} --benchmark --max_epochs 2 --min_epochs 1 --optimizer adam "
+    cmd += f"python main.py --task {args.task} --benchmark --epochs 2 "
     cmd += f"--results {args.results} "
     cmd += f"--logname {args.logname} "
     cmd += f"--exec_mode {args.mode} "
@@ -45,9 +44,8 @@ if __name__ == "__main__":
     cmd += f"--test_batches {args.test_batches} "
     cmd += f"--warmup {args.warmup} "
     cmd += "--amp " if args.amp else ""
-    cmd += "--profile " if args.profile else ""
     if args.mode == "train":
         cmd += f"--batch_size {args.batch_size} "
     else:
         cmd += f"--val_batch_size {args.batch_size} "
-    call(cmd, shell=True)
+    run(cmd, shell=True)

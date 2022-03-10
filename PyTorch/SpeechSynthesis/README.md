@@ -15,7 +15,7 @@ In this collection, we will cover:
 TTS synthesis is a 2-step process described as follows:
 
 1. Text to Spectrogram Model:
-This model Transforms the text into time-aligned features such as spectrogram, mel spectrogram, or F0 frequencies and other linguistic features. We use architectures like Tacotron
+This model Transforms the text into time-aligned features such as spectrogram, mel spectrogram, or F0 frequencies and other acoustic features. We use architectures like Tacotron
 
 2. Spectrogram to Audio Model:
 Converts generated spectrogram time-aligned representation into continuous human-like audio—for example, WaveGlow.

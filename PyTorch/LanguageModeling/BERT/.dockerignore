@@ -16,5 +16,15 @@ data/extracted
 data/formatted_one_article_per_line
 data/sharded
 data/hdf5
-vocab/
+data/hdf5_lower_case_1_seq_len_128_max_pred_20_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/
+data/hdf5_lower_case_1_seq_len_512_max_pred_80_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/
+data/sharded_training_shards_256_test_shards_256_fraction_0.1/
+data/pretrain
+data/books
+data/wikipedia
+#vocab/
 results/
+dask-worker-space/
+__pycache__
+distillation/__pycache__
+runner_workspace

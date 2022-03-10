@@ -1,117 +1,95 @@
-# Deploying the BERT model using Triton Inference Server
-
+# Deploying the BERT model on Triton Inference Server
+ 
+This folder contains instructions for deployment to run inference
+on Triton Inference Server, as well as detailed performance analysis.
+The purpose of this document is to help you with achieving
+the best inference performance.
+ 
+## Table of contents
+ - [Solution overview](#solution-overview)
+   - [Introduction](#introduction)
+   - [Deployment process](#deployment-process)
+ - [Setup](#setup)
+ - [Quick Start Guide](#quick-start-guide)
+ - [Release notes](#release-notes)
+   - [Changelog](#changelog)
+   - [Known issues](#known-issues)
+ 
+ 
 ## Solution overview
-
-The [NVIDIA Triton Inference Server](https://github.com/NVIDIA/triton-inference-server) provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs. The server provides an inference service via an HTTP or gRPC endpoint, allowing remote clients to request inferencing for any number of GPU or CPU models being managed by the server. 
-This folder contains detailed performance analysis as well as scripts to run SQuAD fine-tuning on BERT model using Triton Inference Server. 
-
+### Introduction
+The [NVIDIA Triton Inference Server](https://github.com/NVIDIA/triton-inference-server)
+provides a datacenter and cloud inferencing solution optimized for NVIDIA GPUs.
+The server provides an inference service via an HTTP or gRPC endpoint,
+allowing remote clients to request inferencing for any number of GPU
+or CPU models being managed by the server.
+ 
+This README provides step-by-step deployment instructions for models generated
+during training (as described in the [model README](../readme.md)).
+Additionally, this README provides the corresponding deployment scripts that
+ensure optimal GPU utilization during inferencing on the Triton Inference Server.
+ 
+### Deployment process
+ 
+The deployment process consists of two steps:
+ 
+1. Conversion.
+ 
+  The purpose of conversion is to find the best performing model
+  format supported by the Triton Inference Server.
+  Triton Inference Server uses a number of runtime backends such as
+  [TensorRT](https://developer.nvidia.com/tensorrt),
+  [LibTorch](https://github.com/triton-inference-server/pytorch_backend) and
+  [ONNX Runtime](https://github.com/triton-inference-server/onnxruntime_backend)
+  to support various model types. Refer to the
+  [Triton documentation](https://github.com/triton-inference-server/backend#where-can-i-find-all-the-backends-that-are-available-for-triton)
+  for a list of available backends.
+ 
+2. Configuration.
+ 
+  Model configuration on the Triton Inference Server, which generates
+  necessary [configuration files](https://github.com/triton-inference-server/server/blob/master/docs/model_configuration.md).
+ 
+After deployment, the Triton inference server is used for evaluation of the converted model in two steps:
+ 
+1. Accuracy tests.
+ 
+  Produce results that are tested against given accuracy thresholds.
+ 
+2. Performance tests.
+ 
+  Produce latency and throughput results for offline (static batching)
+  and online (dynamic batching) scenarios.
+ 
+ 
+All steps are executed by the provided runner script. Refer to [Quick Start Guide](#quick-start-guide)
+ 
+ 
 ## Setup
-
-The first step is to train BERT for question answering. The process is the same as in the main readme. 
-
-1. Download the squad dataset with `cd [bert folder]/data/squad/ && bash ./squad_download.sh`. 
-
-2. Build the Docker container with `bash ./scripts/docker/build.sh`. 
-
-3. [train](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/LanguageModeling/BERT#training-process) your own checkpoint and fine-tune it, or [download](https://ngc.nvidia.com/catalog/models/nvidia:bert_large_pyt_amp_ckpt_squad_qa1_1/files) the already trained and fine-tuned checkpoint from the [NGC](https://ngc.nvidia.com/catalog/models/nvidia:bert_large_pyt_amp_ckpt_squad_qa1_1/files) model repository. 
-
-The checkpoint should be placed in `[bert folder]/checkpoints/<checkpoint>`. By default, the scripts assume `<checkpoint>` is `bert_qa.pt`, therefore, you might have to rename the trained or downloaded models as necessary. 
-
-Note: The following instructions are run from outside the container and call `docker run` commands as required. \
-Unless stated otherwise, all the commands below have to be executed from `[bert folder]`. 
-
+Ensure you have the following components:
+* [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
+* [PyTorch NGC container 21.10](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch)
+* [Triton Inference Server NGC container 21.10](https://ngc.nvidia.com/catalog/containers/nvidia:tritonserver)
+* [NVIDIA CUDA](https://docs.nvidia.com/cuda/archive//index.html)
+* [NVIDIA Ampere](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/), [Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
+ 
+ 
 ## Quick Start Guide
-
-### Deploying the model
-
-The following command exports the checkpoint to `torchscript`, and deploys the Triton model repository. 
-
-`bash ./triton/export_model.sh` 
-
-The deployed Triton model repository will be in `[bert folder]/results/triton_models`. 
-
-Edit `[bert folder]/triton/export_model.sh` to deploy BERT in ONNX format. 
-Change the value of `EXPORT_FORMAT` from `ts-script` to `onnx`. Additionally, change the value of `triton_model_name` from `bertQA-ts` to `bertQA-onnx`, respectively. 
-Moreover, you may set `precision` to either `fp32` or `fp16`. 
-
-### Running the Triton server
-
-To launch the Triton server, execute the following command. 
-
-`docker run --rm --gpus device=0 --ipc=host --network=host -p 8000:8000 -p 8001:8001 -p 8002:8002 -v $PWD/results/triton_models:/models nvcr.io/nvidia/tritonserver:20.06-v1-py3 trtserver --model-store=/models --log-verbose=1`
-
-Here `device=0,1,2,3` selects GPUs indexed by ordinals `0,1,2` and `3`, respectively. The server will see only these GPUs. If you write `device=all`, then the server will see all the available GPUs. 
-
-By default, the server expects the model repository to be in `[bert folder]/results/triton_models`. 
-
-### Running the custom Triton client
-
-The custom Triton client is found in `[bert folder]/triton/client.py`. 
-It may be used once BERT is deployed and the Triton server is running. To try it, do the following steps. 
-
-1. Start the BERT docker container with the following command: \
-`docker run -it --rm --ipc=host --network=host -v $PWD/vocab:/workspace/bert/vocab bert:latest` \
-Notice, that for the client, no GPU support is necessary. 
-
-2. Move to the triton folder with the following command: \
-`cd /workspace/bert/triton/` 
-
-3. Run the client with the following command: \
-`python client.py --do_lower_case --version_2_with_negative --vocab_file=../vocab/vocab --triton-model-name=bertQA-ts-script` 
-
-This will send a request to the already running Triton server, which will process it, and return the result to the client. The response will be printed on the screen. 
-
-You may send your own question-context pair for processing, using the `--question` and `--context` flags of client.py, respectively. 
-You may want to use the `--triton-model-name` flag to select the model in onnx format. 
-
-### Evaluating the deployed model on Squad1.1
-
-To deploy and evaluate your model, run the following command. 
-
-`bash ./triton/evaluate.sh` 
-
-By default, this will deploy BERT in torchscript format, and evaluate it on Squad1.1. 
-
-You may change the format of deployment by editing `[bert folder]/triton/evaluate.sh`. 
-Change the value of `EXPORT_FORMAT` from `ts-script` to `onnx`. Moreover, you may set `precision` to either `fp32` or `fp16`. 
-
-### Generating performance data
-
-To collect performance data, run the following command. 
-
-`bash ./triton/generate_figures.sh` 
-
-By default, this will deploy BERT in `torchscript` format, launch the server, run the perf client, collect statistics and place them in `[bert folder]/results/triton_models/perf_client`. 
-
-You may change the format of deployment by editing `./triton/generate_figures.sh`. Change the value of `EXPORT_FORMAT` from `ts-script` to `onnx`, respectively. 
-Moreover, you may set `precision` to either `fp32` or `fp16`. 
-
-## Advanced
-
-### Other scripts
-
-To launch the Triton server in a detached state, run the following command. 
-
-`bash ./triton/launch_triton_server.sh` 
-
-By default, the Triton server is expecting the model repository in `[bert folder]/results/triton_models`. 
-
-To make the machine wait until the server is initialized, and the model is ready for inference, run the following command. 
-
-`bash ./triton/wait_for_triton_server.sh` 
-
-## Performance
-
-The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
-
-The numbers below are averages, measured on Triton on V100 32G GPU, with [static batching](https://docs.nvidia.com/deeplearning/sdk/tensorrt-inference-server-guide/docs/model_configuration.html#scheduling-and-batching). 
-
-| Format | GPUs | Batch size | Sequence length | Throughput - FP32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (mixed precision/FP32)  |
-|--------|------|------------|-----------------|----------------------------------|---------------------------------------------|--------------------------------------------|
-|pytorch      | 1 | 1 | 384 | 30.1 | 28.0  | 0.93x | 
-|pytorch      | 1 | 8 | 384 | 36.0 | 116.8 | 3.24x | 
-|torchscript  | 1 | 1 | 384 | 32.20 | 38.40 | 1.19x | 
-|torchscript  | 1 | 8 | 384 | 40.00 | 134.40 | 3.36x | 
-|onnx         | 1 | 1 | 384 | 33.30 | 92.00 | 2.76x | 
-|onnx         | 1 | 8 | 384 | 42.60 | 165.30 | 3.88x | 
-
+Deployment is supported for the following architectures. For the deployment steps, refer to the appropriate readme file:
+* [BERT-large](./large/README.md)
+* [BERT-distilled-4l](./dist4l/README.md)
+* [BERT-distilled-6l](./dist6l/README.md)
+ 
+ 
+## Release Notes
+We’re constantly refining and improving our performance on AI
+and HPC workloads with frequent updates
+to our software stack. For our latest performance data refer
+to these pages for
+[AI](https://developer.nvidia.com/deep-learning-performance-training-inference)
+and [HPC](https://developer.nvidia.com/hpc-application-performance) benchmarks.
+ 
+### Changelog
+### Known issues
+ 
+- There are no known issues with this model.

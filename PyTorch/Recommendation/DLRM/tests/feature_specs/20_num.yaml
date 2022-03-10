@@ -1,0 +1,455 @@
+channel_spec:
+  categorical:
+  - cat_0.bin
+  - cat_1.bin
+  - cat_2.bin
+  - cat_3.bin
+  - cat_4.bin
+  - cat_5.bin
+  - cat_6.bin
+  - cat_7.bin
+  - cat_8.bin
+  - cat_9.bin
+  - cat_10.bin
+  - cat_11.bin
+  - cat_12.bin
+  - cat_13.bin
+  - cat_14.bin
+  - cat_15.bin
+  - cat_16.bin
+  - cat_17.bin
+  - cat_18.bin
+  - cat_19.bin
+  - cat_20.bin
+  - cat_21.bin
+  - cat_22.bin
+  - cat_23.bin
+  - cat_24.bin
+  - cat_25.bin
+  label:
+  - label
+  numerical: &id001
+  - num_0
+  - num_1
+  - num_2
+  - num_3
+  - num_4
+  - num_5
+  - num_6
+  - num_7
+  - num_8
+  - num_9
+  - num_10
+  - num_11
+  - num_12
+  - num_13
+  - num_14
+  - num_15
+  - num_16
+  - num_17
+  - num_18
+  - num_19
+feature_spec:
+  cat_0.bin:
+    cardinality: 100000
+    dtype: int32
+  cat_1.bin:
+    cardinality: 100001
+    dtype: int32
+  cat_10.bin:
+    cardinality: 100010
+    dtype: int32
+  cat_11.bin:
+    cardinality: 100011
+    dtype: int32
+  cat_12.bin:
+    cardinality: 100012
+    dtype: int32
+  cat_13.bin:
+    cardinality: 100013
+    dtype: int32
+  cat_14.bin:
+    cardinality: 100014
+    dtype: int32
+  cat_15.bin:
+    cardinality: 100015
+    dtype: int32
+  cat_16.bin:
+    cardinality: 100016
+    dtype: int32
+  cat_17.bin:
+    cardinality: 100017
+    dtype: int32
+  cat_18.bin:
+    cardinality: 100018
+    dtype: int32
+  cat_19.bin:
+    cardinality: 100019
+    dtype: int32
+  cat_2.bin:
+    cardinality: 100002
+    dtype: int32
+  cat_20.bin:
+    cardinality: 100020
+    dtype: int32
+  cat_21.bin:
+    cardinality: 100021
+    dtype: int32
+  cat_22.bin:
+    cardinality: 100022
+    dtype: int32
+  cat_23.bin:
+    cardinality: 100023
+    dtype: int32
+  cat_24.bin:
+    cardinality: 100024
+    dtype: int32
+  cat_25.bin:
+    cardinality: 100025
+    dtype: int32
+  cat_3.bin:
+    cardinality: 100003
+    dtype: int32
+  cat_4.bin:
+    cardinality: 100004
+    dtype: int32
+  cat_5.bin:
+    cardinality: 100005
+    dtype: int32
+  cat_6.bin:
+    cardinality: 100006
+    dtype: int32
+  cat_7.bin:
+    cardinality: 100007
+    dtype: int32
+  cat_8.bin:
+    cardinality: 100008
+    dtype: int32
+  cat_9.bin:
+    cardinality: 100009
+    dtype: int32
+  label:
+    dtype: bool
+  num_0:
+    dtype: float16
+  num_1:
+    dtype: float16
+  num_10:
+    dtype: float16
+  num_11:
+    dtype: float16
+  num_12:
+    dtype: float16
+  num_13:
+    dtype: float16
+  num_14:
+    dtype: float16
+  num_15:
+    dtype: float16
+  num_16:
+    dtype: float16
+  num_17:
+    dtype: float16
+  num_18:
+    dtype: float16
+  num_19:
+    dtype: float16
+  num_2:
+    dtype: float16
+  num_3:
+    dtype: float16
+  num_4:
+    dtype: float16
+  num_5:
+    dtype: float16
+  num_6:
+    dtype: float16
+  num_7:
+    dtype: float16
+  num_8:
+    dtype: float16
+  num_9:
+    dtype: float16
+metadata: {}
+source_spec:
+  test:
+  - features: *id001
+    files:
+    - test/numerical.bin
+    type: split_binary
+  - features:
+    - label
+    files:
+    - test/label.bin
+    type: split_binary
+  - features:
+    - cat_0.bin
+    files:
+    - test/cat_0.bin
+    type: split_binary
+  - features:
+    - cat_1.bin
+    files:
+    - test/cat_1.bin
+    type: split_binary
+  - features:
+    - cat_2.bin
+    files:
+    - test/cat_2.bin
+    type: split_binary
+  - features:
+    - cat_3.bin
+    files:
+    - test/cat_3.bin
+    type: split_binary
+  - features:
+    - cat_4.bin
+    files:
+    - test/cat_4.bin
+    type: split_binary
+  - features:
+    - cat_5.bin
+    files:
+    - test/cat_5.bin
+    type: split_binary
+  - features:
+    - cat_6.bin
+    files:
+    - test/cat_6.bin
+    type: split_binary
+  - features:
+    - cat_7.bin
+    files:
+    - test/cat_7.bin
+    type: split_binary
+  - features:
+    - cat_8.bin
+    files:
+    - test/cat_8.bin
+    type: split_binary
+  - features:
+    - cat_9.bin
+    files:
+    - test/cat_9.bin
+    type: split_binary
+  - features:
+    - cat_10.bin
+    files:
+    - test/cat_10.bin
+    type: split_binary
+  - features:
+    - cat_11.bin
+    files:
+    - test/cat_11.bin
+    type: split_binary
+  - features:
+    - cat_12.bin
+    files:
+    - test/cat_12.bin
+    type: split_binary
+  - features:
+    - cat_13.bin
+    files:
+    - test/cat_13.bin
+    type: split_binary
+  - features:
+    - cat_14.bin
+    files:
+    - test/cat_14.bin
+    type: split_binary
+  - features:
+    - cat_15.bin
+    files:
+    - test/cat_15.bin
+    type: split_binary
+  - features:
+    - cat_16.bin
+    files:
+    - test/cat_16.bin
+    type: split_binary
+  - features:
+    - cat_17.bin
+    files:
+    - test/cat_17.bin
+    type: split_binary
+  - features:
+    - cat_18.bin
+    files:
+    - test/cat_18.bin
+    type: split_binary
+  - features:
+    - cat_19.bin
+    files:
+    - test/cat_19.bin
+    type: split_binary
+  - features:
+    - cat_20.bin
+    files:
+    - test/cat_20.bin
+    type: split_binary
+  - features:
+    - cat_21.bin
+    files:
+    - test/cat_21.bin
+    type: split_binary
+  - features:
+    - cat_22.bin
+    files:
+    - test/cat_22.bin
+    type: split_binary
+  - features:
+    - cat_23.bin
+    files:
+    - test/cat_23.bin
+    type: split_binary
+  - features:
+    - cat_24.bin
+    files:
+    - test/cat_24.bin
+    type: split_binary
+  - features:
+    - cat_25.bin
+    files:
+    - test/cat_25.bin
+    type: split_binary
+  train:
+  - features: *id001
+    files:
+    - train/numerical.bin
+    type: split_binary
+  - features:
+    - label
+    files:
+    - train/label.bin
+    type: split_binary
+  - features:
+    - cat_0.bin
+    files:
+    - train/cat_0.bin
+    type: split_binary
+  - features:
+    - cat_1.bin
+    files:
+    - train/cat_1.bin
+    type: split_binary
+  - features:
+    - cat_2.bin
+    files:
+    - train/cat_2.bin
+    type: split_binary
+  - features:
+    - cat_3.bin
+    files:
+    - train/cat_3.bin
+    type: split_binary
+  - features:
+    - cat_4.bin
+    files:
+    - train/cat_4.bin
+    type: split_binary
+  - features:
+    - cat_5.bin
+    files:
+    - train/cat_5.bin
+    type: split_binary
+  - features:
+    - cat_6.bin
+    files:
+    - train/cat_6.bin
+    type: split_binary
+  - features:
+    - cat_7.bin
+    files:
+    - train/cat_7.bin
+    type: split_binary
+  - features:
+    - cat_8.bin
+    files:
+    - train/cat_8.bin
+    type: split_binary
+  - features:
+    - cat_9.bin
+    files:
+    - train/cat_9.bin
+    type: split_binary
+  - features:
+    - cat_10.bin
+    files:
+    - train/cat_10.bin
+    type: split_binary
+  - features:
+    - cat_11.bin
+    files:
+    - train/cat_11.bin
+    type: split_binary
+  - features:
+    - cat_12.bin
+    files:
+    - train/cat_12.bin
+    type: split_binary
+  - features:
+    - cat_13.bin
+    files:
+    - train/cat_13.bin
+    type: split_binary
+  - features:
+    - cat_14.bin
+    files:
+    - train/cat_14.bin
+    type: split_binary
+  - features:
+    - cat_15.bin
+    files:
+    - train/cat_15.bin
+    type: split_binary
+  - features:
+    - cat_16.bin
+    files:
+    - train/cat_16.bin
+    type: split_binary
+  - features:
+    - cat_17.bin
+    files:
+    - train/cat_17.bin
+    type: split_binary
+  - features:
+    - cat_18.bin
+    files:
+    - train/cat_18.bin
+    type: split_binary
+  - features:
+    - cat_19.bin
+    files:
+    - train/cat_19.bin
+    type: split_binary
+  - features:
+    - cat_20.bin
+    files:
+    - train/cat_20.bin
+    type: split_binary
+  - features:
+    - cat_21.bin
+    files:
+    - train/cat_21.bin
+    type: split_binary
+  - features:
+    - cat_22.bin
+    files:
+    - train/cat_22.bin
+    type: split_binary
+  - features:
+    - cat_23.bin
+    files:
+    - train/cat_23.bin
+    type: split_binary
+  - features:
+    - cat_24.bin
+    files:
+    - train/cat_24.bin
+    type: split_binary
+  - features:
+    - cat_25.bin
+    files:
+    - train/cat_25.bin
+    type: split_binary
+

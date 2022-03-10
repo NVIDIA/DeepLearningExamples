@@ -18,7 +18,7 @@ FROM ${FROM_IMAGE_NAME}
 RUN apt update && \
     apt install -y openjdk-8-jdk && \
     apt install -y curl && \
-    curl https://archive.apache.org/dist/spark/spark-3.0.1/spark-3.0.1-bin-hadoop2.7.tgz -o /opt/spark.tgz && \
+    curl https://archive.apache.org/dist/spark/spark-3.0.1/spark-3.0.1-bin-hadoop3.2.tgz -o /opt/spark.tgz && \
     tar zxf /opt/spark.tgz -C /opt/ && \
     mv /opt/spark-3.0.1-bin-hadoop3.2 /opt/spark && \
     rm /opt/spark.tgz && \
@@ -27,7 +27,7 @@ RUN apt update && \
     apt install -y git
 
 ADD requirements.txt .
-RUN apt install -y python3-pip && pip3 install -r requirements.txt
+RUN apt install -y python3-pip && python3 -m pip install --upgrade pip && pip3 install -r requirements.txt
 
 WORKDIR /workspace/dlrm
 

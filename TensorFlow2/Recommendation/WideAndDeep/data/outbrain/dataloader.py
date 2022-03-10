@@ -12,128 +12,67 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from functools import partial
-from multiprocessing import cpu_count
 
+import cupy
+import horovod.tensorflow as hvd
 import tensorflow as tf
+from data.outbrain.features import CATEGORICAL_COLUMNS, NUMERIC_COLUMNS
+from nvtabular.loader.tensorflow import KerasSequenceLoader
 
-from data.outbrain.features import get_features_keys
-
-
-def _consolidate_batch(elem):
-    label = elem.pop('label')
-    reshaped_label = tf.reshape(label, [-1, label.shape[-1]])
-    features = get_features_keys()
-
-    reshaped_elem = {
-        key: tf.reshape(elem[key], [-1, elem[key].shape[-1]])
-        for key in elem
-        if key in features
-    }
-
-    return reshaped_elem, reshaped_label
+cupy.random.seed(None)
 
 
-def get_parse_function(feature_spec):
-    def _parse_function(example_proto):
-        return tf.io.parse_single_example(example_proto, feature_spec)
+def seed_fn():
+    min_int, max_int = tf.int32.limits
+    max_rand = max_int // hvd.size()
 
-    return _parse_function
+    # Generate a seed fragment on each worker
+    seed_fragment = cupy.random.randint(0, max_rand).get()
+
+    # Aggregate seed fragments from all Horovod workers
+    seed_tensor = tf.constant(seed_fragment)
+    reduced_seed = hvd.allreduce(seed_tensor, name="shuffle_seed", op=hvd.mpi_ops.Sum)
+
+    return reduced_seed % max_rand
 
 
 def train_input_fn(
-        filepath_pattern,
-        feature_spec,
-        records_batch_size,
-        num_gpus=1,
-        id=0):
-    _parse_function = get_parse_function(feature_spec)
-
-    dataset = tf.data.Dataset.list_files(
-        file_pattern=filepath_pattern
-    )
-
-    dataset = dataset.interleave(
-        lambda x: tf.data.TFRecordDataset(x),
-        cycle_length=cpu_count() // num_gpus,
-        block_length=1
-    )
-
-    dataset = dataset.map(
-        map_func=_parse_function,
-        num_parallel_calls=tf.data.experimental.AUTOTUNE
-    )
-
-    dataset = dataset.shard(num_gpus, id)
-
-    dataset = dataset.shuffle(records_batch_size * 8)
-
-    dataset = dataset.repeat(
-        count=None
-    )
-
-    dataset = dataset.batch(
+    train_paths, records_batch_size, buffer_size=0.1, parts_per_chunk=1, shuffle=True
+):
+    train_dataset_tf = KerasSequenceLoader(
+        train_paths,
         batch_size=records_batch_size,
-        drop_remainder=False
+        label_names=["clicked"],
+        cat_names=CATEGORICAL_COLUMNS,
+        cont_names=NUMERIC_COLUMNS,
+        engine="parquet",
+        shuffle=shuffle,
+        buffer_size=buffer_size,
+        parts_per_chunk=parts_per_chunk,
+        global_size=hvd.size(),
+        global_rank=hvd.rank(),
+        seed_fn=seed_fn,
     )
 
-    dataset = dataset.map(
-        map_func=partial(
-            _consolidate_batch
-        ),
-        num_parallel_calls=tf.data.experimental.AUTOTUNE
-    )
-
-    dataset = dataset.prefetch(
-        buffer_size=tf.data.experimental.AUTOTUNE
-    )
-
-    return dataset
+    return train_dataset_tf
 
 
 def eval_input_fn(
-        filepath_pattern,
-        feature_spec,
-        records_batch_size,
-        num_gpus=1,
-        repeat=1,
-        id=0):
-    dataset = tf.data.Dataset.list_files(
-        file_pattern=filepath_pattern,
-        shuffle=False
-    )
-
-    dataset = tf.data.TFRecordDataset(
-        filenames=dataset,
-        num_parallel_reads=1
-    )
-
-    dataset = dataset.shard(num_gpus, id)
-
-    dataset = dataset.repeat(
-        count=repeat
-    )
-
-    dataset = dataset.batch(
+    valid_paths, records_batch_size, buffer_size=0.1, parts_per_chunk=1, shuffle=False
+):
+    valid_dataset_tf = KerasSequenceLoader(
+        valid_paths,
         batch_size=records_batch_size,
-        drop_remainder=False
+        label_names=["clicked"],
+        cat_names=CATEGORICAL_COLUMNS + ["display_id"],
+        cont_names=NUMERIC_COLUMNS,
+        engine="parquet",
+        shuffle=shuffle,
+        buffer_size=buffer_size,
+        parts_per_chunk=parts_per_chunk,
+        global_size=hvd.size(),
+        global_rank=hvd.rank(),
+        seed_fn=seed_fn,
     )
 
-    dataset = dataset.apply(
-        transformation_func=tf.data.experimental.parse_example_dataset(
-            features=feature_spec,
-            num_parallel_calls=1
-        )
-    )
-
-    dataset = dataset.map(
-        map_func=partial(
-            _consolidate_batch
-        ),
-        num_parallel_calls=None
-    )
-    dataset = dataset.prefetch(
-        buffer_size=1
-    )
-
-    return dataset
+    return valid_dataset_tf

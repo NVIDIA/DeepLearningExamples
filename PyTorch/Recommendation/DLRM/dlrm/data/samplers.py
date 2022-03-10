@@ -21,7 +21,6 @@ from dlrm.utils.distributed import get_local_rank
 
 
 class RandomDistributedSampler(RandomSampler):
-
     _SAMPLE_FILE = "/tmp/dlrm_training_sample.npy"
 
     def __iter__(self):

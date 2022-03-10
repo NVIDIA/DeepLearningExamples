@@ -1,9 +1,7 @@
 matplotlib
 numpy
 inflect
-librosa==0.8.0
+librosa==0.9.0
 scipy
-Unidecode
-praat-parselmouth==0.3.3
 tensorboardX==2.0
-git+git://github.com/NVIDIA/dllogger.git@26a0f8f1958de2c0c460925ff6102a4d2486d6cc#egg=dllogger
+git+https://github.com/NVIDIA/dllogger@v0.1.0#egg=dllogger

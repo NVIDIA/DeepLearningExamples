@@ -12,33 +12,53 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import operator
+import os
 import time
 
 import dllogger as logger
 import numpy as np
-import torch.cuda.profiler as profiler
 from dllogger import JSONStreamBackend, StdOutBackend, Verbosity
 from pytorch_lightning import Callback
 
-from utils.utils import is_main_process
+from utils.utils import rank_zero
+
+
+class DLLogger:
+    def __init__(self, log_dir, filename, append=True):
+        super().__init__()
+        self._initialize_dllogger(log_dir, filename, append)
+
+    @rank_zero
+    def _initialize_dllogger(self, log_dir, filename, append):
+        backends = [
+            JSONStreamBackend(Verbosity.VERBOSE, os.path.join(log_dir, filename), append=append),
+            StdOutBackend(Verbosity.VERBOSE),
+        ]
+        logger.init(backends=backends)
+
+    @rank_zero
+    def log_metrics(self, metrics, step=None):
+        if step is None:
+            step = ()
+        logger.log(step=step, data=metrics)
+
+    @rank_zero
+    def flush(self):
+        logger.flush()
 
 
 class LoggingCallback(Callback):
-    def __init__(self, log_dir, global_batch_size, mode, warmup, dim, profile):
-        logger.init(backends=[JSONStreamBackend(Verbosity.VERBOSE, log_dir), StdOutBackend(Verbosity.VERBOSE)])
+    def __init__(self, log_dir, filnename, global_batch_size, mode, warmup, dim):
+        self.dllogger = DLLogger(log_dir, filnename)
         self.warmup_steps = warmup
         self.global_batch_size = global_batch_size
         self.step = 0
         self.dim = dim
         self.mode = mode
-        self.profile = profile
         self.timestamps = []
 
     def do_step(self):
         self.step += 1
-        if self.profile and self.step == self.warmup_steps:
-            profiler.start()
         if self.step > self.warmup_steps:
             self.timestamps.append(time.time())
 
@@ -65,17 +85,13 @@ class LoggingCallback(Callback):
 
         return stats
 
+    @rank_zero
     def _log(self):
-        if is_main_process():
-            diffs = list(map(operator.sub, self.timestamps[1:], self.timestamps[:-1]))
-            deltas = np.array(diffs)
-            stats = self.process_performance_stats(deltas)
-            logger.log(step=(), data=stats)
-            logger.flush()
+        stats = self.process_performance_stats(np.diff(self.timestamps))
+        self.dllogger.log_metrics(metrics=stats)
+        self.dllogger.flush()
 
     def on_train_end(self, trainer, pl_module):
-        if self.profile:
-            profiler.stop()
         self._log()
 
     def on_test_end(self, trainer, pl_module):

@@ -68,7 +68,7 @@ if ! [ "$gpu" -ge 0 ] || [[ ! "$gpu" =~ ^(1|4|8)$ ]] 2>/dev/null; then
   exit 1
 fi
 
-cmd="mpiexec --allow-run-as-root --bind-to socket -np ${gpu} \
+cmd="horovodrun -np ${gpu} sh hvd_wrapper.sh \
 	python main.py \
 	--benchmark \
 	--benchmark_warmup_steps 500 \

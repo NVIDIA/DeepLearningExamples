@@ -12,29 +12,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import ctypes
 import os
 
 import torch
 from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
+from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, early_stopping
 
 from data_loading.data_module import DataModule
-from models.nn_unet import NNUnet
+from nnunet.nn_unet import NNUnet
+from utils.args import get_main_args
 from utils.gpu_affinity import set_affinity
 from utils.logger import LoggingCallback
-from utils.utils import get_main_args, is_main_process, log, make_empty_dir, set_cuda_devices, verify_ckpt_path
+from utils.utils import make_empty_dir, set_cuda_devices, verify_ckpt_path
 
 if __name__ == "__main__":
     args = get_main_args()
 
-    if args.profile:
-        import nvidia_dlprof_pytorch_nvtx
-
-        nvidia_dlprof_pytorch_nvtx.init()
-        print("Profiling enabled")
-
     if args.affinity != "disabled":
-        affinity = set_affinity(os.getenv("LOCAL_RANK", "0"), args.affinity)
+        set_affinity(int(os.getenv("LOCAL_RANK", "0")), args.gpus, mode=args.affinity)
+
+    # Limit number of CPU threads
+    os.environ["OMP_NUM_THREADS"] = "1"
+    # Set device limit on the current device cudaLimitMaxL2FetchGranularity = 0x05
+    _libcudart = ctypes.CDLL("libcudart.so")
+    pValue = ctypes.cast((ctypes.c_int * 1)(), ctypes.POINTER(ctypes.c_int))
+    _libcudart.cudaDeviceSetLimit(ctypes.c_int(0x05), ctypes.c_int(128))
+    _libcudart.cudaDeviceGetLimit(pValue, ctypes.c_int(0x05))
+    assert pValue.contents.value == 128
 
     set_cuda_devices(args)
     seed_everything(args.seed)
@@ -48,22 +53,26 @@ if __name__ == "__main__":
     if args.benchmark:
         model = NNUnet(args)
         batch_size = args.batch_size if args.exec_mode == "train" else args.val_batch_size
-        log_dir = os.path.join(args.results, args.logname if args.logname is not None else "perf.json")
+        filnename = args.logname if args.logname is not None else "perf1.json"
         callbacks = [
             LoggingCallback(
-                log_dir=log_dir,
+                log_dir=args.results,
+                filnename=filnename,
                 global_batch_size=batch_size * args.gpus,
                 mode=args.exec_mode,
                 warmup=args.warmup,
                 dim=args.dim,
-                profile=args.profile,
             )
         ]
     elif args.exec_mode == "train":
         model = NNUnet(args)
+        early_stopping = EarlyStopping(monitor="dice_mean", patience=args.patience, verbose=True, mode="max")
+        callbacks = [early_stopping]
         if args.save_ckpt:
-            model_ckpt = ModelCheckpoint(monitor="dice_sum", mode="max", save_last=True)
-        callbacks = [EarlyStopping(monitor="dice_sum", patience=args.patience, verbose=True, mode="max")]
+            model_ckpt = ModelCheckpoint(
+                dirpath=f"{args.ckpt_store_dir}/checkpoints", filename="{epoch}-{dice_mean:.2f}", monitor="dice_mean", mode="max", save_last=True
+            )
+            callbacks.append(model_ckpt)
     else:  # Evaluation or inference
         if ckpt_path is not None:
             model = NNUnet.load_from_checkpoint(ckpt_path)
@@ -76,8 +85,8 @@ if __name__ == "__main__":
         precision=16 if args.amp else 32,
         benchmark=True,
         deterministic=False,
-        min_epochs=args.min_epochs,
-        max_epochs=args.max_epochs,
+        min_epochs=args.epochs,
+        max_epochs=args.epochs,
         sync_batchnorm=args.sync_batchnorm,
         gradient_clip_val=args.gradient_clip_val,
         callbacks=callbacks,
@@ -85,7 +94,7 @@ if __name__ == "__main__":
         default_root_dir=args.results,
         resume_from_checkpoint=ckpt_path,
         accelerator="ddp" if args.gpus > 1 else None,
-        checkpoint_callback=model_ckpt,
+        checkpoint_callback=args.save_ckpt,
         limit_train_batches=1.0 if args.train_batches == 0 else args.train_batches,
         limit_val_batches=1.0 if args.test_batches == 0 else args.test_batches,
         limit_test_batches=1.0 if args.test_batches == 0 else args.test_batches,
@@ -93,11 +102,7 @@ if __name__ == "__main__":
 
     if args.benchmark:
         if args.exec_mode == "train":
-            if args.profile:
-                with torch.autograd.profiler.emit_nvtx():
-                    trainer.fit(model, train_dataloader=data_module.train_dataloader())
-            else:
-                trainer.fit(model, train_dataloader=data_module.train_dataloader())
+            trainer.fit(model, train_dataloader=data_module.train_dataloader())
         else:
             # warmup
             trainer.test(model, test_dataloaders=data_module.test_dataloader())
@@ -109,17 +114,15 @@ if __name__ == "__main__":
     elif args.exec_mode == "evaluate":
         model.args = args
         trainer.test(model, test_dataloaders=data_module.val_dataloader())
-        if is_main_process():
-            logname = args.logname if args.logname is not None else "eval_log.json"
-            log(logname, model.eval_dice, results=args.results)
     elif args.exec_mode == "predict":
-        model.args = args
         if args.save_preds:
-            prec = "amp" if args.amp else "fp32"
-            dir_name = f"preds_task_{args.task}_dim_{args.dim}_fold_{args.fold}_{prec}"
+            ckpt_name = "_".join(args.ckpt_path.split("/")[-1].split(".")[:-1])
+            dir_name = f"predictions_{ckpt_name}"
+            dir_name += f"_task={model.args.task}_fold={model.args.fold}"
             if args.tta:
                 dir_name += "_tta"
             save_dir = os.path.join(args.results, dir_name)
             model.save_dir = save_dir
             make_empty_dir(save_dir)
+        model.args = args
         trainer.test(model, test_dataloaders=data_module.test_dataloader())

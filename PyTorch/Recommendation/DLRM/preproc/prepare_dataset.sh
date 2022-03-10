@@ -68,7 +68,7 @@ source ${DGX_VERSION}_config.sh
 if [ -d ${final_output_dir}/train ] \
    && [ -d ${final_output_dir}/validation ] \
    && [ -d ${final_output_dir}/test ] \
-   && [ -f ${final_output_dir}/model_sizes.json ]; then
+   && [ -f ${final_output_dir}/feature_spec.yaml ]; then
 
     echo "Final conversion already done"
 else
@@ -83,6 +83,7 @@ else
     rm ${final_output_dir}/train_data.bin
     rm ${final_output_dir}/validation_data.bin
     rm ${final_output_dir}/test_data.bin
+    rm ${final_output_dir}/model_size.json
 
     mv ${final_output_dir}/split/* ${final_output_dir}
     rm -rf ${final_output_dir}/split

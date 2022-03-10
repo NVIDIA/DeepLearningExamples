@@ -48,7 +48,7 @@ def get_dataloader_fn(batch_size: int = 8,
                       mel_fmax: float = 8000.0):
 
     if p_arpabet > 0.0:
-        cmudict.initialize(cmudict_path, keep_ambiguous=True)
+        cmudict.initialize(cmudict_path, heteronyms_path)
 
     dataset = TTSDataset(dataset_path=dataset_path,
                          audiopaths_and_text=filelist,

@@ -19,15 +19,13 @@ from __future__ import print_function
 
 import tensorflow as tf
 
-import horovod.tensorflow as hvd
+from utils import hvd_wrapper as hvd
 import dllogger
 
 from model import layers
 from model import blocks
 
 from utils import var_storage
-from utils import hvd_utils
-
 from utils.data_utils import normalized_inputs
 
 from utils.learning_rate import learning_rate_scheduler
@@ -337,8 +335,8 @@ class ResnetModel(object):
                     if params["apply_loss_scaling"]:
                         optimizer = FixedLossScalerOptimizer(optimizer, scale=params["loss_scale"])
 
-                    if hvd_utils.is_using_hvd():
-                        optimizer = hvd.DistributedOptimizer(optimizer)
+                    if hvd.size() > 1:
+                        optimizer = hvd.hvd_global_object.DistributedOptimizer(optimizer)
 
                     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
                     if mode != tf.estimator.ModeKeys.TRAIN:

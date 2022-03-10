@@ -18,7 +18,6 @@ ENV LD_LIBRARY_PATH /workspace/install/lib:${LD_LIBRARY_PATH}
 ENV PYTHONPATH /workspace
 WORKDIR /workspace
 
-RUN pip install nvidia-pyindex
 ADD requirements.txt /workspace/requirements.txt
 ADD triton/requirements.txt /workspace/triton/requirements.txt
 RUN pip install -r /workspace/requirements.txt

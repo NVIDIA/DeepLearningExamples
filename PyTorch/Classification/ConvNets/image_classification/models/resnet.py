@@ -36,14 +36,16 @@ from typing import List, Dict, Callable, Any, Type
 import torch
 import torch.nn as nn
 
-from .common import SqueezeAndExcitation, LayerBuilder, LambdaLayer
+from .common import (
+    SqueezeAndExcitation,
+    LayerBuilder,
+    SqueezeAndExcitationTRT,
+)
 
 from .model import (
     Model,
     ModelParams,
     ModelArch,
-    OptimizerParams,
-    create_entrypoint,
     EntryPoint,
 )
 
@@ -128,11 +130,18 @@ class Bottleneck(nn.Module):
         self.stride = stride
 
         self.fused_se = fused_se
-        self.squeeze = (
-            SqueezeAndExcitation(planes * expansion, se_squeeze, builder.activation(), use_conv=trt)
-            if se
-            else None
-        )
+        if se:
+            self.squeeze = (
+                SqueezeAndExcitation(
+                    planes * expansion, se_squeeze, builder.activation()
+                )
+                if not trt
+                else SqueezeAndExcitationTRT(
+                    planes * expansion, se_squeeze, builder.activation()
+                )
+            )
+        else:
+            self.squeeze = None
 
     def forward(self, x):
         residual = x
@@ -215,6 +224,7 @@ class ResNet(nn.Module):
         last_bn_0_init: bool = False
         conv_init: str = "fan_in"
         trt: bool = False
+        fused_se: bool = True
 
         def parser(self, name):
             p = super().parser(name)
@@ -240,6 +250,10 @@ class ResNet(nn.Module):
                 help="initialization mode for convolutional layers, see https://pytorch.org/docs/stable/nn.init.html#torch.nn.init.kaiming_normal_",
             )
             p.add_argument("--trt", metavar="True|False", default=self.trt, type=bool)
+            p.add_argument(
+                "--fused_se", metavar="True|False", default=self.fused_se, type=bool
+            )
+
             return p
 
     def __init__(
@@ -249,6 +263,7 @@ class ResNet(nn.Module):
         last_bn_0_init: bool = False,
         conv_init: str = "fan_in",
         trt: bool = False,
+        fused_se: bool = True,
     ):
 
         super(ResNet, self).__init__()
@@ -265,6 +280,7 @@ class ResNet(nn.Module):
         inplanes = arch.stem_width
         assert len(arch.widths) == len(arch.layers)
         self.num_layers = len(arch.widths)
+        layers = []
         for i, (w, l) in enumerate(zip(arch.widths, arch.layers)):
             layer, inplanes = self._make_layer(
                 arch.block,
@@ -275,9 +291,11 @@ class ResNet(nn.Module):
                 cardinality=arch.cardinality,
                 stride=1 if i == 0 else 2,
                 trt=trt,
+                fused_se=fused_se,
             )
-            setattr(self, f"layer{i+1}", layer)
+            layers.append(layer)
 
+        self.layers = nn.Sequential(*layers)
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Linear(arch.widths[-1] * arch.expansion, num_classes)
 
@@ -297,13 +315,8 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         x = self.stem(x)
-
-        for i in range(self.num_layers):
-            fn = getattr(self, f"layer{i+1}")
-            x = fn(x)
-
+        x = self.layers(x)
         x = self.classifier(x)
-
         return x
 
     def extract_features(self, x, layers=None):
@@ -311,7 +324,7 @@ class ResNet(nn.Module):
             layers = [f"layer{i+1}" for i in range(self.num_layers)] + ["classifier"]
 
         run = [
-            f"layer{i+1}"
+            i
             for i in range(self.num_layers)
             if "classifier" in layers
             or any([f"layer{j+1}" in layers for j in range(i, self.num_layers)])
@@ -320,10 +333,10 @@ class ResNet(nn.Module):
         output = {}
         x = self.stem(x)
         for l in run:
-            fn = getattr(self, l)
+            fn = self.layers[l]
             x = fn(x)
-            if l in layers:
-                output[l] = x
+            if f"layer{l+1}" in layers:
+                output[f"layer{l+1}"] = x
 
         if "classifier" in layers:
             output["classifier"] = self.classifier(x)
@@ -332,7 +345,16 @@ class ResNet(nn.Module):
 
     # helper functions {{{
     def _make_layer(
-        self, block, expansion, inplanes, planes, blocks, stride=1, cardinality=1, trt=False,
+        self,
+        block,
+        expansion,
+        inplanes,
+        planes,
+        blocks,
+        stride=1,
+        cardinality=1,
+        trt=False,
+        fused_se=True,
     ):
         downsample = None
         if stride != 1 or inplanes != planes * expansion:
@@ -354,14 +376,32 @@ class ResNet(nn.Module):
                     stride=stride if i == 0 else 1,
                     cardinality=cardinality,
                     downsample=downsample if i == 0 else None,
-                    fused_se=True,
+                    fused_se=fused_se,
                     last_bn_0_init=self.last_bn_0_init,
-                    trt = trt,
+                    trt=trt,
                 )
             )
             inplanes = planes * expansion
 
         return nn.Sequential(*layers), inplanes
+
+    def ngc_checkpoint_remap(self, url=None, version=None):
+        if version is None:
+            version = url.split("/")[8]
+
+        def to_sequential_remap(s):
+            splited = s.split(".")
+            if splited[0].startswith("layer"):
+                return ".".join(
+                    ["layers." + str(int(splited[0][len("layer") :]) - 1)] + splited[1:]
+                )
+            else:
+                return s
+
+        def no_remap(s):
+            return s
+
+        return {"20.06.0": to_sequential_remap}.get(version, no_remap)
 
     # }}}
 
@@ -410,7 +450,7 @@ __models: Dict[str, Model] = {
     ),
 }
 
-_ce = lambda n: EntryPoint(n, __models[n])
+_ce = lambda n: EntryPoint.create(n, __models[n])
 resnet50 = _ce("resnet50")
 resnext101_32x4d = _ce("resnext101-32x4d")
 se_resnext101_32x4d = _ce("se-resnext101-32x4d")

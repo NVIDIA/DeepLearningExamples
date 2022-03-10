@@ -222,7 +222,7 @@ The `launch.sh` script requires that the location on the dataset is specified in
 ```
 bash ./scripts/D0/train_{AMP, FP32, TF32}_8x{V100-32G, A100-80G}.sh
 ```
-The training scripts train an EfficientDet-D0 model and performs evaluation on the COCO 2017 dataset. By default, the training script run training on standard configuration (DGX A100/DGX-1 V100, AMP/FP32/TF32, 300 epochs). Run one of the scripts in `./scripts/D0` directory using `bash ./scripts/D0/train_{AMP, FP32, TF32}_8x{V100-32G, A100-80G}.sh`. Ensure COCO-2017 is mounted in `/workspace/object_detection/datasets/coco` and EfficientNet-B0 backbone weights are mounted in `/backbone_checkpoints`. The backbone checkpoint can be downloaded from [this](https://ngc.nvidia.com/catalog/models/nvidia:efficientdet_backbone_efficientnet-b0_pyt_amp_ckpt) location.
+The training scripts train an EfficientDet-D0 model and performs evaluation on the COCO 2017 dataset. By default, the training script run training on standard configuration (DGX A100/DGX-1 V100, AMP/FP32/TF32, 300 epochs). Run one of the scripts in `./scripts/D0` directory using `bash ./scripts/D0/train_{AMP, FP32, TF32}_8x{V100-32G, A100-80G}.sh`. Ensure COCO-2017 is mounted in `/workspace/object_detection/datasets/coco` and EfficientNet-B0 backbone weights are mounted in `/backbone_checkpoints`. The backbone checkpoint can be downloaded from [this](https://ngc.nvidia.com/catalog/models/nvidia:efficientdet_backbone_efficientnet_b0_pyt_amp_ckpt) location.
  
 ### 6. Start validation/evaluation.
 

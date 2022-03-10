@@ -34,13 +34,6 @@ import dllogger
 from maskrcnn_benchmark.utils.logger import format_step
 
 # See if we can use apex.DistributedDataParallel instead of the torch default,
-# and enable mixed-precision via apex.amp
-try:
-    from apex import amp
-    use_amp = True
-except ImportError:
-    print('Use APEX for multi-precision via apex.amp')
-    use_amp = False
 try:
     from apex.parallel import DistributedDataParallel as DDP
     use_apex_ddp = True
@@ -98,15 +91,11 @@ def train(cfg, local_rank, distributed, fp16, dllogger):
     optimizer = make_optimizer(cfg, model)
     scheduler = make_lr_scheduler(cfg, optimizer)
 
-    if use_amp:
-        # Initialize mixed-precision training
-        if fp16:
-            use_mixed_precision = True
-        else:
-            use_mixed_precision = cfg.DTYPE == "float16"
-
-        amp_opt_level = 'O1' if use_mixed_precision else 'O0'
-        model, optimizer = amp.initialize(model, optimizer, opt_level=amp_opt_level)
+    use_amp = False
+    if fp16:
+        use_amp = True
+    else:
+        use_amp = cfg.DTYPE == "float16"
 
     if distributed:
         if use_apex_ddp:

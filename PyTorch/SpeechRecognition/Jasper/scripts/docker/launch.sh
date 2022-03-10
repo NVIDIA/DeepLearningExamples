@@ -21,7 +21,7 @@ MOUNTS+=" -v $JASPER_REPO:/workspace/jasper"
 echo $MOUNTS
 docker run -it --rm --gpus all \
   --env PYTHONDONTWRITEBYTECODE=1 \
-  --shm-size=4g \
+  --ipc=host \
   --ulimit memlock=-1 \
   --ulimit stack=67108864 \
   $MOUNTS \

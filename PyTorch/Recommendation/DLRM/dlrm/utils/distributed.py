@@ -13,10 +13,11 @@
 # limitations under the License.
 import math
 import os
+import warnings
 from collections import deque
 from functools import reduce
 from itertools import combinations_with_replacement
-from typing import MutableSequence, Any, Sequence, List
+from typing import Sequence
 
 import torch
 import torch.distributed as dist
@@ -84,12 +85,15 @@ def init_distributed_mode(backend="nccl", use_gpu=True):
         os.environ['MASTER_PORT'] = '29500'
     else:
         print('Not using distributed mode')
-        return None, 1, None
+        return 0, 1, 0
 
     if use_gpu:
         torch.cuda.set_device(gpu)
 
-    print('| distributed init (rank {})'.format(rank), flush=True)
+    if rank != 0:
+        warnings.filterwarnings("ignore")
+
+    os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "0"
     torch.distributed.init_process_group(backend=backend, world_size=world_size, rank=rank, init_method='env://')
 
     return rank, world_size, gpu

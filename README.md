@@ -83,7 +83,7 @@ These examples, along with our NVIDIA deep learning software stack, are provided
 ## Graph Neural Networks
 | Models  | Framework | A100 | AMP | Multi-GPU | Multi-Node  | TRT  | ONNX  | Triton | DLC | NB | 
 | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- |------------- |------------- |------------- |------------- |------------- |
-| [SE(3)-Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/DrugDiscovery/SE3Transformer) | PyTorch  | Yes  | Yes  | Yes  | - | - | - | - | - | - |
+| [SE(3)-Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/DGLPyTorch/DrugDiscovery/SE3Transformer) | PyTorch  | Yes  | Yes  | Yes  | - | - | - | - | - | - |
 
 
 ## NVIDIA support

@@ -1,0 +1,3 @@
+git+https://github.com/NVIDIA/dllogger@v1.0.0#egg=dllogger
+pandas==1.3.4
+pynvml==11.0.0

@@ -932,7 +932,11 @@ To view all available options for inference, run `python3 translate.py --help`.
 
 ## Performance
 
-The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
+The performance measurements in this document were conducted at the time of
+publication and may not reflect the performance achieved from NVIDIA’s latest
+software release. For the most up-to-date performance measurements, go to
+[NVIDIA Data Center Deep Learning Product
+Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
 
 ### Benchmarking
 The following section shows how to run benchmarks measuring the model

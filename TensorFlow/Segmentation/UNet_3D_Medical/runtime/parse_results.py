@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,11 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+""" Parsing of results"""
 import os
 import argparse
 
 
 def parse_convergence_results(path, environment):
+    """ Parse convergence results utility
+
+    :param path: Path to results
+    :param environment: System environment
+    """
     whole_tumor = []
     tumor_core = []
     peritumoral_edema = []
@@ -26,22 +32,22 @@ def parse_convergence_results(path, environment):
     if not logfiles:
         raise FileNotFoundError("No logfile found at {}".format(path))
     for logfile in logfiles:
-        with open(os.path.join(path, logfile), "r") as f:
-            content = f.readlines()
-        if "TumorCore" not in content[-1]:
+        with open(os.path.join(path, logfile), "r") as file_item:
+            content = file_item.readlines()
+        if "tumor_core" not in content[-1]:
             print("Evaluation score not found. The file", logfile, "might be corrupted.")
             continue
         content = content[-1].split("()")[1]
         whole_tumor.append(float([val for val in content.split("  ")
-                                  if "WholeTumor" in val][0].split()[-1]))
+                                  if "whole_tumor" in val][0].split()[-1]))
         tumor_core.append(float([val for val in content.split("  ")
-                                 if "TumorCore" in val][0].split()[-1]))
+                                 if "tumor_core" in val][0].split()[-1]))
         peritumoral_edema.append(float([val for val in content.split("  ")
-                                        if "PeritumoralEdema" in val][0].split()[-1]))
+                                        if "peritumoral_edema" in val][0].split()[-1]))
         enhancing_tumor.append(float([val for val in content.split("  ")
-                                      if "EnhancingTumor" in val][0].split()[-1]))
+                                      if "enhancing_tumor" in val][0].split()[-1]))
         mean_dice.append(float([val for val in content.split("  ")
-                                if "MeanDice" in val][0].split()[-1]))
+                                if "mean_dice" in val][0].split()[-1]))
 
     if whole_tumor:
         print("Evaluation average dice score:", sum(mean_dice) / len(mean_dice))

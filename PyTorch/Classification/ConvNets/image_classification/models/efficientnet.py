@@ -31,11 +31,11 @@ except ImportError as e:
 
 
 from .common import (
-    SqueezeAndExcitation,
-    ONNXSiLU,
     SequentialSqueezeAndExcitation,
+    SequentialSqueezeAndExcitationTRT,
     LayerBuilder,
-    LambdaLayer,
+    StochasticDepthResidual,
+    Flatten,
 )
 
 from .model import (
@@ -206,6 +206,7 @@ class EfficientNet(nn.Module):
             out_channels = arch.stem_channels
 
             plc = 0
+            layers = []
             for i, (k, s, r, e, c) in arch.enumerate():
                 layer, out_channels = self._make_layer(
                     block=arch.block,
@@ -220,8 +221,8 @@ class EfficientNet(nn.Module):
                     trt=trt,
                 )
                 plc = plc + r
-                setattr(self, f"layer{i+1}", layer)
-
+                layers.append(layer)
+            self.layers = nn.Sequential(*layers)
             self.features = self._make_features(out_channels, arch.feature_channels)
             self.classifier = self._make_classifier(
                 arch.feature_channels, num_classes, dropout
@@ -229,11 +230,7 @@ class EfficientNet(nn.Module):
 
     def forward(self, x):
         x = self.stem(x)
-
-        for i in range(self.num_layers):
-            fn = getattr(self, f"layer{i+1}")
-            x = fn(x)
-
+        x = self.layers(x)
         x = self.features(x)
         x = self.classifier(x)
 
@@ -241,27 +238,34 @@ class EfficientNet(nn.Module):
 
     def extract_features(self, x, layers=None):
         if layers is None:
-            layers = [f"layer{i+1}" for i in range(self.num_layers)]
+            layers = [f"layer{i+1}" for i in range(self.num_layers)] + [
+                "features",
+                "classifier",
+            ]
 
         run = [
-            f"layer{i+1}"
+            i
             for i in range(self.num_layers)
             if "classifier" in layers
             or "features" in layers
             or any([f"layer{j+1}" in layers for j in range(i, self.num_layers)])
         ]
-        if "features" in layers or "classifier" in layers:
-            run.append("features")
-        if "classifier" in layers:
-            run.append("classifier")
 
         output = {}
         x = self.stem(x)
         for l in run:
-            fn = getattr(self, l)
+            fn = self.layers[l]
             x = fn(x)
-            if l in layers:
-                output[l] = x
+            if f"layer{l+1}" in layers:
+                output[f"layer{l+1}"] = x
+
+        if "features" in layers or "classifier" in layers:
+            x = self.features(x)
+            if "features" in layers:
+                output["features"] = x
+
+        if "classifier" in layers:
+            output["classifier"] = self.classifier(x)
 
         return output
 
@@ -298,7 +302,7 @@ class EfficientNet(nn.Module):
             OrderedDict(
                 [
                     ("pooling", nn.AdaptiveAvgPool2d(1)),
-                    ("squeeze", LambdaLayer(lambda x: x.squeeze(-1).squeeze(-1))),
+                    ("squeeze", Flatten()),
                     ("dropout", nn.Dropout(dropout)),
                     ("fc", nn.Linear(num_features, num_classes)),
                 ]
@@ -353,11 +357,33 @@ class EfficientNet(nn.Module):
             layers.append((f"block{idx}", blk))
         return nn.Sequential(OrderedDict(layers)), out_channels
 
+    def ngc_checkpoint_remap(self, url=None, version=None):
+        if version is None:
+            version = url.split("/")[8]
+
+        def to_sequential_remap(s):
+            splited = s.split(".")
+            if splited[0].startswith("layer"):
+                return ".".join(
+                    ["layers." + str(int(splited[0][len("layer") :]) - 1)] + splited[1:]
+                )
+            else:
+                return s
+
+        def no_remap(s):
+            return s
+
+        return {"20.12.0": to_sequential_remap, "21.03.0": to_sequential_remap}.get(
+            version, no_remap
+        )
+
 
 # }}}
 
 # MBConvBlock {{{
 class MBConvBlock(nn.Module):
+    __constants__ = ["quantized"]
+
     def __init__(
         self,
         builder: LayerBuilder,
@@ -366,7 +392,7 @@ class MBConvBlock(nn.Module):
         out_channels: int,
         expand_ratio: int,
         stride: int,
-        squeeze_excitation_ratio: int,
+        squeeze_excitation_ratio: float,
         squeeze_hidden=False,
         survival_prob: float = 1.0,
         quantized: bool = False,
@@ -387,25 +413,31 @@ class MBConvBlock(nn.Module):
         self.depsep = builder.convDepSep(
             depsep_kernel_size, hidden_dim, hidden_dim, stride, bn=True, act=True
         )
-        self.se = SequentialSqueezeAndExcitation(
-            hidden_dim, squeeze_dim, builder.activation(), self.quantized, use_conv=trt
-        )
+        if trt or self.quantized:
+            # Need TRT mode for quantized in order to automatically insert quantization before pooling
+            self.se: nn.Module = SequentialSqueezeAndExcitationTRT(
+                hidden_dim, squeeze_dim, builder.activation(), self.quantized
+            )
+        else:
+            self.se: nn.Module = SequentialSqueezeAndExcitation(
+                hidden_dim, squeeze_dim, builder.activation(), self.quantized
+            )
+
         self.proj = builder.conv1x1(hidden_dim, out_channels, bn=True)
 
-        self.survival_prob = survival_prob
-
+        if survival_prob == 1.0:
+            self.residual_add = torch.add
+        else:
+            self.residual_add = StochasticDepthResidual(survival_prob=survival_prob)
         if self.quantized and self.residual:
             assert quant_nn is not None, "pytorch_quantization is not available"
             self.residual_quantizer = quant_nn.TensorQuantizer(
                 quant_nn.QuantConv2d.default_quant_desc_input
             )  # TODO QuantConv2d ?!?
+        else:
+            self.residual_quantizer = nn.Identity()
 
-    def drop(self):
-        if self.survival_prob == 1.0:
-            return False
-        return random.uniform(0.0, 1.0) > self.survival_prob
-
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         if not self.residual:
             return self.proj(
                 self.se(self.depsep(x if self.expand is None else self.expand(x)))
@@ -414,16 +446,10 @@ class MBConvBlock(nn.Module):
         b = self.proj(
             self.se(self.depsep(x if self.expand is None else self.expand(x)))
         )
-        if self.training:
-            if self.drop():
-                multiplication_factor = 0.0
-            else:
-                multiplication_factor = 1.0 / self.survival_prob
-        else:
-            multiplication_factor = 1.0
         if self.quantized:
             x = self.residual_quantizer(x)
-        return torch.add(x, alpha=multiplication_factor, other=b)
+
+        return self.residual_add(x, b)
 
 
 def original_mbconv(
@@ -436,7 +462,7 @@ def original_mbconv(
     squeeze_excitation_ratio: int,
     survival_prob: float,
     quantized: bool,
-    trt: bool
+    trt: bool,
 ):
     return MBConvBlock(
         builder,
@@ -547,7 +573,7 @@ architectures = {
 
 # }}}
 
-_ce = lambda n: EntryPoint(n, architectures[n])
+_ce = lambda n: EntryPoint.create(n, architectures[n])
 efficientnet_b0 = _ce("efficientnet-b0")
 efficientnet_b4 = _ce("efficientnet-b4")
 

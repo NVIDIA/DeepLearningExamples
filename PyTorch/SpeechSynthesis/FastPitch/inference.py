@@ -47,7 +47,7 @@ from common.tb_dllogger import (init_inference_metadata, stdout_metric_format,
                                 unique_log_fpath)
 from common.text import cmudict
 from common.text.text_processing import TextProcessing
-from pitch_transform import pitch_transform_custom
+from fastpitch.pitch_transform import pitch_transform_custom
 from waveglow import model as glow
 from waveglow.denoiser import Denoiser
 
@@ -120,7 +120,7 @@ def parse_args(parser):
 
     text_processing = parser.add_argument_group('Text processing parameters')
     text_processing.add_argument('--text-cleaners', nargs='*',
-                                 default=['english_cleaners'], type=str,
+                                 default=['english_cleaners_v2'], type=str,
                                  help='Type of text cleaners for input text')
     text_processing.add_argument('--symbol-set', type=str, default='english_basic',
                                  help='Define symbol set for input text')
@@ -296,7 +296,7 @@ def main():
     args, unk_args = parser.parse_known_args()
 
     if args.p_arpabet > 0.0:
-        cmudict.initialize(args.cmudict_path, keep_ambiguous=True)
+        cmudict.initialize(args.cmudict_path, args.heteronyms_path)
 
     torch.backends.cudnn.benchmark = args.cudnn_benchmark
 

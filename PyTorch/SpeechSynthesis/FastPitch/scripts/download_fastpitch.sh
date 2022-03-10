@@ -2,10 +2,17 @@
 
 set -e
 
+# # Grapheme-level w/o energy conditioning
+# MODEL_ZIP="nvidia_fastpitch_200518.zip"
+# MODEL="nvidia_fastpitch_200518.pt"
+# MODEL_URL="https://api.ngc.nvidia.com/v2/models/nvidia/fastpitch_pyt_amp_ckpt_v1/versions/20.02.0/zip"
+# MODEL_DIR="../pretrained_models/fastpitch"
+
+# Phoneme-level w/ energy conditioning
 : ${MODEL_DIR:="pretrained_models/fastpitch"}
-MODEL_ZIP="nvidia_fastpitch_200518.zip"
-MODEL="nvidia_fastpitch_200518.pt"
-MODEL_URL="https://api.ngc.nvidia.com/v2/models/nvidia/fastpitch_pyt_amp_ckpt_v1/versions/20.02.0/zip"
+: ${MODEL_ZIP:="nvidia_fastpitch_210824.zip"}
+: ${MODEL:="nvidia_fastpitch_210824.pt"}
+: ${MODEL_URL:="https://api.ngc.nvidia.com/v2/models/nvidia/fastpitch_pyt_amp_ckpt_v1_1/versions/21.05.0/zip"}
 
 mkdir -p "$MODEL_DIR"
 

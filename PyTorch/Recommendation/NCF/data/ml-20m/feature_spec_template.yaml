@@ -1,0 +1,52 @@
+feature_spec:
+  user:
+    dtype: torch.int64
+    cardinality: 138493
+  item:
+    dtype: torch.int64
+    cardinality: 26744
+  label:
+    dtype: torch.float32
+
+metadata:
+  test_samples_per_series: 101
+
+source_spec:
+  train:
+    - type: torch_tensor
+      features:
+        # For torch_tensor, each line corresponds to a column. They are ordered
+        - user
+        - item
+      files:
+        # Loader currently only supports one file per chunk
+        - train_data_0.pt # Paths are relative to data-spec's directory
+    - type: torch_tensor
+      features:
+        - label
+      files:
+        - train_data_1.pt
+  test:
+    - type: torch_tensor
+      features:
+        - user
+        - item
+      files:
+        - test_data_0.pt
+    - type: torch_tensor
+      features:
+        - label
+      files:
+        - test_data_1.pt
+
+channel_spec:
+  user_ch: # Channel names are model-specific magics (in this model, neumf_constants.py)
+    - user
+  item_ch:
+    - item
+  label_ch:
+    - label
+
+# Requirements:
+
+# During validation, for each user we have the same number of samples, supplied consecutively

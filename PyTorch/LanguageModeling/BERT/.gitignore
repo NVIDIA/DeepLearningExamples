@@ -10,10 +10,15 @@ __pycache__/
 
 #Data checkpoints and results       
 data/*/*/   
+data/wikipedia/
+data/books/
+data/pretrain/
+data/formatted_one_article_per_line/
 data/*/*.zip
 checkpoints/
 results
 results/*
+testing*
 
 #Editor
 .idea
@@ -134,3 +139,16 @@ tensorflow_code
 
 # Models
 models
+
+#distillation
+distillation/refactored*
+distillation/batch_tensors
+distillation/student_init_weights
+distillation/__pycache__
+distillation/testing*
+
+# Dask cache
+dask-worker-space/
+
+# Slurm logs.
+slurm-*.out

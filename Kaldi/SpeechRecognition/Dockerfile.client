@@ -1,4 +1,4 @@
-# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2019-2021 NVIDIA CORPORATION. All rights reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -11,11 +11,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvcr.io/nvidia/kaldi:20.03-py3 as kb
-FROM nvcr.io/nvidia/tritonserver:20.03-py3-clientsdk
+ARG TRITONSERVER_IMAGE=nvcr.io/nvidia/tritonserver:21.05-py3
+ARG KALDI_IMAGE=nvcr.io/nvidia/kaldi:21.08-py3
+ARG PYTHON_VER=3.8
+
+
+#
+# Kaldi shared library dependencies
+#
+FROM ${KALDI_IMAGE} as kaldi
+
+
+#
+# Builder image based on Triton Server SDK image
+#
+FROM ${TRITONSERVER_IMAGE}-sdk as builder
+ARG PYTHON_VER
 
 # Kaldi dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -yq --no-install-recommends \
         automake \
         autoconf \
         cmake \
@@ -23,21 +39,78 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         gawk \
         libatlas3-base \
         libtool \
-        python3.6 \
-        python3.6-dev \
+        python${PYTHON_VER} \
+        python${PYTHON_VER}-dev \
         sox \
         subversion \
         unzip \
         bc \
         libatlas-base-dev \
-        zlib1g-dev
+        gfortran \
+        zlib1g-dev; \
+    rm -rf /var/lib/apt/lists/*
 
-# Moving Kaldi to container
-COPY --from=kb /opt/kaldi /opt/kaldi
-ENV LD_LIBRARY_PATH /opt/kaldi/src/lib/:$LD_LIBRARY_PATH
+# Add Kaldi dependency
+COPY --from=kaldi /opt/kaldi /opt/kaldi
 
+# Set up Atlas
+RUN set -eux; \
+    ln -sf /usr/include/x86_64-linux-gnu/atlas     /usr/local/include/atlas; \
+    ln -sf /usr/include/x86_64-linux-gnu/cblas.h   /usr/local/include/cblas.h; \
+    ln -sf /usr/include/x86_64-linux-gnu/clapack.h /usr/local/include/clapack.h; \
+    ln -sf /usr/lib/x86_64-linux-gnu/atlas         /usr/local/lib/atlas
+
+
+#
+# Triton Kaldi client build
+#
+FROM builder as client-build
+
+# Build the clients
+COPY kaldi-asr-client /workspace/triton-client
+RUN set -eux; \
+    cd /workspace; \
+    echo 'add_subdirectory(../../../triton-client src/c++/triton-client)' \
+        >> /workspace/client/src/c++/CMakeLists.txt; \
+    cmake -DCMAKE_BUILD_TYPE=Release -B build client; \
+    cmake --build build --parallel --target cc-clients
+
+
+#
+# Final gRPC client image
+#
+FROM ${TRITONSERVER_IMAGE}
+ARG PYTHON_VER
+
+# Kaldi dependencies
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -yq --no-install-recommends \
+        automake \
+        autoconf \
+        cmake \
+        flac \
+        gawk \
+        libatlas3-base \
+        libtool \
+        python${PYTHON_VER} \
+        python${PYTHON_VER}-dev \
+        sox \
+        subversion \
+        unzip \
+        bc \
+        libatlas-base-dev \
+        zlib1g-dev; \
+    rm -rf /var/lib/apt/lists/*
+
+# Add Kaldi dependency
+COPY --from=kaldi /opt/kaldi /opt/kaldi
+
+# Add Triton clients and scripts
+COPY --from=client-build /workspace/build/cc-clients/src/c++/triton-client/kaldi-asr-parallel-client /usr/local/bin/
 COPY scripts /workspace/scripts
 
-COPY kaldi-asr-client /workspace/src/clients/c++/kaldi-asr-client
-RUN echo "add_subdirectory(kaldi-asr-client)" >> "/workspace/src/clients/c++/CMakeLists.txt"
-RUN cd /workspace/build/ && make -j16 trtis-clients
+# Setup environment and entrypoint
+ENV LD_LIBRARY_PATH /opt/kaldi/src/lib/:/opt/tritonserver/lib:$LD_LIBRARY_PATH
+VOLUME /mnt/model-repo
+ENTRYPOINT ["/usr/local/bin/kaldi-asr-parallel-client"]

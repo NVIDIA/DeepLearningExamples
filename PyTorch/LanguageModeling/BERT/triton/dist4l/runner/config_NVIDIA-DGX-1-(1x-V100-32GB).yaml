@@ -1,0 +1,176 @@
+checkpoints:
+- name: dist-4l-qa
+  url: https://api.ngc.nvidia.com/v2/models/nvidia/dle/bert_pyt_ckpt_distilled_4l_288d_qa_squad11_amp/versions/21.11.0/zip
+configurations:
+- accelerator: none
+  accelerator_precision: fp16
+  batch_size:
+  - 1
+  batch_sizes: '1'
+  capture_cuda_graph: 0
+  checkpoint_variant: dist-4l-qa
+  export_format: onnx
+  export_precision: fp16
+  format: onnx
+  max_batch_size: 1
+  max_seq_length: 384
+  precision: fp16
+  triton_gpu_engine_count: 1
+  triton_max_queue_delay: 1
+  triton_preferred_batch_sizes: '1'
+- accelerator: none
+  accelerator_precision: fp16
+  batch_size:
+  - 16
+  batch_sizes: '16'
+  capture_cuda_graph: 0
+  checkpoint_variant: dist-4l-qa
+  export_format: onnx
+  export_precision: fp16
+  format: onnx
+  max_batch_size: 16
+  max_seq_length: 384
+  precision: fp16
+  triton_gpu_engine_count: 1
+  triton_max_queue_delay: 1
+  triton_preferred_batch_sizes: 8 16
+- accelerator: none
+  accelerator_precision: fp16
+  batch_size:
+  - 8
+  batch_sizes: '8'
+  capture_cuda_graph: 0
+  checkpoint_variant: dist-4l-qa
+  export_format: onnx
+  export_precision: fp16
+  format: onnx
+  max_batch_size: 8
+  max_seq_length: 384
+  precision: fp16
+  triton_gpu_engine_count: 1
+  triton_max_queue_delay: 1
+  triton_preferred_batch_sizes: 4 8
+- accelerator: trt
+  accelerator_precision: fp16
+  batch_size:
+  - 1
+  batch_sizes: '1'
+  capture_cuda_graph: 0
+  checkpoint_variant: dist-4l-qa
+  export_format: onnx
+  export_precision: fp16
+  format: onnx
+  max_batch_size: 1
+  max_seq_length: 384
+  precision: fp16
+  triton_gpu_engine_count: 1
+  triton_max_queue_delay: 1
+  triton_preferred_batch_sizes: '1'
+- accelerator: trt
+  accelerator_precision: fp16
+  batch_size:
+  - 16
+  batch_sizes: '16'
+  capture_cuda_graph: 0
+  checkpoint_variant: dist-4l-qa
+  export_format: onnx
+  export_precision: fp16
+  format: onnx
+  max_batch_size: 16
+  max_seq_length: 384
+  precision: fp16
+  triton_gpu_engine_count: 1
+  triton_max_queue_delay: 1
+  triton_preferred_batch_sizes: 8 16
+- accelerator: trt
+  accelerator_precision: fp16
+  batch_size:
+  - 8
+  batch_sizes: '8'
+  capture_cuda_graph: 0
+  checkpoint_variant: dist-4l-qa
+  export_format: onnx
+  export_precision: fp16
+  format: onnx
+  max_batch_size: 8
+  max_seq_length: 384
+  precision: fp16
+  triton_gpu_engine_count: 1
+  triton_max_queue_delay: 1
+  triton_preferred_batch_sizes: 4 8
+- accelerator: none
+  accelerator_precision: fp16
+  batch_size:
+  - 1
+  batch_sizes: '1'
+  capture_cuda_graph: 0
+  checkpoint_variant: dist-4l-qa
+  export_format: onnx
+  export_precision: fp16
+  format: trt
+  max_batch_size: 1
+  max_seq_length: 384
+  precision: fp16
+  triton_gpu_engine_count: 1
+  triton_max_queue_delay: 1
+  triton_preferred_batch_sizes: '1'
+- accelerator: none
+  accelerator_precision: fp16
+  batch_size:
+  - 16
+  batch_sizes: '16'
+  capture_cuda_graph: 0
+  checkpoint_variant: dist-4l-qa
+  export_format: onnx
+  export_precision: fp16
+  format: trt
+  max_batch_size: 16
+  max_seq_length: 384
+  precision: fp16
+  triton_gpu_engine_count: 1
+  triton_max_queue_delay: 1
+  triton_preferred_batch_sizes: 8 16
+- accelerator: none
+  accelerator_precision: fp16
+  batch_size:
+  - 8
+  batch_sizes: '8'
+  capture_cuda_graph: 0
+  checkpoint_variant: dist-4l-qa
+  export_format: onnx
+  export_precision: fp16
+  format: trt
+  max_batch_size: 8
+  max_seq_length: 384
+  precision: fp16
+  triton_gpu_engine_count: 1
+  triton_max_queue_delay: 1
+  triton_preferred_batch_sizes: 4 8
+- accelerator: none
+  accelerator_precision: fp16
+  batch_size:
+  - 1
+  - 8
+  - 16
+  batch_sizes: 1 8 16
+  capture_cuda_graph: 0
+  checkpoint_variant: dist-4l-qa
+  export_format: ts-trace
+  export_precision: fp16
+  format: ts-trace
+  max_batch_size: 16
+  max_seq_length: 384
+  precision: fp16
+  triton_gpu_engine_count: 1
+  triton_max_queue_delay: 1
+  triton_preferred_batch_sizes: 8 16
+container_version: '21.10'
+datasets:
+- name: data
+datasets_dir: datasets
+framework: PyTorch
+model_name: BERT
+triton_container_image: null
+triton_custom_operations: null
+triton_dockerfile: null
+triton_load_model_method: explicit

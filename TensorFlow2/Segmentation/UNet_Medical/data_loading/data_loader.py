@@ -25,12 +25,13 @@ from PIL import Image, ImageSequence
 class Dataset:
     """Load, separate and prepare the data for training and prediction"""
 
-    def __init__(self, data_dir, batch_size, fold, augment=False, gpu_id=0, num_gpus=1, seed=0):
+    def __init__(self, data_dir, batch_size, fold, augment=False, gpu_id=0, num_gpus=1, seed=0, amp=False):
         if not os.path.exists(data_dir):
             raise FileNotFoundError('Cannot find data dir: {}'.format(data_dir))
         self._data_dir = data_dir
         self._batch_size = batch_size
         self._augment = augment
+        self.precision = tf.float16 if amp else tf.float32
 
         self._seed = seed
 
@@ -149,7 +150,7 @@ class Dataset:
         cond = tf.less(labels, 0.5 * tf.ones(tf.shape(input=labels)))
         labels = tf.where(cond, tf.zeros(tf.shape(input=labels)), tf.ones(tf.shape(input=labels)))
 
-        return inputs, labels
+        return tf.cast(inputs, self.precision), labels
 
     @tf.function
     def _preproc_eval_samples(self, inputs, labels):
@@ -162,7 +163,12 @@ class Dataset:
         cond = tf.less(labels, 0.5 * tf.ones(tf.shape(input=labels)))
         labels = tf.where(cond, tf.zeros(tf.shape(input=labels)), tf.ones(tf.shape(input=labels)))
 
-        return (inputs, labels)
+        return tf.cast(inputs, self.precision), labels
+
+    @tf.function
+    def _preproc_test_samples(self, inputs):
+        inputs = self._normalize_inputs(inputs)
+        return tf.cast(inputs, self.precision)
 
     def train_fn(self, drop_remainder=False):
         """Input function for training"""
@@ -195,7 +201,7 @@ class Dataset:
         dataset = tf.data.Dataset.from_tensor_slices(
             self._test_images)
         dataset = dataset.repeat(count=count)
-        dataset = dataset.map(self._normalize_inputs)
+        dataset = dataset.map(self._preproc_test_samples)
         dataset = dataset.batch(self._batch_size, drop_remainder=drop_remainder)
         dataset = dataset.prefetch(self._batch_size)
 

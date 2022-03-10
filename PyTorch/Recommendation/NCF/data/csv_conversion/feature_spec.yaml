@@ -1,0 +1,43 @@
+feature_spec:
+  user:
+    cardinality: auto
+  item:
+    cardinality: auto
+  label:
+
+metadata:
+  test_samples_per_series: 3
+
+source_spec:
+  train:
+    - type: csv
+      features: #Each line corresponds to a column in the csv files
+        - user
+        - item
+        - label
+      files:
+        - train_data_1.csv # we assume no header
+        - train_data_2.csv
+  test:
+    - type: csv
+      features:
+        - user
+        - item
+        - label
+      files:
+        - test_data_1.csv
+
+channel_spec:
+  user_ch: # Channel names are model-specific magics (in this model, neumf_constants.py)
+    - user
+  item_ch:
+    - item
+  label_ch:
+    - label
+
+# Requirements:
+
+# We assume the ids supplied have already been factorized into 0...N
+
+# In the mapping to be used for validation and testing, candidates for each series (each user) appear consecutively.
+# Each series has the same number of items: metadata['test_samples_per_series']

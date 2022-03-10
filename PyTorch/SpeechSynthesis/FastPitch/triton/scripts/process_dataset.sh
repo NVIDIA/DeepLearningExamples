@@ -23,9 +23,7 @@ DATASET_DIR="${DATASETS_DIR}/LJSpeech-1.1/LJSpeech-1.1_fastpitch"
 if [ ! -d "${DATASET_DIR}/mels" ]; then
 
     python prepare_dataset.py \
-        --wav-text-filelists filelists/ljs_audio_text_train_v3.txt \
-	filelists/ljs_audio_text_val.txt \
-        filelists/ljs_audio_text_test.txt \
+        --wav-text-filelists filelists/ljs_audio_text_val.txt \
         --n-workers 16 \
         --batch-size 1 \
         --dataset-path $DATASET_DIR \

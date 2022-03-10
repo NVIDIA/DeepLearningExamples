@@ -17,14 +17,15 @@
 import argparse
 import json
 import os
-#
 import sys
 
 import torch
+import numpy as np
 
 from dlrm.data.datasets import SyntheticDataset
-from dlrm.model.single import Dlrm
-from dlrm.utils.checkpointing.serial import make_serial_checkpoint_loader
+from dlrm.model.distributed import DistributedDlrm
+from dlrm.utils.checkpointing.distributed import make_distributed_checkpoint_loader
+from dlrm.utils.distributed import get_gpu_batch_sizes, get_device_mapping, is_main_process
 from triton import deployer_lib
 
 sys.path.append('../')
@@ -52,9 +53,9 @@ def get_model_args(model_args):
     return parser.parse_args(model_args)
 
 
-def initialize_model(args, categorical_sizes):
+def initialize_model(args, categorical_sizes, device_mapping):
     ''' return model, ready to trace '''
-    base_device = "cuda:0" if not args.cpu else "cpu"
+    device = "cuda:0" if not args.cpu else "cpu"
     model_config = {
         'top_mlp_sizes': args.top_mlp_sizes,
         'bottom_mlp_sizes': args.bottom_mlp_sizes,
@@ -66,16 +67,16 @@ def initialize_model(args, categorical_sizes):
         'hash_indices': False,
         'use_cpp_mlp': False,
         'fp16': args.fp16,
-        'base_device': base_device,
+        'device': device,
     }
 
-    model = Dlrm.from_dict(model_config)
-    model.to(base_device)
+    model = DistributedDlrm.from_dict(model_config)
+    model.to(device)
 
     if args.model_checkpoint:
-        checkpoint_loader = make_serial_checkpoint_loader(range(len(categorical_sizes)), device="cpu")
+        checkpoint_loader = make_distributed_checkpoint_loader(device_mapping=device_mapping, rank=0)
         checkpoint_loader.load_checkpoint(model, args.model_checkpoint)
-        model.to(base_device)
+        model.to(device)
 
     if args.fp16:
         model = model.half()
@@ -112,7 +113,7 @@ def get_dataloader(args, categorical_sizes):
     return test_loader
 
 
-if __name__=='__main__':
+def main():
     # deploys and returns removed deployer arguments
     deployer, model_args = deployer_lib.create_deployer(sys.argv[1:],
                                                         get_model_args)
@@ -120,8 +121,12 @@ if __name__=='__main__':
     with open(os.path.join(model_args.dataset, "model_size.json")) as f:
         categorical_sizes = list(json.load(f).values())
         categorical_sizes = [s + 1 for s in categorical_sizes]
+        categorical_sizes = np.array(categorical_sizes)
 
-    model = initialize_model(model_args, categorical_sizes)
+    device_mapping = get_device_mapping(categorical_sizes, num_gpus=1)
+    categorical_sizes = categorical_sizes[device_mapping['embedding'][0]].tolist()
+
+    model = initialize_model(model_args, categorical_sizes, device_mapping)
     dataloader = get_dataloader(model_args, categorical_sizes)
 
     if model_args.dump_perf_data:
@@ -134,3 +139,7 @@ if __name__=='__main__':
         input_1.detach().cpu().numpy()[0].tofile(os.path.join(model_args.dump_perf_data, "input__1"))
 
     deployer.deploy(dataloader, model)
+
+
+if __name__=='__main__':
+    main()

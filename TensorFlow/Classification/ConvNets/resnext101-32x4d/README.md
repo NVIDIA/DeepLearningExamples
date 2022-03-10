@@ -283,7 +283,6 @@ The `utils/` directory contains the following utility modules:
  - `cmdline_helper.py`: helper module for command line processing
  - `data_utils.py`: module defining input data pipelines
  - `dali_utils.py`: helper module for DALI 
- - `hvd_utils.py`: helper module for Horovod
  - `image_processing.py`: image processing and data augmentation functions
  - `learning_rate.py`: definition of used learning rate schedule
  - `optimizers.py`: definition of used custom optimizers
@@ -797,6 +796,7 @@ June 2020
 August 2020
    - Updated command line argument names
    - Added support for syntetic dataset with different image size
-
+January 2022
+   - Added barrier at the end of multiprocess run
 ### Known issues
 Performance without XLA enabled is low due to BN + ReLU fusion bug.

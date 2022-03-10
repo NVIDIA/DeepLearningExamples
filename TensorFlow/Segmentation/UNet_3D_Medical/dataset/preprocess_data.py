@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+""" Preprocess dataset and prepare it for training
+
+Example usage:
+    $ python preprocess_data.py --input_dir ./src --output_dir ./dst
+    --vol_per_file 2
+
+All arguments are listed under `python preprocess_data.py -h`.
+
+"""
 import os
 import argparse
 from random import shuffle
@@ -19,7 +28,6 @@ import numpy as np
 
 import nibabel as nib
 import tensorflow as tf
-
 
 PARSER = argparse.ArgumentParser()
 
@@ -38,10 +46,15 @@ PARSER.add_argument('--single_data_dir', dest='single_data_dir', action='store_t
 
 
 def load_features(path):
+    """ Load features from Nifti
+
+    :param path: Path to dataset
+    :return: Loaded data
+    """
     data = np.zeros((240, 240, 155, 4), dtype=np.uint8)
     name = os.path.basename(path)
     for i, modality in enumerate(["_t1.nii.gz", "_t1ce.nii.gz", "_t2.nii.gz", "_flair.nii.gz"]):
-        vol = load_single_nifti(os.path.join(path, name+modality)).astype(np.float32)
+        vol = load_single_nifti(os.path.join(path, name + modality)).astype(np.float32)
         vol[vol > 0.85 * vol.max()] = 0.85 * vol.max()
         vol = 255 * vol / vol.max()
         data[..., i] = vol.astype(np.uint8)
@@ -50,16 +63,37 @@ def load_features(path):
 
 
 def load_segmentation(path):
+    """ Load segmentations from Nifti
+
+    :param path: Path to dataset
+    :return: Loaded data
+    """
     path = os.path.join(path, os.path.basename(path)) + "_seg.nii.gz"
     return load_single_nifti(path).astype(np.uint8)
 
 
 def load_single_nifti(path):
+    """ Load Nifti file as numpy
+
+    :param path: Path to file
+    :return: Loaded data
+    """
     data = nib.load(path).get_fdata().astype(np.int16)
     return np.transpose(data, (1, 0, 2))
 
 
-def write_to_file(features_list, labels_list, foreground_mean_list, foreground_std_list, output_dir, count):
+def write_to_file(features_list, labels_list, foreground_mean_list, foreground_std_list, output_dir, # pylint: disable=R0913
+                  count):
+    """ Dump numpy array to tfrecord
+
+    :param features_list: List of features
+    :param labels_list:  List of labels
+    :param foreground_mean_list: List of means for each volume
+    :param foreground_std_list:  List of std for each volume
+    :param output_dir: Directory where to write
+    :param count: Index of the record
+    :return:
+    """
     output_filename = os.path.join(output_dir, "volume-{}.tfrecord".format(count))
     filelist = list(zip(np.array(features_list),
                         np.array(labels_list),
@@ -69,17 +103,22 @@ def write_to_file(features_list, labels_list, foreground_mean_list, foreground_s
 
 
 def np_to_tfrecords(filelist, output_filename):
+    """ Convert numpy array to tfrecord
+
+    :param filelist: List of files
+    :param output_filename: Destination directory
+    """
     writer = tf.io.TFRecordWriter(output_filename)
 
-    for idx in range(len(filelist)):
-        X = filelist[idx][0].flatten().tostring()
-        Y = filelist[idx][1].flatten().tostring()
-        mean = filelist[idx][2].astype(np.float32).flatten()
-        stdev = filelist[idx][3].astype(np.float32).flatten()
+    for file_item in filelist:
+        sample = file_item[0].flatten().tostring()
+        label = file_item[1].flatten().tostring()
+        mean = file_item[2].astype(np.float32).flatten()
+        stdev = file_item[3].astype(np.float32).flatten()
 
         d_feature = {}
-        d_feature['X'] = tf.train.Feature(bytes_list=tf.train.BytesList(value=[X]))
-        d_feature['Y'] = tf.train.Feature(bytes_list=tf.train.BytesList(value=[Y]))
+        d_feature['X'] = tf.train.Feature(bytes_list=tf.train.BytesList(value=[sample]))
+        d_feature['Y'] = tf.train.Feature(bytes_list=tf.train.BytesList(value=[label]))
         d_feature['mean'] = tf.train.Feature(float_list=tf.train.FloatList(value=mean))
         d_feature['stdev'] = tf.train.Feature(float_list=tf.train.FloatList(value=stdev))
 
@@ -90,8 +129,9 @@ def np_to_tfrecords(filelist, output_filename):
     writer.close()
 
 
-def main():
-    # parse arguments
+def main():  # pylint: disable=R0914
+    """ Starting point of the application"""
+
     params = PARSER.parse_args()
     input_dir = params.input_dir
     output_dir = params.output_dir
@@ -101,7 +141,7 @@ def main():
     if params.single_data_dir:
         patient_list.extend([os.path.join(input_dir, folder) for folder in os.listdir(input_dir)])
     else:
-        assert "HGG" in os.listdir(input_dir) and "LGG" in os.listdir(input_dir),\
+        assert "HGG" in os.listdir(input_dir) and "LGG" in os.listdir(input_dir), \
             "Data directory has to contain folders named HGG and LGG. " \
             "If you have a single folder with patient's data please set --single_data_dir flag"
         path_hgg = os.path.join(input_dir, "HGG")
@@ -135,7 +175,7 @@ def main():
         foreground_mean_list.append(fg_mean)
         foreground_std_list.append(fg_std)
 
-        if (i+1) % params.vol_per_file == 0:
+        if (i + 1) % params.vol_per_file == 0:
             write_to_file(features_list, labels_list, foreground_mean_list, foreground_std_list, output_dir, count)
 
             # Clear lists
@@ -158,4 +198,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

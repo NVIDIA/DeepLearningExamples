@@ -101,7 +101,7 @@ def parse_args():
                              "be truncated to this length.")
     parser.add_argument("--vocab_file", default=None, type=str,
                         help="Path to vocabulary file use for tokenization")
-
+    parser.add_argument("--ci", action="store_true", help="true if running on CI")
     parser.add_argument(
         "--joint_head",
         default=True,
@@ -521,7 +521,10 @@ def main():
                                                  "final_loss": float(epoch_loss_avg.result().numpy())})
 
             if not args.skip_checkpoint:
-                checkpoint_name = "checkpoints/electra_base_qa_v2_{}_epoch_{}_ckpt".format(args.version_2_with_negative, epoch + 1)
+                if args.ci:
+                    checkpoint_name = "{}/electra_base_qa_v2_{}_epoch_{}_ckpt".format(args.output_dir, args.version_2_with_negative, epoch + 1)
+                else:
+                    checkpoint_name = "checkpoints/electra_base_qa_v2_{}_epoch_{}_ckpt".format(args.version_2_with_negative, epoch + 1)
                 if is_main_process():
                     model.save_weights(checkpoint_name)
 

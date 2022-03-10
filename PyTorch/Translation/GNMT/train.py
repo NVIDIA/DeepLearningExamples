@@ -21,12 +21,14 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import os
+
+os.environ['KMP_AFFINITY'] = 'disabled'
+
 import argparse
 import logging
-import os
 import sys
 import time
-import warnings
 from ast import literal_eval
 
 import dllogger
@@ -34,11 +36,6 @@ import torch.nn as nn
 import torch.nn.parallel
 import torch.optim
 import torch.utils.data.distributed
-
-try:
-    import pyprof
-except ModuleNotFoundError:
-    warnings.warn('PyProf is unavailable')
 
 import seq2seq.data.config as config
 import seq2seq.gpu_affinity as gpu_affinity
@@ -168,8 +165,6 @@ def parse_args():
                                   'socket_unique_continuous',
                                   'disabled'],
                          help='type of CPU affinity')
-    general.add_argument('--profile', action='store_true',
-                         help='Enable profiling with DLProf')
 
     exclusive_group(group=general, name='eval', default=True,
                     help='run validation and test after every epoch')
@@ -409,12 +404,6 @@ def main():
     dllog_file = os.path.join(args.save_dir, args.dllog_file)
     utils.setup_dllogger(enabled=True, filename=dllog_file)
 
-    if args.profile:
-        try:
-            pyprof.init(enable_function_stack=True)
-        except NameError:
-            warnings.warn('Called pyprof.init() but pyprof is not available')
-
     if args.env:
         utils.log_env_info()
 
@@ -582,61 +571,60 @@ def main():
     training_perf = []
     break_training = False
     test_bleu = None
-    with torch.autograd.profiler.emit_nvtx(enabled=args.profile):
-        for epoch in range(args.start_epoch, args.epochs):
-            logging.info(f'Starting epoch {epoch}')
+    for epoch in range(args.start_epoch, args.epochs):
+        logging.info(f'Starting epoch {epoch}')
 
-            train_loader.sampler.set_epoch(epoch)
+        train_loader.sampler.set_epoch(epoch)
 
-            trainer.epoch = epoch
-            train_loss, train_perf = trainer.optimize(train_loader)
-            training_perf.append(train_perf)
+        trainer.epoch = epoch
+        train_loss, train_perf = trainer.optimize(train_loader)
+        training_perf.append(train_perf)
 
-            # evaluate on validation set
-            if args.eval:
-                logging.info(f'Running validation on dev set')
-                val_loss, val_perf = trainer.evaluate(val_loader)
+        # evaluate on validation set
+        if args.eval:
+            logging.info(f'Running validation on dev set')
+            val_loss, val_perf = trainer.evaluate(val_loader)
 
-                # remember best prec@1 and save checkpoint
-                if args.rank == 0:
-                    is_best = val_loss < best_loss
-                    best_loss = min(val_loss, best_loss)
-                    trainer.save(save_all=args.save_all, is_best=is_best)
-
-            if args.eval:
-                utils.barrier()
-                eval_fname = f'eval_epoch_{epoch}'
-                eval_path = os.path.join(args.save_dir, eval_fname)
-                _, eval_stats = translator.run(
-                    calc_bleu=True,
-                    epoch=epoch,
-                    eval_path=eval_path,
-                    )
-                test_bleu = eval_stats['bleu']
-                if args.target_bleu and test_bleu >= args.target_bleu:
-                    logging.info(f'Target accuracy reached')
-                    break_training = True
-
-            acc_log = []
-            acc_log += [f'Summary: Epoch: {epoch}']
-            acc_log += [f'Training Loss: {train_loss:.4f}']
-            if args.eval:
-                acc_log += [f'Validation Loss: {val_loss:.4f}']
-                acc_log += [f'Test BLEU: {test_bleu:.2f}']
-
-            perf_log = []
-            perf_log += [f'Performance: Epoch: {epoch}']
-            perf_log += [f'Training: {train_perf:.0f} Tok/s']
-            if args.eval:
-                perf_log += [f'Validation: {val_perf:.0f} Tok/s']
-
+            # remember best prec@1 and save checkpoint
             if args.rank == 0:
-                logging.info('\t'.join(acc_log))
-                logging.info('\t'.join(perf_log))
+                is_best = val_loss < best_loss
+                best_loss = min(val_loss, best_loss)
+                trainer.save(save_all=args.save_all, is_best=is_best)
 
-            logging.info(f'Finished epoch {epoch}')
-            if break_training:
-                break
+        if args.eval:
+            utils.barrier()
+            eval_fname = f'eval_epoch_{epoch}'
+            eval_path = os.path.join(args.save_dir, eval_fname)
+            _, eval_stats = translator.run(
+                calc_bleu=True,
+                epoch=epoch,
+                eval_path=eval_path,
+                )
+            test_bleu = eval_stats['bleu']
+            if args.target_bleu and test_bleu >= args.target_bleu:
+                logging.info(f'Target accuracy reached')
+                break_training = True
+
+        acc_log = []
+        acc_log += [f'Summary: Epoch: {epoch}']
+        acc_log += [f'Training Loss: {train_loss:.4f}']
+        if args.eval:
+            acc_log += [f'Validation Loss: {val_loss:.4f}']
+            acc_log += [f'Test BLEU: {test_bleu:.2f}']
+
+        perf_log = []
+        perf_log += [f'Performance: Epoch: {epoch}']
+        perf_log += [f'Training: {train_perf:.0f} Tok/s']
+        if args.eval:
+            perf_log += [f'Validation: {val_perf:.0f} Tok/s']
+
+        if args.rank == 0:
+            logging.info('\t'.join(acc_log))
+            logging.info('\t'.join(perf_log))
+
+        logging.info(f'Finished epoch {epoch}')
+        if break_training:
+            break
 
     utils.barrier()
     training_stop = time.time()

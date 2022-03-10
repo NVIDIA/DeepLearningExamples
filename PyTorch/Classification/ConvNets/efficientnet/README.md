@@ -326,11 +326,11 @@ unzip
 
 To run inference on ImageNet, run:
 
-`python ./main.py --arch efficientnet-<version> --evaluate --epochs 1 --pretrained-from-file  -b <batch size> <path to imagenet>`
+`python ./main.py --arch efficientnet-<version> --evaluate --epochs 1 --pretrained  -b <batch size> <path to imagenet>`
 
 To run inference on JPEG image using pre-trained weights, run:
 
-`python classify.py --arch efficientnet-<version> -c fanin --weights  --precision AMP|FP32 --image <path to JPEG image>`
+`python classify.py --arch efficientnet-<version> --pretrained --precision AMP|FP32 --image <path to JPEG image>`
 
 
 ## Advanced
@@ -423,7 +423,7 @@ To run inference on JPEG image, you have to first extract the model weights from
 
 Then, run the classification script:
 
-`python classify.py --arch efficientnet-<version> --weights <path to weights from previous step> --precision AMP|FP32 --image <path to JPEG image>`
+`python classify.py --arch efficientnet-<version> --pretrained-from-file <path to weights from previous step> --precision AMP|FP32 --image <path to JPEG image>`
 
 You can also run the ImageNet validation on pretrained weights:
 
@@ -450,11 +450,11 @@ URL for each model can be found in the following table:
 
 To run inference on ImageNet, run:
 
-`python ./main.py --arch efficientnet-<version> --evaluate --epochs 1 --pretrained-from-file  -b <batch size> <path to imagenet>`
+`python ./main.py --arch efficientnet-<version> --evaluate --epochs 1 --pretrained -b <batch size> <path to imagenet>`
 
 To run inference on JPEG images using pretrained weights, run:
 
-`python classify.py --arch efficientnet-<version> --weights  --precision AMP|FP32 --image <path to JPEG image>`
+`python classify.py --arch efficientnet-<version> --pretrained --precision AMP|FP32 --image <path to JPEG image>`
 
 
 ### Quantization process
@@ -487,7 +487,7 @@ There is also a possibility to transform trained models (quantized or not) into 
 
 
 Quantized models could also be used to classify new images using the `classify.py`  flag. For example:
-`python classify.py --arch efficientnet-quant-<version> -c fanin --pretrained-from-file <path to quant weights> --image <path to JPEG image>`
+`python classify.py --arch efficientnet-quant-<version> --pretrained-from-file <path to quant weights> --image <path to JPEG image>`
 
 
 ## Performance

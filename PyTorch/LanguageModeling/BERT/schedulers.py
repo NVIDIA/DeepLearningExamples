@@ -1,4 +1,4 @@
-# Copyright (c) 2019 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2019-2021 NVIDIA CORPORATION. All rights reserved.
 # Copyright 2018 The Google AI Language Team Authors and The HugginFace Inc. team.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,6 +47,10 @@ class LRScheduler(_LRScheduler):
         for param_group, lr in zip(self.optimizer.param_groups, self.get_lr()):
             param_group['lr'] = lr
 
+
+class ConstantLR(LRScheduler):
+    def get_lr(self):
+        return self.base_lrs
 
 class CosineWarmUpScheduler(LRScheduler):
     """
@@ -107,25 +111,26 @@ class PolyWarmUpScheduler(LRScheduler):
     Applies a warm up period to the learning rate.
     """
 
-    def __init__(self, optimizer, warmup, total_steps, degree=0.5, last_epoch=-1):
-        self.warmup = warmup
-        self.total_steps = total_steps
-        self.degree = degree
-        super(PolyWarmUpScheduler, self).__init__(optimizer, last_epoch)
+    def __init__(self, optimizer, warmup, total_steps, degree=0.5, last_epoch=-1, base_lr=1., device='cpu'):
+        self.warmup = torch.tensor(warmup, device=device)
+        self.total_steps = torch.tensor(total_steps, device=device)
+        self.degree = torch.tensor(degree, device=device)
+        device_last_epoch = torch.tensor(last_epoch, device=device)
+        self.base_lr = torch.tensor(base_lr, device=device)
+        self.device = device
+        super(PolyWarmUpScheduler, self).__init__(optimizer, device_last_epoch)
 
     def step(self, epoch=None):
         param_group = self.optimizer.param_groups[0]
         if 'step' in param_group:
             self.last_epoch = param_group['step'] + 1
         else:
-            self.last_epoch = 1
+            self.last_epoch = torch.tensor(1., device=self.device)
 
         for param_group, lr in zip(self.optimizer.param_groups, self.get_lr()):
             param_group['lr'] = lr
 
     def get_lr(self):
         progress = self.last_epoch / self.total_steps
-        if progress < self.warmup:
-            return [base_lr * progress / self.warmup for base_lr in self.base_lrs]
-        else:
-            return [base_lr * ((1.0 - progress) ** self.degree) for base_lr in self.base_lrs]
+        lr_tensor = torch.where(progress < self.warmup, self.base_lr * progress / self.warmup, self.base_lr * ((1.0 - progress) ** self.degree))
+        return [lr_tensor for _ in range(len(self.optimizer.param_groups))]

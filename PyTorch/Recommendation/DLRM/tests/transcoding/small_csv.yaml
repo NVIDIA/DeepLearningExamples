@@ -1,0 +1,81 @@
+channel_spec:
+  categorical:
+  - cat_0.bin
+  - cat_1.bin
+  - cat_2.bin
+  - cat_3.bin
+  - cat_4.bin
+  - cat_5.bin
+  label:
+  - label
+  numerical: &id001
+  - num_0
+  - num_1
+  - num_2
+feature_spec:
+  cat_0.bin:
+    cardinality: 10
+  cat_1.bin:
+    cardinality: 23412
+  cat_2.bin:
+    cardinality: 45000
+  cat_3.bin:
+    cardinality: 100
+  cat_4.bin:
+    cardinality: 50
+  cat_5.bin:
+    cardinality: 127
+  label: {}
+  num_0: {}
+  num_1: {}
+  num_2: {}
+metadata: {}
+source_spec:
+  test:
+  - features: *id001
+    files:
+    - test/numerical.bin
+    type: csv
+  - features:
+    - label
+    files:
+    - test/label.bin
+    type: csv
+  - features:
+    - cat_0.bin
+    - cat_1.bin
+    files:
+    - test/catpart1.bin
+    type: csv
+  - features:
+    - cat_2.bin
+    - cat_3.bin
+    - cat_4.bin
+    - cat_5.bin
+    files:
+    - test/catpart2.bin
+    type: csv
+  train:
+  - features: *id001
+    files:
+    - train/numerical.bin
+    type: csv
+  - features:
+    - label
+    files:
+    - train/label.bin
+    type: csv
+  - features:
+    - cat_0.bin
+    - cat_1.bin
+    - cat_2.bin
+    files:
+    - train/catpart0.bin
+    type: csv
+  - features:
+    - cat_3.bin
+    - cat_4.bin
+    - cat_5.bin
+    files:
+    - train/catpart1.bin
+    type: csv

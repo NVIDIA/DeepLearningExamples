@@ -11,7 +11,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvcr.io/nvidia/tritonserver:20.03-py3-clientsdk
+FROM nvcr.io/nvidia/tritonserver:21.05-py3-sdk
 
 # Kaldi dependencies
 RUN apt-get update && apt-get install -y jupyter \

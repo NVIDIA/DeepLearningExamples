@@ -16,10 +16,9 @@ ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.06-py3
 FROM ${FROM_IMAGE_NAME}
 
 # Install Python dependencies
-RUN pip install --upgrade --no-cache-dir pip \
- && pip install --no-cache-dir \
+RUN pip install --no-cache-dir \
       mlperf-compliance==0.0.10 \
-      opencv-python==3.4.1.15 \
+      opencv-python==4.4.0.42 \
       git+https://github.com/NVIDIA/dllogger \
       yacs
 
@@ -30,6 +29,6 @@ RUN mkdir /results
 COPY . .
 RUN pip install -e .
 
-RUN /opt/conda/bin/conda install -y numpy==1.17.4
+RUN /opt/conda/bin/conda install -y numpy
 
 ENV OMP_NUM_THREADS=1

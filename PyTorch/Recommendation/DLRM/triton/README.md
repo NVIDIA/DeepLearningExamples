@@ -44,8 +44,8 @@ deployed models were stored.
 
 #### Deploying the model
 
-To deploy model into Triton compatible format, `deployer.py` script can by used. This script is
-meant to be run from inside deployment docker container.
+To deploy the model into Triton compatible format use `deployer.py`. This script is
+meant to be run from the deployment docker container.
 
 ```
 usage: deployer.py [-h] (--ts-script | --ts-trace | --onnx) [--triton-no-cuda]
@@ -135,7 +135,7 @@ unload models. This is especially useful when dealing with numerous large models
 
 For models exported to onnx format and hosted inside onnx runtime it might be required to limit visible cpu to fully utlize gpu acceleration. Use `--cpuset-cpus` docker option for that.
 
-#### Running client
+#### Running the client
 
 Exemplary client `client.py` allows to check model performance against synthetic or real validation
 data. Client connects to Triton server and perform inference.
@@ -172,7 +172,7 @@ optional arguments:
                         Specifies number of batches used in the inference
 ```
 
-To run inference on model exported in previous steps, using data located under
+To run inference on the model exported in previous steps, using data located under
 `/data/test` execute:
 
 `python -m triton.client --triton-server-url localhost:8000 --triton-model-name dlrm-ts-trace-16 --dataset_config /data/model_size.json --inference_data /data/test --batch_size 4096 --fp16`
@@ -184,7 +184,7 @@ to be dumped during deployment. To do that, use `--dump_perf_data` option for th
 
 `python -m triton.deployer --ts-trace --triton-model-name dlrm-ts-trace-16 --triton-max-batch-size 4096 --save-dir /repository -- --model_checkpoint /results/checkpoint --fp16 --batch_size 4096 --num_numerical_features 13 --embedding_dim 128 --top_mlp_sizes 1024 1024 512 256 1 --bottom_mlp_sizes 512 256 128 --interaction_op dot --dataset /data --dump_perf_data /location/for/perfdata`
 
-When perf data are dumped, `perf_client` can be used with following command:
+When perf data are saved, `perf_client` can be used with following command:
 
 `/workspace/bin/perf_client --max-threads 10 -m dlrm-ts-trace-16 -x 1 -p 5000 -v -i gRPC -u localhost:8001 -b 4096 -l 5000 --concurrency-range 1 --input-data /location/for/perfdata -f result.csv`
 
