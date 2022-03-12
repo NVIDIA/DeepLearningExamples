@@ -30,27 +30,32 @@ import copy
 import glob
 import os
 import re
+import shlex
+import sys
 import time
 import warnings
-from collections import defaultdict, OrderedDict
+from collections import defaultdict
 
 import numpy as np
 import torch
 import torch.distributed as dist
 import amp_C
+import wandb
 from apex.optimizers import FusedAdam, FusedLAMB
+from matplotlib import pyplot as plt
 from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-import common.tb_dllogger as logger
 import models
-from common.tb_dllogger import log
 from common.text import cmudict
 from common.utils import BenchmarkStats, prepare_tmp
 from fastpitch.attn_loss_function import AttentionBinarizationLoss
 from fastpitch.data_function import batch_to_gpu, TTSCollate, TTSDataset
 from fastpitch.loss_function import FastPitchLoss
+from fastpitch.model import regulate_len
+
+os.environ["WANDB_SILENT"] = "true"
 
 
 def parse_args(parser):
@@ -58,8 +63,11 @@ def parse_args(parser):
                         help='Directory to save checkpoints')
     parser.add_argument('-d', '--dataset-path', type=str, default=None,
                         help='Path to dataset')
-    parser.add_argument('--log-file', type=str, default=None,
-                        help='Path to a DLLogger log file')
+    parser.add_argument('--project', type=str, default='',
+                        help='Project name for logging')
+    parser.add_argument('--experiment-desc', type=str, default='',
+                        help='Run description for logging')
+    parser.add_argument('--architecture', type=str, default='FastPitch1.1')
 
     train = parser.add_argument_group('training setup')
     train.add_argument('--epochs', type=int, required=True,
@@ -261,8 +269,123 @@ def load_checkpoint(args, model, ema_model, optimizer, scaler, epoch,
         ema_model.load_state_dict(checkpoint['ema_state_dict'])
 
 
-def validate(model, epoch, total_iter, criterion, valset, batch_size,
-             collate_fn, distributed_run, batch_to_gpu, ema=False):
+def plot_mels(pred_tgt_lists):
+    # from FastSpeech2: https://github.com/ming024/FastSpeech2
+    fig, axes = plt.subplots(2, 1, squeeze=False)
+    titles = ["Synthetized Spectrogram", "Ground-Truth Spectrogram"]
+    # make local so we can access data to plot
+    local_prep_tgts = []
+    for lizt in pred_tgt_lists:
+        local_prep_tgts.append([tenzor.cpu().numpy() for tenzor in lizt])
+
+    # this is just for the axes limits
+    pitch_max = max([feature_list[1].max() for feature_list in local_prep_tgts])
+    energy_max = max([feature_list[2].max() for feature_list in local_prep_tgts])
+    energy_min = min([feature_list[2].min() for feature_list in local_prep_tgts])
+    pitch_std = max([feature_list[2].std() for feature_list in local_prep_tgts])
+    pitch_mean = max([feature_list[2].mean() for feature_list in local_prep_tgts])
+    pitch_max = pitch_max * pitch_std + pitch_mean
+
+    def add_axis(fig, old_ax):
+        ax = fig.add_axes(old_ax.get_position(), anchor="W")
+        ax.set_facecolor("None")
+        return ax
+
+    for i in range(2):  # we always only expect 2: pred and tgt
+        mel, pitch, energy = local_prep_tgts[i]
+        pitch = pitch * pitch_std + pitch_mean
+        axes[i][0].imshow(mel, origin="lower")
+        axes[i][0].set_aspect(2.5, adjustable="box")
+        axes[i][0].set_ylim(0, mel.shape[0])
+        axes[i][0].set_title(titles[i], fontsize="medium")
+        axes[i][0].tick_params(labelsize="x-small", left=False,
+                               labelleft=False)
+        axes[i][0].set_anchor("W")
+
+        ax1 = add_axis(fig, axes[i][0])
+        ax1.plot(pitch, color="tomato")
+        ax1.set_xlim(0, mel.shape[1])
+        ax1.set_ylim(0, pitch_max)
+        ax1.set_ylabel("F0", color="tomato")
+        ax1.tick_params(labelsize="x-small",
+                        colors="tomato",
+                        bottom=False,
+                        labelbottom=False)
+
+        ax2 = add_axis(fig, axes[i][0])
+        ax2.plot(energy, color="darkviolet")
+        ax2.set_xlim(0, mel.shape[1])
+        ax2.set_ylim(energy_min, energy_max)
+        ax2.set_ylabel("Energy", color="darkviolet")
+        ax2.yaxis.set_label_position("right")
+        ax2.tick_params(
+            labelsize="x-small",
+            colors="darkviolet",
+            bottom=False,
+            labelbottom=False,
+            left=False,
+            labelleft=False,
+            right=True,
+            labelright=True,
+        )
+
+    return fig
+
+
+def plot_batch_mels(pred_tgt_lists, rank):
+    regulated_features = []
+    # prediction: mel, pitch, energy
+    # target: mel, pitch, energy
+    for mel_pitch_energy in pred_tgt_lists:
+        mels = mel_pitch_energy[0]
+        if mels.size(dim=2) == 80:  # tgt and pred mel have diff dimension order
+            mels = mels.permute(0, 2, 1)
+        mel_lens = mel_pitch_energy[-1]
+        # reverse regulation for plotting: for every mel frame get pitch+energy
+        new_pitch = regulate_len(mel_lens,
+                                 mel_pitch_energy[1].permute(0, 2, 1))[0]
+        new_energy = regulate_len(mel_lens,
+                                  mel_pitch_energy[2].unsqueeze(dim=-1))[0]
+        regulated_features.append([mels,
+                                   new_pitch.squeeze(axis=2),
+                                   new_energy.squeeze(axis=2)])
+
+    batch_sizes = [feature.size(dim=0)
+                   for pred_tgt in regulated_features
+                   for feature in pred_tgt]
+    assert len(set(batch_sizes)) == 1
+
+    for i in range(batch_sizes[0]):
+        fig = plot_mels([
+            [array[i] for array in regulated_features[0]],
+            [array[i] for array in regulated_features[1]]
+        ])
+        log({'spectrogram': fig}, rank)
+        # empty pyplot
+        plt.close('all')
+
+
+def log_validation_batch(x, y_pred, rank):
+    x_fields = ['text_padded', 'input_lengths', 'mel_padded',
+                'output_lengths', 'pitch_padded', 'energy_padded',
+                'speaker', 'attn_prior', 'audiopaths']
+    y_pred_fields = ['mel_out', 'dec_mask', 'dur_pred', 'log_dur_pred',
+                     'pitch_pred', 'pitch_tgt', 'energy_pred',
+                     'energy_tgt', 'attn_soft', 'attn_hard',
+                     'attn_hard_dur', 'attn_logprob']
+
+    validation_dict = dict(zip(x_fields + y_pred_fields,
+                               list(x) + list(y_pred)))
+    log(validation_dict, rank)  # something in here returns a warning
+
+    pred_specs_keys = ['mel_out', 'pitch_pred', 'energy_pred', 'attn_hard_dur']
+    tgt_specs_keys = ['mel_padded', 'pitch_tgt', 'energy_tgt', 'attn_hard_dur']
+    plot_batch_mels([[validation_dict[key] for key in pred_specs_keys],
+                     [validation_dict[key] for key in tgt_specs_keys]], rank)
+
+
+def validate(model, criterion, valset, batch_size, collate_fn, distributed_run,
+             batch_to_gpu, rank):
     """Handles all the validation scoring and printing"""
     was_training = model.training
     model.eval()
@@ -279,6 +402,10 @@ def validate(model, epoch, total_iter, criterion, valset, batch_size,
         for i, batch in enumerate(val_loader):
             x, y, num_frames = batch_to_gpu(batch)
             y_pred = model(x)
+
+            if i % 5 == 0:
+                log_validation_batch(x, y_pred, rank)
+
             loss, meta = criterion(y_pred, y, is_training=False, meta_agg='sum')
 
             if distributed_run:
@@ -294,14 +421,13 @@ def validate(model, epoch, total_iter, criterion, valset, batch_size,
 
     val_meta['took'] = time.perf_counter() - tik
 
-    log((epoch,) if epoch is not None else (), tb_total_steps=total_iter,
-        subset='val_ema' if ema else 'val',
-        data=OrderedDict([
-            ('loss', val_meta['loss'].item()),
-            ('mel_loss', val_meta['mel_loss'].item()),
-            ('frames/s', num_frames.item() / val_meta['took']),
-            ('took', val_meta['took'])]),
-        )
+    # log overall statistics of the validate step
+    log({
+        'loss/validation-loss': val_meta['loss'].item(),
+        'mel-loss/validation-mel-loss': val_meta['mel_loss'].item(),
+        'validation-frames per s': num_frames.item() / val_meta['took'],
+        'validation-took': val_meta['took'],
+    }, rank)
 
     if was_training:
         model.train()
@@ -344,11 +470,19 @@ def apply_multi_tensor_ema(decay, model_weights, ema_weights, overflow_buf):
         decay, 1-decay, -1)
 
 
+def log(dictionary, rank):
+    if rank == 0:
+        wandb.log(dictionary)
+
+
 def main():
     parser = argparse.ArgumentParser(description='PyTorch FastPitch Training',
                                      allow_abbrev=False)
     parser = parse_args(parser)
-    args, _ = parser.parse_known_args()
+    # necessary to retain multi-word strings, e.g. for experiment description
+    # first item is 'train.py', which causes an exception later on (and is irrelevant)
+    fixed_args_list = shlex.split(' '.join(sys.argv))[1:]
+    args, _ = parser.parse_known_args(fixed_args_list)
 
     if args.p_arpabet > 0.0:
         cmudict.initialize(args.cmudict_path, keep_ambiguous=True)
@@ -362,17 +496,12 @@ def main():
         if not os.path.exists(args.output):
             os.makedirs(args.output)
 
-    log_fpath = args.log_file or os.path.join(args.output, 'nvlog.json')
     tb_subsets = ['train', 'val']
     if args.ema_decay > 0.0:
         tb_subsets.append('val_ema')
 
-    logger.init(log_fpath, args.output, enabled=(args.local_rank == 0),
-                tb_subsets=tb_subsets)
-    logger.parameters(vars(args), tb_subset='train')
-
     parser = models.parse_model_args('FastPitch', parser)
-    args, unk_args = parser.parse_known_args()
+    args, unk_args = parser.parse_known_args(fixed_args_list)
     if len(unk_args) > 0:
         raise ValueError(f'Invalid options {unk_args}')
 
@@ -382,14 +511,26 @@ def main():
         init_distributed(args, args.world_size, args.local_rank)
 
     device = torch.device('cuda' if args.cuda else 'cpu')
+
     model_config = models.get_model_config('FastPitch', args)
     model = models.get_model('FastPitch', model_config, device)
-
     attention_kl_loss = AttentionBinarizationLoss()
+
+    if args.local_rank == 0:
+        wandb.init(project=args.project,
+                   config=vars(args),
+                   notes=args.experiment_desc,
+                   dir=args.output,
+                   magic=True
+                   )
+        print(f'Weights and Biases run name: {wandb.run.name}')
+        wandb.watch(model, log='all')
 
     # Store pitch mean/std as params to translate from Hz during inference
     model.pitch_mean[0] = args.pitch_mean
     model.pitch_std[0] = args.pitch_std
+    log({'pitch_mean': args.pitch_mean, 'pitch_std': args.pitch_std},
+        args.local_rank)
 
     kw = dict(lr=args.learning_rate, betas=(0.9, 0.98), eps=1e-9,
               weight_decay=args.weight_decay)
@@ -464,6 +605,7 @@ def main():
 
     torch.cuda.synchronize()
     for epoch in range(start_epoch, args.epochs + 1):
+        print(f'epoch {epoch} out of {args.epochs}')
         epoch_start_time = time.perf_counter()
 
         epoch_loss = 0.0
@@ -545,7 +687,6 @@ def main():
 
             if accumulated_steps % args.grad_accumulation == 0:
 
-                logger.log_grads_tb(total_iter, model)
                 if args.amp:
                     scaler.unscale_(optimizer)
                     torch.nn.utils.clip_grad_norm_(
@@ -567,17 +708,20 @@ def main():
                 epoch_loss += iter_loss
                 epoch_num_frames += iter_num_frames
                 epoch_mel_loss += iter_mel_loss
-
-                log((epoch, epoch_iter, num_iters), tb_total_steps=total_iter,
-                    subset='train', data=OrderedDict([
-                        ('loss', iter_loss),
-                        ('mel_loss', iter_mel_loss),
-                        ('kl_loss', iter_kl_loss),
-                        ('kl_weight', kl_weight),
-                        ('frames/s', iter_num_frames / iter_time),
-                        ('took', iter_time),
-                        ('lrate', optimizer.param_groups[0]['lr'])]),
-                )
+                if epoch_iter % 5 == 0:
+                    log({
+                        'epoch': epoch,
+                        'epoch_iter': epoch_iter,
+                        'num_iters': num_iters,
+                        'total_steps': total_iter,
+                        'loss/loss': iter_loss,
+                        'mel-loss/mel_loss': iter_mel_loss,
+                        'kl_loss': iter_kl_loss,
+                        'kl_weight': kl_weight,
+                        'frames per s': iter_num_frames / iter_time,
+                        'took': iter_time,
+                        'lrate': optimizer.param_groups[0]['lr'],
+                    }, args.local_rank)
 
                 accumulated_steps = 0
                 iter_loss = 0
@@ -590,34 +734,35 @@ def main():
         epoch_mel_loss /= epoch_iter
         epoch_time = time.perf_counter() - epoch_start_time
 
-        log((epoch,), tb_total_steps=None, subset='train_avg',
-            data=OrderedDict([
-                ('loss', epoch_loss),
-                ('mel_loss', epoch_mel_loss),
-                ('frames/s', epoch_num_frames / epoch_time),
-                ('took', epoch_time)]),
-        )
+        log({
+            'epoch': epoch,
+            'loss/epoch_loss': epoch_loss,
+            'mel-loss/epoch_mel_loss': epoch_mel_loss,
+            'epoch_frames per s': epoch_num_frames / epoch_time,
+            'epoch_took': epoch_time,
+        }, args.local_rank)
         bmark_stats.update(epoch_num_frames, epoch_loss, epoch_mel_loss,
                            epoch_time)
 
-        validate(model, epoch, total_iter, criterion, valset, args.batch_size,
-                 collate_fn, distributed_run, batch_to_gpu)
+        validate(model, criterion, valset, args.batch_size, collate_fn,
+                 distributed_run, batch_to_gpu, args.local_rank)
 
         if args.ema_decay > 0:
-            validate(ema_model, epoch, total_iter, criterion, valset,
-                     args.batch_size, collate_fn, distributed_run, batch_to_gpu,
-                     ema=True)
+            validate(ema_model, criterion, valset, args.batch_size, collate_fn,
+                     distributed_run, batch_to_gpu, args.local_rank)
 
         maybe_save_checkpoint(args, model, ema_model, optimizer, scaler, epoch,
                               total_iter, model_config)
-        logger.flush()
 
     # Finished training
     if len(bmark_stats) > 0:
-        log((), tb_total_steps=None, subset='train_avg', data=bmark_stats.get(args.benchmark_epochs_num))
+        log(bmark_stats.get(args.benchmark_epochs_num), args.local_rank)
 
-    validate(model, None, total_iter, criterion, valset, args.batch_size,
-             collate_fn, distributed_run, batch_to_gpu)
+    validate(model, criterion, valset, args.batch_size, collate_fn,
+             distributed_run, batch_to_gpu, args.local_rank)
+
+    if args.local_rank == 0:
+        wandb.finish()
 
 
 if __name__ == '__main__':

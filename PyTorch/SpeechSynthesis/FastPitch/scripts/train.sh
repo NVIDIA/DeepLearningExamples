@@ -6,7 +6,6 @@ export OMP_NUM_THREADS=1
 : ${BATCH_SIZE:=16}
 : ${GRAD_ACCUMULATION:=2}
 : ${OUTPUT_DIR:="./output"}
-: ${LOG_FILE:=$OUTPUT_DIR/nvlog.json}
 : ${DATASET_PATH:=LJSpeech-1.1}
 : ${TRAIN_FILELIST:=filelists/ljs_audio_pitch_text_train_v3.txt}
 : ${VAL_FILELIST:=filelists/ljs_audio_pitch_text_val.txt}
@@ -45,7 +44,6 @@ echo -e "\nAMP=$AMP, ${NUM_GPUS}x${BATCH_SIZE}x${GRAD_ACCUMULATION}" \
 ARGS=""
 ARGS+=" --cuda"
 ARGS+=" -o $OUTPUT_DIR"
-ARGS+=" --log-file $LOG_FILE"
 ARGS+=" --dataset-path $DATASET_PATH"
 ARGS+=" --training-files $TRAIN_FILELIST"
 ARGS+=" --validation-files $VAL_FILELIST"
@@ -68,6 +66,8 @@ ARGS+=" --kl-loss-warmup-epochs $KL_LOSS_WARMUP"
 ARGS+=" --text-cleaners $TEXT_CLEANERS"
 ARGS+=" --n-speakers $NSPEAKERS"
 
+[ "$PROJECT" != "" ]               && ARGS+=" --project \"${PROJECT}\""
+[ "$EXPERIMENT_DESC" != "" ]       && ARGS+=" --experiment-desc \"${EXPERIMENT_DESC}\""
 [ "$AMP" = "true" ]                && ARGS+=" --amp"
 [ "$PHONE" = "true" ]              && ARGS+=" --p-arpabet 1.0"
 [ "$ENERGY" = "true" ]             && ARGS+=" --energy-conditioning"
