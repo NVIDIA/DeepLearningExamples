@@ -206,7 +206,7 @@ def main():
             print("DALI supported only with input .json files; disabling")
             use_dali = False
 
-        assert not args.pad_to_max_duration
+        assert not cfg['input_val']['audio_dataset'].get('pad_to_max_duration', False)
         assert not (args.transcribe_wav and args.transcribe_filelist)
 
         if args.transcribe_wav:
