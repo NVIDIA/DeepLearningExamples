@@ -32,7 +32,7 @@ setup(
         'news-please==1.5.21',
         'cchardet==2.1.7',
         'awscli==1.22.55',
-        'wikiextractor @ git+https://github.com/attardi/wikiextractor.git',
+        'wikiextractor @ git+https://github.com/attardi/wikiextractor.git@v3.0.6',
     ],
     entry_points={
         'console_scripts': [
