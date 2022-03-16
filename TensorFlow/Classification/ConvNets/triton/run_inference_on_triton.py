@@ -67,7 +67,7 @@ if __package__ is None:
 
 from .deployment_toolkit.args import ArgParserGenerator
 from .deployment_toolkit.core import DATALOADER_FN_NAME, load_from_file
-from .deployment_toolkit.dump import NpzWriter
+from .deployment_toolkit.dump import JsonDumpWriter
 
 LOGGER = logging.getLogger("run_inference_on_triton")
 
@@ -266,7 +266,7 @@ def main():
         max_unresponded_reqs=args.max_unresponded_requests,
     )
 
-    with NpzWriter(output_dir=args.output_dir) as writer:
+    with JsonDumpWriter(output_dir=args.output_dir) as writer:
         start = time.time()
         for ids, x, y_pred, y_real in tqdm(runner, unit="batch", mininterval=10):
             data = _verify_and_format_dump(args, ids, x, y_pred, y_real)

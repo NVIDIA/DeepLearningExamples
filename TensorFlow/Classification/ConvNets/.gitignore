@@ -124,3 +124,7 @@ models/
 tests/
 pytest.ini
 requirements_test.txt
+
+# Inference related
+workspace/
+navigator_workspace/

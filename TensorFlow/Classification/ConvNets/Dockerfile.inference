@@ -25,6 +25,6 @@ RUN pip uninstall -y typing
 ADD requirements.txt .
 ADD triton/requirements.txt triton/requirements.txt
 RUN pip install -r requirements.txt
-RUN pip install -r triton/requirements.txt
+RUN pip install --extra-index-url https://pypi.ngc.nvidia.com -r triton/requirements.txt
 
 ADD . .

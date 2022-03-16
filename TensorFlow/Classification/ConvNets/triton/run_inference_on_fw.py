@@ -49,7 +49,7 @@ if __package__ is None:
 
 from .deployment_toolkit.args import ArgParserGenerator
 from .deployment_toolkit.core import DATALOADER_FN_NAME, BaseLoader, BaseRunner, Format, load_from_file
-from .deployment_toolkit.dump import NpzWriter
+from .deployment_toolkit.dump import JsonDumpWriter
 from .deployment_toolkit.extensions import loaders, runners
 
 LOGGER = logging.getLogger("run_inference_on_fw")
@@ -119,7 +119,7 @@ def main():
     runner = ArgParserGenerator(Runner).from_args(args)
     LOGGER.info(f"Loading {args.input_path}")
     model = loader.load(args.input_path)
-    with runner.init_inference(model=model) as runner_session, NpzWriter(args.output_dir) as writer:
+    with runner.init_inference(model=model) as runner_session, JsonDumpWriter(args.output_dir) as writer:
         get_dataloader_fn = load_from_file(args.dataloader, label="dataloader", target=DATALOADER_FN_NAME)
         dataloader_fn = ArgParserGenerator(get_dataloader_fn).from_args(args)
         LOGGER.info(f"Data loader initialized; Running inference")

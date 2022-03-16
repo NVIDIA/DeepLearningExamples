@@ -184,7 +184,6 @@ processing, and training of the model.
     python3 triton/calculate_metrics.py \
         --dump-dir ${SHARED_DIR}/correctness_dump \
         --metrics triton/metrics.py \
-        --output-used-for-metrics classes \
         --csv ${SHARED_DIR}/correctness_metrics.csv
 
     cat ${SHARED_DIR}/correctness_metrics.csv
@@ -194,24 +193,26 @@ processing, and training of the model.
 9. Configure the model on Triton Inference Server.
  
    Generate the configuration from your model repository.
- 
    ```
-    python3 triton/config_model_on_triton.py \
-        --model-repository ${MODEL_REPOSITORY_PATH} \
-        --model-path ${SHARED_DIR}/model \
-        --model-format ${FORMAT} \
-        --model-name ${MODEL_NAME} \
-        --model-version 1 \
-        --max-batch-size ${MAX_BATCH_SIZE} \
-        --precision ${PRECISION} \
-        --number-of-model-instances ${NUMBER_OF_MODEL_INSTANCES} \
-        --max-queue-delay-us ${TRITON_MAX_QUEUE_DELAY} \
-        --preferred-batch-sizes ${TRITON_PREFERRED_BATCH_SIZES} \
-        --capture-cuda-graph 0 \
-        --backend-accelerator ${BACKEND_ACCELERATOR} \
-        --load-model ${TRITON_LOAD_MODEL_METHOD}
-   ```
- 
+   model-navigator triton-config-model \
+            --model-repository ${MODEL_REPOSITORY_PATH} \
+            --model-name ${MODEL_NAME} \
+            --model-version 1 \
+            --model-path ${SHARED_DIR}/model \
+            --model-format ${FORMAT} \
+            --load-model \
+            --load-model-timeout-s 100 \
+            --verbose \
+            \
+            --batching dynamic \
+            --max-queue-delay-us ${TRITON_MAX_QUEUE_DELAY} \
+            --preferred-batch-sizes ${TRITON_PREFERRED_BATCH_SIZES} \
+            --backend-accelerator ${BACKEND_ACCELERATOR} \
+            --tensorrt-precision ${PRECISION} \
+            --max-batch-size ${MAX_BATCH_SIZE} \
+            --engine-count-per-device ${DEVICE_KIND}=${NUMBER_OF_MODEL_INSTANCES}
+   ``` 
+    
 10. Run the Triton Inference Server accuracy tests.
  
    ```
@@ -228,7 +229,6 @@ processing, and training of the model.
     python3 triton/calculate_metrics.py \
         --dump-dir ${SHARED_DIR}/accuracy_dump \
         --metrics triton/metrics.py \
-        --output-used-for-metrics classes \
         --csv ${SHARED_DIR}/accuracy_metrics.csv
 
     cat ${SHARED_DIR}/accuracy_metrics.csv
@@ -307,12 +307,12 @@ Example values of some key variables in one configuration:
 PRECISION="fp16"
 FORMAT="tf-trt"
 BATCH_SIZE="1, 2, 4, 8, 16, 32, 64, 128"
-BACKEND_ACCELERATOR="trt"
+BACKEND_ACCELERATOR="none"
 MAX_BATCH_SIZE="128"
 NUMBER_OF_MODEL_INSTANCES="2"
 TRITON_MAX_QUEUE_DELAY="1"
 TRITON_PREFERRED_BATCH_SIZES="64 128"
-
+DEVICE_KIND="gpu"
 ```
 
 
@@ -352,9 +352,9 @@ The performance measurements in this document were conducted at the time of publ
 This table lists the common variable parameters for all performance measurements:
 | Parameter Name               | Parameter Value   |
 |:-----------------------------|:------------------|
-| Max Batch Size               | 128.0             |
-| Number of model instances    | 2.0               |
-| Triton Max Queue Delay       | 1.0               |
+| Max Batch Size               | 128             |
+| Number of model instances    | 2               |
+| Triton Max Queue Delay       | 1               |
 | Triton Preferred Batch Sizes | 64 128            |
 
 
@@ -495,9 +495,9 @@ Full tabular data
 This table lists the common variable parameters for all performance measurements:
 | Parameter Name               | Parameter Value   |
 |:-----------------------------|:------------------|
-| Max Batch Size               | 128.0             |
-| Number of model instances      | 2.0               |
-| Triton Max Queue Delay       | 1.0               |
+| Max Batch Size               | 128             |
+| Number of model instances      | 2               |
+| Triton Max Queue Delay       | 1               |
 | Triton Preferred Batch Sizes | 64 128            |
 
 

@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 networkx==2.5
-numpy<1.20.0,>=1.16.0  # # numpy 1.20+ requires py37+
 onnx>=1.8.0
 onnxruntime>=1.9.0
 pycuda>=2019.1.2
@@ -22,4 +21,4 @@ tf2onnx==1.8.3
 tabulate>=0.8.7
 natsort>=7.0.0
 # use tags instead of branch names - because there might be docker cache hit causing not fetching most recent changes on branch
-model_navigator @ git+https://github.com/triton-inference-server/model_navigator.git@v0.1.0#egg=model_navigator
+model_navigator @ git+https://github.com/triton-inference-server/model_navigator.git@v0.2.7#egg=model_navigator
