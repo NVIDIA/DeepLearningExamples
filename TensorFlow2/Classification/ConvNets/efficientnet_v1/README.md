@@ -28,12 +28,12 @@ The content of the repository is maintained by NVIDIA and is tested against each
   
   * [Benchmarking](#benchmarking)
   * [Training performance benchmark](#training-performance-benchmark)
-    * [Inference performance benchmark](#inference-performance-benchmark))
+    * [Inference performance benchmark](#inference-performance-benchmark)
   * [Results](#results)
-    * [Training accuracy results for EfficientNet v1-B0](#training-results-for-efficientnet-v1-b0)
+    * [Training accuracy results for EfficientNet v1-B0](#training-accuracy-results-for-efficientnet-v1-b0)
       * [Training accuracy: NVIDIA DGX A100 (8x A100 80GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-80gb)
       * [Training accuracy: NVIDIA DGX-1 (8x V100 32GB)](#training-accuracy-nvidia-dgx-1-8x-v100-32gb)
-    * [Training accuracy results for EfficientNet v1-B4](#training-results-for-efficientnet-v1-b4)
+    * [Training accuracy results for EfficientNet v1-B4](#training-accuracy-results-for-efficientnet-v1-b4)
       * [Training accuracy: NVIDIA DGX A100 (8x A100 80GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-80gb)
       * [Training accuracy: NVIDIA DGX-1 (8x V100 32GB)](#training-accuracy-nvidia-dgx-1-8x-v100-32gb)
     * [Training performance results for EfficientNet v1-B0](#training-performance-results-for-efficientnet-v1-b0)
@@ -446,7 +446,7 @@ Our results were obtained by running the training scripts in the tensorflow:21.0
 |  8  |          4504          |               4880              |                 1.08                          |            5.99        |                5.62              |
 |  32 |          15309         |               18424             |                 1.20                          |            20.36       |                21.23             |
 
-#### Training performance results for EfficientNet v1-B0
+#### Training performance results for EfficientNet v1-B4
 ##### Training performance: NVIDIA DGX A100 (8x A100 80GB)
 | GPUs  | Throughput - TF32    | Throughput - mixed precision    | Throughput speedup (TF32 - mixed precision)   | Weak scaling - TF32    | Weak scaling - mixed precision   |     
 |-----|------------------------|---------------------------------|-----------------------------------------------|------------------------|----------------------------------|
