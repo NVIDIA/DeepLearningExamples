@@ -17,7 +17,7 @@
 r"""
 Using `calculate_metrics.py` script, you can obtain model accuracy/error metrics using defined `MetricsCalculator` class.
 
-Data provided to `MetricsCalculator` are obtained from npz dump files
+Data provided to `MetricsCalculator` are obtained from dump files
 stored in directory pointed by `--dump-dir` argument.
 Above files are prepared by `run_inference_on_fw.py` and `run_inference_on_triton.py` scripts.
 
@@ -40,8 +40,6 @@ import logging
 import string
 from pathlib import Path
 
-import numpy as np
-
 # method from PEP-366 to support relative import in executed modules
 
 if __package__ is None:
@@ -49,40 +47,17 @@ if __package__ is None:
 
 from .deployment_toolkit.args import ArgParserGenerator
 from .deployment_toolkit.core import BaseMetricsCalculator, load_from_file
-from .deployment_toolkit.dump import pad_except_batch_axis
+from .deployment_toolkit.dump import JsonDumpReader
 
 LOGGER = logging.getLogger("calculate_metrics")
 TOTAL_COLUMN_NAME = "_total_"
-
-
-def get_data(dump_dir, prefix):
-    """Loads and concatenates dump files for given prefix (ex. inputs, outputs, labels, ids)"""
-    dump_dir = Path(dump_dir)
-    npz_files = sorted(dump_dir.glob(f"{prefix}*.npz"))
-    data = None
-    if npz_files:
-        # assume that all npz files with given prefix contain same set of names
-        names = list(np.load(npz_files[0].as_posix()).keys())
-        # calculate target shape
-        target_shape = {
-            name: tuple(np.max([np.load(npz_file.as_posix())[name].shape for npz_file in npz_files], axis=0))
-            for name in names
-        }
-        # pad and concatenate data
-        data = {
-            name: np.concatenate(
-                [pad_except_batch_axis(np.load(npz_file.as_posix())[name], target_shape[name]) for npz_file in npz_files]
-            )
-            for name in names
-        }
-    return data
 
 
 def main():
     logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser(description="Run models with given dataloader", allow_abbrev=False)
-    parser.add_argument("--metrics", help=f"Path to python module containing metrics calculator", required=True)
+    parser.add_argument("--metrics", help="Path to python module containing metrics calculator", required=True)
     parser.add_argument("--csv", help="Path to csv file", required=True)
     parser.add_argument("--dump-dir", help="Path to directory with dumped outputs (and labels)", required=True)
 
@@ -93,29 +68,18 @@ def main():
 
     args = parser.parse_args()
 
-    LOGGER.info(f"args:")
+    LOGGER.info("args:")
     for key, value in vars(args).items():
         LOGGER.info(f"    {key} = {value}")
 
     MetricsCalculator = load_from_file(args.metrics, "metrics", "MetricsCalculator")
     metrics_calculator: BaseMetricsCalculator = ArgParserGenerator(MetricsCalculator).from_args(args)
 
-    ids = get_data(args.dump_dir, "ids")["ids"]
-    x = get_data(args.dump_dir, "inputs")
-    y_true = get_data(args.dump_dir, "labels")
-    y_pred = get_data(args.dump_dir, "outputs")
-
-    common_keys = list({k for k in (y_true or [])} & {k for k in (y_pred or [])})
-    for key in common_keys:
-        if y_true[key].shape != y_pred[key].shape:
-            LOGGER.warning(
-                f"Model predictions and labels shall have equal shapes. "
-                f"y_pred[{key}].shape={y_pred[key].shape} != "
-                f"y_true[{key}].shape={y_true[key].shape}"
-            )
-
-    metrics = metrics_calculator.calc(ids=ids, x=x, y_pred=y_pred, y_real=y_true)
-    metrics = {TOTAL_COLUMN_NAME: len(ids), **metrics}
+    reader = JsonDumpReader(args.dump_dir)
+    for ids, x, y_true, y_pred in reader.iterate_over(["ids", "inputs", "labels", "outputs"]):
+        ids = list(ids["ids"]) if ids is not None else None
+        metrics_calculator.update(ids=ids, x=x, y_pred=y_pred, y_real=y_true)
+    metrics = metrics_calculator.metrics
 
     metric_names_with_space = [name for name in metrics if any([c in string.whitespace for c in name])]
     if metric_names_with_space:
