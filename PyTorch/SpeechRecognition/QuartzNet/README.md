@@ -555,14 +555,14 @@ AMP=false NUM_GPUS_SEQ="8" GRAD_ACC_SEQ="2 3" bash scripts/train_benchmark.sh
 ```
 in the PyTorch 21.07-py3 NGC container on NVIDIA DGX A100 with (8x A100 80GB) GPUs. Performance numbers (in items/images per second) were averaged over an entire training epoch.
 
-| Batch size / GPU | Grad accumulation | GPUs | Throughput - FP32 | Throughput - mixed precision | Throughput speedup (FP32 to mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision |
+| Batch size / GPU | Grad accumulation | GPUs | Throughput - TF32 | Throughput - mixed precision | Throughput speedup (TF32 to mixed precision) | Weak scaling - TF32 | Weak scaling - mixed precision |
 |-----:|-----:|-------:|----------:|-------:|--------:|-----:|------:|
-|   48 |   24 |      1 |     89.69 |  78.89 |    1.14 | 1.00 |  1.00 |
-|   72 |   16 |      1 |     88.70 |  79.01 |    1.12 | 1.00 |  1.00 |
-|   48 |    6 |      4 |    343.06 | 303.16 |    1.13 | 3.84 |  3.82 |
-|   72 |    4 |      4 |    341.95 | 304.47 |    1.12 | 3.85 |  3.86 |
-|   48 |    3 |      8 |    644.27 | 576.37 |    1.12 | 7.31 |  7.18 |
-|   72 |    2 |      8 |    651.60 | 583.31 |    1.12 | 7.38 |  7.35 |
+|   48 |   24 |      1 |     78.89 |  89.69 |    1.14 | 1.00 |  1.00 |
+|   72 |   16 |      1 |     79.01 |  88.70 |    1.12 | 1.00 |  1.00 |
+|   48 |    6 |      4 |    303.16 | 343.06 |    1.13 | 3.84 |  3.82 |
+|   72 |    4 |      4 |    304.47 | 341.95 |    1.12 | 3.85 |  3.86 |
+|   48 |    3 |      8 |    576.37 | 644.27 |    1.12 | 7.31 |  7.18 |
+|   72 |    2 |      8 |    583.31 | 651.60 |    1.12 | 7.38 |  7.35 |
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -582,14 +582,14 @@ AMP=false NUM_GPUS_SEQ="16" GRAD_ACC_SEQ="3" bash scripts/train_benchmark.sh
 in the PyTorch 21.07-py3 NGC container on NVIDIA DGX-2 with (16x V100 32GB) GPUs. Performance numbers (in items/images per second) were averaged over an entire training epoch.
 
 | Batch size / GPU | Grad accumulation | GPUs | Throughput - FP32 | Throughput - mixed precision | Throughput speedup (FP32 to mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision |
-|-----:|-----:|-------:|----------:|-------:|--------:|------:|------:|
-|   24 |   48 |      1 |     67.95 |  44.65 |    1.52 |  1.00 |  1.00 |
-|   48 |   24 |      1 |     67.49 |      - |       - |  1.00 |  1.00 |
-|   24 |   12 |      4 |    258.56 | 170.18 |    1.52 |  3.81 |  3.81 |
-|   48 |    6 |      4 |    254.58 |      - |       - |     - |  3.77 |
-|   24 |    6 |      8 |    495.52 | 330.53 |    1.50 |  7.40 |  7.29 |
-|   48 |    3 |      8 |    477.87 |      - |       - |     - |  7.08 |
-|   24 |    3 |     16 |    872.99 | 616.51 |    1.42 | 13.81 | 12.85 |
+|-----:|-----:|-------:|-------:|-------:|------:|------:|------:|
+|   24 |   48 |      1 |  44.65 |  67.95 |  1.52 |  1.00 |  1.00 |
+|   48 |   24 |      1 |      - |  67.49 |     - |  1.00 |  1.00 |
+|   24 |   12 |      4 | 170.18 | 258.56 |  1.52 |  3.81 |  3.81 |
+|   48 |    6 |      4 |      - | 254.58 |     - |     - |  3.77 |
+|   24 |    6 |      8 | 330.53 | 495.52 |  1.50 |  7.40 |  7.29 |
+|   48 |    3 |      8 |      - | 477.87 |     - |     - |  7.08 |
+|   24 |    3 |     16 | 616.51 | 872.99 |  1.42 | 13.81 | 12.85 |
 
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
