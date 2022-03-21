@@ -24,12 +24,13 @@ REGISTER_OP("DotBasedInteract")
     .Input("bottom_mlp_output: T")
     .Output("output: T")
     .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
-      const int64 pad = 1;
       auto input = c->input(0);
       auto batch_size_dim = c->Dim(input, 0);
-      int64 num_rows = c->Value(c->Dim(input, 1));
-      int64 num_cols = c->Value(c->Dim(input, 2));
-      auto output_size_dim = c->MakeDim(((num_rows * (num_rows - 1)) >> 1) + num_cols + pad);
+      int64 num_rows = c->Value(c->Dim(input, 1)); //number of categories
+      int64 num_cols = c->Value(c->Dim(input, 2)); //embedding size
+      int64 raw_output_size = ((num_rows * (num_rows - 1)) >> 1) + num_cols;
+      int64 output_size = ((raw_output_size-1)/8 + 1)*8; //round up to multiple of 8
+      auto output_size_dim = c->MakeDim(output_size);
       c->set_output(0, c->MakeShape({batch_size_dim, output_size_dim}));
       return Status::OK();
     });
@@ -44,7 +45,7 @@ REGISTER_OP("DotBasedInteractGrad")
       auto input = c->input(0);
       auto batch_size_dim = c->Dim(input, 0);
       auto num_cols_dim = c->Dim(input, 2);
-      c->set_output(0, input);
-      c->set_output(1, c->MakeShape({batch_size_dim, num_cols_dim}));
+      c->set_output(0, input); //gradient w.r.t categoricals
+      c->set_output(1, c->MakeShape({batch_size_dim, num_cols_dim})); //gradient w.r.t bottom mlp
       return Status::OK();
     });

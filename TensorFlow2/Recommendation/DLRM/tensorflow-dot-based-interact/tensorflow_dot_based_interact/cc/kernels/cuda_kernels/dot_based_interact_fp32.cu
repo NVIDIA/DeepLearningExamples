@@ -26,7 +26,7 @@
 #include <iostream>
 #include <vector>
 
-#include "../dot_based_interact_shared_utils.cu.h"
+#include "dot_based_interact_shared_utils.cuh"
 
 template <uint THREADBLOCK_SIZE>
 __launch_bounds__(THREADBLOCK_SIZE) __global__
@@ -79,7 +79,11 @@ __launch_bounds__(THREADBLOCK_SIZE) __global__
     gmem_out_interaction[idx] = sum;
   }
 
-  gmem_out_interaction[interaction_output_size] = 0;
+  // Zero out the padding
+  uint zeroout_index = num_cols + interaction_output_size + threadIdx.x;
+  if(zeroout_index < output_size){
+  gmem_out_bottom_mlp[zeroout_index] = 0;
+  }
 }
 
 template <uint THREADBLOCK_SIZE>
@@ -142,7 +146,11 @@ __launch_bounds__(THREADBLOCK_SIZE) __global__ void dotBasedInteractF32FwdKernel
     gmem_out_interaction[idx] = sum.x + sum.y + sum.z + sum.w;
   }
 
-  gmem_out_interaction[interaction_output_size] = 0;
+  // Zero out the padding
+  uint zeroout_index = num_cols + interaction_output_size + threadIdx.x;
+  if(zeroout_index < output_size){
+  gmem_out_bottom_mlp[zeroout_index] = 0;
+  }
 }
 
 template <uint THREADBLOCK_SIZE>

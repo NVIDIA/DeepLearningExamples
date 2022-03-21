@@ -15,7 +15,7 @@
 # author: Tomasz Grel (tgrel@nvidia.com)
 
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:21.06-tf2-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:21.11-tf2-py3
 FROM ${FROM_IMAGE_NAME}
 
 WORKDIR /dlrm

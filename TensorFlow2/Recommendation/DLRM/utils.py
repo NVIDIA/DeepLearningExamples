@@ -19,6 +19,16 @@ import time
 import dllogger
 import horovod.tensorflow as hvd
 import json
+import os
+
+
+def get_variable_path(checkpoint_path, name, i=0):
+    tokens = name.split('/')
+    tokens = [t for t in tokens if 'model_parallel' not in t and 'data_parallel' not in t]
+    name = '_'.join(tokens)
+    name = name.replace(':', '_')
+    filename = name + f'_part{i}' + '.npy'
+    return os.path.join(checkpoint_path, filename)
 
 
 def print_model_summary(model):
@@ -59,7 +69,7 @@ def init_logging(log_path, FLAGS):
 
 class IterTimer:
     def __init__(self, train_batch_size, test_batch_size, optimizer, print_freq=50,
-                 enabled=True, benchmark_warmup_steps=100):
+                 enabled=True, benchmark_warmup_steps=None):
         self.previous_tick = None
         self.train_idx = 0
         self.test_idx = 0
@@ -69,8 +79,12 @@ class IterTimer:
         self.optimizer = optimizer
         self.enabled = enabled
         self.training_steps_time = 0
-        self.benchmark_warmup_steps = benchmark_warmup_steps
         self.steps_measured = 0
+
+        if benchmark_warmup_steps is None:
+            self.benchmark_warmup_steps = print_freq * 2
+        else:
+            self.benchmark_warmup_steps = benchmark_warmup_steps
 
     def step_train(self, loss=None):
         if not self.enabled:
@@ -102,6 +116,9 @@ class IterTimer:
         self.train_idx += 1
 
     def mean_train_time(self):
+        if self.steps_measured == 0:
+            print("Run too short to measure mean training time")
+            return float('nan')
         return self.training_steps_time / self.steps_measured
 
     def step_test(self):

@@ -102,11 +102,12 @@ class DotBasedInteractOp : public OpKernel {
 
     // Calculate the output tensor shape
     TensorShape input_shape = input_tensor.shape();
-    const int64 pad = 1;
     int64 batch_size = input_shape.dim_size(0);
     int64 num_rows = input_shape.dim_size(1);
     int64 num_cols = input_shape.dim_size(2);
-    int64 output_size = ((num_rows * (num_rows - 1)) >> 1) + num_cols + pad;
+    int64 raw_output_size = ((num_rows * (num_rows - 1)) >> 1) + num_cols;
+    int64 output_size = ((raw_output_size-1)/8 + 1)*8; //round up to multiple of 8
+
     TensorShape output_shape({batch_size, output_size});
 
     // Create an output tensor

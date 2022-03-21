@@ -111,5 +111,136 @@ class DotBasedInteractTest(test.TestCase):
   def test_grad_fp16_not_aligned(self):
     self.assertAllCloseAccordingToType(*self.backward(17, 31, 37, tf.float16))
 
+  extended_argset_1 = [ #within both old bounds
+    #batch_size, num_rows, num_cols
+    (16,31,31),
+    (16,31,32),
+    (16,31,33),
+    (16,32,31),
+    (16,32,32),
+    (16,32,33),
+    (255,31,32),
+    (255,31,31),
+    (255,31,33),
+    (255,32,31),
+    (255,32,32),
+    (255,32,33)
+  ]
+
+  extended_argset_2 = [ #exceeding num_rows bound
+    #batch_size, num_rows, num_cols
+    (16,33,31),
+    (16,33,32),
+    (16,33,33),
+    (255,33,31),
+    (255,33,32),
+    (255,33,33)
+  ]
+
+  extended_argset_3 = [ #exceeding num_cols bound
+  #batch_size, num_rows, num_cols
+    (16,31,255),
+    (16,31,256),
+    (16,31,257),
+    (16,32,255),
+    (16,32,256),
+    (16,32,257),
+    (255,31,255),
+    (255,31,256),
+    (255,31,257),
+    (255,32,255),
+    (255,32,256),
+    (255,32,257)
+  ]
+  extended_argset_4 = [ #exceeding both bounds
+    #batch_size, num_rows, num_cols
+    (16,39,255),
+    (16,39,256),
+    (16,39,257),
+    (16,40,255),
+    (16,40,256),
+    (16,40,257),
+    (16,41,255),
+    (16,41,256),
+    (16,41,257),
+    (255,39,255),
+    (255,39,256),
+    (255,39,257),
+    (255,40,255),
+    (255,40,256),
+    (255,40,257),
+    (255,41,255),
+    (255,41,256),
+    (255,41,257)
+  ]
+
+  def test_fp32_extended_1(self):
+    # Higher than normal tolerance on FP32 due to TF32 on Ampere
+    for batch_size, num_rows, num_cols in self.extended_argset_1:
+      self.assertAllClose(*self.forward(batch_size, num_rows, num_cols, tf.float32), rtol=1e-03)
+
+  def test_grad_fp32_extended_1(self):
+    for batch_size, num_rows, num_cols in self.extended_argset_1:
+      self.assertAllClose(*self.backward(batch_size, num_rows, num_cols, tf.float32), rtol=1e-03)
+
+  def test_fp16_extended_1(self):
+    for batch_size, num_rows, num_cols in self.extended_argset_1:
+      self.assertAllCloseAccordingToType(*self.forward(batch_size, num_rows, num_cols, tf.float16))
+
+  def test_grad_fp16_extended_1(self):
+    for batch_size, num_rows, num_cols in self.extended_argset_1:
+      self.assertAllCloseAccordingToType(*self.backward(batch_size, num_rows, num_cols, tf.float16))
+
+  def test_fp32_extended_2(self):
+    # Higher than normal tolerance on FP32 due to TF32 on Ampere
+    for batch_size, num_rows, num_cols in self.extended_argset_2:
+      self.assertAllClose(*self.forward(batch_size, num_rows, num_cols, tf.float32), rtol=1e-03)
+
+  def test_grad_fp32_extended_2(self):
+    for batch_size, num_rows, num_cols in self.extended_argset_2:
+      self.assertAllClose(*self.backward(batch_size, num_rows, num_cols, tf.float32), rtol=1e-03)
+
+  def test_fp16_extended_2(self):
+    for batch_size, num_rows, num_cols in self.extended_argset_2:
+      self.assertAllCloseAccordingToType(*self.forward(batch_size, num_rows, num_cols, tf.float16))
+
+  def test_grad_fp16_extended_2(self):
+    for batch_size, num_rows, num_cols in self.extended_argset_2:
+      self.assertAllCloseAccordingToType(*self.backward(batch_size, num_rows, num_cols, tf.float16))
+
+  def test_fp32_extended_3(self):
+    # Higher than normal tolerance on FP32 due to TF32 on Ampere
+    for batch_size, num_rows, num_cols in self.extended_argset_3:
+      self.assertAllClose(*self.forward(batch_size, num_rows, num_cols, tf.float32), rtol=1e-03)
+
+  def test_grad_fp32_extended_3(self):
+    for batch_size, num_rows, num_cols in self.extended_argset_3:
+      self.assertAllClose(*self.backward(batch_size, num_rows, num_cols, tf.float32), rtol=1e-03)
+
+  def test_fp16_extended_3(self):
+    for batch_size, num_rows, num_cols in self.extended_argset_3:
+      self.assertAllCloseAccordingToType(*self.forward(batch_size, num_rows, num_cols, tf.float16))
+
+  def test_grad_fp16_extended_3(self):
+    for batch_size, num_rows, num_cols in self.extended_argset_3:
+      self.assertAllCloseAccordingToType(*self.backward(batch_size, num_rows, num_cols, tf.float16))
+
+  def test_fp32_extended_4(self):
+    # Higher than normal tolerance on FP32 due to TF32 on Ampere
+    for batch_size, num_rows, num_cols in self.extended_argset_4:
+      self.assertAllClose(*self.forward(batch_size, num_rows, num_cols, tf.float32), rtol=1e-03)
+
+  def test_grad_fp32_extended_4(self):
+    for batch_size, num_rows, num_cols in self.extended_argset_4:
+      self.assertAllClose(*self.backward(batch_size, num_rows, num_cols, tf.float32), rtol=1e-03)
+
+  def test_fp16_extended_4(self):
+    for batch_size, num_rows, num_cols in self.extended_argset_4:
+      self.assertAllCloseAccordingToType(*self.forward(batch_size, num_rows, num_cols, tf.float16))
+
+  def test_grad_fp16_extended_4(self):
+    for batch_size, num_rows, num_cols in self.extended_argset_4:
+      self.assertAllCloseAccordingToType(*self.backward(batch_size, num_rows, num_cols, tf.float16))
+      
 if __name__ == '__main__':
   test.main()

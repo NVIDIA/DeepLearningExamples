@@ -20,7 +20,8 @@ from collections import deque
 import math
 import horovod.tensorflow as hvd
 from collections import namedtuple
-
+import itertools
+import numpy as np
 
 class BroadcastingInitializer(tf.keras.initializers.Initializer):
     def __init__(self, wrapped):
@@ -33,6 +34,13 @@ class BroadcastingInitializer(tf.keras.initializers.Initializer):
 
     def get_config(self):
         return {}
+
+
+def is_multinode():
+    if not hvd.is_homogeneous():
+        return ValueError('Only homogeneous clusters are currently supported')
+
+    return hvd.cross_size() > 1
 
 
 def argsort(sequence, reverse: bool = False):
@@ -65,11 +73,25 @@ def distribute_to_buckets(sizes, buckets_num):
 
 
 MultiGpuMetadata = namedtuple('MultiGpuMetadata',
-                              ['bottom_mlp_ranks','rank_to_categorical_ids','rank_to_feature_count'])
+                              ['bottom_mlp_ranks','rank_to_categorical_ids',
+                               'rank_to_feature_count', 'sort_order'])
+
+
+def _find_mapping(target, source):
+    """
+    Find a mapping, such that target == source[mapping]
+    """
+    assert len(target) == len(source)
+
+    mapping = []
+    for x in target:
+        j = source.index(x)
+        mapping.append(j)
+    return mapping
 
 
 def get_device_mapping(embedding_sizes, num_gpus, data_parallel_bottom_mlp,
-                       experimental_columnwise_split, num_numerical_features):
+                       columnwise_split, num_numerical_features):
     """Get device mappings for hybrid parallelism
 
     Bottom MLP running on device 0. Embeddings will be distributed across among all the devices.
@@ -92,17 +114,36 @@ def get_device_mapping(embedding_sizes, num_gpus, data_parallel_bottom_mlp,
     else:
         bottom_mlp_ranks = [0]
 
-    if experimental_columnwise_split:
-        gpu_buckets = num_gpus * [list(range(len(embedding_sizes)))]
+
+    singlegpu_order = distribute_to_buckets(embedding_sizes, 1)[0]
+    if not data_parallel_bottom_mlp or num_gpus == 1:
+        # one more feature because of the bottom mlp
+        singlegpu_order = [-1] + singlegpu_order
+
+    print('singleGPU order: ', singlegpu_order)
+
+    if columnwise_split:
+        gpu_buckets = num_gpus * [distribute_to_buckets(embedding_sizes, 1)[0]]
 
         vectors_per_gpu = [len(bucket) for bucket in gpu_buckets]
 
         if num_numerical_features > 0:
             vectors_per_gpu[0] += 1  # count bottom mlp
 
+        # [-1] for the model parallel bottom mlp at first position
+        flattened_buckets = [] if data_parallel_bottom_mlp else [-1]
+        flattened_buckets.extend(gpu_buckets[0])
+        sort_order = _find_mapping(target=singlegpu_order, source=flattened_buckets)
+
+        print(f'bottom mlp ranks: {bottom_mlp_ranks}\n'
+              f'gpu buckets: {gpu_buckets}\n'
+              f'vectors_per_gpu: {vectors_per_gpu}\n',
+              f'sort_order: {sort_order}')
+
         return MultiGpuMetadata(bottom_mlp_ranks=bottom_mlp_ranks,
                                 rank_to_categorical_ids=gpu_buckets,
-                                rank_to_feature_count=vectors_per_gpu)
+                                rank_to_feature_count=vectors_per_gpu,
+                                sort_order=sort_order)
 
     if num_gpus > 4 and not data_parallel_bottom_mlp and num_numerical_features > 0:
         # for higher no. of GPUs, make sure the one with bottom mlp has no embeddings
@@ -117,6 +158,20 @@ def get_device_mapping(embedding_sizes, num_gpus, data_parallel_bottom_mlp,
         for rank in bottom_mlp_ranks:
             vectors_per_gpu[rank] += 1  # count bottom mlp
 
+    # [-1] for the model parallel bottom mlp at first position
+    flattened_buckets = [] if data_parallel_bottom_mlp else [-1]
+    flattened_buckets.extend(itertools.chain(*gpu_buckets))
+
+    print('tablewise-multiGPU order: ', flattened_buckets)
+    sort_order = _find_mapping(target=singlegpu_order, source=flattened_buckets)
+
+    if hvd.rank() == 0:
+        print(f'bottom mlp ranks: {bottom_mlp_ranks}\n'
+              f'gpu buckets: {gpu_buckets}\n'
+              f'vectors_per_gpu: {vectors_per_gpu}\n',
+              f'sort_order: {sort_order}')
+
     return MultiGpuMetadata(bottom_mlp_ranks=bottom_mlp_ranks,
                             rank_to_categorical_ids=gpu_buckets,
-                            rank_to_feature_count=vectors_per_gpu)
+                            rank_to_feature_count=vectors_per_gpu,
+                            sort_order=sort_order)

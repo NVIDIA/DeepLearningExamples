@@ -26,9 +26,7 @@
 #include <iostream>
 #include <vector>
 
-#include "../dot_based_interact_shared_utils.cu.h"
-
-using namespace nvcuda;
+#include "dot_based_interact_shared_utils.cuh"
 
 using namespace nvcuda;
 
@@ -53,7 +51,8 @@ __launch_bounds__(THREADBLOCK_SIZE) __global__ void dotBasedInteractTF32FwdKerne
                                                                                   uint num_row_steps,
                                                                                   uint num_col_steps,
                                                                                   uint smem_stride,
-                                                                                  uint smem_stride_acc) {
+                                                                                  uint smem_stride_acc,
+                                                                                  uint padding_size) {
   // The only support sizes for TF32.
   const uint kWmmaM = 16;
   const uint kWmmaN = 16;
@@ -153,9 +152,9 @@ __launch_bounds__(THREADBLOCK_SIZE) __global__ void dotBasedInteractTF32FwdKerne
       gmem_interact_output[offset + lane_id] = shmem[src_line * smem_stride_acc + lane_id];
     }
   }
-  // Padding
-  if (lane_id == 0) {
-    gmem_output[output_size - 1] = 0;
+  // Add padding to the output vectors
+  if (lane_id < padding_size) {
+    gmem_output[output_size - lane_id - 1] = __float2half(0);
   }
 }
 

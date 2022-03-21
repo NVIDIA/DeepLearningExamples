@@ -1,6 +1,6 @@
 #! /bin/bash
 
-# Copyright (c) 2020 NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021 NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -52,9 +52,9 @@ final_output_dir=${final_output_dir:-'/data/dlrm/binary_dataset'}
 
 
 if [ -d ${final_output_dir}/train ] \
-   && [ -d ${final_output_dir}/val ] \
+   && [ -d ${final_output_dir}/validation ] \
    && [ -d ${final_output_dir}/test ] \
-   && [ -f ${final_output_dir}/model_sizes.json ]; then
+   && [ -f ${final_output_dir}/feature_spec.yaml ]; then
 
     echo "Final conversion already done"
 else
@@ -67,13 +67,12 @@ else
 
     python split_dataset.py --dataset "${final_output_dir}" --output "${final_output_dir}/split"
     rm ${final_output_dir}/train_data.bin
-    rm ${final_output_dir}/val_data.bin
+    rm ${final_output_dir}/validation_data.bin
     rm ${final_output_dir}/test_data.bin
+    rm ${final_output_dir}/model_size.json
 
     mv ${final_output_dir}/split/* ${final_output_dir}
     rm -rf ${final_output_dir}/split
 fi
 
 echo "Done preprocessing the Criteo Kaggle Dataset"
-echo "You can now start the training with: "
-echo "python -m dlrm.scripts.main --mode train --dataset  ${final_output_dir}"
