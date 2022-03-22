@@ -28,7 +28,6 @@ from skimage.transform import resize
 from utils.logger import DLLogger
 from utils.utils import get_config_file, print0, rank_zero
 
-
 from nnunet.loss import Loss, LossBraTS
 from nnunet.metrics import Dice
 
@@ -238,7 +237,7 @@ class NNUnet(pl.LightningModule):
     def test_epoch_end(self, outputs):
         if self.args.exec_mode == "evaluate":
             self.eval_dice, _ = self.dice.compute()
-            
+
     @rank_zero
     def on_fit_end(self):
         if not self.args.benchmark:
@@ -246,7 +245,7 @@ class NNUnet(pl.LightningModule):
             metrics["dice_score"] = round(self.best_mean.item(), 2)
             metrics["Epoch"] = self.best_mean_epoch
             self.dllogger.log_metrics(step=(), metrics=metrics)
-            self.dllogger.flush()            
+            self.dllogger.flush()
 
     def configure_optimizers(self):
         optimizer = {

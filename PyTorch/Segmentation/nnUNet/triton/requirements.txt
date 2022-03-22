@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 networkx==2.5
-numpy<1.20.0,>=1.19.1  # # numpy 1.20+ requires py37
 onnx==1.8.0
 onnxruntime==1.5.2
 pycuda>=2019.1.2
