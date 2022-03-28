@@ -510,7 +510,7 @@ def take_training_step(args, grad_scaler, model, criterion, batch, stats):
         prediction_scores, seq_relationship_score = model(input_ids=batch['input_ids'], token_type_ids=batch['token_type_ids'], attention_mask=batch['attention_mask'], masked_lm_labels=batch['labels'])
         loss = criterion(prediction_scores, seq_relationship_score, batch['labels'], batch['next_sentence_labels'])
 
-    stats.device_stat('average_loss').add_(loss)
+    stats.device_stat('average_loss').add_(loss.clone().detach())
     grad_scaler.scale(loss).backward()
 
 
