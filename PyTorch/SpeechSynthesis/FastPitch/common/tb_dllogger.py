@@ -1,14 +1,14 @@
 import atexit
 import glob
-import os
 import re
-import numpy as np
-
-import torch
-from torch.utils.tensorboard import SummaryWriter
+from itertools import product
+from pathlib import Path
 
 import dllogger
+import torch
+import numpy as np
 from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
+from torch.utils.tensorboard import SummaryWriter
 
 
 tb_loggers = {}
@@ -25,11 +25,10 @@ class TBLogger:
         self.cache = {}
         if self.enabled:
             self.summary_writer = SummaryWriter(
-                log_dir=os.path.join(log_dir, name),
-                flush_secs=120, max_queue=200)
+                log_dir=Path(log_dir, name), flush_secs=120, max_queue=200)
             atexit.register(self.summary_writer.close)
             if dummies:
-                for key in ('aaa', 'zzz'):
+                for key in ('_', '✕'):
                     self.summary_writer.add_scalar(key, 0.0, 1)
 
     def log(self, step, data):
@@ -55,17 +54,15 @@ class TBLogger:
                                stat=stat)
 
 
-def unique_log_fpath(log_fpath):
+def unique_log_fpath(fpath):
 
-    if not os.path.isfile(log_fpath):
-        return log_fpath
+    if not Path(fpath).is_file():
+        return fpath
 
     # Avoid overwriting old logs
-    saved = sorted([int(re.search('\.(\d+)', f).group(1))
-                    for f in glob.glob(f'{log_fpath}.*')])
-
-    log_num = (saved[-1] if saved else 0) + 1
-    return f'{log_fpath}.{log_num}'
+    saved = [re.search('\.(\d+)$', f) for f in glob.glob(f'{fpath}.*')]
+    saved = [0] + [int(m.group(1)) for m in saved if m is not None]
+    return f'{fpath}.{max(saved) + 1}'
 
 
 def stdout_step_format(step):
@@ -127,21 +124,22 @@ def init(log_fpath, log_dir, enabled=True, tb_subsets=[], **tb_kw):
                   for s in tb_subsets}
 
 
-def init_inference_metadata():
+def init_inference_metadata(batch_size=None):
 
     modalities = [('latency', 's', ':>10.5f'), ('RTF', 'x', ':>10.2f'),
                   ('frames/s', None, ':>10.2f'), ('samples/s', None, ':>10.2f'),
-                  ('letters/s', None, ':>10.2f')]
+                  ('letters/s', None, ':>10.2f'), ('tokens/s', None, ':>10.2f')]
 
-    for perc in ['', 'avg', '90%', '95%', '99%']:
-        for model in ['fastpitch', 'waveglow', '']:
-            for mod, unit, format in modalities:
+    if batch_size is not None:
+        modalities.append((f'RTF@{batch_size}', 'x', ':>10.2f'))
 
-                name = f'{perc} {model} {mod}'.strip().replace('  ', ' ')
+    percs = ['', 'avg', '90%', '95%', '99%']
+    models = ['', 'fastpitch', 'waveglow', 'hifigan']
 
-                dllogger.metadata(
-                    name.replace(' ', '_'),
-                    {'name': f'{name: <26}', 'unit': unit, 'format': format})
+    for perc, model, (mod, unit, fmt) in product(percs, models, modalities):
+        name = f'{perc} {model} {mod}'.strip().replace('  ', ' ')
+        dllogger.metadata(name.replace(' ', '_'),
+                          {'name': f'{name: <26}', 'unit': unit, 'format': fmt})
 
 
 def log(step, tb_total_steps=None, data={}, subset='train'):
@@ -149,7 +147,7 @@ def log(step, tb_total_steps=None, data={}, subset='train'):
         tb_loggers[subset].log(tb_total_steps, data)
 
     if subset != '':
-        data = {f'{subset}_{key}': v for key,v in data.items()}
+        data = {f'{subset}_{key}': v for key, v in data.items()}
     dllogger.log(step, data=data)
 
 
@@ -158,11 +156,11 @@ def log_grads_tb(tb_total_steps, grads, tb_subset='train'):
 
 
 def parameters(data, verbosity=0, tb_subset=None):
-    for k,v in data.items():
-        dllogger.log(step="PARAMETER", data={k:v}, verbosity=verbosity)
+    for k, v in data.items():
+        dllogger.log(step="PARAMETER", data={k: v}, verbosity=verbosity)
 
     if tb_subset is not None and tb_loggers[tb_subset].enabled:
-        tb_data = {k:v for k,v in data.items()
+        tb_data = {k: v for k, v in data.items()
                    if type(v) in (str, bool, int, float)}
         tb_loggers[tb_subset].summary_writer.add_hparams(tb_data, {})
 

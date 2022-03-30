@@ -233,6 +233,7 @@ def maybe_save_checkpoint(args, model, ema_model, optimizer, scaler, epoch,
     checkpoint = {'epoch': epoch,
                   'iteration': total_iter,
                   'config': config,
+                  'train_setup': args.__dict__,
                   'state_dict': model.state_dict(),
                   'ema_state_dict': ema_dict,
                   'optimizer': optimizer.state_dict()}

@@ -1,6 +1,9 @@
 """ from https://github.com/keithito/tacotron """
 
 import re
+import sys
+import urllib.request
+from pathlib import Path
 
 
 valid_symbols = [
@@ -16,45 +19,33 @@ valid_symbols = [
 _valid_symbol_set = set(valid_symbols)
 
 
-def lines_to_list(filename):
-  with open(filename, encoding='utf-8') as f:
-    lines = f.readlines()
-  lines = [l.rstrip() for l in lines]
-  return lines
-
-
 class CMUDict:
   '''Thin wrapper around CMUDict data. http://www.speech.cs.cmu.edu/cgi-bin/cmudict'''
   def __init__(self, file_or_path=None, heteronyms_path=None, keep_ambiguous=True):
-    if file_or_path is None:
-      self._entries = {}
-    else:
+    self._entries = {}
+    self.heteronyms = []
+    if file_or_path is not None:
       self.initialize(file_or_path, heteronyms_path, keep_ambiguous)
 
   def initialize(self, file_or_path, heteronyms_path, keep_ambiguous=True):
     if isinstance(file_or_path, str):
-      try:
-        with open(file_or_path, encoding='latin-1') as f:
-          entries = _parse_cmudict(f)
-      except FileNotFoundError:
-        print("CMUdict missing. Download with")
-        print()
-        print("    bash scripts/download_cmudict.sh")
-        print()
-        print("and re-run the script.")
-        import sys
-        sys.exit(0)
+      if not Path(file_or_path).exists():
+        print("CMUdict missing. Downloading to data/cmudict/.")
+        self.download()
+
+      with open(file_or_path, encoding='latin-1') as f:
+        entries = _parse_cmudict(f)
+
     else:
       entries = _parse_cmudict(file_or_path)
+
     if not keep_ambiguous:
       entries = {word: pron for word, pron in entries.items() if len(pron) == 1}
     self._entries = entries
 
-    if heteronyms_path is None:
-      self.heteronyms = []
-    else:
-      self.heteronyms = set(lines_to_list(heteronyms_path))
-
+    if heteronyms_path is not None:
+      with open(heteronyms_path, encoding='utf-8') as f:
+        self.heteronyms = [l.rstrip() for l in f]
 
   def __len__(self):
     if len(self._entries) == 0:
@@ -66,6 +57,19 @@ class CMUDict:
     if len(self._entries) == 0:
       raise ValueError("CMUDict not initialized")
     return self._entries.get(word.upper())
+
+  def download(self):
+    url = 'https://github.com/Alexir/CMUdict/raw/master/cmudict-0.7b'
+    try:
+      Path('cmudict').mkdir(parents=False, exist_ok=True)
+      urllib.request.urlretrieve(url, filename='cmudict/cmudict-0.7b')
+    except:
+      print("Automatic download of CMUdict failed. Try manually with:")
+      print()
+      print("    bash scripts/download_cmudict.sh")
+      print()
+      print("and re-run the script.")
+      sys.exit(0)
 
 
 _alt_re = re.compile(r'\([0-9]+\)')

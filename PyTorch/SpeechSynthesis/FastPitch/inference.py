@@ -1,34 +1,21 @@
-# *****************************************************************************
-#  Copyright (c) 2018, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
-#  Redistribution and use in source and binary forms, with or without
-#  modification, are permitted provided that the following conditions are met:
-#      * Redistributions of source code must retain the above copyright
-#        notice, this list of conditions and the following disclaimer.
-#      * Redistributions in binary form must reproduce the above copyright
-#        notice, this list of conditions and the following disclaimer in the
-#        documentation and/or other materials provided with the distribution.
-#      * Neither the name of the NVIDIA CORPORATION nor the
-#        names of its contributors may be used to endorse or promote products
-#        derived from this software without specific prior written permission.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
 #
-#  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-#  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-#  WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-#  DISCLAIMED. IN NO EVENT SHALL NVIDIA CORPORATION BE LIABLE FOR ANY
-#  DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-#  (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-#  LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-#  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-#  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-#  SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#           http://www.apache.org/licenses/LICENSE-2.0
 #
-# *****************************************************************************
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import argparse
-import models
-import time
+import itertools
 import sys
+import time
 import warnings
 from pathlib import Path
 from tqdm import tqdm
@@ -37,21 +24,29 @@ import torch
 import numpy as np
 from scipy.stats import norm
 from scipy.io.wavfile import write
+from torch.nn.functional import l1_loss
 from torch.nn.utils.rnn import pad_sequence
 
 import dllogger as DLLogger
 from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
 
-from common import utils
+import models
+from common import gpu_affinity
 from common.tb_dllogger import (init_inference_metadata, stdout_metric_format,
                                 unique_log_fpath)
 from common.text import cmudict
 from common.text.text_processing import TextProcessing
+from common.utils import l2_promote
 from fastpitch.pitch_transform import pitch_transform_custom
+from hifigan.data_function import MAX_WAV_VALUE, mel_spectrogram
+from hifigan.models import Denoiser
 from waveglow import model as glow
-from waveglow.denoiser import Denoiser
 
-sys.modules['glow'] = glow
+
+CHECKPOINT_SPECIFIC_ARGS = [
+    'sampling_rate', 'hop_length', 'win_length', 'p_arpabet', 'text_cleaners',
+    'symbol_set', 'max_wav_value', 'prepend_space_to_text',
+    'append_space_to_text']
 
 
 def parse_args(parser):
@@ -64,23 +59,33 @@ def parse_args(parser):
                         help='Output folder to save audio (file per phrase)')
     parser.add_argument('--log-file', type=str, default=None,
                         help='Path to a DLLogger log file')
-    parser.add_argument('--save-mels', action='store_true', help='')
+    parser.add_argument('--save-mels', action='store_true',
+                        help='Save generator outputs to disk')
     parser.add_argument('--cuda', action='store_true',
                         help='Run inference on a GPU using CUDA')
     parser.add_argument('--cudnn-benchmark', action='store_true',
                         help='Enable cudnn benchmark mode')
-    parser.add_argument('--fastpitch', type=str,
-                        help='Full path to the generator checkpoint file (skip to use ground truth mels)')
-    parser.add_argument('--waveglow', type=str,
-                        help='Full path to the WaveGlow model checkpoint file (skip to only generate mels)')
-    parser.add_argument('-s', '--sigma-infer', default=0.9, type=float,
+    parser.add_argument('--l2-promote', action='store_true',
+                        help='Increase max fetch granularity of GPU L2 cache')
+    parser.add_argument('--fastpitch', type=str, default=None, required=False,
+                        help='Full path to the spectrogram generator .pt file '
+                             '(skip to synthesize from ground truth mels)')
+    parser.add_argument('--waveglow', type=str, default=None, required=False,
+                        help='Full path to a WaveGlow model .pt file')
+    parser.add_argument('-s', '--waveglow-sigma-infer', default=0.9, type=float,
                         help='WaveGlow sigma')
-    parser.add_argument('-d', '--denoising-strength', default=0.01, type=float,
-                        help='WaveGlow denoising')
-    parser.add_argument('-sr', '--sampling-rate', default=22050, type=int,
-                        help='Sampling rate')
-    parser.add_argument('--stft-hop-length', type=int, default=256,
+    parser.add_argument('--hifigan', type=str, default=None, required=False,
+                        help='Full path to a HiFi-GAN model .pt file')
+    parser.add_argument('-d', '--denoising-strength', default=0.0, type=float,
+                        help='Capture and subtract model bias to enhance audio')
+    parser.add_argument('--hop-length', type=int, default=256,
                         help='STFT hop length for estimating audio length from mel size')
+    parser.add_argument('--win-length', type=int, default=1024,
+                        help='STFT win length for denoiser and mel loss')
+    parser.add_argument('-sr', '--sampling-rate', default=22050, type=int,
+                        choices=[22050, 44100], help='Sampling rate')
+    parser.add_argument('--max_wav_value', default=32768.0, type=float,
+                        help='Maximum audiowave value')
     parser.add_argument('--amp', action='store_true',
                         help='Inference with AMP')
     parser.add_argument('-bs', '--batch-size', type=int, default=64)
@@ -89,7 +94,14 @@ def parse_args(parser):
     parser.add_argument('--repeats', type=int, default=1,
                         help='Repeat inference for benchmarking')
     parser.add_argument('--torchscript', action='store_true',
-                        help='Apply TorchScript')
+                        help='Run inference with TorchScript model (convert to TS if needed)')
+    parser.add_argument('--checkpoint-format', type=str,
+                        choices=['pyt', 'ts'], default='pyt',
+                        help='Input checkpoint format (PyT or TorchScript)')
+    parser.add_argument('--torch-tensorrt', action='store_true',
+                        help='Run inference with Torch-TensorRT model (compile beforehand)')
+    parser.add_argument('--report-mel-loss', action='store_true',
+                        help='Report mel loss in metrics')
     parser.add_argument('--ema', action='store_true',
                         help='Use EMA averaged model (if saved in checkpoints)')
     parser.add_argument('--dataset-path', type=str,
@@ -97,91 +109,42 @@ def parse_args(parser):
     parser.add_argument('--speaker', type=int, default=0,
                         help='Speaker ID for a multi-speaker model')
 
-    parser.add_argument('--p-arpabet', type=float, default=0.0, help='')
-    parser.add_argument('--heteronyms-path', type=str, default='cmudict/heteronyms',
-                        help='')
-    parser.add_argument('--cmudict-path', type=str, default='cmudict/cmudict-0.7b',
-                        help='')
-    transform = parser.add_argument_group('transform')
-    transform.add_argument('--fade-out', type=int, default=10,
-                           help='Number of fadeout frames at the end')
-    transform.add_argument('--pace', type=float, default=1.0,
-                           help='Adjust the pace of speech')
-    transform.add_argument('--pitch-transform-flatten', action='store_true',
-                           help='Flatten the pitch')
-    transform.add_argument('--pitch-transform-invert', action='store_true',
-                           help='Invert the pitch wrt mean value')
-    transform.add_argument('--pitch-transform-amplify', type=float, default=1.0,
-                           help='Amplify pitch variability, typical values are in the range (1.0, 3.0).')
-    transform.add_argument('--pitch-transform-shift', type=float, default=0.0,
-                           help='Raise/lower the pitch by <hz>')
-    transform.add_argument('--pitch-transform-custom', action='store_true',
-                           help='Apply the transform from pitch_transform.py')
+    parser.add_argument('--affinity', type=str, default='single',
+                        choices=['socket', 'single', 'single_unique',
+                                 'socket_unique_interleaved',
+                                 'socket_unique_continuous',
+                                 'disabled'],
+                        help='type of CPU affinity')
 
-    text_processing = parser.add_argument_group('Text processing parameters')
-    text_processing.add_argument('--text-cleaners', nargs='*',
-                                 default=['english_cleaners_v2'], type=str,
-                                 help='Type of text cleaners for input text')
-    text_processing.add_argument('--symbol-set', type=str, default='english_basic',
-                                 help='Define symbol set for input text')
+    transf = parser.add_argument_group('transform')
+    transf.add_argument('--fade-out', type=int, default=10,
+                        help='Number of fadeout frames at the end')
+    transf.add_argument('--pace', type=float, default=1.0,
+                        help='Adjust the pace of speech')
+    transf.add_argument('--pitch-transform-flatten', action='store_true',
+                        help='Flatten the pitch')
+    transf.add_argument('--pitch-transform-invert', action='store_true',
+                        help='Invert the pitch wrt mean value')
+    transf.add_argument('--pitch-transform-amplify', type=float, default=1.0,
+                        help='Multiplicative amplification of pitch variability. '
+                             'Typical values are in the range (1.0, 3.0).')
+    transf.add_argument('--pitch-transform-shift', type=float, default=0.0,
+                        help='Raise/lower the pitch by <hz>')
+    transf.add_argument('--pitch-transform-custom', action='store_true',
+                        help='Apply the transform from pitch_transform.py')
 
-    cond = parser.add_argument_group('conditioning on additional attributes')
-    cond.add_argument('--n-speakers', type=int, default=1,
-                      help='Number of speakers in the model.')
-
+    txt = parser.add_argument_group('Text processing parameters')
+    txt.add_argument('--text-cleaners', type=str, nargs='*',
+                     default=['english_cleaners_v2'],
+                     help='Type of text cleaners for input text')
+    txt.add_argument('--symbol-set', type=str, default='english_basic',
+                     help='Define symbol set for input text')
+    txt.add_argument('--p-arpabet', type=float, default=0.0, help='')
+    txt.add_argument('--heteronyms-path', type=str,
+                     default='cmudict/heteronyms', help='')
+    txt.add_argument('--cmudict-path', type=str,
+                     default='cmudict/cmudict-0.7b', help='')
     return parser
-
-
-def load_model_from_ckpt(checkpoint_path, ema, model):
-
-    checkpoint_data = torch.load(checkpoint_path)
-    status = ''
-
-    if 'state_dict' in checkpoint_data:
-        sd = checkpoint_data['state_dict']
-        if ema and 'ema_state_dict' in checkpoint_data:
-            sd = checkpoint_data['ema_state_dict']
-            status += ' (EMA)'
-        elif ema and not 'ema_state_dict' in checkpoint_data:
-            print(f'WARNING: EMA weights missing for {checkpoint_data}')
-
-        if any(key.startswith('module.') for key in sd):
-            sd = {k.replace('module.', ''): v for k,v in sd.items()}
-        status += ' ' + str(model.load_state_dict(sd, strict=False))
-    else:
-        model = checkpoint_data['model']
-    print(f'Loaded {checkpoint_path}{status}')
-
-    return model
-
-
-def load_and_setup_model(model_name, parser, checkpoint, amp, device,
-                         unk_args=[], forward_is_infer=False, ema=True,
-                         jitable=False):
-
-    model_parser = models.parse_model_args(model_name, parser, add_help=False)
-    model_args, model_unk_args = model_parser.parse_known_args()
-    unk_args[:] = list(set(unk_args) & set(model_unk_args))
-
-    model_config = models.get_model_config(model_name, model_args)
-
-    model = models.get_model(model_name, model_config, device,
-                             forward_is_infer=forward_is_infer,
-                             jitable=jitable)
-
-    if checkpoint is not None:
-        model = load_model_from_ckpt(checkpoint, ema, model)
-
-    if model_name == "WaveGlow":
-        for k, m in model.named_modules():
-            m._non_persistent_buffers_set = set()  # pytorch 1.6.0 compatability
-
-        model = model.remove_weightnorm(model)
-
-    if amp:
-        model.half()
-    model.eval()
-    return model.to(device)
 
 
 def load_fields(fpath):
@@ -192,7 +155,7 @@ def load_fields(fpath):
     else:
         columns = ['text']
         fields = [lines]
-    return {c:f for c, f in zip(columns, fields)}
+    return {c: f for c, f in zip(columns, fields)}
 
 
 def prepare_input_sequence(fields, device, symbol_set, text_cleaners,
@@ -212,6 +175,7 @@ def prepare_input_sequence(fields, device, symbol_set, text_cleaners,
 
     if load_mels:
         assert 'mel' in fields
+        assert dataset is not None
         fields['mel'] = [
             torch.load(Path(dataset, fields['mel'][i])).t() for i in order]
         fields['mel_lens'] = torch.LongTensor([t.size(0) for t in fields['mel']])
@@ -256,13 +220,47 @@ def build_pitch_transformation(args):
         fun = f'({fun}) * 0.0'
     if args.pitch_transform_invert:
         fun = f'({fun}) * -1.0'
-    if args.pitch_transform_amplify:
+    if args.pitch_transform_amplify != 1.0:
         ampl = args.pitch_transform_amplify
         fun = f'({fun}) * {ampl}'
     if args.pitch_transform_shift != 0.0:
         hz = args.pitch_transform_shift
         fun = f'({fun}) + {hz} / std'
+
+    if fun == 'pitch':
+        return None
+
     return eval(f'lambda pitch, pitch_lens, mean, std: {fun}')
+
+
+def setup_mel_loss_reporting(args, voc_train_setup):
+    if args.denoising_strength > 0.0:
+        print('WARNING: denoising will be included in vocoder mel loss')
+    num_mels = voc_train_setup.get('num_mels', 80)
+    fmin = voc_train_setup.get('mel_fmin', 0)
+    fmax = voc_train_setup.get('mel_fmax', 8000)  # not mel_fmax_loss
+
+    def compute_audio_mel_loss(gen_audios, gt_mels, mel_lens):
+        gen_audios /= MAX_WAV_VALUE
+        total_loss = 0
+        for gen_audio, gt_mel, mel_len in zip(gen_audios, gt_mels, mel_lens):
+            mel_len = mel_len.item()
+            gen_audio = gen_audio[None, :mel_len * args.hop_length]
+            gen_mel = mel_spectrogram(gen_audio, args.win_length, num_mels,
+                                      args.sampling_rate, args.hop_length,
+                                      args.win_length, fmin, fmax)[0]
+            total_loss += l1_loss(gen_mel, gt_mel[:, :mel_len])
+        return total_loss.item()
+
+    return compute_audio_mel_loss
+
+
+def compute_mel_loss(mels, lens, gt_mels, gt_lens):
+    total_loss = 0
+    for mel, len_, gt_mel, gt_len in zip(mels, lens, gt_mels, gt_lens):
+        min_len = min(len_, gt_len)
+        total_loss += l1_loss(gt_mel[:, :min_len], mel[:, :min_len])
+    return total_loss.item()
 
 
 class MeasureTime(list):
@@ -273,31 +271,39 @@ class MeasureTime(list):
     def __enter__(self):
         if self.cuda:
             torch.cuda.synchronize()
-        self.t0 = time.perf_counter()
+        self.t0 = time.time()
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         if self.cuda:
             torch.cuda.synchronize()
-        self.append(time.perf_counter() - self.t0)
+        self.append(time.time() - self.t0)
 
     def __add__(self, other):
         assert len(self) == len(other)
-        return MeasureTime((sum(ab) for ab in zip(self, other)), cuda=cuda)
+        return MeasureTime((sum(ab) for ab in zip(self, other)), cuda=self.cuda)
 
 
 def main():
     """
-    Launches text to speech (inference).
-    Inference is executed on a single GPU.
+    Launches text-to-speech inference on a single GPU.
     """
     parser = argparse.ArgumentParser(description='PyTorch FastPitch Inference',
                                      allow_abbrev=False)
     parser = parse_args(parser)
     args, unk_args = parser.parse_known_args()
 
-    if args.p_arpabet > 0.0:
-        cmudict.initialize(args.cmudict_path, args.heteronyms_path)
+    if args.affinity != 'disabled':
+        nproc_per_node = torch.cuda.device_count()
+        # print(nproc_per_node)
+        affinity = gpu_affinity.set_affinity(
+            0,
+            nproc_per_node,
+            args.affinity
+        )
+        print(f'Thread affinity: {affinity}')
 
+    if args.l2_promote:
+        l2_promote()
     torch.backends.cudnn.benchmark = args.cudnn_benchmark
 
     if args.output is not None:
@@ -307,68 +313,151 @@ def main():
     log_fpath = unique_log_fpath(log_fpath)
     DLLogger.init(backends=[JSONStreamBackend(Verbosity.DEFAULT, log_fpath),
                             StdOutBackend(Verbosity.VERBOSE,
-                                          metric_format=stdout_metric_format)])
-    init_inference_metadata()
+                                          metric_format=stdout_metric_format)
+                            ])
+
+    init_inference_metadata(args.batch_size)
     [DLLogger.log("PARAMETER", {k: v}) for k, v in vars(args).items()]
 
     device = torch.device('cuda' if args.cuda else 'cpu')
 
-    if args.fastpitch != 'SKIP':
-        generator = load_and_setup_model(
-            'FastPitch', parser, args.fastpitch, args.amp, device,
-            unk_args=unk_args, forward_is_infer=True, ema=args.ema,
-            jitable=args.torchscript)
+    gen_train_setup = {}
+    voc_train_setup = {}
+    generator = None
+    vocoder = None
+    denoiser = None
 
-        if args.torchscript:
-            generator = torch.jit.script(generator)
-    else:
-        generator = None
+    is_ts_based_infer = args.torch_tensorrt or args.torchscript
 
-    if args.waveglow != 'SKIP':
+    assert args.checkpoint_format == 'pyt' or is_ts_based_infer, \
+        'TorchScript checkpoint can be used only for TS or Torch-TRT' \
+        ' inference. Please set --torchscript or --torch-tensorrt flag.'
+
+    assert args.waveglow is None or args.hifigan is None, \
+        "Specify a single vocoder model"
+
+    def _load_pyt_or_ts_model(model_name, ckpt_path):
+        if args.checkpoint_format == 'ts':
+            model = models.load_and_setup_ts_model(model_name, ckpt_path,
+                                                   args.amp, device)
+            model_train_setup = {}
+            return model, model_train_setup
+        model, _, model_train_setup = models.load_and_setup_model(
+            model_name, parser, ckpt_path, args.amp, device,
+            unk_args=unk_args, forward_is_infer=True, jitable=is_ts_based_infer)
+
+        if is_ts_based_infer:
+            model = torch.jit.script(model)
+        return model, model_train_setup
+
+    if args.fastpitch is not None:
+        gen_name = 'fastpitch'
+        generator, gen_train_setup = _load_pyt_or_ts_model('FastPitch',
+                                                           args.fastpitch)
+
+    if args.waveglow is not None:
+        voc_name = 'waveglow'
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            waveglow = load_and_setup_model(
+            vocoder, _, voc_train_setup = models.load_and_setup_model(
                 'WaveGlow', parser, args.waveglow, args.amp, device,
-                unk_args=unk_args, forward_is_infer=True, ema=args.ema)
-        denoiser = Denoiser(waveglow).to(device)
-        waveglow = getattr(waveglow, 'infer', waveglow)
-    else:
-        waveglow = None
+                unk_args=unk_args, forward_is_infer=True, jitable=False)
+
+        if args.denoising_strength > 0.0:
+            denoiser = Denoiser(vocoder, sigma=0.0,
+                                win_length=args.win_length).to(device)
+
+        # if args.torchscript:
+        #     vocoder = torch.jit.script(vocoder)
+
+        def generate_audio(mel):
+            audios = vocoder(mel, sigma=args.waveglow_sigma_infer)
+            if denoiser is not None:
+                audios = denoiser(audios.float(), args.denoising_strength).squeeze(1)
+            return audios
+
+    elif args.hifigan is not None:
+        voc_name = 'hifigan'
+        vocoder, voc_train_setup = _load_pyt_or_ts_model('HiFi-GAN',
+                                                         args.hifigan)
+
+        if args.denoising_strength > 0.0:
+            denoiser = Denoiser(vocoder, win_length=args.win_length).to(device)
+
+        if args.torch_tensorrt:
+            vocoder = models.convert_ts_to_trt('HiFi-GAN', vocoder, parser,
+                                               args.amp, unk_args)
+
+        def generate_audio(mel):
+            audios = vocoder(mel).float()
+            if denoiser is not None:
+                audios = denoiser(audios.squeeze(1), args.denoising_strength)
+            return audios.squeeze(1) * args.max_wav_value
 
     if len(unk_args) > 0:
         raise ValueError(f'Invalid options {unk_args}')
 
-    fields = load_fields(args.input)
-    batches = prepare_input_sequence(
-        fields, device, args.symbol_set, args.text_cleaners, args.batch_size,
-        args.dataset_path, load_mels=(generator is None), p_arpabet=args.p_arpabet)
+    for k in CHECKPOINT_SPECIFIC_ARGS:
 
-    # Use real data rather than synthetic - FastPitch predicts len
-    for _ in tqdm(range(args.warmup_steps), 'Warmup'):
-        with torch.no_grad():
-            if generator is not None:
-                b = batches[0]
-                mel, *_ = generator(b['text'])
-            if waveglow is not None:
-                audios = waveglow(mel, sigma=args.sigma_infer).float()
-                _ = denoiser(audios, strength=args.denoising_strength)
+        v1 = gen_train_setup.get(k, None)
+        v2 = voc_train_setup.get(k, None)
 
-    gen_measures = MeasureTime(cuda=args.cuda)
-    waveglow_measures = MeasureTime(cuda=args.cuda)
+        assert v1 is None or v2 is None or v1 == v2, \
+            f'{k} mismatch in spectrogram generator and vocoder'
+
+        val = v1 or v2
+        if val and getattr(args, k) != val:
+            src = 'generator' if v2 is None else 'vocoder'
+            print(f'Overwriting args.{k}={getattr(args, k)} with {val} '
+                  f'from {src} checkpoint.')
+            setattr(args, k, val)
 
     gen_kw = {'pace': args.pace,
               'speaker': args.speaker,
               'pitch_tgt': None,
               'pitch_transform': build_pitch_transformation(args)}
 
-    if args.torchscript:
+    if is_ts_based_infer and generator is not None:
         gen_kw.pop('pitch_transform')
-        print('NOTE: Pitch transforms are disabled with TorchScript')
+        print('Note: --pitch-transform-* args are disabled with TorchScript. '
+              'To condition on pitch, pass pitch_tgt as input.')
+
+    if args.p_arpabet > 0.0:
+        cmudict.initialize(args.cmudict_path, args.heteronyms_path)
+
+    if args.report_mel_loss:
+        mel_loss_fn = setup_mel_loss_reporting(args, voc_train_setup)
+
+    fields = load_fields(args.input)
+    batches = prepare_input_sequence(
+        fields, device, args.symbol_set, args.text_cleaners, args.batch_size,
+        args.dataset_path, load_mels=(generator is None or args.report_mel_loss),
+        p_arpabet=args.p_arpabet)
+
+    cycle = itertools.cycle(batches)
+    # Use real data rather than synthetic - FastPitch predicts len
+    for _ in tqdm(range(args.warmup_steps), 'Warmup'):
+        with torch.no_grad():
+            b = next(cycle)
+            if generator is not None:
+                mel, *_ = generator(b['text'])
+            else:
+                mel, mel_lens = b['mel'], b['mel_lens']
+                if args.amp:
+                    mel = mel.half()
+            if vocoder is not None:
+                audios = generate_audio(mel)
+
+    gen_measures = MeasureTime(cuda=args.cuda)
+    vocoder_measures = MeasureTime(cuda=args.cuda)
 
     all_utterances = 0
     all_samples = 0
+    all_batches = 0
     all_letters = 0
     all_frames = 0
+    gen_mel_loss_sum = 0
+    voc_mel_loss_sum = 0
 
     reps = args.repeats
     log_enabled = reps == 1
@@ -376,18 +465,24 @@ def main():
 
     for rep in (tqdm(range(reps), 'Inference') if reps > 1 else range(reps)):
         for b in batches:
+
             if generator is None:
-                log(rep, {'Synthesizing from ground truth mels'})
                 mel, mel_lens = b['mel'], b['mel_lens']
+                if args.amp:
+                    mel = mel.half()
             else:
                 with torch.no_grad(), gen_measures:
                     mel, mel_lens, *_ = generator(b['text'], **gen_kw)
 
+                if args.report_mel_loss:
+                    gen_mel_loss_sum += compute_mel_loss(
+                        mel, mel_lens, b['mel'], b['mel_lens'])
+
                 gen_infer_perf = mel.size(0) * mel.size(2) / gen_measures[-1]
                 all_letters += b['text_lens'].sum().item()
                 all_frames += mel.size(0) * mel.size(2)
-                log(rep, {"fastpitch_frames/s": gen_infer_perf})
-                log(rep, {"fastpitch_latency": gen_measures[-1]})
+                log(rep, {f"{gen_name}_frames/s": gen_infer_perf})
+                log(rep, {f"{gen_name}_latency": gen_measures[-1]})
 
                 if args.save_mels:
                     for i, mel_ in enumerate(mel):
@@ -396,27 +491,25 @@ def main():
                         mel_path = Path(args.output, Path(fname).stem + '.npy')
                         np.save(mel_path, m.cpu().numpy())
 
-            if waveglow is not None:
-                with torch.no_grad(), waveglow_measures:
-                    audios = waveglow(mel, sigma=args.sigma_infer)
-                    audios = denoiser(audios.float(),
-                                      strength=args.denoising_strength
-                                      ).squeeze(1)
+            if vocoder is not None:
+                with torch.no_grad(), vocoder_measures:
+                    audios = generate_audio(mel)
 
-                all_utterances += len(audios)
-                all_samples += sum(audio.size(0) for audio in audios)
-                waveglow_infer_perf = (
-                    audios.size(0) * audios.size(1) / waveglow_measures[-1])
+                vocoder_infer_perf = (
+                    audios.size(0) * audios.size(1) / vocoder_measures[-1])
 
-                log(rep, {"waveglow_samples/s": waveglow_infer_perf})
-                log(rep, {"waveglow_latency": waveglow_measures[-1]})
+                log(rep, {f"{voc_name}_samples/s": vocoder_infer_perf})
+                log(rep, {f"{voc_name}_latency": vocoder_measures[-1]})
+
+                if args.report_mel_loss:
+                    voc_mel_loss_sum += mel_loss_fn(audios, mel, mel_lens)
 
                 if args.output is not None and reps == 1:
                     for i, audio in enumerate(audios):
-                        audio = audio[:mel_lens[i].item() * args.stft_hop_length]
+                        audio = audio[:mel_lens[i].item() * args.hop_length]
 
                         if args.fade_out:
-                            fade_len = args.fade_out * args.stft_hop_length
+                            fade_len = args.fade_out * args.hop_length
                             fade_w = torch.linspace(1.0, 0.0, fade_len)
                             audio[-fade_len:] *= fade_w.to(audio.device)
 
@@ -425,36 +518,50 @@ def main():
                         audio_path = Path(args.output, fname)
                         write(audio_path, args.sampling_rate, audio.cpu().numpy())
 
-            if generator is not None and waveglow is not None:
-                log(rep, {"latency": (gen_measures[-1] + waveglow_measures[-1])})
+                if generator is not None:
+                    log(rep, {"latency": (gen_measures[-1] + vocoder_measures[-1])})
+
+            all_utterances += mel.size(0)
+            all_samples += mel_lens.sum().item() * args.hop_length
+            all_batches += 1
 
     log_enabled = True
     if generator is not None:
         gm = np.sort(np.asarray(gen_measures))
         rtf = all_samples / (all_utterances * gm.mean() * args.sampling_rate)
-        log((), {"avg_fastpitch_letters/s": all_letters / gm.sum()})
-        log((), {"avg_fastpitch_frames/s": all_frames / gm.sum()})
-        log((), {"avg_fastpitch_latency": gm.mean()})
-        log((), {"avg_fastpitch_RTF": rtf})
-        log((), {"90%_fastpitch_latency": gm.mean() + norm.ppf((1.0 + 0.90) / 2) * gm.std()})
-        log((), {"95%_fastpitch_latency": gm.mean() + norm.ppf((1.0 + 0.95) / 2) * gm.std()})
-        log((), {"99%_fastpitch_latency": gm.mean() + norm.ppf((1.0 + 0.99) / 2) * gm.std()})
-    if waveglow is not None:
-        wm = np.sort(np.asarray(waveglow_measures))
-        rtf = all_samples / (all_utterances * wm.mean() * args.sampling_rate)
-        log((), {"avg_waveglow_samples/s": all_samples / wm.sum()})
-        log((), {"avg_waveglow_latency": wm.mean()})
-        log((), {"avg_waveglow_RTF": rtf})
-        log((), {"90%_waveglow_latency": wm.mean() + norm.ppf((1.0 + 0.90) / 2) * wm.std()})
-        log((), {"95%_waveglow_latency": wm.mean() + norm.ppf((1.0 + 0.95) / 2) * wm.std()})
-        log((), {"99%_waveglow_latency": wm.mean() + norm.ppf((1.0 + 0.99) / 2) * wm.std()})
-    if generator is not None and waveglow is not None:
-        m = gm + wm
+        rtf_at = all_samples / (all_batches * gm.mean() * args.sampling_rate)
+        log((), {f"avg_{gen_name}_tokens/s": all_letters / gm.sum()})
+        log((), {f"avg_{gen_name}_frames/s": all_frames / gm.sum()})
+        log((), {f"avg_{gen_name}_latency": gm.mean()})
+        log((), {f"avg_{gen_name}_RTF": rtf})
+        log((), {f"avg_{gen_name}_RTF@{args.batch_size}": rtf_at})
+        log((), {f"90%_{gen_name}_latency": gm.mean() + norm.ppf((1.0 + 0.90) / 2) * gm.std()})
+        log((), {f"95%_{gen_name}_latency": gm.mean() + norm.ppf((1.0 + 0.95) / 2) * gm.std()})
+        log((), {f"99%_{gen_name}_latency": gm.mean() + norm.ppf((1.0 + 0.99) / 2) * gm.std()})
+        if args.report_mel_loss:
+            log((), {f"avg_{gen_name}_mel-loss": gen_mel_loss_sum / all_utterances})
+    if vocoder is not None:
+        vm = np.sort(np.asarray(vocoder_measures))
+        rtf = all_samples / (all_utterances * vm.mean() * args.sampling_rate)
+        rtf_at = all_samples / (all_batches * vm.mean() * args.sampling_rate)
+        log((), {f"avg_{voc_name}_samples/s": all_samples / vm.sum()})
+        log((), {f"avg_{voc_name}_latency": vm.mean()})
+        log((), {f"avg_{voc_name}_RTF": rtf})
+        log((), {f"avg_{voc_name}_RTF@{args.batch_size}": rtf_at})
+        log((), {f"90%_{voc_name}_latency": vm.mean() + norm.ppf((1.0 + 0.90) / 2) * vm.std()})
+        log((), {f"95%_{voc_name}_latency": vm.mean() + norm.ppf((1.0 + 0.95) / 2) * vm.std()})
+        log((), {f"99%_{voc_name}_latency": vm.mean() + norm.ppf((1.0 + 0.99) / 2) * vm.std()})
+        if args.report_mel_loss:
+            log((), {f"avg_{voc_name}_mel-loss": voc_mel_loss_sum / all_utterances})
+    if generator is not None and vocoder is not None:
+        m = gm + vm
         rtf = all_samples / (all_utterances * m.mean() * args.sampling_rate)
+        rtf_at = all_samples / (all_batches * m.mean() * args.sampling_rate)
         log((), {"avg_samples/s": all_samples / m.sum()})
         log((), {"avg_letters/s": all_letters / m.sum()})
         log((), {"avg_latency": m.mean()})
         log((), {"avg_RTF": rtf})
+        log((), {f"avg_RTF@{args.batch_size}": rtf_at})
         log((), {"90%_latency": m.mean() + norm.ppf((1.0 + 0.90) / 2) * m.std()})
         log((), {"95%_latency": m.mean() + norm.ppf((1.0 + 0.95) / 2) * m.std()})
         log((), {"99%_latency": m.mean() + norm.ppf((1.0 + 0.99) / 2) * m.std()})

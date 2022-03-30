@@ -1,7 +1,8 @@
-matplotlib
-numpy
+git+https://github.com/NVIDIA/dllogger#egg=dllogger
 inflect
 librosa==0.9.0
+matplotlib
+numpy
+pynvml==11.0.0
 scipy
 tensorboardX==2.0
-git+https://github.com/NVIDIA/dllogger@v0.1.0#egg=dllogger

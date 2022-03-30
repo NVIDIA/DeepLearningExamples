@@ -1,0 +1,17 @@
+results*/
+LJSpeech-1.1/
+output*
+pretrained_models/
+tb_*/
+data
+! data/filelists
+
+*.pyc
+__pycache__
+
+.idea/
+.DS_Store
+
+*.swp
+*.swo
+*.swn
