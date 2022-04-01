@@ -110,12 +110,12 @@ The following features are supported by this model.
  
 | **Feature** | **BERT** |
 |:-----------:|:--------:|
-|  APEX AMP   |   Yes    |
-|  APEX DDP   |   Yes    |
-|    LAMB     |   Yes    |
-| Multi-node  |   Yes    |
-|    LDDL     |   Yes    |
-|   NVFuser   |   Yes    |
+|  PyTorch AMP   |   Yes    |
+|  PyTorch DDP   |   Yes    |
+|      LAMB      |   Yes    |
+|   Multi-node   |   Yes    |
+|      LDDL      |   Yes    |
+|     NVFuser    |   Yes    |
  
 #### Features
  
