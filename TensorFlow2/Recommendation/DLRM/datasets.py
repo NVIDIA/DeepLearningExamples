@@ -174,6 +174,7 @@ class TfRawBinaryDataset:
         # Only one gpu is set to be visible
         pipeline = pipeline.apply(tf.data.experimental.prefetch_to_device(f'/gpu:0'))
         pipeline = pipeline.unbatch()
+        pipeline = pipeline.repeat()
         return pipeline
 
     @tf.function

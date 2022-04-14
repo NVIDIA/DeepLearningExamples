@@ -329,6 +329,7 @@ def main(argv):
     best_auc = 0
     train_begin = time.time()
     for epoch in range(FLAGS.epochs):
+        print('Starting epoch: ', epoch)
         for step in range(len(train_pipeline)):
             if step == FLAGS.profiler_start_step and hvd.rank() == FLAGS.profiled_rank:
                 tf.profiler.experimental.start('logdir')
