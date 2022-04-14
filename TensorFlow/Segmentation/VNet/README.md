@@ -1,6 +1,6 @@
 # V-Net Medical For Tensorflow
 
-This repository provides a script and recipe to train the V-Net model to achieve state of the art accuracy, and is tested and maintained by NVIDIA.
+This repository provides a script and recipe to train the V-Net model to achieve state of the art accuracy, and is tested and maintained by NVIDIA. V-Net model for TensorFlow will no longer be available after 04/30/2022, please consider [UNet for 3D image segmentation in TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_3D_Medical) or [nnU-Net for PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Segmentation/nnUNet) as a substitute for your requirements.
 
 ## Table of Contents
  
@@ -525,6 +525,8 @@ FP32
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
 ## Release notes
+
+V-Net model for TensorFlow will no longer be available after 04/30/2022, please consider [UNet for 3D image segmentation in TensorFlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_3D_Medical) or [nnU-Net for PyTorch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Segmentation/nnUNet) as a substitute for your requirements.
 
 ### Changelog
 
