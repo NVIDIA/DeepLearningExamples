@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -77,8 +77,11 @@ def get_split(data, idx):
     return list(np.array(data)[idx])
 
 
-def load_data(path, files_pattern):
-    return sorted(glob.glob(os.path.join(path, files_pattern)))
+def load_data(path, files_pattern, non_empty=True):
+    data = sorted(glob.glob(os.path.join(path, files_pattern)))
+    if non_empty:
+        assert len(data) > 0, f"No data found in {path} with pattern {files_pattern}"
+    return data
 
 
 def get_kfold_splitter(nfolds):
@@ -87,7 +90,7 @@ def get_kfold_splitter(nfolds):
 
 def get_test_fnames(args, data_path, meta=None):
     kfold = get_kfold_splitter(args.nfolds)
-    test_imgs = load_data(data_path, "*_x.npy")
+    test_imgs = load_data(data_path, "*_x.npy", non_empty=False)
     if args.exec_mode == "predict" and "val" in data_path:
         _, val_idx = list(kfold.split(test_imgs))[args.fold]
         test_imgs = sorted(get_split(test_imgs, val_idx))

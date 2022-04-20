@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -41,8 +41,8 @@ class NNUnet(pl.LightningModule):
         if data_dir is not None:
             self.args.data = data_dir
         self.build_nnunet()
-        self.best_mean, self.best_mean_epoch, self.test_idx = (0,) * 3
-        self.best_dice, self.best_epoch, self.best_mean_dice = (self.n_class * [0],) * 3
+        self.best_mean, self.best_epoch, self.test_idx = (0,) * 3
+        self.start_benchmark = 0
         self.test_imgs = []
         if not self.triton:
             self.learning_rate = args.learning_rate
@@ -179,20 +179,10 @@ class NNUnet(pl.LightningModule):
         return pred
 
     def inference2d(self, image):
-        batch_modulo = image.shape[2] % self.args.val_batch_size
-        if batch_modulo != 0:
-            batch_pad = self.args.val_batch_size - batch_modulo
-            image = nn.ConstantPad3d((0, 0, 0, 0, batch_pad, 0), 0)(image)
         image = torch.transpose(image.squeeze(0), 0, 1)
-        preds_shape = (image.shape[0], self.n_class + 1, *image.shape[2:])
-        preds = torch.zeros(preds_shape, dtype=image.dtype, device=image.device)
-        for start in range(0, image.shape[0] - self.args.val_batch_size + 1, self.args.val_batch_size):
-            end = start + self.args.val_batch_size
-            pred = self.model(image[start:end])
-            preds[start:end] = pred.data
-        if batch_modulo != 0:
-            preds = preds[batch_pad:]
-        return torch.transpose(preds, 0, 1).unsqueeze(0)
+        preds = self.model(image)
+        preds = torch.transpose(preds, 0, 1).unsqueeze(0)
+        return preds
 
     def inference2d_test(self, image):
         preds_shape = (image.shape[0], self.n_class + 1, *image.shape[2:])
@@ -211,28 +201,33 @@ class NNUnet(pl.LightningModule):
             mode=self.args.blend,
         )
 
+    def round(self, tensor):
+        return round(torch.mean(tensor).item(), 2)
+
     def validation_epoch_end(self, outputs):
         dice, loss = self.dice.compute()
         self.dice.reset()
+
+        # Update metrics
         dice_mean = torch.mean(dice)
         if dice_mean >= self.best_mean:
             self.best_mean = dice_mean
             self.best_mean_dice = dice[:]
-            self.best_mean_epoch = self.current_epoch
-        for i, dice_i in enumerate(dice):
-            if dice_i > self.best_dice[i]:
-                self.best_dice[i], self.best_epoch[i] = dice_i, self.current_epoch
+            self.best_epoch = self.current_epoch
 
         metrics = {}
-        metrics.update({"Mean dice": round(torch.mean(dice).item(), 2)})
-        metrics.update({"Highest": round(torch.mean(self.best_mean_dice).item(), 2)})
+        metrics["Dice"] = self.round(dice)
+        metrics["Loss"] = self.round(loss)
+        metrics["Max Dice"] = self.round(self.best_mean_dice)
+        metrics["Best epoch"] = self.best_epoch
         if self.n_class > 1:
-            metrics.update({f"L{i+1}": round(m.item(), 2) for i, m in enumerate(dice)})
-        metrics.update({"val_loss": round(loss.item(), 4)})
+            metrics.update({f"D{i+1}": self.round(m) for i, m in enumerate(dice)})
+
         self.dllogger.log_metrics(step=self.current_epoch, metrics=metrics)
         self.dllogger.flush()
-        self.log("val_loss", loss)
-        self.log("dice_mean", dice_mean)
+        if self.args.tb_logs:
+            self.logger.log_metrics(metrics, step=self.current_epoch)
+        self.log("dice", metrics["Dice"])
 
     def test_epoch_end(self, outputs):
         if self.args.exec_mode == "evaluate":
@@ -243,7 +238,7 @@ class NNUnet(pl.LightningModule):
         if not self.args.benchmark:
             metrics = {}
             metrics["dice_score"] = round(self.best_mean.item(), 2)
-            metrics["Epoch"] = self.best_mean_epoch
+            metrics["Epoch"] = self.best_epoch
             self.dllogger.log_metrics(step=(), metrics=metrics)
             self.dllogger.flush()
 

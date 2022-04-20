@@ -3,7 +3,7 @@ FROM ${FROM_IMAGE_NAME}
 
 ADD ./requirements.txt .
 RUN pip install --disable-pip-version-check -r requirements.txt
-RUN pip install monai==0.8.0 --no-dependencies
+RUN pip install monai==0.8.1 --no-dependencies
 RUN pip uninstall -y torchtext
 RUN pip install numpy --upgrade
 

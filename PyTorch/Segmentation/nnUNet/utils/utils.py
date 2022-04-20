@@ -1,3 +1,18 @@
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import ctypes
 import os
 import pickle
 from functools import wraps
@@ -57,3 +72,11 @@ def get_stats(pred, targ, class_idx):
     fn = np.logical_and(pred != class_idx, targ == class_idx).sum()
     fp = np.logical_and(pred == class_idx, targ != class_idx).sum()
     return tp, fn, fp
+
+
+def set_granularity():
+    _libcudart = ctypes.CDLL("libcudart.so")
+    pValue = ctypes.cast((ctypes.c_int * 1)(), ctypes.POINTER(ctypes.c_int))
+    _libcudart.cudaDeviceSetLimit(ctypes.c_int(0x05), ctypes.c_int(128))
+    _libcudart.cudaDeviceGetLimit(pValue, ctypes.c_int(0x05))
+    assert pValue.contents.value == 128

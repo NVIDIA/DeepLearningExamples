@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,12 +20,14 @@ class Loss(nn.Module):
     def __init__(self, focal):
         super(Loss, self).__init__()
         if focal:
-            self.loss = DiceFocalLoss(gamma=2.0, softmax=True, to_onehot_y=True, batch=True)
+            self.loss_fn = DiceFocalLoss(
+                include_background=False, softmax=True, to_onehot_y=True, batch=True, gamma=2.0
+            )
         else:
-            self.loss = DiceCELoss(softmax=True, to_onehot_y=True, batch=True)
+            self.loss_fn = DiceCELoss(include_background=False, softmax=True, to_onehot_y=True, batch=True)
 
     def forward(self, y_pred, y_true):
-        return self.loss(y_pred, y_true)
+        return self.loss_fn(y_pred, y_true)
 
 
 class LossBraTS(nn.Module):

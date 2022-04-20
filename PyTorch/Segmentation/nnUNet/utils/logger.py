@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -62,12 +62,12 @@ class LoggingCallback(Callback):
         if self.step > self.warmup_steps:
             self.timestamps.append(time.time())
 
-    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
         if trainer.current_epoch == 1:
             self.do_step()
 
     def on_test_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
-        if trainer.current_epoch == 1:
+        if pl_module.start_benchmark == 1:
             self.do_step()
 
     def process_performance_stats(self, deltas):
@@ -95,5 +95,5 @@ class LoggingCallback(Callback):
         self._log()
 
     def on_test_end(self, trainer, pl_module):
-        if trainer.current_epoch == 1:
+        if pl_module.start_benchmark == 1:
             self._log()
