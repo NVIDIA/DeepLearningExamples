@@ -1,3 +1,4 @@
+mels|pitch|text
 wavs/LJ050-0234.wav|pitch/LJ050-0234.pt|It has used other Treasury law enforcement agents on special experiments in building and route surveys in places to which the President frequently travels.
 wavs/LJ019-0373.wav|pitch/LJ019-0373.pt|to avail himself of his powers, as it was difficult to bring home the derelictions of duties and evasion of the acts. Too much was left to the inspectors.
 wavs/LJ050-0207.wav|pitch/LJ050-0207.pt|Although Chief Rowley does not complain about the pay scale for Secret Service agents,

@@ -1,3 +1,4 @@
+mels|pitch|text
 wavs/LJ045-0096.wav|pitch/LJ045-0096.pt|Mrs. De Mohrenschildt thought that Oswald,
 wavs/LJ049-0022.wav|pitch/LJ049-0022.pt|The Secret Service believed that it was very doubtful that any President would ride regularly in a vehicle with a fixed top, even though transparent.
 wavs/LJ033-0042.wav|pitch/LJ033-0042.pt|Between the hours of eight and nine p.m. they were occupied with the children in the bedrooms located at the extreme east end of the house.

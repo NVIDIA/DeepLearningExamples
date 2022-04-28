@@ -162,7 +162,7 @@ class TTSDataset(torch.utils.data.Dataset):
         self.dataset_path = dataset_path
         self.audiopaths_and_text = load_filepaths_and_text(
             audiopaths_and_text, dataset_path,
-            has_speakers=(n_speakers > 1))
+            has_speakers=(n_speakers > 1)) #this now returns a list of dicts
         self.load_mel_from_disk = load_mel_from_disk
         if not load_mel_from_disk:
             self.max_wav_value = max_wav_value
@@ -193,25 +193,24 @@ class TTSDataset(torch.utils.data.Dataset):
 
         assert not (load_pitch_from_disk and self.pitch_tmp_dir is not None)
 
-        if len(self.audiopaths_and_text[0]) < expected_columns:
-            raise ValueError(f'Expected {expected_columns} columns in audiopaths file. '
-                             'The format is <mel_or_wav>|[<pitch>|]<text>[|<speaker_id>]')
-
-        if len(self.audiopaths_and_text[0]) > expected_columns:
-            print('WARNING: Audiopaths file has more columns than expected')
 
         to_tensor = lambda x: torch.Tensor([x]) if type(x) is float else x
         self.pitch_mean = to_tensor(pitch_mean)
         self.pitch_std = to_tensor(pitch_std)
 
     def __getitem__(self, index):
-        # Separate filename and text
+
+        #Indexing items using dictionary entries
         if self.n_speakers > 1:
-            audiopath, *extra, text, speaker = self.audiopaths_and_text[index]
+            audiopath = self.audiopaths_and_text[index]['mels']
+            text = self.audiopaths_and_text[index]['text']
+            speaker = self.audiopaths_and_text[index]['speaker']
             speaker = int(speaker)
         else:
-            audiopath, *extra, text = self.audiopaths_and_text[index]
+            audiopath = self.audiopaths_and_text[index]['mels']
+            text = self.audiopaths_and_text[index]['text']
             speaker = None
+
 
         mel = self.get_mel(audiopath)
         text = self.get_text(text)
@@ -287,15 +286,15 @@ class TTSDataset(torch.utils.data.Dataset):
         return attn_prior
 
     def get_pitch(self, index, mel_len=None):
-        audiopath, *fields = self.audiopaths_and_text[index]
+        audiopath = self.audiopaths_and_text[index]['mels']
 
         if self.n_speakers > 1:
-            spk = int(fields[-1])
+            spk = int(self.audiopaths_and_text[index]['speaker'])
         else:
             spk = 0
 
         if self.load_pitch_from_disk:
-            pitchpath = fields[0]
+            pitchpath = self.audiopaths_and_text[index]['pitch']
             pitch = torch.load(pitchpath)
             if self.pitch_mean is not None:
                 assert self.pitch_std is not None

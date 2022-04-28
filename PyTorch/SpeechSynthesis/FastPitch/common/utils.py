@@ -16,13 +16,11 @@ import shutil
 import warnings
 from pathlib import Path
 from typing import Optional
-
 import librosa
 import numpy as np
-
 import torch
 from scipy.io.wavfile import read
-
+from csv import DictReader
 
 class BenchmarkStats:
     """ Tracks statistics used for benchmarking. """
@@ -69,21 +67,16 @@ def load_wav_to_torch(full_path, force_sampling_rate=None):
 
 def load_filepaths_and_text(fnames, dataset_path=None, has_speakers=False,
                             split="|"):
-    def split_line(line, root=None):
-        parts = line.strip().split(split)
-        if has_speakers:
-            paths, non_paths = parts[:-2], parts[-2:]
-        else:
-            paths, non_paths = parts[:-1], parts[-1:]
-        if root:
-            return tuple(str(Path(root, p)) for p in paths) + tuple(non_paths)
-        else:
-            return tuple(str(Path(p)) for p in paths) + tuple(non_paths)
+
+    #Reads in csv with headers mels|pitch|text|optional-speaker
+    #Returns list of dicts
 
     fpaths_and_text = []
     for fname in fnames:
         with open(fname, encoding='utf-8') as f:
-            fpaths_and_text += [split_line(line, dataset_path) for line in f]
+            dict_reader = DictReader(f, delimiter='|')
+            fpaths_and_text = list(dict_reader)
+
     return fpaths_and_text
 
 
