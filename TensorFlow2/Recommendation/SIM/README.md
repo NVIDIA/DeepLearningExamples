@@ -372,7 +372,7 @@ The following section lists the requirements that you need to meet in order to s
 
 This repository contains a Dockerfile that extends the TensorFflow2 NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 - [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-- [TensorFlow2 21.10-py3](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow/tags) NGC container (@Tomek, don't we use nvcr.io/nvidia/merlin/merlin-tensorflow-training:22.01 ?)
+- [TensorFlow2 21.10-py3](https://ngc.nvidia.com/catalog/containers/nvidia:tensorflow/tags) NGC container
 - Supported GPUs:
   - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
   - [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
