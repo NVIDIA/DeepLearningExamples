@@ -65,7 +65,7 @@ These examples, along with our NVIDIA deep learning software stack, are provided
 | [Wide&Deep](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Recommendation/WideAndDeep) | TensorFlow2  | Yes  | Yes  | Yes  | -  | -  |   -  | -  | Yes  | - |
 | [NCF](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Recommendation/NCF) | TensorFlow  | Yes  | Yes  | Yes  | -  | -  | -  | - | Yes | - |
 | [VAE-CF](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Recommendation/VAE-CF) | TensorFlow  | Yes  | Yes  | Yes  | -  | -  |   -  | -  | -  | - |
-| [SIM](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Recommendation/SIM) | TensorFlow2  | Yes  | Yes  | Yes  | -  | -  |   -  | -  | Yes  | - |
+| [SIM](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Recommendation/SIM) | TensorFlow2  | Yes  | Yes  | Yes  | -  | -  |   -  | -  | Yes  | - |
 
 
 ## Speech to Text
