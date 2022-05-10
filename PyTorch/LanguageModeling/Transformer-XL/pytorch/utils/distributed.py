@@ -100,6 +100,17 @@ def all_reduce_item(value, op='sum'):
     return ret
 
 
+def all_gather_tensors(tensor, device):
+    tensor = tensor.to(device)
+    world_size = get_world_size()
+    if world_size == 1:
+        tensors = [tensor]
+    else:
+        tensors = [torch.empty_like(tensor) for _ in range(world_size)]
+        torch.distributed.all_gather(tensors, tensor)
+    return tensors
+
+
 @contextmanager
 def sync_workers():
     """

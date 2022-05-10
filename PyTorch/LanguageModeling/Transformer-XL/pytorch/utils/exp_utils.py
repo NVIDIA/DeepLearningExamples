@@ -226,3 +226,40 @@ def l2_promote():
     _libcudart.cudaDeviceSetLimit(ctypes.c_int(0x05), ctypes.c_int(128))
     _libcudart.cudaDeviceGetLimit(pValue, ctypes.c_int(0x05))
     assert pValue.contents.value == 128
+
+
+def get_default_rng_states(device):
+    """
+    Get states of default random generators from all devices participating in a
+    distributed training.
+
+    If device == torch.device('cuda') it returns states of CUDA generators, if
+    device == torch.device('cpu') it returns states of host generators.
+
+    Returns a list of random states indexed with a distributed rank. All
+    generator states are in host memory.
+    """
+    if device == torch.device('cuda'):
+        state = torch.cuda.get_rng_state()
+    elif device == torch.device('cpu'):
+        state = torch.random.get_rng_state()
+    else:
+        raise RuntimeError('Unknown device')
+
+    states = utils.distributed.all_gather_tensors(state, device)
+    states = [state.to(torch.device('cpu')) for state in states]
+    return states
+
+
+def set_default_rng_states(rng_states, device):
+    """
+    Sets states of default random generators for all devices participating in a
+    distributed training.
+    """
+    rank = utils.distributed.get_rank()
+    rng_states = [s.to(torch.device('cpu')) for s in rng_states]
+
+    if device == torch.device('cuda'):
+        torch.cuda.set_rng_state(rng_states[rank])
+    elif device.type == 'cpu':
+        torch.random.set_rng_state(rng_states[rank])

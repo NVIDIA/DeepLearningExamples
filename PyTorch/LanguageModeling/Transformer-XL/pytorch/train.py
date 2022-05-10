@@ -100,6 +100,8 @@ def parse_args():
                          help='Do not print info on execution env')
     general.add_argument('--no_eval', action='store_true',
                          help='Disable model evaluation')
+    general.add_argument('--no_test', action='store_true',
+                         help='Disable model evaluation on test data')
     general.add_argument('--log_interval', type=int, default=10,
                          help='Report interval')
     general.add_argument('--target_throughput', type=float, default=None,
@@ -294,9 +296,9 @@ def parse_args():
     return args
 
 
-def save_checkpoint(args, model, model_config, optimizer, scheduler, scaler,
-                    vocab, epoch, batch, last_iter, train_step, best_val_loss,
-                    is_best, work_dir):
+def save_checkpoint(args, model, mems, model_config, optimizer, scheduler,
+                    scaler, vocab, epoch, batch, last_iter, train_step,
+                    best_val_loss, is_best, work_dir, device):
     if args.fp16:
         if args.amp == 'pytorch':
             amp_state = scaler.state_dict()
@@ -305,12 +307,18 @@ def save_checkpoint(args, model, model_config, optimizer, scheduler, scaler,
     else:
         amp_state = None
 
+    memory = [
+        utils.distributed.all_gather_tensors(mem, device) for mem in mems
+    ]
+
     state = {
         'args': args,
         'model_config': model_config,
         'model_state': model.state_dict(),
         'optimizer_state': optimizer.state_dict(),
         'scheduler_state': scheduler.state_dict(),
+        'rng_states': utils.exp_utils.get_default_rng_states(device),
+        'memory': memory,
         'vocab': vocab,
         'amp_state': amp_state,
         'epoch': epoch,
@@ -494,7 +502,7 @@ def train_iteration(model, i, mems, data_chunks, target_chunks, scaler,
     return train_loss
 
 
-def train(tr_iter, va_iter, model, para_model, model_config, optimizer,
+def train(tr_iter, va_iter, model, para_model, mems, model_config, optimizer,
           optimizer_sparse, scheduler, scheduler_sparse, scaler, vocab, epoch,
           last_batch, last_iter, train_step, best_val_loss, meters,
           timeout_handler, device, args):
@@ -506,7 +514,6 @@ def train(tr_iter, va_iter, model, para_model, model_config, optimizer,
     log_step = 0
     log_start_time = time.time()
 
-    mems = [None for _ in range(args.batch_chunk)]
     if args.varlen:
         train_iter = tr_iter.get_varlen_iter(start=last_iter)
     else:
@@ -663,10 +670,10 @@ def train(tr_iter, va_iter, model, para_model, model_config, optimizer,
                 is_best = True
 
             if not args.debug:
-                save_checkpoint(args, model, model_config, optimizer, scheduler,
-                                scaler, vocab, epoch, batch, last_iter,
-                                train_step, best_val_loss, is_best,
-                                args.work_dir)
+                save_checkpoint(args, model, mems, model_config, optimizer,
+                                scheduler, scaler, vocab, epoch, batch,
+                                last_iter, train_step, best_val_loss, is_best,
+                                args.work_dir, device)
 
             # dev-performance based learning rate annealing
             if args.scheduler == 'dev_perf':
@@ -957,6 +964,8 @@ def main():
     last_iter = 0
     best_val_loss = None
 
+    train_mems = [None for _ in range(args.batch_chunk)]
+
     if args.restart:
         try:
             checkpoint = load_checkpoint(args.restart)
@@ -968,6 +977,15 @@ def main():
                     scaler.load_state_dict(checkpoint['amp_state'])
                 elif args.amp == 'apex':
                     amp.load_state_dict(checkpoint['amp_state'])
+            utils.exp_utils.set_default_rng_states(
+                checkpoint['rng_states'], device
+            )
+
+            train_mems = [
+                checkpoint['memory'][i][utils.distributed.get_rank()]
+                for i in range(args.batch_chunk)
+            ]
+
             train_step = checkpoint['train_step']
             start_epoch = checkpoint['epoch']
             last_batch = checkpoint['batch']
@@ -1001,10 +1019,11 @@ def main():
                 if args.roll:
                     tr_iter.roll(seed=args.seed + epoch)
                 train_step, best_val_loss = train(
-                    tr_iter, va_iter, model, para_model, model_config,
-                    optimizer, optimizer_sparse, scheduler, scheduler_sparse,
-                    scaler, vocab, epoch, last_batch, last_iter, train_step,
-                    best_val_loss, meters, timeout_handler, device, args
+                    tr_iter, va_iter, model, para_model, train_mems,
+                    model_config, optimizer, optimizer_sparse, scheduler,
+                    scheduler_sparse, scaler, vocab, epoch, last_batch,
+                    last_iter, train_step, best_val_loss, meters,
+                    timeout_handler, device, args
                     )
 
                 last_batch = 0
@@ -1024,7 +1043,12 @@ def main():
     ###########################################################################
     summary = {}
     test_path = os.path.join(args.work_dir, 'checkpoint_best.pt')
-    if not args.debug and not args.no_eval and os.path.exists(test_path):
+    if (
+        not args.debug
+        and not args.no_test
+        and not args.no_eval
+        and os.path.exists(test_path)
+    ):
         # Load the best saved model.
         checkpoint = load_checkpoint(test_path)
         model.load_state_dict(checkpoint['model_state'])
