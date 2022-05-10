@@ -1,0 +1,270 @@
+[
+      {
+            "layer_type": "data",
+            "img_resolution": 528,
+            "distill": true
+      },
+      {
+            "layer_type": "head_large",
+            "num_in_channels": 3,
+            "num_out_channels": 48,
+            "stage": 0
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 48,
+            "num_out_channels": 48,
+            "stride": 1,
+            "expansion": 1,
+            "kernel_size": 3,
+            "groups": 1,
+            "stage": 0
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 48,
+            "num_out_channels": 64,
+            "stride": 2,
+            "expansion": 3,
+            "kernel_size": 3,
+            "groups": 1,
+            "stage": 1
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 64,
+            "num_out_channels": 64,
+            "stride": 1,
+            "expansion": 4,
+            "kernel_size": 5,
+            "groups": 1,
+            "stage": 1
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 64,
+            "num_out_channels": 64,
+            "stride": 1,
+            "expansion": 3,
+            "kernel_size": 3,
+            "groups": 1,
+            "stage": 1
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 64,
+            "num_out_channels": 96,
+            "stride": 2,
+            "expansion": 4,
+            "kernel_size": 5,
+            "groups": 1,
+            "stage": 2
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 96,
+            "num_out_channels": 96,
+            "stride": 1,
+            "expansion": 4,
+            "kernel_size": 5,
+            "groups": 1,
+            "stage": 2
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 96,
+            "num_out_channels": 96,
+            "stride": 1,
+            "expansion": 6,
+            "kernel_size": 3,
+            "groups": 1,
+            "stage": 2
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 96,
+            "num_out_channels": 96,
+            "stride": 1,
+            "expansion": 3,
+            "kernel_size": 5,
+            "groups": 1,
+            "stage": 2
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 96,
+            "num_out_channels": 192,
+            "stride": 2,
+            "expansion": 6,
+            "kernel_size": 7,
+            "groups": 1,
+            "stage": 3
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 192,
+            "num_out_channels": 192,
+            "stride": 1,
+            "expansion": 6,
+            "kernel_size": 5,
+            "groups": 1,
+            "stage": 3
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 192,
+            "num_out_channels": 192,
+            "stride": 1,
+            "expansion": 3,
+            "kernel_size": 3,
+            "groups": 1,
+            "stage": 3
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 192,
+            "num_out_channels": 192,
+            "stride": 1,
+            "expansion": 4,
+            "kernel_size": 5,
+            "groups": 1,
+            "stage": 3
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 192,
+            "num_out_channels": 192,
+            "stride": 1,
+            "expansion": 4,
+            "kernel_size": 5,
+            "groups": 1,
+            "stage": 3
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 192,
+            "num_out_channels": 272,
+            "stride": 1,
+            "expansion": 6,
+            "kernel_size": 3,
+            "groups": 1,
+            "stage": 3
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 272,
+            "num_out_channels": 272,
+            "stride": 1,
+            "expansion": 6,
+            "kernel_size": 5,
+            "groups": 1,
+            "stage": 3
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 272,
+            "num_out_channels": 272,
+            "stride": 1,
+            "expansion": 6,
+            "kernel_size": 7,
+            "groups": 1,
+            "stage": 3
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 272,
+            "num_out_channels": 272,
+            "stride": 1,
+            "expansion": 6,
+            "kernel_size": 5,
+            "groups": 1,
+            "stage": 3
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 272,
+            "num_out_channels": 272,
+            "stride": 1,
+            "expansion": 4,
+            "kernel_size": 3,
+            "groups": 1,
+            "stage": 3
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 272,
+            "num_out_channels": 384,
+            "stride": 2,
+            "expansion": 6,
+            "kernel_size": 3,
+            "groups": 1,
+            "stage": 4
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 384,
+            "num_out_channels": 384,
+            "stride": 1,
+            "expansion": 6,
+            "kernel_size": 3,
+            "groups": 1,
+            "stage": 4
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 384,
+            "num_out_channels": 384,
+            "stride": 1,
+            "expansion": 6,
+            "kernel_size": 5,
+            "groups": 1,
+            "stage": 4
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 384,
+            "num_out_channels": 384,
+            "stride": 1,
+            "expansion": 3,
+            "kernel_size": 3,
+            "groups": 1,
+            "stage": 4
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 384,
+            "num_out_channels": 384,
+            "stride": 1,
+            "expansion": 3,
+            "kernel_size": 3,
+            "groups": 1,
+            "stage": 4
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 384,
+            "num_out_channels": 384,
+            "stride": 1,
+            "expansion": 3,
+            "kernel_size": 3,
+            "groups": 1,
+            "stage": 4
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 384,
+            "num_out_channels": 384,
+            "stride": 1,
+            "expansion": 3,
+            "kernel_size": 3,
+            "groups": 1,
+            "stage": 4
+      },
+      {
+            "layer_type": "tail",
+            "num_in_channels": 384,
+            "num_out_channels": 1984,
+            "num_classes": 1000,
+            "stage:": 5
+      }
+]

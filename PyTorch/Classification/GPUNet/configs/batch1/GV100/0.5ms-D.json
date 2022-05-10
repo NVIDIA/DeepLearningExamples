@@ -1,0 +1,167 @@
+[
+      {
+            "layer_type": "data",
+            "img_resolution": 224,
+	        "distill": false
+      },
+      {
+            "layer_type": "head",
+            "num_in_channels": 3,
+            "num_out_channels": 32,
+	    "act": "relu"
+      },
+      {
+            "layer_type": "conv",
+            "num_in_channels": 32,
+            "num_out_channels": 32,
+            "stride": 1,
+            "kernel_size": 3,
+            "act": "relu",
+            "stage": 1
+      },
+      {
+            "layer_type": "conv",
+            "num_in_channels": 32,
+            "num_out_channels": 32,
+            "stride": 1,
+            "kernel_size": 3,
+            "act": "relu",
+            "stage": 1
+      },
+      {
+            "layer_type": "conv",
+            "num_in_channels": 32,
+            "num_out_channels": 64,
+            "stride": 2,
+            "kernel_size": 3,
+            "act": "relu",
+            "stage": 2
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 64,
+            "num_out_channels": 96,
+            "stride": 2,
+            "expansion": 8,
+            "kernel_size": 3,
+            "act": "relu",
+            "use_se": false,
+            "stage": 3
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 96,
+            "num_out_channels": 96,
+            "stride": 1,
+            "expansion": 7.67,
+            "kernel_size": 3,
+            "act": "relu",
+            "use_se": false,
+            "stage": 3
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 96,
+            "num_out_channels": 96,
+            "stride": 1,
+            "expansion": 7.67,
+            "kernel_size": 3,
+            "act": "relu",
+            "use_se": false,
+            "stage": 3
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 96,
+            "num_out_channels": 256,
+            "stride": 2,
+            "expansion": 7.67,
+            "kernel_size": 3,
+            "act": "relu",
+            "use_se": false,
+            "stage": 4
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 256,
+            "num_out_channels": 256,
+            "stride": 1,
+            "expansion": 4.25,
+            "kernel_size": 5,
+            "act": "relu",
+            "use_se": false,
+            "stage": 4
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 256,
+            "num_out_channels": 256,
+            "stride": 1,
+            "expansion": 4.75,
+            "kernel_size": 3,
+            "act": "relu",
+            "use_se": false,
+            "stage": 4
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 256,
+            "num_out_channels": 704,
+            "stride": 2,
+            "expansion": 8,
+            "kernel_size": 3,
+            "act": "relu",
+            "use_se": false,
+            "stage": 5
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 704,
+            "num_out_channels": 704,
+            "stride": 1,
+            "expansion": 3.82,
+            "kernel_size": 5,
+            "act": "relu",
+            "use_se": false,
+            "stage": 5
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 704,
+            "num_out_channels": 704,
+            "stride": 1,
+            "expansion": 3.36,
+            "kernel_size": 3,
+            "act": "relu",
+            "use_se": false,
+            "stage": 5
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 704,
+            "num_out_channels": 704,
+            "stride": 1,
+            "expansion": 2.55,
+            "kernel_size": 3,
+            "act": "relu",
+            "use_se": false,
+            "stage": 5
+      },
+      {
+            "layer_type": "irb",
+            "num_in_channels": 704,
+            "num_out_channels": 704,
+            "stride": 2,
+            "expansion": 5.73,
+            "kernel_size": 3,
+            "act": "relu",
+            "use_se": false,
+            "stage": 6
+      },
+      {
+            "layer_type": "tail",
+            "num_in_channels": 704,
+            "num_out_channels": 1984,
+            "num_classes": 1000
+      }
+]

@@ -1,0 +1,32 @@
+batching: dynamic
+checkpoints:
+- name: 0.8ms-D
+  url: https://api.ngc.nvidia.com/v2/models/nvidia/dle/gpunet_p1_pyt_ckpt/versions/21.12.0_amp/zip
+configurations:
+- checkpoint: 0.8ms-D
+  parameters:
+    backend_accelerator: trt
+    checkpoint: 0.8ms-D
+    device_kind: gpu
+    export_format: onnx
+    export_precision: fp16
+    format: onnx
+    max_batch_size: 64
+    number_of_model_instances: 2
+    precision: fp16
+    tensorrt_capture_cuda_graph: 0
+    torch_jit: none
+container_version: '21.12'
+datasets:
+- name: imagenet
+datasets_dir: datasets
+ensemble_model_name: null
+framework: PyTorch
+measurement_steps_offline: 8
+measurement_steps_online: 32
+model_name: GPUnet
+performance_tool: model_analyzer
+triton_container_image: nvcr.io/nvidia/tritonserver:21.12-py3
+triton_custom_operations: null
+triton_dockerfile: null
+triton_load_model_method: explicit
