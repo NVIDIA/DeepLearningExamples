@@ -31,7 +31,7 @@ def parse_hifigan_args(parent, add_help=False):
                      help='Upsample initial channel')
     hfg.add_argument('--resblock', default='1', type=str,
                      help='Resblock module version')
-    hfg.add_argument('--resblock_kernel_sizes', default=[3, 7, 11],
+    hfg.add_argument('--resblock_kernel_sizes', default=[11, 7, 3],
                      type=literal_eval_arg,
                      help='Resblock kernel sizes')
     hfg.add_argument('--resblock_dilation_sizes', type=literal_eval_arg,
