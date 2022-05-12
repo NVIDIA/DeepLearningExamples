@@ -136,13 +136,11 @@ class Metrics(dict):
             self.metrics['train_benchmark'] = defaultdict(list)
 
     def __setitem__(self, key, val):
-        extract = lambda t: t.item() if type(t) is torch.Tensor else t
-
         if type(val) is dict:
             for k, v in val.items():
-                super().__setitem__(k, extract(v))
+                super().__setitem__(k, v)
         else:
-            super().__setitem__(key, extract(val))
+            super().__setitem__(key, val)
 
     def __getitem__(self, key):
         if key not in self:
@@ -171,6 +169,8 @@ class Metrics(dict):
         counts = self.metric_counts[scope]
 
         for k, v in metr.items():
+            if type(v) is torch.Tensor:
+                v = v.item()
             metr[k] = v / counts[k]
 
         if stop_timer:

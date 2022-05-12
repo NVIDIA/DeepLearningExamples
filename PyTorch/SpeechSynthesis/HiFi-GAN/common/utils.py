@@ -80,7 +80,7 @@ def unfreeze(model):
 def reduce_tensor(tensor, world_size):
     if world_size == 1:
         return tensor
-    rt = tensor.clone()
+    rt = tensor.detach().clone()
     dist.all_reduce(rt, op=dist.ReduceOp.SUM)
     return rt.true_divide(world_size)
 
