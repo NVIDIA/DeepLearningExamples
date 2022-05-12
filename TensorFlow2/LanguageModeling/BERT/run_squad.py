@@ -47,6 +47,7 @@ import squad_lib as squad_lib_wp
 import squad_lib_sp
 import tokenization
 import gpu_affinity
+import tf_trt
 from official.utils.misc import distribution_utils
 from official.utils.misc import keras_utils
 from official.utils.misc import tpu_lib
@@ -54,14 +55,16 @@ import dllogger_class
 
 flags.DEFINE_enum(
     'mode', 'train_and_predict',
-    ['train_and_predict', 'train', 'predict', 'export_only'],
-    'One of {"train_and_predict", "train", "predict", "export_only"}. '
+    ['train_and_predict', 'train', 'predict', 'export_only', 'sm_predict', 'trt_predict'],
+    'One of {"train_and_predict", "train", "predict", "export_only", "sm_predict", "trt_predict"}. '
     '`train_and_predict`: both train and predict to a json file. '
     '`train`: only trains the model. '
     'trains the model and evaluates in the meantime. '
     '`predict`: predict answers from the squad json file. '
     '`export_only`: will take the latest checkpoint inside '
-    'model_dir and export a `SavedModel`.')
+    'model_dir and export a `SavedModel`.'
+    '`sm_predict`: will load SavedModel from savedmodel_dir and predict answers'
+    '`trt_predict`: will load SavedModel from savedmodel_dir, convert and predict answers with TF-TRT')
 flags.DEFINE_string('train_data_path', '',
                     'Training data path with train tfrecords.')
 flags.DEFINE_string(
@@ -101,6 +104,9 @@ flags.DEFINE_string(
     'sp_model_file', None,
     'The path to the sentence piece model. Used by sentence piece tokenizer '
     'employed by ALBERT.')
+flags.DEFINE_string(
+    'savedmodel_dir', None,
+    'The path of SavedModel for Savedmodel and TF-TRT prediction.')
 
 common_flags.define_common_bert_flags()
 
@@ -194,18 +200,25 @@ def predict_squad_customized(strategy, input_meta_data, bert_config,
   else:
     predict_iterator = iter(predict_dataset_fn())
 
-  with distribution_utils.get_strategy_scope(strategy):
-    squad_model, _ = bert_models.squad_model(
-        bert_config, input_meta_data['max_seq_length'], float_type=tf.float16 if FLAGS.use_fp16 else tf.float32)
+  if FLAGS.mode == 'trt_predict':
+    squad_model = tf_trt.TFTRTModel(FLAGS.savedmodel_dir, "amp" if FLAGS.use_fp16 else "fp32")
 
-  if FLAGS.init_checkpoint:
+  elif FLAGS.mode == 'sm_predict':
+    squad_model = tf_trt.SavedModel(FLAGS.savedmodel_dir, "amp" if FLAGS.use_fp16 else "fp32")
+
+  else:
+    with distribution_utils.get_strategy_scope(strategy):
+      squad_model, _ = bert_models.squad_model(
+          bert_config, input_meta_data['max_seq_length'], float_type=tf.float16 if FLAGS.use_fp16 else tf.float32)
+
+    if FLAGS.init_checkpoint:
+      checkpoint = tf.train.Checkpoint(model=squad_model)
+      checkpoint.restore(FLAGS.init_checkpoint).expect_partial()
+
+    checkpoint_path = tf.train.latest_checkpoint(FLAGS.model_dir)
+    logging.info('Restoring checkpoints from %s', checkpoint_path)
     checkpoint = tf.train.Checkpoint(model=squad_model)
-    checkpoint.restore(FLAGS.init_checkpoint).expect_partial()
-
-  checkpoint_path = tf.train.latest_checkpoint(FLAGS.model_dir)
-  logging.info('Restoring checkpoints from %s', checkpoint_path)
-  checkpoint = tf.train.Checkpoint(model=squad_model)
-  checkpoint.restore(checkpoint_path).expect_partial()
+    checkpoint.restore(checkpoint_path).expect_partial()
 
   @tf.function
   def predict_step(iterator):
@@ -621,12 +634,13 @@ def main(_):
     policy = tf.keras.mixed_precision.experimental.Policy("mixed_float16")
     tf.keras.mixed_precision.experimental.set_policy(policy)
 
+  os.makedirs(FLAGS.model_dir, exist_ok=True)
   dllogging = dllogger_class.dllogger_class(FLAGS.dllog_path)
   input_meta_data['dllogging'] = dllogging
 
   if FLAGS.mode in ('train', 'train_and_predict'):
     train_squad(strategy, input_meta_data)
-  if FLAGS.mode in ('predict', 'train_and_predict') and (not FLAGS.use_horovod or hvd.rank() == 0):
+  if FLAGS.mode in ('predict', 'sm_predict', 'trt_predict', 'train_and_predict') and (not FLAGS.use_horovod or hvd.rank() == 0):
     predict_squad(strategy, input_meta_data)
 
 
