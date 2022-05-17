@@ -1,0 +1,10 @@
+./train.sh 8 /root/data/imagenet/ \
+--model gpunet_p0 --sched step --decay-epochs 2.4 --decay-rate 0.97 --opt rmsproptf \
+-b 256 --epochs 450 \
+--opt-eps 0.001 -j 8 \
+--warmup-lr 1e-6 --weight-decay 1e-5 --drop 0.3 --drop-connect 0.2 --model-ema --model-ema-decay 0.9999 \
+--aa rand-m9-mstd0.5 --remode pixel --reprob 0.2 --lr 0.08 --num-classes 1000 --enable-distill True --crop-pct 0.875 \
+--img-size 224 --amp \
+--test-teacher False \
+--teacher tf_efficientnet_b2 \
+--teacher-img-size 260

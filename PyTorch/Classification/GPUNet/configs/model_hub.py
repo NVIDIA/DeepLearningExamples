@@ -16,34 +16,11 @@ import json
 import os
 import pathlib
 from pathlib import Path
-import gdown
 import shutil
 import urllib.request
 from typing import Any, Callable
 from zipfile import ZipFile
-
 from tqdm.auto import tqdm
-# Predefined model config files
-MODEL_ZOO_KEYS_B1 = {}
-MODEL_ZOO_KEYS_B1["GV100"] = {}
-# GPUNet-0: 0.62ms on GV100
-MODEL_ZOO_KEYS_B1["GV100"]["0.65ms"] = "1PaQ3CP9zLeKRBe5Bw4rBtdMFWXA1H9m0"
-# GPUNet-1: 0.85ms on GV100
-MODEL_ZOO_KEYS_B1["GV100"]["0.85ms"] = "189UrQUuSHBUTUComDSf9xdBzr0aEG69g"
-# GPUNet-2: 1.76ms on GV100
-MODEL_ZOO_KEYS_B1["GV100"]["1.75ms"] = "1875UgrJNKv9GD7NNazGikbSufdRtAu6n"
-# GPUNet-D1: 1.25ms on GV100
-MODEL_ZOO_KEYS_B1["GV100"]["1.25ms-D"] = "1r5BNu7sg-iFU8Nr33Jnecpzv0F3AqkM1"
-# GPUNet-D2: 2.25ms on GV100
-MODEL_ZOO_KEYS_B1["GV100"]["2.25ms-D"] = "13BxvI21uopfoh_ViAt-6wqfr-bcH2tDZ"
-
-# GPUNet-P0: 0.5ms on GV100
-MODEL_ZOO_KEYS_B1["GV100"]["0.5ms-D"] = "1ZwIM5ZhuyjHdbnj0k6ShFwWyRxYyERoB"
-# GPUNet-P1: 0.8ms on GV100
-MODEL_ZOO_KEYS_B1["GV100"]["0.8ms-D"] = "1V3KW6OaGLbem3k66uOxYeTp8oOPiyL8X"
-MODEL_ZOO_BATCH = {
-    "1": MODEL_ZOO_KEYS_B1,
-}
 
 # Predefined model config files
 MODEL_ZOO_KEYS_B1_NGC = {}
@@ -67,62 +44,59 @@ MODEL_ZOO_BATCH_NGC = {
     "1": MODEL_ZOO_KEYS_B1_NGC,
 }
 
+MODEL_ZOO_NAME2TYPE_B1 = {}
+MODEL_ZOO_NAME2TYPE_B1["GPUNet-0"] = "0.65ms"
+MODEL_ZOO_NAME2TYPE_B1["GPUNet-1"] = "0.85ms"
+MODEL_ZOO_NAME2TYPE_B1["GPUNet-2"] = "1.75ms"
+MODEL_ZOO_NAME2TYPE_B1["GPUNet-P0"] = "0.5ms-D"
+MODEL_ZOO_NAME2TYPE_B1["GPUNet-P1"] = "0.8ms-D"
+MODEL_ZOO_NAME2TYPE_B1["GPUNet-D1"] = "1.25ms-D"
+MODEL_ZOO_NAME2TYPE_B1["GPUNet-D2"] = "2.25ms-D"
 
 def get_model_list(batch: int = 1):
     """Get a list of models in model zoo."""
     batch = str(batch)
     err_msg = "Batch {} is not yet optimized.".format(batch)
-    assert batch in MODEL_ZOO_BATCH.keys(), err_msg
-    return list(MODEL_ZOO_BATCH[batch].keys())
+    assert batch in MODEL_ZOO_BATCH_NGC.keys(), err_msg
+    return list(MODEL_ZOO_BATCH_NGC[batch].keys())
 
 
-def download_checkpoint_gdown(checkpointPath, fileID):
-    if os.path.isfile(checkpointPath):
-        return
-    url = "https://drive.google.com/uc?export=download&confirm=pbef&id=" + fileID
-    print(url)
-    gdown.download(url, checkpointPath)
 
 
 def get_configs(
     batch: int = 1,
-    latency: str = "NVNet_1ms",
-    gpuType: str = "V100",
+    latency: str = "GPUNet_1ms",
+    gpuType: str = "GV100",
     config_root_dir: str = "./configs",
-    download: bool = True,
-    use_ngc: bool = False,
+    download: bool = True
 ):
     """Get file with model config (downloads if necessary)."""
     batch = str(batch)
     errMsg0 = "Batch {} not found, available batches are {}".format(
-        batch, list(MODEL_ZOO_BATCH.keys())
+        batch, list(MODEL_ZOO_BATCH_NGC.keys())
     )
-    assert batch in MODEL_ZOO_BATCH.keys(), errMsg0
+    assert batch in MODEL_ZOO_BATCH_NGC.keys(), errMsg0
 
-    availGPUs = list(MODEL_ZOO_BATCH[batch].keys())
+    availGPUs = list(MODEL_ZOO_BATCH_NGC[batch].keys())
     errMsg1 = "GPU {} not found, available GPUs are {}".format(gpuType, availGPUs)
     assert gpuType in availGPUs, errMsg1
 
     errMsg2 = "Latency {} not found, available Latencies are {}".format(
-        latency, list(MODEL_ZOO_BATCH[batch][gpuType])
+        latency, list(MODEL_ZOO_BATCH_NGC[batch][gpuType])
     )
-    assert latency in MODEL_ZOO_BATCH[batch][gpuType].keys(), errMsg2
-    print("testing:", " batch=", batch, " latency=", latency, " gpu=", gpuType)
+    assert latency in MODEL_ZOO_BATCH_NGC[batch][gpuType].keys(), errMsg2
 
+    print("testing:", " batch=", batch, " latency=", latency, " gpu=", gpuType)
+    
     configPath = config_root_dir + "/batch" + str(batch)
     configPath += "/" + gpuType + "/" + latency + ".json"
     checkpointPath = config_root_dir + "/batch" + str(batch) + "/"
     checkpointPath += gpuType + "/"
     ngcCheckpointPath = Path(checkpointPath)
     checkpointPath += latency + ".pth.tar"
-    fileID = MODEL_ZOO_BATCH[batch][gpuType][latency]
     ngcUrl = MODEL_ZOO_BATCH_NGC[batch][gpuType][latency]
     if download:
-        if use_ngc:
-            download_checkpoint_ngc(ngcUrl, ngcCheckpointPath)
-        else:
-            download_checkpoint_gdown(checkpointPath, fileID)
-
+        download_checkpoint_ngc(ngcUrl, ngcCheckpointPath)
     with open(configPath) as configFile:
         modelJSON = json.load(configFile)
         configFile.close()
@@ -192,3 +166,5 @@ def download_checkpoint_ngc(checkpoint_url: str, checkpoint_path: pathlib.Path) 
 
     archive_path = checkpoint_path.parent / file_path.name
     unzip(checkpoint_path, archive_path)
+
+

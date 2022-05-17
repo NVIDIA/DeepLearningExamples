@@ -126,20 +126,15 @@ git clone https://github.com/NVIDIA/DeepLearningExamples
 cd DeepLearningExamples/PyTorch/Classification/GPUNet
 ```
 
-2. Download ImageNet from the [offical website](https://image-net.org/download.php) or from [here](https://academictorrents.com/collection/imagenet?sort_field=name&sort_dir=DESC) for the faster BitTorrent download. Recursively unzip the dataset, and locate the train and val folders. Refer to [Prepare the dataset](#prepare-the-dataset) for more details.
+2. Download ImageNet from the [offical website](https://image-net.org/download-images). Recursively unzip the dataset, and locate the train and val folders. Refer to [Prepare the dataset](#prepare-the-dataset) for more details.
 
 
 3. Build and run the GPUNet PyTorch container, assuming you have installed the docker.
 ```
 docker build -t gpunet .
-docker run --gpus all -it --rm --network=host --shm-size 600G --cpus 48 -v /path/to/imagenet:/root/data/imagenet/ gpunet
+docker run --gpus all -it --rm --network=host --shm-size 600G --ipc=host -v /path/to/imagenet:/root/data/imagenet/ gpunet
 ```
-or you can use a docker image pre-built by us
-```
-docker pull linnanwang/nvnet:v2
-docker run --gpus all -it --rm --network=host --shm-size 600G --cpus 48 -v /path/to/imagenet:/root/data/imagenet/ -v /path/to/gpunet:/codes linnanwang/nvnet:v2  /bin/bash
-cd /codes
-```
+
 ### Prepare the Dataset
 
 1. [Download the ImageNet](http://image-net.org/download-images).
@@ -158,7 +153,7 @@ cd /codes
   wget -qO- https://raw.githubusercontent.com/soumith/imagenetloader.torch/master/valprep.sh | bash
   ```
 
-The directory where the `train/` and `val/` directories are placed is referred to as `<path to imagenet>` in this document.
+The directory where the `train/` and `val/` directories are placed is referred to as `/path/to/imagenet/` in this document.
 
 
 ### Training
@@ -184,13 +179,14 @@ GPUNet training hyperparameters:
 
 4. GPUNet-D1 with distillation
 ```
-./train.sh 8 /root/data/imagenet/ --model gpunet_d1 --sched step --decay-epochs 2.4 --decay-rate .97 --opt rmsproptf -b 192 --epochs 450 --opt-eps .001 -j 8 --warmup-lr 1e-6 --weight-decay 1e-5 --drop 0.3 --drop-connect 0.2 --model-ema --model-ema-decay 0.9999 --aa rand-m9-mstd0.5 --remode pixel --reprob 0.2 --lr .06 --num-classes 1000 --enable-distill False --amp --crop-pct 1.0 --output ./output/train/gpunet_d2/ --img-size 456 --enable-distill True --test-teacher False --teacher tf_efficientnet_b5_ns --teacher-img-size 456
+./train.sh 8 /root/data/imagenet/ --model gpunet_d1 --sched step --decay-epochs 2.4 --decay-rate .97 --opt rmsproptf -b 192 --epochs 450 --opt-eps .001 -j 8 --warmup-lr 1e-6 --weight-decay 1e-5 --drop 0.3 --drop-connect 0.2 --model-ema --model-ema-decay 0.9999 --aa rand-m9-mstd0.5 --remode pixel --reprob 0.2 --lr .06 --num-classes 1000 --enable-distill True --crop-pct 1.0 --img-size 456 --amp --test-teacher False --teacher tf_efficientnet_b5_ns --teacher-img-size 456
 ```
 
 5. GPUNet-D2 with distillation
 ```
-./train.sh 8 /root/data/imagenet/ --model gpunet_d2 --sched step --decay-epochs 2.4 --decay-rate .97 --opt rmsproptf -b 128 --epochs 450 --opt-eps .001 -j 8 --warmup-lr 1e-6 --weight-decay 1e-5 --drop 0.3 --drop-connect 0.2 --model-ema --model-ema-decay 0.9999 --aa rand-m9-mstd0.5 --remode pixel --reprob 0.2 --lr .06 --num-classes 1000 --enable-distill False --amp --crop-pct 1.0 --output ./output/train/gpunet_d2/ --img-size 528 --enable-distill True --test-teacher False --teacher tf_efficientnet_b6_ns --teacher-img-size 528
+./train.sh 8 /root/data/imagenet/ --model gpunet_d2 --sched step --decay-epochs 2.4 --decay-rate .97 --opt rmsproptf -b 128 --epochs 450 --opt-eps .001 -j 8 --warmup-lr 1e-6 --weight-decay 1e-5 --drop 0.3 --drop-connect 0.2 --model-ema --model-ema-decay 0.9999 --aa rand-m9-mstd0.5 --remode pixel --reprob 0.2 --lr .06 --num-classes 1000 --enable-distill True --crop-pct 1.0 --img-size 528 --amp --test-teacher False --teacher tf_efficientnet_b6_ns --teacher-img-size 528
 ```
+
 6. GPUNet-P0 with distillation
 ```
 ./train.sh 8 /root/data/imagenet/ --model gpunet_p0 --sched step --decay-epochs 2.4 --decay-rate 0.97 --opt rmsproptf -b 256 --epochs 450 --opt-eps 0.001 -j 8 --warmup-lr 1e-6 --weight-decay 1e-5 --drop 0.3 --drop-connect 0.2 --model-ema --model-ema-decay 0.9999 --aa rand-m9-mstd0.5 --remode pixel --reprob 0.2 --lr 0.08 --num-classes 1000 --enable-distill True --crop-pct 0.875 --img-size 224 --amp --test-teacher False --teacher tf_efficientnet_b2 --teacher-img-size 260
@@ -200,6 +196,7 @@ GPUNet training hyperparameters:
 ```
 ./train.sh 8 /root/data/imagenet/ --model gpunet_p1 --sched step --decay-epochs 2.4 --decay-rate 0.97 --opt rmsproptf -b 256 --epochs 450 --opt-eps 0.001 -j 8 --warmup-lr 1e-6 --weight-decay 1e-5 --drop 0.3 --drop-connect 0.2 --model-ema --model-ema-decay 0.9999 --aa rand-m9-mstd0.5 --remode pixel --reprob 0.2 --lr 0.08 --num-classes 1000 --enable-distill True --crop-pct 0.875 --img-size 224 --amp --test-teacher False --teacher tf_efficientnet_b2 --teacher-img-size 260
 ```
+
 You need to call train.sh to start the training, and here is an example of arguments to train.sh.
 ```
 ./train.sh 8                   >>launch with 8 GPUs.
@@ -416,9 +413,9 @@ We benchmark the training results following the steps in [Training](#training). 
 ##### NVIDIA DGX V100 (8x V100 32GB)
 | **Model**|**Batch**| **Epochs** | **GPUs** | **FP32 Top1**  | **AMP Top1**   | **FP32 (hours)<br />Train Time** | **AMP (hours)<br />Train Time** | **Training speedup<br />(FP32 / AMP)** |
 |:--------:|:------:|:----------:|:--------:|:--------------:|:--------------:|:-------------------:|:-----------------------:|:--------------------------------:|
-| GPUNet0  |192     |    450     |    8     | 77.90<sub>+/-0.03</sub> | 77.96<sub>+/-0.05</sub> |71.63|46.56|    1.54  x                         |
-| GPUNet1  |192     |    450     |    8     | 80.4-<sub>+/-0.03</sub>  | 80.5<sub>+/-0.03</sub> |67.5 |43.5 |    1.55  x                         |
-| GPUNet2  |192     |    450     |    8     | 82.1-<sub>+/-0.04</sub>  | 82.2<sub>+/-0.04</sub> |171  |84.25|    2.03  x                         |
+| GPUNet-0  |192     |    450     |    8     | 77.90<sub>+/-0.03</sub> | 77.96<sub>+/-0.05</sub> |71.63|46.56|    1.54  x                         |
+| GPUNet-1  |192     |    450     |    8     | 80.4-<sub>+/-0.03</sub>  | 80.5<sub>+/-0.03</sub> |67.5 |43.5 |    1.55  x                         |
+| GPUNet-2  |192     |    450     |    8     | 82.1-<sub>+/-0.04</sub>  | 82.2<sub>+/-0.04</sub> |171  |84.25|    2.03  x                         |
 
 #### Training performance results
 Please also follow the steps in [Training](#training) to reproduce the performance results below.
@@ -427,15 +424,15 @@ Please also follow the steps in [Training](#training) to reproduce the performan
     
 | **Model** | **GPUs** | **Batch** |   FP32<br />imgs/second  | **AMP<br />imgs/second** |  Speedup<br />(FP32 to AMP) | 
 |:---------:|:--------:|:---------:|:-----------:|:--------------------------------:|:------------------------------------------------:|
-| GPUNet0   |    8     | 192       | 2289 img/s  |           3518 img/s            |                      1.53 x                       |
-| GPUNet1   |    8     | 192       | 2415 img/s  |           3774 img/s            |                      1.56 x                       |
-| GPUNet2   |    8     | 192       | 948 img/s   |           1957 img/s            |                      2.03 x                       |
+| GPUNet-0   |    8     | 192       | 2289 img/s  |           3518 img/s            |                      1.53 x                       |
+| GPUNet-1   |    8     | 192       | 2415 img/s  |           3774 img/s            |                      1.56 x                       |
+| GPUNet-2   |    8     | 192       | 948 img/s   |           1957 img/s            |                      2.03 x                       |
 
 ##### NVIDIA DGX A100 (8x A100 80GB)
     
 | **Model** | **GPUs** | **Batch** |   FP32<br />imgs/second  | **AMP<br />imgs/second** |  Speedup<br />(TF32 to AMP) | 
 |:---------:|:--------:|:---------:|:-----------:|:--------------------------------:|:------------------------------------------------:|
-| GPUNet2   |    8     | 192       | 2002 img/s   |           2690 img/s            |                      1.34 x                       |
+| GPUNet-2   |    8     | 192       | 2002 img/s   |           2690 img/s            |                      1.34 x                       |
 | GPUNet-D1   |    8     | 128       | 755 img/s   |           844 img/s            |                      1.11 x                       |
 
 #### Inference results
@@ -447,8 +444,8 @@ We benchmark the training results following the steps in [Benchmark the GPUNet l
 |    GPUNet-0       |       1        |     V100 |   0.63 ms                  |        1.82 ms             | [here](./triton/065ms)   | 78.9         |
 |    GPUNet-1       |       1        |     V100 |   0.82 ms                  |        2.75 ms             | [here](./triton/085ms)   | 80.5         |
 |    GPUNet-2       |       1        |     V100 |   1.68 ms                  |        5.50 ms             | [here](./triton/175ms)   | 82.2         |
-|    GPUNet-P0      |       1        |     V100 |   0.63 ms                  |        2.11 ms             | [here](./triton/05ms-D)  | 80.5         |
-|    GPUNet-P1      |       1        |     V100 |   0.96 ms                  |        2.47 ms             | [here](./triton/08ms-D)  | 81.3         |
+|    GPUNet-P0      |       1        |     V100 |   0.63 ms                  |        2.11 ms             | [here](./triton/05ms-D)  | 80.3         |
+|    GPUNet-P1      |       1        |     V100 |   0.96 ms                  |        2.47 ms             | [here](./triton/08ms-D)  | 81.1         |
 |    GPUNet-D1      |       1        |     V100 |   1.24 ms                  |        2.88 ms             | [here](./triton/125ms-D) | 82.5         |
 |    GPUNet-D2      |       1        |     V100 |   2.17 ms                  |        4.22 ms             | [here](./triton/225ms-D) | 83.6         |
 
@@ -458,8 +455,8 @@ We benchmark the training results following the steps in [Benchmark the GPUNet l
 |    GPUNet-0       |       1        |     A100 |   0.46 ms                  |        1.46 ms             | [here](./triton/065ms)   | 78.9         |
 |    GPUNet-1       |       1        |     A100 |   0.59 ms                  |        1.81 ms             | [here](./triton/085ms)   | 80.5         |
 |    GPUNet-2       |       1        |     A100 |   1.25 ms                  |        4.03 ms             | [here](./triton/175ms)   | 82.2         |
-|    GPUNet-P0      |       1        |     A100 |   0.45 ms                  |        1.31 ms             | [here](./triton/05ms-D)  | 80.5         |
-|    GPUNet-P1      |       1        |     A100 |   0.61 ms                  |        1.64 ms             | [here](./triton/08ms-D)  | 81.3         |
+|    GPUNet-P0      |       1        |     A100 |   0.45 ms                  |        1.31 ms             | [here](./triton/05ms-D)  | 80.3         |
+|    GPUNet-P1      |       1        |     A100 |   0.61 ms                  |        1.64 ms             | [here](./triton/08ms-D)  | 81.1         |
 |    GPUNet-D1      |       1        |     A100 |   0.94 ms                  |        2.44 ms             | [here](./triton/125ms-D) | 82.5         |
 |    GPUNet-D2      |       1        |     A100 |   1.40 ms                  |        3.06 ms             | [here](./triton/225ms-D) | 83.6         |
 

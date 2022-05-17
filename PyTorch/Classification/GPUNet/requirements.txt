@@ -13,5 +13,4 @@
 # limitations under the License.
 
 git+https://github.com/NVIDIA/dllogger@v1.0.0#egg=dllogger
-gdown==4.4.0
 timm==0.5.4
