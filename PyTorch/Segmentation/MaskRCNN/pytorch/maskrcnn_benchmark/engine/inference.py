@@ -1,5 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
-# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 
 import datetime
 import logging
@@ -15,20 +15,26 @@ from ..utils.comm import all_gather
 from ..utils.comm import synchronize
 
 
-def compute_on_dataset(model, data_loader, device):
+def compute_on_dataset(model, data_loader, device, steps=-1):
     model.eval()
     results_dict = {}
+    latency = []
     cpu_device = torch.device("cpu")
     for i, batch in enumerate(tqdm(data_loader)):
+        #Break earlier for inference on partial dataset
+        if steps > -1 and i >= steps:
+            break
         images, targets, image_ids = batch
         images = images.to(device)
         with torch.no_grad():
+            batch_start = time.perf_counter()
             output = model(images)
+            latency.append(time.perf_counter() - batch_start)
             output = [o.to(cpu_device) for o in output]
         results_dict.update(
             {img_id: result for img_id, result in zip(image_ids, output)}
         )
-    return results_dict
+    return results_dict, latency
 
 
 def _accumulate_predictions_from_multiple_gpus(predictions_per_gpu):
@@ -64,7 +70,9 @@ def inference(
         expected_results_sigma_tol=4,
         output_folder=None,
         skip_eval=False,
-        dllogger=None
+        dllogger=None,
+        steps=-1,
+        profile=False,
 ):
     # convert to a torch.device for efficiency
     device = torch.device(device)
@@ -76,16 +84,28 @@ def inference(
     dataset = data_loader.dataset
     dllogger.log(step="PARAMETER", data={"eval_dataset_name": dataset_name, "eval_num_samples":len(dataset)})
     start_time = time.time()
-    predictions = compute_on_dataset(model, data_loader, device)
+    with torch.autograd.profiler.emit_nvtx(enabled=profile):
+        predictions, latency = compute_on_dataset(model, data_loader, device, steps=steps)
     # wait for all processes to complete before measuring the time
     synchronize()
     total_time = time.time() - start_time
+    latency_avg = sum(latency) / len(latency)
+    latency.sort()
+    def _latency_avg(n):
+        return sum(latency[:n]) / n 
+    latency_90 = _latency_avg(int(len(latency)*0.9))
+    latency_95 = _latency_avg(int(len(latency)*0.95))
+    latency_99 = _latency_avg(int(len(latency)*0.99))
+    len_dataset = len(dataset) if steps is -1 else steps
     total_time_str = str(datetime.timedelta(seconds=total_time))
-    dllogger.log(step=tuple(), data={"e2e_infer_time": total_time, "inference_perf_fps": len(dataset) / total_time})
+    dllogger.log(step=tuple(), data={"e2e_infer_time": total_time, "inference_perf_fps": len_dataset / total_time})
+    stats = {'latency_avg' : latency_avg, 'latency_90': latency_90,
+            'latency_95' : latency_95, 'latency_99': latency_99,}
+    dllogger.log(step=tuple(), data=stats)
     logger = logging.getLogger("maskrcnn_benchmark.inference")
     logger.info(
     "Total inference time: {} ({} s / img per device, on {} devices)".format(
-        total_time_str, total_time * num_devices / len(dataset), num_devices
+        total_time_str, total_time * num_devices / len_dataset, num_devices
         )
     )
 

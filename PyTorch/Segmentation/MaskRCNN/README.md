@@ -10,11 +10,14 @@ This repository provides a script and recipe to train and infer on MaskRCNN to a
   * [Mixed precision training](#mixed-precision-training)
     * [Enabling mixed precision](#enabling-mixed-precision)
     * [Enabling TF32](#enabling-tf32)
+  * [Performance Optimizations](#performance-optimizations)
 * [Setup](#setup)
   * [Requirements](#requirements)
 * [Quick start guide](#quick-start-guide)
 * [Advanced](#advanced)
-  * [Command line arguments](#command-line-arguments)
+  * [Scripts and sample code](#scripts-and-sample-code)
+  * [Parameters](#parameters)
+  * [Command line options](#command-line-options)
   * [Getting the data](#getting-the-data)
     * [Dataset guidelines](#dataset-guidelines)
   * [Training process](#training-process)
@@ -24,25 +27,23 @@ This repository provides a script and recipe to train and infer on MaskRCNN to a
     * [Inference performance benchmark](#inference-performance-benchmark)
   * [Results](#results)
     * [Training accuracy results](#training-accuracy-results)
-      * [Training accuracy: NVIDIA DGX A100 (8x A100 40GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-40gb)  
-      * [Training accuracy: NVIDIA DGX-1 (8x V100 16GB)](#training-accuracy-nvidia-dgx-1-8x-v100-16gb)
+      * [Training accuracy: NVIDIA DGX A100 (8x A100 80GB)](#training-accuracy-nvidia-dgx-a100-8x-a100-80gb)  
+      * [Training accuracy: NVIDIA DGX-1 (8x V100 32GB)](#training-accuracy-nvidia-dgx-1-8x-v100-32gb)
       * [Training loss curves](#training-loss-curves)
       * [Training stability test](#training-stability-test)
     * [Training performance results](#training-performance-results)
-      * [Training performance: NVIDIA DGX A100 (8x A100 40GB)](#training-performance-nvidia-dgx-a100-8x-a100-40gb)
-      * [Training performance: NVIDIA DGX-1 (8x V100 16GB)](#training-performance-nvidia-dgx-1-8x-v100-16gb)
-      * [Training performance: NVIDIA DGX-2 (16x V100 32GB)](#training-performance-nvidia-dgx-2-16x-v100-32gb)
+      * [Training performance: NVIDIA DGX A100 (8x A100 80GB)](#training-performance-nvidia-dgx-a100-8x-a100-80gb)
+      * [Training performance: NVIDIA DGX-1 (8x V100 32GB)](#training-performance-nvidia-dgx-1-8x-v100-32gb)
     * [Inference performance results](#inference-performance-results)
-      * [Inference performance: NVIDIA DGX A100 (1x A100 40GB)](#inference-performance-nvidia-dgx-a100-1x-a100-40gb)
-      * [Inference performance: NVIDIA DGX-1 (1x V100 16GB)](#inference-performance-nvidia-dgx-1-1x-v100-16gb)
-      * [Inference performance: NVIDIA DGX-2 (1x V100 32GB)](#inference-performance-nvidia-dgx-1-1x-v100-16gb)
+      * [Inference performance: NVIDIA DGX A100 (1x A100 80GB)](#inference-performance-nvidia-dgx-a100-1x-a100-80gb)
+      * [Inference performance: NVIDIA DGX-1 (1x V100 32GB)](#inference-performance-nvidia-dgx-1-1x-v100-32gb)
 * [Release notes](#release-notes)
   * [Changelog](#changelog)
   * [Known issues](#known-issues)
  
 ## Model overview
  
-Mask R-CNN is a convolution based neural network for the task of object instance segmentation. The paper describing the model can be found [here](https://arxiv.org/abs/1703.06870). NVIDIA’s Mask R-CNN 19.2 is an optimized version of [Facebook’s implementation](https://github.com/facebookresearch/maskrcnn-benchmark).This model is trained with mixed precision using Tensor Cores on Volta, Turing, and the NVIDIA Ampere GPU architectures. Therefore, researchers can get results 1.3x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
+Mask R-CNN is a convolution based neural network for the task of object instance segmentation. The paper describing the model can be found [here](https://arxiv.org/abs/1703.06870). NVIDIA’s Mask R-CNN is an optimized version of [Facebook’s implementation](https://github.com/facebookresearch/maskrcnn-benchmark).This model is trained with mixed precision using Tensor Cores on Volta, Turing, and the NVIDIA Ampere GPU architectures. Therefore, researchers can get results 1.3x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
  
 The repository also contains scripts to interactively launch training, benchmarking and inference routines in a Docker container.
  
@@ -117,16 +118,17 @@ The following features are supported by this model.
  
 | **Feature** | **Mask R-CNN** |
 |:---------:|:----------:|
-|APEX AMP|No|
-|PyTorch AMP|Yes|
-|APEX DDP|Yes|
+|Native AMP|Yes|
+|Native DDP|Yes|
+|Native NHWC|Yes|
  
 #### Features
  
-[APEX](https://github.com/NVIDIA/apex) is a PyTorch extension with NVIDIA-maintained utilities to streamline mixed precision and distributed training, whereas [AMP](https://nvidia.github.io/apex/amp.html) is an abbreviation used for automatic mixed precision training.
+[AMP](https://pytorch.org/docs/stable/amp.html) is an abbreviation used for automatic mixed precision training.
  
-[DDP](https://nvidia.github.io/apex/parallel.html) stands for DistributedDataParallel and is used for multi-GPU training.
+[Native DDP](https://pytorch.org/docs/master/generated/torch.nn.parallel.DistributedDataParallel.html); [Apex DDP](https://nvidia.github.io/apex/parallel.html) where DDP stands for DistributedDataParallel and is used for multi-GPU training.
  
+[NHWC](https://pytorch.org/tutorials/intermediate/memory_format_tutorial.html) is the channels last memory format for tensors.
   
 ### Mixed precision training
  
@@ -144,18 +146,29 @@ For information about:
 -   How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) documentation.
     
 -   Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
-    
- 
--   APEX tools for mixed precision training, see the [NVIDIA Apex: Tools for Easy Mixed-Precision Training in PyTorch](https://devblogs.nvidia.com/apex-pytorch-easy-mixed-precision-training/).
   
  
 #### Enabling mixed precision
- 
-In this repository, mixed precision training is enabled by using Pytorch's [AMP](https://pytorch.org/docs/stable/amp.html).
 
+In this repository, mixed precision training is enabled by the [PyTorch native AMP](https://pytorch.org/docs/stable/amp.html) library. PyTorch has an automatic mixed precision module that allows mixed precision to be enabled with minimal code changes.
+
+Automatic mixed precision can be enabled with the following code changes:
+```
+# Create gradient scaler
+scaler = torch.cuda.amp.GradScaler(init_scale=8192.0)
+
+# Wrap the forward pass in torch.cuda.amp.autocast
+with torch.cuda.amp.autocast():
+  loss_dict = model(images, targets)
+
+# Gradient scaling
+scaler.scale(losses).backward()
+scaler.step(optimizer)
+scaler.update()
+```
+AMP can be enabled by setting `DTYPE` to `float16`.
  
 #### Enabling TF32
- 
  
  
 TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
@@ -165,8 +178,23 @@ TF32 Tensor Cores can speed up networks using FP32, typically with no loss of ac
 For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
  
 TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by default.
- 
- 
+
+
+### Performance Optimizations
+
+[MLPerf Training](https://mlcommons.org/en/training-normal-11/) is an [ML Commons](https://mlcommons.org/en/) benchmark that measures how fast systems can train models to a target quality metric. MaskRCNN is one of the MLPerf training benchmarks which is improved every year. Some of the performance optimizations used in MLPerf can be introduced to this repository easily to gain significant training speedup. [Here](https://github.com/mlcommons/training_results_v1.1/tree/main/NVIDIA/benchmarks/maskrcnn/implementations/pytorch) is NVIDIA's MLPerf v1.1 submission codebase.
+
+Listed below are some of the performance optimization tricks applied to this repository:
+
+- Prefetcher: [PyTorch CUDA Streams](https://pytorch.org/docs/stable/generated/torch.cuda.Stream.html) are used to fetch the data required for the next iteration during the current iteration to reduce dataloading time before each iteration.
+- pin_memory: Setting pin_memory can speed up host to device transfer of samples in dataloader. More details can be found in [this blog](https://developer.nvidia.com/blog/how-optimize-data-transfers-cuda-cc/).
+- Hybrid Dataloader: Some dataloading is done on the CPU and the rest is on the GPU.
+- FusedSGD: Replace SGD with Apex FusedSGD for training speedup.
+- Native DDP: Use PyTorch [DistributedDataParallel](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html).
+- Native NHWC: Switching from channels first (NCHW) memory format to NHWC (channels last) gives [better performance](https://docs.nvidia.com/deeplearning/performance/dl-performance-convolutional/index.html#tensor-layout).
+
+Increasing the local batch size and applying the above tricks gives ~2x speedup for end-to-end training time on 8 DGX A100s when compared to the old implementation.
+
 ## Setup
 The following sections list the requirements in order to start training the Mask R-CNN model.
  
@@ -174,7 +202,7 @@ The following sections list the requirements in order to start training the Mask
  
 This repository contains `Dockerfile` which extends the PyTorch NGC container and encapsulates some dependencies.  Aside from these dependencies, ensure you have the following components:
   - [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-  - [PyTorch 20.06-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
+  - [PyTorch 21.12-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
 -   Supported GPUs:
 - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
 - [NVIDIA Turing architecture](https://www.nvidia.com/en-us/geforce/turing/)
@@ -191,7 +219,7 @@ For those unable to use the [framework name] NGC container, to set up the requir
  
  
 ## Quick Start Guide
-To train your model using mixed or TF32 precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the Mask R-CNN model on the COCO 2014 dataset. For the specifics concerning training and inference, see the [Advanced](#advanced) section.
+To train your model using mixed or TF32 precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the Mask R-CNN model on the COCO 2017 dataset. For the specifics concerning training and inference, see the [Advanced](#advanced) section.
  
  
 ### 1. Clone the repository.
@@ -201,7 +229,7 @@ cd DeepLearningExamples/PyTorch/Segmentation/MaskRCNN
 ```
  
 ### 2. Download and preprocess the dataset.
-This repository provides scripts to download and extract the COCO 2014 dataset.  Data will be downloaded to the `current working` directory on the host and extracted to a user-defined directory
+This repository provides scripts to download and extract the COCO 2017 dataset.  Data will be downloaded to the `current working` directory on the host and extracted to a user-defined directory
  
 To download, verify, and extract the COCO dataset, use the following scripts:
   ```
@@ -211,12 +239,12 @@ By default, the data is organized into the following structure:
   ```
   <data/dir>
     annotations/
-      instances_train2014.json
-      instances_val2014.json
-    train2014/
-      COCO_train2014_*.jpg
-    val2014/
-      COCO_val2014_*.jpg
+      instances_train2017.json
+      instances_val2017.json
+    train2017/
+      *.jpg
+    val2017/
+      *.jpg
   ```
  
 ### 3. Build the Mask R-CNN PyTorch NGC container.
@@ -241,14 +269,11 @@ The `train.sh` script trains a model and performs evaluation on the COCO 2014 da
   - Uses 8 GPUs.
   - Saves a checkpoint every 2500 iterations and at the end of training. All checkpoints, evaluation results and training logs are saved to the `/results` directory (in the container which can be mounted to a local directory).
   - Mixed precision training with Tensor Cores is invoked by either adding `--amp` to the command line or `DTYPE \"float16\"` to the end of the above command as shown in the train script. This will override the default `DTYPE` configuration which is tf32 for Ampere and float32 for Volta.
+  - Channels last memory format can be set using the `NHWC` flag which is set to `True` by default. Disabling this flag will run training using `NCHW` or channels first memory format.
  
   The `scripts/train.sh` script runs the following Python command:
   ```
-  Volta:
-  python -m torch.distributed.launch --nproc_per_node=8 tools/train_net.py --config-file “configs/e2e_mask_rcnn_R_50_FPN_1x.yaml”
-  
-  Ampere:
-  python -m torch.distributed.launch --nproc_per_node=8 tools/train_net.py --config-file “configs/e2e_mask_rcnn_R_50_FPN_1x_ampere_bs64.yaml”   
+  python -m torch.distributed.launch --nproc_per_node=8 tools/train_net.py --config-file “configs/e2e_mask_rcnn_R_50_FPN_1x.yaml”  
   ```
  
 ### 6. Start validation/evaluation.
@@ -336,6 +361,7 @@ For example:
 python -m torch.distributed.launch --nproc_per_node=2 tools/train_net.py \
     --config-file configs/e2e_faster_rcnn_R_50_FPN_1x.yaml \
     DTYPE "float16" \
+    NHWC True \
     OUTPUT_DIR RESULTS \
     SOLVER.BASE_LR 0.002 \
     SOLVER.STEPS ‘(360000, 480000)’
@@ -343,15 +369,13 @@ python -m torch.distributed.launch --nproc_per_node=2 tools/train_net.py \
   
 ### Command-line options
  
-To see the full list of available options and their descriptions, use the -h or --help command line option, for example:
- 
-  
+To see the full list of available options and their descriptions, use the -h or --help command line option, for example: 
  
 `python tools/train_net.py --help`
  
  
 ### Getting the data
-The Mask R-CNN model was trained on the [COCO 2014](http://cocodataset.org/#download) dataset.  This dataset comes with a training and validation set.  
+The Mask R-CNN model was trained on the [COCO 2017](http://cocodataset.org/#download) dataset.  This dataset comes with a training and validation set.  
  
 This repository contains the `./download_dataset.sh`,`./verify_dataset.sh`, and `./extract_dataset.sh` scripts which automatically download and preprocess the training and validation sets.
  
@@ -397,16 +421,16 @@ The `e2e_mask_rcnn_R_50_FPN_1x.yaml` file was used to gather accuracy and perfor
   - Feature extractor set to ResNet-50 with Feature Pyramid Networks (FPN)
   - RPN uses FPN
   - RoI Heads use FPN
-  - Dataset - COCO 2014
-  - Base Learning Rate - 0.02
-  - Global train batch size - 16
+  - Dataset - COCO 2017
+  - Base Learning Rate - 0.12
+  - Global train batch size - 96
   - Global test batch size - 8
   - RPN batch size - 256
   - ROI batch size - 512
-  - Solver steps - (60000, 80000)
-  - Max iterations - 90000
-  - Warmup iterations - 500
-  - Warmup factor = 0.33
+  - Solver steps - (12000, 16000)
+  - Max iterations - 16667
+  - Warmup iterations - 800
+  - Warmup factor = 0.0001
     - Initial learning rate = Base Learning Rate x Warmup factor
  
 The default feature extractor can be changed by setting `CONV_BODY` parameter in `yaml` file to any of the following:
@@ -437,14 +461,14 @@ Multi-gpu and multi-node training is enabled with the PyTorch distributed launch
   python -m torch.distributed.launch --nproc_per_node=8 tools/train_net.py --config-file \"configs/e2e_mask_rcnn_R_50_FPN_1x.yaml\"
   ```
  
-We have tested batch sizes upto 4 on a 16GB V100 and upto 8 on a 32G V100 with mixed precision. The repository also implements gradient accumulation functionality to simulate bigger batches. The following command can be used to run a batch of 64:
+We have tested batch sizes upto 12 on a 32GB V100 and 80GB A100 with mixed precision. The repository also implements gradient accumulation functionality to simulate bigger batches as follows:
   ```
   python -m torch.distributed.launch --nproc_per_node=8 tools/train_net.py --config-file \"configs/e2e_mask_rcnn_R_50_FPN_1x.yaml\" SOLVER.ACCUMULATE_GRAD True SOLVER.ACCUMULATE_STEPS 4
   ```
  
 By default, training is performed using FP32 on Volta and TF32 on Ampere, however training time can be reduced further using tensor cores and mixed precision. This can be done by either adding `--amp` to the command line or `DTYPE \"float16\"` to override the respective parameter in the config file.
  
-__Note__: When training a global batch size >= 32, it is recommended to additionally set the following parameters:
+__Note__: When training a global batch size >= 32, it is recommended to add required warmup by additionally setting the following parameters:
   - `SOLVER.WARMUP_ITERS 625`
   - `SOLVER.WARMUP_FACTOR 0.01`
  
@@ -452,6 +476,8 @@ When experimenting with different global batch sizes for training and inference,
  
 #### Other training options
 A sample single GPU config is provided under `configs/e2e_mask_rcnn_R_50_FPN_1x_1GPU.yaml`
+
+To train with smaller global batch sizes (32 or 64) use `configs/e2e_mask_rcnn_R_50_FPN_1x_bs32.yaml` and `configs/e2e_mask_rcnn_R_50_FPN_1x_bs64.yaml` respectively.
  
 For multi-gpu runs, `-m torch.distributed.launch --nproc_per_node num_gpus` is added prior to `tools/train_net.py`.  For example, for an 8 GPU run:
 ```
@@ -471,8 +497,6 @@ __Note__: The score is always the Average Precision(AP) at
   - maxDets = 100
  
 ## Performance
-
-The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
  
 ### Benchmarking
 Benchmarking can be performed for both training and inference. Both scripts run the Mask R-CNN model using the parameters defined in `configs/e2e_mask_rcnn_R_50_FPN_1x.yaml`. You can specify whether benchmarking is performed in FP16, TF32 or FP32 by specifying it as an argument to the benchmarking scripts.
@@ -480,35 +504,36 @@ Benchmarking can be performed for both training and inference. Both scripts run 
 #### Training performance benchmark
 Training benchmarking can performed by running the script:
 ```
-scripts/train_benchmark.sh <float16/tf32/float32>
+scripts/train_benchmark.sh <float16/tf32/float32> <number of gpus> <NHWC True/False> <Hybrid dataloader True/False>
 ```
  
 #### Inference performance benchmark
 Inference benchmarking can be performed by running the script:
 ```
-scripts/inference_benchmark.sh <float16/tf32/float32>
+scripts/inference_benchmark.sh <float16/tf32/float32> <batch_size>
 ```
  
 ### Results
 The following sections provide details on how we achieved our performance and accuracy in training and inference.
 #### Training Accuracy Results
  
-##### Training accuracy: NVIDIA DGX A100 (8x A100 40GB)
+##### Training accuracy: NVIDIA DGX A100 (8x A100 80GB)
  
-Our results were obtained by running the `scripts/train.sh` training script in the 20.06-py3 NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs.
+Our results were obtained by running the `scripts/train.sh` training script in the 21.12-py3 NGC container on NVIDIA DGX A100 (8x A100 80GB) GPUs.
  
 | GPUs    | Batch size / GPU    | BBOX mAP - TF32| MASK mAP - TF32  | BBOX mAP - FP16| MASK mAP - FP16  |   Time to train - TF32  |  Time to train - mixed precision | Time to train speedup (TF32 to mixed precision)
 | --| --| --  | -- | -- | -- | -- | -- | --
-| 8 | 8 | 0.377 | 0.3422 | 0.377 | 0.3424 | 3.63 | 3.37 | 1.077
+| 8 | 12 | 0.3765 | 0.3408 | 0.3763 | 0.3417 | 2.15 | 1.85 | 1.16x
  
-##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
+##### Training accuracy: NVIDIA DGX-1 (8x V100 32GB)
  
-Our results were obtained by running the `scripts/train.sh`  training script in the PyTorch 20.06-py3 NGC container on NVIDIA DGX-1 with 8x V100 16GB GPUs.
+Our results were obtained by running the `scripts/train.sh`  training script in the PyTorch 21.12-py3 NGC container on NVIDIA DGX-1 with 8x V100 32GB GPUs.
  
 | GPUs    | Batch size / GPU    | BBOX mAP - FP32| MASK mAP - FP32  | BBOX mAP - FP16| MASK mAP - FP16  |   Time to train - FP32  |  Time to train - mixed precision | Time to train speedup (FP32 to mixed precision)
 | --| --| --  | -- | -- | -- | -- | -- | --
-| 8 | 4 | 0.377 | 0.3422 | 0.3767 | 0.3421 | 5.69 | 4.48 | 1.27
- 
+| 8 | 12 | 0.3768 | 0.3415 | 0.3755 | 0.3403 | 5.58 | 3.37 | 1.65x
+
+Note: Currently V100 32GB + FP32 + NHWC + Hybrid dataloader causes a slowdown. So for all V100 32GB FP32 runs hybrid dataloader and NHWC are disabled `NHWC=False HYBRID=False DTYPE=float32 bash scripts/train.sh`
  
 ##### Training loss curves
  
@@ -522,82 +547,102 @@ The following tables compare mAP scores across 5 different training runs with di
  
 | **Config** | **Seed 1** | **Seed 2** | **Seed 3** |  **Seed 4** | **Seed 5** | **Mean** | **Standard Deviation** |
 | --- | --- | ----- | ----- | --- | --- | ----- | ----- |
-|  8 GPUs, final AP BBox  | 0.377 | 0.376 | 0.376 | 0.378  | 0.377 | 0.377 | 0.001 |
-| 8 GPUs, final AP Segm | 0.343 | 0.342 | 0.341 | 0.343  | 0.343 | 0.342 | 0.001 |
+|  8 GPUs, final AP BBox  | 0.3764 | 0.3766 | 0.3767 | 0.3752  | 0.3768 | 0.3763 | 0.0006 |
+| 8 GPUs, final AP Segm | 0.3414 | 0.3411 | 0.341 | 0.3407  | 0.3415 | 0.3411 | 0.0003 |
  
 #### Training Performance Results
  
-##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
+##### Training performance: NVIDIA DGX A100 (8x A100 80GB)
  
-Our results were obtained by running the `scripts/train_benchmark.sh` training script in the 20.06-py3 NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs. Performance numbers in images per second were averaged over an entire training epoch.
+Our results were obtained by running the `scripts/train_benchmark.sh` training script in the 21.12-py3 NGC container on NVIDIA DGX A100 (8x A100 80GB) GPUs. Performance numbers in images per second were averaged over 500 iterations.
  
 | GPUs   | Batch size / GPU   | Throughput - TF32    | Throughput - mixed precision    | Throughput speedup (TF32 - mixed precision)   | Weak scaling - TF32    | Weak scaling - mixed precision
  --- | --- | ----- | ----- | --- | --- | ----- |
-| 1 | 8 | 21 | 25 | 1.19 | 1 | 1 |
-| 4 | 8 | 74 | 84 | 1.14 | 3.52 | 3.36 |
-| 8 | 8 | 145 | 161 | 1.11 | 6.90 | 6.44 |
+| 1 | 12 | 23 | 24 | 1.04 | 1 | 1 |
+| 4 | 12 | 104 | 106 | 1.02 | 4.52 | 4.42 |
+| 8 | 12 | 193 | 209 | 1.08 | 8.39 | 8.71 |
  
-##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
+##### Training performance: NVIDIA DGX-1 (8x V100 32GB)
  
-Our results were obtained by running the `scripts/train_benchmark.sh` training script in the 20.06-py3 NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs. Performance numbers in images per second were averaged over an entire training epoch.
+Our results were obtained by running the `scripts/train_benchmark.sh` training script in the 21.12-py3 NGC container on NVIDIA DGX-1 with (8x V100 32GB) GPUs. Performance numbers in images per second were averaged over 500 iterations.
  
 | GPUs   | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)   | Weak scaling - FP32    | Weak scaling - mixed precision
 | --- | --- | ----- | ----- | --- | --- | -----
-| 1 | 4 | 12 | 15 | 1.25 | 1 | 1 |
-| 4 | 4 | 38 | 46 | 1.21 | 3.7 | 3.07 |
-| 8 | 4 | 70 | 89 | 1.27 | 5.83 | 5.93 |
+| 1 | 12 | 12 | 16 | 1.33 | 1 | 1 |
+| 4 | 12 | 44 | 71 | 1.61 | 3.67 | 4.44 |
+| 8 | 12 | 85 | 135 | 1.59 | 7.08 | 8.44 |
  
-##### Training performance: NVIDIA DGX-2 (16x V100 32GB)
- 
-Our results were obtained by running the `scripts/train_benchmark.sh` training script in the 20.06-py3 NGC container on NVIDIA DGX-2 with (16x V100 32GB) GPUs. Performance numbers in images per second were averaged over an entire training epoch.
- 
-| GPUs   | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)   | Weak scaling - FP32    | Weak scaling - mixed precision        
-| --- | --- | ----- | ----- | --- | --- | ----- |
-| 1 | 4 | 12 | 16 | 1.33 | 1 | 1 |
-| 4 | 4 | 39 | 50 | 1.28 | 3.25 | 3.13 |
-| 8 | 4 | 75 | 92 | 1.27 | 6.25 | 5.75 |
-| 16 | 4 | 148 | 218 | 1.47 | 12.33 | 13.63 |
- 
+Note: Currently V100 32GB + FP32 + NHWC + Hybrid dataloader causes a slowdown. So for all V100 32GB FP32 runs hybrid dataloader and NHWC are disabled `bash scripts/train_benchmark.sh fp32 <number of gpus> False False`
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
  
 #### Inference performance results
  
-##### Inference performance: NVIDIA DGX A100 (1x A100 40GB)
+##### Inference performance: NVIDIA DGX A100 (1x A100 80GB)
  
-Our results were obtained by running the `scripts/inference_benchmark.sh` training script in the PyTorch 20.06-py3 NGC container on NVIDIA DGX A100 (1x A100 40GB) GPU.
- 
-| GPUs   | Batch size / GPU   | Throughput - TF32    | Throughput - mixed precision    | Throughput speedup (TF32 - mixed precision)
-| --- | --- | ----- | ----- | ----- |
-|  1  | 8 | 27 | 26 | 0.963 |
- 
-To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
+Our results were obtained by running the `scripts/inference_benchmark.sh` training script in the PyTorch 21.12-py3 NGC container on NVIDIA DGX A100 (1x A100 80GB) GPU.
 
-##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
+FP16 Inference Latency
+
+| Batch size   | Throughput Avg   | Latency Avg (ms)    | Latency 90% (ms)    | Latency 95% (ms)    | Latency 99% (ms)
+| --- | ----- | ----- | ----- | ----- | ----- |
+|  1  | 23 | 34.91 | 33.87 | 33.95 | 34.15 |
+|  2  | 26 | 59.31 | 57.80 | 57.99 | 58.27 |
+|  4  | 31 | 101.46 | 99.24 | 99.51 | 99.86 |
+|  8  | 31 | 197.57 | 193.82 | 194.28 | 194.77 |
+
+TF32 Inference Latency
+
+| Batch size   | Throughput Avg   | Latency Avg (ms)    | Latency 90% (ms)    | Latency 95% (ms)    | Latency 99% (ms)
+| --- | ----- | ----- | ----- | ----- | ----- |
+|  1  | 25 | 31.66 | 31.03 | 31.13 | 31.26 |
+|  2  | 28 | 56.91 | 55.88 | 56.05 | 56.02 |
+|  4  | 29 | 104.11 | 102.29 | 102.53 | 102.74 |
+|  8  | 30 | 201.13 | 197.43 | 197.84 | 198.19 |
+
+##### Inference performance: NVIDIA DGX-1 (1x V100 32GB)
  
-Our results were obtained by running the `scripts/inference_benchmark.sh` training script in the PyTorch 20.06-py3 NGC container on NVIDIA DGX-1 with 1x V100 16GB GPUs. 
-| GPUs   | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)
-| --- | --- | ----- | ----- | ----- |
-|  1  | 8 | 16 | 19 | 1.188 |
- 
-To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
- 
-##### Inference performance: NVIDIA DGX-2 (1x V100 32GB)
- 
-Our results were obtained by running the `scripts/inference_benchmark.sh` training script in the PyTorch 20.06-py3 NGC container on NVIDIA DGX-1 with 1x V100 32GB GPUs. Performance numbers (in items/images per second) were averaged over an entire training epoch.
- 
-| GPUs   | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)
-| --- | --- | ----- | ----- | ----- |
-|  1  | 8 | 19 | 21 | 1.105 |
+Our results were obtained by running the `scripts/inference_benchmark.sh` training script in the PyTorch 21.12-py3 NGC container on NVIDIA DGX-1 with 1x V100 32GB GPUs. 
+
+FP16 Inference Latency
+
+| Batch size   | Throughput Avg   | Latency Avg (ms)    | Latency 90% (ms)    | Latency 95% (ms)    | Latency 99% (ms)
+| --- | ----- | ----- | ----- | ----- | ----- |
+|  1  | 19 | 44.72 | 43.62 | 43.77 | 44.03 |
+|  2  | 21 | 82.80 | 81.37 | 81.67 | 82.06 |
+|  4  | 22 | 155.25 | 153.15 | 153.63 | 154.10 |
+|  8  | 22 | 307.60 | 304.08 | 304.82 | 305.48 |
+
+FP32 Inference Latency
+
+| Batch size   | Throughput Avg   | Latency Avg (ms)    | Latency 90% (ms)    | Latency 95% (ms)    | Latency 99% (ms)
+| --- | ----- | ----- | ----- | ----- | ----- |
+|  1  | 16 | 52.78 | 51.87 | 52.16 | 52.43 |
+|  2  | 17 | 100.81 | 99.19 | 99.67 | 100.15 |
+|  4  | 17 | 202.05 | 198.84 | 199.98 | 200.92 |
+|  8  | 18 | 389.99 | 384.29 | 385.77 | 387.66 |
  
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
  
 ## Release notes
  
 ### Changelog
- 
+
+May 2022
+- Update container to 21.12
+- Add native NHWC, native DDP
+- Replace SGD with FusedSGD
+- Use cuda streams to prefetch dataloader
+- Hybrid dataloader
+- Use new training recipe
+
 October 2021
 - Replace APEX AMP with PyTorch native AMP
 - Use opencv-python version 4.4.0.42
+
+July 2021
+- Update container
+- Use native AMP
+- Update dataset to coco 2017
 
 June 2020
 - Updated accuracy and performance tables to include A100 results
@@ -617,4 +662,5 @@ March 2019
  
  
 ### Known Issues
-There are no known issues with this model.
+Currently V100 32GB + FP32 + NHWC + Hybrid dataloader causes a slowdown. So for all V100 32GB FP32 runs hybrid dataloader and NHWC should be disabled.
+

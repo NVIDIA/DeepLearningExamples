@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,5 +38,6 @@ std::vector<at::Tensor> GeneratePreNMSUprightBoxes(
     const int pre_nms_nboxes,
     const int rpn_min_size,
     const float bbox_xform_clip_default,
-    const bool correct_transform_coords);
+    const bool correct_transform_coords,
+    const bool is_channels_last);
 } // namespace rpn

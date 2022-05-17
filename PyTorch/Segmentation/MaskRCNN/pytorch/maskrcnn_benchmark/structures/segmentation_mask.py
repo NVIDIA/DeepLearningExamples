@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 import torch
 
 import pycocotools.mask as mask_utils
@@ -55,10 +56,12 @@ class Polygons(object):
     polygons
     """
 
-    def __init__(self, polygons, size, mode):
+    def __init__(self, polygons, size, mode, pin_memory=False):
         # assert isinstance(polygons, list), '{}'.format(polygons)
         if isinstance(polygons, list):
             polygons = [torch.as_tensor(p, dtype=torch.float32) for p in polygons]
+            if pin_memory:
+                polygons = [p.pin_memory() for p in polygons]
         elif isinstance(polygons, Polygons):
             polygons = polygons.polygons
 
@@ -148,7 +151,7 @@ class SegmentationMask(object):
     This class stores the segmentations for all objects in the image
     """
 
-    def __init__(self, polygons, size, mode=None):
+    def __init__(self, polygons, size, mode=None, pin_memory=False):
         """
         Arguments:
             polygons: a list of list of lists of numbers. The first
@@ -158,7 +161,7 @@ class SegmentationMask(object):
         """
         assert isinstance(polygons, list)
 
-        self.polygons = [Polygons(p, size, mode) for p in polygons]
+        self.polygons = [Polygons(p, size, mode, pin_memory=pin_memory) for p in polygons]
         self.size = size
         self.mode = mode
 

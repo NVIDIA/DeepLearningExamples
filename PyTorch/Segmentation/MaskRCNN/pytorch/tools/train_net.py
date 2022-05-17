@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 r"""
 Basic training script for PyTorch
 """
@@ -31,9 +32,13 @@ from maskrcnn_benchmark.utils.logger import format_step
 #from dllogger import Logger, StdOutBackend, JSONStreamBackend, Verbosity
 #import dllogger as DLLogger
 import dllogger
+import torch.utils.tensorboard as tbx
+
 from maskrcnn_benchmark.utils.logger import format_step
 
 # See if we can use apex.DistributedDataParallel instead of the torch default,
+# and enable mixed-precision via apex.amp
+
 try:
     from apex.parallel import DistributedDataParallel as DDP
     use_apex_ddp = True
@@ -74,7 +79,6 @@ def mlperf_test_early_exit(iteration, iters_per_epoch, tester, model, distribute
         # necessary for correctness
         model.train()
         dllogger.log(step=(iteration, epoch, ), data={"BBOX_mAP": bbox_map, "MASK_mAP": segm_map})
-
         # terminating condition
         if bbox_map >= min_bbox_map and segm_map >= min_segm_map:
             dllogger.log(step="PARAMETER", data={"target_accuracy_reached": True})
@@ -98,14 +102,14 @@ def train(cfg, local_rank, distributed, fp16, dllogger):
         use_amp = cfg.DTYPE == "float16"
 
     if distributed:
-        if use_apex_ddp:
-            model = DDP(model, delay_allreduce=True)
-        else:
+        if cfg.USE_TORCH_DDP or not use_apex_ddp:
             model = torch.nn.parallel.DistributedDataParallel(
                 model, device_ids=[local_rank], output_device=local_rank,
                 # this should be removed if we update BatchNorm stats
                 broadcast_buffers=False,
             )
+        else:
+            model = DDP(model, delay_allreduce=True)
 
     arguments = {}
     arguments["iteration"] = 0
@@ -155,6 +159,7 @@ def train(cfg, local_rank, distributed, fp16, dllogger):
         cfg,
         dllogger,
         per_iter_end_callback_fn=per_iter_callback_fn,
+        nhwc=cfg.NHWC
     )
 
     return model, iters_per_epoch
@@ -198,7 +203,6 @@ def test_model(cfg, model, distributed, iters_per_epoch, dllogger):
         dllogger.log(step=tuple(), data={"BBOX_mAP": bbox_map, "MASK_mAP": segm_map})
 
 def main():
-
 
     parser = argparse.ArgumentParser(description="PyTorch Object Detection Training")
     parser.add_argument(

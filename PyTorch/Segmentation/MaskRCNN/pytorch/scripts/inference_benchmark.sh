@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 #Predictions will be stored in `FOLDER`/inference`
 #1x8x4 DGX1V
 
@@ -30,10 +30,12 @@ if ! [ -d "$FOLDER" ]; then mkdir $FOLDER; fi
 python3 -m torch.distributed.launch --nproc_per_node=$GPU tools/test_net.py \
     --config-file $CONFIG \
     --skip-eval \
-    DATASETS.TEST "(\"coco_2014_minival\",)" \
+    DATASETS.TEST "(\"coco_2017_val\",)" \
     DTYPE "$DTYPE" \
+    NHWC "${NHWC:-True}" \
+    DATALOADER.HYBRID "${HYBRID:-True}" \
     OUTPUT_DIR $FOLDER \
-    TEST.IMS_PER_BATCH 1 \
+    TEST.IMS_PER_BATCH $2 \
     | tee $LOGFILE
 
 #2019-02-22 00:05:39,954 maskrcnn_benchmark.inference INFO: Total inference time: 0:04:55.840343 (0.05916806864738464 s / img per device, on 1 devices)

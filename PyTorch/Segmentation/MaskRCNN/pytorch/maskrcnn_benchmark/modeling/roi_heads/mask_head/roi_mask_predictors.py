@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 from torch import nn
 from torch.nn import functional as F
 

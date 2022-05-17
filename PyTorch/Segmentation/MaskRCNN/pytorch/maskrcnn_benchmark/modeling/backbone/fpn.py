@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -12,7 +13,7 @@ class FPN(nn.Module):
     """
 
     def __init__(
-        self, in_channels_list, out_channels, conv_block, top_blocks=None
+        self, in_channels_list, out_channels, conv_block, top_blocks=None, nhwc=False
     ):
         """
         Arguments:
@@ -22,6 +23,7 @@ class FPN(nn.Module):
             top_blocks (nn.Module or None): if provided, an extra operation will
                 be performed on the output of the last (smallest resolution)
                 FPN output, and the result will extend the result list
+            nhwc (bool): specify is FPN is running at nhwc mode
         """
         super(FPN, self).__init__()
         self.inner_blocks = []

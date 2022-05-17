@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 import torch
 
 from maskrcnn_benchmark.modeling.box_coder import BoxCoder
@@ -113,6 +114,10 @@ class RPNPostProcessor(torch.nn.Module):
             # At the end we need to keep only the proposals & scores flagged
             # Note: topk_idx, objectness are sorted => proposals, objectness, keep are also
             # sorted -- this is important later
+            
+            use_nhwc_kernel = box_regression.is_contiguous(memory_format=torch.channels_last)
+
+
             proposals, objectness, keep = C.GeneratePreNMSUprightBoxes(
                                     N,
                                     A,
@@ -126,7 +131,8 @@ class RPNPostProcessor(torch.nn.Module):
                                     pre_nms_top_n,
                                     self.min_size,
                                     self.box_coder.bbox_xform_clip,
-                                    True)
+                                    True,
+                                    use_nhwc_kernel)
 
 
             # view as [N, pre_nms_top_n, 4]

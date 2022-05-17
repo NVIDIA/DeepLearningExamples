@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 """
 Variant of the resnet module that takes cfg as an argument.
 Example usage. Strings may be specified in the config file.
@@ -325,7 +326,7 @@ class BaseStem(nn.Module):
             nn.init.kaiming_uniform_(l.weight, a=1)
 
     def forward(self, x):
-        x = self.conv1(x)
+        x = self.conv1(x.float())
         x = self.bn1(x)
         x = F.relu_(x)
         x = F.max_pool2d(x, kernel_size=3, stride=2, padding=1)

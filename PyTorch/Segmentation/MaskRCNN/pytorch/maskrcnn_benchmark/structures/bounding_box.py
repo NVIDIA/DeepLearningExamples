@@ -1,5 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
-# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 import torch
 
 # transpose
@@ -195,11 +195,24 @@ class BoxList(object):
 
     # Tensor-like methods
 
-    def to(self, device):
-        bbox = BoxList(self.bbox.to(device), self.size, self.mode)
+    def to(self, device, **kwargs):
+        bbox = BoxList(self.bbox.to(device, non_blocking=True), self.size, self.mode)
         for k, v in self.extra_fields.items():
             if hasattr(v, "to"):
-                v = v.to(device)
+                if torch.is_tensor(v):
+                    v_tmp = torch.empty_like(v, device=device)
+                    v_tmp.copy_(v, **kwargs)
+                    v = v_tmp
+                else:
+                    v = v.to(device, **kwargs)
+            bbox.add_field(k, v)
+        return bbox
+
+    def pin_memory(self):
+        bbox = BoxList(self.bbox.pin_memory(), self.size, self.mode)
+        for k, v in self.extra_fields.items():
+            if hasattr(v, "pin_memory"):
+                v = v.pin_memory()
             bbox.add_field(k, v)
         return bbox
 

@@ -1,5 +1,7 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 import torch
+from apex.optimizers import FusedSGD
 
 from .lr_scheduler import WarmupMultiStepLR
 
@@ -16,7 +18,7 @@ def make_optimizer(cfg, model):
             weight_decay = cfg.SOLVER.WEIGHT_DECAY_BIAS
         params += [{"params": [value], "lr": lr, "weight_decay": weight_decay}]
 
-    optimizer = torch.optim.SGD(params, lr, momentum=cfg.SOLVER.MOMENTUM)
+    optimizer = FusedSGD(params, lr, momentum=cfg.SOLVER.MOMENTUM)
     return optimizer
 
 

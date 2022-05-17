@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 #Predictions will be stored in `FOLDER`/inference`
 #1x8x4 DGX1V
 
@@ -38,7 +38,7 @@ python3 -m torch.distributed.launch --nproc_per_node=$GPU tools/test_net.py \
     --config-file $CONFIG \
     --skip-eval \
     DTYPE "float16" \
-    DATASETS.TEST "(\"coco_2014_minival\",)" \
+    DATASETS.TEST "(\"coco_2017_val\",)" \
     OUTPUT_DIR $FOLDER \
     TEST.IMS_PER_BATCH 1 \
     | tee $LOGFILE

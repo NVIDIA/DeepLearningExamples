@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 from __future__ import division
 
 import torch
@@ -24,6 +25,10 @@ class ImageList(object):
     def to(self, *args, **kwargs):
         cast_tensor = self.tensors.to(*args, **kwargs)
         return ImageList(cast_tensor, self.image_sizes)
+
+    def to_nhwc(self):
+        nhwc_tensor = self.tensors.to(memory_format=torch.channels_last)
+        return ImageList(nhwc_tensor, self.image_sizes)
 
 
 def to_image_list(tensors, size_divisible=0):

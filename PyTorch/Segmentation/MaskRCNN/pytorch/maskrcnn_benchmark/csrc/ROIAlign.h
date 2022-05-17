@@ -1,4 +1,5 @@
 // Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+// Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 #pragma once
 
 #include "cpu/vision.h"
@@ -13,10 +14,11 @@ at::Tensor ROIAlign_forward(const at::Tensor& input,
                             const float spatial_scale,
                             const int pooled_height,
                             const int pooled_width,
-                            const int sampling_ratio) {
+                            const int sampling_ratio,
+                            const bool is_nhwc) {
   if (input.is_cuda()) {
 #ifdef WITH_CUDA
-    return ROIAlign_forward_cuda(input, rois, spatial_scale, pooled_height, pooled_width, sampling_ratio);
+    return ROIAlign_forward_cuda(input, rois, spatial_scale, pooled_height, pooled_width, sampling_ratio, is_nhwc);
 #else
     AT_ERROR("Not compiled with GPU support");
 #endif
@@ -33,10 +35,11 @@ at::Tensor ROIAlign_backward(const at::Tensor& grad,
                              const int channels,
                              const int height,
                              const int width,
-                             const int sampling_ratio) {
+                             const int sampling_ratio,
+                             const bool is_nhwc) {
   if (grad.is_cuda()) {
 #ifdef WITH_CUDA
-    return ROIAlign_backward_cuda(grad, rois, spatial_scale, pooled_height, pooled_width, batch_size, channels, height, width, sampling_ratio);
+    return ROIAlign_backward_cuda(grad, rois, spatial_scale, pooled_height, pooled_width, batch_size, channels, height, width, sampling_ratio, is_nhwc);
 #else
     AT_ERROR("Not compiled with GPU support");
 #endif

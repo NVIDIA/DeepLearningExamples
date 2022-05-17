@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 import random
 
 import torch
@@ -53,9 +54,19 @@ class Resize(object):
         return (oh, ow)
 
     def __call__(self, image, target):
-        size = self.get_size(image.size)
+        if isinstance(image, torch.Tensor):
+            image_size = image.shape[-2:]
+            image_size = (image_size[1], image_size[0])
+        else:
+            image_size = image.size
+        size = self.get_size(image_size)
         image = F.resize(image, size)
-        target = target.resize(image.size)
+        if isinstance(image, torch.Tensor):
+            image_size = image.shape[-2:]
+            image_size = (image_size[1], image_size[0])
+        else:
+            image_size = image.size
+        target = target.resize(image_size)
         return image, target
 
 
@@ -72,7 +83,10 @@ class RandomHorizontalFlip(object):
 
 class ToTensor(object):
     def __call__(self, image, target):
-        return F.to_tensor(image), target
+        if isinstance(image, torch.Tensor):
+            return F.convert_image_dtype(image, dtype=torch.float32), target
+        else:
+            return F.to_tensor(image), target
 
 
 class Normalize(object):

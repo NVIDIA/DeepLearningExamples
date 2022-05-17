@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 import os
 
 from yacs.config import CfgNode as CN
@@ -74,6 +75,9 @@ _C.DATALOADER.SIZE_DIVISIBILITY = 0
 # is compatible. This groups portrait images together, and landscape images
 # are not batched with portrait images.
 _C.DATALOADER.ASPECT_RATIO_GROUPING = True
+# If True, the custom Hybrid Dataloader is used.
+# If not, torch.utils.data.DataLoader is used for dataloading.
+_C.DATALOADER.HYBRID = True
 
 
 # ---------------------------------------------------------------------------- #
@@ -311,6 +315,8 @@ _C.OUTPUT_DIR = "."
 
 _C.PATHS_CATALOG = os.path.join(os.path.dirname(__file__), "paths_catalog.py")
 
+_C.USE_TORCH_DDP = True
+
 # ---------------------------------------------------------------------------- #
 # Precision options
 # ---------------------------------------------------------------------------- #
@@ -318,6 +324,8 @@ _C.PATHS_CATALOG = os.path.join(os.path.dirname(__file__), "paths_catalog.py")
 # Precision of input, allowable: (float32, float16)
 _C.DTYPE = "float32"
 
+# Use NATIVE NHWC/NCHW for eligible convolutions
+_C.NHWC = True
 
 # Evaluate every epoch
 _C.PER_EPOCH_EVAL = False

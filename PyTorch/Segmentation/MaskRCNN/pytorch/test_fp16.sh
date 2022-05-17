@@ -1,9 +1,9 @@
 #!/bin/bash
-# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 #Script for PyT CI
-#CONFIG: 1x8x4
+#CONFIG: 1x8x12
 
-RESULTS_DIR='maskrcnn_coco2014_test'
+RESULTS_DIR='maskrcnn_coco2017_test'
 REPO_DIR='/opt/pytorch/examples/Detectron_PyT/pytorch'
 CONFIG='configs/e2e_mask_rcnn_R_50_FPN_1x.yaml'
 
@@ -20,10 +20,10 @@ cd $REPO_DIR
 
 python -m torch.distributed.launch --nproc_per_node=$GPU tools/train_net.py \
         --config-file $CONFIG \
-        SOLVER.BASE_LR 0.04 \
-        SOLVER.MAX_ITER 45000 \
-        SOLVER.STEPS "(30000, 40000)" \
-        SOLVER.IMS_PER_BATCH 32 \
+        SOLVER.BASE_LR 0.12 \
+        SOLVER.MAX_ITER 16667 \
+        SOLVER.STEPS "(12000, 16000)" \
+        SOLVER.IMS_PER_BATCH 96 \
         TEST.IMS_PER_BATCH 8 \
         DTYPE "float16" \
         OUTPUT_DIR results/$RESULTS_DIR \

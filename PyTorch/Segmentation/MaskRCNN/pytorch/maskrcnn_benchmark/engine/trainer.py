@@ -1,5 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
-# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 import datetime
 import logging
 import time
@@ -35,6 +35,40 @@ def reduce_loss_dict(loss_dict):
     return reduced_losses
 
 
+class Prefetcher:
+    def __init__(self, data_loader, device):
+        self.data_loader = iter(data_loader)
+        self.device = device
+        self.images = None
+        self.targets = None
+        self.loader_stream = torch.cuda.Stream()
+        self.done = False
+
+    def __iter__(self):
+        return self
+
+    def prefetch(self):
+        try:
+            with torch.cuda.stream(self.loader_stream):
+                self.images, self.targets, _ = next(self.data_loader)
+                self.images = self.images.to(self.device)
+                self.targets = [target.to(self.device, non_blocking=True) for target in self.targets]
+        except StopIteration:
+            self.images, self.targets = None, None
+            self.done = True
+
+    def __next__(self):
+        torch.cuda.current_stream().wait_stream(self.loader_stream)
+        if self.images is None and not self.done:
+            self.prefetch()
+        if self.done:
+            raise StopIteration()
+        else:
+            images, targets = self.images, self.targets
+            self.images, self.targets = None, None
+            return images, targets
+
+
 def do_train(
     model,
     data_loader,
@@ -48,22 +82,27 @@ def do_train(
     cfg,
     dllogger,
     per_iter_end_callback_fn=None,
+    nhwc=False
 ):
     dllogger.log(step="PARAMETER", data={"train_start": True})
     meters = MetricLogger(delimiter="  ")
     max_iter = len(data_loader)
+    prefetcher = Prefetcher(data_loader, device)
     start_iter = arguments["iteration"]
     model.train()
     start_training_time = time.time()
     end = time.time()
     if use_amp:
         scaler = torch.cuda.amp.GradScaler(init_scale=8192.0)
-    for iteration, (images, targets, _) in enumerate(data_loader, start_iter):
+    for iteration, (images, targets) in enumerate(prefetcher, start_iter):
         data_time = time.time() - end
         iteration = iteration + 1
         arguments["iteration"] = iteration
 
         images = images.to(device)
+        if nhwc:
+            images = images.to_nhwc()
+            model = model.to(memory_format=torch.channels_last)
         targets = [target.to(device) for target in targets]
 
         if use_amp:

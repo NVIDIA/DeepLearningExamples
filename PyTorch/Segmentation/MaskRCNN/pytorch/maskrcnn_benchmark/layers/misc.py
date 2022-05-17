@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 """
 helper class that supports empty tensors on some nn functions.
 
@@ -100,3 +101,13 @@ def interpolate(
     output_shape = tuple(_output_size(2))
     output_shape = input.shape[:-2] + output_shape
     return _NewEmptyTensorOp.apply(input, output_shape)
+
+def nhwc_to_nchw_transform(x):
+    if x.numel() == 0:
+        return x
+    return x.to(memory_format=torch.contiguous_format)
+
+def nchw_to_nhwc_transform(x):
+    if x.numel() == 0:
+        return x
+    return x.to(memory_format=torch.channels_last)

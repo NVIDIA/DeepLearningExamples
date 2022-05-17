@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -61,6 +62,7 @@ class FPN2MLPFeatureExtractor(nn.Module):
             output_size=(resolution, resolution),
             scales=scales,
             sampling_ratio=sampling_ratio,
+            is_nhwc=cfg.NHWC
         )
         input_size = cfg.MODEL.BACKBONE.OUT_CHANNELS * resolution ** 2
         representation_size = cfg.MODEL.ROI_BOX_HEAD.MLP_HEAD_DIM
@@ -71,8 +73,7 @@ class FPN2MLPFeatureExtractor(nn.Module):
 
     def forward(self, x, proposals):
         x = self.pooler(x, proposals)
-        x = x.view(x.size(0), -1)
-
+        x = torch.flatten(x, start_dim=1)
         x = F.relu(self.fc6(x))
         x = F.relu(self.fc7(x))
 

@@ -1,9 +1,11 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved..
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 import bisect
 import copy
 import logging
 
 import torch.utils.data
+from maskrcnn_benchmark.data.datasets.coco import HybridDataLoader
 from maskrcnn_benchmark.utils.comm import get_world_size
 from maskrcnn_benchmark.utils.imports import import_file
 
@@ -145,6 +147,8 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
     # group in two cases: those with width / height > 1, and the other way around,
     # but the code supports more general grouping strategy
     aspect_grouping = [1] if cfg.DATALOADER.ASPECT_RATIO_GROUPING else []
+    
+    hybrid_dataloader = cfg.DATALOADER.HYBRID
 
     paths_catalog = import_file(
         "maskrcnn_benchmark.config.paths_catalog", cfg.PATHS_CATALOG, True
@@ -153,7 +157,10 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
     dataset_list = cfg.DATASETS.TRAIN if is_train else cfg.DATASETS.TEST
 
     transforms = build_transforms(cfg, is_train)
-    datasets, epoch_size = build_dataset(dataset_list, transforms, DatasetCatalog, is_train)
+    if hybrid_dataloader:
+        datasets, epoch_size = build_dataset(dataset_list, None, DatasetCatalog, is_train)
+    else:
+        datasets, epoch_size = build_dataset(dataset_list, transforms, DatasetCatalog, is_train)
 
     data_loaders = []
     for dataset in datasets:
@@ -162,13 +169,20 @@ def make_data_loader(cfg, is_train=True, is_distributed=False, start_iter=0):
             dataset, sampler, aspect_grouping, images_per_gpu, num_iters, start_iter
         )
         collator = BatchCollator(cfg.DATALOADER.SIZE_DIVISIBILITY)
-        num_workers = cfg.DATALOADER.NUM_WORKERS
-        data_loader = torch.utils.data.DataLoader(
-            dataset,
-            num_workers=num_workers,
-            batch_sampler=batch_sampler,
-            collate_fn=collator,
-        )
+        
+        if hybrid_dataloader:
+            data_loader = HybridDataLoader(cfg, is_train, 
+                                        images_per_gpu, batch_sampler, 
+                                        dataset, collator, 
+                                        transforms, 
+                                        cfg.DATALOADER.SIZE_DIVISIBILITY)
+        else:
+            num_workers = cfg.DATALOADER.NUM_WORKERS
+            data_loader = torch.utils.data.DataLoader(
+                        dataset,
+                        num_workers=num_workers,
+                        batch_sampler=batch_sampler,
+                        collate_fn=collator)
         data_loaders.append(data_loader)
     if is_train:
         # during training, a single (possibly concatenated) data_loader is returned

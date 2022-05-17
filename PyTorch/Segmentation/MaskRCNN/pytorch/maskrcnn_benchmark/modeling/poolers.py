@@ -1,4 +1,5 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -52,7 +53,7 @@ class Pooler(nn.Module):
     which is available thanks to the BoxList.
     """
 
-    def __init__(self, output_size, scales, sampling_ratio):
+    def __init__(self, output_size, scales, sampling_ratio, is_nhwc):
         """
         Arguments:
             output_size (list[tuple[int]] or list[int]): output size for the pooled region
@@ -61,10 +62,11 @@ class Pooler(nn.Module):
         """
         super(Pooler, self).__init__()
         poolers = []
+        self.is_nhwc=is_nhwc
         for scale in scales:
             poolers.append(
                 ROIAlign(
-                    output_size, spatial_scale=scale, sampling_ratio=sampling_ratio
+                    output_size, spatial_scale=scale, sampling_ratio=sampling_ratio, is_nhwc=is_nhwc
                 )
             )
         self.poolers = nn.ModuleList(poolers)
@@ -112,10 +114,15 @@ class Pooler(nn.Module):
             (num_rois, num_channels, output_size, output_size),
             dtype=dtype,
             device=device,
-        )
+        ) if not self.is_nhwc else torch.zeros(
+            (num_rois, num_channels, output_size, output_size),
+            dtype=dtype,
+            device=device,
+        ).to(memory_format=torch.channels_last)
+
         for level, (per_level_feature, pooler) in enumerate(zip(x, self.poolers)):
             idx_in_level = torch.nonzero(levels == level).squeeze(1)
             rois_per_level = rois[idx_in_level]
             result[idx_in_level] = pooler(per_level_feature, rois_per_level).to(dtype)
-
+        
         return result

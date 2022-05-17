@@ -12,13 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.06-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.12-py3
 FROM ${FROM_IMAGE_NAME}
 
+# openCV
+RUN apt-get update && apt-get install -y libgl1-mesa-dev
+
 # Install Python dependencies
-RUN pip install --no-cache-dir \
+RUN pip install --upgrade --no-cache-dir pip \
+ && pip install --no-cache-dir \
       mlperf-compliance==0.0.10 \
-      opencv-python==4.4.0.42 \
       git+https://github.com/NVIDIA/dllogger \
       yacs
 
@@ -28,7 +31,5 @@ RUN mkdir -p /datasets/data
 RUN mkdir /results
 COPY pytorch/. .
 RUN pip install -e .
-
-RUN /opt/conda/bin/conda install -y numpy
 
 ENV OMP_NUM_THREADS=1

@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.06-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.12-py3
 FROM ${FROM_IMAGE_NAME}
 
 # Install Python dependencies
-RUN pip install --no-cache-dir \
+RUN pip install --upgrade --no-cache-dir pip \
+      && pip install --no-cache-dir \
       mlperf-compliance==0.0.10 \
       opencv-python==4.4.0.42 \
       git+https://github.com/NVIDIA/dllogger \
@@ -28,7 +29,5 @@ RUN mkdir -p /datasets/data
 RUN mkdir /results
 COPY . .
 RUN pip install -e .
-
 RUN /opt/conda/bin/conda install -y numpy
-
 ENV OMP_NUM_THREADS=1

@@ -4,7 +4,6 @@ from torch.nn import functional as F
 
 from ..box_head.roi_box_feature_extractors import ResNet50Conv5ROIFeatureExtractor
 from maskrcnn_benchmark.modeling.poolers import Pooler
-from maskrcnn_benchmark.layers import Conv2d
 from maskrcnn_benchmark.modeling.make_layers import make_conv3x3
 
 
@@ -30,9 +29,11 @@ class MaskRCNNFPNFeatureExtractor(nn.Module):
             output_size=(resolution, resolution),
             scales=scales,
             sampling_ratio=sampling_ratio,
+            is_nhwc=cfg.NHWC
         )
         input_size = cfg.MODEL.BACKBONE.OUT_CHANNELS
         self.pooler = pooler
+        self.nhwc = cfg.NHWC
 
         use_gn = cfg.MODEL.ROI_MASK_HEAD.USE_GN
         layers = cfg.MODEL.ROI_MASK_HEAD.CONV_LAYERS
@@ -51,10 +52,8 @@ class MaskRCNNFPNFeatureExtractor(nn.Module):
 
     def forward(self, x, proposals):
         x = self.pooler(x, proposals)
-
         for layer_name in self.blocks:
             x = F.relu(getattr(self, layer_name)(x))
-
         return x
 
 

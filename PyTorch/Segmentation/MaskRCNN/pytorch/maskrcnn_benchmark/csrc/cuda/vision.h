@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+ * Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,8 @@ at::Tensor ROIAlign_forward_cuda(const at::Tensor& input,
                                  const float spatial_scale,
                                  const int pooled_height,
                                  const int pooled_width,
-                                 const int sampling_ratio);
+                                 const int sampling_ratio,
+                                 const bool is_nhwc);
 
 at::Tensor ROIAlign_backward_cuda(const at::Tensor& grad,
                                   const at::Tensor& rois,
@@ -35,7 +36,8 @@ at::Tensor ROIAlign_backward_cuda(const at::Tensor& grad,
                                   const int channels,
                                   const int height,
                                   const int width,
-                                  const int sampling_ratio);
+                                  const int sampling_ratio,
+                                  const bool is_nhwc);
 
 
 std::tuple<at::Tensor, at::Tensor> ROIPool_forward_cuda(const at::Tensor& input,
