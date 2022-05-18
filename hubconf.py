@@ -17,6 +17,9 @@ from PyTorch.Classification.ConvNets.image_classification.models import resnext1
 from PyTorch.Classification.ConvNets.image_classification.models import nvidia_efficientnet
 sys.path.append(os.path.join(sys.path[0], 'PyTorch/Classification/ConvNets/image_classification'))
 
+from PyTorch.Classification.GPUNet.configs.gpunet_torchhub import nvidia_gpunet
+sys.path.append(os.path.join(sys.path[0], 'PyTorch/Classification/GPUNet/configs'))
+
 from PyTorch.SpeechSynthesis.Tacotron2.tacotron2 import nvidia_tacotron2
 from PyTorch.SpeechSynthesis.Tacotron2.tacotron2 import nvidia_tts_utils
 from PyTorch.SpeechSynthesis.Tacotron2.waveglow import nvidia_waveglow
