@@ -128,9 +128,5 @@ class Dataset:
         data_options.experimental_threading.max_intra_op_parallelism = 1
         data_options.experimental_optimization.map_parallelization = True
 
-        map_vectorization_options = tf.data.experimental.MapVectorizationOptions()
-        map_vectorization_options.enabled = True
-        map_vectorization_options.use_choose_fastest = True
-        data_options.experimental_optimization.map_vectorization = map_vectorization_options
 
         return data_options
