@@ -14,9 +14,6 @@
 
 import os
 import torch
-from ..models.gpunet_builder import GPUNet_Builder
-from .model_hub import get_configs, MODEL_ZOO_NAME2TYPE_B1
-from timm.models.helpers import load_checkpoint
 
 def nvidia_gpunet(pretrained=True, **kwargs):
     """Constructs a gpunet model (nn.module with additional infer(input) method).
@@ -27,6 +24,11 @@ def nvidia_gpunet(pretrained=True, **kwargs):
         model_math (str, 'fp32'): returns a model in given precision ('fp32' or 'fp16'). Precision fp32 only gpunets
         model_type (str, 'GPUNet-0'): loads selected model type GPUNet-1.... or GPUNet-P1 or DPUNet-D3. Defaults to GPUNet-0
     """
+
+    from ..models.gpunet_builder import GPUNet_Builder
+    from .model_hub import get_configs, MODEL_ZOO_NAME2TYPE_B1
+    from timm.models.helpers import load_checkpoint
+
     modelType = kwargs.get('model_type', 'GPUNet-0')
     print("model_type=", modelType)
 
