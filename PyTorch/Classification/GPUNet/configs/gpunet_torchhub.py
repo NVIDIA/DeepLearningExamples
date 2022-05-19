@@ -59,10 +59,6 @@ def nvidia_gpunet(pretrained=True, **kwargs):
 
     modelMath = kwargs.get('model_math', 'fp32')
     if modelMath == "fp16":
-        modelMath = torch.float16
-    else:
-        modelMath = torch.float32
-
-    model = model.to("cuda", modelMath)
+        model.half()
     
     return model
