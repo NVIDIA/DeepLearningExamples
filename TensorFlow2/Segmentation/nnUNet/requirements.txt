@@ -1,0 +1,9 @@
+git+https://github.com/NVIDIA/dllogger
+nibabel==3.1.1
+joblib==0.16.0
+scikit-learn==0.23.2
+pynvml==8.0.4
+fsspec==0.8.0
+scikit-image==0.18.2
+tqdm==4.62
+tensorflow-addons==0.14.0
