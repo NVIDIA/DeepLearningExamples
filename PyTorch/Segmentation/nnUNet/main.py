@@ -15,7 +15,7 @@
 import os
 
 from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, ModelSummary, RichProgressBar
+from pytorch_lightning.callbacks import ModelCheckpoint, ModelSummary, RichProgressBar
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from data_loading.data_module import DataModule
@@ -43,7 +43,7 @@ if __name__ == "__main__":
             LoggingCallback(
                 log_dir=args.results,
                 filnename=filnename,
-                global_batch_size=batch_size * args.gpus,
+                global_batch_size=batch_size * args.gpus * args.nodes,
                 mode=args.exec_mode,
                 warmup=args.warmup,
                 dim=args.dim,
@@ -57,14 +57,6 @@ if __name__ == "__main__":
                 default_hp_metric=False,
                 version=0,
             )
-        callbacks.append(
-            EarlyStopping(
-                monitor="dice",
-                patience=args.patience,
-                verbose=True,
-                mode="max",
-            )
-        )
         if args.save_ckpt:
             callbacks.append(
                 ModelCheckpoint(

@@ -23,10 +23,11 @@ from data_loading.data_module import get_data_path, get_test_fnames
 from monai.inferers import sliding_window_inference
 from monai.networks.nets import DynUNet
 from monai.optimizers.lr_scheduler import WarmupCosineSchedule
+from pytorch_lightning.utilities import rank_zero_only
 from scipy.special import expit, softmax
 from skimage.transform import resize
 from utils.logger import DLLogger
-from utils.utils import get_config_file, print0, rank_zero
+from utils.utils import get_config_file, print0
 
 from nnunet.loss import Loss, LossBraTS
 from nnunet.metrics import Dice
@@ -82,6 +83,8 @@ class NNUnet(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
+        if self.current_epoch < self.args.skip_first_n_eval:
+            return None
         img, lbl = batch["image"], batch["label"]
         pred = self._forward(img)
         loss = self.loss(pred, lbl)
@@ -205,6 +208,11 @@ class NNUnet(pl.LightningModule):
         return round(torch.mean(tensor).item(), 2)
 
     def validation_epoch_end(self, outputs):
+        if self.current_epoch < self.args.skip_first_n_eval:
+            self.log("Dice", 0.001 * self.current_epoch)  # To prevent early stopping
+            self.dice.reset()
+            return None
+
         dice, loss = self.dice.compute()
         self.dice.reset()
 
@@ -233,7 +241,7 @@ class NNUnet(pl.LightningModule):
         if self.args.exec_mode == "evaluate":
             self.eval_dice, _ = self.dice.compute()
 
-    @rank_zero
+    @rank_zero_only
     def on_fit_end(self):
         if not self.args.benchmark:
             metrics = {}

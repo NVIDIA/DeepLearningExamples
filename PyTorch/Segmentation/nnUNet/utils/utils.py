@@ -15,23 +15,14 @@
 import ctypes
 import os
 import pickle
-from functools import wraps
 from subprocess import run
 
 import numpy as np
 import torch
+from pytorch_lightning.utilities import rank_zero_only
 
 
-def rank_zero(fn):
-    @wraps(fn)
-    def wrapped_fn(*args, **kwargs):
-        if int(os.getenv("LOCAL_RANK", "0")) == 0:
-            return fn(*args, **kwargs)
-
-    return wrapped_fn
-
-
-@rank_zero
+@rank_zero_only
 def print0(text):
     print(text)
 

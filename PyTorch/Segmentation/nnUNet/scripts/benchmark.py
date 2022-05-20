@@ -21,6 +21,7 @@ parser = ArgumentParser(ArgumentDefaultsHelpFormatter)
 parser.add_argument("--mode", type=str, required=True, choices=["train", "predict"], help="Benchmarking mode")
 parser.add_argument("--task", type=str, default="01", help="Task code")
 parser.add_argument("--gpus", type=int, default=1, help="Number of GPUs to use")
+parser.add_argument("--nodes", type=int, default=1, help="Number of nodes to use")
 parser.add_argument("--dim", type=int, required=True, help="Dimension of UNet")
 parser.add_argument("--batch_size", type=int, default=2, help="Batch size")
 parser.add_argument("--amp", action="store_true", help="Enable automatic mixed precision")
@@ -40,6 +41,7 @@ if __name__ == "__main__":
     cmd += f"--exec_mode {args.mode} "
     cmd += f"--dim {args.dim} "
     cmd += f"--gpus {args.gpus} "
+    cmd += f"--nodes {args.nodes} "
     cmd += f"--train_batches {args.train_batches} "
     cmd += f"--test_batches {args.test_batches} "
     cmd += f"--warmup {args.warmup} "

@@ -19,8 +19,7 @@ import dllogger as logger
 import numpy as np
 from dllogger import JSONStreamBackend, StdOutBackend, Verbosity
 from pytorch_lightning import Callback
-
-from utils.utils import rank_zero
+from pytorch_lightning.utilities import rank_zero_only
 
 
 class DLLogger:
@@ -28,7 +27,7 @@ class DLLogger:
         super().__init__()
         self._initialize_dllogger(log_dir, filename, append)
 
-    @rank_zero
+    @rank_zero_only
     def _initialize_dllogger(self, log_dir, filename, append):
         backends = [
             JSONStreamBackend(Verbosity.VERBOSE, os.path.join(log_dir, filename), append=append),
@@ -36,13 +35,13 @@ class DLLogger:
         ]
         logger.init(backends=backends)
 
-    @rank_zero
+    @rank_zero_only
     def log_metrics(self, metrics, step=None):
         if step is None:
             step = ()
         logger.log(step=step, data=metrics)
 
-    @rank_zero
+    @rank_zero_only
     def flush(self):
         logger.flush()
 
@@ -85,7 +84,7 @@ class LoggingCallback(Callback):
 
         return stats
 
-    @rank_zero
+    @rank_zero_only
     def _log(self):
         stats = self.process_performance_stats(np.diff(self.timestamps))
         self.dllogger.log_metrics(metrics=stats)
