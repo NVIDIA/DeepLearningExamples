@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,8 @@
 
 import os
 
-os.environ["TF_MEMORY_ALLOCATION"] = "0.6"  # fraction of free memory
+os.environ["TF_GPU_ALLOCATOR"]="cuda_malloc_async"
+
 import nvtabular as nvt
 
 from trainer.model.widedeep import wide_deep_model

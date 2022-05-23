@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,10 +31,10 @@ class ThroughputCalculator:
             self.samples = tf.Variable(0, trainable=False, dtype=tf.int64)
 
     def _init_benchmark(self):
-        self.t0 = time.time()
+        self.t0 = time.perf_counter()
 
     def on_epoch_end_log(self, step, shape):
-        batch_time = time.time() - self.start_batch_time
+        batch_time = time.perf_counter() - self.start_batch_time
         self.samples.assign_add(shape)
         workers = hvd.size() if not self.args.cpu else 1
         samplesps = shape * workers / batch_time
@@ -42,7 +42,7 @@ class ThroughputCalculator:
             dllogger.log(data={"batch_samplesps": samplesps}, step=(1, step))
 
     def on_benchmark_end_log(self, eval_benchmark=False):
-        train_time = time.time() - self.t0
+        train_time = time.perf_counter() - self.t0
         hvd.join()
         if not self.args.cpu:
             all_samples = hvd.allreduce(self.samples, op=Sum)
@@ -67,4 +67,4 @@ class ThroughputCalculator:
                     exit(0)
 
             self.step += 1
-            self.start_batch_time = time.time()
+            self.start_batch_time = time.perf_counter()

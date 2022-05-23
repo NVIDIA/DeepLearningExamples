@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 import horovod.tensorflow as hvd
 import tensorflow as tf
+
 from trainer.utils.benchmark import ThroughputCalculator
 from trainer.utils.evaluator import Evaluator
 from trainer.utils.schedulers import LearningRateScheduler
@@ -24,6 +25,8 @@ def run(args, model, config):
     train_dataset = config["train_dataset"]
     eval_dataset = config["eval_dataset"]
     steps_per_epoch = len(train_dataset)
+    steps_per_epoch = min(hvd.allgather(tf.constant([steps_per_epoch], dtype=tf.int32)))
+    steps_per_epoch = steps_per_epoch.numpy()
 
     steps = int(steps_per_epoch * args.num_epochs)
     deep_optimizer = tf.keras.optimizers.RMSprop(
@@ -33,8 +36,12 @@ def run(args, model, config):
     wide_optimizer = tf.keras.optimizers.Ftrl(learning_rate=args.linear_learning_rate)
 
     if not args.cpu:
-        deep_optimizer = hvd.DistributedOptimizer(deep_optimizer)
-        wide_optimizer = hvd.DistributedOptimizer(wide_optimizer)
+        deep_optimizer = hvd.DistributedOptimizer(
+            deep_optimizer, compression=hvd.Compression.fp16
+        )
+        wide_optimizer = hvd.DistributedOptimizer(
+            wide_optimizer, compression=hvd.Compression.fp16
+        )
 
     if args.amp:
         deep_optimizer = tf.keras.mixed_precision.LossScaleOptimizer(
@@ -56,7 +63,6 @@ def run(args, model, config):
         throughput_calculator=throughput_calculator,
         eval_dataset=eval_dataset,
         compiled_loss=compiled_loss,
-        steps=steps,
         args=args,
     )
 
@@ -74,6 +80,19 @@ def run(args, model, config):
     )
 
     trainer.maybe_restore_checkpoint()
+
+    # Wrap datasets with .epochs(n) method to speed up data loading
+    current_epoch = trainer.current_epoch
+    trainer.prepare_dataset(current_epoch)
+    evaluator.prepare_dataset(current_epoch)
+
+    # Update max_steps to make sure that all workers finish training at the same time
+    max_training_steps = len(trainer.train_dataset)
+    max_training_steps = min(
+        hvd.allgather(tf.constant([max_training_steps], dtype=tf.int32))
+    )
+    max_training_steps = int(max_training_steps.numpy())
+    trainer.max_steps = max_training_steps
 
     if args.evaluate:
         evaluator.eval(trainer.current_step_var)

@@ -56,7 +56,7 @@ Recommendation systems drive engagement on many of the most popular online platf
 Google's [Wide & Deep Learning for Recommender Systems](https://arxiv.org/abs/1606.07792) has emerged as a popular model for Click Through Rate (CTR) prediction tasks thanks to its power of generalization (deep part) and memorization (wide part).
 The differences between this Wide & Deep Recommender Model and the model from the paper is the size of the deep part of the model. Originally, in Google's paper, the fully connected part was three layers of 1024, 512, and 256 neurons. Our model consists of 5 layers each of 1024 neurons.
 
-This model is trained with mixed precision using Tensor Cores on NVIDIA Volta and NVIDIA Ampere GPU architectures. Therefore, researchers can get results 4.5 times faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
+This model is trained with mixed precision using Tensor Cores on NVIDIA Volta and NVIDIA Ampere GPU architectures. Therefore, researchers can get results 3.5 times faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
 
 ### Model architecture
 
@@ -67,10 +67,6 @@ Wide & Deep refers to a class of networks that use the output of two parts worki
   <br>
 Figure 1. The architecture of the Wide & Deep model.</a>
 </p>
-
-
-
-
 
 ### Applications and dataset
 
@@ -83,23 +79,25 @@ The Outbrain Dataset is preprocessed in order to get features input to the model
 Features:
 - Request Level:
     * 5 scalar numeric features `dtype=float32`
-    * 8 categorical features `dtype=int32`
-    * 8 trainable embeddings of (dimension, cardinality of categorical variable): (128,300000), (19,4), (128,100000), (64,4000), (64,1000), (64,2500), (64,300), (64,2000)
-    * 8  trainable embeddings for wide part of size 1 (serving as an embedding from the categorical to scalar space for input to the wide portion of the model)
+    * 8 one-hot categorical features `dtype=int32`
+    * 3 multi-hot categorical features `dtype=int32`
+    * 11 trainable embeddings of (dimension, cardinality of categorical variable, hotness for multi-hot): \
+      (128,300000), (19,4), (128,100000), (64,4000), (64,1000), (64,2500), (64,300), (64,2000), (64, 350, 3), (64, 10000, 3), (64, 100, 3)
+    * 11 trainable embeddings for wide part of size 1 (serving as an embedding from the categorical to scalar space for input to the wide portion of the model)
 
 - Item Level:
     * 8 scalar numeric features `dtype=float32`
-    * 5 categorical features `dtype=int32`
+    * 5 one-hot categorical features `dtype=int32`
     * 5 trainable embeddings of  (dimension, cardinality of categorical variable): (128,250000), (64,2500), (64,4000), (64,1000), (128,5000)
     * 5 trainable embeddings for wide part of size 1 (working as trainable one-hot embeddings)
 
 Features describe both the user (Request Level features) and Item (Item Level Features).
 
 - Model:
-    * Input dimension is 26 (13 categorical and 13 numerical features)
-    * Total embedding dimension is 1043
+    * Input dimension is 29 (16 categorical and 13 numerical features)
+    * Total embedding dimension is 1235
     * 5 hidden layers each with size 1024
-    * Total number of model parameter is ~90M
+    * Total number of model parameter is ~92M
     * Output dimension is 1 (`y` is the probability of click given Request-level and Item-level features)
     * Loss function: Binary Crossentropy
 
@@ -143,7 +141,7 @@ For more information:
 * Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
 * How to access and enable AMP for TensorFlow, see [Using TF-AMP](https://docs.nvidia.com/deeplearning/dgx/tensorflow-user-guide/index.html#tfamp) from the TensorFlow User Guide.
 
-For information on the influence of mixed precision training on model accuracy in train and inference, go to [Training accuracy results](Training-accuracy-results).
+For information on the influence of mixed precision training on model accuracy in train and inference, go to [Training accuracy results](#training-accuracy-results).
 
 #### Enabling mixed precision
 
@@ -174,7 +172,7 @@ The following section lists the requirements that you need to meet in order to s
 
 This repository contains Dockerfile which extends the TensorFlow2 NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 - [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-- [21.09 Merlin Tensorflow Training](https://ngc.nvidia.com/catalog/containers/nvidia:merlin:merlin-tensorflow-training) NGC container
+- [22.03 Merlin Tensorflow Training](https://ngc.nvidia.com/catalog/containers/nvidia:merlin:merlin-tensorflow-training) NGC container
 
 Supported GPUs:
 - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
@@ -205,7 +203,7 @@ cd DeepLearningExamples/TensorFlow2/Recommendation/WideAndDeep
 
 3. Download the Outbrain dataset.
 
-The Outbrain dataset can be downloaded from Kaggle (requires Kaggle account). Unzip the downloaded archive (for example, to `/raid/outbrain/orig`) and set the `HOST_OUTBRAIN_PATH` variable to the parent directory:
+The Outbrain dataset can be downloaded from [Kaggle](https://www.kaggle.com/c/outbrain-click-prediction/) (requires Kaggle account). Unzip the downloaded archive into `orig` directory (for example, to `/raid/outbrain/orig`) and set the `HOST_OUTBRAIN_PATH` variable to the parent directory:
 ```
 HOST_OUTBRAIN_PATH=/raid/outbrain
 ```
@@ -262,7 +260,7 @@ If you want to run validation or evaluation, you can either:
 * use the checkpoint obtained from the training commands above, or
 * download the pretrained checkpoint from NGC.
 
-In order to download the checkpoint from NGC, visit [ngc.nvidia.com](https://ngc.nvidia.com) website and browse the available models. Download the checkpoint files and unzip them to some path, for example, to `$HOST_OUTBRAIN_PATH/checkpoints/` (which is the default path for storing the checkpoints during training). The checkpoint requires around 700MB disk space.
+In order to download the checkpoint from NGC, visit [ngc.nvidia.com](https://catalog.ngc.nvidia.com/orgs/nvidia/models/widedeep_tf2_amp_base_128k_nvtabular) website and browse the available models. Download the checkpoint files and unzip them to some path, for example, to `$HOST_OUTBRAIN_PATH/checkpoints/` (which is the default path for storing the checkpoints during training). The checkpoint requires around 700MB disk space.
 
 8. Start validation/evaluation.
 In order to validate the checkpoint on the evaluation set, run the `main.py` script with the `--evaluate` and `--use_checkpoint` flags.
@@ -271,7 +269,7 @@ In order to validate the checkpoint on the evaluation set, run the `main.py` scr
 horovodrun -np ${GPU} sh hvd_wrapper.sh python main.py --evaluate --use_checkpoint
 ```
 
-Now that you have your model trained and evaluated, you can choose to compare your training results with our [Training accuracy results](#training-accuracy-results). You can also choose to benchmark yours performance to [Training and evaluation performance benchmark](#training-and-evaluation-performance-benchmark). Following the steps in these sections will ensure that you achieve the same accuracy and performance results as stated in the [Results](#results) section.
+Now that you have your model trained and evaluated, you can choose to compare your training results with our [Training accuracy results](#training-accuracy-results). You can also choose to benchmark your performance to [Training and evaluation performance benchmark](#training-and-evaluation-performance-benchmark). Following the steps in these sections will ensure that you achieve the same accuracy and performance results as stated in the [Results](#results) section.
 
 ## Advanced
 
@@ -310,11 +308,12 @@ These are model parameters in the `main.py` script:
 |training parameters|--deep_warmup_epochs DEEP_WARMUP_EPOCHS|Number of learning rate warmup epochs for deep model | 6
 |model construction|--deep_hidden_units DEEP_HIDDEN_UNITS [DEEP_HIDDEN_UNITS ...]|Hidden units per layer for deep model, separated by spaces|[1024, 1024, 1024, 1024, 1024]
 |model construction|--deep_dropout DEEP_DROPOUT|Dropout regularization for deep model|0.1
+|model construction|--combiner {mean,sum}|Type of aggregation used for multi hot categorical features|sum
 |run mode parameters|--evaluate|Only perform an evaluation on the validation dataset, don't train | False
 |run mode parameters|--benchmark|Run training or evaluation benchmark to collect performance metrics | False
 |run mode parameters|--benchmark_warmup_steps BENCHMARK_WARMUP_STEPS|Number of warmup steps before start of the benchmark | 500
 |run mode parameters|--benchmark_steps BENCHMARK_STEPS|Number of steps for performance benchmark | 1000
-|run mode parameters|--affinity{socket,single,single_unique,<br>socket_unique_interleaved,<br>socket_unique_continuous,disabled}|Type of CPU affinity | socket_unique_interleaved
+|run mode parameters|--affinity {all,single,single_unique,<br>unique_interleaved,unique_contiguous,disabled}|Type of CPU affinity | unique_interleaved
 
 
 ### Command-line options
@@ -339,25 +338,26 @@ The original data is stored in several separate files:
 * `promoted_content.csv` - metadata about the ads
 * `document_meta.csv`, `document_topics.csv`, `document_entities.csv`, `document_categories.csv` - metadata about the documents
 
-During the preprocessing stage, the data is transformed into 87M rows tabular data of 26 features. The dataset is split into training and evaluation parts that have approx 60M and approx 27M rows, respectively. Splitting into train and eval is done in this way so that random 80% of daily events for the first 10 days of the dataset form a training set and remaining part (20% of events daily for the first 10 days and all events in the last two days) form an evaluation set. Eventually the dataset is saved in NVTabular parquet format.
+During the preprocessing stage, the data is transformed into 87M rows tabular data of 29 features. The dataset is split into training and evaluation parts that have approx 60M and approx 27M rows, respectively. Splitting into train and eval is done in this way so that random 80% of daily events for the first 10 days of the dataset form a training set and remaining part (20% of events daily for the first 10 days and all events in the last two days) form an evaluation set. Eventually the dataset is saved in NVTabular parquet format.
 
 #### Dataset preprocessing
 
-Dataset preprocessing aims in creating in total 26 features: 13 categorical and 13 numerical. These features are obtained from the original Outbrain dataset in [NVTabular](https://nvidia.github.io/NVTabular/v0.6.1/index.html) preprocessing.
+Dataset preprocessing aims in creating in total 29 features: 16 categorical and 13 numerical. These features are obtained from the original Outbrain dataset in [NVTabular](https://nvidia-merlin.github.io/NVTabular/v0.7.1/Introduction.html) preprocessing.
 
 ##### NVTabular GPU preprocessing
 
 The NVTabular dataset is preprocessed using the script provided in `data/outbrain/nvtabular`. The workflow consists of:
 * separating out the validation set for cross-validation
-* filling missing data with themode, median, or imputed values most frequent value
+* filling missing data with the mode, median, or imputed values most frequent value
 * joining click data, ad metadata, and document category, topic and entity tables to create an enriched table.joining the  tables for the ad clicks data
 * computing  7 click-through rates (CTR) for ads grouped by 7 features different contexts
 * computing attribute cosine similarity between the landing page and ad to be featured on the page features of the clicked ads and the viewed ads
+* extracting multi-hot categorical values
 * math transformations of the numeric features (logarithmic, normalization)
 * categorifying data using hash-bucketing
 * storing the result in a Parquet format
 
-Most of the code describing operations in this workflow are in `data/outbrain/nvtabular/utils/workflow.py` and leverage NVTabular v0.6.1. As stated in its repository, [NVTabular](https://github.com/NVIDIA/NVTabular), a component of [NVIDIA Merlin Open Beta](https://developer.nvidia.com/nvidia-merlin), is a feature engineering and preprocessing library for tabular data that is designed to quickly and easily manipulate terabyte scale datasets and train deep learning based recommender systems. It provides a high-level abstraction to simplify code and accelerates computation on the GPU using the [RAPIDS Dask-cuDF](https://github.com/rapidsai/cudf/tree/main/python/dask_cudf) library.
+Most of the code describing operations in this workflow are in `data/outbrain/nvtabular/utils/workflow.py` and leverage NVTabular v0.7.1. As stated in its repository, [NVTabular](https://github.com/NVIDIA/NVTabular), a component of [NVIDIA Merlin Open Beta](https://developer.nvidia.com/nvidia-merlin), is a feature engineering and preprocessing library for tabular data that is designed to quickly and easily manipulate terabyte scale datasets and train deep learning based recommender systems. It provides a high-level abstraction to simplify code and accelerates computation on the GPU using the [RAPIDS Dask-cuDF](https://github.com/rapidsai/cudf/tree/main/python/dask_cudf) library.
 The NVTabular Outbrain workflow has been successfully tested on DGX-1 V100 and DGX A100 for single and multigpu preprocessing.
 
 For more information about NVTabular, refer to the [NVTabular documentation](https://github.com/NVIDIA/NVTabular).
@@ -427,13 +427,12 @@ The following sections provide details on how we achieved our performance and ac
 
 Our results were obtained by running the `main.py` training script in the TensorFlow2 NGC container on NVIDIA DGX A100 with (8x A100 80GB) GPUs.
 
-| GPUs | Batch size / GPU | XLA | Accuracy - TF32 (MAP@12) | Accuracy - mixed precision (MAP@12) |  Time to train - TF32 (minutes) | Time to train - mixed precision (minutes) | Time to train speedup (TF32 to mixed precision) |
-| ---- | ---------------- | --- | --------------|---|------- | ----------------------------------- |  ----------------------------------------------- |
-1|131072|Yes|0.65656|0.65654|13.40|9.48|1.41
-1|131072|No |0.65662|0.65656|17.75|13.38|1.33
-8|16384|Yes |0.65672|0.65665|4.82|4.50|1.07
-8|16384|No  |0.65671|0.65655|5.71|5.72|1.00
-
+| GPUs | Batch size / GPU | XLA | Accuracy - TF32 (MAP@12) | Accuracy - mixed precision (MAP@12) | Time to train - TF32 (minutes) | Time to train - mixed precision (minutes) | Time to train speedup (TF32 to mixed precision) |
+| --- | ---------------- | ---- | -------------- | -------------- | ------- | ------- | ------- |
+| 1   | 131072           | Yes  | 0.65728        | 0.65728        | 17.05   | 13.12   | 1.30    |
+| 1   | 131072           | No   | 0.65734        | 0.65732        | 21.75   | 17.50   | 1.24    |
+| 8   | 16384            | Yes  | 0.65754        | 0.65751        | 6.48    | 6.33    | 1.02    |
+| 8   | 16384            | No   | 0.65750        | 0.65754        | 8.07    | 7.87    | 1.03    |
 
 To achieve the same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -442,12 +441,12 @@ To achieve the same results, follow the steps in the [Quick Start Guide](#quick-
 Our results were obtained by running the main.py training script in the TensorFlow2 NGC container on NVIDIA DGX-1 with (8x V100 32GB) GPUs.
 
 
-| GPUs | Batch size / GPU | XLA | Accuracy - FP32 (MAP@12) | Accuracy - mixed precision (MAP@12) |  Time to train - FP32 (minutes) | Time to train - mixed precision (minutes) | Time to train speedup (FP32 to mixed precision) |
-| ---- | ---------------- | --- | --------------|---|------- |  ----------------------------------------- | ----------------------------------------------- |
-1|131072|Yes |0.65658|0.65664|62.89|18.65|3.37
-1|131072|No  |0.65662|0.65658|71.53|25.18|2.84
-8|16384|Yes  |0.65668|0.65655|12.21|8.89|1.37
-8|16384|No   |0.65665|0.65654|14.38|7.17|2.01
+| GPUs | Batch size / GPU | XLA | Accuracy - FP32 (MAP@12) | Accuracy - mixed precision (MAP@12) | Time to train - FP32 (minutes) | Time to train - mixed precision (minutes) | Time to train speedup (FP32 to mixed precision) |
+| --- | ---------------- | ---- | -------------- | -------------- | ------- | ------- | ------- |
+| 1   | 131072           | Yes  | 0.65736        | 0.65731        | 72.38   | 24.60   | 2.94    |
+| 1   | 131072           | No   | 0.65736        | 0.65735        | 80.53   | 31.60   | 2.55    |
+| 8   | 16384            | Yes  | 0.65751        | 0.65752        | 15.62   | 10.13   | 1.54    |
+| 8   | 16384            | No   | 0.65749        | 0.65752        | 18.37   | 12.45   | 1.48    |
 
 
 To achieve the same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
@@ -466,7 +465,7 @@ The plot represents MAP@12 in a function of steps (step is single batch) during 
 
 ##### Training stability test
 
-Training of the model is stable for multiple configurations achieving the standard deviation of 10e-4. The model achieves similar MAP@12 scores for A100 and V100, training precisions, XLA usage and single/multi GPU. The Wide and Deep model was trained for 9140 training steps (20 epochs, 457 batches in each epoch, every batch containing 131072), starting from 20 different initial random seeds for each setup. The training was performed in the 21.09 Merlin Tensorflow Training NGC container on NVIDIA DGX A100 80GB and DGX-1 32GB machines with and without mixed precision enabled, with and without XLA enabled for NVTabular generated dataset. The provided charts and numbers consider single and 8 GPU training. After training, the models were evaluated on the validation set. The following plots compare distributions of MAP@12 on the evaluation set. In columns there is single vs 8 GPU training, in rows DGX A100 and DGX-1 V100.
+Training of the model is stable for multiple configurations achieving the standard deviation of 10e-4. The model achieves similar MAP@12 scores for A100 and V100, training precisions, XLA usage and single/multi GPU. The Wide and Deep model was trained for 9140 training steps (20 epochs, 457 batches in each epoch, every batch containing 131072), starting from 20 different initial random seeds for each setup. The training was performed in the 22.03 Merlin Tensorflow Training NGC container on NVIDIA DGX A100 80GB and DGX-1 32GB machines with and without mixed precision enabled, with and without XLA enabled for NVTabular generated dataset. The provided charts and numbers consider single and 8 GPU training. After training, the models were evaluated on the validation set. The following plots compare distributions of MAP@12 on the evaluation set. In columns there is single vs 8 GPU training, in rows DGX A100 and DGX-1 V100.
 
 <p align="center">
   <img width="100%" src="./img/training_stability.svg" />
@@ -480,24 +479,24 @@ Training stability was also compared in terms of point statistics for MAP@12 dis
 <details>
 <summary>Full tabular data for training stability tests</summary>
 
-| | GPUs | Precicision | XLA | Mean | Std | Min | Max | 
-| -------- | --- |  --------- | ---- | ------ | ------ | ------ | ------ |
-|DGX A100|1|TF32|Yes   |0.65656|0.00016|0.6563|0.6569
-|DGX A100|1|TF32|No    |0.65662|0.00013|0.6563|0.6568
-|DGX A100|1|AMP|Yes    |0.65654|0.00010|0.6563|0.6567
-|DGX A100|1|AMP|No     |0.65656|0.00011|0.6564|0.6568
-|DGX A100|8|TF32|Yes   |0.65672|0.00012|0.6565|0.6570
-|DGX A100|8|TF32|No    |0.65671|0.00013|0.6565|0.6569
-|DGX A100|8|AMP|Yes    |0.65665|0.00014|0.6564|0.6569
-|DGX A100|8|AMP|No     |0.65655|0.00012|0.6564|0.6568
-|DGX-1 V100|1|FP32|Yes |0.65658|0.00013|0.6563|0.6568
-|DGX-1 V100|1|FP32|No  |0.65662|0.00011|0.6564|0.6568
-|DGX-1 V100|1|AMP|Yes  |0.65664|0.00011|0.6564|0.6568
-|DGX-1 V100|1|AMP|No   |0.65658|0.00011|0.6564|0.6568
-|DGX-1 V100|8|FP32|Yes |0.65668|0.00016|0.6564|0.6570
-|DGX-1 V100|8|FP32|No  |0.65665|0.00019|0.6564|0.6570
-|DGX-1 V100|8|AMP|Yes  |0.65655|0.00012|0.6563|0.6567
-|DGX-1 V100|8|AMP|No   |0.65654|0.00013|0.6563|0.6567
+|  | GPUs | Precision | XLA | Mean | Std | Min | Max |
+| ---------- | --- | ----- | ---- | -------------- | -------------- | ------------- | ------------- |
+| DGX A100   | 1   | TF32  | Yes  | 0.65728        | 0.00014        | 0.6571        | 0.6575        |
+| DGX A100   | 1   | TF32  | No   | 0.65734        | 0.00007        | 0.6572        | 0.6575        |
+| DGX A100   | 1   | AMP   | Yes  | 0.65728        | 0.00011        | 0.6571        | 0.6575        |
+| DGX A100   | 1   | AMP   | No   | 0.65732        | 0.00009        | 0.6572        | 0.6575        |
+| DGX A100   | 8   | TF32  | Yes  | 0.65754        | 0.00014        | 0.6573        | 0.6579        |
+| DGX A100   | 8   | TF32  | No   | 0.65750        | 0.00011        | 0.6573        | 0.6577        |
+| DGX A100   | 8   | AMP   | Yes  | 0.65751        | 0.00013        | 0.6573        | 0.6577        |
+| DGX A100   | 8   | AMP   | No   | 0.65754        | 0.00013        | 0.6573        | 0.6578        |
+| DGX-1 V100 | 1   | FP32  | Yes  | 0.65736        | 0.00011        | 0.6572        | 0.6576        |
+| DGX-1 V100 | 1   | FP32  | No   | 0.65736        | 0.00009        | 0.6572        | 0.6575        |
+| DGX-1 V100 | 1   | AMP   | Yes  | 0.65731        | 0.00013        | 0.6571        | 0.6576        |
+| DGX-1 V100 | 1   | AMP   | No   | 0.65735        | 0.00011        | 0.6571        | 0.6575        |
+| DGX-1 V100 | 8   | FP32  | Yes  | 0.65751        | 0.00011        | 0.6574        | 0.6578        |
+| DGX-1 V100 | 8   | FP32  | No   | 0.65749        | 0.00014        | 0.6572        | 0.6577        |
+| DGX-1 V100 | 8   | AMP   | Yes  | 0.65752        | 0.00012        | 0.6573        | 0.6578        |
+| DGX-1 V100 | 8   | AMP   | No   | 0.65752        | 0.00013        | 0.6573        | 0.6577        |
 </details>
 
 
@@ -520,16 +519,16 @@ Distribution scores for full precision training and AMP training were compared i
 <details>
 <summary>Full tabular data for AMP influence on MAP@12</summary>
 
-|              | GPUs                   |  XLA    | Mean MAP@12 for Full precision (TF32 for A100, FP32 for V100) | Std MAP@12 for Full precision (TF32 for A100, FP32 for V100) | Mean MAP@12 for AMP | Std MAP@12 for AMP | KS test value: statistics, p-value |
-| ------------ | ---------------------- |  ------ | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------- | ------------------ | ---------------------------------- |
-| DGX A100   | 1    | Yes     |0.65656|0.00016|0.65654|0.00010|0.10000 (0.99999)
-| DGX A100   | 8    | Yes     |0.65672|0.00012|0.65665|0.00014|0.40000 (0.08106)
-| DGX A100   | 1    | No      |0.65662|0.00013|0.65656|0.00011|0.35000 (0.17453)
-| DGX A100   | 8    | No      |0.65671|0.00013|0.65655|0.00012|0.35000 (0.17453)
-| DGX-1 V100 | 1    | Yes     |0.65658|0.00013|0.65664|0.00011|0.25000 (0.57134)
-| DGX-1 V100 | 8    | Yes     |0.65668|0.00016|0.65655|0.00012|0.30000 (0.33559)
-| DGX-1 V100 | 1    | No      |0.65662|0.00011|0.65658|0.00011|0.20000 (0.83197)
-| DGX-1 V100 | 8    | No      |0.65665|0.00019|0.65654|0.00013|0.40000 (0.08106)
+|  | GPUs | XLA | Mean MAP@12 for Full precision (TF32 for A100, FP32 for V100) | Std MAP@12 for Full precision (TF32 for A100, FP32 for V100) | Mean MAP@12 for AMP | Std MAP@12 for AMP | KS test value: statistics, p-value |
+| ---------- | --- | ---- | -------------- | -------------- | -------------- | -------------- | ------------------------- |
+| DGX A100   | 1   | Yes  | 0.65728        | 0.00014        | 0.65728        | 0.00011        | 0.15000 (0.98314)         |
+| DGX A100   | 8   | Yes  | 0.65754        | 0.00014        | 0.65751        | 0.00013        | 0.10000 (0.99999)         |
+| DGX A100   | 1   | No   | 0.65734        | 0.00007        | 0.65732        | 0.00009        | 0.20000 (0.83197)         |
+| DGX A100   | 8   | No   | 0.65750        | 0.00011        | 0.65754        | 0.00013        | 0.15000 (0.98314)         |
+| DGX-1 V100 | 1   | Yes  | 0.65736        | 0.00011        | 0.65731        | 0.00013        | 0.20000 (0.83197)         |
+| DGX-1 V100 | 8   | Yes  | 0.65751        | 0.00011        | 0.65752        | 0.00012        | 0.10000 (0.99999)         |
+| DGX-1 V100 | 1   | No   | 0.65736        | 0.00009        | 0.65735        | 0.00011        | 0.05000 (1.00000)         |
+| DGX-1 V100 | 8   | No   | 0.65749        | 0.00014        | 0.65752        | 0.00013        | 0.15000 (0.98314)         |
 
 </details>
 
@@ -539,24 +538,24 @@ Distribution scores for full precision training and AMP training were compared i
 
 Our results were obtained by running the benchmark script (`main.py --benchmark`) in the TensorFlow2 NGC container on NVIDIA DGX A100 with (8x A100 80GB) GPUs. 
 
-|GPUs | Batch size / GPU | XLA | Throughput - TF32 (samples/s)|Throughput - mixed precision (samples/s)|Throughput speedup (TF32 - mixed precision)| Strong scaling - TF32|Strong scaling - mixed precision
-| ---- | ---------------- | --- | ----------------------------- | ---------------------------------------- | ------------------------------------------- | --------------------- | -------------------------------- |
-|1|131,072|Yes|2026524|3069487|1.51|1.00|1.00
-|1|131,072|No |1379960|1928375|1.40|1.00|1.00
-|8|16,384|Yes |6892010|7574174|1.10|3.40|2.47
-|8|16,384|No  |5124054|5120040|1.00|3.71|2.66
+| GPUs | Batch size / GPU | XLA | Throughput - TF32 (samples/s) | Throughput - mixed precision (samples/s) | Throughput speedup (TF32 - mixed precision) | Strong scaling - TF32 | Strong scaling - mixed precision |
+| --- | ---------------- | ---- | -------------- | -------------- | ------- | ------- | ------- |
+| 1   | 131072           | Yes  | 1655113        | 2346864        | 1.42    | 1.00    | 1.00    |
+| 1   | 131072           | No   | 1198447        | 1568767        | 1.31    | 1.00    | 1.00    |
+| 8   | 16384            | Yes  | 5364411        | 5852297        | 1.09    | 3.24    | 2.49    |
+| 8   | 16384            | No   | 3955617        | 4048638        | 1.02    | 3.30    | 2.58    |
 
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 32GB)
 
 Our results were obtained by running the benchmark script (`main.py --benchmark`) in the TensorFlow2 NGC container on NVIDIA DGX-1 with (8x V100 32GB) GPUs.
 
-|GPUs | Batch size / GPU | XLA | Throughput - FP32 (samples/s)|Throughput - mixed precision (samples/s)|Throughput speedup (FP32 - mixed precision)| Strong scaling - FP32|Strong scaling - mixed precision
-| ---- | ---------------- | --- | ----------------------------- | ---------------------------------------- | ------------------------------------------- | --------------------- | -------------------------------- |
-|1|131,072|Yes|378918|1405633|3.71|1.00|1.00
-|1|131,072|No |323817|969824|2.99|1.00|1.00
-|8|16,384|Yes |2196648|4332939|1.97|5.80|3.08
-|8|16,384|No  |1772485|3058944|1.73|5.47|3.15
+| GPUs | Batch size / GPU | XLA | Throughput - FP32 (samples/s) | Throughput - mixed precision (samples/s) | Throughput speedup (FP32 - mixed precision) | Strong scaling - FP32 | Strong scaling - mixed precision |
+| --- | ---------------- | ---- | -------------- | -------------- | ------- | ------- | ------- |
+| 1   | 131072           | Yes  | 338245         | 1111894        | 3.29    | 1.00    | 1.00    |
+| 1   | 131072           | No   | 293062         | 814952         | 2.78    | 1.00    | 1.00    |
+| 8   | 16384            | Yes  | 1869462        | 3549165        | 1.90    | 5.53    | 3.19    |
+| 8   | 16384            | No   | 1489016        | 2491795        | 1.67    | 5.08    | 3.06    |
 
 
 #### Evaluation performance results
@@ -566,52 +565,49 @@ Our results were obtained by running the benchmark script (`main.py --benchmark`
 Our results were obtained by running the benchmark script (`main.py --evaluate --benchmark`) in the TensorFlow2 NGC container on NVIDIA DGX A100 with 8x A100 80GB GPUs. 
 
 
-|GPUs|Batch size / GPU|XLA|Throughput \[samples/s\] TF32|Throughput \[samples/s\] AMP|Throughput speedup AMP to TF32
-|----|----------------|---|------------------------------|-----------------------------|-------------------------------
-|1|4096|NO    |1107650|1028782|0.93|
-|1|8192|NO    |1783848|1856528|1.04|
-|1|16384|NO   |2295874|2409601|1.05|
-|1|32768|NO   |2367142|2583293|1.09|
-|1|65536|NO   |3044662|3471619|1.14|
-|1|131072|NO  |3229625|3823612|1.18|
-|8|4096|NO    |5503985|5333228|0.97|
-|8|8192|NO    |12251675|12386870|1.01|
-|8|16384|NO   |16020973|16438269|1.03|
-|8|32768|NO   |17225168|18667798|1.08|
-|8|65536|NO   |19969248|22270424|1.12|
-|8|131072|NO  |19929457|22496045|1.13|
+| GPUs | Batch size / GPU | XLA | Throughput [samples/s] TF32 | Throughput [samples/s] AMP | Throughput speedup AMP to TF32 |
+| --- | ---------------- | ---- | -------------- | -------------- | ------- |
+| 1   | 4096             | No   | 631542         | 605132         | 0.96    |
+| 1   | 8192             | No   | 1003923        | 1025958        | 1.02    |
+| 1   | 16384            | No   | 1436331        | 1465785        | 1.02    |
+| 1   | 32768            | No   | 1807615        | 1965822        | 1.09    |
+| 1   | 65536            | No   | 2114939        | 2320347        | 1.10    |
+| 1   | 131072           | No   | 2343520        | 2638773        | 1.13    |
+| 8   | 4096             | No   | 4474162        | 4129841        | 0.92    |
+| 8   | 8192             | No   | 6984567        | 6977303        | 1.00    |
+| 8   | 16384            | No   | 10398419       | 10872412       | 1.05    |
+| 8   | 32768            | No   | 13896799       | 13704361       | 0.99    |
+| 8   | 65536            | No   | 15933755       | 17760589       | 1.11    |
 
 For more results go to the expandable table below.
 
 <details>
 <summary>Full tabular data for evaluation performance results for DGX A100</summary>
 
-|GPUs|Batch size / GPU|XLA|Throughput \[samples/s\] TF32|Throughput \[samples/s\] AMP|Throughput speedup AMP to TF32
-|----|----------------|---|------------------------------|-----------------------------|-------------------------------
-|1|4096|YES   |1344225|1501677|1.12|
-|1|4096|NO    |1107650|1028782|0.93|
-|1|8192|YES   |2220721|2545781|1.15|
-|1|8192|NO    |1783848|1856528|1.04|
-|1|16384|YES  |2730441|3230949|1.18|
-|1|16384|NO   |2295874|2409601|1.05|
-|1|32768|YES  |2527368|2974417|1.18|
-|1|32768|NO   |2367142|2583293|1.09|
-|1|65536|YES  |3163906|3935731|1.24|
-|1|65536|NO   |3044662|3471619|1.14|
-|1|131072|YES |3171670|4064426|1.28|
-|1|131072|NO  |3229625|3823612|1.18|
-|8|4096|YES   |6243348|6553485|1.05|
-|8|4096|NO    |5503985|5333228|0.97|
-|8|8192|YES   |14995914|16222429|1.08|
-|8|8192|NO    |12251675|12386870|1.01|
-|8|16384|YES  |14584474|16543902|1.13|
-|8|16384|NO   |16020973|16438269|1.03|
-|8|32768|YES  |17840220|21537660|1.21|
-|8|32768|NO   |17225168|18667798|1.08|
-|8|65536|YES  |20732672|24082577|1.16|
-|8|65536|NO   |19969248|22270424|1.12|
-|8|131072|YES |20104010|24157900|1.20|
-|8|131072|NO  |19929457|22496045|1.13|
+| GPUs | Batch size / GPU | XLA | Throughput [samples/s] TF32 | Throughput [samples/s] AMP | Throughput speedup AMP to TF32 |
+| --- | ---------------- | ---- | -------------- | -------------- | ------- |
+| 1   | 4096             | Yes  | 765213         | 802188         | 1.05    |
+| 1   | 4096             | No   | 631542         | 605132         | 0.96    |
+| 1   | 8192             | Yes  | 1162267        | 1233427        | 1.06    |
+| 1   | 8192             | No   | 1003923        | 1025958        | 1.02    |
+| 1   | 16384            | Yes  | 1643782        | 1824973        | 1.11    |
+| 1   | 16384            | No   | 1436331        | 1465785        | 1.02    |
+| 1   | 32768            | Yes  | 2014538        | 2248111        | 1.12    |
+| 1   | 32768            | No   | 1807615        | 1965822        | 1.09    |
+| 1   | 65536            | Yes  | 2308737        | 2666944        | 1.16    |
+| 1   | 65536            | No   | 2114939        | 2320347        | 1.10    |
+| 1   | 131072           | Yes  | 2515197        | 2944289        | 1.17    |
+| 1   | 131072           | No   | 2343520        | 2638773        | 1.13    |
+| 1   | 4096             | Yes  | 5235260        | 5386308        | 1.03    |
+| 1   | 4096             | No   | 4474162        | 4129841        | 0.92    |
+| 1   | 8192             | Yes  | 8438479        | 8625083        | 1.02    |
+| 1   | 8192             | No   | 6984567        | 6977303        | 1.00    |
+| 1   | 16384            | Yes  | 12629246       | 12146912       | 0.96    |
+| 1   | 16384            | No   | 10398419       | 10872412       | 1.05    |
+| 1   | 32768            | Yes  | 14908125       | 17372751       | 1.17    |
+| 1   | 32768            | No   | 13896799       | 13704361       | 0.99    |
+| 1   | 65536            | Yes  | 17899139       | 19909649       | 1.11    |
+| 1   | 65536            | No   | 15933755       | 17760589       | 1.11    |
  </details>
 
 
@@ -619,20 +615,19 @@ For more results go to the expandable table below.
 
 Our results were obtained by running the benchmark script (`main.py --evaluate --benchmark`) in the TensorFlow2 NGC container on NVIDIA DGX-1 with (8x V100 32GB) GPUs.
 
-|GPUs|Batch size / GPU|XLA|Throughput \[samples/s\] FP32|Throughput \[samples/s\] AMP|Throughput speedup AMP to FP32
-|----|----------------|---|------------------------------|-----------------------------|-------------------------------
-|1|4096|NO    |499442|718163|1.44|
-|1|8192|NO    |670906|1144640|1.71|
-|1|16384|NO   |802366|1599006|1.99|
-|1|32768|NO   |856130|1795285|2.10|
-|1|65536|NO   |934394|2221221|2.38|
-|1|131072|NO  |965293|2403829|2.49|
-|8|4096|NO    |2840155|3602516|1.27|
-|8|8192|NO    |4810100|7912019|1.64|
-|8|16384|NO   |5939908|10876135|1.83|
-|8|32768|NO   |6489446|12593087|1.94|
-|8|65536|NO   |6614453|14742844|2.23|
-|8|131072|NO  |7133219|15524549|2.18|
+| GPUs | Batch size / GPU | XLA | Throughput [samples/s] FP32 | Throughput [samples/s] AMP | Throughput speedup AMP to FP32 |
+| --- | ---------------- | ---- | -------------- | -------------- | ------- |
+| 1   | 4096             | No   | 311886         | 363685         | 1.17    |
+| 1   | 8192             | No   | 454822         | 639173         | 1.41    |
+| 1   | 16384            | No   | 594582         | 959301         | 1.61    |
+| 1   | 32768            | No   | 705038         | 1279068        | 1.81    |
+| 1   | 65536            | No   | 748398         | 1510412        | 2.02    |
+| 1   | 131072           | No   | 787982         | 1677366        | 2.13    |
+| 8   | 4096             | No   | 2210862        | 2548723        | 1.15    |
+| 8   | 8192             | No   | 3408621        | 4474287        | 1.31    |
+| 8   | 16384            | No   | 4368245        | 6518982        | 1.49    |
+| 8   | 32768            | No   | 5153906        | 8689990        | 1.69    |
+| 8   | 65536            | No   | 5393286        | 11071794       | 2.05    |
 
 
 
@@ -641,40 +636,42 @@ For more results go to the expandable table below.
 <details>
 <summary>Full tabular data for evaluation performance for DGX-1 V100 results</summary>
 
-|GPUs|Batch size / GPU|XLA|Throughput \[samples/s\] FP32|Throughput \[samples/s\] AMP|Throughput speedup AMP to FP32
-|----|----------------|---|------------------------------|-----------------------------|-------------------------------
-|1|4096|YES   |573285|919150|1.60|
-|1|4096|NO    |499442|718163|1.44|
-|1|8192|YES   |753993|1486867|1.97|
-|1|8192|NO    |670906|1144640|1.71|
-|1|16384|YES  |859699|1945700|2.26|
-|1|16384|NO   |802366|1599006|1.99|
-|1|32768|YES  |904255|1995194|2.21|
-|1|32768|NO   |856130|1795285|2.10|
-|1|65536|YES  |982448|2608010|2.65|
-|1|65536|NO   |934394|2221221|2.38|
-|1|131072|YES |926734|2621095|2.83|
-|1|131072|NO  |965293|2403829|2.49|
-|8|4096|YES   |3102948|4083015|1.32|
-|8|4096|NO    |2840155|3602516|1.27|
-|8|8192|YES   |5536556|10094905|1.82|
-|8|8192|NO    |4810100|7912019|1.64|
-|8|16384|YES  |5722386|10524548|1.84|
-|8|16384|NO   |5939908|10876135|1.83|
-|8|32768|YES  |6813318|14356608|2.11|
-|8|32768|NO   |6489446|12593087|1.94|
-|8|65536|YES  |6918413|16227668|2.35|
-|8|65536|NO   |6614453|14742844|2.23|
-|8|131072|YES |6910518|16423342|2.38|
-|8|131072|NO  |7133219|15524549|2.18|
+| GPUs | Batch size / GPU | XLA | Throughput [samples/s] FP32 | Throughput [samples/s] AMP | Throughput speedup AMP to FP32 |
+| --- | ---------------- | ---- | -------------- | -------------- | ------- |
+| 1   | 4096             | Yes  | 349110         | 419470         | 1.20    |
+| 1   | 4096             | No   | 311886         | 363685         | 1.17    |
+| 1   | 8192             | Yes  | 495663         | 738806         | 1.49    |
+| 1   | 8192             | No   | 454822         | 639173         | 1.41    |
+| 1   | 16384            | Yes  | 641953         | 1112849        | 1.73    |
+| 1   | 16384            | No   | 594582         | 959301         | 1.61    |
+| 1   | 32768            | Yes  | 737395         | 1442387        | 1.96    |
+| 1   | 32768            | No   | 705038         | 1279068        | 1.81    |
+| 1   | 65536            | Yes  | 794009         | 1693861        | 2.13    |
+| 1   | 65536            | No   | 748398         | 1510412        | 2.02    |
+| 1   | 131072           | Yes  | 819904         | 1887338        | 2.30    |
+| 1   | 131072           | No   | 787982         | 1677366        | 2.13    |
+| 1   | 4096             | Yes  | 2505902        | 3165730        | 1.26    |
+| 1   | 4096             | No   | 2210862        | 2548723        | 1.15    |
+| 1   | 8192             | Yes  | 3759356        | 5289218        | 1.41    |
+| 1   | 8192             | No   | 3408621        | 4474287        | 1.31    |
+| 1   | 16384            | Yes  | 4686372        | 7551041        | 1.61    |
+| 1   | 16384            | No   | 4368245        | 6518982        | 1.49    |
+| 1   | 32768            | Yes  | 5398782        | 9615114        | 1.78    |
+| 1   | 32768            | No   | 5153906        | 8689990        | 1.69    |
+| 1   | 65536            | Yes  | 5642629        | 11907666       | 2.11    |
+| 1   | 65536            | No   | 5393286        | 11071794       | 2.05    |
  </details>
 
 ## Release notes
 
 ### Changelog
 
-February 2021
-- Initial release
+May 2022
+- Added multi-hot categorical features
+- Added triton inference
+- Updated model architecture figure
+- Updated NVTabular to v0.7.1
+- Updated readme numbers
 
 November 2021
 - Refresh release with performance optimizations
@@ -683,6 +680,9 @@ November 2021
 - Removed spark CPU preprocessing
 - Updated readme numbers
 - Changed V100 cards from 16GB to 32GB
+
+February 2021
+- Initial release
 
 ### Known issues
 * In this model the TF32 precision can in some cases be as fast as the FP16 precision on Ampere GPUs. This is because TF32 also uses Tensor Cores and doesn't need any additional logic such as maintaining FP32 master weights and casts. However, please note that W&D is, by modern recommender standards, a very small model. Larger models should still see significant benefits of using FP16 math.

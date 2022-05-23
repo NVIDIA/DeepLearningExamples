@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,23 +15,23 @@
 import dllogger
 import horovod.tensorflow as hvd
 import tensorflow as tf
+from data.outbrain.dataloader import pad_batch
 from data.outbrain.features import DISPLAY_ID_COLUMN
-from horovod.tensorflow.mpi_ops import Sum, Average
+from horovod.tensorflow.mpi_ops import Average, Sum
 
 
 class Evaluator:
     def __init__(
-        self,
-        model,
-        throughput_calculator,
-        eval_dataset,
-        compiled_loss,
-        steps,
-        args,
+            self,
+            model,
+            throughput_calculator,
+            eval_dataset,
+            compiled_loss,
+            args,
     ):
 
         self.model = model
-        self.steps = steps
+        self.steps_per_epoch = len(eval_dataset)
         self.args = args
         self.throughput_calculator = throughput_calculator
         self.compiled_loss = compiled_loss
@@ -57,11 +57,16 @@ class Evaluator:
         self.current_step_var.assign(1)
         self.streaming_map.assign(1)
 
+    def prepare_dataset(self, current_epoch):
+        benchmark_needed_steps = self.args.benchmark_steps // self.steps_per_epoch + 1
+        n = 1 if self.args.evaluate and not self.args.benchmark else self.args.num_epochs - current_epoch \
+            if not self.args.benchmark else max(benchmark_needed_steps, self.args.num_epochs)
+        self.eval_dataset = self.eval_dataset.epochs(n)
+
     @tf.function
-    def _calculate_map(self, x, y, predictions):
+    def _calculate_map(self, y, predictions, display_ids):
         predictions = tf.reshape(predictions, [-1])
         predictions = tf.cast(predictions, tf.float64)
-        display_ids = x[DISPLAY_ID_COLUMN]
         display_ids = tf.reshape(display_ids, [-1])
         labels = tf.reshape(y, [-1])
         sorted_ids = tf.argsort(display_ids)
@@ -96,8 +101,8 @@ class Evaluator:
         self.display_id_counter.assign_add(shape)
         self.streaming_map.assign_add(ap_sum)
 
-    @tf.function
-    def _execute_step_calculations(self, x, y):
+    @tf.function(experimental_relax_shapes=True)
+    def _execute_step_calculations(self, x, y, display_ids):
         predictions = self.model(x, training=False)
 
         with tf.device("/CPU:0"):
@@ -105,7 +110,7 @@ class Evaluator:
             for metric in self.metrics:
                 metric.update_state(y, predictions)
             self.eval_loss.update_state(loss)
-            self._calculate_map(x, y, predictions)
+            self._calculate_map(y, predictions, display_ids)
 
         return loss
 
@@ -114,9 +119,7 @@ class Evaluator:
         if not self.args.cpu:
             all_streaming_map = hvd.allreduce(self.streaming_map, op=Sum)
             all_display_id_counter = hvd.allreduce(self.display_id_counter, op=Sum)
-            eval_loss = hvd.allreduce(
-                self.eval_loss.result(), op=Average
-            )
+            eval_loss = hvd.allreduce(self.eval_loss.result(), op=Average)
         else:
             all_streaming_map = self.streaming_map
             all_display_id_counter = self.display_id_counter
@@ -128,11 +131,11 @@ class Evaluator:
         return map_metric, eval_loss
 
     @staticmethod
-    def log(eval_data, step, steps):
-        dllogger.log(data=eval_data, step=(step, steps))
+    def log(eval_data, step):
+        dllogger.log(data=eval_data, step=(step,))
 
-    def eval_step(self, x, y):
-        self._execute_step_calculations(x, y)
+    def eval_step(self, x, y, display_ids):
+        self._execute_step_calculations(x, y, display_ids)
 
         if self.args.benchmark:
             self.throughput_calculator(y.shape[0], eval_benchmark=True)
@@ -141,12 +144,14 @@ class Evaluator:
 
         eval_data = {}
         self._reset_states()
-        range_val = 1 if not self.args.benchmark else 100
 
         # Graph mode part
-        for _ in range(range_val):
-            for x, y in self.eval_dataset:
-                self.eval_step(x, y)
+        for i, (x, y) in enumerate(self.eval_dataset, 1):
+            x = pad_batch(x)
+            display_ids = x.pop(DISPLAY_ID_COLUMN)
+            self.eval_step(x, y, display_ids)
+            if i == self.steps_per_epoch and not self.args.benchmark:
+                break
 
         map_metric, eval_loss = self._reduce_results()
 
@@ -159,6 +164,6 @@ class Evaluator:
                     "streaming_map_val": f"{map_metric.numpy():.4f}",
                 }
 
-                self.log(eval_data, current_step, self.steps)
+                self.log(eval_data, current_step)
 
         return eval_data

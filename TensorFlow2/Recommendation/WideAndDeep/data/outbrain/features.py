@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ NUMERIC_COLUMNS = [
     "publish_time_promo_days_since_published",
 ]
 
-CATEGORICAL_COLUMNS = [
+ONEHOT_COLUMNS = [
     "ad_id",
     "document_id",
     "platform",
@@ -50,6 +50,15 @@ CATEGORICAL_COLUMNS = [
     "publisher_id_promo",
 ]
 
+# Multihot columns with their hotness
+MULTIHOT_COLUMNS = {
+    "topic_id_list": 3,
+    "entity_id_list": 3,
+    "category_id_list": 3
+}
+
+CATEGORICAL_COLUMNS = ONEHOT_COLUMNS + list(MULTIHOT_COLUMNS.keys())
+
 HASH_BUCKET_SIZES = {
     "document_id": 300000,
     "ad_id": 250000,
@@ -64,6 +73,9 @@ HASH_BUCKET_SIZES = {
     "geo_location_country": 300,
     "platform": 4,
     "campaign_id": 5000,
+    "topic_id_list": 350,
+    "entity_id_list": 10000,
+    "category_id_list": 100,
 }
 
 EMBEDDING_DIMENSIONS = {
@@ -80,6 +92,9 @@ EMBEDDING_DIMENSIONS = {
     "geo_location_country": 64,
     "platform": 19,
     "campaign_id": 128,
+    "topic_id_list": 64,
+    "entity_id_list": 64,
+    "category_id_list": 64,
 }
 
 EMBEDDING_TABLE_SHAPES = {
@@ -92,7 +107,7 @@ def get_features_keys():
     return CATEGORICAL_COLUMNS + NUMERIC_COLUMNS + [DISPLAY_ID_COLUMN]
 
 
-def get_feature_columns():
+def get_feature_columns(combiner):
     logger = logging.getLogger("tensorflow")
     wide_columns, deep_columns = [], []
 
@@ -104,7 +119,7 @@ def get_feature_columns():
             wrapped_column = tf.feature_column.embedding_column(
                 categorical_column,
                 dimension=EMBEDDING_TABLE_SHAPES[column_name][1],
-                combiner="mean",
+                combiner=combiner,
             )
         else:
             raise ValueError(f"Unexpected categorical column found {column_name}")
