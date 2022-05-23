@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ def parse_args():
         "--eval_data_pattern",
         type=str,
         default=f"{DEFAULT_DIR}/data/valid/*.parquet",
-        help="Pattern of eval file names. For example if training files are part_0.parquet, "
+        help="Pattern of eval file names. For example if evaluation files are part_0.parquet, "
              "part_0.parquet then --eval_data_pattern is *.parquet",
     )
 
@@ -143,6 +143,17 @@ def parse_args():
         help="Dropout regularization for deep model",
     )
 
+    model_construction.add_argument(
+        "--combiner",
+        type=str,
+        default="sum",
+        choices=[
+            "mean",
+            "sum",
+        ],
+        help="Type of aggregation used for multi hot categorical features",
+    )
+
     run_params = parser.add_argument_group("run mode parameters")
 
     run_params.add_argument(
@@ -176,13 +187,13 @@ def parse_args():
     run_params.add_argument(
         "--affinity",
         type=str,
-        default="socket_unique_interleaved",
+        default="unique_interleaved",
         choices=[
-            "socket",
+            "all",
             "single",
             "single_unique",
-            "socket_unique_interleaved",
-            "socket_unique_continuous",
+            "unique_interleaved",
+            "unique_contiguous",
             "disabled",
         ],
         help="Type of CPU affinity",

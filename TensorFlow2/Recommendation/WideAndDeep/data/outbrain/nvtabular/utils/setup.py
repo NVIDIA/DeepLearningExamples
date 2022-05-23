@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ def create_config(args):
         "valid_path": valid_path,
         "output_valid_folder": output_valid_folder,
         "hash_spec": hash_spec,
-        "dask": args.use_dask
+        "dask": args.use_dask,
     }
 
     return config

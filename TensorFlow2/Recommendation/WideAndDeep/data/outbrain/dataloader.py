@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 import cupy
 import horovod.tensorflow as hvd
 import tensorflow as tf
-from data.outbrain.features import CATEGORICAL_COLUMNS, NUMERIC_COLUMNS
+from data.outbrain.features import CATEGORICAL_COLUMNS, MULTIHOT_COLUMNS, NUMERIC_COLUMNS
 from nvtabular.loader.tensorflow import KerasSequenceLoader
 
 cupy.random.seed(None)
@@ -37,7 +37,7 @@ def seed_fn():
 
 
 def train_input_fn(
-    train_paths, records_batch_size, buffer_size=0.1, parts_per_chunk=1, shuffle=True
+        train_paths, records_batch_size, buffer_size=0.1, parts_per_chunk=1, shuffle=True
 ):
     train_dataset_tf = KerasSequenceLoader(
         train_paths,
@@ -58,7 +58,7 @@ def train_input_fn(
 
 
 def eval_input_fn(
-    valid_paths, records_batch_size, buffer_size=0.1, parts_per_chunk=1, shuffle=False
+        valid_paths, records_batch_size, buffer_size=0.1, parts_per_chunk=1, shuffle=False
 ):
     valid_dataset_tf = KerasSequenceLoader(
         valid_paths,
@@ -76,3 +76,17 @@ def eval_input_fn(
     )
 
     return valid_dataset_tf
+
+
+@tf.function(experimental_relax_shapes=True)
+def pad_batch(batch):
+    batch = batch.copy()
+    for feature, hotness in MULTIHOT_COLUMNS.items():
+        multihot_tuple = batch[feature]
+        values = multihot_tuple[0][:, 0]
+        row_lengths = multihot_tuple[1][:, 0]
+        padded = tf.RaggedTensor.from_row_lengths(
+            values, row_lengths, validate=False
+        ).to_tensor(default_value=-1, shape=[None, hotness])
+        batch[feature] = padded
+    return batch

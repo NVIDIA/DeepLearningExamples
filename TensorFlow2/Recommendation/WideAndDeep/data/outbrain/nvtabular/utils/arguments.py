@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,10 +36,10 @@ def parse_args():
         nargs="+",
     )
     parser.add_argument(
-        '--use_dask',
+        "--use_dask",
         default=False,
-        action='store_true',
-        help='Use multi-gpu preprocessing for nvTabular workflow'
+        action="store_true",
+        help="Use multi-gpu preprocessing for nvTabular workflow",
     )
 
     return parser.parse_args()

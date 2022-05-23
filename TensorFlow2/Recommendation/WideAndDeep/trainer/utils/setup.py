@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,12 +15,13 @@
 import glob
 import json
 import logging
+import multiprocessing
 import os
 
 import dllogger
 import horovod.tensorflow.keras as hvd
 import tensorflow as tf
-from data.outbrain.dataloader import train_input_fn, eval_input_fn
+from data.outbrain.dataloader import eval_input_fn, train_input_fn
 from trainer.utils.gpu_affinity import set_affinity
 
 
@@ -45,11 +46,25 @@ def init_gpu(args, logger):
         )
         logger.warning(f"{gpu_id}: thread affinity: {affinity}")
 
+    tf.config.threading.set_intra_op_parallelism_threads(1)
+    tf.config.threading.set_inter_op_parallelism_threads(
+        max(2, (multiprocessing.cpu_count() // hvd.size()) - 2)
+    )
+
     if args.amp:
         tf.keras.mixed_precision.set_global_policy("mixed_float16")
 
     if args.xla:
         tf.config.optimizer.set_jit(True)
+
+    # Max out L2 cache
+    import ctypes
+
+    _libcudart = ctypes.CDLL("libcudart.so")
+    pValue = ctypes.cast((ctypes.c_int * 1)(), ctypes.POINTER(ctypes.c_int))
+    _libcudart.cudaDeviceSetLimit(ctypes.c_int(0x05), ctypes.c_int(128))
+    _libcudart.cudaDeviceGetLimit(pValue, ctypes.c_int(0x05))
+    assert pValue.contents.value == 128
 
 
 def init_logger(args, full, logger):
@@ -80,10 +95,10 @@ def init_logger(args, full, logger):
 
 def create_config(args):
     assert not (
-        args.cpu and args.amp
+            args.cpu and args.amp
     ), "Automatic mixed precision conversion works only with GPU"
     assert (
-        not args.benchmark or args.benchmark_warmup_steps < args.benchmark_steps
+            not args.benchmark or args.benchmark_warmup_steps < args.benchmark_steps
     ), "Number of benchmark steps must be higher than warmup steps"
 
     logger = logging.getLogger("tensorflow")

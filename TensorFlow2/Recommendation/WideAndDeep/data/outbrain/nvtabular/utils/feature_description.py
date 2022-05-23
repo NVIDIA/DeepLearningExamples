@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -81,44 +81,3 @@ EXCLUDE_COLUMNS = [
     "uuid",
     "day_event",
 ]
-
-nvt_to_spark = {
-    "ad_id": "ad_id",
-    "clicked": "label",
-    "display_id": "display_id",
-    "document_id": "doc_event_id",
-    "platform": "event_platform",
-    "document_id_promo": "doc_id",
-    "campaign_id": "campaign_id",
-    "advertiser_id": "ad_advertiser",
-    "source_id": "doc_event_source_id",
-    "publisher_id": "doc_event_publisher_id",
-    "source_id_promo": "doc_ad_source_id",
-    "publisher_id_promo": "doc_ad_publisher_id",
-    "geo_location": "event_geo_location",
-    "geo_location_country": "event_country",
-    "geo_location_state": "event_country_state",
-    "document_id_promo_ctr": "pop_document_id",
-    "publisher_id_promo_ctr": "pop_publisher_id",
-    "source_id_promo_ctr": "pop_source_id",
-    "document_id_promo_count": "doc_views_log_01scaled",
-    "publish_time_days_since_published": "doc_event_days_since_published_log_01scaled",
-    "ad_id_ctr": "pop_ad_id",
-    "advertiser_id_ctr": "pop_advertiser_id",
-    "campaign_id_ctr": "pop_campain_id",
-    "ad_id_count": "ad_views_log_01scaled",
-    "publish_time_promo_days_since_published": "doc_ad_days_since_published_log_01scaled",
-    "document_id_document_id_promo_sim_categories": "doc_event_doc_ad_sim_categories",
-    "document_id_document_id_promo_sim_topics": "doc_event_doc_ad_sim_topics",
-    "document_id_document_id_promo_sim_entities": "doc_event_doc_ad_sim_entities",
-}
-
-spark_to_nvt = {item: key for key, item in nvt_to_spark.items()}
-
-
-def transform_nvt_to_spark(column):
-    return nvt_to_spark[column]
-
-
-def transform_spark_to_nvt(column):
-    return spark_to_nvt[column]

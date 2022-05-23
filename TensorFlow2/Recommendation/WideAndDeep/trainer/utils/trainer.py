@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,21 +18,23 @@ import os
 import dllogger
 import horovod.tensorflow as hvd
 import tensorflow as tf
+from data.outbrain.dataloader import pad_batch
+from trainer.model.widedeep import get_dummy_inputs
 
 
 class Trainer:
     def __init__(
-        self,
-        model,
-        scheduler,
-        deep_optimizer,
-        wide_optimizer,
-        throughput_calculator,
-        compiled_loss,
-        steps,
-        args,
-        train_dataset,
-        evaluator,
+            self,
+            model,
+            scheduler,
+            deep_optimizer,
+            wide_optimizer,
+            throughput_calculator,
+            compiled_loss,
+            steps,
+            args,
+            train_dataset,
+            evaluator,
     ):
         self.model = model
         self.scheduler = scheduler
@@ -40,6 +42,7 @@ class Trainer:
         self.wide_optimizer = wide_optimizer
         self.throughput_calculator = throughput_calculator
         self.steps = steps
+        self.steps_per_epoch = steps // args.num_epochs
         self.args = args
         self.train_dataset = train_dataset
         self.evaluator = evaluator
@@ -53,6 +56,7 @@ class Trainer:
             )
 
         self._init_checkpoint_manager()
+        self.max_steps = steps
 
     def _init_checkpoint_manager(self):
         self.checkpoint = tf.train.Checkpoint(
@@ -66,6 +70,24 @@ class Trainer:
             directory=os.path.join(self.args.model_dir, "checkpoint"),
             max_to_keep=1,
         )
+
+    @property
+    def current_epoch(self):
+        return int(self.current_step_var.numpy()) // self.steps
+
+    @property
+    def max_steps(self):
+        return self.__max_steps
+
+    @max_steps.setter
+    def max_steps(self, steps):
+        self.__max_steps = min(self.steps, steps)
+
+    def prepare_dataset(self, current_epoch):
+        benchmark_needed_steps = self.args.benchmark_steps // self.steps_per_epoch + 1
+        n = self.args.num_epochs - current_epoch if not self.args.benchmark \
+            else max(benchmark_needed_steps, self.args.num_epochs)
+        self.train_dataset = self.train_dataset.epochs(n)
 
     def maybe_restore_checkpoint(self):
         if self.args.use_checkpoint:
@@ -94,7 +116,12 @@ class Trainer:
             )
 
         if not self.args.cpu:
-            tape = hvd.DistributedGradientTape(tape, sparse_as_dense=True)
+            tape = hvd.DistributedGradientTape(
+                tape,
+                sparse_as_dense=True,
+                num_groups=1,
+                compression=hvd.Compression.fp16,
+            )
 
         linear_vars = self.model.linear_model.trainable_variables
         dnn_vars = self.model.dnn_model.trainable_variables
@@ -115,7 +142,7 @@ class Trainer:
 
         return loss
 
-    @tf.function
+    @tf.function(experimental_relax_shapes=True)
     def _execute_step_calculations(self, x, y):
         loss = self(x, y)
         with tf.device("/CPU:0"):
@@ -126,7 +153,7 @@ class Trainer:
 
     def log(self, current_step, loss):
         train_data = {"loss": f"{loss:.4f}"}
-        dllogger.log(data=train_data, step=(current_step, self.steps))
+        dllogger.log(data=train_data, step=(current_step, self.max_steps))
 
     def train_step(self, x, y):
 
@@ -140,31 +167,24 @@ class Trainer:
         elif (self.args.cpu or hvd.rank() == 0) and current_step % 100 == 0:
             self.log(current_step, loss.numpy())
 
-    def join_and_broadcast(self):
-        hvd.join()
-        if not self.args.benchmark:
-            hvd.broadcast_variables(self.model.linear_model.variables, root_rank=0)
-            hvd.broadcast_variables(self.model.dnn_model.variables, root_rank=0)
-            hvd.broadcast_variables(self.wide_optimizer.variables(), root_rank=0)
-            hvd.broadcast_variables(self.deep_optimizer.variables(), root_rank=0)
-
     def run_loop(self):
         eval_data = {}
-        current_epoch = int(self.current_step_var.numpy()) // len(self.train_dataset) + 1
+        current_step = int(self.current_step_var.numpy()) + 1
 
-        for _ in range(current_epoch, self.args.num_epochs + 1):
-            range_val = 1 if not self.args.benchmark else 100
+        # Graph mode part
+        for i, (x, y) in enumerate(self.train_dataset, current_step):
+            x = pad_batch(x)
+            self.train_step(x, y)
+            if not self.args.benchmark and (
+                    i % self.steps_per_epoch == 0 or i == self.max_steps
+            ):
+                eval_data = self.evaluator.eval(self.current_step_var)
 
-            # Graph mode part
-            for _ in range(range_val):
-                for x, y in self.train_dataset:
-                    self.train_step(x, y)
-                self.join_and_broadcast()
+                if self.args.cpu or hvd.rank() == 0:
+                    self.manager.save()
 
-            eval_data = self.evaluator.eval(self.current_step_var)
-
-            if self.args.cpu or hvd.rank() == 0:
-                self.manager.save()
+                if i == self.max_steps:
+                    break
 
         if self.args.cpu or hvd.rank() == 0:
             dllogger.log(data=eval_data, step=tuple())

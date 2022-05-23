@@ -1,0 +1,45 @@
+batching: dynamic
+checkpoints:
+- name: widedeep_tf2_amp_base_128k_nvtabular
+  url: ''
+configurations:
+- checkpoint: widedeep_tf2_amp_base_128k_nvtabular
+  parameters:
+    backend_accelerator: amp
+    checkpoint: widedeep_tf2_amp_base_128k_nvtabular
+    device_kind: gpu
+    export_format: tf-savedmodel
+    export_precision: fp32
+    format: tf-savedmodel
+    max_batch_size: 131072
+    number_of_model_instances: 2
+    precision: fp32
+    tensorrt_capture_cuda_graph: 0
+    torch_jit: none
+- checkpoint: widedeep_tf2_amp_base_128k_nvtabular
+  parameters:
+    backend_accelerator: none
+    checkpoint: widedeep_tf2_amp_base_128k_nvtabular
+    device_kind: gpu
+    export_format: tf-savedmodel
+    export_precision: fp16
+    format: trt
+    max_batch_size: 131072
+    number_of_model_instances: 2
+    precision: fp16
+    tensorrt_capture_cuda_graph: 1
+    torch_jit: none
+container_version: '22.02'
+datasets:
+- name: outbrain
+datasets_dir: datasets
+ensemble_model_name: null
+framework: TensorFlow2
+measurement_steps_offline: 8
+measurement_steps_online: 32
+model_name: WidenDeep
+performance_tool: perf_analyzer
+triton_container_image: nvcr.io/nvidia/tritonserver:22.02-py3
+triton_custom_operations: null
+triton_dockerfile: null
+triton_load_model_method: explicit

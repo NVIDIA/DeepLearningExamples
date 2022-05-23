@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/merlin/merlin-tensorflow-training:21.09
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/merlin/merlin-tensorflow-training:22.03
 
 FROM ${FROM_IMAGE_NAME}
 
@@ -27,4 +27,4 @@ WORKDIR  /wd
 
 COPY . .
 
-RUN cd /nvtabular && git checkout v0.6.1
+RUN cd /nvtabular && git checkout v0.7.1

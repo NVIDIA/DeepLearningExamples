@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@ import logging
 import os
 
 os.environ["TF_MEMORY_ALLOCATION"] = "0.0"
-from data.outbrain.nvtabular.utils.workflow import execute_pipeline
 from data.outbrain.nvtabular.utils.arguments import parse_args
 from data.outbrain.nvtabular.utils.setup import create_config
+from data.outbrain.nvtabular.utils.workflow import execute_pipeline
 
 
 def is_empty(path):

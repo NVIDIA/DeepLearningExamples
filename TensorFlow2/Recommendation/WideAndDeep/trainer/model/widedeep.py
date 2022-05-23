@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,53 +13,45 @@
 # limitations under the License.
 
 import tensorflow as tf
-from data.outbrain.features import (
-    CATEGORICAL_COLUMNS,
-    NUMERIC_COLUMNS,
-    get_feature_columns,
-)
-from nvtabular.framework_utils.tensorflow import layers as nvtlayers
+from data.outbrain.features import (CATEGORICAL_COLUMNS, MULTIHOT_COLUMNS,
+                                    NUMERIC_COLUMNS, ONEHOT_COLUMNS,
+                                    get_feature_columns)
+
+from trainer.model import layers as nvtlayers
 
 
-def get_inputs_columns():
-    wide_columns, deep_columns = get_feature_columns()
+def get_inputs_columns(combiner):
+    wide_columns, deep_columns = get_feature_columns(combiner)
 
-    wide_columns_dict = {}
-    deep_columns_dict = {}
     features = {}
 
-    for col in wide_columns:
-        features[col.key] = tf.keras.Input(
-            shape=(1,),
+    # Numerical
+    for feature in NUMERIC_COLUMNS:
+        features[feature] = tf.keras.Input(
+            shape=(1,), batch_size=None, name=feature, dtype=tf.float32, sparse=False
+        )
+
+    # Categorical (One-hot)
+    for feature in ONEHOT_COLUMNS:
+        features[feature] = tf.keras.Input(
+            shape=(1,), batch_size=None, name=feature, dtype=tf.int32, sparse=False
+        )
+
+    # Categorical (Multi-hot)
+    for feature, hotness in MULTIHOT_COLUMNS.items():
+        features[feature] = tf.keras.Input(
+            shape=(hotness,),
             batch_size=None,
-            name=col.key,
-            dtype=tf.float32 if col.key in NUMERIC_COLUMNS else tf.int32,
+            name=f"{feature}",
+            dtype=tf.int32,
             sparse=False,
         )
-        wide_columns_dict[col.key] = col
-
-    for col in deep_columns:
-        is_embedding_column = "key" not in dir(col)
-        key = col.categorical_column.key if is_embedding_column else col.key
-
-        if key not in features:
-            features[key] = tf.keras.Input(
-                shape=(1,),
-                batch_size=None,
-                name=key,
-                dtype=tf.float32 if col.key in NUMERIC_COLUMNS else tf.int32,
-                sparse=False,
-            )
-        deep_columns_dict[key] = col
-
-    deep_columns = list(deep_columns_dict.values())
-    wide_columns = list(wide_columns_dict.values())
 
     return deep_columns, wide_columns, features
 
 
 def wide_deep_model(args):
-    deep_columns, wide_columns, features = get_inputs_columns()
+    deep_columns, wide_columns, features = get_inputs_columns(combiner=args.combiner)
 
     wide = nvtlayers.LinearFeatures(wide_columns, name="wide_linear")(features)
 
@@ -85,7 +77,12 @@ def get_dummy_inputs(batch_size):
     for cat in CATEGORICAL_COLUMNS:
         inputs[cat] = tf.zeros(shape, dtype=tf.dtypes.int32)
 
-    for cat in NUMERIC_COLUMNS:
-        inputs[cat] = tf.zeros(shape, dtype=tf.dtypes.float32)
+    for num in NUMERIC_COLUMNS:
+        inputs[num] = tf.zeros(shape, dtype=tf.dtypes.float32)
 
-    return inputs
+    for mul, hotness in MULTIHOT_COLUMNS.items():
+        inputs[mul] = tf.zeros((batch_size, hotness), dtype=tf.dtypes.int32)
+
+    labels = tf.zeros(shape, dtype=tf.dtypes.int32)
+
+    return inputs, labels
