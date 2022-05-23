@@ -1,0 +1,10 @@
+absl-py>=0.7.1
+matplotlib>=3.0.3
+numpy>=1.16.4
+Pillow>=6.0.0
+PyYAML>=5.1
+six>=1.12.0
+pynvml==8.0.4
+mpi4py>=3.0.3
+tensorflow-addons>=0.13.0
+git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI
