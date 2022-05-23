@@ -624,8 +624,8 @@ def main(
 
     feature_spec = FeatureSpec.from_yaml(dataset_dir / feature_spec)
 
-    # since all features must be included in each tfrecord file, therefore we can select only first file of each chunk
-    train_files = [dataset_dir / chunk[FILES_SELECTOR][0] for chunk in feature_spec.source_spec[TRAIN_MAPPING]]
+    # since each tfrecord file must include all of the features, it is enough to read first chunk for each split. 
+    train_files = [dataset_dir / file for file in feature_spec.source_spec[TRAIN_MAPPING][0][FILES_SELECTOR]]
 
     if prefetch_train_size < 0:
         prefetch_train_size = train_dataset_size // global_batch_size
@@ -637,7 +637,7 @@ def main(
     )
 
     if mode == "train":
-        test_files = [dataset_dir / chunk[FILES_SELECTOR][0] for chunk in feature_spec.source_spec[TEST_MAPPING]]
+        test_files = [dataset_dir / file for file in feature_spec.source_spec[TEST_MAPPING][0][FILES_SELECTOR]]
         data_iterator_test = get_data_iterator(
             test_files, feature_spec, batch_size, num_gpus, long_seq_length,
             amp=amp, disable_cache=disable_cache, prefetch_size=prefetch_test_size

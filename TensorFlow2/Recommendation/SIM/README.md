@@ -32,6 +32,9 @@ This repository provides a script and recipe to train the SIM model to achieve s
             * [Channel definitions and requirements](#channel-definitions-and-requirements)
     * [Training process](#training-process)
     * [Inference process](#inference-process)
+    * [Log format](#log-format)
+        * [Training log data](#training-log-data)
+        * [Inference log data](#inference-log-data)
 - [Performance](#performance)
     * [Benchmarking](#benchmarking)
         * [Training performance benchmark](#training-performance-benchmark)
@@ -413,7 +416,10 @@ To train your model using mixed or TF32 precision with Tensor Cores or using FP3
 
 5. Start preprocessing.
 
-    For details of the required file format and certain preprocessing parameters (for example, `${NUMBER_OF_USER_FEATURES}` refer to [BYO dataset](#byo-dataset))
+    For details of the required file format and certain preprocessing parameters refer to [BYO dataset](#byo-dataset).
+    
+    
+    `${NUMBER_OF_USER_FEATURES}` defines how many user specific features are present in dataset. If using default Amazon Books dataset and `sim_preprocessing` script (as shown below), this parameter should be set to <b>1</b> (in this case, the only user specific features is <b>user_id</b>. Other features are item specific).
 
    ```bash
    python preprocessing/sim_preprocessing.py \
@@ -451,6 +457,8 @@ To train your model using mixed or TF32 precision with Tensor Cores or using FP3
     --global_batch_size 131072 \
     --amp
    ```
+
+For the explanation of output logs, refer to [Log format](#log-format) section.
 
 Now that you have your model trained and evaluated, you can choose to compare your training results with our [Training accuracy results](#training-accuracy-results). You can also choose to benchmark your performance to [Training performance benchmark](#training-performance-results), or [Inference performance benchmark](#inference-performance-results). Following the steps in these sections will ensure that you achieve the same accuracy and performance results as stated in the [Results](#results) section.
 
@@ -704,6 +712,51 @@ Training can be run using `main.py` script by specifying the `--mode train` para
 Inference  can be run using `main.py` script by specifying the `--mode inference` parameter. It is performed using a dummy model initialized randomly, and it is intended to measure inference throughput. The most important parameter for inference is the batch size.
 
 Example usage of training and inference are demonstrated in [Quick Start Guide](#quick-start-guide).
+
+### Log format
+
+There are three type of log lines during model execution. Each of them have `step` value, however it is formatted differently based on the type of log:
+- <b>step log</b> - step value is in format `[epoch, step]`:
+
+DLLL {"timestamp": ..., "datetime": ..., "elapsedtime": ..., "type": ..., `"step": [2, 79]`, "data": ...}
+
+- <b>end of epoch log</b> - step value is in format `[epoch]`:
+
+DLLL {"timestamp": ..., "datetime": ..., "elapsedtime": ..., "type": ..., `"step": [2]`, "data": ...}
+
+- <b>summary log</b> - logged once at the end of script execution. Step value is in fomat `[]`:
+
+DLLL {"timestamp": ..., "datetime": ..., "elapsedtime": ..., "type": ..., `"step": []`, "data": ...}
+
+In those logs, `data` field contains dictonary in form `{metric: value}`. Metrics logged differ based on log type (step, end of epoch, summary) and model mode (training, inference).
+
+#### Training log data
+- <b> step log </b>
+  - classification_loss - loss at the final output of the model.
+  - dien_aux_loss - loss at the output of auxiliary model.
+  - total_loss - sum of the above.
+  - samples/s - estimated throughput in samples per second.
+- <b> end of epoch log </b>
+  - throughput - average throughput during epoch in samples/s.
+  - time - epoch time in seconds.
+  - train_auc - AUC during evaluation on train set.
+  - test_auc - AUC during evaluation on test set.
+  - train_loss - loss during evaluation on train set.
+  - test_loss - loss during evaluation on test set.
+  - latency_[mean, p90, p95, p99] - latencies in miliseconds.
+- <b> summary log </b>
+  - time_to_train - total training time in seconds.
+  - train_auc, test_auc, train_loss, test_loss - results from the last epoch (see above).
+
+#### Inference log data
+- <b> step log </b>
+  - samples/s - estimated throughput in samples per second.
+- <b> end of epoch log is not present</b>
+- <b> summary log </b>
+  - throughput - average throughput during epoch in samples/s.  
+  - time - total execution time in seconds.
+  - latency_[mean, p90, p95, p99] - latencies in miliseconds.
+
 
 ## Performance
 
