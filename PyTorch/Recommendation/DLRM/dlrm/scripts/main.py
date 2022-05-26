@@ -618,6 +618,7 @@ def main(argv):
     data_stream = torch.cuda.Stream()
     timer = utils.StepTimer()
 
+    best_validation_loss = 1e6
     best_auc = 0
     best_epoch = 0
     start_time = time()
@@ -662,6 +663,11 @@ def main(argv):
                 # Averaging across a print_freq period to reduce the error.
                 # An accurate timing needs synchronize which would slow things down.
 
+                # only check for nan every print_freq steps
+                if torch.any(torch.isnan(loss)):
+                    print('NaN loss encountered.')
+                    break
+
                 if global_step < FLAGS.benchmark_warmup_steps:
                     metric_logger.update(
                         loss=moving_loss.item() / print_freq,
@@ -678,7 +684,7 @@ def main(argv):
                 moving_loss = 0.
 
             if global_step % test_freq == 0 and global_step > 0 and global_step / steps_per_epoch >= FLAGS.test_after:
-                auc = dist_evaluate(trainer.model, data_loader_test)
+                auc, validation_loss = dist_evaluate(trainer.model, data_loader_test)
 
                 if auc is None:
                     continue
@@ -689,6 +695,9 @@ def main(argv):
                 if auc > best_auc:
                     best_auc = auc
                     best_epoch = epoch + ((step + 1) / steps_per_epoch)
+
+                if validation_loss < best_validation_loss:
+                    best_validation_loss = validation_loss
 
                 if FLAGS.auc_threshold and auc >= FLAGS.auc_threshold:
                     run_time_s = int(stop_time - start_time)
@@ -706,6 +715,7 @@ def main(argv):
         checkpoint_writer.save_checkpoint(model, FLAGS.save_checkpoint_path, epoch, step)
 
     results = {'best_auc': best_auc,
+               'best_validation_loss': best_validation_loss,
                'best_epoch': best_epoch,
                'average_train_throughput': avg_throughput}
 
@@ -817,17 +827,18 @@ def dist_evaluate(model, data_loader):
             y_true = torch.cat(y_true)
             y_score = torch.sigmoid(torch.cat(y_score)).float()
             auc = utils.roc_auc_score(y_true, y_score)
-            loss = loss_fn(y_score, y_true)
-            print(f'test loss: {loss.item():.8f}', )
+            loss = loss_fn(y_score, y_true).item()
+            print(f'test loss: {loss:.8f}', )
         else:
             auc = None
+            loss = None
 
         if world_size > 1:
             torch.distributed.barrier()
 
     model.train()
 
-    return auc
+    return auc, loss
 
 
 if __name__ == '__main__':
