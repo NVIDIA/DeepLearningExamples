@@ -3,3 +3,13 @@ GPUNet for PyTorch
 This repository contains code from https://github.com/rwightman/pytorch-image-models/blob/master/validate.py under the Apache 2.0 License.
 
 This repository contains code from https://github.com/rwightman/pytorch-image-models/blob/master/train.py under the Apache 2.0 License.
+
+This repository contains code from https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/efficientnet_blocks.py under the Apache 2.0 License.
+
+This repository contains code from https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/layers/padding.py under the Apache 2.0 License.
+
+This repository contains code from https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/layers/helpers.py under the Apache 2.0 License.
+
+This repository contains code from https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/layers/create_conv2d.py under the Apache 2.0 License.
+
+This repository contains code from https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/layers/drop.py under the Apache 2.0 License.
