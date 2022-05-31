@@ -37,7 +37,8 @@ These examples, along with our NVIDIA deep learning software stack, are provided
 | [V-Net Med](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/VNet) | TensorFlow  | Yes  | Yes  | Yes  | -  |  -  | -  |   -  | Yes | - |
 | [U-Net Med](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Segmentation/UNet_Medical) | TensorFlow2  | Yes  | Yes  | Yes  | -  |  -  |-  |   -  | Yes  | - |
 | [Mask R-CNN](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Segmentation/MaskRCNN) |TensorFlow2  | Yes  | Yes  | Yes  | -  |  -  |-  |   -  | Yes  | - |
-| [EfficientNet](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Classification/ConvNets/efficientnet) |TensorFlow2  | Yes  | Yes  | Yes  | Yes  |  -  |-  |   -  | Yes  | - |
+| [EfficientNet v1](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Classification/ConvNets/efficientnet_v1) |TensorFlow2  | Yes  | Yes  | Yes  | Yes  |  -  |-  |   -  | Yes  | - |
+| [EfficientNet v2](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Classification/ConvNets/efficientnet_v2) |TensorFlow2  | Yes  | Yes  | Yes  | Yes  |  -  |-  |   -  | Yes  | - |
 | [ResNet-50](https://github.com/NVIDIA/DeepLearningExamples/tree/master/MxNet/Classification/RN50v1.5) | MXNet  | -  | Yes  | Yes  | -  | -  |   -  | -  | -  | - |
 
 ## Natural Language Processing
