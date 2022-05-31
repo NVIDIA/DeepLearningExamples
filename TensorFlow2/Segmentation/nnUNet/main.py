@@ -37,7 +37,8 @@ def main(args):
     assert pValue.contents.value == 128
 
     hvd_init()
-    set_seed(args.seed)
+    if args.seed is not None:
+        set_seed(args.seed)
     set_tf_flags(args)
     data = DataModule(args)
     data.setup()

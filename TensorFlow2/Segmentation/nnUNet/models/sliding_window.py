@@ -27,20 +27,8 @@ def batch_window_slices(slices, image_batch_size, batch_size):
         )
     return batched_window_slices
 
-@tf.function
-def gaussian_kernel_tf_v2(roi_size, sigma):
-        """
-        adapted from: https://gist.github.com/blzq
-        """
-        kernel_size = roi_size[0]
-        sigma = sigma * kernel_size
-        gauss = tf.range(start = 0, limit = kernel_size, dtype = tf.float32) - (kernel_size - 1.0) / 2.0
-        xx, yy, zz = tf.meshgrid(gauss, gauss, gauss)
-        kernel = tf.exp(-(xx ** 2 + yy ** 2 + zz ** 2) / (2.0 * sigma ** 2))
-        kernel = tf.math.pow(kernel, 1/len(roi_size))
-        kernel = kernel / tf.reduce_max(kernel)
-        return kernel
 
+@tf.function
 def gaussian_kernel(roi_size, sigma):
     gauss = signal.windows.gaussian(roi_size[0], std=sigma * roi_size[0])
     for s in roi_size[1:]:
@@ -57,7 +45,7 @@ def get_importance_kernel(roi_size, blend_mode, sigma):
     if blend_mode == "constant":
         return tf.ones(roi_size, dtype=tf.float32)
     elif blend_mode == "gaussian":
-        return gaussian_kernel_tf_v2(roi_size, sigma=sigma)
+        return gaussian_kernel(roi_size, sigma)
     else:
         raise ValueError(f'Invalid blend mode: {blend_mode}. Use either "constant" or "gaussian".')
 
@@ -133,7 +121,6 @@ def sliding_window_inference(
     image_size = list(input_padded.shape[1:-1])
 
     importance_kernel = get_importance_kernel(roi_size, blend_mode, sigma=sigma)
-
     output_shape = (batch_size,) + tuple(image_size) + (n_class,)
     importance_map = tf.tile(
         tf.reshape(importance_kernel, shape=[1, *roi_size, 1]),
