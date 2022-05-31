@@ -37,9 +37,13 @@
 # The following functions/classes were based on code from https://github.com/jik876/hifi-gan:
 # init_weights, get_padding, AttrDict
 
+import ctypes
+import glob
+import os
+import re
 import shutil
 import warnings
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from pathlib import Path
 from typing import Optional
 
@@ -47,6 +51,7 @@ import librosa
 import numpy as np
 
 import torch
+import torch.distributed as dist
 from scipy.io.wavfile import read
 
 
@@ -59,6 +64,7 @@ def mask_from_lens(lens, max_len: Optional[int] = None):
 
 
 def load_wav(full_path, torch_tensor=False):
+    import soundfile  # flac
     data, sampling_rate = soundfile.read(full_path, dtype='int16')
     if torch_tensor:
         return torch.FloatTensor(data.astype(np.float32)), sampling_rate
@@ -170,3 +176,116 @@ class BenchmarkStats:
 
     def __len__(self):
         return len(self.losses)
+
+
+class Checkpointer:
+
+    def __init__(self, save_dir, keep_milestones=[]):
+        self.save_dir = save_dir
+        self.keep_milestones = keep_milestones
+
+        find = lambda name: [
+            (int(re.search("_(\d+).pt", fn).group(1)), fn)
+            for fn in glob.glob(f"{save_dir}/{name}_checkpoint_*.pt")]
+
+        tracked = sorted(find("FastPitch"), key=lambda t: t[0])
+        self.tracked = OrderedDict(tracked)
+
+    def last_checkpoint(self, output):
+
+        def corrupted(fpath):
+            try:
+                torch.load(fpath, map_location="cpu")
+                return False
+            except:
+                warnings.warn(f"Cannot load {fpath}")
+                return True
+
+        saved = sorted(
+            glob.glob(f"{output}/FastPitch_checkpoint_*.pt"),
+            key=lambda f: int(re.search("_(\d+).pt", f).group(1)))
+
+        if len(saved) >= 1 and not corrupted(saved[-1]):
+            return saved[-1]
+        elif len(saved) >= 2:
+            return saved[-2]
+        else:
+            return None
+
+    def maybe_load(self, model, optimizer, scaler, train_state, args,
+                   ema_model=None):
+
+        assert args.checkpoint_path is None or args.resume is False, (
+            "Specify a single checkpoint source")
+
+        fpath = None
+        if args.checkpoint_path is not None:
+            fpath = args.checkpoint_path
+            self.tracked = OrderedDict()  # Do not track/delete prev ckpts
+        elif args.resume:
+            fpath = self.last_checkpoint(args.output)
+
+        if fpath is None:
+            return
+
+        print_once(f"Loading model and optimizer state from {fpath}")
+        ckpt = torch.load(fpath, map_location="cpu")
+        train_state["epoch"] = ckpt["epoch"] + 1
+        train_state["total_iter"] = ckpt["iteration"]
+
+        no_pref = lambda sd: {re.sub("^module.", "", k): v for k, v in sd.items()}
+        unwrap = lambda m: getattr(m, "module", m)
+
+        unwrap(model).load_state_dict(no_pref(ckpt["state_dict"]))
+
+        if ema_model is not None:
+            unwrap(ema_model).load_state_dict(no_pref(ckpt["ema_state_dict"]))
+
+        optimizer.load_state_dict(ckpt["optimizer"])
+
+        if "scaler" in ckpt:
+            scaler.load_state_dict(ckpt["scaler"])
+        else:
+            warnings.warn("AMP scaler state missing from the checkpoint.")
+
+    def maybe_save(self, args, model, ema_model, optimizer, scaler, epoch,
+                   total_iter, config):
+
+        intermediate = (args.epochs_per_checkpoint > 0
+                        and epoch % args.epochs_per_checkpoint == 0)
+        final = epoch == args.epochs
+
+        if not intermediate and not final and epoch not in self.keep_milestones:
+            return
+
+        rank = 0
+        if dist.is_initialized():
+            dist.barrier()
+            rank = dist.get_rank()
+
+        if rank != 0:
+            return
+
+        unwrap = lambda m: getattr(m, "module", m)
+        ckpt = {"epoch": epoch,
+                "iteration": total_iter,
+                "config": config,
+                "train_setup": args.__dict__,
+                "state_dict": unwrap(model).state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "scaler": scaler.state_dict()}
+        if ema_model is not None:
+            ckpt["ema_state_dict"] = unwrap(ema_model).state_dict()
+
+        fpath = Path(args.output, f"FastPitch_checkpoint_{epoch}.pt")
+        print(f"Saving model and optimizer state at epoch {epoch} to {fpath}")
+        torch.save(ckpt, fpath)
+
+        # Remove old checkpoints; keep milestones and the last two
+        self.tracked[epoch] = fpath
+        for epoch in set(list(self.tracked)[:-2]) - set(self.keep_milestones):
+            try:
+                os.remove(self.tracked[epoch])
+            except:
+                pass
+            del self.tracked[epoch]
