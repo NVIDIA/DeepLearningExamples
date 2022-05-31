@@ -27,11 +27,8 @@
 
 import argparse
 import copy
-import glob
 import os
-import re
 import time
-import warnings
 from collections import defaultdict, OrderedDict
 
 import numpy as np
@@ -47,7 +44,7 @@ import common.tb_dllogger as logger
 import models
 from common.tb_dllogger import log
 from common.text import cmudict
-from common.utils import BenchmarkStats, prepare_tmp
+from common.utils import BenchmarkStats, Checkpointer, prepare_tmp
 from fastpitch.attn_loss_function import AttentionBinarizationLoss
 from fastpitch.data_function import batch_to_gpu, TTSCollate, TTSDataset
 from fastpitch.loss_function import FastPitchLoss
@@ -68,6 +65,9 @@ def parse_args(parser):
                        help='Number of epochs per checkpoint')
     train.add_argument('--checkpoint-path', type=str, default=None,
                        help='Checkpoint path to resume training')
+    train.add_argument('--keep-milestones', default=list(range(100, 1000, 100)),
+                       type=int, nargs='+',
+                       help='Milestone checkpoints to keep from removing')
     train.add_argument('--resume', action='store_true',
                        help='Resume training from the last checkpoint')
     train.add_argument('--seed', type=int, default=1234,
@@ -192,74 +192,6 @@ def init_distributed(args, world_size, rank):
     dist.init_process_group(backend=('nccl' if args.cuda else 'gloo'),
                             init_method='env://')
     print("Done initializing distributed training")
-
-
-def last_checkpoint(output):
-
-    def corrupted(fpath):
-        try:
-            torch.load(fpath, map_location='cpu')
-            return False
-        except:
-            warnings.warn(f'Cannot load {fpath}')
-            return True
-
-    saved = sorted(
-        glob.glob(f'{output}/FastPitch_checkpoint_*.pt'),
-        key=lambda f: int(re.search('_(\d+).pt', f).group(1)))
-
-    if len(saved) >= 1 and not corrupted(saved[-1]):
-        return saved[-1]
-    elif len(saved) >= 2:
-        return saved[-2]
-    else:
-        return None
-
-
-def maybe_save_checkpoint(args, model, ema_model, optimizer, scaler, epoch,
-                          total_iter, config, final_checkpoint=False):
-    if args.local_rank != 0:
-        return
-
-    intermediate = (args.epochs_per_checkpoint > 0
-                    and epoch % args.epochs_per_checkpoint == 0)
-
-    if not intermediate and epoch < args.epochs:
-        return
-
-    fpath = os.path.join(args.output, f"FastPitch_checkpoint_{epoch}.pt")
-    print(f"Saving model and optimizer state at epoch {epoch} to {fpath}")
-    ema_dict = None if ema_model is None else ema_model.state_dict()
-    checkpoint = {'epoch': epoch,
-                  'iteration': total_iter,
-                  'config': config,
-                  'train_setup': args.__dict__,
-                  'state_dict': model.state_dict(),
-                  'ema_state_dict': ema_dict,
-                  'optimizer': optimizer.state_dict()}
-    if args.amp:
-        checkpoint['scaler'] = scaler.state_dict()
-    torch.save(checkpoint, fpath)
-
-
-def load_checkpoint(args, model, ema_model, optimizer, scaler, epoch,
-                    total_iter, config, filepath):
-    if args.local_rank == 0:
-        print(f'Loading model and optimizer state from {filepath}')
-    checkpoint = torch.load(filepath, map_location='cpu')
-    epoch[0] = checkpoint['epoch'] + 1
-    total_iter[0] = checkpoint['iteration']
-
-    sd = {k.replace('module.', ''): v
-          for k, v in checkpoint['state_dict'].items()}
-    getattr(model, 'module', model).load_state_dict(sd)
-    optimizer.load_state_dict(checkpoint['optimizer'])
-
-    if args.amp:
-        scaler.load_state_dict(checkpoint['scaler'])
-
-    if ema_model is not None:
-        ema_model.load_state_dict(checkpoint['ema_state_dict'])
 
 
 def validate(model, epoch, total_iter, criterion, valset, batch_size,
@@ -413,24 +345,14 @@ def main():
             model, device_ids=[args.local_rank], output_device=args.local_rank,
             find_unused_parameters=True)
 
-    start_epoch = [1]
-    start_iter = [0]
+    train_state = {'epoch': 1, 'total_iter': 0}
+    checkpointer = Checkpointer(args.output, args.keep_milestones)
 
-    assert args.checkpoint_path is None or args.resume is False, (
-        "Specify a single checkpoint source")
-    if args.checkpoint_path is not None:
-        ch_fpath = args.checkpoint_path
-    elif args.resume:
-        ch_fpath = last_checkpoint(args.output)
-    else:
-        ch_fpath = None
+    checkpointer.maybe_load(model, optimizer, scaler, train_state, args,
+                            ema_model)
 
-    if ch_fpath is not None:
-        load_checkpoint(args, model, ema_model, optimizer, scaler,
-                        start_epoch, start_iter, model_config, ch_fpath)
-
-    start_epoch = start_epoch[0]
-    total_iter = start_iter[0]
+    start_epoch = train_state['epoch']
+    total_iter = train_state['total_iter']
 
     criterion = FastPitchLoss(
         dur_predictor_loss_scale=args.dur_predictor_loss_scale,
@@ -609,8 +531,9 @@ def main():
                      args.batch_size, collate_fn, distributed_run, batch_to_gpu,
                      ema=True)
 
-        maybe_save_checkpoint(args, model, ema_model, optimizer, scaler, epoch,
-                              total_iter, model_config)
+        # save before making sched.step() for proper loading of LR
+        checkpointer.maybe_save(args, model, ema_model, optimizer, scaler,
+                                epoch, total_iter, model_config)
         logger.flush()
 
     # Finished training
