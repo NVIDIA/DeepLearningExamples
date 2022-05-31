@@ -14,6 +14,7 @@
 
 import dllogger
 import horovod.tensorflow as hvd
+import numpy as np
 import tensorflow as tf
 from data.outbrain.dataloader import pad_batch
 from data.outbrain.features import DISPLAY_ID_COLUMN
@@ -160,8 +161,8 @@ class Evaluator:
                 # Eager mode part
                 current_step = int(step.numpy())
                 eval_data = {
-                    "loss_val": f"{eval_loss.numpy():.4f}",
-                    "streaming_map_val": f"{map_metric.numpy():.4f}",
+                    "loss_val": np.around(eval_loss.numpy().astype(np.float64), 4),
+                    "streaming_map_val": np.around(map_metric.numpy(), 4),
                 }
 
                 self.log(eval_data, current_step)

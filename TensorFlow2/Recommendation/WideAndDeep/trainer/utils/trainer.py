@@ -17,6 +17,7 @@ import os
 
 import dllogger
 import horovod.tensorflow as hvd
+import numpy as np
 import tensorflow as tf
 from data.outbrain.dataloader import pad_batch
 from trainer.model.widedeep import get_dummy_inputs
@@ -152,7 +153,7 @@ class Trainer:
         return loss
 
     def log(self, current_step, loss):
-        train_data = {"loss": f"{loss:.4f}"}
+        train_data = {"loss": np.around(loss.astype(np.float64), 4)}
         dllogger.log(data=train_data, step=(current_step, self.max_steps))
 
     def train_step(self, x, y):
