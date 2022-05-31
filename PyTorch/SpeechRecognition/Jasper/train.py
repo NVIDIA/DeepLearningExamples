@@ -20,7 +20,6 @@ import time
 
 import torch
 import numpy as np
-import torch.cuda.profiler as profiler
 import torch.distributed as dist
 from contextlib import suppress as empty_context
 

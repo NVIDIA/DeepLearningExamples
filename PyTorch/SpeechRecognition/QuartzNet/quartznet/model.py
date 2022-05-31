@@ -16,6 +16,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from common import monkey_patch
+
 
 activations = {
     "hardtanh": nn.Hardtanh,

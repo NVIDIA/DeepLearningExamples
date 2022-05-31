@@ -21,7 +21,6 @@ import time
 import torch
 import amp_C
 import numpy as np
-import torch.cuda.profiler as profiler
 import torch.distributed as dist
 from apex.optimizers import FusedLAMB, FusedNovoGrad
 from contextlib import suppress as empty_context
