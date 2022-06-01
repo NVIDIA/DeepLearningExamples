@@ -15,10 +15,7 @@
 # Nsys Profile Flags
 export ENABLE_PROFILE=1
 export PROFILE_START_STEP=100
-export PROFILE_STOP_STEP=105
-
-# Affinity Flags
-export GPUS_PER_NODE=8
+export PROFILE_STOP_STEP=120
 
 NSYS_CMD=" \
         nsys profile --stats=true \
