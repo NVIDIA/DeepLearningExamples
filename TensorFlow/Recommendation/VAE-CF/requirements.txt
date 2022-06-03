@@ -1,1 +1,4 @@
 git+https://github.com/NVIDIA/dllogger#egg=dllogger
+mpi4py
+sklearn
+pandas
