@@ -15,6 +15,7 @@
 from __future__ import print_function
 
 import os
+import time
 import multiprocessing
 import warnings
 
@@ -30,6 +31,8 @@ from utils import hvd_wrapper as hvd
 from runtime import runner_utils
 
 import dllogger
+import random
+
 
 __all__ = [
     'Runner',
@@ -68,18 +71,26 @@ class Runner(object):
             seed=None):
 
         if dtype not in [tf.float32, tf.float16]:
-            raise ValueError("Unknown dtype received: %s (allowed: `tf.float32` and `tf.float16`)" % dtype)
+            raise ValueError(
+                "Unknown dtype received: %s (allowed: `tf.float32` and `tf.float16`)" % dtype)
 
         if compute_format not in ["NHWC", 'NCHW']:
-            raise ValueError("Unknown `compute_format` received: %s (allowed: ['NHWC', 'NCHW'])" % compute_format)
+            raise ValueError(
+                "Unknown `compute_format` received: %s (allowed: ['NHWC', 'NCHW'])" % compute_format)
 
         if input_format not in ["NHWC", 'NCHW']:
-            raise ValueError("Unknown `input_format` received: %s (allowed: ['NHWC', 'NCHW'])" % input_format)
+            raise ValueError(
+                "Unknown `input_format` received: %s (allowed: ['NHWC', 'NCHW'])" % input_format)
 
         if n_channels not in [1, 3]:
-            raise ValueError("Unsupported number of channels: %d (allowed: 1 (grayscale) and 3 (color))" % n_channels)
+            raise ValueError(
+                "Unsupported number of channels: %d (allowed: 1 (grayscale) and 3 (color))" % n_channels)
 
-        tf_seed = 2 * (seed + hvd.rank()) if seed is not None else None
+        if seed is not None:
+            seed = seed * 2 + hvd.rank()
+            tf.set_random_seed(seed)
+            np.random.seed(seed)
+            random.seed(seed)
 
         # ============================================
         # Optimsation Flags - Do not remove
@@ -103,7 +114,8 @@ class Runner(object):
         os.environ['TF_SYNC_ON_FINISH'] = '0'
         os.environ['TF_AUTOTUNE_THRESHOLD'] = '2'
         os.environ['TF_DISABLE_NVTX_RANGES'] = '1'
-        os.environ["TF_XLA_FLAGS"] = (os.environ.get("TF_XLA_FLAGS", "") + " --tf_xla_enable_lazy_compilation=false")
+        os.environ["TF_XLA_FLAGS"] = (os.environ.get(
+            "TF_XLA_FLAGS", "") + " --tf_xla_enable_lazy_compilation=false")
 
         # ============================================
         # TF-AMP Setup - Do not remove
@@ -111,7 +123,8 @@ class Runner(object):
 
         if dtype == tf.float16:
             if use_tf_amp:
-                raise RuntimeError("TF AMP can not be activated for FP16 precision")
+                raise RuntimeError(
+                    "TF AMP can not be activated for FP16 precision")
 
         elif use_tf_amp:
             os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_GRAPH_REWRITE"] = "1"
@@ -128,7 +141,7 @@ class Runner(object):
                                                     input_format=input_format,
                                                     compute_format=compute_format,
                                                     distort_colors=distort_colors,
-                                                    seed=tf_seed)
+                                                    seed=seed)
 
         num_preprocessing_threads = 10 if not use_dali else 4
         run_config_performance = tf.contrib.training.HParams(num_preprocessing_threads=num_preprocessing_threads,
@@ -146,7 +159,8 @@ class Runner(object):
             data_idx_dir=data_idx_dir,
             num_preprocessing_threads=num_preprocessing_threads)
 
-        self.run_hparams = Runner._build_hparams(model_hparams, run_config_additional, run_config_performance)
+        self.run_hparams = Runner._build_hparams(
+            model_hparams, run_config_additional, run_config_performance)
 
         model_name = architecture
         architecture = resnet.model_architectures[architecture]
@@ -166,9 +180,6 @@ class Runner(object):
                                          use_se=architecture['use_se'] if 'use_se' in architecture else False,
                                          se_ratio=architecture['se_ratio'] if 'se_ratio' in architecture else 1)
 
-        if self.run_hparams.seed is not None:
-            tf.set_random_seed(self.run_hparams.seed)
-
         self.training_logging_hook = None
         self.eval_logging_hook = None
 
@@ -179,7 +190,8 @@ class Runner(object):
 
         for _hparams in args:
             if not isinstance(_hparams, tf.contrib.training.HParams):
-                raise ValueError("Non valid HParams argument object detected:", _hparams)
+                raise ValueError(
+                    "Non valid HParams argument object detected:", _hparams)
 
             for key, val in _hparams.values().items():
                 try:
@@ -207,7 +219,8 @@ class Runner(object):
         if not use_cpu:
             # Limit available GPU memory (tune the size)
             if use_dali:
-                gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=gpu_memory_fraction)
+                gpu_options = tf.GPUOptions(
+                    per_process_gpu_memory_fraction=gpu_memory_fraction)
                 config = tf.ConfigProto(gpu_options=gpu_options)
                 config.gpu_options.allow_growth = False
             else:
@@ -230,7 +243,8 @@ class Runner(object):
         if mode == 'train':
             if not use_cpu:
                 config.intra_op_parallelism_threads = 1  # Avoid pool of Eigen threads
-                config.inter_op_parallelism_threads = max(2, (multiprocessing.cpu_count() // max(hvd.size(), 8) - 2))
+                config.inter_op_parallelism_threads = max(
+                    2, (multiprocessing.cpu_count() // max(hvd.size(), 8) - 2))
 
         return config
 
@@ -241,15 +255,11 @@ class Runner(object):
             raise ValueError("Unknown mode received: %s (allowed: 'train', 'validation', 'benchmark', 'inference')" %
                              mode)
 
-        if seed is not None:
-            tf_random_seed = 2 * (seed + hvd.rank())
-        else:
-            tf_random_seed = None
-
         config = tf.estimator.RunConfig(
             model_dir=model_dir,
-            tf_random_seed=tf_random_seed,
-            save_summary_steps=100 if mode in ['train', 'validation'] else 1e9,  # disabled in benchmark mode
+            tf_random_seed=seed,
+            save_summary_steps=100 if mode in [
+                'train', 'validation'] else 1e9,  # disabled in benchmark mode
             save_checkpoints_steps=None,
             save_checkpoints_secs=None,
             session_config=Runner._get_session_config(mode=mode,
@@ -318,7 +328,8 @@ class Runner(object):
               use_qdq=False):
 
         if iter_unit not in ["epoch", "batch"]:
-            raise ValueError('`iter_unit` value is unknown: %s (allowed: ["epoch", "batch"])' % iter_unit)
+            raise ValueError(
+                '`iter_unit` value is unknown: %s (allowed: ["epoch", "batch"])' % iter_unit)
 
         if self.run_hparams.data_dir is None and not is_benchmark:
             raise ValueError('`data_dir` must be specified for training!')
@@ -329,7 +340,8 @@ class Runner(object):
             else:
                 os.environ["TF_ENABLE_AUTO_MIXED_PRECISION_LOSS_SCALING"] = "1"
         else:
-            use_static_loss_scaling = False  # Make sure it hasn't been set to True on FP32 training
+            # Make sure it hasn't been set to True on FP32 training
+            use_static_loss_scaling = False
 
         num_gpus = hvd.size()
         global_batch_size = batch_size * num_gpus
@@ -386,7 +398,8 @@ class Runner(object):
                     num_samples=num_samples,
                     num_epochs=num_epochs,
                     steps_per_epoch=steps_per_epoch,
-                    logging_steps=log_every_n_steps
+                    logging_steps=log_every_n_steps,
+                    seed=self.run_hparams.seed,
                 )
             training_hooks.append(self.training_logging_hook)
 
@@ -394,8 +407,9 @@ class Runner(object):
             bcast_hook = hvd.hvd_global_object.BroadcastGlobalVariablesHook(0)
             training_hooks.append(bcast_hook)
 
+        partition_hook = hooks.TrainingPartitionHook()
         training_hooks.append(hooks.PrefillStagingAreasHook())
-        training_hooks.append(hooks.TrainingPartitionHook())
+        training_hooks.append(partition_hook)
 
         estimator_params = {
             'batch_size': batch_size,
@@ -486,11 +500,15 @@ class Runner(object):
             except KeyboardInterrupt:
                 print("Keyboard interrupt")
 
+        if partition_hook.signal_recieved:
+            self.wait_after_eval = True
+
         if hvd.rank() == 0:
             if run_iter > 0:
                 print('Ending Model Training ...')
                 train_throughput = self.training_logging_hook.mean_throughput.value()
-                dllogger.log(data={'train_throughput': train_throughput}, step=tuple())
+                dllogger.log(
+                    data={'train_throughput': train_throughput}, step=tuple())
             else:
                 print('Model already trained required number of steps. Skipped')
 
@@ -510,7 +528,8 @@ class Runner(object):
     ):
 
         if iter_unit not in ["epoch", "batch"]:
-            raise ValueError('`iter_unit` value is unknown: %s (allowed: ["epoch", "batch"])' % iter_unit)
+            raise ValueError(
+                '`iter_unit` value is unknown: %s (allowed: ["epoch", "batch"])' % iter_unit)
 
         if self.run_hparams.data_dir is None and not is_benchmark:
             raise ValueError('`data_dir` must be specified for evaluation!')
@@ -609,8 +628,10 @@ class Runner(object):
 
             eval_throughput = self.eval_logging_hook.mean_throughput.value()
             if len(self.eval_logging_hook.latencies) > 0:
-                eval_latencies = np.array(self.eval_logging_hook.latencies) * 1000
-                eval_latencies_q = np.quantile(eval_latencies, q=[0.9, 0.95, 0.99])
+                eval_latencies = np.array(
+                    self.eval_logging_hook.latencies) * 1000
+                eval_latencies_q = np.quantile(
+                    eval_latencies, q=[0.9, 0.95, 0.99])
                 eval_latencies_mean = np.mean(eval_latencies)
                 additional_metrics = {
                     'eval_latency_avg': eval_latencies_mean,
@@ -621,14 +642,13 @@ class Runner(object):
             else:
                 additional_metrics = {}
 
-
             dllogger.log(data={
                 'top1_accuracy': float(eval_results['top1_accuracy']),
                 'top5_accuracy': float(eval_results['top5_accuracy']),
                 'eval_throughput': eval_throughput,
                 **additional_metrics
             },
-                         step=tuple())
+                step=tuple())
 
             if export_dir is not None:
                 dllogger.log(data={'export_dir': export_dir}, step=tuple())
@@ -639,12 +659,16 @@ class Runner(object):
                                                                              data_format=self.run_hparams.input_format,
                                                                              dtype=self.run_hparams.dtype)
 
-                self.exported_path = image_classifier.export_savedmodel(export_dir, input_receiver_fn)
+                self.exported_path = image_classifier.export_savedmodel(
+                    export_dir, input_receiver_fn)
 
         except KeyboardInterrupt:
             print("Keyboard interrupt")
 
         print('Model evaluation finished')
+
+        if hasattr(self, "wait_after_eval") and self.wait_after_eval == True:
+            time.sleep(3600)
 
     def predict(self, to_predict, quantize=False, symmetric=False, use_qdq=False, use_final_conv=False):
 
@@ -679,7 +703,8 @@ class Runner(object):
                                                          yield_single_examples=True)
 
             for result in inference_results:
-                print(result['classes'], str(result['probabilities'][result['classes']]))
+                print(result['classes'], str(
+                    result['probabilities'][result['classes']]))
 
         except KeyboardInterrupt:
             print("Keyboard interrupt")

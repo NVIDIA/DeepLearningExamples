@@ -17,6 +17,9 @@
 
 import time
 import tensorflow as tf
+import numpy as np
+
+import random
 
 import dllogger
 import signal
@@ -46,7 +49,7 @@ class MeanAccumulator:
 class TrainingLoggingHook(tf.estimator.SessionRunHook):
 
     def __init__(
-        self, global_batch_size, num_steps, num_samples, num_epochs, steps_per_epoch, warmup_steps=20, logging_steps=1
+        self, global_batch_size, num_steps, num_samples, num_epochs, steps_per_epoch, warmup_steps=20, logging_steps=1, seed=None
     ):
         self.global_batch_size = global_batch_size
         self.num_steps = num_steps
@@ -61,6 +64,7 @@ class TrainingLoggingHook(tf.estimator.SessionRunHook):
         self.t0 = None
 
         self.mean_throughput = MeanAccumulator()
+        self.seed = seed
 
     # Determines if its the last step of the epoch
     def _last_step_of_epoch(self, global_step):
@@ -83,6 +87,11 @@ class TrainingLoggingHook(tf.estimator.SessionRunHook):
         batch_time = time.time() - self.t0
         ips = self.global_batch_size / batch_time
 
+        if global_step // self.steps_per_epoch < (global_step + 1) // self.steps_per_epoch and self.seed is not None:
+            tf.set_random_seed(self.seed + global_step)
+            np.random.seed(self.seed + global_step)
+            random.seed(self.seed + global_step)
+
         metrics = {
             "imgs_per_sec": ips,
             "cross_entropy": cross_entropy,
@@ -96,7 +105,8 @@ class TrainingLoggingHook(tf.estimator.SessionRunHook):
 
             if (self.current_step % self.logging_steps) == 0:
                 metrics = {k: float(v) for k, v in metrics.items()}
-                dllogger.log(data=metrics, step=(int(global_step // self.steps_per_epoch), int(global_step)))
+                dllogger.log(data=metrics, step=(
+                    int(global_step // self.steps_per_epoch), int(global_step)))
 
         self.current_step += 1
 
@@ -108,7 +118,8 @@ class TrainingLoggingHook(tf.estimator.SessionRunHook):
                 "learning_rate": learning_rate
             }
             metrics = {k: float(v) for k, v in metrics.items()}
-            dllogger.log(data=metrics, step=(int(global_step // self.steps_per_epoch), ))
+            dllogger.log(data=metrics, step=(
+                int(global_step // self.steps_per_epoch), ))
             self.current_epoch += 1
 
 
@@ -137,7 +148,7 @@ class TrainingPartitionHook(tf.estimator.SessionRunHook):
         if hvd.size() > 1 and (self.global_step % self.sync_freq) == 0:
             fetches += [self.allreduce_op]
             feed_dict = {self.input_op: int(self.signal_recieved)}
-            
+
         return tf.train.SessionRunArgs(fetches, feed_dict=feed_dict)
 
     def after_run(self, run_context, run_values):
@@ -145,10 +156,10 @@ class TrainingPartitionHook(tf.estimator.SessionRunHook):
 
         if hvd.size() > 1 and len(run_values.results) == 2:
             if run_values.results[1] > 0:
+                self.signal_recieved = True
                 run_context.request_stop()
         elif self.signal_recieved:
             run_context.request_stop()
 
     def _signal_handler(self, signum, frame):
-        print("Stop signal received")
         self.signal_recieved = True
