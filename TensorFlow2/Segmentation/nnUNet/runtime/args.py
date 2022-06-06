@@ -62,7 +62,7 @@ def get_main_args():
     p.arg("--data", type=Path, default=Path("/data"), help="Path to data directory")
     p.arg("--task", type=str, default="01", help="Task number, MSD uses numbers 01-10")
     p.arg("--dim", type=int, choices=[2, 3], default=3, help="UNet dimension")
-    p.arg("--seed", type=non_negative_int, help="Random seed")
+    p.arg("--seed", type=non_negative_int, default=None, help="Random seed")
     p.flag("--benchmark", help="Run model benchmarking")
     p.boolean_flag("--tta", default=False, help="Enable test time augmentation")
     p.boolean_flag("--save-preds", "--save_preds", default=False, help="Save predictions")
