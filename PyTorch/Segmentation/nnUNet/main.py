@@ -28,7 +28,8 @@ if __name__ == "__main__":
     args = get_main_args()
     set_granularity()  # Increase maximum fetch granularity of L2 to 128 bytes
     set_cuda_devices(args)
-    seed_everything(args.seed)
+    if args.seed is not None:
+        seed_everything(args.seed)
     data_module = DataModule(args)
     data_module.setup()
     ckpt_path = verify_ckpt_path(args)

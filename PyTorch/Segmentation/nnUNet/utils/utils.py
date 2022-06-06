@@ -47,9 +47,15 @@ def set_cuda_devices(args):
 
 
 def verify_ckpt_path(args):
-    resume_path = os.path.join(args.results, "checkpoints", "last.ckpt")
-    if args.resume_training and os.path.exists(resume_path):
-        return resume_path
+    if args.resume_training:
+        resume_path_ckpt = os.path.join(args.ckpt_path, "checkpoints", "last.ckpt")
+        resume_path_results = os.path.join(args.results, "checkpoints", "last.ckpt")
+        if os.path.exists(resume_path_ckpt):
+            return resume_path_ckpt
+        if os.path.exists(resume_path_results):
+            return resume_path_results
+        print("[Warning] Checkpoint not found. Starting training from scratch.")
+        return None
     return args.ckpt_path
 
 

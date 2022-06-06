@@ -209,7 +209,7 @@ class NNUnet(pl.LightningModule):
 
     def validation_epoch_end(self, outputs):
         if self.current_epoch < self.args.skip_first_n_eval:
-            self.log("Dice", 0.001 * self.current_epoch)  # To prevent early stopping
+            self.log("dice", 0.0)
             self.dice.reset()
             return None
 
