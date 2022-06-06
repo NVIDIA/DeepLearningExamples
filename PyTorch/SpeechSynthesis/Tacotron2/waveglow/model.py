@@ -25,6 +25,7 @@
 #
 # *****************************************************************************
 import torch
+torch._C._jit_set_autocast_mode(False)
 from torch.autograd import Variable
 import torch.nn.functional as F
 
