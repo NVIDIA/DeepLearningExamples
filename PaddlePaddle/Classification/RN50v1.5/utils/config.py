@@ -23,7 +23,7 @@ from utils.utility import get_num_trainers
 def print_args(args):
     args_for_log = copy.deepcopy(args)
 
-    # Due to dllogger cannot serializable Enum into JSON.
+    # Due to dllogger cannot serialize Enum into JSON.
     args_for_log.run_scope = args_for_log.run_scope.value
 
     dllogger.log(step='PARAMETER', data=vars(args_for_log))
@@ -60,7 +60,7 @@ def check_and_process_args(args):
             RunScope.TRAIN_ONLY, RunScope.EVAL_ONLY
         ], "If benchmark enabled, run_scope must be `train_only` or `eval_only`"
 
-    # Only run one epoch when benchmark on eval_only.
+    # Only run one epoch when benchmark or eval_only.
     if args.benchmark or \
       (args.run_scope == RunScope.EVAL_ONLY):
         args.epochs = args.start_epoch + 1
