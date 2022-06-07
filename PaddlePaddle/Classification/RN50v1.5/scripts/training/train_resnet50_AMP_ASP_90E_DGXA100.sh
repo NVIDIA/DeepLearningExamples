@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-CKPT=${1:-"./output/ResNet50/89/paddle_example"}
+CKPT=${1:-"./output/ResNet50/89/resnet_50_paddle"}
 
 python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
-  --from-pretrained-params ./output/ResNet50/89/paddle_example \
+  --from-pretrained-params ./output/ResNet50/89/resnet_50_paddle \
   --epochs 90 \
   --amp \
   --scale-loss 128.0 \

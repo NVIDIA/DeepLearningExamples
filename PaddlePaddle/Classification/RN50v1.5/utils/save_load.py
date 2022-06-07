@@ -146,7 +146,7 @@ def init_program(args, program, exe):
         init_pretrained(args.from_pretrained_params, program)
 
 
-def save_model(program, model_path, epoch_id, prefix='paddle_example'):
+def save_model(program, model_path, epoch_id, prefix='resnet_50_paddle'):
     """
     Save a model to given path.
     Args:

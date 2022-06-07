@@ -530,10 +530,10 @@ The model will be stored in the directory specified with `--output-dir`, includi
 - `.pdopts`: The optimizer information contains all the Tensors used by the optimizer. For Adam optimizer, it contains beta1, beta2, momentum, and so on. All the information will be saved to a file with suffix “.pdopt”. (If the optimizer has no Tensor need to save (like SGD), the file will not be generated).
 - `.pdmodel`: The network description is the description of the program. It’s only used for deployment. The description will save to a file with the suffix “.pdmodel”.
 
-The default prefix of model files is `paddle_example`. Model of each epoch would be stored in directory `./output/ResNet/epoch_id/` with three files by default, including `paddle_example.pdparams`, `paddle_example.pdopts`, `paddle_example.pdmodel`. Note that `epoch_id` is 0-based, which means `epoch_id` is from 0 to 89 for a total of 90 epochs. For example, the model of the 89th epoch would be stored in `./output/ResNet/89/paddle_example` 
+The default prefix of model files is `resnet_50_paddle`. Model of each epoch would be stored in directory `./output/ResNet/epoch_id/` with three files by default, including `resnet_50_paddle.pdparams`, `resnet_50_paddle.pdopts`, `resnet_50_paddle.pdmodel`. Note that `epoch_id` is 0-based, which means `epoch_id` is from 0 to 89 for a total of 90 epochs. For example, the model of the 89th epoch would be stored in `./output/ResNet/89/resnet_50_paddle` 
 
 Assume you want to train the ResNet for 90 epochs, but the training process aborts during the 50th epoch due to infrastructure faults. To resume training from the checkpoint, specify `--from-checkpoint` and `--last-epoch-of-checkpoint` with following these steps:  
-- Set `./output/ResNet/49/paddle_example` to `--from-checkpoint`.
+- Set `./output/ResNet/49/resnet_50_paddle` to `--from-checkpoint`.
 - Set `--last-epoch-of-checkpoint` to `49`.
 Then rerun the training to resume training from the 50th epoch to the 89th epoch.
 
@@ -546,28 +546,28 @@ python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
   --scale-loss 128.0 \
   --use-dynamic-loss-scaling \
   --data-layout NHWC \
-  --from-checkpoint ./output/ResNet/49/paddle_example
+  --from-checkpoint ./output/ResNet/49/resnet_50_paddle
   --last-epoch-of-checkpoint 49
 ```
 
-To start training from pretrained weights, set `--from-pretrained-params` to `./output/ResNet/<epoch_id>/paddle_example`.
+To start training from pretrained weights, set `--from-pretrained-params` to `./output/ResNet/<epoch_id>/resnet_50_paddle`.
 
 Example:
 ```bash
-# Train AMP with model initialization by <./your_own_path_to/paddle_example>
+# Train AMP with model initialization by <./your_own_path_to/resnet_50_paddle>
 python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
   --epochs 90 \
   --amp \
   --scale-loss 128.0 \
   --use-dynamic-loss-scaling \
   --data-layout NHWC \
-  --from-pretrained-params ./your_own_path_to/paddle_example
+  --from-pretrained-params ./your_own_path_to/resnet_50_paddle
 ```
 
 Make sure:
-- Resume from checkpoints: Both `paddle_example.pdopts` and `paddle_example.pdparams` must be in the given path.
-- Start from pretrained weights: `paddle_example.pdparams` must be in the given path.
-- The prefix `paddle_example` must be added to the end of the given path. For example: set path as `./output/ResNet/89/paddle_example` instead of `./output/ResNet/89/`
+- Resume from checkpoints: Both `resnet_50_paddle.pdopts` and `resnet_50_paddle.pdparams` must be in the given path.
+- Start from pretrained weights: `resnet_50_paddle.pdparams` must be in the given path.
+- The prefix `resnet_50_paddle` must be added to the end of the given path. For example: set path as `./output/ResNet/89/resnet_50_paddle` instead of `./output/ResNet/89/`
 - Don't set `--from-checkpoint` and `--from-pretrained-params` at the same time.
 
 The difference between those two is that `--from-pretrained-params` contain only model weights, and `--from-checkpoint`, apart from model weights, contain the optimizer state, and LR scheduler state.
@@ -596,18 +596,18 @@ Note that automatic sparsity (ASP) requires a pretrained model to initialize par
 
 You can apply `scripts/training/train_resnet50_AMP_ASP_90E_DGXA100.sh` we provided to launch ASP + AMP training.
 ```bash
-# Default path to pretrained parameters is ./output/ResNet50/89/paddle_example
+# Default path to pretrained parameters is ./output/ResNet50/89/resnet_50_paddle
 bash scripts/training/train_resnet50_AMP_ASP_90E_DGXA100.sh <pretrained_parameters>
 ```
 
 Or following steps below to manually launch ASP + AMP training.
 
-First, set `--from-pretrained-params` to a pretrained model file. For example, if you have trained the ResNet for 90 epochs following [Training process](#training-process), the final pretrained weights would be stored in `./output/ResNet50/89/paddle_example.pdparams` by default, and set `--from-pretrained-params` to `./output/ResNet/89/paddle_example`.
+First, set `--from-pretrained-params` to a pretrained model file. For example, if you have trained the ResNet for 90 epochs following [Training process](#training-process), the final pretrained weights would be stored in `./output/ResNet50/89/resnet_50_paddle.pdparams` by default, and set `--from-pretrained-params` to `./output/ResNet/89/resnet_50_paddle`.
 
 Then run following command to run AMP + ASP:
 ```bash
 python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
-  --from-pretrained-params ./output/ResNet50/89/paddle_example \
+  --from-pretrained-params ./output/ResNet50/89/resnet_50_paddle \
   --epochs 90 \
   --amp \
   --scale-loss 128.0 \
@@ -646,7 +646,7 @@ To run inference with TensorRT for the best performance, you can apply the scrip
 
 For example,
 1. Run `bash scripts/inference/export_resnet50_AMP.sh <your_checkpoint>` to export an inference model.
-  - The default path of checkpoint is `./output/ResNet/89/paddle_example`.
+  - The default path of checkpoint is `./output/ResNet/89/resnet_50_paddle`.
 2. Run `bash scripts/inference/infer_resnet50_AMP.sh` to infer with TensorRT.
 
 Or you could manually run `export_model.py` and `inference.py` with specific arguments, refer to [Command-line options](#command-line-options).
