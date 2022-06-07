@@ -1,0 +1,14 @@
+Efficient-det for PyTorch
+Copyright 2022 NVIDIA CORPORATION
+
+This repo contains code from pytorch-image-models/timm (https://github.com/rwightman/pytorch-image-models/timm).
+Copyright 2019-2022 Ross Wightman.
+
+This repo contains code from efficientdet-pytorch (https://github.com/rwightman/efficientdet-pytorch).
+Copyright 2019-2022 Ross Wightman.
+
+This repo contains code from retinanet (https://github.com/tensorflow/tpu/tree/master/models/official/retinanet).
+Copyright 2020-2022 Google Research. All Rights Reserved.
+
+This repo contains code from detectron2 (https://github.com/facebookresearch/detectron2).
+Copyright (c) Facebook, Inc. and its affiliates.
