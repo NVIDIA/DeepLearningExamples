@@ -41,7 +41,7 @@ mode:
     benchmark_training_short:
         <<: *benchmark_training
         epochs: 1
-        data_backend: syntetic
+        data_backend: synthetic
         prof: 100
     benchmark_inference: &benchmark_inference
         print_freq: 1

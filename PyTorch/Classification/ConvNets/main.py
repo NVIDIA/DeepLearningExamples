@@ -501,9 +501,9 @@ def prepare_for_training(args, model_args, model_arch):
     elif args.data_backend == "dali-cpu":
         get_train_loader = get_dali_train_loader(dali_cpu=True)
         get_val_loader = get_dali_val_loader()
-    elif args.data_backend == "syntetic":
-        get_val_loader = get_syntetic_loader
-        get_train_loader = get_syntetic_loader
+    elif args.data_backend == "synthetic":
+        get_val_loader = get_synthetic_loader
+        get_train_loader = get_synthetic_loader
     else:
         print("Bad databackend picked")
         exit(1)

@@ -352,7 +352,7 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   --data-backend BACKEND
-                        data backend: pytorch | syntetic | dali-gpu | dali-cpu
+                        data backend: pytorch | synthetic | dali-gpu | dali-cpu
                         (default: dali-cpu)
   --arch ARCH, -a ARCH  model architecture: resnet18 | resnet34 | resnet50 |
                         resnet101 | resnet152 | resnext50-32x4d |

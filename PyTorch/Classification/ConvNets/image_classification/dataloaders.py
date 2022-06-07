@@ -37,7 +37,7 @@ from functools import partial
 
 from image_classification.autoaugment import AutoaugmentImageNetPolicy
 
-DATA_BACKEND_CHOICES = ["pytorch", "syntetic"]
+DATA_BACKEND_CHOICES = ["pytorch", "synthetic"]
 try:
     from nvidia.dali.plugin.pytorch import DALIClassificationIterator
     from nvidia.dali.pipeline import Pipeline
@@ -542,7 +542,7 @@ class SynteticDataLoader(object):
             yield self.input_data, self.input_target
 
 
-def get_syntetic_loader(
+def get_synthetic_loader(
     data_path,
     image_size,
     batch_size,
