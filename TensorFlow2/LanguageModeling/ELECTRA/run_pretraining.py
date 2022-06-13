@@ -477,7 +477,7 @@ def main(e2e_start_time):
             iter_save_path = iter_manager.save(checkpoint_number=step)
             log(" ** Saved iterator checkpoint for step {}: {}".format(step, iter_save_path), all_rank=True)
         local_step += 1
-        if (local_step % (config.steps_this_run * args.gradient_accumulation_steps) == 0):
+        if config.steps_this_run != -1 and (local_step % (config.steps_this_run * args.gradient_accumulation_steps) == 0):
             #terminating run sooner as steps_this_run has been reached
             log("terminating as steps_this_run:{} has been reached".format(config.steps_this_run))
             break
