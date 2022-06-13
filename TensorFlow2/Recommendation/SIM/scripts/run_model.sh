@@ -28,6 +28,8 @@ Usage: bash scripts/run_model.sh
 --batch_size            Batch size.
 --results_dir           Path to output directory. Default: /tmp/sim.
 --log_filename          Name of output log file within results_dir. Default: log.json.
+--save_checkpoint_path  Path to output checkpoint after training.
+--load_checkpoint_path  Path from which to restore checkpoint for inference or suspend/resume training.
 EOF
 }
 
@@ -78,9 +80,12 @@ batch_size_option=$(get_option_or_use_default --global_batch_size $batch_size)
 epochs_option=$(get_option_or_use_default --epochs $epochs)
 results_dir_option=$(get_option_or_use_default --results_dir $results_dir)
 log_filename_option=$(get_option_or_use_default --log_filename $log_filename)
+save_checkpoint_path_option=$(get_option_or_use_default --save_checkpoint_path $save_checkpoint_path)
+load_checkpoint_path_option=$(get_option_or_use_default --load_checkpoint_path $load_checkpoint_path)
 
 command="mpiexec --allow-run-as-root --bind-to socket -np ${gpus} python main.py --dataset_dir ${data_path} --drop_remainder ${epochs_option} 
-${xla_arg} ${amp_arg} ${benchmark_arg} ${mode_option} ${benchmark_steps_option} ${batch_size_option} ${results_dir_option} ${log_filename_option}"
+${xla_arg} ${amp_arg} ${benchmark_arg} ${mode_option} ${benchmark_steps_option} ${batch_size_option} ${results_dir_option} ${log_filename_option}
+${save_checkpoint_path_option} ${load_checkpoint_path_option}"
 
 printf "[INFO] Running:\n%s\n" "${command}"
 # run
