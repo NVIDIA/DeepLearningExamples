@@ -38,7 +38,8 @@ from sim.utils.misc import csv_str_to_int_list, dist_print
 def init_checkpoint_manager(model, optimizer, save_checkpoint_path, load_checkpoint_path):
     checkpoint = tf.train.Checkpoint(
         model=model,
-        optimizer=optimizer
+        optimizer=optimizer,
+        epoch=tf.Variable(-1, name='epoch')
     )
 
     checkpoint_manager = tf.train.CheckpointManager(
@@ -283,7 +284,7 @@ def model_step(batch, model, model_fn, optimizer, amp, first_batch):
     return loss_dict
 
 
-def run_single_epoch(model, model_fn, data_iterator, optimizer, amp, epoch, benchmark, performance_calculator):
+def run_single_epoch(model, model_fn, data_iterator, optimizer, amp, start_epoch, epoch, benchmark, performance_calculator):
 
     for current_step, batch in enumerate(data_iterator):
         if benchmark and performance_calculator.completed:
@@ -296,7 +297,7 @@ def run_single_epoch(model, model_fn, data_iterator, optimizer, amp, epoch, benc
         n_samples = len(batch[1])
         step_throughput = performance_calculator(n_samples)
         step_dict["samples/s"] = step_throughput
-        dllogger.log(data=step_dict, step=(epoch, current_step))
+        dllogger.log(data=step_dict, step=(start_epoch + epoch, current_step))
 
 
 def train(model, model_fn, data_iterator_train, data_iterator_test, optimizer, amp, epochs,
@@ -307,8 +308,10 @@ def train(model, model_fn, data_iterator_train, data_iterator_test, optimizer, a
 
     all_epochs_results = []
 
-    for epoch in range(epochs):
-        run_single_epoch(model, model_fn, data_iterator_train, optimizer, amp, epoch, benchmark, performance_calculator)
+    start_epoch = checkpoint_manager.checkpoint.epoch.numpy().item() + 1
+
+    for epoch in range(epochs - start_epoch):
+        run_single_epoch(model, model_fn, data_iterator_train, optimizer, amp, start_epoch, epoch, benchmark, performance_calculator)
 
         if not benchmark:
             # we dump throughput results for consecutive epochs for a regular training job (w/o --benchmark flag)
@@ -321,10 +324,11 @@ def train(model, model_fn, data_iterator_train, data_iterator_test, optimizer, a
             results_data.update(results_eval_test)
 
             if save_checkpoint:
+                checkpoint_manager.checkpoint.epoch.assign(epoch)
                 checkpoint_manager.save()
 
             if hvd.rank() == 0:
-                dllogger.log(data=results_data, step=(epoch,))
+                dllogger.log(data=results_data, step=(start_epoch + epoch,))
 
             performance_calculator.init()  # restart for another epoch
 
