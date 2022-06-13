@@ -250,6 +250,10 @@ def parse_arguments():
                         default=False,
                         action='store_true',
                         help="Whether to train with seq len 512")
+    parser.add_argument('--resume_phase2',
+                        default=False,
+                        action='store_true',
+                        help="Whether to resume training with seq len 512")
     parser.add_argument('--allreduce_post_accumulation',
                         default=False,
                         action='store_true',
@@ -427,13 +431,13 @@ def prepare_model_and_optimizer(args, device, sequence_output_is_dense):
     model.checkpoint_activations(args.checkpoint_activations)
 
     if args.resume_from_checkpoint:
-        # For phase2, need to reset the learning rate and step count in the checkpoint
-        if args.phase2 or args.init_checkpoint :
+        # For phase2 from scratch, need to reset the learning rate and step count in the checkpoint. Else restore values in checkpoint.
+        if (args.phase2 and not args.resume_phase2) or args.init_checkpoint :
             for group in checkpoint['optimizer']['param_groups'] :
                 group['step'].zero_()
                 group['lr'].fill_(args.learning_rate)
         else :
-            if 'grad_scaler' in checkpoint and not args.phase2:
+            if 'grad_scaler' in checkpoint and (not args.phase2 or args.resume_phase2):
                 grad_scaler.load_state_dict(checkpoint['grad_scaler'])
         optimizer.load_state_dict(checkpoint['optimizer'])  # , strict=False)
 
