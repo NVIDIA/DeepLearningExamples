@@ -200,7 +200,7 @@ python -m torch.distributed.launch --nproc_per_node 8 /workspace/translation/tra
   --arch transformer_wmt_en_de_big_t2t \
   --share-all-embeddings \
   --optimizer adam \
-  --adam-betas '(0.9, 0.997)' \
+  --adam-betas 0.9 0.997 \
   --adam-eps "1e-9" \
   --clip-norm 0.0 \
   --lr-scheduler inverse_sqrt \
@@ -216,7 +216,6 @@ python -m torch.distributed.launch --nproc_per_node 8 /workspace/translation/tra
   --seed 1 \
   --fuse-layer-norm \
   --amp \
-  --amp-level O2 \
   --save-dir /workspace/checkpoints \
   --distributed-init-method env:// 
 ```
