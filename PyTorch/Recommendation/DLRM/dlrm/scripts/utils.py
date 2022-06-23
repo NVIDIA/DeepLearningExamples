@@ -189,6 +189,8 @@ def init_logging(log_path):
     stdout_backend._metadata['best_epoch'].update({'format': '0:.2f'})
     stdout_backend._metadata['average_train_throughput'].update({'format': ':.2e'})
     stdout_backend._metadata['average_test_throughput'].update({'format': ':.2e'})
+    stdout_backend._metadata['training_loss'].update({'format': '0:.5f'})
+    stdout_backend._metadata['best_validation_loss'].update({'format': '0:.5f'})
 
     dllogger.init(backends=[json_backend, stdout_backend])
 

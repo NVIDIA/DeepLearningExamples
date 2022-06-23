@@ -716,6 +716,7 @@ def main(argv):
 
     results = {'best_auc': best_auc,
                'best_validation_loss': best_validation_loss,
+               'training_loss' : metric_logger.meters['loss'].avg,
                'best_epoch': best_epoch,
                'average_train_throughput': avg_throughput}
 
