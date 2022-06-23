@@ -510,6 +510,7 @@ def train(tr_iter, va_iter, model, para_model, mems, model_config, optimizer,
     model.train()
 
     train_loss = 0
+    cur_loss = float('inf')
     target_tokens = 0
     log_step = 0
     log_start_time = time.time()
@@ -690,7 +691,7 @@ def train(tr_iter, va_iter, model, para_model, mems, model_config, optimizer,
 
         if is_final_step:
             break
-    return train_step, best_val_loss
+    return train_step, best_val_loss, cur_loss
 
 
 def main():
@@ -963,6 +964,7 @@ def main():
     last_batch = 0
     last_iter = 0
     best_val_loss = None
+    cur_loss = float('inf')
 
     train_mems = [None for _ in range(args.batch_chunk)]
 
@@ -1018,7 +1020,7 @@ def main():
             for epoch in itertools.count(start=start_epoch):
                 if args.roll:
                     tr_iter.roll(seed=args.seed + epoch)
-                train_step, best_val_loss = train(
+                train_step, best_val_loss, cur_loss = train(
                     tr_iter, va_iter, model, para_model, train_mems,
                     model_config, optimizer, optimizer_sparse, scheduler,
                     scheduler_sparse, scaler, vocab, epoch, last_batch,
@@ -1082,21 +1084,22 @@ def main():
     logging.info(f'Training throughput: {meters["train_throughput"].avg:.2f} tok/s')
 
     if best_val_loss:
-        val_perplexity = math.exp(best_val_loss)
+        best_val_perplexity = math.exp(best_val_loss)
     else:
-        val_perplexity = None
+        best_val_perplexity = None
 
     summary.update({
         'train_throughput': meters['train_throughput'].avg,
         'train_elapsed': elapsed / 60,
+        'train_loss': cur_loss,
         'valid_loss': best_val_loss,
-        'valid_perplexity': val_perplexity,
+        'valid_perplexity': best_val_perplexity,
         })
     dllogger.log(step=tuple(), data=summary)
 
     passed = benchmark(
         target_perplexity=args.target_perplexity,
-        test_perplexity=val_perplexity,
+        test_perplexity=best_val_perplexity,
         target_throughput=args.target_throughput,
         test_throughput=meters['train_throughput'].avg
         )
