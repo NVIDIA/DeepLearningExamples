@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-CKPT=${1:-"./output/ResNet50/89/resnet_50_paddle"}
+CKPT=${1:-"./output/ResNet50/89"}
+MODEL_PREFIX=${2:-"resnet_50_paddle"}
 
 python -m paddle.distributed.launch --gpus=0 export_model.py \
     --amp \
     --data-layout NHWC \
     --trt-inference-dir ./inference_amp \
-    --from-checkpoint $CKPT
+    --from-checkpoint ${CKPT} \
+    --model-prefix ${MODEL_PREFIX}

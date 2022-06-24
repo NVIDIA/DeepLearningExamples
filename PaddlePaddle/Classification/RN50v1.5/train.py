@@ -147,7 +147,7 @@ def main(args):
             if epoch_id % args.save_interval == 0:
                 model_path = os.path.join(args.output_dir,
                                           args.model_arch_name)
-                save_model(train_prog, model_path, epoch_id)
+                save_model(train_prog, model_path, epoch_id, args.model_prefix)
 
         # Evaluation
         if (eval_prog is not None) and \
