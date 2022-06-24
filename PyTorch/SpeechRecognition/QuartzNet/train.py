@@ -55,7 +55,7 @@ def parse_args():
                           help='Enable cudnn benchmark')
     training.add_argument('--amp', '--fp16', action='store_true', default=False,
                           help='Use pytorch native mixed precision training')
-    training.add_argument('--seed', default=1, type=int, help='Random seed')
+    training.add_argument('--seed', default=None, type=int, help='Random seed')
     training.add_argument('--local_rank', default=os.getenv('LOCAL_RANK', 0), type=int,
                           help='GPU id used for distributed training')
     training.add_argument('--pre_allocate_range', default=None, type=int, nargs=2,
@@ -211,9 +211,10 @@ def main():
     else:
         world_size = 1
 
-    torch.manual_seed(args.seed + args.local_rank)
-    np.random.seed(args.seed + args.local_rank)
-    random.seed(args.seed + args.local_rank)
+    if args.seed is not None:
+        torch.manual_seed(args.seed + args.local_rank)
+        np.random.seed(args.seed + args.local_rank)
+        random.seed(args.seed + args.local_rank)
 
     init_log(args)
 
