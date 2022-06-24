@@ -567,6 +567,8 @@ def main():
             logging.error(f'No checkpoint found at {args.resume}')
 
     # training loop
+    train_loss = float('inf')
+    val_loss = float('inf')
     best_loss = float('inf')
     training_perf = []
     break_training = False
@@ -639,6 +641,8 @@ def main():
         table.write('Training Summary', args.math)
 
     summary = {
+        'val_loss': val_loss,
+        'train_loss': train_loss,
         'train_throughput': avg_training_perf,
         'train_elapsed': training_time,
         'test_bleu': test_bleu,
