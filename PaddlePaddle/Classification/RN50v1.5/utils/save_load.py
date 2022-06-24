@@ -146,14 +146,13 @@ def init_program(args, program, exe):
         init_pretrained(args.from_pretrained_params, program)
 
 
-def save_model(program, model_path, epoch_id, prefix='resnet_50_paddle'):
+def save_model(program, model_path, epoch_id, prefix):
     """
     Save a model to given path.
     Args:
         program(paddle.static.Program): The program to be saved.
         model_path(str): The path to save model.
         epoch_id(int): The current epoch id.
-        prefix(str): The prefix of model files.
     """
     if paddle.distributed.get_rank() != 0:
         return

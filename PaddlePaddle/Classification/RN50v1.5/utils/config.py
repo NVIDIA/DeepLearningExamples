@@ -12,12 +12,88 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import copy
 import argparse
+import logging
 import distutils.util
 import dllogger
 from utils.mode import RunScope
 from utils.utility import get_num_trainers
+from utils.save_load import _PDOPT_SUFFIX, _PDPARAMS_SUFFIX
+
+_AUTO_LAST_EPOCH = 'auto'
+
+
+def _get_full_path_of_ckpt(args):
+    if args.from_checkpoint is None:
+        args.last_epoch_of_checkpoint = -1
+        return
+
+    def _check_file_exist(path_with_prefix):
+        pdopt_path = path_with_prefix + _PDOPT_SUFFIX
+        pdparams_path = path_with_prefix + _PDPARAMS_SUFFIX
+        found = False
+        if os.path.exists(pdopt_path) and os.path.exists(pdparams_path):
+            found = True
+        return found, pdopt_path, pdparams_path
+
+    target_from_checkpoint = os.path.join(args.from_checkpoint,
+                                          args.model_prefix)
+    if args.last_epoch_of_checkpoint is None:
+        args.last_epoch_of_checkpoint = -1
+    elif args.last_epoch_of_checkpoint == _AUTO_LAST_EPOCH:
+        folders = os.listdir(args.from_checkpoint)
+        args.last_epoch_of_checkpoint = -1
+        for folder in folders:
+            tmp_ckpt_path = os.path.join(args.from_checkpoint, folder,
+                                         args.model_prefix)
+
+            try:
+                folder = int(folder)
+            except ValueError:
+                logging.warning(
+                    f"Skip folder '{folder}' since its name is not integer-convertable."
+                )
+                continue
+
+            if folder > args.last_epoch_of_checkpoint and \
+               _check_file_exist(tmp_ckpt_path)[0]:
+                args.last_epoch_of_checkpoint = folder
+        epoch_with_prefix = os.path.join(str(args.last_epoch_of_checkpoint), args.model_prefix) \
+                            if args.last_epoch_of_checkpoint > -1 else args.model_prefix
+        target_from_checkpoint = os.path.join(args.from_checkpoint,
+                                              epoch_with_prefix)
+    else:
+        try:
+            args.last_epoch_of_checkpoint = int(args.last_epoch_of_checkpoint)
+        except ValueError:
+            raise ValueError(f"The value of --last-epoch-of-checkpoint should be None, {_AUTO_LAST_EPOCH}"  \
+                            f" or integer >= 0, but receive {args.last_epoch_of_checkpoint}")
+
+    args.from_checkpoint = target_from_checkpoint
+    found, pdopt_path, pdparams_path = _check_file_exist(args.from_checkpoint)
+    if not found:
+        args.from_checkpoint = None
+        args.last_epoch_of_checkpoint = -1
+        logging.warning(
+            f"Cannot find {pdopt_path} and {pdparams_path}, disable --from-checkpoint."
+        )
+
+
+def _get_full_path_of_pretrained_params(args):
+    if args.from_pretrained_params is None:
+        args.last_epoch_of_checkpoint = -1
+        return
+
+    args.from_pretrained_params = os.path.join(args.from_pretrained_params,
+                                               args.model_prefix)
+    pdparams_path = args.from_pretrained_params + _PDPARAMS_SUFFIX
+    if not os.path.exists(pdparams_path):
+        args.from_pretrained_params = None
+        logging.warning(
+            f"Cannot find {pdparams_path}, disable --from-pretrained-params.")
+    args.last_epoch_of_checkpoint = -1
 
 
 def print_args(args):
@@ -30,6 +106,7 @@ def print_args(args):
 
 
 def check_and_process_args(args):
+    # Precess the scope of run
     run_scope = None
     for scope in RunScope:
         if args.run_scope == scope.value:
@@ -39,22 +116,26 @@ def check_and_process_args(args):
            f"only support {[scope.value for scope in RunScope]} as run_scope"
     args.run_scope = run_scope
 
+    # Precess image layout and channel
     args.image_channel = args.image_shape[0]
     if args.data_layout == "NHWC":
         args.image_shape = [
             args.image_shape[1], args.image_shape[2], args.image_shape[0]
         ]
 
+    # Precess learning rate
     args.lr = get_num_trainers() * args.lr
 
+    # Precess model loading
     assert not (args.from_checkpoint is not None and \
                 args.from_pretrained_params is not None), \
            "--from-pretrained-params and --from-checkpoint should " \
            "not be set simultaneously."
-    args.last_epoch_of_checkpoint = -1 if args.from_checkpoint is None \
-                                     else args.last_epoch_of_checkpoint
-    args.start_epoch = 1 + args.last_epoch_of_checkpoint
+    _get_full_path_of_pretrained_params(args)
+    _get_full_path_of_ckpt(args)
+    args.start_epoch = args.last_epoch_of_checkpoint + 1
 
+    # Precess benchmark
     if args.benchmark:
         assert args.run_scope in [
             RunScope.TRAIN_ONLY, RunScope.EVAL_ONLY
@@ -129,25 +210,36 @@ def add_global_args(parser):
         help='Warmup steps for benchmark run, only be applied when --benchmark is set.'
     )
     group.add_argument(
+        '--model-prefix',
+        type=str,
+        default="resnet_50_paddle",
+        help='The prefix name of model files to save/load.')
+    group.add_argument(
         '--from-pretrained-params',
         type=str,
         default=None,
-        help='A pretrained parameters. It should be a file name without suffix .pdparams, ' \
-             'and not be set with --from-checkpoint at the same time.'
+        help='A folder path which contains pretrained parameters, that is a file in name' \
+             ' --model-prefix + .pdparams. It should not be set with --from-checkpoint' \
+             ' at the same time.'
     )
     group.add_argument(
         '--from-checkpoint',
         type=str,
         default=None,
         help='A checkpoint path to resume training. It should not be set ' \
-             'with --from-pretrained-params at the same time.'
+             'with --from-pretrained-params at the same time. The path provided ' \
+             'could be a folder contains < epoch_id/ckpt_files > or < ckpt_files >.'
     )
     group.add_argument(
         '--last-epoch-of-checkpoint',
-        type=int,
-        default=-1,
+        type=str,
+        default=None,
         help='The epoch id of the checkpoint given by --from-checkpoint. ' \
-             'Default is -1 means training starts from 0-th epoth.'
+             'It should be None, auto or integer >= 0. If it is set as ' \
+             'None, then training will start from 0-th epoch. If it is set as ' \
+             'auto, then it will search largest integer-convertable folder ' \
+             ' --from-checkpoint, which contains required checkpoint. ' \
+             'Default is None.'
     )
     group.add_argument(
         '--show-config',

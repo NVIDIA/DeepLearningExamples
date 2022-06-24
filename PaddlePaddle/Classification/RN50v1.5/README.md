@@ -400,8 +400,8 @@ Global:
   --save-interval SAVE_INTERVAL
                         The iteration interval to save checkpoints. (default: 1)
   --eval-interval EVAL_INTERVAL
-                        The iteration interval to test trained models on a given validation dataset. Ignored when --run-scope is train_only.
-                        (default: 1)
+                        The iteration interval to test trained models on a given validation dataset. Ignored when --run-scope is
+                        train_only. (default: 1)
   --print-interval PRINT_INTERVAL
                         The iteration interval to show training/evaluation message. (default: 10)
   --report-file REPORT_FILE
@@ -413,15 +413,18 @@ Global:
                         Steps for benchmark run, only be applied when --benchmark is set. (default: 100)
   --benchmark-warmup-steps BENCHMARK_WARMUP_STEPS
                         Warmup steps for benchmark run, only be applied when --benchmark is set. (default: 100)
+  --model-prefix MODEL_PREFIX
+                        The prefix name of model files to save/load. (default: resnet_50_paddle)
   --from-pretrained-params FROM_PRETRAINED_PARAMS
-                        A pretrained parameters. It should be a file name without suffix .pdparams, and not be set with --from-checkpoint at
-                        the same time. (default: None)
+                        A folder path which contains pretrained parameters, that is a file in name --model-prefix + .pdparams. It should
+                        not be set with --from-checkpoint at the same time. (default: None)
   --from-checkpoint FROM_CHECKPOINT
-                        A checkpoint path to resume training. It should not be set with --from-pretrained-params at the same time. (default:
-                        None)
+                        A checkpoint path to resume training. It should not be set with --from-pretrained-params at the same time. The
+                        path provided could be a folder contains < epoch_id/ckpt_files > or < ckpt_files >. (default: None)
   --last-epoch-of-checkpoint LAST_EPOCH_OF_CHECKPOINT
-                        The epoch id of the checkpoint given by --from-checkpoint. Default is -1 means training starts from 0-th epoth.
-                        (default: -1)
+                        The epoch id of the checkpoint given by --from-checkpoint. It should be None, auto or integer >= 0. If it is set
+                        as None, then training will start from 0-th epoch. If it is set as auto, then it will search largest integer-
+                        convertable folder --from-checkpoint, which contains required checkpoint. Default is None. (default: None)
   --show-config SHOW_CONFIG
                         To show arguments. (default: True)
   --enable-cpu-affinity ENABLE_CPU_AFFINITY
@@ -490,13 +493,13 @@ Advanced Training:
   --asp                 Enable automatic sparse training (ASP). (default: False)
   --prune-model         Prune model to 2:4 sparse pattern, only be applied when --asp is set. (default: False)
   --mask-algo {mask_1d,mask_2d_greedy,mask_2d_best}
-                        The algorithm to generate sparse masks. It should be one of {mask_1d, mask_2d_greedy, mask_2d_best}. This only be
-                        applied when --asp and --prune-model is set. (default: mask_1d)
+                        The algorithm to generate sparse masks. It should be one of {mask_1d, mask_2d_greedy, mask_2d_best}. This only
+                        be applied when --asp and --prune-model is set. (default: mask_1d)
 
 Paddle-TRT:
   --trt-inference-dir TRT_INFERENCE_DIR
-                        A path to store/load inference models. export_model.py would export models to this folder, then inference.py would
-                        load from here. (default: ./inference)
+                        A path to store/load inference models. export_model.py would export models to this folder, then inference.py
+                        would load from here. (default: ./inference)
   --trt-precision {FP32,FP16,INT8}
                         The precision of TensorRT. It should be one of {FP32, FP16, INT8}. (default: FP32)
   --trt-workspace-size TRT_WORKSPACE_SIZE
@@ -515,6 +518,8 @@ Paddle-TRT:
                         Apply synthetic data for benchmark. (default: False)
 ```
 
+Noted that arguments in Paddle-TRT are only available to `export_model.py` or `inference.py`.
+
 ### Dataset guidelines
 
 To use your own dataset, divide it in directories as in the following scheme:
@@ -525,15 +530,15 @@ To use your own dataset, divide it in directories as in the following scheme:
 If the number of classes in your dataset is not 1000, you need to specify it to `--num-of-class`.
 
 ### Training process
-The model will be stored in the directory specified with `--output-dir`, including three files:
+The model will be stored in the directory specified with `--output-dir` and `--model-arch-name`, including three files:
 - `.pdparams`: The parameters contain all the trainable tensors and will save to a file with the suffix “.pdparams”. 
 - `.pdopts`: The optimizer information contains all the Tensors used by the optimizer. For Adam optimizer, it contains beta1, beta2, momentum, and so on. All the information will be saved to a file with suffix “.pdopt”. (If the optimizer has no Tensor need to save (like SGD), the file will not be generated).
 - `.pdmodel`: The network description is the description of the program. It’s only used for deployment. The description will save to a file with the suffix “.pdmodel”.
 
-The default prefix of model files is `resnet_50_paddle`. Model of each epoch would be stored in directory `./output/ResNet/epoch_id/` with three files by default, including `resnet_50_paddle.pdparams`, `resnet_50_paddle.pdopts`, `resnet_50_paddle.pdmodel`. Note that `epoch_id` is 0-based, which means `epoch_id` is from 0 to 89 for a total of 90 epochs. For example, the model of the 89th epoch would be stored in `./output/ResNet/89/resnet_50_paddle` 
+The prefix of model files is specified by `--model-prefix`, which default value is `resnet_50_paddle`. Model of each epoch would be stored in directory `./output/ResNet50/epoch_id/` with three files by default, including `resnet_50_paddle.pdparams`, `resnet_50_paddle.pdopts`, `resnet_50_paddle.pdmodel`. Note that `epoch_id` is 0-based, which means `epoch_id` is from 0 to 89 for a total of 90 epochs. For example, the model of the 89th epoch would be stored in `./output/ResNet50/89/resnet_50_paddle` 
 
-Assume you want to train the ResNet for 90 epochs, but the training process aborts during the 50th epoch due to infrastructure faults. To resume training from the checkpoint, specify `--from-checkpoint` and `--last-epoch-of-checkpoint` with following these steps:  
-- Set `./output/ResNet/49/resnet_50_paddle` to `--from-checkpoint`.
+Assume you want to train the ResNet50 for 90 epochs, but the training process aborts during the 50th epoch due to infrastructure faults. To resume training from the checkpoint, specify `--from-checkpoint` and `--last-epoch-of-checkpoint` with following these steps:  
+- Set `./output/ResNet50/49` to `--from-checkpoint`.
 - Set `--last-epoch-of-checkpoint` to `49`.
 Then rerun the training to resume training from the 50th epoch to the 89th epoch.
 
@@ -546,11 +551,28 @@ python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
   --scale-loss 128.0 \
   --use-dynamic-loss-scaling \
   --data-layout NHWC \
-  --from-checkpoint ./output/ResNet/49/resnet_50_paddle
+  --model-prefix resnet_50_paddle \
+  --from-checkpoint ./output/ResNet50/49 \
   --last-epoch-of-checkpoint 49
 ```
 
-To start training from pretrained weights, set `--from-pretrained-params` to `./output/ResNet/<epoch_id>/resnet_50_paddle`.
+We also provide automatic searching for the checkpoint from last epoch. You can enable this by set `--last-epoch-of-checkpoint` as `auto`. Noted that if enable automatic searching, `--from-checkpoint` should be a folder contains chekcpoint files or `<epoch_id>/<ckpt_files>`. In previous example, it should be `./output/ResNet50`.
+
+Example:
+```bash
+# Resume AMP training from checkpoint with automatic searching
+python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
+  --epochs 90 \
+  --amp \
+  --scale-loss 128.0 \
+  --use-dynamic-loss-scaling \
+  --data-layout NHWC \
+  --model-prefix resnet_50_paddle \
+  --from-checkpoint ./output/ResNet50 \
+  --last-epoch-of-checkpoint auto
+```
+
+To start training from pretrained weights, set `--from-pretrained-params` to `./output/ResNet50/<epoch_id>/<--model-prefix>`.
 
 Example:
 ```bash
@@ -561,13 +583,13 @@ python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
   --scale-loss 128.0 \
   --use-dynamic-loss-scaling \
   --data-layout NHWC \
-  --from-pretrained-params ./your_own_path_to/resnet_50_paddle
+  --model-prefix resnet_50_paddle \
+  --from-pretrained-params ./output/ResNet50/<epoch_id>
 ```
 
 Make sure:
-- Resume from checkpoints: Both `resnet_50_paddle.pdopts` and `resnet_50_paddle.pdparams` must be in the given path.
-- Start from pretrained weights: `resnet_50_paddle.pdparams` must be in the given path.
-- The prefix `resnet_50_paddle` must be added to the end of the given path. For example: set path as `./output/ResNet/89/resnet_50_paddle` instead of `./output/ResNet/89/`
+- Resume from checkpoints: Both `<--model-prefix>.pdopts` and `<--model-prefix>.pdparams` must be in the given path.
+- Start from pretrained weights: `<--model-prefix>.pdparams` must be in the given path.
 - Don't set `--from-checkpoint` and `--from-pretrained-params` at the same time.
 
 The difference between those two is that `--from-pretrained-params` contain only model weights, and `--from-checkpoint`, apart from model weights, contain the optimizer state, and LR scheduler state.
@@ -602,12 +624,13 @@ bash scripts/training/train_resnet50_AMP_ASP_90E_DGXA100.sh <pretrained_paramete
 
 Or following steps below to manually launch ASP + AMP training.
 
-First, set `--from-pretrained-params` to a pretrained model file. For example, if you have trained the ResNet for 90 epochs following [Training process](#training-process), the final pretrained weights would be stored in `./output/ResNet50/89/resnet_50_paddle.pdparams` by default, and set `--from-pretrained-params` to `./output/ResNet/89/resnet_50_paddle`.
+First, set `--from-pretrained-params` to a pretrained model file. For example, if you have trained the ResNet50 for 90 epochs following [Training process](#training-process), the final pretrained weights would be stored in `./output/ResNet50/89/resnet_50_paddle.pdparams` by default, and set `--from-pretrained-params` to `./output/ResNet50/89`.
 
 Then run following command to run AMP + ASP:
 ```bash
 python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
-  --from-pretrained-params ./output/ResNet50/89/resnet_50_paddle \
+  --from-pretrained-params ./output/ResNet50/89 \
+  --model-prefix resnet_50_paddle \
   --epochs 90 \
   --amp \
   --scale-loss 128.0 \
@@ -646,7 +669,7 @@ To run inference with TensorRT for the best performance, you can apply the scrip
 
 For example,
 1. Run `bash scripts/inference/export_resnet50_AMP.sh <your_checkpoint>` to export an inference model.
-  - The default path of checkpoint is `./output/ResNet/89/resnet_50_paddle`.
+  - The default path of checkpoint is `./output/ResNet50/89`.
 2. Run `bash scripts/inference/infer_resnet50_AMP.sh` to infer with TensorRT.
 
 Or you could manually run `export_model.py` and `inference.py` with specific arguments, refer to [Command-line options](#command-line-options).
