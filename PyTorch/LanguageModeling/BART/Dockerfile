@@ -55,7 +55,7 @@ RUN --mount=from=tokenizers,source=/wheelhouse,target=/tmp/wheelhouse \
     pip install --no-cache-dir /tmp/wheelhouse/tokenizers*.whl
 
 RUN pip install --no-cache-dir dataclasses gitpython rouge-score pynvml==8.0.4 \
- git+https://github.com/NVIDIA/dllogger pytorch-lightning==1.1.5 gdown
+  git+https://github.com/NVIDIA/dllogger pytorch-lightning==1.5.10 gdown sacrebleu
 
 RUN pip install tqdm --upgrade
 
