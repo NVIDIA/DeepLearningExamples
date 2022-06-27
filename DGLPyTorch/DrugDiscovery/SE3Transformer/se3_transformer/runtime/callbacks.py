@@ -64,6 +64,8 @@ class LRSchedulerCallback(BaseCallback):
         self.logger = logger
         self.scheduler = None
 
+        self.logger.log_metadata('learning rate', {'unit': None})
+
     @abstractmethod
     def get_scheduler(self, optimizer, args):
         pass
@@ -92,6 +94,9 @@ class QM9MetricCallback(BaseCallback):
         self.targets_std = targets_std
         self.prefix = prefix
         self.best_mae = float('inf')
+
+        self.logger.log_metadata(f'{self.prefix} MAE', {'unit': None})
+        self.logger.log_metadata(f'{self.prefix} best MAE', {'unit': None})
 
     def on_validation_step(self, input, target, pred):
         self.mae(pred.detach(), target.detach())
@@ -125,6 +130,12 @@ class PerformanceCallback(BaseCallback):
         self.timestamps = []
         self.mode = mode
         self.logger = logger
+
+        logger.log_metadata(f"throughput_{self.mode}", {'unit': 'molecules/s'})
+        logger.log_metadata(f"total_time_{self.mode}", {'unit': 's'})
+        logger.log_metadata(f"latency_{self.mode}_mean", {'unit': 's'})
+        for level in [90, 95, 99]:
+            logger.log_metadata(f"latency_{self.mode}_{level}", {'unit': 's'})
 
     def on_batch_start(self):
         if self.epoch >= self.warmup_epochs:

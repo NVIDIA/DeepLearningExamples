@@ -106,4 +106,7 @@ def get_logger(params):
         if params.log_dir:
             backends += [JSONStreamBackend(Verbosity.VERBOSE, params.log_dir)]
     logger.init(backends=backends)
+    logger.metadata("whole_tumor", {"unit": None})
+    logger.metadata("throughput_test", {"unit": "volumes/s"})
+    logger.metadata("throughput_train", {"unit": "volumes/s"})
     return logger

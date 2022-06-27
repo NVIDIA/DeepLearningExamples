@@ -289,6 +289,9 @@ def main(e2e_start_time):
     args.log_dir = config.log_dir
     # DLLogger
     setup_logger(args)
+    dllogger.metadata('training_sequences_per_second', {'unit': 'sequences/s'})
+    dllogger.metadata('final_loss', {'unit': None})
+    dllogger.metadata('e2e_train_time', {'unit': 's'})
 
     set_affinity(hvd.local_rank())
     gpus = tf.config.experimental.list_physical_devices('GPU')

@@ -112,6 +112,9 @@ def main():
         DLLogger.log(step="PARAMETER", data={k:v})
     DLLogger.log(step="PARAMETER", data={'model_name':'Tacotron2_PyT'})
 
+    DLLogger.metadata('infer_latency', {'unit': 's'})
+    DLLogger.metadata('infer_items_per_sec', {'unit': 'items/s'})
+
     if args.synth_data:
         model = load_and_setup_model(args.model_name, parser, None, args.fp16,
                                      cpu_run=False, forward_is_infer=True)

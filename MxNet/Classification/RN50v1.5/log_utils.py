@@ -31,3 +31,11 @@ def setup_logging(args):
         ])
     else:
         dllogger.init([])
+
+    dllogger.metadata("val.accuracy", {"unit": None})
+    dllogger.metadata("val.top_k_accuracy_5", {"unit": None})
+    dllogger.metadata("train.ips", {"unit": "images/s"})
+    dllogger.metadata("val.ips", {"unit": "images/s"})
+    dllogger.metadata("val.latency_50", {"unit": "s"})
+    dllogger.metadata("val.latency_90", {"unit": "s"})
+    dllogger.metadata("val.latency_avg", {"unit": "s"})

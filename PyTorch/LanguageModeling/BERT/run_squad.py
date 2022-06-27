@@ -875,6 +875,14 @@ def main():
                                 dllogger.StdOutBackend(verbosity=dllogger.Verbosity.VERBOSE, step_format=format_step)])
     else:
         dllogger.init(backends=[])
+    
+    dllogger.metadata("e2e_train_time", {"unit": "s"})
+    dllogger.metadata("training_sequences_per_second", {"unit": "sequences/s"})
+    dllogger.metadata("final_loss", {"unit": None})
+    dllogger.metadata("e2e_inference_time", {"unit": "s"})
+    dllogger.metadata("inference_sequences_per_second", {"unit": "sequences/s"})
+    dllogger.metadata("exact_match", {"unit": None})
+    dllogger.metadata("F1", {"unit": None})
 
     print("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
                                 device, n_gpu, bool(args.local_rank != -1), args.fp16))

@@ -44,6 +44,8 @@ def main(args: argparse.Namespace):
         dllogger.StdOutBackend(verbosity=dllogger.Verbosity.VERBOSE)
     ])
     dllogger.log(data=vars(args), step='PARAMETER')
+    dllogger.metadata("throughput", {"unit": "images/s"})
+    dllogger.metadata("accuracy", {"unit": None})
 
     if args.model is None:
         saved_model_to_load = tempfile.mkdtemp(prefix="tftrt-savedmodel")

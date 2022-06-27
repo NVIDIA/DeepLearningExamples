@@ -1028,6 +1028,9 @@ def main(unused_argv):
         dllogger.JSONStreamBackend(dllogger.Verbosity.VERBOSE, os.path.join(FLAGS.output_dir, FLAGS.mode + '-report.json')),
     ])
     dllogger.log('PARAMETER', vars(FLAGS))
+    dllogger.metadata("bleu", {"unit": None})
+    dllogger.metadata("train_speed_sent", {"unit": "sequences/s"})
+    dllogger.metadata("train_speed_toks", {"unit": "tokens/s"})
 
     # Load hparams.
     default_hparams = create_hparams(FLAGS)

@@ -194,6 +194,15 @@ def init_logging(log_path):
 
     dllogger.init(backends=[json_backend, stdout_backend])
 
+    dllogger.metadata("best_auc", {"unit": None})
+    dllogger.metadata("mean_inference_latency_batch_1", {"unit": "s"})
+    dllogger.metadata("mean_inference_latency_batch_64", {"unit": "s"})
+    dllogger.metadata("mean_inference_latency_batch_4096", {"unit": "s"})
+    dllogger.metadata("average_train_throughput", {"unit": "samples/s"})
+    dllogger.metadata("mean_inference_throughput_batch_1", {"unit": "samples/s"})
+    dllogger.metadata("mean_inference_throughput_batch_64", {"unit": "samples/s"})
+    dllogger.metadata("mean_inference_throughput_batch_4096", {"unit": "samples/s"})
+
 
 class StepTimer():
     def __init__(self):

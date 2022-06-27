@@ -291,6 +291,10 @@ def run_generate(verbose=True):
     else:
         dllogger.init(backends=[])
 
+    dllogger.metadata("inference_throughput_mean", {"unit": "tokens/s"})
+    for suffix in ["mean", "conf_50", "conf_90", "conf_95", "conf_99", "conf_100"]:
+        dllogger.metadata(f"inference_latency_{suffix}", {"unit": "s"})
+
     if parsed_args and verbose:
         print(f"parsed the following generate kwargs: {parsed_args}")
 

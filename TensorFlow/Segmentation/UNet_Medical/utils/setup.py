@@ -88,4 +88,7 @@ def get_logger(params):
         if params.log_dir:
             backends += [JSONStreamBackend(Verbosity.VERBOSE, params.log_dir)]
     logger.init(backends=backends)
+    logger.metadata("eval_dice_score", {"unit": None})
+    logger.metadata("throughput_test", {"unit": "images/s"})
+    logger.metadata("throughput_train", {"unit": "images/s"})
     return logger

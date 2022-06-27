@@ -114,6 +114,11 @@ parser.add_argument('--waymo-val-annotation', default=None, type=str,
 
 def validate(args):
     setup_dllogger(0, filename=args.dllogger_file)
+    dllogger.metadata('total_inference_time', {'unit': 's'})
+    dllogger.metadata('inference_throughput', {'unit': 'images/s'})
+    dllogger.metadata('inference_time', {'unit': 's'})
+    dllogger.metadata('map', {'unit': None})
+    dllogger.metadata('total_eval_time', {'unit': 's'})
 
     if args.checkpoint != '':
         args.pretrained = True

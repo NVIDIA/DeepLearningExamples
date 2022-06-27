@@ -59,6 +59,8 @@ def main():
 
     dllogger.log(data=vars(args), step='PARAMETER')
 
+
+
     model = NeuMF(nb_users=args.n_users, nb_items=args.n_items, mf_dim=args.factors,
                   mlp_layer_sizes=args.layers, dropout=args.dropout)
 
@@ -99,6 +101,11 @@ def main():
         result_data[f'batch_{batch_size}_p90_latency'] = np.percentile(latencies, 90)
         result_data[f'batch_{batch_size}_p95_latency'] = np.percentile(latencies, 95)
         result_data[f'batch_{batch_size}_p99_latency'] = np.percentile(latencies, 99)
+
+    for batch_size in batch_sizes:
+        dllogger.metadata(f'batch_{batch_size}_mean_throughput', {'unit': 'samples/s'})
+        for p in ['mean', 'p90', 'p95', 'p99']:
+            dllogger.metadata(f'batch_{batch_size}_{p}_latency', {'unit': 's'})
 
     dllogger.log(data=result_data, step=tuple())
     dllogger.flush()

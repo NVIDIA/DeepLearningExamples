@@ -328,6 +328,11 @@ def main():
     else:
         dllogger.init(backends=[])
 
+    dllogger.metadata("exact_match", {"unit": None})
+    dllogger.metadata("F1", {"unit": None})
+    dllogger.metadata("inference_sequences_per_second", {"unit": "sequences/s"})
+    dllogger.metadata("training_sequences_per_second", {"unit": "sequences/s"})
+
     tf.random.set_seed(args.seed)
     dllogger.log(step="PARAMETER", data={"SEED": args.seed})
     # script parameters

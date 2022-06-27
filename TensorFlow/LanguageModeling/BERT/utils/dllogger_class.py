@@ -40,16 +40,16 @@ class dllogger_class():
         self.logger.metadata("avg_loss_step", {"format": ":.4f", "GOAL": "MINIMIZE", "STAGE": "TRAIN"})
         self.logger.metadata("total_loss", {"format": ":.4f", "GOAL": "MINIMIZE", "STAGE": "TRAIN"})
         self.logger.metadata("loss", {"format": ":.4f", "GOAL": "MINIMIZE", "STAGE": "TRAIN"})
-        self.logger.metadata("f1", {"format": ":.4f", "GOAL": "MINIMIZE", "STAGE": "VAL"})
+        self.logger.metadata("f1", {"unit": None, "format": ":.4f", "GOAL": "MINIMIZE", "STAGE": "VAL"})
         self.logger.metadata("precision", {"format": ":.4f", "GOAL": "MINIMIZE", "STAGE": "VAL"})
         self.logger.metadata("recall", {"format": ":.4f", "GOAL": "MINIMIZE", "STAGE": "VAL"})
         self.logger.metadata("mcc", {"format": ":.4f", "GOAL": "MINIMIZE", "STAGE": "VAL"})
-        self.logger.metadata("exact_match", {"format": ":.4f", "GOAL": "MINIMIZE", "STAGE": "VAL"})
+        self.logger.metadata("exact_match", {"unit": None, "format": ":.4f", "GOAL": "MINIMIZE", "STAGE": "VAL"})
         self.logger.metadata(
             "throughput_train",
-            {"unit": "seq/s", "format": ":.3f", "GOAL": "MAXIMIZE", "STAGE": "TRAIN"},
+            {"unit": "sequences/s", "format": ":.3f", "GOAL": "MAXIMIZE", "STAGE": "TRAIN"},
         )
         self.logger.metadata(
             "throughput_inf",
-            {"unit": "seq/s", "format": ":.3f", "GOAL": "MAXIMIZE", "STAGE": "VAL"},
+            {"unit": "sequences/s", "format": ":.3f", "GOAL": "MAXIMIZE", "STAGE": "VAL"},
         )

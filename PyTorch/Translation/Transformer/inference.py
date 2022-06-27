@@ -118,8 +118,12 @@ def setup_logger(args):
             dllogger.log(step='PARAMETER', data={k:v}, verbosity=0)
         container_setup_info = log_helper.get_framework_env_vars()
         dllogger.log(step='PARAMETER', data=container_setup_info, verbosity=0)
-        dllogger.metadata('throughput',
-                          {'unit':'tokens/s', 'format':':/3f', 'GOAL':'MAXIMIZE', 'STAGE':'INFER'})
+        dllogger.metadata('throughput', {'unit':'tokens/s', 'format':':/3f', 'GOAL':'MAXIMIZE', 'STAGE':'INFER'})
+        dllogger.metadata('latency_avg', {'unit':'s', 'format':':/3f', 'GOAL':'MINIMIZE', 'STAGE':'INFER'})
+        dllogger.metadata('latency_p90', {'unit':'s', 'format':':/3f', 'GOAL':'MINIMIZE', 'STAGE':'INFER'})
+        dllogger.metadata('latency_p95', {'unit':'s', 'format':':/3f', 'GOAL':'MINIMIZE', 'STAGE':'INFER'})
+        dllogger.metadata('latency_p99', {'unit':'s', 'format':':/3f', 'GOAL':'MINIMIZE', 'STAGE':'INFER'})
+        dllogger.metadata('total_infernece_time', {'unit':'s', 'format':':/3f', 'GOAL':'MINIMIZE', 'STAGE':'INFER'})
     else:
         dllogger.init(backends=[])
 

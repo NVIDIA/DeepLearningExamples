@@ -345,6 +345,11 @@ def setup_training(args):
     else:
         dllogger.init(backends=[])
 
+    dllogger.metadata("e2e_train_time", {"unit": "s"})
+    dllogger.metadata("training_sequences_per_second", {"unit": "sequences/s"})
+    dllogger.metadata("final_loss", {"unit": None})
+    dllogger.metadata("raw_train_time", {"unit": "s"})
+
     print("device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
         device, args.n_gpu, bool(args.local_rank != -1), args.fp16))
 

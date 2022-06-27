@@ -100,6 +100,12 @@ def main(_):
     JSONStreamBackend(verbosity=Verbosity.VERBOSE, filename=FLAGS.dllogger_path),
     StdOutBackend(verbosity=Verbosity.DEFAULT)]
   DLLogger.init(backends=backends)
+  DLLogger.metadata('inference_fps', {'unit': 'images/s'})
+  DLLogger.metadata('inference_latency_ms', {'unit': 'ms'})
+  DLLogger.metadata('latency_avg', {'unit': 's'})
+  DLLogger.metadata('latency_90', {'unit': 's'})
+  DLLogger.metadata('latency_95', {'unit': 's'})
+  DLLogger.metadata('latency_99', {'unit': 's'})
 
   if FLAGS.mode == 'export':
     if tf.io.gfile.exists(FLAGS.saved_model_dir):

@@ -86,7 +86,21 @@ if __name__== "__main__":
         ]
     DLLogger.init(backends=backends)
     DLLogger.log(data=vars(config), step='PARAMETER')
-    
+    DLLogger.metadata('avg_exp_per_second_training', {'unit': 'samples/s'})
+    DLLogger.metadata('avg_exp_per_second_training_per_GPU', {'unit': 'samples/s'})
+    DLLogger.metadata('avg_exp_per_second_eval', {'unit': 'samples/s'})
+    DLLogger.metadata('avg_exp_per_second_eval_per_GPU', {'unit': 'samples/s'})
+    DLLogger.metadata('latency_pct', {'unit': 'ms'})
+    DLLogger.metadata('latency_90pct', {'unit': 'ms'})
+    DLLogger.metadata('latency_95pct', {'unit': 'ms'})
+    DLLogger.metadata('latency_99pct', {'unit': 'ms'})
+    DLLogger.metadata('eval_loss', {'unit': None})
+    DLLogger.metadata('eval_accuracy_top_1', {'unit': None})
+    DLLogger.metadata('eval_accuracy_top_5', {'unit': None})
+    DLLogger.metadata('training_loss', {'unit': None})
+    DLLogger.metadata('training_accuracy_top_1', {'unit': None})
+    DLLogger.metadata('training_accuracy_top_5', {'unit': None})
+
     #========== initialize the runner
     runner = Runner(config, DLLogger)
 

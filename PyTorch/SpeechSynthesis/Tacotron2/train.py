@@ -369,6 +369,11 @@ def main():
         DLLogger.log(step="PARAMETER", data={k:v})
     DLLogger.log(step="PARAMETER", data={'model_name':'Tacotron2_PyT'})
 
+    DLLogger.metadata('run_time', {'unit': 's'})
+    DLLogger.metadata('val_loss', {'unit': None})
+    DLLogger.metadata('train_items_per_sec', {'unit': 'items/s'})
+    DLLogger.metadata('val_items_per_sec', {'unit': 'items/s'})
+
     model_name = args.model_name
     parser = models.model_parser(model_name, parser)
     args, _ = parser.parse_known_args()

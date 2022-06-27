@@ -42,6 +42,10 @@ class DLLogger:
         logger.log(step=step, data=metrics)
 
     @rank_zero_only
+    def log_metadata(self, metric, metadata):
+        logger.metadata(metric, metadata)
+
+    @rank_zero_only
     def flush(self):
         logger.flush()
 
@@ -55,6 +59,12 @@ class LoggingCallback(Callback):
         self.dim = dim
         self.mode = mode
         self.timestamps = []
+
+        self.dllogger.log_metadata(f"dice_score", {"unit": None})
+        self.dllogger.log_metadata(f"throughput_{self.mode}", {"unit": "images/s"})
+        self.dllogger.log_metadata(f"latency_{self.mode}_mean", {"unit": "ms"})
+        for level in [90, 95, 99]:
+            self.dllogger.log_metadata(f"latency_{self.mode}_{level}", {"unit": "ms"})
 
     def do_step(self):
         self.step += 1

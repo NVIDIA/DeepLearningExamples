@@ -117,19 +117,19 @@ def init_log(args):
         backends = []
 
     dllogger.init(backends=backends)
-    dllogger.metadata("train_lrate", {"name": "lrate", "format": ":>3.2e"})
+    dllogger.metadata("train_lrate", {"name": "lrate", "unit": None, "format": ":>3.2e"})
 
     for id_, pref in [('train', ''), ('train_avg', 'avg train '),
                       ('dev', '  avg dev '), ('dev_ema', '  EMA dev ')]:
 
         dllogger.metadata(f"{id_}_loss",
-                          {"name": f"{pref}loss", "format": ":>7.2f"})
+                          {"name": f"{pref}loss", "unit": None, "format": ":>7.2f"})
 
         dllogger.metadata(f"{id_}_wer",
-                          {"name": f"{pref}wer", "format": ":>6.2f"})
+                          {"name": f"{pref}wer", "unit": "%", "format": ":>6.2f"})
 
         dllogger.metadata(f"{id_}_throughput",
-                          {"name": f"{pref}utts/s", "format": ":>5.0f"})
+                          {"name": f"{pref}utts/s", "unit": "samples/s", "format": ":>5.0f"})
 
         dllogger.metadata(f"{id_}_took",
                           {"name": "took", "unit": "s", "format": ":>5.2f"})

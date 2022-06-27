@@ -296,6 +296,12 @@ def main(FLAGS):
         num_gpus = 1
 
     dllogger.log(data=vars(FLAGS), step='PARAMETER')
+    dllogger.metadata('train_throughput', {'unit': 'samples/s'})
+    dllogger.metadata('infer_throughput', {'unit': 'samples/s'})
+    dllogger.metadata('map', {'unit': None})
+    dllogger.metadata('map_infer', {'unit': None})
+    dllogger.metadata('map_with_leak', {'unit': None})
+    dllogger.metadata('map_with_leak_infer', {'unit': None})
 
     local_batch_size = FLAGS.global_batch_size // num_gpus
     create_batches = local_batch_size // FLAGS.prebatch_size

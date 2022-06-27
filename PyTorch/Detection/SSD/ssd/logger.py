@@ -66,6 +66,7 @@ class Logger:
             backends.append(DLLogger.JSONStreamBackend(DLLogger.Verbosity.VERBOSE, json_output))
 
         DLLogger.init(backends)
+        DLLogger.metadata("mAP", {"unit": None})
 
         self.epoch = 0
         self.train_iter = 0
@@ -136,6 +137,11 @@ class BenchLogger(Logger):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.images_per_ses = BenchmarkMeter(self.name)
+
+        DLLogger.metadata("avg_img/sec", {"unit": "images/s"})
+        DLLogger.metadata("med_img/sec", {"unit": "images/s"})
+        DLLogger.metadata("min_img/sec", {"unit": "images/s"})
+        DLLogger.metadata("max_img/sec", {"unit": "images/s"})
 
     def update(self, bs, time):
         self.images_per_ses.update(bs, time)

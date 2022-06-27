@@ -54,3 +54,8 @@ def setup_dllogger(enabled=True, filename=os.devnull, rank=0):
         dllogger.init(backends)
     else:
         dllogger.init([])
+
+    dllogger.metadata("eval_avg_latency", {"unit": "ms"})
+    dllogger.metadata("eval_ppl", {"unit": None})
+    dllogger.metadata("eval_avg_throughput", {"unit": "tokens/s"})
+    dllogger.metadata("train_throughput", {"unit": "tokens/s"})

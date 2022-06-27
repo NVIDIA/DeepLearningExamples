@@ -239,6 +239,13 @@ def setup_dllogger(enabled=True, filename=os.devnull):
     else:
         dllogger.init([])
 
+    dllogger.metadata("test_bleu", {"unit": None})
+    dllogger.metadata("eval_90%_latency", {"unit": "ms"})
+    dllogger.metadata("eval_avg_latency", {"unit": "ms"})
+    dllogger.metadata("train_elapsed", {"unit": "s"})
+    dllogger.metadata("eval_throughput", {"unit": "tokens/s"})
+    dllogger.metadata("train_throughput", {"unit": "tokens/s"})
+
 
 def set_device(cuda, local_rank):
     """

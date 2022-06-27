@@ -153,6 +153,11 @@ def main(_):
       StdOutBackend(verbosity=Verbosity.DEFAULT)]
     
   DLLogger.init(backends=backends)
+  DLLogger.metadata('avg_fps_training', {'unit': 'images/s'})
+  DLLogger.metadata('avg_fps_training_per_GPU', {'unit': 'images/s'})
+  DLLogger.metadata('avg_latency_training', {'unit': 's'})
+  DLLogger.metadata('training_loss', {'unit': None})
+  DLLogger.metadata('e2e_training_time', {'unit': 's'})
 
   def get_dataset(is_training, params):
     file_pattern = (

@@ -107,6 +107,10 @@ def main():
         dllogger.init(backends=[])
         logger.setLevel(logging.ERROR)
 
+    dllogger.metadata("final_ndcg@100", {"unit": None})
+    dllogger.metadata("mean_inference_throughput", {"unit": "samples/s"})
+    dllogger.metadata("mean_training_throughput", {"unit": "samples/s"})
+
     if args.seed is None:
         if hvd.rank() == 0:
             seed = int(time.time())

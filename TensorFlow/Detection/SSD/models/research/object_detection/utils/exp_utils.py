@@ -54,3 +54,6 @@ def setup_dllogger(enabled=True, filename=os.devnull, rank=0):
         dllogger.init(backends)
     else:
         dllogger.init([])
+
+    dllogger.metadata("infer_throughput", {"unit": "images/s"})
+    dllogger.metadata("train_throughput", {"unit": "images/s"})

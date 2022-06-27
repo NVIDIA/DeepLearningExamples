@@ -88,6 +88,14 @@ def main():
     else:
         dllogger.init(backends=[])
 
+    dllogger.metadata("BBOX_mAP", {"unit": None})
+    dllogger.metadata("MASK_mAP", {"unit": None})
+    dllogger.metadata("e2e_infer_time", {"unit": "s"})
+    dllogger.metadata("inference_perf_fps", {"unit": "images/s"})
+    dllogger.metadata("latency_avg", {"unit": "s"})
+    dllogger.metadata("latency_90", {"unit": "s"})
+    dllogger.metadata("latency_95", {"unit": "s"})
+    dllogger.metadata("latency_99", {"unit": "s"})
 
     save_dir = ""
     dllogger.log(step="PARAMETER", data={"config":cfg})
