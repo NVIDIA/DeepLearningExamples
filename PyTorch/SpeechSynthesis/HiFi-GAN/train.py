@@ -159,6 +159,56 @@ def parse_args(parser):
     return parser
 
 
+def validate(args, gen, mel_spec, mpd, msd, val_loader, val_metrics):
+    gen.eval()
+    val_metrics.start_val()
+    with torch.no_grad():
+        for i, batch in enumerate(val_loader):
+            x, y, _, y_mel = batch
+
+            x = x.cuda(non_blocking=True)
+            y = y.cuda(non_blocking=True).unsqueeze(1)
+            y_mel = y_mel.cuda(non_blocking=True)
+
+            with autocast(enabled=args.amp):
+                y_g_hat = gen(x)
+            with autocast(enabled=args.amp and args.autocast_spectrogram):
+                y_g_hat_mel = mel_spec(y_g_hat.float().squeeze(1),
+                                       fmax=args.mel_fmax_loss)
+
+            with autocast(enabled=args.amp):
+                # val_err_tot += F.l1_loss(y_mel, y_g_hat_mel).item() * 45
+                # NOTE: Scale by 45.0 to match train loss magnitude
+                loss_mel = F.l1_loss(y_mel, y_g_hat_mel) * 45
+
+                # MPD
+                y_df_hat_r, y_df_hat_g, _, _ = mpd(y, y_g_hat.detach())
+                loss_disc_f = discriminator_loss(y_df_hat_r, y_df_hat_g)
+
+                # MSD
+                y_ds_hat_r, y_ds_hat_g, _, _ = msd(y, y_g_hat.detach())
+                loss_disc_s = discriminator_loss(y_ds_hat_r, y_ds_hat_g)
+
+                y_df_hat_r, y_df_hat_g, fmap_f_r, fmap_f_g = mpd(y, y_g_hat)
+                y_ds_hat_r, y_ds_hat_g, fmap_s_r, fmap_s_g = msd(y, y_g_hat)
+                loss_fm_f = feature_loss(fmap_f_r, fmap_f_g)
+                loss_fm_s = feature_loss(fmap_s_r, fmap_s_g)
+                loss_gen_f, losses_gen_f = generator_loss(y_df_hat_g)
+                loss_gen_s, losses_gen_s = generator_loss(y_ds_hat_g)
+                loss_gen_all = loss_gen_s + loss_gen_f + loss_fm_s + loss_fm_f + loss_mel
+
+            val_metrics['loss_discrim'] = reduce_tensor(
+                loss_disc_s + loss_disc_f, args.world_size)
+            val_metrics['loss_gen'] = reduce_tensor(loss_gen_all,
+                                                    args.world_size)
+            val_metrics['loss_mel'] = reduce_tensor(loss_mel, args.world_size)
+            val_metrics['frames'] = x.size(0) * x.size(1) * args.world_size
+            val_metrics.accumulate(scopes=['val'])
+
+        val_metrics.finish_val()
+        gen.train()
+
+
 def main():
     parser = argparse.ArgumentParser(description='PyTorch HiFi-GAN Training',
                                      allow_abbrev=False)
@@ -290,6 +340,8 @@ def main():
             if step // args.grad_accumulation >= iters_num:
                 break  # only full effective batches
 
+            if iter_ > 20:
+                break
             is_first_accum_step = step % args.grad_accumulation == 0
             is_last_accum_step = (step + 1) % args.grad_accumulation == 0
             assert (args.grad_accumulation > 1
@@ -392,56 +444,8 @@ def main():
         logger.log((epoch,), metrics, scope='train_avg', flush_log=True)
 
         if epoch % args.validation_interval == 0:
-
-            gen.eval()
-            val_metrics.start_val()
-
-            with torch.no_grad():
-                for i, batch in enumerate(val_loader):
-
-                    x, y, _, y_mel = batch
-
-                    x = x.cuda(non_blocking=True)
-                    y = y.cuda(non_blocking=True).unsqueeze(1)
-                    y_mel = y_mel.cuda(non_blocking=True)
-
-                    with autocast(enabled=args.amp):
-                        y_g_hat = gen(x)
-                    with autocast(enabled=args.amp and args.autocast_spectrogram):
-                        y_g_hat_mel = mel_spec(y_g_hat.float().squeeze(1),
-                                               fmax=args.mel_fmax_loss)
-
-                    with autocast(enabled=args.amp):
-                        # val_err_tot += F.l1_loss(y_mel, y_g_hat_mel).item() * 45
-                        # NOTE: Scale by 45.0 to match train loss magnitude
-                        loss_mel = F.l1_loss(y_mel, y_g_hat_mel) * 45
-
-                        # MPD
-                        y_df_hat_r, y_df_hat_g, _, _ = mpd(y, y_g_hat.detach())
-                        loss_disc_f = discriminator_loss(y_df_hat_r, y_df_hat_g)
-
-                        # MSD
-                        y_ds_hat_r, y_ds_hat_g, _, _ = msd(y, y_g_hat.detach())
-                        loss_disc_s = discriminator_loss(y_ds_hat_r, y_ds_hat_g)
-
-                        y_df_hat_r, y_df_hat_g, fmap_f_r, fmap_f_g = mpd(y, y_g_hat)
-                        y_ds_hat_r, y_ds_hat_g, fmap_s_r, fmap_s_g = msd(y, y_g_hat)
-                        loss_fm_f = feature_loss(fmap_f_r, fmap_f_g)
-                        loss_fm_s = feature_loss(fmap_s_r, fmap_s_g)
-                        loss_gen_f, losses_gen_f = generator_loss(y_df_hat_g)
-                        loss_gen_s, losses_gen_s = generator_loss(y_ds_hat_g)
-                        loss_gen_all = loss_gen_s + loss_gen_f + loss_fm_s + loss_fm_f + loss_mel
-
-                    val_metrics['loss_discrim'] = reduce_tensor(loss_disc_s + loss_disc_f, args.world_size)
-                    val_metrics['loss_gen'] = reduce_tensor(loss_gen_all, args.world_size)
-                    val_metrics['loss_mel'] = reduce_tensor(loss_mel, args.world_size)
-                    val_metrics['frames'] = x.size(0) * x.size(1) * args.world_size
-                    val_metrics.accumulate(scopes=['val'])
-
-                val_metrics.finish_val()
-                logger.log((epoch,), val_metrics, scope='val', tb_iter=iters_all)
-
-                gen.train()
+            validate(args, gen, mel_spec, mpd, msd, val_loader, val_metrics)
+            logger.log((epoch,), val_metrics, scope='val', tb_iter=iters_all)
 
         # validation samples
         if epoch % args.samples_interval == 0 and args.local_rank == 0:
@@ -485,7 +489,13 @@ def main():
             break
 
     # finished training
-    logger.log((), metrics, scope='train_benchmark')
+    if epochs_done > 0:
+        logger.log((), metrics, scope='train_benchmark')
+        if epoch % args.validation_interval != 0:  # val metrics are not up-to-date
+            validate(args, gen, mel_spec, mpd, msd, val_loader, val_metrics)
+        logger.log((), val_metrics, scope='val')
+    else:
+        print_once(f'Finished without training after epoch {args.epochs}.')
 
 
 if __name__ == '__main__':

@@ -166,8 +166,9 @@ def evaluate(epoch, step, val_loader, val_feat_proc, labels, model,
             agg['txts'] += helpers.gather_transcripts([txt], [txt_lens], labels)
 
         wer, loss = process_evaluation_epoch(agg)
-        log((epoch,), step, subset, {'loss': loss, 'wer': 100.0 * wer,
-                                     'took': time.time() - start_time})
+        log(() if epoch is None else (epoch,),
+            step, subset, {'loss': loss, 'wer': 100.0 * wer,
+                           'took': time.time() - start_time})
         model.train()
     return wer
 
@@ -498,10 +499,10 @@ def main():
 
     log((), None, 'train_avg', bmark_stats.get(args.benchmark_epochs_num))
 
-    if epoch == args.epochs:
-        evaluate(epoch, step, val_loader, val_feat_proc, symbols, model,
-                 ema_model, ctc_loss, greedy_decoder, args.amp, use_dali)
+    evaluate(None, step, val_loader, val_feat_proc, symbols, model,
+             ema_model, ctc_loss, greedy_decoder, args.amp, use_dali)
 
+    if epoch == args.epochs:
         checkpointer.save(model, ema_model, optimizer, scaler, epoch, step,
                           best_wer)
     flush_log()
