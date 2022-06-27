@@ -36,6 +36,7 @@ import time
 from collections import OrderedDict
 from contextlib import suppress
 from datetime import datetime
+import itertools
 import dllogger
 
 import torch
@@ -134,7 +135,7 @@ parser = argparse.ArgumentParser(description="PyTorch ImageNet Training")
 
 # DLlogger
 parser.add_argument(
-    "--dllogger-name", default="log.json", type=str, help="name of dllogger file"
+    "--dllogger-name", default="/logs/log.json", type=str, help="name of dllogger file"
 )
 
 # Dataset / Model parameters
@@ -1089,9 +1090,17 @@ def main():
             f"Model {safe_model_name(args.model)} created, param count:{sum([m.numel() for m in model.parameters()])}"
         )
         print(model)
-        if args.output and not os.path.exists(args.output):
-            os.makedirs(args.output, exist_ok=True)
-        log_path = os.path.join(args.output, args.dllogger_name)
+        dllogger_dir = os.path.dirname(args.dllogger_name)
+        if dllogger_dir and not os.path.exists(dllogger_dir):
+            os.makedirs(dllogger_dir, exist_ok=True)
+        log_path = args.dllogger_name
+        original_log_path = log_path
+        if os.path.exists(log_path):
+            for i in itertools.count():
+                s_fname = original_log_path.split('.')
+                log_path = '.'.join(s_fname[:-1]) + f'_{i}.' + s_fname[-1]
+                if not os.path.exists(log_path):
+                    break
         dllogger.init(
             backends=[
                 dllogger.JSONStreamBackend(verbosity=1, filename=log_path),
@@ -1100,7 +1109,12 @@ def main():
         )
     else:
         dllogger.init(backends=[])
-
+        
+    dllogger.metadata("train_loss", {"unit": None})
+    dllogger.metadata("items_sec", {"unit": "images/s"})
+    dllogger.metadata("val_loss", {"unit": None})
+    dllogger.metadata("val_top1", {"unit": None})
+    dllogger.metadata("val_top5", {"unit": None})
     dllogger.metadata("top1", {"unit": None})
     dllogger.metadata("top5", {"unit": None})
     dllogger.metadata("average_ips", {"unit": "images/s"})
@@ -1165,7 +1179,7 @@ def main():
 
     # optionally resume from a checkpoint
     resume_epoch = None
-    if args.resume:
+    if args.resume and os.path.isfile(args.resume):
         resume_epoch = resume_checkpoint(
             model,
             args.resume,
@@ -1173,6 +1187,8 @@ def main():
             loss_scaler=None if args.no_resume_opt else loss_scaler,
             log_info=args.local_rank == 0,
         )
+    elif args.resume and not os.path.isfile(args.resume):
+        print("Warning, resume indicated, but file not found, starting training over")
 
     # setup exponential moving average of model weights, SWA could be used here too
     model_ema = None
@@ -1183,7 +1199,7 @@ def main():
             decay=args.model_ema_decay,
             device="cpu" if args.model_ema_force_cpu else None,
         )
-        if args.resume:
+        if args.resume and os.path.isfile(args.resume):
             load_checkpoint(model_ema.module, args.resume, use_ema=True)
 
     # setup distributed training
@@ -1460,7 +1476,8 @@ def main():
                 useTwoRes=useTwoRes,
             )
             epoch_throughput.append(train_metrics["items_sec"])
-            dllogger.log(step=epoch, data=train_metrics, verbosity=1)
+            dllogger.log(step=epoch, data={"train_loss": train_metrics["loss"], "items_sec": train_metrics["items_sec"]}, verbosity=1)
+            dllogger.log(step=(), data={"train_loss": train_metrics["loss"], "items_sec": train_metrics["items_sec"]}, verbosity=1)
 
             if args.distributed and args.dist_bn in ("broadcast", "reduce"):
                 if args.local_rank == 0:
@@ -1484,6 +1501,8 @@ def main():
                 )
                 eval_metrics = ema_eval_metrics
 
+            dllogger.log(step=epoch, data={"val_loss": eval_metrics["loss"], "val_top1": eval_metrics["top1"], "val_top5": eval_metrics["top5"]}, verbosity=1)
+            dllogger.log(step=(), data={"val_loss": eval_metrics["loss"], "val_top1": eval_metrics["top1"], "val_top5": eval_metrics["top5"]}, verbosity=1)
             if lr_scheduler is not None:
                 # step LR for next epoch
                 lr_scheduler.step(epoch + 1, eval_metrics[eval_metric])
