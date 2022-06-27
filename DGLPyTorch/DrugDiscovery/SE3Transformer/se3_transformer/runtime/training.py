@@ -158,6 +158,9 @@ def train(model: nn.Module,
         logging.info(f'Train loss: {loss}')
         logger.log_metrics({'train loss': loss}, epoch_idx)
 
+        if epoch_idx + 1 == args.epochs:
+            logger.log_metrics({'train loss': loss})
+
         for callback in callbacks:
             callback.on_epoch_end()
 

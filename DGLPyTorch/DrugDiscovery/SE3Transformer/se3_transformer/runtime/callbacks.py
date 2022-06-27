@@ -94,6 +94,7 @@ class QM9MetricCallback(BaseCallback):
         self.targets_std = targets_std
         self.prefix = prefix
         self.best_mae = float('inf')
+        self.last_mae = None
 
         self.logger.log_metadata(f'{self.prefix} MAE', {'unit': None})
         self.logger.log_metadata(f'{self.prefix} best MAE', {'unit': None})
@@ -106,10 +107,12 @@ class QM9MetricCallback(BaseCallback):
         logging.info(f'{self.prefix} MAE: {mae}')
         self.logger.log_metrics({f'{self.prefix} MAE': mae}, epoch)
         self.best_mae = min(self.best_mae, mae)
+        self.last_mae = mae
 
     def on_fit_end(self):
         if self.best_mae != float('inf'):
             self.logger.log_metrics({f'{self.prefix} best MAE': self.best_mae})
+            self.logger.log_metrics({f'{self.prefix} loss': self.last_mae / self.targets_std})
 
 
 class QM9LRSchedulerCallback(LRSchedulerCallback):
