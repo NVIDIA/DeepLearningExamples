@@ -42,6 +42,11 @@ class Logger(ABC):
 
     @rank_zero_only
     @abstractmethod
+    def log_metadata(self, metric, metadata):
+        pass
+
+    @rank_zero_only
+    @abstractmethod
     def log_metrics(self, metrics, step=None):
         pass
 
@@ -81,6 +86,11 @@ class LoggerCollection(Logger):
         for logger in self.loggers:
             logger.log_hyperparams(params)
 
+    @rank_zero_only
+    def log_metadata(self, metric, metadata):
+        for logger in self.loggers:
+            logger.log_metadata(metric, metadata)
+
 
 class DLLogger(Logger):
     def __init__(self, save_dir: pathlib.Path, filename: str):
@@ -94,6 +104,10 @@ class DLLogger(Logger):
     def log_hyperparams(self, params):
         params = self._sanitize_params(params)
         dllogger.log(step="PARAMETER", data=params)
+
+    @rank_zero_only
+    def log_metadata(self, metric, metadata):
+        dllogger.metadata(metric, metadata)
 
     @rank_zero_only
     def log_metrics(self, metrics, step=None):
@@ -125,6 +139,10 @@ class WandbLogger(Logger):
     def log_hyperparams(self, params: Dict[str, Any]) -> None:
         params = self._sanitize_params(params)
         self.experiment.config.update(params, allow_val_change=True)
+
+    @rank_zero_only
+    def log_metadata(self, metric, metadata):
+        pass
 
     @rank_zero_only
     def log_metrics(self, metrics: Dict[str, float], step: Optional[int] = None) -> None:

@@ -178,11 +178,19 @@ def main():
     else:
         dllogger.init(backends=[])
 
-    dllogger.metadata('train_throughput', {"name": 'train_throughput', 'format': ":.3e"})
-    dllogger.metadata('hr@10', {"name": 'hr@10', 'format': ":.5f"})
-    dllogger.metadata('train_epoch_time', {"name": 'train_epoch_time', 'format': ":.3f"})
-    dllogger.metadata('validation_epoch_time', {"name": 'validation_epoch_time', 'format': ":.3f"})
-    dllogger.metadata('eval_throughput', {"name": 'eval_throughput', 'format': ":.3e"})
+    dllogger.metadata('train_throughput', {"name": 'train_throughput', 'unit': 'samples/s', 'format': ":.3e"})
+    dllogger.metadata('best_train_throughput', {'unit': 'samples/s'})
+    dllogger.metadata('mean_train_throughput', {'unit': 'samples/s'})
+    dllogger.metadata('eval_throughput', {"name": 'eval_throughput', 'unit': 'samples/s', 'format': ":.3e"})
+    dllogger.metadata('best_eval_throughput', {'unit': 'samples/s'})
+    dllogger.metadata('mean_eval_throughput', {'unit': 'samples/s'})
+    dllogger.metadata('train_epoch_time', {"name": 'train_epoch_time', 'unit': 's', 'format': ":.3f"})
+    dllogger.metadata('validation_epoch_time', {"name": 'validation_epoch_time', 'unit': 's', 'format': ":.3f"})
+    dllogger.metadata('time_to_target', {'unit': 's'})
+    dllogger.metadata('time_to_best_model', {'unit': 's'})
+    dllogger.metadata('hr@10', {"name": 'hr@10', 'unit': None, 'format': ":.5f"})
+    dllogger.metadata('best_accuracy', {'unit': None})
+    dllogger.metadata('best_epoch', {'unit': None})
 
     dllogger.log(data=vars(args), step='PARAMETER')
 

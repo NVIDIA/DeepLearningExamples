@@ -91,6 +91,9 @@ def init_logger(args, full, logger):
         dllogger.init(backends=[])
 
     dllogger.log(data=vars(args), step="PARAMETER")
+    dllogger.metadata("streaming_map_val", {"unit": None})
+    dllogger.metadata("train_throughput", {"unit": "samples/s"})
+    dllogger.metadata("validation_throughput", {"unit": "samples/s"})
 
 
 def create_config(args):

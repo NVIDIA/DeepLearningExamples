@@ -50,16 +50,15 @@ def init_logging(log_path, FLAGS):
     json_backend = dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE,
                                               filename=log_path)
     stdout_backend = dllogger.StdOutBackend(verbosity=dllogger.Verbosity.VERBOSE)
-
-    stdout_backend._metadata['auc'].update({'format': '0:.5f'})
-    stdout_backend._metadata['throughput'].update({'format': ':.2e'})
-    stdout_backend._metadata['mean_step_time_ms'].update({'format': '0:.3f'})
-    stdout_backend._metadata['mean_inference_throughput'].update({'format': ':.2e'})
-    stdout_backend._metadata['mean_inference_latency'].update({'format': '0:.5f'})
-    for percentile in [90, 95, 99]:
-        stdout_backend._metadata[f'p{percentile}_inference_latency'].update({'format': '0:.5f'})
-
     dllogger.init(backends=[json_backend, stdout_backend])
+
+    dllogger.metadata('auc', {'unit': None, 'format': '0:.5f'})
+    dllogger.metadata('throughput', {'unit': 'samples/s', 'format': ':.2e'})
+    dllogger.metadata('mean_step_time_ms', {'unit': 'ms', 'format': '0:.3f'})
+    dllogger.metadata('mean_inference_throughput', {'unit': 'samples/s', 'format': ':.2e'})
+    dllogger.metadata('mean_inference_latency', {'unit': 's', 'format': '0:.5f'})
+    for percentile in [90, 95, 99]:
+        dllogger.metadata(f'p{percentile}_inference_latency', {'unit': 's', 'format': '0:.5f'})
 
     if hvd.rank() == 0:
         dllogger.log(data=FLAGS.flag_values_dict(), step='PARAMETER')

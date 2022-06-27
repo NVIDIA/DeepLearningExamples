@@ -275,6 +275,13 @@ def main():
     assert args.rank >= 0
 
     setup_dllogger(args.rank, filename=args.dllogger_file)
+    dllogger.metadata('eval_batch_time', {'unit': 's'})
+    dllogger.metadata('train_batch_time', {'unit': 's'})
+    dllogger.metadata('eval_throughput', {'unit': 'images/s'})
+    dllogger.metadata('train_throughout', {'unit': 'images/s'})
+    dllogger.metadata('eval_loss', {'unit': None})
+    dllogger.metadata('train_loss', {'unit': None})
+    dllogger.metadata('map', {'unit': None})
 
     if args.distributed:
         logging.info('Training in distributed mode with multiple processes, 1 GPU per process. Process %d, total %d.'

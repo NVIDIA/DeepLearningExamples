@@ -39,6 +39,10 @@ class DLLoggerMetricsCallback(KerasCallback):
         if not isinstance(log_every, dict):
             self._log_every = defaultdict(lambda: log_every)
 
+        self._dllogger.metadata('loss', {'unit': None})
+        self._dllogger.metadata('AP', {'unit': None})
+        self._dllogger.metadata('mask_AP', {'unit': None})
+
         logging.getLogger('hooks').info('Created metrics logging hook')
 
     def on_any_batch_end(self, mode, epoch, batch, logs):
@@ -93,6 +97,14 @@ class DLLoggerPerfCallback(KerasCallback):
         self._deltas = {}
         self._batch_timestamps = {}
         self._start_timestamps = {}
+
+        for mode in ['train', 'test', 'predict']:
+            self._dllogger.metadata(f'{mode}_throughput', {'unit': 'images/s'})
+            self._dllogger.metadata(f'{mode}_latency', {'unit': 's'})
+            self._dllogger.metadata(f'{mode}_latency_90', {'unit': 's'})
+            self._dllogger.metadata(f'{mode}_latency_95', {'unit': 's'})
+            self._dllogger.metadata(f'{mode}_latency_99', {'unit': 's'})
+            self._dllogger.metadata(f'{mode}_time', {'unit': 's'})
 
         self._logger = logging.getLogger('hooks')
         self._logger.info('Created perf logging hooks')

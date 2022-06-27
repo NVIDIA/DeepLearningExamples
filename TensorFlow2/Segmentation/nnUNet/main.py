@@ -45,6 +45,12 @@ def main(args):
 
     logger = get_logger(args)
     logger.log_hyperparams(vars(args))
+    logger.log_metadata("dice_score", {"unit": None})
+    logger.log_metadata("eval_dice_nobg", {"unit": None})
+    logger.log_metadata("throughput_predict", {"unit": "images/s"})
+    logger.log_metadata("throughput_train", {"unit": "images/s"})
+    logger.log_metadata("latency_predict_mean", {"unit": "ms"})
+    logger.log_metadata("latency_train_mean", {"unit": "ms"})
 
     if args.exec_mode == "train":
         model = NNUnet(args)

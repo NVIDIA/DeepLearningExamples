@@ -208,6 +208,12 @@ def postprocess_dllog(args):
     with open(log_path, 'w') as dest_file:
         for lines in zip(*[f.readlines() for f in logfiles]):
             json_lines = [json.loads(l[5:]) for l in lines]
+
+            assert all(x['type'] == json_lines[0]['type'] for x in json_lines)
+            if json_lines[0]['type'] != 'LOG':
+                dest_file.write(lines[0])
+                continue
+
             assert all(x['step'] == json_lines[0]['step'] for x in json_lines)
             if json_lines[0]['step'] == 'PARAMETER':
                 dest_file.write(lines[0])

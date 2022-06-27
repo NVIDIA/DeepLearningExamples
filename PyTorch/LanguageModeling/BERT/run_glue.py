@@ -486,6 +486,13 @@ def main(args):
     else:
         dllogger.init(backends=[])
 
+    dllogger.metadata("e2e_train_time", {"unit": "s"})
+    dllogger.metadata("training_sequences_per_second", {"unit": "sequences/s"})
+    dllogger.metadata("e2e_inference_time", {"unit": "s"})
+    dllogger.metadata("inference_sequences_per_second", {"unit": "sequences/s"})
+    dllogger.metadata("exact_match", {"unit": None})
+    dllogger.metadata("F1", {"unit": None})
+
     dllogger.log(step="PARAMETER", data={"Config": [str(args)]})
 
     if args.gradient_accumulation_steps < 1:

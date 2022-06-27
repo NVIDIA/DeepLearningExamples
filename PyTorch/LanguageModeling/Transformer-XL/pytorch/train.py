@@ -752,6 +752,14 @@ def main():
     logging.info(args)
     dllogger.log(step='PARAMETER', data=vars(args))
 
+    dllogger.metadata('train_throughput', {'unit': 'tokens/s'})
+    dllogger.metadata('train_elapsed', {'unit': 'min'})
+    dllogger.metadata('valid_elapsed', {'unit': 'min'})
+    dllogger.metadata('train_perplexity', {'unit': None})
+    dllogger.metadata('valid_perplexity', {'unit': None})
+    dllogger.metadata('train_loss', {'unit': None})
+    dllogger.metadata('valid_loss', {'unit': None})
+
     logging.info(f'world size: {utils.distributed.get_world_size()}')
 
     if not args.no_env:

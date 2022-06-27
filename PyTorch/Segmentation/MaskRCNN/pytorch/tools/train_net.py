@@ -265,6 +265,11 @@ def main():
     else:
         dllogger.init(backends=[])
 
+    dllogger.metadata("BBOX_mAP", {"unit": None})
+    dllogger.metadata("MASK_mAP", {"unit": None})
+    dllogger.metadata("e2e_train_time", {"unit": "s"})
+    dllogger.metadata("train_perf_fps", {"unit": "images/s"})
+
     dllogger.log(step="PARAMETER", data={"gpu_count":num_gpus})
     # dllogger.log(step="PARAMETER", data={"environment_info": collect_env_info()})
     dllogger.log(step="PARAMETER", data={"config_file": args.config_file})

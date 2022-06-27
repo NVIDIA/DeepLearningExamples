@@ -338,10 +338,10 @@ class Logger(object):
 
 class Metrics:
     ACC_METADATA = {"unit": "%", "format": ":.2f"}
-    IPS_METADATA = {"unit": "img/s", "format": ":.2f"}
+    IPS_METADATA = {"unit": "images/s", "format": ":.2f"}
     TIME_METADATA = {"unit": "s", "format": ":.5f"}
-    LOSS_METADATA = {"format": ":.5f"}
-    LR_METADATA = {"format": ":.5f"}
+    LOSS_METADATA = {"unit": None, "format": ":.5f"}
+    LR_METADATA = {"unit": None, "format": ":.5f"}
 
     def __init__(self, logger):
         self.logger = logger

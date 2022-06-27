@@ -308,6 +308,14 @@ def main():
     logging.info(args)
     dllogger.log(step='PARAMETER', data=vars(args))
 
+    dllogger.metadata('eval_throughput', {'unit': 'tokens/s'})
+    dllogger.metadata('eval_loss', {'unit': None})
+    dllogger.metadata('eval_perplexity', {'unit': None})
+    dllogger.metadata('eval_latency', {'unit': 'ms'})
+    dllogger.metadata('eval_avg_latency', {'unit': 'ms'})
+    for p in args.percentiles:
+        dllogger.metadata(f'eval_{p}%_latency', {'unit': 'ms'})
+
     if not args.no_env:
         log_env_info()
 

@@ -1100,6 +1100,11 @@ def main():
         )
     else:
         dllogger.init(backends=[])
+
+    dllogger.metadata("top1", {"unit": None})
+    dllogger.metadata("top5", {"unit": None})
+    dllogger.metadata("average_ips", {"unit": "images/s"})
+
     data_config = resolve_data_config(
         vars(args), model=model, verbose=args.local_rank == 0
     )

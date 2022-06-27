@@ -29,6 +29,11 @@ class Logger(ABC):
 
     @rank_zero_only
     @abstractmethod
+    def log_metadata(self, metric, metadata):
+        pass
+
+    @rank_zero_only
+    @abstractmethod
     def log_metrics(self, metrics, step=None):
         pass
 
@@ -73,6 +78,11 @@ class LoggerCollection(Logger):
             logger.log_hyperparams(params)
 
     @rank_zero_only
+    def log_metadata(self, metric, metadata):
+        for logger in self.loggers:
+            logger.log_metadata(metric, metadata)
+
+    @rank_zero_only
     def flush(self):
         for logger in self.loggers:
             logger.flush()
@@ -103,6 +113,10 @@ class DLLogger(Logger):
     def log_hyperparams(self, params):
         params = self._sanitize_params(params)
         dllogger.log(step="PARAMETER", data=params)
+
+    @rank_zero_only
+    def log_metadata(self, metric, metadata):
+        dllogger.metadata(metric, metadata)
 
     @rank_zero_only
     def log_metrics(self, metrics, step=None):

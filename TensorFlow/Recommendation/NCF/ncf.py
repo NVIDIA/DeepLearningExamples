@@ -176,6 +176,16 @@ def main():
     else:
         dllogger.init(backends=[])
 
+    dllogger.metadata("best_epoch", {"unit": None})
+    dllogger.metadata("first_epoch_to_hit", {"unit": None})
+    dllogger.metadata("best_hr", {"unit": None})
+    dllogger.metadata("average_eval_time_per_epoch", {"unit": "s"})
+    dllogger.metadata("average_train_time_per_epoch", {"unit": "s"})
+    dllogger.metadata("time_to_best", {"unit": "s"})
+    dllogger.metadata("time_to_train", {"unit": "s"})
+    dllogger.metadata("average_train_throughput", {"unit": "samples/s"})
+    dllogger.metadata("average_eval_throughput", {"unit": "samples/s"})
+
     args.world_size = hvd.size()
     dllogger.log(data=vars(args), step='PARAMETER')
 

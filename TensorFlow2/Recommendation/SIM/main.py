@@ -83,6 +83,11 @@ def init_logger(results_dir, filename):
                 dllogger.StdOutBackend(verbosity=dllogger.Verbosity.VERBOSE),
             ]
         )
+        dllogger.metadata("test_auc", {"unit": None})
+        dllogger.metadata("latency_p90", {"unit": "ms"})
+        dllogger.metadata("train_loss", {"unit": None})
+        dllogger.metadata("time_to_train", {"unit": "s"})
+        dllogger.metadata("throughput", {"unit": "samples/s"})
     else:
         dllogger.init(backends=[])
 

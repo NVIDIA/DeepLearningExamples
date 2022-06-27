@@ -47,6 +47,15 @@ if __name__ == "__main__":
         dllogger.init(backends=[])
     dllogger.log(data=vars(FLAGS), step='PARAMETER')
 
+    dllogger.metadata("train_throughput", {"unit": "images/s"})
+    dllogger.metadata("eval_throughput", {"unit": "images/s"})
+    dllogger.metadata("eval_latency_avg", {"unit": "ms"})
+    dllogger.metadata("eval_latency_p90", {"unit": "ms"})
+    dllogger.metadata("eval_latency_p95", {"unit": "ms"})
+    dllogger.metadata("eval_latency_p99", {"unit": "ms"})
+    dllogger.metadata("top1_accuracy", {"unit": None})
+    dllogger.metadata("top5_accuracy", {"unit": None})
+
     runner = Runner(
         # ========= Model HParams ========= #
         n_classes=1001,

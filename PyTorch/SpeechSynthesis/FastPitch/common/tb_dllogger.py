@@ -99,20 +99,20 @@ def init(log_fpath, log_dir, enabled=True, tb_subsets=[], **tb_kw):
         backends = []
 
     dllogger.init(backends=backends)
-    dllogger.metadata("train_lrate", {"name": "lrate", "format": ":>3.2e"})
+    dllogger.metadata("train_lrate", {"name": "lrate", "unit": None, "format": ":>3.2e"})
 
     for id_, pref in [('train', ''), ('train_avg', 'avg train '),
                       ('val', '  avg val '), ('val_ema', '  EMA val ')]:
 
         dllogger.metadata(f"{id_}_loss",
-                          {"name": f"{pref}loss", "format": ":>5.2f"})
+                          {"name": f"{pref}loss", "unit": None, "format": ":>5.2f"})
         dllogger.metadata(f"{id_}_mel_loss",
-                          {"name": f"{pref}mel loss", "format": ":>5.2f"})
+                          {"name": f"{pref}mel loss", "unit": None, "format": ":>5.2f"})
 
         dllogger.metadata(f"{id_}_kl_loss",
-                          {"name": f"{pref}kl loss", "format": ":>5.5f"})
+                          {"name": f"{pref}kl loss", "unit": None, "format": ":>5.5f"})
         dllogger.metadata(f"{id_}_kl_weight",
-                          {"name": f"{pref}kl weight", "format": ":>5.5f"})
+                          {"name": f"{pref}kl weight", "unit": None, "format": ":>5.5f"})
 
         dllogger.metadata(f"{id_}_frames/s",
                           {"name": None, "unit": "frames/s", "format": ":>10.2f"})
@@ -127,8 +127,8 @@ def init(log_fpath, log_dir, enabled=True, tb_subsets=[], **tb_kw):
 def init_inference_metadata(batch_size=None):
 
     modalities = [('latency', 's', ':>10.5f'), ('RTF', 'x', ':>10.2f'),
-                  ('frames/s', None, ':>10.2f'), ('samples/s', None, ':>10.2f'),
-                  ('letters/s', None, ':>10.2f'), ('tokens/s', None, ':>10.2f')]
+                  ('frames/s', 'frames/s', ':>10.2f'), ('samples/s', 'samples/s', ':>10.2f'),
+                  ('letters/s', 'letters/s', ':>10.2f'), ('tokens/s', 'tokens/s', ':>10.2f')]
 
     if batch_size is not None:
         modalities.append((f'RTF@{batch_size}', 'x', ':>10.2f'))

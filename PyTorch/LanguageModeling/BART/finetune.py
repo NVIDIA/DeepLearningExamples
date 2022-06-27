@@ -560,6 +560,9 @@ if __name__ == "__main__":
     else:
         dllogger.init(backends=[])
 
+    dllogger.metadata("avg_train_time", {"unit": "s"})
+    dllogger.metadata("avg_train_throughput", {"unit": "tokens/s"})
+
     main(args)
 
     dllogger.flush()
