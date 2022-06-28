@@ -1,2 +1,4 @@
 *.pth.tar
 *.log
+workspace/
+navigator_workspace/

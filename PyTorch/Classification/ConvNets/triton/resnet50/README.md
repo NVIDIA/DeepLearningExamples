@@ -103,51 +103,49 @@ Running the following scripts will build and launch the container with all requi
  
    IMPORTANT: This step is executed on the host computer.
  
-   ```
+    ```
     git clone https://github.com/NVIDIA/DeepLearningExamples.git
     cd DeepLearningExamples/PyTorch/Classification/ConvNets
-   ```
+    ```
+   
 2. Setup the environment in the host computer and start Triton Inference Server.
  
-   ```
+    ```
     source triton/scripts/setup_environment.sh
     bash triton/scripts/docker/triton_inference_server.sh 
-   ```
+    ```
 
 3. Build and run a container that extends the NGC PyTorch container with the Triton Inference Server client libraries and dependencies.
  
-   ```
+    ```
     bash triton/scripts/docker/build.sh
     bash triton/scripts/docker/interactive.sh
-   ```
+    ```
 
 
 4. Prepare the deployment configuration and create folders in Docker.
  
    IMPORTANT: These and the following commands must be executed in the PyTorch NGC container.
- 
- 
-   ```
+
+    ```
     source triton/scripts/setup_environment.sh
-   ```
+    ```
 
 5. Download and pre-process the dataset.
- 
- 
-   ```
+  
+    ```
     bash triton/scripts/download_data.sh
     bash triton/scripts/process_dataset.sh
-   ```
+    ```
  
 6. Setup the parameters for deployment.
  
-   ```
+    ```
     source triton/scripts/setup_parameters.sh
-   ```
+    ```
  
 7. Convert the model from training to inference format (e.g. TensorRT).
- 
- 
+  
    ```
     python3 triton/convert_model.py \
         --input-path triton/model.py \
@@ -230,7 +228,7 @@ Running the following scripts will build and launch the container with all requi
    presented below set the maximum latency to zero to achieve the best latency
    possible with good performance.
  
-   ```
+    ```
     python triton/run_online_performance_test_on_triton.py \
         --model-name ${MODEL_NAME} \
         --input-data random \
@@ -238,8 +236,7 @@ Running the following scripts will build and launch the container with all requi
         --triton-instances ${TRITON_INSTANCES} \
         --number-of-model-instances ${NUMBER_OF_MODEL_INSTANCES} \
         --result-path ${SHARED_DIR}/triton_performance_online.csv
- 
-   ```
+    ```
  
 
 
@@ -253,14 +250,14 @@ Running the following scripts will build and launch the container with all requi
    from increasing the batch size due to efficiency gains in the GPU with larger
    batches.
  
-   ```
+    ```
     python triton/run_offline_performance_test_on_triton.py \
         --model-name ${MODEL_NAME} \
         --input-data random \
         --batch-sizes ${BATCH_SIZE} \
         --triton-instances ${TRITON_INSTANCES} \
         --result-path ${SHARED_DIR}/triton_performance_offline.csv
-   ```
+    ```
  
 
 
@@ -290,8 +287,6 @@ BATCH_SIZE="1, 2, 4, 8, 16, 32, 64, 128"
 BACKEND_ACCELERATOR="cuda"
 MAX_BATCH_SIZE="128"
 NUMBER_OF_MODEL_INSTANCES="1"
-TRITON_MAX_QUEUE_DELAY="1"
-TRITON_PREFERRED_BATCH_SIZES="64 128"
 
 ```
 
@@ -332,10 +327,8 @@ The performance measurements in this document were conducted at the time of publ
 This table lists the common variable parameters for all performance measurements:
 | Parameter Name               | Parameter Value   |
 |:-----------------------------|:------------------|
-| Max Batch Size               | 128.0             |
-| Number of model instances    | 1.0               |
-| Triton Max Queue Delay       | 1.0               |
-| Triton Preferred Batch Sizes | 64 128            |
+| Max Batch Size               | 128             |
+| Number of model instances    | 1               |
 
 
 
@@ -508,10 +501,8 @@ Full tabular data
 This table lists the common variable parameters for all performance measurements:
 | Parameter Name               | Parameter Value   |
 |:-----------------------------|:------------------|
-| Max Batch Size               | 128.0             |
-| Number of model instances    | 1.0               |
-| Triton Max Queue Delay       | 1.0               |
-| Triton Preferred Batch Sizes | 64 128            |
+| Max Batch Size               | 128             |
+| Number of model instances    | 2               |
 
 
 
