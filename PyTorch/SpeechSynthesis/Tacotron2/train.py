@@ -318,6 +318,7 @@ def validate(model, criterion, valset, epoch, batch_iter, batch_size,
 
         return val_loss, val_items_per_sec
 
+
 def adjust_learning_rate(iteration, epoch, optimizer, learning_rate,
                          anneal_steps, anneal_factor, rank):
 
@@ -550,6 +551,7 @@ def main():
     run_time = run_stop_time - run_start_time
     DLLogger.log(step=tuple(), data={'run_time': run_time})
     DLLogger.log(step=tuple(), data={'val_loss': val_loss})
+    DLLogger.log(step=tuple(), data={'train_loss': reduced_loss})
     DLLogger.log(step=tuple(), data={'train_items_per_sec':
                                      (train_epoch_items_per_sec/num_iters if num_iters > 0 else 0.0)})
     DLLogger.log(step=tuple(), data={'val_items_per_sec': val_items_per_sec})
