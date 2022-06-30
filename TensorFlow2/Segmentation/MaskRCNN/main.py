@@ -49,7 +49,7 @@ def main():
 
     # setup dllogger
     dllogger.init(backends=[
-        dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE, filename=params.log_file),
+        dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE, filename=params.log_file, append=True),
         LoggingBackend(verbosity=dllogger.Verbosity.VERBOSE)
     ])
     dllogger.log(step='PARAMETER', data=vars(params))
