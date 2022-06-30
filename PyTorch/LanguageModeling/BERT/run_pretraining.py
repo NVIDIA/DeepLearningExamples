@@ -404,6 +404,8 @@ def prepare_model_and_optimizer(args, device, sequence_output_is_dense):
 
         if args.phase2 and not args.init_checkpoint:
             global_step -= args.phase1_end_step
+        if args.init_checkpoint:
+            args.resume_step = 0
         if is_main_process():
             print("resume step from ", args.resume_step)
 
@@ -476,8 +478,8 @@ def prepare_model_and_optimizer(args, device, sequence_output_is_dense):
 
     criterion = BertPretrainingCriterion(config.vocab_size, sequence_output_is_dense=sequence_output_is_dense)
 
-    if args.resume_from_checkpoint and args.init_checkpoint:
-        start_epoch = checkpoint['epoch']
+    if (args.resume_from_checkpoint and not args.phase2) or (args.resume_phase2) or args.init_checkpoint:
+        start_epoch = checkpoint.get('epoch', 0)
     else:
         start_epoch = 0
 
@@ -548,7 +550,7 @@ def main():
     dllogger.log(step="PARAMETER", data={"Config": [str(args)]})
 
     # Prepare optimizer
-    model, optimizer, grad_scaler, lr_scheduler, checkpoint, global_step, criterion, epoch = prepare_model_and_optimizer(args, device, sequence_output_is_dense=not args.no_dense_sequence_output)
+    model, optimizer, grad_scaler, lr_scheduler, checkpoint, global_resume_step, criterion, epoch = prepare_model_and_optimizer(args, device, sequence_output_is_dense=not args.no_dense_sequence_output)
     # Prepare the data loader.
     if is_main_process():
         tic = time.perf_counter()
@@ -686,7 +688,7 @@ def main():
             # Log Optimizer Step
             if (not grad_accumulation_step) or timeout_sent:
                 static_optimizer_step = stats.host_stat_value('model_step') // args.gradient_accumulation_steps
-                dynamic_optimizer_step = static_optimizer_step - int(stats.host_stat_value('skipped_optimizer_steps'))
+                dynamic_optimizer_step = static_optimizer_step - int(stats.host_stat_value('skipped_optimizer_steps')) + global_resume_step
                 no_log_steps = static_optimizer_step % args.log_freq
 
                 # Log Final Step (MAYBE)
@@ -696,9 +698,9 @@ def main():
                 # and others to not because they accidentally see a different value for `skipped_optimizer_steps`.
                 # In order to remove most device syncs, synchronizations only begin in the last few steps
                 # where the skipped step count matters.
-                if static_optimizer_step >= args.steps_this_run or timeout_sent:
+                if static_optimizer_step + global_resume_step >= args.steps_this_run or timeout_sent:
                     torch.cuda.synchronize()
-                    dynamic_optimizer_step = static_optimizer_step - int(stats.host_stat_value('skipped_optimizer_steps'))
+                    dynamic_optimizer_step = static_optimizer_step - int(stats.host_stat_value('skipped_optimizer_steps')) + global_resume_step
                     if dynamic_optimizer_step >= args.steps_this_run or timeout_sent:
                         train_time_raw = time.time() - raw_train_start
 
