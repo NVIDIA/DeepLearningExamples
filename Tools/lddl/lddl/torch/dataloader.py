@@ -78,4 +78,4 @@ class DataLoader(torch.utils.data.DataLoader):
           (num_samples_per_worker - 1) // self.batch_size + 1)
       return num_batches_per_worker * num_workers_per_rank
     else:
-      super().__len__()
+      return super().__len__()
