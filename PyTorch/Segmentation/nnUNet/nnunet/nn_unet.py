@@ -44,6 +44,7 @@ class NNUnet(pl.LightningModule):
         self.build_nnunet()
         self.best_mean, self.best_epoch, self.test_idx = (0,) * 3
         self.start_benchmark = 0
+        self.train_loss = []
         self.test_imgs = []
         if not self.triton:
             self.learning_rate = args.learning_rate
@@ -71,15 +72,18 @@ class NNUnet(pl.LightningModule):
         if self.args.deep_supervision:
             loss, weights = 0.0, 0.0
             for i in range(preds.shape[1]):
-                loss += self.loss(preds[:, i], label) * 0.5 ** i
-                weights += 0.5 ** i
+                loss += self.loss(preds[:, i], label) * 0.5**i
+                weights += 0.5**i
             return loss / weights
         return self.loss(preds, label)
 
     def training_step(self, batch, batch_idx):
+        if batch_idx == 0:
+            self.train_loss = []
         img, lbl = self.get_train_data(batch)
         pred = self.model(img)
         loss = self.compute_loss(pred, lbl)
+        self.train_loss.append(loss.item())
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -225,9 +229,10 @@ class NNUnet(pl.LightningModule):
 
         metrics = {}
         metrics["Dice"] = self.round(dice)
-        metrics["Loss"] = self.round(loss)
+        metrics["Val Loss"] = self.round(loss)
         metrics["Max Dice"] = self.round(self.best_mean_dice)
         metrics["Best epoch"] = self.best_epoch
+        metrics["Train Loss"] = round(sum(self.train_loss) / len(self.train_loss), 4)
         if self.n_class > 1:
             metrics.update({f"D{i+1}": self.round(m) for i, m in enumerate(dice)})
 
@@ -246,6 +251,8 @@ class NNUnet(pl.LightningModule):
         if not self.args.benchmark:
             metrics = {}
             metrics["dice_score"] = round(self.best_mean.item(), 2)
+            metrics["train_loss"] = round(sum(self.train_loss) / len(self.train_loss), 4)
+            metrics["val_loss"] = round(1 - self.best_mean.item() / 100, 4)
             metrics["Epoch"] = self.best_epoch
             self.dllogger.log_metrics(step=(), metrics=metrics)
             self.dllogger.flush()

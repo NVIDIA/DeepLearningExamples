@@ -48,7 +48,9 @@ def set_cuda_devices(args):
 
 def verify_ckpt_path(args):
     if args.resume_training:
-        resume_path_ckpt = os.path.join(args.ckpt_path, "checkpoints", "last.ckpt")
+        resume_path_ckpt = os.path.join(
+            args.ckpt_path if args.ckpt_path is not None else "", "checkpoints", "last.ckpt"
+        )
         resume_path_results = os.path.join(args.results, "checkpoints", "last.ckpt")
         if os.path.exists(resume_path_ckpt):
             return resume_path_ckpt

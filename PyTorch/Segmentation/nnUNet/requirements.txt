@@ -4,5 +4,5 @@ joblib==1.0.1
 pytorch-lightning==1.5.10
 scikit-learn==1.0
 scikit-image==0.18.3
-pynvml==11.0.0
+scipy==1.8.1
 rich==12.2.0

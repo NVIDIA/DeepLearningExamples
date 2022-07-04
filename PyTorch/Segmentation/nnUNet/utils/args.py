@@ -108,20 +108,6 @@ def get_main_args(strings=None):
         help="Amount of overlap between scans during sliding window inference",
     )
     arg(
-        "--affinity",
-        type=str,
-        default="unique_contiguous",
-        choices=[
-            "all",
-            "single",
-            "single_unique",
-            "unique_interleaved",
-            "unique_contiguous",
-            "disabled",
-        ],
-        help="type of CPU affinity",
-    )
-    arg(
         "--scheduler",
         action="store_true",
         help="Enable cosine rate scheduler with warmup",
