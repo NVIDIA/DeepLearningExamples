@@ -340,8 +340,6 @@ def main():
             if step // args.grad_accumulation >= iters_num:
                 break  # only full effective batches
 
-            if iter_ > 20:
-                break
             is_first_accum_step = step % args.grad_accumulation == 0
             is_last_accum_step = (step + 1) % args.grad_accumulation == 0
             assert (args.grad_accumulation > 1
