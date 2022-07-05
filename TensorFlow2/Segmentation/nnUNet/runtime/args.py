@@ -86,11 +86,11 @@ def get_main_args():
     p.arg(
         "--scheduler",
         type=str,
-        default="poly",
+        default="none",
         choices=["none", "poly", "cosine", "cosine_annealing"],
         help="Learning rate scheduler",
     )
-    p.arg("--end-learning-rate", type=float, default=0.0001, help="End learning rate for poly scheduler")
+    p.arg("--end-learning-rate", type=float, default=0.00008, help="End learning rate for poly scheduler")
     p.arg(
         "--cosine-annealing-first-cycle-steps",
         type=positive_int,

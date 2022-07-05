@@ -172,12 +172,16 @@ def train(args, model, dataset, logger):
             desc="Train",
             postfix={"epoch": 1},
             unit="step",
-            total=total_steps,
+            total=total_steps - int(tstep),
         )
         start_time = time()
+        total_train_loss, dice_score = 0.0, 0.0
         for images, labels in wrapped_data:
+            if tstep >= total_steps:
+                break
             tstep.assign_add(1)
             loss = train_step_fn(images, labels, warmup_batch=tstep == 1)
+            total_train_loss += float(loss)
             lr = scheduler(tstep) if callable(scheduler) else scheduler
             metrics = {"loss": float(loss), "learning_rate": float(lr)}
             if tstep % steps_per_epoch == 0:
@@ -197,15 +201,15 @@ def train(args, model, dataset, logger):
                     checkpoint.update(None)
                 if is_main_process() and not args.quiet:
                     wrapped_data.set_postfix(epoch=epoch + 1)
-            if tstep == total_steps:
-                break
+            elif tstep % steps_per_epoch == 0:
+                total_train_loss = 0.0
 
-        best_score, ttt = checkpoint.load_best()
         metrics = {
-            "dice_score": best_score,
-            "time_to_train_best": ttt,
+            "train_loss": round(total_train_loss / steps_per_epoch, 5),
+            "val_loss": round(1 - float(dice_score), 5),
+            "dice": round(float(dice_metrics.metrics["value"]), 5),
         }
-        logger.log_metrics(metrics=metrics, step=())
+        logger.log_metrics(metrics=metrics)
         logger.flush()
 
 
