@@ -73,7 +73,7 @@ def get_optimizer(args, scheduler):
 def get_epoch_size(args, batch_size, dataset_size):
     if args.steps_per_epoch:
         return args.steps_per_epoch
-    div = args.gpus * batch_size if args.dim == 3 else args.nvol
+    div = args.gpus * (batch_size if args.dim == 3 else args.nvol)
     return (dataset_size + div - 1) // div
 
 
