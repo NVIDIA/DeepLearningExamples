@@ -75,6 +75,9 @@ def parse_cmdline():
             'are stored. When resuming from a previous checkpoint,'
             'all necessary files should be placed in this directory '))
 
+    p.add_argument('--log_dir', type=str, default=None,
+                   help=('The directory where the model and training/evaluation summaries'
+                         'are stored. '))
     
     p.add_argument( '--log_filename', type=str, default='log.json', help="Name of the JSON file to which write the training log")
 

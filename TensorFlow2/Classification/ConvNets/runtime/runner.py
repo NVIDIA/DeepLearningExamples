@@ -110,7 +110,7 @@ class Runner(object):
         The iteration of the latest checkpoint, or 0 if not restoring.
 
         """
-        # import pdb; pdb.set_trace()
+
         if gfile.IsDirectory(model_dir_or_fn):
             latest_checkpoint = tf.train.latest_checkpoint(model_dir_or_fn)
             if not latest_checkpoint:
@@ -132,7 +132,7 @@ class Runner(object):
         
     def serialize_config(self):
         """Serializes and saves the experiment config."""
-        save_dir=self.params.model_dir
+        save_dir=self.params.log_dir if self.params.log_dir is not None else self.params.model_dir
         mode=self.params.mode
         if mode in ["train", "train_and_eval", "training_benchmark"]:
             params_save_path = os.path.join(save_dir, 'params.yaml')

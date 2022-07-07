@@ -15,9 +15,7 @@
 ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:21.09-tf2-py3
 FROM ${FROM_IMAGE_NAME}
 
-RUN echo ${FROM_IMAGE_NAME} 
-
-LABEL Effnetv2_tf2 by ntajbakhsh
+RUN echo ${FROM_IMAGE_NAME}
 
 WORKDIR /workspace
 COPY . .

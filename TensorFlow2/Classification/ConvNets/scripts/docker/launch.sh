@@ -14,9 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 set -euxo pipefail
-arg1=$1
 nvidia-docker run -it --rm --net=host --runtime=nvidia --ipc=host --cap-add=SYS_PTRACE --cap-add SYS_ADMIN --cap-add DAC_READ_SEARCH --security-opt seccomp=unconfined \
 	-v $(pwd)/:/workspace/ \
-	-v "/mnt/nvdl/datasets/joc-datasets/image/imagenet/tfrecord":/data/ \
-	-v "/mnt/nvdl/usr/subhankarg/imagenet_infer":/infer_data/  \
-	"$arg1" 
+	-v "/imagenet_tfrecords":/data/ \
+	-v "/imagenet_infer/":/infer_data/images/ \
+	nvcr.io/nvidia/efficientnet-tf2:21.09-tf2-py3
+ 
