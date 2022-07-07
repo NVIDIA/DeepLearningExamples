@@ -20,27 +20,44 @@ import torch.nn.functional as F
 class AttentionCTCLoss(torch.nn.Module):
     def __init__(self, blank_logprob=-1):
         super(AttentionCTCLoss, self).__init__()
-        self.log_softmax = torch.nn.LogSoftmax(dim=3)
+        self.log_softmax = torch.nn.LogSoftmax(dim=-1)
         self.blank_logprob = blank_logprob
         self.CTCLoss = nn.CTCLoss(zero_infinity=True)
 
     def forward(self, attn_logprob, in_lens, out_lens):
         key_lens = in_lens
         query_lens = out_lens
-        attn_logprob_padded = F.pad(input=attn_logprob,
-                                    pad=(1, 0, 0, 0, 0, 0, 0, 0),
-                                    value=self.blank_logprob)
-        cost_total = 0.0
-        for bid in range(attn_logprob.shape[0]):
-            target_seq = torch.arange(1, key_lens[bid]+1).unsqueeze(0)
-            curr_logprob = attn_logprob_padded[bid].permute(1, 0, 2)
-            curr_logprob = curr_logprob[:query_lens[bid], :, :key_lens[bid]+1]
-            curr_logprob = self.log_softmax(curr_logprob[None])[0]
-            ctc_cost = self.CTCLoss(
-                curr_logprob, target_seq, input_lengths=query_lens[bid:bid+1],
-                target_lengths=key_lens[bid:bid+1])
-            cost_total += ctc_cost
-        cost = cost_total/attn_logprob.shape[0]
+        max_key_len = attn_logprob.size(-1)
+
+        # Reorder input to [query_len, batch_size, key_len]
+        attn_logprob = attn_logprob.squeeze(1)
+        attn_logprob = attn_logprob.permute(1, 0, 2)
+
+        # Add blank label
+        attn_logprob = F.pad(
+            input=attn_logprob,
+            pad=(1, 0, 0, 0, 0, 0),
+            value=self.blank_logprob)
+
+        # Convert to log probabilities
+        # Note: Mask out probs beyond key_len
+        key_inds = torch.arange(
+            max_key_len+1,
+            device=attn_logprob.device,
+            dtype=torch.long)
+        attn_logprob.masked_fill_(
+            key_inds.view(1,1,-1) > key_lens.view(1,-1,1), # key_inds >= key_lens+1
+            -float("inf"))
+        attn_logprob = self.log_softmax(attn_logprob)
+
+        # Target sequences
+        target_seqs = key_inds[1:].unsqueeze(0)
+        target_seqs = target_seqs.repeat(key_lens.numel(), 1)
+
+        # Evaluate CTC loss
+        cost = self.CTCLoss(
+            attn_logprob, target_seqs,
+            input_lengths=query_lens, target_lengths=key_lens)
         return cost
 
 
