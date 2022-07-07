@@ -509,13 +509,10 @@ def main(argv):
 
     if FLAGS.mode == 'test':
         model = parallelize(model)
-        auc = dist_evaluate(model, data_loader_test)
+        auc, valid_loss = dist_evaluate(model, data_loader_test)
 
-        results = {'auc': auc}
+        results = {'best_auc': auc, 'best_validation_loss': valid_loss}
         dllogger.log(data=results, step=tuple())
-
-        if auc is not None:
-            print(f"Finished testing. Test auc {auc:.4f}")
         return
     elif FLAGS.mode == 'inference_benchmark':
         if world_size > 1:
