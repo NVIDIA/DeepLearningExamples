@@ -284,8 +284,13 @@ def add_parser_arguments(parser, skip_arch=False):
 
     parser.add_argument(
         "--gather-checkpoints",
-        action="store_true",
-        help="Gather checkpoints throughout the training, without this flag only best and last checkpoints will be stored",
+        default="0",
+        type=int,
+        help=(
+            "Gather N last checkpoints throughout the training,"
+            " without this flag only best and last checkpoints will be stored. "
+            "Use -1 for all checkpoints"
+        )
     )
 
     parser.add_argument(
@@ -627,7 +632,6 @@ def main(args, model_args, model_arch):
         train_loader_len,
         val_loader,
         logger,
-        should_backup_checkpoint(args),
         start_epoch=start_epoch,
         end_epoch=min((start_epoch + args.run_epochs), args.epochs)
         if args.run_epochs != -1
@@ -640,6 +644,7 @@ def main(args, model_args, model_arch):
         save_checkpoints=args.save_checkpoints and not args.evaluate,
         checkpoint_dir=args.workspace,
         checkpoint_filename=args.checkpoint_filename,
+        keep_last_n_checkpoints=args.gather_checkpoints,
     )
     exp_duration = time.time() - exp_start_time
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:

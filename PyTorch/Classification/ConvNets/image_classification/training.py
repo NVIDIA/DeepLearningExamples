@@ -321,7 +321,6 @@ def train_loop(
     train_loader_len,
     val_loader,
     logger,
-    should_backup_checkpoint,
     best_prec1=0,
     start_epoch=0,
     end_epoch=0,
@@ -332,7 +331,13 @@ def train_loop(
     save_checkpoints=True,
     checkpoint_dir="./",
     checkpoint_filename="checkpoint.pth.tar",
+    keep_last_n_checkpoints=0,
 ):
+    checkpointer = utils.Checkpointer(
+        last_filename=checkpoint_filename,
+        checkpoint_dir=checkpoint_dir,
+        keep_last_n=keep_last_n_checkpoints,
+    )
     train_metrics = TrainingMetrics(logger)
     val_metrics = {
         k: ValidationMetrics(logger, k) for k in trainer.validation_steps().keys()
@@ -343,11 +348,6 @@ def train_loop(
 
     if early_stopping_patience > 0:
         epochs_since_improvement = 0
-    backup_prefix = (
-        checkpoint_filename[: -len("checkpoint.pth.tar")]
-        if checkpoint_filename.endswith("checkpoint.pth.tar")
-        else ""
-    )
 
     print(f"RUNNING EPOCHS FROM {start_epoch} TO {end_epoch}")
     with utils.TimeoutHandler() as timeout_handler:
@@ -410,23 +410,15 @@ def train_loop(
                 not torch.distributed.is_initialized()
                 or torch.distributed.get_rank() == 0
             ):
-                if should_backup_checkpoint(epoch):
-                    backup_filename = "{}checkpoint-{}.pth.tar".format(
-                        backup_prefix, epoch + 1
-                    )
-                else:
-                    backup_filename = None
                 checkpoint_state = {
                     "epoch": epoch + 1,
                     "best_prec1": best_prec1,
                     **trainer.state_dict(),
                 }
-                utils.save_checkpoint(
+                checkpointer.save_checkpoint(
                     checkpoint_state,
                     is_best,
-                    checkpoint_dir=checkpoint_dir,
-                    backup_filename=backup_filename,
-                    filename=checkpoint_filename,
+                    filename=f"checkpoint_{epoch:04}.pth.tar",
                 )
 
             if early_stopping_patience > 0:

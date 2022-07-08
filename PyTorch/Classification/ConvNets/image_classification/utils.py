@@ -36,30 +36,48 @@ import signal
 import torch.distributed as dist
 
 
-def should_backup_checkpoint(args):
-    def _sbc(epoch):
-        return args.gather_checkpoints and (epoch < 10 or epoch % 10 == 0)
+class Checkpointer:
+    def __init__(self, last_filename, checkpoint_dir="./", keep_last_n=0):
+        self.last_filename = last_filename
+        self.checkpoints = []
+        self.checkpoint_dir = checkpoint_dir
+        self.keep_last_n = keep_last_n
 
-    return _sbc
+    def cleanup(self):
+        to_delete = self.checkpoints[: -self.keep_last_n]
+        self.checkpoints = self.checkpoints[-self.keep_last_n :]
+        for f in to_delete:
+            full_path = os.path.join(self.checkpoint_dir, f)
+            os.remove(full_path)
 
+    def get_full_path(self, filename):
+        return os.path.join(self.checkpoint_dir, filename)
 
-def save_checkpoint(
-    state,
-    is_best,
-    filename="checkpoint.pth.tar",
-    checkpoint_dir="./",
-    backup_filename=None,
-):
-    if (not torch.distributed.is_initialized()) or torch.distributed.get_rank() == 0:
-        filename = os.path.join(checkpoint_dir, filename)
-        print("SAVING {}".format(filename))
-        torch.save(state, filename)
+    def save_checkpoint(
+        self,
+        state,
+        is_best,
+        filename,
+    ):
+        if torch.distributed.is_initialized() and torch.distributed.get_rank() != 0:
+            assert False
+
+        full_path = self.get_full_path(filename)
+
+        print("SAVING {}".format(full_path))
+        torch.save(state, full_path)
+        self.checkpoints.append(filename)
+
+        shutil.copyfile(
+            full_path, self.get_full_path(self.last_filename)
+        )
+
         if is_best:
             shutil.copyfile(
-                filename, os.path.join(checkpoint_dir, "model_best.pth.tar")
+                full_path, self.get_full_path("model_best.pth.tar")
             )
-        if backup_filename is not None:
-            shutil.copyfile(filename, os.path.join(checkpoint_dir, backup_filename))
+
+        self.cleanup()
 
 
 def timed_generator(gen):

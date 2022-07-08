@@ -54,6 +54,12 @@ mode:
         training_only: False
         evaluate: False
         save_checkpoints: True
+    evaluate:
+        print_freq: 20
+        training_only: False
+        evaluate: True
+        epochs: 1
+        save_checkpoints: False
 
 anchors:
     # ResNet_like params: {{{
