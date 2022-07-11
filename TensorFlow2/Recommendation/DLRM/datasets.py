@@ -93,10 +93,21 @@ class TfRawBinaryDataset:
             local_categorical_feature_names: List[str],
             batch_size: int = 1,
             numerical_features_enabled: bool = False,
+            rank: int = 0,
+            world_size: int = 1
     ):
 
         self._feature_spec = feature_spec
         self._batch_size = batch_size
+
+        local_batch_size = int(batch_size / world_size)
+        batch_sizes_per_gpu = [local_batch_size] * world_size
+        indices = tuple(np.cumsum([0] + list(batch_sizes_per_gpu)))
+        self.dp_begin_idx = indices[rank]
+        self.dp_end_idx = indices[rank + 1]
+
+        self._rank = rank
+        self._world_size = world_size
         self._instance = instance
         feature_spec.check_feature_spec()
         self._create_readers(feature_spec, local_categorical_feature_names, numerical_features_enabled)
@@ -180,10 +191,13 @@ class TfRawBinaryDataset:
     @tf.function
     def decode_batch(self, labels, numerical_features, categorical_features):
         labels = tf.io.decode_raw(labels, out_type=tf.int8)
+        labels = labels[self.dp_begin_idx:self.dp_end_idx]
+
         if self._number_of_numerical_features > 0:
             numerical_features = tf.io.decode_raw(numerical_features, out_type=tf.float16)
             numerical_features = tf.reshape(numerical_features,
                                             shape=[-1, self._number_of_numerical_features])
+            numerical_features = numerical_features[self.dp_begin_idx:self.dp_end_idx, :]
 
         if self._categorical:
             temp = []

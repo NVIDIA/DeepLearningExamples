@@ -15,19 +15,19 @@
 # author: Tomasz Grel (tgrel@nvidia.com)
 
 import tensorflow as tf
-from embedding import DualEmbeddingGroup
+from embedding import DualEmbeddingGroup, EmbeddingInitializer
+from distributed_embeddings.python.layers import embedding
 import interaction
 import tensorflow.keras.initializers as initializers
 import math
 import horovod.tensorflow as hvd
-from distributed_utils import BroadcastingInitializer, is_multinode
 import numpy as np
 import time
 import os
 from utils import dist_print, get_variable_path
 from tensorflow.python.keras.saving.saving_utils import model_input_signature
 from collections import OrderedDict
-
+from distributed_embeddings.python.layers import dist_model_parallel as dmp
 
 try:
     from tensorflow_dot_based_interact.python.ops import dot_based_interact_ops
@@ -65,28 +65,9 @@ def _create_inputs_dict(numerical_features, categorical_features):
     inputs['categorical_features'] = categorical_features
     return inputs
 
-class DataParallelSplitter:
-    def __init__(self, batch_size):
-        local_batch_size = (batch_size // hvd.size())
-        if local_batch_size % 1 != 0:
-            raise ValueError("Global batch size must be divisible by the number of workers!")
-        local_batch_size = int(local_batch_size)
-
-        batch_sizes_per_gpu = [local_batch_size] * hvd.size()
-        indices = tuple(np.cumsum([0] + list(batch_sizes_per_gpu)))
-        self.begin_idx = indices[hvd.rank()]
-        self.end_idx = indices[hvd.rank() + 1]
-
-    def __call__(self, x):
-        x = x[self.begin_idx:self.end_idx]
-        x = tf.cast(x, dtype=tf.float32)
-        return x
-
 
 class DlrmTrainer:
-    def __init__(self, dlrm, embedding_optimizer, mlp_optimizer, amp, lr_scheduler, dp_splitter,
-                 data_parallel_bottom_mlp, pipe, cpu):
-
+    def __init__(self, dlrm, embedding_optimizer, mlp_optimizer, amp, lr_scheduler, pipe, cpu):
         self.dlrm = dlrm
         self.embedding_optimizer = embedding_optimizer
         self.mlp_optimizer = mlp_optimizer
@@ -94,105 +75,33 @@ class DlrmTrainer:
         self.lr_scheduler = lr_scheduler
         self.bce = tf.keras.losses.BinaryCrossentropy(reduction=tf.keras.losses.Reduction.NONE,
                                                       from_logits=True)
-        self.dp_splitter = dp_splitter
-        self.data_parallel_bottom_mlp = data_parallel_bottom_mlp
         self.cpu = cpu
         self.pipe = iter(pipe.op())
-
-    def _bottom_part_weight_update(self, unscaled_gradients):
-        bottom_gradients = self.dlrm.extract_bottom_gradients(unscaled_gradients)
-
-        if hvd.size() > 1:
-            # need to correct for allreduced gradients being averaged and model-parallel ones not
-            bottom_gradients = [scale_grad(g, 1 / hvd.size()) for g in bottom_gradients]
-
-        if self.mlp_optimizer is self.embedding_optimizer:
-            self.mlp_optimizer.apply_gradients(zip(bottom_gradients, self.dlrm.model_parallel_variables))
-        else:
-            bottom_grads_and_vars = list(zip(bottom_gradients, self.dlrm.model_parallel_variables))
-
-            embedding_grads_and_vars = [(g,v) for g,v in bottom_grads_and_vars if 'embedding' in v.name]
-            bottom_mlp_grads_and_vars = [(g,v) for g,v in bottom_grads_and_vars if 'embedding' not in v.name]
-
-            self.mlp_optimizer.apply_gradients(bottom_mlp_grads_and_vars)
-            self.embedding_optimizer.apply_gradients(embedding_grads_and_vars)
-
-    def _top_part_weight_update(self, unscaled_gradients):
-        top_gradients = self.dlrm.extract_top_gradients(unscaled_gradients)
-
-        if hvd.size() > 1:
-            top_gradients = [hvd.allreduce(g, name="top_gradient_{}".format(i), op=hvd.Average,
-                                           compression=hvd.compression.NoneCompressor) for i, g in
-                             enumerate(top_gradients)]
-
-        self.mlp_optimizer.apply_gradients(zip(top_gradients, self.dlrm.data_parallel_variables))
-
-    def broadcasting_dataloader_wrapper(self):
-        if hvd.rank() == 0:
-            (numerical_features, categorical_features), labels = self.pipe.get_next()
-
-            # Bitcasting to float32 before broadcast and back to int32 right afterwards is necessary
-            # otherwise tensorflow performs a spurious D2H and H2D transfer on this tensor.
-            # Without this call, the columnwise-split mode gets about 2x slower.
-            categorical_features = tf.bitcast(categorical_features, type=tf.float32)
-        else:
-            # using random uniform instead of e.g., tf.zeros is necessary here
-            # tf.zeros would be placed on CPU causing a device clash in the broadcast
-            numerical_features = tf.random.uniform(shape=[self.dlrm.batch_size, self.dlrm.num_numerical_features],
-                                                   dtype=tf.float16)
-            categorical_features = tf.random.uniform(maxval=1, dtype=tf.float32,
-                                                     shape=[self.dlrm.batch_size, len(self.dlrm.table_sizes)])
-            labels = tf.random.uniform(maxval=1, shape=[self.dlrm.batch_size], dtype=tf.int32)
-            labels = tf.cast(labels, dtype=tf.int8)
-
-        numerical_features = hvd.broadcast(numerical_features, root_rank=0,
-                                           name='numerical_broadcast')
-
-        categorical_features = hvd.broadcast(categorical_features, root_rank=0,
-                                             name='cat_broadcast')
-
-        labels = hvd.broadcast(labels, root_rank=0,
-                               name='labels_broadcast')
-
-        categorical_features = tf.bitcast(categorical_features, type=tf.int32)
-        return (numerical_features, categorical_features), labels
-
-    def _load_data(self):
-        if hvd.size() > 1 and self.dlrm.columnwise_split and not is_multinode():
-            (numerical_features, categorical_features), labels = self.broadcasting_dataloader_wrapper()
-        else:
-            (numerical_features, categorical_features), labels = self.pipe.get_next()
-        labels = self.dp_splitter(labels)
-        if self.data_parallel_bottom_mlp:
-            numerical_features = self.dp_splitter(numerical_features)
-        return (numerical_features, categorical_features), labels
 
     @tf.function
     def train_step(self):
         device = '/CPU:0' if self.cpu else '/GPU:0'
         with tf.device(device):
             self.lr_scheduler()
-            (numerical_features, categorical_features), labels = self._load_data()
+            with tf.name_scope("dataloading"):
+                (numerical_features, categorical_features), labels = self.pipe.get_next()
 
             inputs = _create_inputs_dict(numerical_features, categorical_features)
             with tf.GradientTape() as tape:
                 predictions = self.dlrm(inputs=inputs, training=True)
-
                 unscaled_loss = self.bce(labels, predictions)
                 # tf keras doesn't reduce the loss when using a Custom Training Loop
                 unscaled_loss = tf.math.reduce_mean(unscaled_loss)
                 scaled_loss = self.mlp_optimizer.get_scaled_loss(unscaled_loss) if self.amp else unscaled_loss
 
-            scaled_gradients = tape.gradient(scaled_loss, self.dlrm.trainable_variables)
-
+            if hvd.size() > 1:
+                tape = dmp.DistributedGradientTape(tape)
+            gradients = tape.gradient(scaled_loss, self.dlrm.trainable_variables)
+            
             if self.amp:
-                unscaled_gradients = self.mlp_optimizer.get_unscaled_gradients(scaled_gradients)
-            else:
-                unscaled_gradients = scaled_gradients
+                gradients = self.mlp_optimizer.get_unscaled_gradients(gradients)
 
-            self._bottom_part_weight_update(unscaled_gradients)
-            self._top_part_weight_update(unscaled_gradients)
-
+            self.mlp_optimizer.apply_gradients(zip(gradients, self.dlrm.trainable_variables))
             if hvd.size() > 1:
                 # compute mean loss for all workers for reporting
                 mean_loss = hvd.allreduce(unscaled_loss, name="mean_loss", op=hvd.Average)
@@ -202,15 +111,13 @@ class DlrmTrainer:
             return mean_loss
 
 
-def evaluate(validation_pipeline, dlrm, timer, auc_thresholds,
-             data_parallel_splitter, max_steps=None, cast_dtype=None):
+def evaluate(validation_pipeline, dlrm, timer, auc_thresholds, max_steps=None, cast_dtype=None):
 
     auc, test_loss = 0, 0
     latencies, all_test_losses = [], []
     distributed = hvd.size() != 1
 
     pipe = iter(validation_pipeline.op())
-
 
     auc_metric = tf.keras.metrics.AUC(num_thresholds=auc_thresholds,
                                       curve='ROC', summation_method='interpolation',
@@ -221,9 +128,6 @@ def evaluate(validation_pipeline, dlrm, timer, auc_thresholds,
         begin = time.time()
 
         (numerical_features, categorical_features), labels = pipe.get_next()
-
-        if hasattr(dlrm, 'data_parallel_bottom_mlp') and dlrm.data_parallel_bottom_mlp:
-            numerical_features = data_parallel_splitter(numerical_features)
 
         if cast_dtype is not None:
             numerical_features = tf.cast(numerical_features, cast_dtype)
@@ -239,6 +143,7 @@ def evaluate(validation_pipeline, dlrm, timer, auc_thresholds,
 
         if distributed:
             y_pred = hvd.allgather(y_pred)
+            labels = hvd.allgather(labels)
 
         timer.step_test()
         if hvd.rank() == 0 and auc_metric is not None:
@@ -255,29 +160,24 @@ def evaluate(validation_pipeline, dlrm, timer, auc_thresholds,
 
 
 class Dlrm(tf.keras.Model):
-    def __init__(self, FLAGS, dataset_metadata, multi_gpu_metadata):
+    def __init__(self, FLAGS, dataset_metadata):
         super(Dlrm, self).__init__()
-        self.local_table_ids = multi_gpu_metadata.rank_to_categorical_ids[hvd.rank()]
-        self.table_sizes = [dataset_metadata.categorical_cardinalities[i] for i in self.local_table_ids]
-        self.rank_to_feature_count = multi_gpu_metadata.rank_to_feature_count
 
-        if multi_gpu_metadata.sort_order == sorted(multi_gpu_metadata.sort_order):
-            self.sort_order = None
-        else:
-            self.sort_order = multi_gpu_metadata.sort_order
+        self.global_table_sizes = dataset_metadata.categorical_cardinalities
 
         self.distributed = hvd.size() > 1
         self.batch_size = FLAGS.batch_size
         self.num_all_categorical_features = len(dataset_metadata.categorical_cardinalities)
 
-        self.memory_limit = FLAGS.tf_gpu_memory_limit_gb
-
         self.amp = FLAGS.amp
         self.fp16 = FLAGS.fp16
+
+        self.use_merlin_de_embeddings = FLAGS.use_merlin_de_embeddings
 
         self.dataset_metadata = dataset_metadata
 
         self.embedding_dim = FLAGS.embedding_dim
+        self.column_slice_threshold = FLAGS.column_slice_threshold
 
         self.dot_interaction = FLAGS.dot_interaction
         if FLAGS.dot_interaction == 'custom_cuda':
@@ -289,33 +189,16 @@ class Dlrm(tf.keras.Model):
         else:
             raise ValueError(f'Unknown dot-interaction implementation {FLAGS.dot_interaction}')
 
-        self.cpu_embedding_type = FLAGS.cpu_embedding_type
-        self.gpu_embedding_type = FLAGS.gpu_embedding_type
-
-        self.columnwise_split = FLAGS.columnwise_split
-        self.data_parallel_bottom_mlp = FLAGS.data_parallel_bottom_mlp
-
-        if self.columnwise_split:
-            self.local_embedding_dim = self.embedding_dim // hvd.size()
-        else:
-            self.local_embedding_dim = self.embedding_dim
-
         self.embedding_trainable = FLAGS.embedding_trainable
 
         self.bottom_mlp_dims = [int(d) for d in FLAGS.bottom_mlp_dims]
         self.top_mlp_dims = [int(d) for d in FLAGS.top_mlp_dims]
 
-        self.variables_partitioned = False
-        self.running_bottom_mlp = (not self.distributed) or (hvd.rank() == 0) or self.data_parallel_bottom_mlp
-
         self.num_numerical_features = dataset_metadata.num_numerical_features
-        # override in case there's no numerical features in the dataset
-        if self.num_numerical_features == 0:
-            self.running_bottom_mlp = False
 
-        if self.running_bottom_mlp:
-            self._create_bottom_mlp()
+        self._create_bottom_mlp()
         self._create_embeddings()
+
         self._create_top_mlp()
 
         # create once to avoid tf.function recompilation at each eval
@@ -353,10 +236,6 @@ class Dlrm(tf.keras.Model):
             kernel_initializer = initializers.GlorotNormal()
             bias_initializer = initializers.RandomNormal(stddev=math.sqrt(1. / dim))
 
-            if self.data_parallel_bottom_mlp:
-                kernel_initializer = BroadcastingInitializer(kernel_initializer)
-                bias_initializer = BroadcastingInitializer(bias_initializer)
-
             l = tf.keras.layers.Dense(dim, activation='relu',
                                       kernel_initializer=kernel_initializer,
                                       bias_initializer=bias_initializer)
@@ -371,8 +250,8 @@ class Dlrm(tf.keras.Model):
             else:
                 activation = 'relu'
 
-            kernel_initializer = BroadcastingInitializer(initializers.GlorotNormal())
-            bias_initializer = BroadcastingInitializer(initializers.RandomNormal(stddev=math.sqrt(1. / dim)))
+            kernel_initializer = initializers.GlorotNormal()
+            bias_initializer = initializers.RandomNormal(stddev=math.sqrt(1. / dim))
 
             l = tf.keras.layers.Dense(dim, activation=activation,
                                       kernel_initializer=kernel_initializer,
@@ -380,15 +259,34 @@ class Dlrm(tf.keras.Model):
             self.top_mlp.append(l)
 
     def _create_embeddings(self):
-        feature_names = [f'feature_{i}_{nrows}' for i, nrows in zip(self.local_table_ids, self.table_sizes)]
+        if self.distributed:
+            self.embedding_layers = []
+            for table_size in self.global_table_sizes:
+                if self.use_merlin_de_embeddings:
+                    e = embedding.Embedding(input_dim=table_size,
+                                            output_dim=self.embedding_dim,
+                                            embeddings_initializer=EmbeddingInitializer())
+                else:
+                    e = tf.keras.layers.Embedding(input_dim=table_size,
+                                                  output_dim=self.embedding_dim,
+                                                  embeddings_initializer=EmbeddingInitializer())
+                self.embedding_layers.append(e)
 
-        self.embedding = DualEmbeddingGroup(cardinalities=self.table_sizes, output_dim=self.local_embedding_dim,
-                                            memory_threshold=self.memory_limit,
-                                            cpu_embedding=self.cpu_embedding_type,
-                                            gpu_embedding=self.gpu_embedding_type,
-                                            dtype=tf.float16 if self.fp16 else tf.float32,
-                                            feature_names=feature_names,
-                                            trainable=self.embedding_trainable)
+            self.embedding = dmp.DistributedEmbedding(self.embedding_layers,
+                                                      strategy='memory_balanced',
+                                                      dp_input=False,
+                                                      column_slice_threshold=self.column_slice_threshold)
+
+            self.local_table_ids = self.embedding.strategy.input_ids_list[hvd.rank()]
+        else:
+            self.local_table_ids = list(range(len(self.global_table_sizes)))
+            feature_names = [f'feature_{i}' for i in self.local_table_ids]
+
+            self.embedding = DualEmbeddingGroup(cardinalities=self.global_table_sizes, output_dim=self.embedding_dim,
+                                                memory_threshold=70,
+                                                dtype=tf.float16 if self.fp16 else tf.float32,
+                                                feature_names=feature_names,
+                                                trainable=self.embedding_trainable)
 
     def create_eval_metrics(self, FLAGS):
         if FLAGS.auc_thresholds is not None:
@@ -401,37 +299,11 @@ class Dlrm(tf.keras.Model):
         self.bce_op = tf.keras.losses.BinaryCrossentropy(reduction=tf.keras.losses.Reduction.NONE,
                                                          from_logits=True)
 
-
-    def _partition_variables(self):
-        self.model_parallel_variables = [v for v in self.trainable_variables if 'model_parallel' in v.name]
-        self.model_parallel_variable_indices = [i for i, v in enumerate(self.trainable_variables) if 'model_parallel' in v.name]
-
-        self.data_parallel_variables = [v for v in self.trainable_variables if 'model_parallel' not in v.name]
-        self.data_parallel_variable_indices = [i for i, v in enumerate(self.trainable_variables) if 'model_parallel' not in v.name]
-        self.variables_partitioned = True
-
-    def extract_bottom_gradients(self, all_gradients):
-        if not self.variables_partitioned:
-            self._partition_variables()
-        return [all_gradients[i] for i in self.model_parallel_variable_indices]
-
-    def extract_top_gradients(self, all_gradients):
-        if not self.variables_partitioned:
-            self._partition_variables()
-        return [all_gradients[i] for i in self.data_parallel_variable_indices]
-
     def force_initialization(self):
-        if self.running_bottom_mlp:
-            if self.data_parallel_bottom_mlp:
-                numerical_features = tf.zeros(shape=[self.batch_size // hvd.size(),
-                                                     self.dataset_metadata.num_numerical_features])
-            else:
-                numerical_features = tf.zeros(shape=[self.batch_size,
-                                                     self.dataset_metadata.num_numerical_features])
-        else:
-            numerical_features = None
+        numerical_features = tf.zeros(shape=[self.batch_size // hvd.size(),
+                                      self.dataset_metadata.num_numerical_features])
 
-        categorical_features = tf.zeros(shape=[self.batch_size, len(self.table_sizes)], dtype=tf.int32)
+        categorical_features = tf.zeros(shape=[self.batch_size, len(self.local_table_ids)], dtype=tf.int32)
         inputs = _create_inputs_dict(numerical_features, categorical_features)
         self(inputs=inputs, training=True)
 
@@ -439,34 +311,19 @@ class Dlrm(tf.keras.Model):
     def call(self, inputs, sigmoid=False, training=False):
         vals = list(inputs.values())
         numerical_features, cat_features = vals[0], vals[1]
+
+        cat_features = tf.split(cat_features, num_or_size_splits=len(self.local_table_ids), axis=1)
+        cat_features = [tf.reshape(f, shape=[self.batch_size]) for f in cat_features]
+
         embedding_outputs = self._call_embeddings(cat_features, training=training)
 
-        if self.running_bottom_mlp:
-            bottom_mlp_out = self._call_bottom_mlp(numerical_features, training=training)
-        else:
-            bottom_mlp_out = None
+        bottom_mlp_out = self._call_bottom_mlp(numerical_features, training=training)
+        bottom_part_output = tf.concat([bottom_mlp_out, embedding_outputs], axis=1)
 
-        if self.distributed:
-            if self.columnwise_split:
-                interaction_input = self._call_alltoall_columnwise(
-                                             embedding_outputs,
-                                             bottom_mlp_out)
-            else:
-                interaction_input = self._call_alltoall_tablewise(embedding_outputs, bottom_mlp_out)
-        else:
-            if bottom_mlp_out is not None:
-                bottom_part_output = tf.concat([bottom_mlp_out, embedding_outputs], axis=1)
-            else:
-                bottom_part_output = tf.concat(embedding_outputs, axis=1)
-            bottom_part_output = self._maybe_reorder_features(bottom_part_output)
-
-            num_categorical_features = len(self.dataset_metadata.categorical_cardinalities)
-            interaction_input = tf.reshape(bottom_part_output,
-                                           [-1, num_categorical_features + 1,
-                                            self.embedding_dim])
-
-        if not self.data_parallel_bottom_mlp:
-            bottom_mlp_out = interaction_input[:, 0, :]
+        num_categorical_features = len(self.dataset_metadata.categorical_cardinalities)
+        interaction_input = tf.reshape(bottom_part_output,
+                                       [-1, num_categorical_features + 1,
+                                        self.embedding_dim])
 
         x = self.interact_op(interaction_input, tf.squeeze(bottom_mlp_out))
         x = self._call_top_mlp(x, training=training)
@@ -481,127 +338,29 @@ class Dlrm(tf.keras.Model):
         if self.amp:
             numerical_features = tf.cast(numerical_features, dtype=tf.float16)
 
-        if training and self.data_parallel_bottom_mlp:
+        if training:
             batch_size = self.batch_size // hvd.size()
-        elif training:
-            batch_size = self.batch_size
         else:
             batch_size = tf.shape(numerical_features)[0]
 
         padding = self._get_bottom_mlp_padding(batch_size=batch_size)
         x = tf.concat([numerical_features, padding], axis=1)
 
-        name_scope = "data_parallel" if self.data_parallel_bottom_mlp else "model_parallel"
-        with tf.name_scope(name_scope):
-            with tf.name_scope('bottom_mlp'):
-                for l in self.bottom_mlp_layers:
-                    x = l(x)
-                x = tf.expand_dims(x, axis=1)
-                bottom_mlp_out = x
+        with tf.name_scope('bottom_mlp'):
+            for l in self.bottom_mlp_layers:
+                x = l(x)
+            x = tf.expand_dims(x, axis=1)
+            bottom_mlp_out = x
         return bottom_mlp_out
 
     def _call_embeddings(self, cat_features, training=False):
-        if not self.table_sizes:
-            return []
+        x = self.embedding(cat_features)
+        if self.distributed:
+            x = tf.concat([tf.expand_dims(z, axis=1) for z in x], axis=1)
 
-        batch_size = self.batch_size if training else -1
-
-        with tf.name_scope("model_parallel"):
-            x = self.embedding(cat_features)
-            shape = [batch_size, len(self.table_sizes), self.local_embedding_dim]
-            x = tf.reshape(x, shape)
         if self.amp:
             x = tf.cast(x, dtype=tf.float16)
         return x
-
-    def _maybe_reorder_features(self, interaction_input):
-        """
-        Sort the features to always maintain the same order no matter the number of GPUs.
-        Necessary for checkpoint interoperability.
-        """
-        if self.sort_order is None:
-            return interaction_input
-        else:
-            features = tf.split(interaction_input,
-                                num_or_size_splits=len(self.sort_order),
-                                axis=1)
-
-            reordered_features = [features[i] for i in self.sort_order]
-            reordered_tensor = tf.concat(reordered_features, axis=1)
-            return reordered_tensor
-
-    def _call_alltoall_tablewise(self, embedding_outputs, bottom_mlp_out=None):
-        num_tables = len(self.table_sizes)
-        if bottom_mlp_out is not None and not self.data_parallel_bottom_mlp:
-            features = [bottom_mlp_out]
-            if len(embedding_outputs) > 0:
-                features.append(embedding_outputs)
-            bottom_part_output = tf.concat(features, axis=1)
-            num_tables += 1
-        else:
-            bottom_part_output = tf.concat(embedding_outputs, axis=1)
-
-        global_batch = tf.shape(bottom_part_output)[0]
-        world_size = hvd.size()
-        local_batch = global_batch // world_size
-        embedding_dim = self.embedding_dim
-
-        alltoall_input = tf.reshape(bottom_part_output,
-                                    shape=[global_batch * num_tables,
-                                           embedding_dim],
-                                    name='alltoall_input_reshape')
-
-        splits = [tf.shape(alltoall_input)[0] // world_size] * world_size
-
-        alltoall_output = hvd.alltoall(tensor=alltoall_input, splits=splits, ignore_name_scope=True)[0]
-
-        vectors_per_worker = [x * local_batch for x in self.rank_to_feature_count]
-        alltoall_output = tf.split(alltoall_output,
-                                   num_or_size_splits=vectors_per_worker,
-                                   axis=0)
-        interaction_input = [tf.reshape(x, shape=[local_batch, -1, embedding_dim]) for x in alltoall_output]
-        interaction_input = tf.concat(interaction_input, axis=1)  # shape=[local_batch, num_vectors, vector_dim]
-        interaction_input = self._maybe_reorder_features(interaction_input)
-
-        if self.data_parallel_bottom_mlp:
-            interaction_input = [bottom_mlp_out, interaction_input]
-            interaction_input = tf.concat(interaction_input, axis=1)  # shape=[local_batch, num_vectors, vector_dim]
-
-        return interaction_input
-
-    def _call_alltoall_columnwise(self, embedding_outputs, bottom_mlp_out):
-        bottom_part_output = tf.concat(embedding_outputs, axis=1)
-
-        global_batch = tf.shape(bottom_part_output)[0]
-        world_size = hvd.size()
-        local_batch = global_batch // world_size
-        num_tables = len(self.table_sizes)
-
-        alltoall_input = tf.transpose(bottom_part_output, perm=[0, 2, 1])
-        alltoall_input = tf.reshape(alltoall_input, shape=[global_batch * self.local_embedding_dim,
-                                                           num_tables])
-
-        splits = [tf.shape(alltoall_input)[0] // world_size] * world_size
-
-        alltoall_output = hvd.alltoall(tensor=alltoall_input, splits=splits, ignore_name_scope=True)[0]
-
-        alltoall_output = tf.split(alltoall_output,
-                                   num_or_size_splits=hvd.size(),
-                                   axis=0)
-        interaction_input = [tf.reshape(x, shape=[local_batch,
-                                                  self.local_embedding_dim, num_tables]) for x in alltoall_output]
-
-        interaction_input = tf.concat(interaction_input, axis=1)  # shape=[local_batch, vector_dim, num_tables]
-        interaction_input = tf.transpose(interaction_input,
-                                         perm=[0, 2, 1])  # shape=[local_batch, num_tables, vector_dim]
-
-        interaction_input = self._maybe_reorder_features(interaction_input)
-
-        if self.running_bottom_mlp:
-            interaction_input = tf.concat([bottom_mlp_out,
-                                           interaction_input],
-                                          axis=1)  # shape=[local_batch, num_tables + 1, vector_dim]
-        return interaction_input
 
     def _call_top_mlp(self, x, training=False):
         if self.dot_interaction != 'custom_cuda':
@@ -609,11 +368,10 @@ class Dlrm(tf.keras.Model):
              padding = self._get_top_mlp_padding(batch_size=batch_size)
              x = tf.concat([x, padding], axis=1)
 
-        with tf.name_scope('data_parallel'):
-            with tf.name_scope('top_mlp'):
-                for i, l in enumerate(self.top_mlp):
-                    x = l(x)
-                x = tf.cast(x, dtype=tf.float32)
+        with tf.name_scope('top_mlp'):
+            for i, l in enumerate(self.top_mlp):
+                x = l(x)
+            x = tf.cast(x, dtype=tf.float32)
         return x
 
     @staticmethod
@@ -636,10 +394,27 @@ class Dlrm(tf.keras.Model):
                 numpy_var = np.load(file=filename)
                 variable.assign(numpy_var)
 
+    @staticmethod
+    def _save_embeddings_checkpoint(checkpoint_path, embedding_weights):
+        for i, weight in enumerate(embedding_weights):
+            filename = get_variable_path(checkpoint_path, f'feature_{i}')
+            np.save(file=filename, arr=weight)
+
+    @staticmethod
+    def _restore_weights_checkpoint(checkpoint_path, num_weights, name):
+        result = []
+        for i in range(num_weights):
+            filename = os.path.join(checkpoint_path, f'{name}_{i}.npy')
+            print(f'loading: {name}_{i} from {filename}')
+            result.append(np.load(file=filename))
+        return result
+
+
     def save_checkpoint_if_path_exists(self, checkpoint_path):
         if checkpoint_path is None:
             return
 
+        begin_save = time.time()
         os.makedirs(checkpoint_path, exist_ok=True)
 
         dist_print('Saving a checkpoint...')
@@ -648,27 +423,44 @@ class Dlrm(tf.keras.Model):
             self._save_mlp_checkpoint(checkpoint_path, self.bottom_mlp_layers, prefix='bottom_mlp')
             self._save_mlp_checkpoint(checkpoint_path, self.top_mlp, prefix='top_mlp')
 
-        distributed_embedding = self.distributed and self.columnwise_split
-        self.embedding.save_checkpoint(checkpoint_path,
-                                       distributed=distributed_embedding)
+        begin = time.time()
+        full_embedding_weights = self.embedding.get_weights()
+        end = time.time()
+        print(f'get weights took: {end - begin:.3f} seconds')
 
+        if hvd.rank() == 0 and self.distributed:
+            self._save_embeddings_checkpoint(checkpoint_path, full_embedding_weights)
+        elif not self.distributed:
+            self.embedding.save_checkpoint(checkpoint_path=checkpoint_path)
+
+        end_save = time.time()
         dist_print('Saved a checkpoint to ', checkpoint_path)
+        dist_print(f'Saving a checkpoint took {end_save - begin_save:.3f}')
 
     def restore_checkpoint_if_path_exists(self, checkpoint_path):
+        begin = time.time()
         if checkpoint_path is None:
             return self
 
         dist_print('Restoring a checkpoint...')
         self.force_initialization()
 
-        if self.running_bottom_mlp:
-            self._restore_mlp_checkpoint(checkpoint_path, self.bottom_mlp_layers, prefix='bottom_mlp')
+        self._restore_mlp_checkpoint(checkpoint_path, self.bottom_mlp_layers, prefix='bottom_mlp')
         self._restore_mlp_checkpoint(checkpoint_path, self.top_mlp, prefix='top_mlp')
 
-        distributed_embedding = self.distributed and self.columnwise_split
-        self.embedding.restore_checkpoint(checkpoint_path, distributed=distributed_embedding)
+        paths = []
+        for i in range(self.num_all_categorical_features):
+            path = get_variable_path(checkpoint_path, f'feature_{i}')
+            paths.append(path)
 
-        dist_print('Restored a checkpoint from', checkpoint_path)
+        if self.distributed:
+            self.embedding.set_weights(weights=paths)
+        else:
+            self.embedding.restore_checkpoint(checkpoint_path=checkpoint_path)
+
+        end = time.time()
+        print('Restored a checkpoint from', checkpoint_path)
+        print(f'Restoring a checkpoint took: {end-begin:.3f} seconds')
         return self
 
     def save_model_if_path_exists(self, path, save_input_signature=False):
@@ -721,7 +513,6 @@ class DummyDlrm(tf.keras.Model):
         self.top_variables = [v for v in self.trainable_variables if 'model_parallel' not in v.name]
         self.variables_partitioned = False
         self.batch_size = FLAGS.batch_size
-        self.data_parallel_bottom_mlp = FLAGS.data_parallel_bottom_mlp
 
     def call(self, inputs, sigmoid=False):
         x = tf.zeros(shape=[self.batch_size // hvd.size(),

@@ -27,7 +27,6 @@
 # Example usage to train a 1.68TB DLRM variant using 32xA100-80GB GPUs on 4 nodes:
 #
 #  cmd='numactl --interleave=all -- python -u main.py --dataset_path /data/dlrm/full_criteo_data --amp \
-#  --tf_gpu_memory_limit_gb 73 --columnwise_split --data_parallel_bottom_mlp \
 #  --embedding_dim 512 --bottom_mlp_dims 512,256,512' \
 #  srun_flags='--mpi=pmix' \
 #  cont=dlrm_tf_adam \

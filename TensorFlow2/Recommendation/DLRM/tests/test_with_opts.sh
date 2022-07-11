@@ -15,7 +15,7 @@ do
   python /dlrm/prepare_synthetic_dataset.py --feature_spec ${fspec_file} --synthetic_dataset_dir ${SYNTH_DATA_DIR}
 
   # single-GPU A100-80GB
-  #horovodrun -np 1 -H localhost:1 --mpi-args=--oversubscribe numactl --interleave=all -- python -u /dlrm/main.py --dataset_path ${SYNTH_DATA_DIR} ${OPTIONS} --tf_gpu_memory_limit_gb 73
+  #horovodrun -np 1 -H localhost:1 --mpi-args=--oversubscribe numactl --interleave=all -- python -u /dlrm/main.py --dataset_path ${SYNTH_DATA_DIR} ${OPTIONS}
 
   # single-GPU V100-32GB
   #horovodrun -np 1 -H localhost:1 --mpi-args=--oversubscribe numactl --interleave=all -- python -u /dlrm/main.py --dataset_path ${SYNTH_DATA_DIR} ${OPTIONS}

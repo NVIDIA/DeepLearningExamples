@@ -15,7 +15,7 @@
 # author: Tomasz Grel (tgrel@nvidia.com)
 
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:21.11-tf2-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:22.06-tf2-py3
 FROM ${FROM_IMAGE_NAME}
 
 WORKDIR /dlrm
@@ -24,13 +24,27 @@ ADD requirements.txt .
 
 RUN pip install -r requirements.txt
 
-ENV HOROVOD_CYCLE_TIME=0.1
+RUN rm -rf distributed-embeddings &&\
+    git clone https://github.com/NVIDIA-Merlin/distributed-embeddings.git &&\
+    cd distributed-embeddings &&\
+    git checkout 427f869ac &&\
+    pip uninstall -y distributed-embeddings &&\
+    make clean &&\
+    make pip_pkg -j all &&\
+    pip install artifacts/*.whl &&\
+    cd ..
 
 ADD . .
 
-RUN mkdir -p /usr/local/lib/python3.8/dist-packages/tensorflow/include/third_party/gpus/cuda/ \
-    && ln -s /usr/local/cuda/include /usr/local/lib/python3.8/dist-packages/tensorflow/include/third_party/gpus/cuda/ \
-    && cd tensorflow-dot-based-interact \
-    && make \
-    && make pkg \
-    && pip install ./artifacts/tensorflow_dot_based_interact-*.whl
+RUN mkdir -p /usr/local/lib/python3.8/dist-packages/tensorflow/include/third_party/gpus/cuda/ &&\
+    ln -s -f /usr/local/cuda/include /usr/local/lib/python3.8/dist-packages/tensorflow/include/third_party/gpus/cuda/ &&\
+    cd tensorflow-dot-based-interact &&\
+    make clean &&\
+    pip uninstall -y tensorflow-dot-based-interact &&\
+    make &&\
+    make pkg &&\
+    pip install ./artifacts/tensorflow_dot_based_interact-*.whl &&\
+    cd ..
+
+ENV HOROVOD_CYCLE_TIME=0.2
+ENV HOROVOD_ENABLE_ASYNC_COMPLETION=1

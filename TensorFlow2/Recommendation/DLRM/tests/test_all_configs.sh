@@ -22,13 +22,13 @@ do
       for amp in True False;
       do
         # single-GPU A100-80GB
-        #horovodrun -np 1 -H localhost:1 --mpi-args=--oversubscribe numactl --interleave=all -- python -u /dlrm/main.py --dataset_path ${SYNTH_DATA_DIR} --amp=${amp} --xla=${xla} --dot_interaction=${dot} --tf_gpu_memory_limit_gb 73
+        #horovodrun -np 1 -H localhost:1 --mpi-args=--oversubscribe numactl --interleave=all -- python -u /dlrm/main.py --dataset_path ${SYNTH_DATA_DIR} --amp=${amp} --xla=${xla} --dot_interaction=${dot}
 
         # single-GPU V100-32GB
         #horovodrun -np 1 -H localhost:1 --mpi-args=--oversubscribe numactl --interleave=all -- python -u /dlrm/main.py --dataset_path ${SYNTH_DATA_DIR} --amp=${amp} --xla=${xla} --dot_interaction=${dot}
 
         # multi-GPU for DGX A100
-        #horovodrun -np 8 -H localhost:8 --mpi-args=--oversubscribe numactl --interleave=all -- python -u /dlrm/main.py --dataset_path ${SYNTH_DATA_DIR} --amp=${amp} --xla=${xla} --dot_interaction=${dot} --tf_gpu_memory_limit_gb 73
+        #horovodrun -np 8 -H localhost:8 --mpi-args=--oversubscribe numactl --interleave=all -- python -u /dlrm/main.py --dataset_path ${SYNTH_DATA_DIR} --amp=${amp} --xla=${xla} --dot_interaction=${dot}
 
         # multi-GPU for DGX2
         #horovodrun -np 16 -H localhost:16 --mpi-args=--oversubscribe numactl --interleave=all -- python -u /dlrm/main.py --dataset_path ${SYNTH_DATA_DIR} --amp=${amp} --xla=${xla} --dot_interaction=${dot}

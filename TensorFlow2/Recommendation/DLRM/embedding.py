@@ -19,8 +19,6 @@ import tensorflow as tf
 import numpy as np
 import math
 
-import horovod.tensorflow as hvd
-
 from utils import get_variable_path
 
 
@@ -28,6 +26,7 @@ from utils import get_variable_path
 _embedding_checkpoint_batch = 1024 * 1024
 
 
+@tf.keras.utils.register_keras_serializable()
 class EmbeddingInitializer(tf.keras.initializers.Initializer):
     def __call__(self, shape, dtype=tf.float32):
         with tf.device('/CPU:0'):
@@ -65,42 +64,19 @@ class Embedding(tf.keras.layers.Layer):
     def call(self, indices):
         return tf.gather(params=self.embedding_table, indices=indices)
 
-    def save_checkpoint(self, checkpoint_path, distributed=False):
-        chunks = math.ceil(self.embedding_table.shape[0] / _embedding_checkpoint_batch)
-        for i in range(chunks):
-            filename = get_variable_path(checkpoint_path, self.feature_name, i)
-            end = min((i + 1) * _embedding_checkpoint_batch, self.embedding_table.shape[0])
+    def save_checkpoint(self, checkpoint_path):
+        filename = get_variable_path(checkpoint_path, self.feature_name)
+        indices = tf.range(start=0, limit=self.embedding_table.shape[0], dtype=tf.int32)
+        arr = tf.gather(params=self.embedding_table, indices=indices, axis=0)
+        arr = arr.numpy()
+        np.save(arr=arr, file=filename)
 
-            indices = tf.range(start=i * _embedding_checkpoint_batch,
-                               limit=end, dtype=tf.int32)
-
-            arr = tf.gather(params=self.embedding_table, indices=indices, axis=0)
-            arr = arr.numpy()
-
-            if distributed:
-                arr = hvd.allgather_object(arr)
-                arr = np.concatenate(arr, axis=1)
-
-                if hvd.rank() != 0:
-                    continue
-
-            np.save(arr=arr, file=filename)
-
-    def restore_checkpoint(self, checkpoint_path, distributed=False):
-        chunks = math.ceil(self.embedding_table.shape[0] / _embedding_checkpoint_batch)
-        for i in range(chunks):
-            filename = get_variable_path(checkpoint_path, self.feature_name, i)
-            start = i * _embedding_checkpoint_batch
-            numpy_arr = np.load(file=filename)
-
-            if distributed:
-                numpy_arr = np.split(numpy_arr, axis=1, indices_or_sections=hvd.size())[hvd.rank()]
-
-            indices = tf.range(start=start,
-                               limit=start + numpy_arr.shape[0],
-                               dtype=tf.int32)
-            update = tf.IndexedSlices(values=numpy_arr, indices=indices, dense_shape=self.embedding_table.shape)
-            self.embedding_table.scatter_update(sparse_delta=update)
+    def restore_checkpoint(self, checkpoint_path):
+        filename = get_variable_path(checkpoint_path, self.feature_name)
+        numpy_arr = np.load(file=filename)
+        indices = tf.range(start=0, limit=numpy_arr.shape[0], dtype=tf.int32)
+        update = tf.IndexedSlices(values=numpy_arr, indices=indices, dense_shape=self.embedding_table.shape)
+        self.embedding_table.scatter_update(sparse_delta=update)
 
 
 class EmbeddingGroup(tf.keras.layers.Layer):
@@ -126,13 +102,13 @@ class EmbeddingGroup(tf.keras.layers.Layer):
         result = tf.concat(outputs, axis=1)
         return result
 
-    def save_checkpoint(self, checkpoint_path, distributed=False):
+    def save_checkpoint(self, checkpoint_path):
         for e in self.embedding_layers:
-            e.save_checkpoint(checkpoint_path, distributed)
+            e.save_checkpoint(checkpoint_path)
 
-    def restore_checkpoint(self, checkpoint_path, distributed=False):
+    def restore_checkpoint(self, checkpoint_path):
         for e in self.embedding_layers:
-            e.restore_checkpoint(checkpoint_path, distributed)
+            e.restore_checkpoint(checkpoint_path)
 
 
 class JointEmbeddingInitializer(tf.keras.initializers.Initializer):
@@ -183,50 +159,27 @@ class JointEmbedding(tf.keras.layers.Layer):
         indices = indices + self.offsets[:-1]
         return tf.nn.embedding_lookup(params=self.embedding_table, ids=indices)
 
-    def save_checkpoint(self, checkpoint_path, distributed=False):
+    def save_checkpoint(self, checkpoint_path):
         for j in range(len(self.offsets) - 1):
             nrows = self.offsets[j+1] - self.offsets[j]
             name = self.feature_names[j]
+            filename = get_variable_path(checkpoint_path, name)
 
-            chunks = math.ceil(nrows / _embedding_checkpoint_batch)
-            for i in range(chunks):
-                filename = get_variable_path(checkpoint_path, name, i)
-                end = min((i + 1) * _embedding_checkpoint_batch, nrows)
+            indices = tf.range(start=self.offsets[j], limit=self.offsets[j] + nrows, dtype=tf.int32)
+            arr = tf.gather(params=self.embedding_table, indices=indices, axis=0)
+            arr = arr.numpy()
+            np.save(arr=arr, file=filename)
 
-                indices = tf.range(start=self.offsets[j] + i * _embedding_checkpoint_batch,
-                                   limit=self.offsets[j] + end, dtype=tf.int32)
-
-                arr = tf.gather(params=self.embedding_table, indices=indices, axis=0)
-                arr = arr.numpy()
-
-                if distributed:
-                    arr = hvd.allgather_object(arr)
-                    arr = np.concatenate(arr, axis=1)
-
-                    if hvd.rank() != 0:
-                        continue
-
-                np.save(arr=arr, file=filename)
-
-    def restore_checkpoint(self, checkpoint_path, distributed=False):
+    def restore_checkpoint(self, checkpoint_path):
         for j in range(len(self.offsets) - 1):
-            nrows = self.offsets[j+1] - self.offsets[j]
             name = self.feature_names[j]
 
-            chunks = math.ceil(nrows / _embedding_checkpoint_batch)
-            for i in range(chunks):
-                filename = get_variable_path(checkpoint_path, name, i)
-                start = self.offsets[j] + i * _embedding_checkpoint_batch
-                numpy_arr = np.load(file=filename)
+            filename = get_variable_path(checkpoint_path, name)
+            numpy_arr = np.load(file=filename)
 
-                if distributed:
-                    numpy_arr = np.split(numpy_arr, axis=1, indices_or_sections=hvd.size())[hvd.rank()]
-
-                indices = tf.range(start=start,
-                                   limit=start + numpy_arr.shape[0],
-                                   dtype=tf.int32)
-                update = tf.IndexedSlices(values=numpy_arr, indices=indices, dense_shape=self.embedding_table.shape)
-                self.embedding_table.scatter_update(sparse_delta=update)
+            indices = tf.range(start=self.offsets[j], limit=self.offsets[j] + numpy_arr.shape[0], dtype=tf.int32)
+            update = tf.IndexedSlices(values=numpy_arr, indices=indices, dense_shape=self.embedding_table.shape)
+            self.embedding_table.scatter_update(sparse_delta=update)
 
 
 class DualEmbeddingGroup(tf.keras.layers.Layer):
@@ -291,6 +244,8 @@ class DualEmbeddingGroup(tf.keras.layers.Layer):
         self.first_gpu_index = index
 
     def call(self, indices):
+        indices = tf.stack(indices, axis=1)
+
         to_concat = []
         if self.first_gpu_index > 0:
             # at least one cpu-based embedding
@@ -312,10 +267,10 @@ class DualEmbeddingGroup(tf.keras.layers.Layer):
             result = to_concat[0]
         return result
 
-    def save_checkpoint(self, checkpoint_path, distributed=False):
-        self.gpu_embedding.save_checkpoint(checkpoint_path, distributed)
-        self.cpu_embeddings.save_checkpoint(checkpoint_path, distributed)
+    def save_checkpoint(self, checkpoint_path):
+        self.gpu_embedding.save_checkpoint(checkpoint_path)
+        self.cpu_embeddings.save_checkpoint(checkpoint_path)
 
-    def restore_checkpoint(self, checkpoint_path, distributed=False):
-        self.gpu_embedding.restore_checkpoint(checkpoint_path, distributed)
-        self.cpu_embeddings.restore_checkpoint(checkpoint_path, distributed)
+    def restore_checkpoint(self, checkpoint_path):
+        self.gpu_embedding.restore_checkpoint(checkpoint_path)
+        self.cpu_embeddings.restore_checkpoint(checkpoint_path)
