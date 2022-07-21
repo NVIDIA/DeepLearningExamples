@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-export CUDNN_V8_API_ENABLED=1
+export CUDNN_V8_API_ENABLED=1  # Keep the flag for older containers
+export TORCH_CUDNN_V8_API_ENABLED=1
 
 : ${DATASET_DIR:="data/LJSpeech-1.1"}
 : ${BATCH_SIZE:=16}

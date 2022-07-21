@@ -3,7 +3,8 @@
 export OMP_NUM_THREADS=1
 
 # Enables faster cuDNN kernels (available since the 21.12-py3 NGC container)
-export CUDNN_V8_API_ENABLED=1
+export CUDNN_V8_API_ENABLED=1  # Keep the flag for older containers
+export TORCH_CUDNN_V8_API_ENABLED=1
 
 : ${NUM_GPUS:=8}
 : ${BATCH_SIZE:=16}
