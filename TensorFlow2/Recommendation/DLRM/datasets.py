@@ -28,14 +28,14 @@ DatasetMetadata = namedtuple('DatasetMetadata', ['num_numerical_features',
 
 
 class DummyDataset:
-    def __init__(self, batch_size, num_numerical_features, categorical_feature_cardinalities, num_batches):
+    def __init__(self, batch_size, num_numerical_features, categorical_feature_cardinalities, num_batches, num_workers):
         cat_features_count = len(
             categorical_feature_cardinalities) if categorical_feature_cardinalities is not None else 0
         num_features_count = num_numerical_features if num_numerical_features is not None else 0
 
-        self.numerical_features = tf.random.uniform(shape=[batch_size, num_numerical_features], dtype=tf.float32) \
+        self.numerical_features = tf.random.uniform(shape=[batch_size // num_workers, num_numerical_features], dtype=tf.float32) \
             if num_features_count else -1
-        self.labels = tf.cast(tf.random.uniform(shape=[batch_size, 1], maxval=2, dtype=tf.int32), tf.float32)
+        self.labels = tf.cast(tf.random.uniform(shape=[batch_size // num_workers, 1], maxval=2, dtype=tf.int32), tf.float32)
         self.categorical_features = tf.concat(
             [tf.random.uniform(shape=[batch_size, 1], maxval=cardinality, dtype=tf.int32)
              for cardinality in categorical_feature_cardinalities], axis=1) if cat_features_count > 0 else -1

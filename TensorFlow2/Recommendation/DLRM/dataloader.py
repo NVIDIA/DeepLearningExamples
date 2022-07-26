@@ -55,12 +55,14 @@ def create_input_pipelines(flags, table_ids):
         train_dataset = DummyDataset(batch_size=flags.batch_size,
                                      num_numerical_features=dataset_metadata.num_numerical_features,
                                      categorical_feature_cardinalities=local_table_sizes,
-                                     num_batches=flags.synthetic_dataset_train_batches)
+                                     num_batches=flags.synthetic_dataset_train_batches,
+                                     num_workers=hvd.size())
 
         test_dataset = DummyDataset(batch_size=flags.batch_size,
                                     num_numerical_features=dataset_metadata.num_numerical_features,
                                     categorical_feature_cardinalities=local_table_sizes,
-                                    num_batches=flags.synthetic_dataset_valid_batches)
+                                    num_batches=flags.synthetic_dataset_valid_batches,
+                                    num_workers=hvd.size())
 
     elif flags.dataset_type == 'tf_raw':
         local_categorical_feature_names = feature_spec.cat_positions_to_names(table_ids)
