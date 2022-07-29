@@ -206,7 +206,7 @@ For the specifics concerning data preprocessing, see the [Getting the data](#get
    
 Training can be started with:
 ```
-python scripts/train.py --gpus <gpus> --fold <fold> --dim <dim> [--amp]
+python scripts/train.py --gpus <gpus> --fold <fold> --dim <dim> [--amp] [--save_ckpt]
 ```
 
 To see descriptions of the train script arguments run `python scripts/train.py --help`. You can customize the training process. For details, see the [Training process](#training-process) section.
@@ -428,7 +428,7 @@ The default configuration minimizes a function `L = (1 - dice_coefficient) + cro
 The training can be run directly without using the predefined scripts. The name of the training script is `main.py`. For example:
 
 ```
-python main.py --exec_mode train --task 01 --fold 0 --gpus 1 --amp
+python main.py --exec_mode train --task 01 --fold 0 --gpus 1 --amp --save_ckpt
 ```
   
 Training artifacts will be saved to `/results` in the container. Some important artifacts are:
