@@ -37,6 +37,8 @@ import time
 from collections import OrderedDict
 from contextlib import suppress
 
+import itertools
+import dllogger
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -262,6 +264,10 @@ parser.add_argument(
     metavar="NAME",
     default="validation",
     help="dataset split (default: validation)",
+)
+# DLlogger
+parser.add_argument(
+    "--dllogger-name", default="/logs/log.json", type=str, help="name of dllogger file"
 )
 parser.add_argument(
     "--dataset-download",
@@ -506,6 +512,26 @@ def validate(args):
     data_config = resolve_data_config(
         vars(args), model=model, use_test_size=True, verbose=True
     )
+    dllogger_dir = os.path.dirname(args.dllogger_name)
+    if dllogger_dir and not os.path.exists(dllogger_dir):
+        os.makedirs(dllogger_dir, exist_ok=True)
+    log_path = args.dllogger_name
+    original_log_path = log_path
+    if os.path.exists(log_path):
+        for i in itertools.count():
+            s_fname = original_log_path.split('.')
+            log_path = '.'.join(s_fname[:-1]) + f'_{i}.' + s_fname[-1]
+            if not os.path.exists(log_path):
+                break
+    dllogger.init(
+        backends=[
+            dllogger.JSONStreamBackend(verbosity=1, filename=log_path),
+            dllogger.StdOutBackend(verbosity=0),
+        ]
+    )
+    dllogger.metadata("top1", {"unit": None})
+    dllogger.metadata("top5", {"unit": None})
+    dllogger.metadata("average_ips", {"unit": "images/s"})
     test_time_pool = False
     if args.test_pool:
         model, test_time_pool = apply_test_time_pool(
@@ -536,7 +562,6 @@ def validate(args):
         load_bytes=args.tf_preprocessing,
         class_map=args.class_map,
     )
-
     if args.valid_labels:
         with open(args.valid_labels, "r") as f:
             valid_labels = {int(line.rstrip()) for line in f}
@@ -641,6 +666,7 @@ def validate(args):
         img_size=data_config["input_size"][-1],
         cropt_pct=crop_pct,
         interpolation=data_config["interpolation"],
+        average_ips = len(dataset)/batch_time.sum
     )
 
     _logger.info(
@@ -730,6 +756,9 @@ def main():
             write_results(results_file, results)
     else:
         results = validate(args)
+    
+    dllogger.log(step=tuple(), data={"average_ips": results["average_ips"], "top1": results["top1"], "top5": results["top5"]}, verbosity=1)
+    dllogger.flush()
     # output results in JSON to stdout w/ delimiter for runner script
     print(f"--result\n{json.dumps(results, indent=4)}")
 
