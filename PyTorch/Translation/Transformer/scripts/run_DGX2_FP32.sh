@@ -17,20 +17,20 @@ nvidia-smi
 
 RESULTS_DIR='/results'
 CHECKPOINTS_DIR='/results/checkpoints'
-STAT_FILE=${RESULTS_DIR}/DGX1_amp_8GPU.json
 mkdir -p $CHECKPOINTS_DIR
 
-SEED=${1:-1}
-LR=${2:-0.000846}
-WARMUP=${3:-4000}
-NUM_EPOCHS=${4:-40}
-BATCH_SIZE=${5:-10240}
-NUM_GPU=${6:-8}
+: ${SEED:=1}
+: ${LR:=0.000846}
+: ${WARMUP:=4000}
+: ${NUM_EPOCHS:=30}
+: ${BS:=5120}
+: ${NUM_GPU:=16}
 
-DISTRIBUTED="-m torch.distributed.launch --nproc_per_node=${NUM_GPU}"
+STAT_FILE=${RESULTS_DIR}/DGX2_fp32_${NUM_GPU}GPU.json
+DISTRIBUTED="-m torch.distributed.run --nproc_per_node=${NUM_GPU}"
 
 python ${DISTRIBUTED} /workspace/translation/train.py \
-  /data/wmt14_en_de_joined_dict \
+  /data/ \
   --arch transformer_wmt_en_de_big_t2t \
   --share-all-embeddings \
   --optimizer adam \
@@ -41,11 +41,12 @@ python ${DISTRIBUTED} /workspace/translation/train.py \
   --warmup-init-lr 0.0 \
   --warmup-updates ${WARMUP} \
   --lr $LR \
-  --min-lr 0.0 \ --dropout 0.1 \
+  --min-lr 0.0 \
+  --dropout 0.1 \
   --weight-decay 0.0 \
   --criterion label_smoothed_cross_entropy \
   --label-smoothing 0.1 \
-  --max-tokens ${BATCH_SIZE} \
+  --max-tokens ${BS} \
   --seed ${SEED} \
   --max-epoch ${NUM_EPOCHS} \
   --no-epoch-checkpoints \
@@ -53,5 +54,4 @@ python ${DISTRIBUTED} /workspace/translation/train.py \
   --online-eval \
   --log-interval 500 \
   --save-dir ${RESULTS_DIR} \
-  --stat-file ${STAT_FILE} \
-  --amp 
+  --stat-file ${STAT_FILE}

@@ -17,20 +17,20 @@ nvidia-smi
 
 RESULTS_DIR='/results'
 CHECKPOINTS_DIR='/results/checkpoints'
-STAT_FILE=${RESULTS_DIR}/DGX1_fp32_8GPU.json
 mkdir -p $CHECKPOINTS_DIR
 
-SEED=${1:-1}
-LR=${2:-0.0006}
-WARMUP=${3:-4000}
-NUM_EPOCHS=${4:-40}
-BATCH_SIZE=${5:-5120}
-NUM_GPU=${6:-8}
+: ${SEED:=1}
+: ${LR:=0.000846}
+: ${WARMUP:=4000}
+: ${NUM_EPOCHS:=30}
+: ${BS:=10240}
+: ${NUM_GPU:=8}
 
-DISTRIBUTED="-m torch.distributed.launch --nproc_per_node=${NUM_GPU}"
+STAT_FILE=${RESULTS_DIR}/DGXA100_tf32_${NUM_GPU}GPU_log.json
+DISTRIBUTED="-m torch.distributed.run --nproc_per_node=${NUM_GPU}"
 
 python ${DISTRIBUTED} /workspace/translation/train.py \
-  /data/wmt14_en_de_joined_dict \
+  /data/ \
   --arch transformer_wmt_en_de_big_t2t \
   --share-all-embeddings \
   --optimizer adam \
@@ -46,7 +46,7 @@ python ${DISTRIBUTED} /workspace/translation/train.py \
   --weight-decay 0.0 \
   --criterion label_smoothed_cross_entropy \
   --label-smoothing 0.1 \
-  --max-tokens ${BATCH_SIZE} \
+  --max-tokens ${BS} \
   --seed ${SEED} \
   --max-epoch ${NUM_EPOCHS} \
   --no-epoch-checkpoints \

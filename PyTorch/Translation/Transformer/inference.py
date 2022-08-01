@@ -8,7 +8,7 @@
 #
 #-------------------------------------------------------------------------
 #
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -118,12 +118,8 @@ def setup_logger(args):
             dllogger.log(step='PARAMETER', data={k:v}, verbosity=0)
         container_setup_info = log_helper.get_framework_env_vars()
         dllogger.log(step='PARAMETER', data=container_setup_info, verbosity=0)
-        dllogger.metadata('throughput', {'unit':'tokens/s', 'format':':/3f', 'GOAL':'MAXIMIZE', 'STAGE':'INFER'})
-        dllogger.metadata('latency_avg', {'unit':'s', 'format':':/3f', 'GOAL':'MINIMIZE', 'STAGE':'INFER'})
-        dllogger.metadata('latency_p90', {'unit':'s', 'format':':/3f', 'GOAL':'MINIMIZE', 'STAGE':'INFER'})
-        dllogger.metadata('latency_p95', {'unit':'s', 'format':':/3f', 'GOAL':'MINIMIZE', 'STAGE':'INFER'})
-        dllogger.metadata('latency_p99', {'unit':'s', 'format':':/3f', 'GOAL':'MINIMIZE', 'STAGE':'INFER'})
-        dllogger.metadata('total_infernece_time', {'unit':'s', 'format':':/3f', 'GOAL':'MINIMIZE', 'STAGE':'INFER'})
+        dllogger.metadata('throughput',
+                          {'unit':'tokens/s', 'format':':/3f', 'GOAL':'MAXIMIZE', 'STAGE':'INFER'})
     else:
         dllogger.init(backends=[])
 
@@ -260,7 +256,6 @@ def main(args):
             for hypo, pos_scores, align in zip(result.hypos, result.pos_scores, result.alignments):
                 print(f'Score {hypo[0]}', file=sys.stderr)
                 print(hypo[1])
-                print(pos_scores, file=sys.stderr)
                 if align is not None:
                     print(align, file=sys.stderr)
 

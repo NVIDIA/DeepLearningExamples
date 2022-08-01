@@ -7,7 +7,7 @@
 #
 #-------------------------------------------------------------------------
 #
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -34,26 +34,21 @@ def is_master(args):
 
 
 def distributed_init(args):
-    if args.distributed_world_size == 1:
-        raise ValueError('Cannot initialize distributed with distributed_world_size=1')
+    args.distributed_world_size = int(os.environ.get('WORLD_SIZE',1))
+    args.distributed_rank = int(os.environ.get('RANK',0))
+    args.local_rank = int(os.environ.get('LOCAL_RANK', 0))
 
-    print('| distributed init (rank {}): {}'.format(
-        args.distributed_rank, args.distributed_init_method), flush=True)
-    print("| distributed env init. MASTER_ADDR: " + os.environ['MASTER_ADDR'] +
-          ", MASTER_PORT: " + os.environ['MASTER_PORT'] +
-          ", WORLD_SIZE: " + os.environ['WORLD_SIZE'] + ", RANK: " + os.environ['RANK'], flush=True)
-    torch.distributed.init_process_group(
-        backend=args.distributed_backend, init_method='env://')
-    print("| distributed init done!", flush=True)
-    args.distributed_world_size = int(os.environ['WORLD_SIZE'])
+    if args.distributed_world_size > 1:
 
-    args.distributed_rank = torch.distributed.get_rank()
-    args.device_id = int(os.environ.get('LOCAL_RANK', args.local_rank))
-    suppress_output(args)
-    print('| initialized host {} as rank {} and device id {}'
-          .format(socket.gethostname(), args.distributed_rank, args.device_id))
+        print('| distributed init (rank {}): env://'.format(args.distributed_rank), flush=True)
+        print(f"| distributed env init. MASTER_ADDR: {os.environ['MASTER_ADDR']}, MASTER_PORT: {os.environ['MASTER_PORT']}" +
+              f", WORLD_SIZE: {os.environ['WORLD_SIZE']}, RANK: {os.environ['RANK']}", flush=True)
+        torch.distributed.init_process_group(backend='nccl', init_method='env://')
+        print("| distributed init done!", flush=True)
 
-    return args.distributed_rank
+        suppress_output(args)
+        print('| initialized host {} as rank {} and device id {}'
+              .format(socket.gethostname(), args.distributed_rank, args.local_rank))
 
 
 def suppress_output(main_args):

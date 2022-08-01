@@ -48,9 +48,9 @@ at::Tensor strided_batched_gemm(
   AT_ASSERTM(in_result.size(2) == batch2.size(2), "wrong matrix size");
   AT_ASSERTM(batch1.size(2)    == batch2.size(1), "wrong matrix size");
 
-  AT_ASSERTM(batch1.type().scalarType()    == at::ScalarType::Half, "Only HALF is supported");
-  AT_ASSERTM(batch2.type().scalarType()    == at::ScalarType::Half, "Only HALF is supported");
-  AT_ASSERTM(in_result.type().scalarType() == at::ScalarType::Half, "Only HALF is supported");
+  AT_ASSERTM(batch1.dtype()    == at::ScalarType::Half, "Only HALF is supported");
+  AT_ASSERTM(batch2.dtype()    == at::ScalarType::Half, "Only HALF is supported");
+  AT_ASSERTM(in_result.dtype() == at::ScalarType::Half, "Only HALF is supported");
   
   return strided_batched_gemm_cuda(beta, in_result, alpha, batch1, batch2);
 }

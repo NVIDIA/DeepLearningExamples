@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.05-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:22.06-py3
 FROM ${FROM_IMAGE_NAME}
 
 WORKDIR /workspace
@@ -20,7 +20,8 @@ WORKDIR /workspace
 # && cd apex \
 # && pip install -v --no-cache-dir --global-option="--cpp_ext" --global-option="--cuda_ext" ./
 # Install Python dependencies
-RUN pip install --no-cache-dir \
+RUN pip install --upgrade --no-cache-dir pip \
+ && pip install --no-cache-dir \
       sacrebleu \
       sentencepiece
 RUN pip install jupyter
@@ -44,4 +45,5 @@ RUN git clone https://github.com/rsennrich/subword-nmt.git /workspace/translatio
 RUN git clone https://github.com/NVIDIA/cutlass.git && cd cutlass && git checkout ed2ed4d6 && cd ..
 COPY . .
 RUN pip install -e .
-RUN pip install git+https://github.com/NVIDIA/dllogger@v0.1.0#egg=dllogger
+RUN pip install nvidia-pyindex
+RUN pip install nvidia-dllogger

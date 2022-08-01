@@ -17,30 +17,17 @@ nvidia-smi
 
 RESULTS_DIR='/results'
 CHECKPOINTS_DIR='/results/checkpoints'
-STAT_FILE=${RESULTS_DIR}/run_log.json
 mkdir -p $CHECKPOINTS_DIR
 
-: ${PREC:='amp'}
 : ${SEED:=1}
-: ${LR:=0.000846}
+: ${LR:=0.001}
 : ${WARMUP:=4000}
 : ${NUM_EPOCHS:=30}
-: ${BS:=5120}
-: ${NUM_GPU:=8}
-: ${USE_SLURM:=0}
-: ${USE_DISTRIBUTED:=1}
+: ${BS:=10240}
+: ${NUM_GPU:=16}
 
-DISTRIBUTED=""
-[ ${USE_DISTRIBUTED} = 1 ] && DISTRIBUTED+="-m torch.distributed.run --nproc_per_node=${NUM_GPU}"
-[ ${USE_DISTRIBUTED} = 1 ] && [ ${USE_SLURM} = 1 ] && DISTRIBUTED+=" --nnodes ${WORLD_SIZE} --node_rank ${SLURM_NODEID}  \
-            --master_addr ${MASTER_ADDR} --master_port ${MASTER_PORT} "
-
-if [ "$PREC" = "amp" ];
-then
-    PREC='--amp '
-else
-    PREC=''
-fi
+STAT_FILE=${RESULTS_DIR}/DGX2_amp_${NUM_GPU}GPU.json
+DISTRIBUTED="-m torch.distributed.run --nproc_per_node=${NUM_GPU}"
 
 python ${DISTRIBUTED} /workspace/translation/train.py \
   /data/ \
@@ -62,10 +49,10 @@ python ${DISTRIBUTED} /workspace/translation/train.py \
   --max-tokens ${BS} \
   --seed ${SEED} \
   --max-epoch ${NUM_EPOCHS} \
-  --no-save \
+  --no-epoch-checkpoints \
   --fuse-layer-norm \
   --online-eval \
   --log-interval 500 \
   --save-dir ${RESULTS_DIR} \
   --stat-file ${STAT_FILE} \
-  ${PREC}
+  --amp 

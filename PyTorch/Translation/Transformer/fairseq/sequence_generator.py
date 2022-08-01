@@ -7,7 +7,7 @@
 #
 #-------------------------------------------------------------------------
 #
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -315,11 +315,7 @@ class SequenceGenerator(object):
                     nonpad_idxs = src_tokens.ne(self.pad)
                 attn[:, :, step + 1].copy_(avg_attn_scores)
 
-            cand_scores = buffer('cand_scores', type_of=scores)
-            cand_indices = buffer('cand_indices')
             cand_beams = buffer('cand_beams')
-            eos_bbsz_idx = buffer('eos_bbsz_idx')
-            eos_scores = buffer('eos_scores', type_of=scores)
             if step < maxlen:
                 if prefix_tokens is not None and step < prefix_tokens.size(1):
                     probs_slice = probs.view(bsz, -1, probs.size(-1))[:, 0, :]
@@ -336,23 +332,23 @@ class SequenceGenerator(object):
                         values, indices = probs[:, 2:].topk(self.sampling_topk)
                         exp_probs = values.div_(self.sampling_temperature).exp()
                         if step == 0:
-                            torch.multinomial(exp_probs, beam_size, replacement=True, out=cand_indices)
+                            cand_indices = torch.multinomial(exp_probs, beam_size, replacement=True)
                         else:
-                            torch.multinomial(exp_probs, 1, replacement=True, out=cand_indices)
-                        torch.gather(exp_probs, dim=1, index=cand_indices, out=cand_scores)
-                        torch.gather(indices, dim=1, index=cand_indices, out=cand_indices)
+                            cand_indices = torch.multinomial(exp_probs, 1, replacement=True)
+                        cand_scores = torch.gather(exp_probs, dim=1, index=cand_indices)
+                        cand_indices = torch.gather(indices, dim=1, index=cand_indices)
                         cand_indices.add_(2)
                     else:
                         exp_probs = probs.div_(self.sampling_temperature).exp_().view(-1, self.vocab_size)
 
                         if step == 0:
                             # we exclude the first two vocab items, one of which is pad
-                            torch.multinomial(exp_probs[:, 2:], beam_size, replacement=True, out=cand_indices)
+                            cand_indices = torch.multinomial(exp_probs[:, 2:], beam_size, replacement=True)
                         else:
-                            torch.multinomial(exp_probs[:, 2:], 1, replacement=True, out=cand_indices)
+                            cand_indices = torch.multinomial(exp_probs[:, 2:], 1, replacement=True)
 
                         cand_indices.add_(2)
-                        torch.gather(exp_probs, dim=1, index=cand_indices, out=cand_scores)
+                        cand_scores = torch.gather(exp_probs, dim=1, index=cand_indices)
 
                     cand_scores.log_()
                     cand_indices = cand_indices.view(bsz, -1).repeat(1, 2)
@@ -371,20 +367,18 @@ class SequenceGenerator(object):
                 else:
                     # take the best 2 x beam_size predictions. We'll choose the first
                     # beam_size of these which don't predict eos to continue with.
-                    torch.topk(
+                    cand_scores, cand_indices = torch.topk(
                         probs.view(bsz, -1),
                         k=min(cand_size, probs.view(bsz, -1).size(1) - 1),  # -1 so we never select pad
-                        out=(cand_scores, cand_indices),
                     )
-                    torch.div(cand_indices, self.vocab_size, out=cand_beams, rounding_mode='trunc')
+                    cand_beams = torch.div(cand_indices, self.vocab_size, rounding_mode='trunc')
                     cand_indices.fmod_(self.vocab_size)
             else:
                 # finalize all active hypotheses once we hit maxlen
                 # pick the hypothesis with the highest prob of EOS right now
-                torch.sort(
+                eos_scores, eos_bbsz_idx = torch.sort(
                     probs[:, self.eos],
                     descending=True,
-                    out=(eos_scores, eos_bbsz_idx),
                 )
                 num_remaining_sent -= len(finalize_hypos(
                     step, eos_bbsz_idx, eos_scores))
@@ -402,16 +396,14 @@ class SequenceGenerator(object):
             finalized_sents = set()
             if step >= self.minlen:
                 # only consider eos when it's among the top beam_size indices
-                torch.masked_select(
+                eos_bbsz_idx = torch.masked_select(
                     cand_bbsz_idx[:, :beam_size],
                     mask=eos_mask[:, :beam_size],
-                    out=eos_bbsz_idx,
                 )
                 if eos_bbsz_idx.numel() > 0:
-                    torch.masked_select(
+                    eos_scores = torch.masked_select(
                         cand_scores[:, :beam_size],
                         mask=eos_mask[:, :beam_size],
-                        out=eos_scores,
                     )
                     finalized_sents = finalize_hypos(
                         step, eos_bbsz_idx, eos_scores, cand_scores)
@@ -454,24 +446,18 @@ class SequenceGenerator(object):
             # set active_mask so that values > cand_size indicate eos hypos
             # and values < cand_size indicate candidate active hypos.
             # After, the min values per row are the top candidate active hypos
-            active_mask = buffer('active_mask')
-            torch.add(
+            active_mask = torch.add(
                 eos_mask.type_as(cand_offsets) * cand_size,
                 cand_offsets[:eos_mask.size(1)],
-                out=active_mask,
             )
 
             # get the top beam_size active hypotheses, which are just the hypos
             # with the smallest values in active_mask
-            active_hypos, _ignore = buffer('active_hypos'), buffer('_ignore')
-            torch.topk(
+            _ignore, active_hypos = torch.topk(
                 active_mask, k=beam_size, dim=1, largest=False,
-                out=(_ignore, active_hypos)
             )
-            active_bbsz_idx = buffer('active_bbsz_idx')
-            torch.gather(
+            active_bbsz_idx = torch.gather(
                 cand_bbsz_idx, dim=1, index=active_hypos,
-                out=active_bbsz_idx,
             )
             active_scores = torch.gather(
                 cand_scores, dim=1, index=active_hypos,

@@ -152,7 +152,7 @@ The following section lists the requirements in order to start training the Tran
 This repository contains Dockerfile which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 
 -   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
--   [PyTorch 20.03-py3+ NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
+-   [PyTorch 22.06-py3+ NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
 -   GPU-based architecture:
 	- [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
 	- [NVIDIA Turing](https://www.nvidia.com/en-us/geforce/turing/)
@@ -196,7 +196,7 @@ After running this command, data will be downloaded to `/workspace/translation/e
 
 4. Start training
 ```bash
-python -m torch.distributed.launch --nproc_per_node 8 /workspace/translation/train.py /data/wmt14_en_de_joined_dict \
+python -m torch.distributed.run --nproc_per_node 8 /workspace/translation/train.py /data/wmt14_en_de_joined_dict \
   --arch transformer_wmt_en_de_big_t2t \
   --share-all-embeddings \
   --optimizer adam \
@@ -217,8 +217,7 @@ python -m torch.distributed.launch --nproc_per_node 8 /workspace/translation/tra
   --fuse-layer-norm \
   --amp \
   --amp-level O2 \
-  --save-dir /workspace/checkpoints \
-  --distributed-init-method env:// 
+  --save-dir /workspace/checkpoints
 ```
 
 The script saves checkpoints every epoch to the directory specified in the `--save-dir` option. In addition, the best performing checkpoint (in terms of loss) and the latest checkpoints are saved separately.
@@ -363,8 +362,6 @@ sacrebleu -t wmt14/full -l en-de --echo src | python inference.py --buffer-size 
 
 ## Performance
 
-The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to [NVIDIA Data Center Deep Learning Product Performance](https://developer.nvidia.com/deep-learning-performance-training-inference).
-
 ### Benchmarking
 
 The following section shows how to run benchmarks measuring the model performance in training and inference modes.
@@ -403,31 +400,31 @@ Mean BLEU score after reaching 4.02 validation loss is 27.38. We observe varianc
 </p>
 
 ##### Training accuracy: NVIDIA DGX A100 (8x A100 40GB)
-Our results were obtained by running the `run_DGXA100_AMP_8GPU.sh` and `run_DGXA100_TF32_8GPU.sh` training scripts in the pytorch-20.06-py3 NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs. We report average accuracy over 6 runs. We consider a model trained when it reaches minimal validation loss. Time to train contains only training time without validation. Depending on a configuration and frequency of validation it can take up to additional minute per epoch. 
+Our results were obtained by running the `run_DGXA100_AMP_8GPU.sh` and `run_DGXA100_TF32_8GPU.sh` training scripts in the pytorch-22.06-py3 NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs. We report average accuracy over 6 runs. We consider a model trained when it reaches minimal validation loss. Time to train contains only training time without validation. Depending on a configuration and frequency of validation it can take up to additional minute per epoch. 
 
 | GPUs    | Batch size / GPU    | Accuracy - TF32  | Accuracy - mixed precision  |   Time to train - TF32  |  Time to train - mixed precision | Time to train speedup (TF32 to mixed precision)        
 |---------|---------------------|------------------|-----------------------------|-------------------------|----------------------------------|------------------------------------
-| 8       | 10240               | 27.92            | 27.76                       | 2.87 hours              | 2.79 hours                       | x1.03
+| 8       | 10240               | 27.92            | 27.76                       | 2.74 hours              | 2.64 hours                       | x1.04
 
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
 
-Our results were obtained by running the `run_DGX1_AMP_8GPU.sh` and `run_DGX1_FP32_8GPU.sh` training scripts in the pytorch-20.06-py3 NGC container on NVIDIA DGX-1 (8x V100 16GB) GPUs. We report average accuracy over 6 runs. We consider a model trained when it reaches minimal validation loss. Time to train contains only training time without validation. Depending on a configuration and frequency of validation it can take up to additional minute per epoch. Using mixed precision we could fit a larger batch size in the memory, further speeding up the training.
+Our results were obtained by running the `run_DGX1_AMP_8GPU.sh` and `run_DGX1_FP32_8GPU.sh` training scripts in the pytorch-22.06-py3 NGC container on NVIDIA DGX-1 (8x V100 16GB) GPUs. We report average accuracy over 6 runs. We consider a model trained when it reaches minimal validation loss. Time to train contains only training time without validation. Depending on a configuration and frequency of validation it can take up to additional minute per epoch. Using mixed precision we could fit a larger batch size in the memory, further speeding up the training.
 
 | GPUs    | Batch size / GPU    | Accuracy - FP32  | Accuracy - mixed precision  |   Time to train - FP32  |  Time to train - mixed precision | Time to train speedup (FP32 to mixed precision)        
 |---------|---------------------|------------------|-----------------------------|-------------------------|----------------------------------|------------------------------------
-| 8       | 5120/2560           | 27.66            | 27.82                       | 12 hours                | 4.6  hours                       | x2.64
+| 8       | 5120/2560           | 27.66            | 27.82                       | 11.8 hours              | 4.5  hours                       | x2.62
 
 #### Training performance results
 
 ##### Training performance: NVIDIA DGX A100 (8x A100 40GB)
 
-Our results were obtained by running the `run_DGXA100_AMP_8GPU.sh` and `run_DGXA100_TF32_8GPU.sh` training scripts in the pytorch-20.06-py3 NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs. Performance numbers (in tokens per second) were averaged over an entire training epoch.
+Our results were obtained by running the `run_DGXA100_AMP_8GPU.sh` and `run_DGXA100_TF32_8GPU.sh` training scripts in the pytorch-22.06-py3 NGC container on NVIDIA DGX A100 (8x A100 40GB) GPUs. Performance numbers (in tokens per second) were averaged over an entire training epoch.
 
 | GPUs   | Batch size / GPU   | Throughput - TF32    | Throughput - mixed precision    | Throughput speedup (TF32 - mixed precision)   | Weak scaling - TF32    | Weak scaling - mixed precision        
 |--------|--------------------|----------------------|---------------------------------|-----------------------------------------------|------------------------|-----
-| 8      | 10240              | 316913               | 582721                          | x1.84                                         | 6.93                   | 7.05 
-| 4      | 10240              | 161980               | 298741                          | x1.84                                         | 3.54                   | 3.62
-| 1      | 10240              | 45755                | 82618                           | x1.81                                         | 1                      | 1
+| 8      | 10240              | 347936               | 551599                          | x1.59                                         | 6.81                   | 6.72 
+| 4      | 10240              | 179245               | 286081                          | x1.60                                         | 3.51                   | 3.49
+| 1      | 10240              | 51057                | 82059                           | x1.60                                         | 1                      | 1
 
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
@@ -444,27 +441,27 @@ The following plot shows average validation loss curves for different configs. W
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
 
-Our results were obtained by running the `run_DGX1_AMP_8GPU.sh` and `run_DGX1_FP32_8GPU.sh` training scripts in the pytorch-20.06-py3 NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs. Performance numbers (in tokens per second) were averaged over an entire training epoch. Using mixed precision we could fit a larger batch size in the memory, further speeding up the training.
+Our results were obtained by running the `run_DGX1_AMP_8GPU.sh` and `run_DGX1_FP32_8GPU.sh` training scripts in the pytorch-22.06-py3 NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs. Performance numbers (in tokens per second) were averaged over an entire training epoch. Using mixed precision we could fit a larger batch size in the memory, further speeding up the training.
 
 | GPUs   | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)   | Weak scaling - FP32    | Weak scaling - mixed precision        
 |--------|--------------------|----------------------|---------------------------------|-----------------------------------------------|------------------------|-----
-| 8      | 5120/2560          | 58742                | 223245                          | x3.80                                         | 6.91                   | 6.67
-| 4      | 5120/2560          | 29674                | 115269                          | x3.88                                         | 3.49                   | 3.44
-| 1      | 5120/2560          | 8498                 | 33468                           | x3.94                                         | 1                      | 1
+| 8      | 5120/2560          | 59316                | 214656                          | x3.62                                         | 6.79                   | 6.52
+| 4      | 5120/2560          | 30204                | 109726                          | x3.63                                         | 3.46                   | 3.33
+| 1      | 5120/2560          | 8742                 | 32942                           | x3.77                                         | 1                      | 1
 
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
 ##### Training performance: NVIDIA DGX-2 (16x V100 32GB)
 
-Our results were obtained by running the `run_DGX1_AMP_8GPU.sh` and `run_DGX1_FP32_8GPU.sh` training scripts setting number of GPUs to 16 in the pytorch-20.06-py3 NGC container on NVIDIA DGX-2 with (16x V100 32GB) GPUs. Performance numbers (in tokens per second) were averaged over an entire training epoch. Using mixed precision we could fit a larger batch size in the memory, further speeding up the training.
+Our results were obtained by running the `run_DGX1_AMP_8GPU.sh` and `run_DGX1_FP32_8GPU.sh` training scripts setting number of GPUs to 16 in the pytorch-22.06-py3 NGC container on NVIDIA DGX-2 with (16x V100 32GB) GPUs. Performance numbers (in tokens per second) were averaged over an entire training epoch. Using mixed precision we could fit a larger batch size in the memory, further speeding up the training.
 
 | GPUs   | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)   | Weak scaling - FP32    | Weak scaling - mixed precision        
 |--------|--------------------|----------------------|---------------------------------|-----------------------------------------------|------------------------|-----
-| 16     | 10240/5120         | 130867               | 510267                          | x3.9                                          | 13.38                  | 12.7
-| 8      | 10240/5120         | 68829                | 269464                          | x3.91                                         | 7.04                   | 6.71
-| 4      | 10240/5120         | 35168                | 141143                          | x4.01                                         | 3.6                    | 3.51
-| 1      | 10240/5120         | 9779                 | 40163                           | x4.11                                         | 1                      | 1   
+| 16     | 10240/5120         | 136253               | 517227                          | x3.80                                         | 13.87                  | 12.96
+| 8      | 10240/5120         | 68929                | 267815                          | x3.89                                         | 7.01                   | 6.71
+| 4      | 10240/5120         | 35216                | 137703                          | x3.91                                         | 3.58                   | 3.45
+| 1      | 10240/5120         | 9827                 | 39911                           | x4.06                                         | 1                      | 1   
 
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
@@ -475,53 +472,23 @@ Our implementation of the Transformer has dynamic batching algorithm, which batc
 
 ##### Inference performance: NVIDIA DGX A100 (1x A100 40GB)
 
-Our results were obtained by running the `inference.py` inferencing benchmarking script in the pytorch-20.06-py3 NGC container on NVIDIA DGX A100 (1x A100 40GB) GPU.
+Our results were obtained by running the `inference.py` inferencing benchmarking script in the pytorch-22.06-py3 NGC container on NVIDIA DGX A100 (1x A100 40GB) GPU.
 
-FP16
-
-| Batch size |  Throughput Avg | Latency Avg | Latency 90% |Latency 95% |Latency 99% |
-|------------|-----------------|-------------|-------------|------------|------------|
-| 10240      | 9653            | 0.986s      | 1.291s      | 2.157s     | 2.167s     |
-| 2560       | 5092            | 0.504s      | 0.721s      | 0.830s     | 1.752s     |
-| 1024       | 2590            | 0.402s      | 0.587s      | 0.666s     | 0.918s     |
-| 512        | 1357            | 0.380s      | 0.561s      | 0.633s     | 0.788s     |
-| 256        | 721             | 0.347s      | 0.513s      | 0.576s     | 0.698s     | 
-
-TF32
-
-| Batch size | Throughput Avg | Latency Avg | Latency 90% |Latency 95% |Latency 99% |
-|------------|----------------|-------------|-------------|------------|------------|
-|  10240     | 7755           | 1.227s      | 1.592s      | 2.512s     | 2.525s     |
-|  2560      | 4624           | 0.555s      | 0.786s      | 0.872s     | 1.886s     |
-|  1024      | 2394           | 0.435s      | 0.627s      | 0.702s     | 0.881s     |
-|  512       | 1275           | 0.405s      | 0.586s      | 0.663s     | 0.821s     |
-|  256       | 677            | 0.370s      | 0.546s      | 0.613s     | 0.733s     |    
+| Precision | Batch size | Throughput Avg | Latency Avg | Latency 90% |Latency 95% |Latency 99% |
+|-----------|------------|----------------|-------------|-------------|------------|------------|
+| TF32      |  10240     | 7105           | 1.22s       | 1.67s       | 1.67s      | 1.67s      |
+| FP16      |  10240     | 7988           | 1.09s       | 1.73s       | 1.73s      | 1.73s      |
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
 ##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
 
-Our results were obtained by running the `inference.py` inferencing benchmarking script in the pytorch-20.06-py3 NGC container on NVIDIA DGX-1 with (1x V100 16GB) GPU.
+Our results were obtained by running the `inference.py` inferencing benchmarking script in the pytorch-22.06-py3 NGC container on NVIDIA DGX-1 with (1x V100 16GB) GPU.
 
-FP16
-
-| Batch size | Throughput Avg | Latency Avg | Latency 90% |Latency 95% |Latency 99% |
-|------------|----------------|-------------|-------------|------------|------------|
-| 10240      | 7464           | 1.283s      | 1.704s      | 1.792s     | 1.801s     |
-| 2560       | 3596           | 0.719s      | 1.066s      | 1.247s     | 1.423s     |
-| 1024       | 1862           | 0.563s      | 0.857s      | 0.936s     | 1.156s     |
-| 512        | 1003           | 0.518s      | 0.782s      | 0.873s     | 1.103s     |
-| 256        | 520            | 0.484s      | 0.723s      | 0.813s     | 0.992s     |
-
-FP32
-
-| Batch size | Throughput Avg | Latency Avg | Latency 90% | Latency 95% | Latency 99% |
-|------------|----------------|-------------|-------------|-------------|-------------|
-| 10240      | 3782           | 2.531s      | 3.091s      | 3.121s      | 3.136s      |
-| 2560       | 2910           | 0.888s      | 1.221s      | 1.252s      | 1.432s      |
-| 1024       | 1516           | 0.692s      | 1.001s      | 1.126s      | 1.297s      |
-| 512        | 941            | 0.551s      | 0.812s      | 0.893s      | 1.133s      |
-| 256        | 502            | 0.501s      | 0.734s      | 0.822s      | 0.978s      |
+| Precision | Batch size | Throughput Avg | Latency Avg | Latency 90% | Latency 95% | Latency 99% |
+|-----------|------------|----------------|-------------|-------------|-------------|-------------|
+| FP32      | 10240      | 3461           | 2.51s       | 3.19 s      | 3.19s       | 3.19s       |
+| FP16      | 10240      | 5983           | 1.45s       | 2.03 s      | 2.03s       | 2.03s       |
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -529,6 +496,10 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 ## Release notes
 
 ### Changelog
+
+February 2022:
+- Update depricated calls in PyTorch CPP and Python API
+- Update README with latest performance measurements
 
 June 2020
 - add TorchScript support

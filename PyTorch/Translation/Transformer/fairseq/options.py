@@ -7,7 +7,7 @@
 #
 #-------------------------------------------------------------------------
 #
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -34,7 +34,6 @@ from fairseq.optim.lr_scheduler import LR_SCHEDULER_REGISTRY
 def get_training_parser():
     parser = get_parser('Trainer')
     add_dataset_args(parser, train=True, gen=True)
-    add_distributed_training_args(parser)
     add_model_args(parser)
     add_optimization_args(parser)
     add_checkpoint_args(parser)
@@ -160,28 +159,6 @@ def add_dataset_args(parser, train=False, gen=False):
         group.add_argument('--shard-id', default=0, type=int, metavar='ID',
                            help='id of the shard to generate (id < num_shards)')
     return group
-
-
-def add_distributed_training_args(parser):
-    group = parser.add_argument_group('Distributed training')
-    group.add_argument('--distributed-world-size', type=int, metavar='N',
-                       default=torch.cuda.device_count(),
-                       help='total number of GPUs across all nodes (default: all visible GPUs)')
-    group.add_argument('--distributed-rank', default=os.getenv('LOCAL_RANK', 0), type=int,
-                       help='rank of the current worker')
-    group.add_argument('--local_rank', default=0, type=int,
-                       help='rank of the current worker')
-    group.add_argument('--distributed-backend', default='nccl', type=str,
-                       help='distributed backend')
-    group.add_argument('--distributed-init-method', default=None, type=str,
-                       help='typically tcp://hostname:port that will be used to '
-                            'establish initial connetion')
-    group.add_argument('--distributed-port', default=-1, type=int,
-                       help='port number (not required if using --distributed-init-method)')
-    group.add_argument('--device-id', default=0, type=int,
-                       help='which GPU to use (usually configured automatically)')
-    return group
-
 
 def add_optimization_args(parser):
     group = parser.add_argument_group('Optimization')

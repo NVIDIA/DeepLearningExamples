@@ -177,10 +177,10 @@ def setup_logger(args):
     container_setup_info = get_framework_env_vars()
     dllogger.log(step='PARAMETER', data=container_setup_info, verbosity=0)
 
-    dllogger.metadata('loss', {'unit': None, 'GOAL': 'MINIMIZE', 'STAGE': 'TRAIN'})
-    dllogger.metadata('val_loss', {'unit': None, 'GOAL': 'MINIMIZE', 'STAGE': 'VAL'})
+    dllogger.metadata('loss', {'unit': 'nat', 'GOAL': 'MINIMIZE', 'STAGE': 'TRAIN'})
+    dllogger.metadata('val_loss', {'unit': 'nat', 'GOAL': 'MINIMIZE', 'STAGE': 'VAL'})
     dllogger.metadata('speed', {'unit': 'tokens/s', 'format': ':.3f', 'GOAL': 'MAXIMIZE', 'STAGE': 'TRAIN'})
-    dllogger.metadata('accuracy', {'unit': None, 'format': ':.2f', 'GOAL': 'MAXIMIZE', 'STAGE': 'VAL'})
+    dllogger.metadata('accuracy', {'unit': 'bleu', 'format': ':.2f', 'GOAL': 'MAXIMIZE', 'STAGE': 'VAL'})
 
 
 def get_framework_env_vars():

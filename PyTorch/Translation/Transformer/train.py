@@ -8,7 +8,7 @@
 #
 #-------------------------------------------------------------------------
 #
-# Copyright (c) 2019, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -48,7 +48,7 @@ def main(args):
 
     if not torch.cuda.is_available():
         raise NotImplementedError('Training on CPU is not supported')
-    torch.cuda.set_device(args.device_id)
+    torch.cuda.set_device(args.local_rank)
     if args.distributed_world_size > 1:
         assert torch.distributed.is_initialized()
         torch.distributed.broadcast(torch.tensor([1], device="cuda"), 0)
@@ -424,7 +424,6 @@ if __name__ == '__main__':
     parser = options.get_training_parser()
     ARGS = options.parse_args_and_arch(parser)
 
-    if ARGS.distributed_world_size > 1:
-        distributed_utils.distributed_init(ARGS)
+    distributed_utils.distributed_init(ARGS)
 
     main(ARGS)
