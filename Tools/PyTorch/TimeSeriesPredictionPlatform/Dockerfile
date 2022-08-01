@@ -1,5 +1,5 @@
 #SPDX-License-Identifier: Apache-2.0
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.09-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:22.04-py3
 
 FROM ${FROM_IMAGE_NAME}
 
@@ -7,6 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV DCGM_VERSION=2.2.9
 
 ENV MODEL_NAVIGATOR_CONTAINER=1
+ENV DGLBACKEND=pytorch
 RUN apt-get update && \
     apt-get install --no-install-recommends -y software-properties-common curl python3-dev python3-pip python-is-python3 libb64-dev wget git wkhtmltopdf && \
     \
@@ -39,22 +40,16 @@ RUN apt-get update && \
 WORKDIR /workspace
 ENV PYTHONPATH /workspace
 
-RUN pip install --upgrade pip
 ADD requirements.txt /workspace/requirements.txt
 ADD triton/requirements.txt /workspace/triton/requirements.txt
 RUN pip install -r /workspace/requirements.txt
 RUN pip install -r /workspace/triton/requirements.txt
+RUN pip install nvidia-pyindex
 RUN pip install git+https://github.com/NVIDIA/dllogger#egg=dllogger
 RUN pip install --no-cache-dir -r requirements.txt -f https://data.dgl.ai/wheels/repo.html
 
 # Add model files to workspace
 ADD . /workspace
 
-
-# AMP monkey-patch
-RUN sed -i 's/  def forward(ctx,/  @amp.custom_fwd\(cast_inputs=torch.float32\)\n  def forward(ctx,/g' /opt/conda/lib/python3.8/site-packages/apex/normalization/fused_layer_norm.py
-RUN sed -i 's/  def backward(ctx,/  @amp.custom_bwd\n  def backward(ctx,/g' /opt/conda/lib/python3.8/site-packages/apex/normalization/fused_layer_norm.py
-RUN sed -i 's/^import torch$/import torch\nfrom torch.cuda import amp/' /opt/conda/lib/python3.8/site-packages/apex/normalization/fused_layer_norm.py
-RUN rm -rf examples
-RUN rm -rf docker-examples
-RUN rm -rf tutorial
+RUN pip install -e distributed_launcher
+RUN rm -rf examples docker-examples tutorials

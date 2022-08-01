@@ -1,12 +1,25 @@
-# SPDX-License-Identifier: Apache-2.0
-import logging
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#           http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import time
 
 import dllogger
 
 from callbacks.callbacks import Callback, CallbackContainer
 from distributed_utils import is_main_process
-from training.utils import round_dict, save_checkpoint
+from training.utils import round_dict
+from training.checkpoint_utils import save_checkpoint
 
 
 class CTLCallbackContainer(CallbackContainer):
@@ -137,45 +150,56 @@ class CTLCallback(Callback):
 class LoggingCallback(CTLCallback):
     def on_train_begin(self, logs=None):
         self.trainer.logger.log(
-            step=[],
-            data={"String": "Training with {} epochs".format(self.trainer.config.trainer.get("num_epochs", 1))},
+            step='event',
+            data={"String": "Training with {} epochs".format(self.trainer.config.get("num_epochs", 1))},
             verbosity=dllogger.Verbosity.DEFAULT,
         )
 
     def on_train_end(self, logs=None):
-        self.trainer.logger.log(step=[], data={"String": "Training Stopped"}, verbosity=dllogger.Verbosity.DEFAULT)
+        self.trainer.logger.log(step='event', data={"String": "Training Stopped"}, verbosity=dllogger.Verbosity.DEFAULT)
 
     def on_epoch_begin(self, epoch, logs=None):
-        self.trainer.logger.log(step=[], data={"String": "Epoch {}".format(epoch)}, verbosity=dllogger.Verbosity.DEFAULT)
+        self.trainer.logger.log(step='event', data={"String": "Epoch {}".format(epoch)}, verbosity=dllogger.Verbosity.DEFAULT)
+
+    def on_batch_end(self, batch, logs=None):
+        if self.trainer.config.log_interval > 0 and self.trainer.global_step % self.trainer.config.log_interval == 0:
+            self.trainer.logger.flush()
 
     def on_valid_begin(self, epoch, logs=None):
         self.trainer.logger.log(
-            step=[], data={"String": "Calculating Validation Metrics"}, verbosity=dllogger.Verbosity.DEFAULT
+            step='event', data={"String": "Calculating Validation Metrics"}, verbosity=dllogger.Verbosity.DEFAULT
         )
 
     def on_valid_end(self, epoch, logs=None):
         self.trainer.logger.log(
-            step=[],
+            step='event',
             data={"String": "Epoch {} Validation Metrics: {}".format(epoch, round_dict(logs))},
             verbosity=dllogger.Verbosity.DEFAULT,
         )
 
+    def on_epoch_end(self, epoch, logs=None):
+        self.trainer.logger.flush()
+
     def on_evaluate_begin(self, logs=None):
         self.trainer.logger.log(
-            step=[], data={"String": "Beginning Metric Evaluation"}, verbosity=dllogger.Verbosity.DEFAULT
+            step='event', data={"String": "Beginning Metric Evaluation"}, verbosity=dllogger.Verbosity.DEFAULT
         )
 
     def on_evaluate_end(self, logs=None):
         self.trainer.logger.log(
-            step=[], data={"String": "Evaluation Metrics: {}".format(round_dict(logs))}, verbosity=dllogger.Verbosity.DEFAULT
+            step='event', data={"String": "Evaluation Metrics: {}".format(round_dict(logs))}, verbosity=dllogger.Verbosity.DEFAULT
         )
+        self.trainer.logger.log(step=[], data=logs, verbosity=dllogger.Verbosity.DEFAULT)
 
 
 class EarlyStopping(CTLCallback):
-    def __init__(self, metric="val_loss", max_diff=0, patience=5):
+    def __init__(self, metric="val_loss", min_delta=0, patience=5, max_divergence=None, divergence_patience=1):
         self.metric = metric
-        self.max_diff = max_diff
+        self.min_delta = min_delta
         self.patience = patience
+        self.max_divergence = max_divergence
+        self.divergence_patience = divergence_patience
+        self.divergence_stopped_epochs = 0
         self.stopped_epochs = 0
         self.best_loss = None
         super().__init__()
@@ -185,19 +209,31 @@ class EarlyStopping(CTLCallback):
         if epoch_loss is None:
             return
 
-        if self.best_loss is None or epoch_loss < self.best_loss:
+        if self.best_loss is None:
             self.best_loss = epoch_loss
             return
 
-        if (epoch_loss - self.best_loss) > self.max_diff:
+        if self.max_divergence and ((epoch_loss - self.best_loss) > self.max_divergence):
+            self.divergence_stopped_epochs += 1
             self.stopped_epochs += 1
-            if self.stopped_epochs >= self.patience:
+            if self.divergence_stopped_epochs >= self.divergence_patience:
                 self.trainer._stop_training = True
                 self.trainer.logger.log(
-                    step=[], data={"String": f"Applying early stopping"}, verbosity=dllogger.Verbosity.DEFAULT
+                    step='event', data={"String": f"Applying early stopping as divergence threshold reached"}, verbosity=dllogger.Verbosity.DEFAULT
                 )
-        else:
+        elif (epoch_loss + self.min_delta) < self.best_loss:
+            self.best_loss = epoch_loss
             self.stopped_epochs = 0
+            self.divergence_stopped_epochs = 0
+        else:
+            self.stopped_epochs += 1
+            self.divergence_stopped_epochs = 0
+
+        if self.stopped_epochs >= self.patience:
+            self.trainer._stop_training = True
+            self.trainer.logger.log(
+                step='event', data={"String": f"Applying early stopping"}, verbosity=dllogger.Verbosity.DEFAULT
+            )
 
 
 class SaveBestCheckpoint(CTLCallback):
@@ -214,8 +250,16 @@ class SaveBestCheckpoint(CTLCallback):
         if self.best_loss is None or epoch_loss < self.best_loss:
             self.best_loss = epoch_loss
             if is_main_process():
-                save_checkpoint(self.trainer, checkpoint_dir=self.trainer.log_path, filename="best_checkpoint.pth.tar")
-            return
+                save_checkpoint(self.trainer, checkpoint_dir=self.trainer.log_path, filename="best_checkpoint.zip")
+
+
+class SaveCheckpoint(CTLCallback):
+    def __init__(self):
+        super().__init__()
+
+    def on_epoch_end(self, epoch, logs=None):
+        if is_main_process():
+            save_checkpoint(self.trainer, checkpoint_dir=self.trainer.log_path, filename="last_checkpoint.zip")
 
 
 class MeanAccumulator:

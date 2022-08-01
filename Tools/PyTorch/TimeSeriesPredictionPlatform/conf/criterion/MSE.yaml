@@ -1,5 +1,0 @@
-# SPDX-License-Identifier: Apache-2.0
-# @package _global_
-config:
-  criterion:
-    _target_: criterion.MSE_wrapper

@@ -13,7 +13,7 @@
 
 DOCKER_BRIDGE=${1:-"bridge"}
 NAV_DIR=${2:-"/workspace/"}
-NV_VISIBLE_DEVICES=${3-"0"}
+NV_VISIBLE_DEVICES=${3:-"0"}
 
 # Start TRITON server in detached state
 docker run --rm -d \
@@ -27,4 +27,4 @@ docker run --rm -d \
    -p 8002:8002 \
    --name trt_server_cont \
    -v ${NAV_DIR}/navigator_workspace/model-store/:/models \
-   nvcr.io/nvidia/tritonserver:21.09-py3 tritonserver --model-store=/models --log-verbose=1 --exit-on-error=true --strict-model-config=false
+   nvcr.io/nvidia/tritonserver:22.04-py3 tritonserver --model-store=/models --log-verbose=1 --exit-on-error=true --strict-model-config=false --cuda-memory-pool-byte-size 0:10000000000

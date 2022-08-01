@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -213,7 +213,6 @@ class PYT2ONNXSaver(BaseSaver):
 
         device = get_model_device(model.handle)
         dummy_input = get_sample_input(dataloader_fn(), device)
-
         with torch.no_grad():
             torch.onnx.export(
                 model.handle,
@@ -224,7 +223,6 @@ class PYT2ONNXSaver(BaseSaver):
                 output_names=list(model.outputs),
                 dynamic_axes=dynamic_axes,
                 opset_version=self._onnx_opset,
-                enable_onnx_checker=True,
             )
 
 

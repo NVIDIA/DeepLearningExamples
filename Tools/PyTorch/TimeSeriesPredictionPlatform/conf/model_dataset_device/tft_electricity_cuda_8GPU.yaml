@@ -1,6 +1,0 @@
-# SPDX-License-Identifier: Apache-2.0
-# @package _global_
-config:
-  optimizer:
-    lr: .001
-    gradient_norm: 1.0  

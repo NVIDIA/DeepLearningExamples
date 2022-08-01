@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -44,6 +44,7 @@ def performance_evaluation_warmup(
     batching_mode: BatchingMode,
     offline_mode: OfflineMode,
     evaluation_mode: EvaluationMode,
+    output_shared_memory_size: int,
 ):
     protocol, host, port = parse_server_url(server_url)
 
@@ -51,7 +52,10 @@ def performance_evaluation_warmup(
     measurement_request_count = 2 * measurement_request_count
 
     if batching_mode == BatchingMode.STATIC:
-        batch_sizes = sorted({1, batch_sizes[-1]})
+        if len(batch_sizes) == 1:
+            batch_sizes = {batch_sizes[0]}
+        else:
+            batch_sizes = sorted({1, batch_sizes[-1]})
         max_concurrency = 1
         min_concurrency = 1
         step = 1
@@ -66,31 +70,32 @@ def performance_evaluation_warmup(
         raise ValueError(f"Unsupported batching mode: {batching_mode}")
 
     for batch_size in batch_sizes:
-        params = {
-            "model-name": model_name,
-            "model-version": 1,
-            "batch-size": batch_size,
-            "url": f"{host}:{port}",
-            "protocol": protocol,
-            "input-data": input_data,
-            "measurement-interval": measurement_interval,
-            "concurrency-range": f"{min_concurrency}:{max_concurrency}:{step}",
-            "verbose": True,
-        }
+        for concurrency in range(min_concurrency, max_concurrency + step, step):
+            params = {
+                "model-name": model_name,
+                "model-version": 1,
+                "batch-size": batch_size,
+                "url": f"{host}:{port}",
+                "protocol": protocol,
+                "input-data": input_data,
+                "measurement-interval": measurement_interval,
+                "concurrency-range": f"{concurrency}:{concurrency}:1",
+            }
 
-        if TRITON_CLIENT_VERSION >= LooseVersion("2.11.0"):
-            params["measurement-mode"] = measurement_mode.value
-            params["measurement-request-count"] = measurement_request_count
+            if TRITON_CLIENT_VERSION >= LooseVersion("2.11.0"):
+                params["measurement-mode"] = measurement_mode.value
+                params["measurement-request-count"] = measurement_request_count
 
-        if evaluation_mode == EvaluationMode.OFFLINE:
-            params["shared-memory"] = offline_mode.value
+            if evaluation_mode == EvaluationMode.OFFLINE:
+                params["shared-memory"] = offline_mode.value
+                params["output-shared-memory-size"] = output_shared_memory_size
 
-        config = PerfAnalyzerConfig()
-        for param, value in params.items():
-            config[param] = value
+            config = PerfAnalyzerConfig()
+            for param, value in params.items():
+                config[param] = value
 
-        for shape in input_shapes:
-            config["shape"] = shape
+            for shape in input_shapes:
+                config["shape"] = shape
 
-        perf_analyzer = PerfAnalyzer(config=config)
-        perf_analyzer.run()
+            perf_analyzer = PerfAnalyzer(config=config)
+            perf_analyzer.run()

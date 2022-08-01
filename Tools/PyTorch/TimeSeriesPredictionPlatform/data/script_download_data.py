@@ -1,4 +1,4 @@
-# Copyright 2021 NVIDIA CORPORATION
+# Copyright 2021-2022 NVIDIA Corporation
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -42,21 +42,23 @@ Command line args:
 from __future__ import absolute_import, division, print_function
 
 import argparse
+from cmath import nan
 import gc
 import os
-import pickle
 import sys
 import warnings
-from datetime import date, timedelta
 
-import dgl
 import numpy as np
 import pandas as pd
-import py7zr
 import pyunpack
-import torch
 import wget
+import pickle
+
+from datetime import date, timedelta, datetime
 from scipy.spatial import distance_matrix
+
+import dgl
+import torch
 
 warnings.filterwarnings("ignore")
 
@@ -70,18 +72,17 @@ def download_from_url(url, output_path):
     print("done")
 
 
-def unzip(zip_path, output_file, data_folder, use_z=False):
+def unzip(zip_path, output_file, data_folder):
     """Unzips files and checks successful completion."""
 
     print("Unzipping file: {}".format(zip_path))
-    if use_z:
-        py7zr.SevenZipFile(zip_path, mode="r").extractall(path=data_folder)
-    else:
-        pyunpack.Archive(zip_path).extractall(data_folder)
+    pyunpack.Archive(zip_path).extractall(data_folder)
 
     # Checks if unzip was successful
     if not os.path.exists(output_file):
-        raise ValueError("Error in unzipping process! {} not found.".format(output_file))
+        raise ValueError(
+            "Error in unzipping process! {} not found.".format(output_file)
+        )
 
 
 def download_and_unzip(url, zip_path, csv_path, data_folder):
@@ -122,20 +123,26 @@ def download_electricity(data_folder):
     output = df.resample("1h").mean().replace(0.0, np.nan)
 
     earliest_time = output.index.min()
+    # Filter to match range used by other academic papers
+    output = output[(output.index >= '2014-01-01') & (output.index < '2014-09-08')]
 
     df_list = []
     for label in output:
         srs = output[label]
 
+        if srs.isna().all():
+            continue
+
         start_date = min(srs.fillna(method="ffill").dropna().index)
         end_date = max(srs.fillna(method="bfill").dropna().index)
 
-        active_range = (srs.index >= start_date) & (srs.index <= end_date)
-        srs = srs[active_range].fillna(0.0)
+        srs = output[label].fillna(0.0)
 
         tmp = pd.DataFrame({"power_usage": srs})
         date = tmp.index
-        tmp["t"] = (date - earliest_time).seconds / 60 / 60 + (date - earliest_time).days * 24
+        tmp["t"] = (date - earliest_time).seconds / 60 / 60 + (
+            date - earliest_time
+        ).days * 24
         tmp["days_from_start"] = (date - earliest_time).days
         tmp["categorical_id"] = label
         tmp["date"] = date
@@ -144,6 +151,7 @@ def download_electricity(data_folder):
         tmp["day"] = date.day
         tmp["day_of_week"] = date.dayofweek
         tmp["month"] = date.month
+        tmp["power_usage_weight"] = ((date >= start_date) & (date <= end_date))
 
         df_list.append(tmp)
 
@@ -153,9 +161,8 @@ def download_electricity(data_folder):
     output["hours_from_start"] = output["t"]
     output["categorical_day_of_week"] = output["day_of_week"].copy()
     output["categorical_hour"] = output["hour"].copy()
+    output["power_usage_weight"] = output["power_usage_weight"].apply(lambda b: 1 if b else 0)
 
-    # Filter to match range used by other academic papers
-    output = output[(output["days_from_start"] >= 1096) & (output["days_from_start"] < 1346)].copy()
 
     output.to_csv(data_folder + "/electricity.csv")
 
@@ -177,9 +184,15 @@ def download_traffic(data_folder):
     def process_list(s, variable_type=int, delimiter=None):
         """Parses a line in the PEMS format to a list."""
         if delimiter is None:
-            parsed_list = [variable_type(i) for i in s.replace("[", "").replace("]", "").split()]
+            parsed_list = [
+                variable_type(i)
+                for i in s.replace("[", "").replace("]", "").split()
+            ]
         else:
-            parsed_list = [variable_type(i) for i in s.replace("[", "").replace("]", "").split(delimiter)]
+            parsed_list = [
+                variable_type(i)
+                for i in s.replace("[", "").replace("]", "").split(delimiter)
+            ]
 
         return parsed_list
 
@@ -199,7 +212,9 @@ def download_traffic(data_folder):
 
                 array = [
                     process_list(row_split, variable_type=float, delimiter=None)
-                    for row_split in process_list(line, variable_type=str, delimiter=";")
+                    for row_split in process_list(
+                        line, variable_type=str, delimiter=";"
+                    )
                 ]
                 array_list.append(array)
 
@@ -213,8 +228,16 @@ def download_traffic(data_folder):
 
     # Inverse permutate shuffle order
     print("Shuffling")
-    inverse_mapping = {new_location: previous_location for previous_location, new_location in enumerate(shuffle_order)}
-    reverse_shuffle_order = np.array([inverse_mapping[new_location] for new_location, _ in enumerate(shuffle_order)])
+    inverse_mapping = {
+        new_location: previous_location
+        for previous_location, new_location in enumerate(shuffle_order)
+    }
+    reverse_shuffle_order = np.array(
+        [
+            inverse_mapping[new_location]
+            for new_location, _ in enumerate(shuffle_order)
+        ]
+    )
 
     # Group and reoder based on permuation matrix
     print("Reodering")
@@ -233,9 +256,15 @@ def download_traffic(data_folder):
 
         # Hourly data
         hourly = pd.DataFrame(day_matrix.T, columns=labels)
-        hourly["hour_on_day"] = [int(i / 6) for i in hourly.index]  # sampled at 10 min intervals
+        hourly["hour_on_day"] = [
+            int(i / 6) for i in hourly.index
+        ]  # sampled at 10 min intervals
         if hourly["hour_on_day"].max() > 23 or hourly["hour_on_day"].min() < 0:
-            raise ValueError("Invalid hour! {}-{}".format(hourly["hour_on_day"].min(), hourly["hour_on_day"].max()))
+            raise ValueError(
+                "Invalid hour! {}-{}".format(
+                    hourly["hour_on_day"].min(), hourly["hour_on_day"].max()
+                )
+            )
 
         hourly = hourly.groupby("hour_on_day", as_index=True).mean()[labels]
         hourly["sensor_day"] = day
@@ -249,7 +278,11 @@ def download_traffic(data_folder):
     # Flatten such that each entitiy uses one row in dataframe
     store_columns = [c for c in hourly_frame.columns if "traj" in c]
     other_columns = [c for c in hourly_frame.columns if "traj" not in c]
-    flat_df = pd.DataFrame(columns=["values", "prev_values", "next_values"] + other_columns + ["id"])
+    flat_df = pd.DataFrame(
+        columns=["values", "prev_values", "next_values"]
+        + other_columns
+        + ["id"]
+    )
 
     def format_index_string(x):
         """Returns formatted string for key."""
@@ -273,7 +306,9 @@ def download_traffic(data_folder):
         key = (
             sliced["id"].apply(str)
             + sliced["sensor_day"].apply(lambda x: "_" + format_index_string(x))
-            + sliced["time_on_day"].apply(lambda x: "_" + format_index_string(x))
+            + sliced["time_on_day"].apply(
+                lambda x: "_" + format_index_string(x)
+            )
         )
         sliced = sliced.set_index(key).sort_index()
 
@@ -289,7 +324,9 @@ def download_traffic(data_folder):
 
     # Creating columns fo categorical inputs
     flat_df["categorical_id"] = flat_df["id"].copy()
-    flat_df["hours_from_start"] = flat_df["time_on_day"] + flat_df["sensor_day"] * 24.0
+    flat_df["hours_from_start"] = (
+        flat_df["time_on_day"] + flat_df["sensor_day"] * 24.0
+    )
     flat_df["categorical_day_of_week"] = flat_df["day_of_week"].copy()
     flat_df["categorical_time_on_day"] = flat_df["time_on_day"].copy()
 
@@ -338,16 +375,29 @@ def main(args):
     print("Download completed.")
 
 
-# XXX: maybe we should add a decorator adding func to registry to keep everything in one place
-DOWNLOAD_FUNCTIONS = {"electricity": download_electricity, "traffic": download_traffic}
+DOWNLOAD_FUNCTIONS = {
+        "electricity": download_electricity,
+        "traffic": download_traffic,
+    }
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Data download configs")
     parser.add_argument(
-        "--dataset", metavar="DATASET", type=str, choices=DOWNLOAD_FUNCTIONS.keys(), required=True, help="Dataset name"
+        "--dataset",
+        metavar="DATASET",
+        type=str,
+        choices=DOWNLOAD_FUNCTIONS.keys(),
+        required=True,
+        help="Dataset name"
     )
-    parser.add_argument("--output_dir", metavar="DIR", type=str, default=".", help="Path to folder for data download")
+    parser.add_argument(
+        "--output_dir",
+        metavar="DIR",
+        type=str,
+        default=".",
+        help="Path to folder for data download",
+    )
 
     args = parser.parse_args()
     main(args)

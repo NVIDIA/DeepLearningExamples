@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ class PerfAnalyzer:
 
         Raises
         ------
-        ServicAnalyzerException
+        PerfAnalyzerException
             If subprocess throws CalledProcessError
         """
         for _ in range(MAX_INTERVAL_CHANGES):
@@ -69,17 +69,19 @@ class PerfAnalyzer:
             LOGGER.debug(f"Perf Analyze command: {command}")
             try:
                 process = Popen(command, start_new_session=True, stdout=PIPE, encoding="utf-8")
+                streamed_output = ""
                 while True:
                     output = process.stdout.readline()
                     if output == "" and process.poll() is not None:
                         break
                     if output:
-                        self._output += output
+                        streamed_output += output
                         print(output.rstrip())
 
+                self._output += streamed_output
                 result = process.poll()
                 if result != 0:
-                    raise CalledProcessError(returncode=result, cmd=command, output=self._output)
+                    raise CalledProcessError(returncode=result, cmd=command, output=streamed_output)
 
                 return
 
@@ -109,14 +111,14 @@ class PerfAnalyzer:
 
     def _faild_with_measruement_inverval(self, output: str):
         return (
-            output.find("Failed to obtain stable measurement") or output.find("Please use a larger time window") != -1
-        )
+            output.find("Failed to obtain stable measurement") or output.find("Please use a larger time window")
+        ) != -1
 
     def _increase_request_count(self):
         self._config["measurement-request-count"] += COUNT_INTERVAL_DELTA
         LOGGER.debug(
             "perf_analyzer's measurement request count is too small, "
-            f"decreased to {self._config['measurement-request-count']}."
+            f"increased to {self._config['measurement-request-count']}."
         )
 
     def _increase_time_interval(self):

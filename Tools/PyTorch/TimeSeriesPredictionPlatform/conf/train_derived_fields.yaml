@@ -1,0 +1,60 @@
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#           http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# @package _global_
+
+dataset:
+    config:
+        # The line below is equivalent to python's `model.config.get(model_type, 'default') == 'graph' and dataset.config.get('graph', False)`
+        # For more info on resolvers see: https://omegaconf.readthedocs.io/en/2.1_branch/custom_resolvers.html
+        # We cannot reuse `graph: ...` because during resolution it queries dataset.config.graph which causes infinite recursion
+        construct_graph: ${and:${cmp:${oc.select:model.config.model_type,default},graph},${oc.select:dataset.config.graph,false}}
+        xgb: ${cont.lower:${oc.select:trainer._target_, ctltrainer}, xgbtrainer}
+        stat: ${cont.lower:${oc.select:trainer._target_, ctltrainer}, stattrainer}
+
+trainer:
+    criterion:
+        reduction: ${if:${feature.selector:${dataset.config.features}, WEIGHT, CONTINUOUS},none,mean}
+    config:
+        encoder_length: ${dataset.config.encoder_length}
+        example_length: ${dataset.config.example_length}
+        model_type: ${oc.select:model.config.model_type,default}
+
+evaluator:
+    config:
+        preprocessor_state_path: ${dataset.config.dest_path}/tspp_preprocess.bin
+        device: ${trainer.config.device}
+        encoder_length: ${dataset.config.encoder_length}
+        output_selector: ${oc.select:model.config.output_selector,0}
+        model_type: ${oc.select:model.config.model_type,default}
+
+
+
+# We want to inform model about shape of the data
+model:
+    config:
+        device: ${trainer.config.device}
+        encoder_length: ${dataset.config.encoder_length}
+        example_length: ${dataset.config.example_length}
+        num_ts: ${dataset.config.time_series_count}
+        temporal_known_continuous_inp_size: ${len:${feature.selector:${dataset.config.features}, KNOWN, CONTINUOUS}}
+        temporal_observed_continuous_inp_size: ${if:${dataset.config.MultiID},${add:${len:${feature.selector:${dataset.config.features}, OBSERVED, CONTINUOUS}},${dataset.config.time_series_count}},${len:${feature.selector:${dataset.config.features}, OBSERVED, CONTINUOUS}}}
+        static_continuous_inp_size: ${len:${feature.selector:${dataset.config.features}, STATIC, CONTINUOUS}}
+        temporal_target_size: ${len:${feature.selector:${dataset.config.features}, TARGET, CONTINUOUS}} # XXX: we currently support only continuous targets
+        static_categorical_inp_lens: ${feature.cardinalities:${feature.selector:${dataset.config.features}, STATIC, CATEGORICAL}}
+        temporal_known_categorical_inp_lens: ${feature.cardinalities:${feature.selector:${dataset.config.features}, KNOWN, CATEGORICAL}}
+        temporal_observed_categorical_inp_lens: ${feature.cardinalities:${feature.selector:${dataset.config.features}, OBSERVED, CATEGORICAL}}
+        num_static_vars: ${sum:${model.config.static_continuous_inp_size},${len:${model.config.static_categorical_inp_lens}}}
+        num_future_vars: ${sum:${model.config.temporal_known_continuous_inp_size},${len:${model.config.temporal_known_categorical_inp_lens}}}
+        num_historic_vars: ${sum:${model.config.num_future_vars},${model.config.temporal_observed_continuous_inp_size},${model.config.temporal_target_size},${len:${model.config.temporal_observed_categorical_inp_lens}}}

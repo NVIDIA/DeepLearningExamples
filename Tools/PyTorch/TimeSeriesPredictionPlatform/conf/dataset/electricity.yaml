@@ -1,8 +1,20 @@
-# SPDX-License-Identifier: Apache-2.0
-# @package _global_
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#           http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+_target_: data.datasets.create_datasets
 config:
-  dataset:
-    _target_: data.data_utils.create_datasets
+    graph: False
     source_path: /workspace/datasets/electricity/electricity.csv
     dest_path: /workspace/datasets/electricity/
     time_ids: 'days_from_start'
@@ -19,6 +31,7 @@ config:
     scale_per_id: True
     encoder_length: 168
     example_length: 192
+    MultiID: False
     features:
       - name: 'categorical_id'
         feature_type: 'ID'
@@ -26,6 +39,9 @@ config:
         cardinality: 371
       - name: 'hours_from_start'
         feature_type: 'TIME'
+        feature_embed_type: 'CONTINUOUS'
+      - name: 'power_usage_weight'
+        feature_type: 'WEIGHT'
         feature_embed_type: 'CONTINUOUS'
       - name: 'power_usage'
         feature_type: 'TARGET'
@@ -52,5 +68,4 @@ config:
     train_samples: 450000
     valid_samples: 50000
     binarized: True
-
-    time_series_count: 370
+    time_series_count: 369
