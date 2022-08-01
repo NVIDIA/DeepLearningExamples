@@ -387,8 +387,6 @@ def inference_benchmark_graphed(model, data_loader, num_batches=100):
 def main(argv):
     torch.manual_seed(FLAGS.seed)
 
-    utils.init_logging(log_path=FLAGS.log_path)
-
     use_gpu = "cpu" not in FLAGS.base_device.lower()
     rank, world_size, gpu = dist.init_distributed_mode(backend=FLAGS.backend, use_gpu=use_gpu)
     device = FLAGS.base_device
@@ -399,6 +397,7 @@ def main(argv):
     validate_flags(cat_feature_count)
 
     if is_main_process():
+        utils.init_logging(log_path=FLAGS.log_path)
         dllogger.log(data=FLAGS.flag_values_dict(), step='PARAMETER')
 
     FLAGS.set_default("test_batch_size", FLAGS.test_batch_size // world_size * world_size)
@@ -512,7 +511,8 @@ def main(argv):
         auc, valid_loss = dist_evaluate(model, data_loader_test)
 
         results = {'best_auc': auc, 'best_validation_loss': valid_loss}
-        dllogger.log(data=results, step=tuple())
+        if is_main_process():
+            dllogger.log(data=results, step=tuple())
         return
     elif FLAGS.mode == 'inference_benchmark':
         if world_size > 1:
@@ -540,7 +540,8 @@ def main(argv):
             subresult = {f'mean_inference_latency_batch_{batch_size}': mean_latency,
                          f'mean_inference_throughput_batch_{batch_size}': mean_inference_throughput}
             results.update(subresult)
-        dllogger.log(data=results, step=tuple())
+        if is_main_process():
+            dllogger.log(data=results, step=tuple())
         return
 
     if FLAGS.save_checkpoint_path and not FLAGS.bottom_features_ordered and is_main_process():
