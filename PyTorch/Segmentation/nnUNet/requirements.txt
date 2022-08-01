@@ -1,7 +1,7 @@
 git+https://github.com/NVIDIA/dllogger
 nibabel==3.2.1
 joblib==1.0.1
-pytorch-lightning==1.5.10
+pytorch-lightning==1.6.5
 scikit-learn==1.0
 scikit-image==0.18.3
 scipy==1.8.1
