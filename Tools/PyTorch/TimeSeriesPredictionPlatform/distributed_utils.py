@@ -1,36 +1,30 @@
-# SPDX-License-Identifier: Apache-2.0
-import logging
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#           http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import os
 import random
 
-import numpy as np
 import torch
 import torch.distributed as dist
 
+from numba import cuda
+import warnings
+from dask.distributed import Client
+from dask_cuda import LocalCUDACluster
 
-def load_checkpoint(load_ckpt_path):
-    if load_ckpt_path:
-        checkpoint = torch.load()
-    else:
-        checkpoint = None
-    return checkpoint
-
-
-def get_device(local_rank, device_name):
-    if torch.cuda.is_available() and device_name == "cuda":
-        torch.cuda.set_device(local_rank % torch.cuda.device_count())
-        device = torch.device("cuda")
-    else:
-        device = torch.device("cpu")
-    return device
-
-
-def seed_everything(seed):
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
-    random.seed(seed)
-
+from hydra.core.hydra_config import HydraConfig
+from joblib.externals.loky.backend.context import get_context
 
 def generate_seeds(rng, size):
     """
@@ -116,18 +110,14 @@ def reduce_tensor(tensor, num_gpus, average=False):
     return tensor
 
 
-def init_distributed(world_size):
-    if dist.is_initialized():
-        return True
-    distributed = world_size > 1
-    if distributed:
-        backend = "nccl" if torch.cuda.is_available() else "gloo"
-        dist.init_process_group(backend=backend, init_method="env://")
+def init_distributed():
+    world_size = int(os.environ.get("WORLD_SIZE", 1))
+    local_rank = int(os.environ.get('LOCAL_RANK', 0))
+    if world_size > 1:
+        dist.init_process_group(backend='nccl', init_method="env://")
         assert dist.is_initialized()
-
-    if get_rank() == 0:
-        print("Distributed initialized. World size:", world_size)
-    return distributed
+        torch.cuda.set_device(local_rank)
+        torch.cuda.synchronize()
 
 
 def get_rank():
@@ -145,18 +135,89 @@ def is_main_process():
     return get_rank() == 0
 
 
-def barrier():
-    """
-    Works as a temporary distributed barrier, currently pytorch
-    doesn't implement barrier for NCCL backend.
-    Calls all_reduce on dummy tensor and synchronizes with GPU.
-    """
-    if torch.distributed.is_available() and torch.distributed.is_initialized():
-        torch.distributed.all_reduce(torch.cuda.FloatTensor(1))
-        torch.cuda.synchronize()
+def init_parallel():
+    if is_parallel():
+        torch.cuda.set_device(HydraConfig.get().job.num % torch.cuda.device_count())
+
+def is_parallel():
+    return HydraConfig.get().launcher.get('n_jobs', 0) > 1 or HydraConfig.get().sweeper.get('n_jobs', 0) > 1
 
 
-# XXX: Why do we even have 2 separate logging objects?
-def log(to_log):
-    if is_main_process():
-        logging.info(to_log)
+def get_mp_context():
+    if HydraConfig.get().launcher.get('n_jobs', 0) > 1 or HydraConfig.get().sweeper.get('n_jobs', 0) > 1:
+        return get_context('loky')
+    return None
+
+
+def _pynvml_mem_size(kind="total", index=0):
+    import pynvml
+
+    pynvml.nvmlInit()
+    size = None
+    if kind == "free":
+        size = int(pynvml.nvmlDeviceGetMemoryInfo(pynvml.nvmlDeviceGetHandleByIndex(index)).free)
+    elif kind == "total":
+        size = int(pynvml.nvmlDeviceGetMemoryInfo(pynvml.nvmlDeviceGetHandleByIndex(index)).total)
+    else:
+        raise ValueError("{0} not a supported option for device_mem_size.".format(kind))
+    pynvml.nvmlShutdown()
+    return size
+
+
+def device_mem_size(kind="total"):
+
+    if kind not in ["free", "total"]:
+        raise ValueError("{0} not a supported option for device_mem_size.".format(kind))
+    try:
+        if kind == "free":
+            return int(cuda.current_context().get_memory_info()[0])
+        else:
+            return int(cuda.current_context().get_memory_info()[1])
+    except NotImplementedError:
+        if kind == "free":
+            # Not using NVML "free" memory, because it will not include RMM-managed memory
+            warnings.warn("get_memory_info is not supported. Using total device memory from NVML.")
+        size = _pynvml_mem_size(kind="total", index=0)
+    return size
+
+
+def get_rmm_size(size):
+    return (size // 256) * 256
+
+
+def calculate_frac(num_rows, num_feat, world_size):
+    total_memory = world_size * device_mem_size(kind='total')
+    mem_to_use = total_memory * 0.4
+    num_rows_to_use = mem_to_use / (num_feat * 6)
+    print(num_rows_to_use)
+    frac = min(num_rows_to_use / num_rows, 1.0)
+    return frac
+
+
+def create_client(config):
+    device_pool_frac = config.cluster.device_pool_frac 
+    device_size = device_mem_size(kind="total")
+    device_pool_size = int(device_pool_frac * device_size)
+    dask_space = "/tmp/dask_space/"
+    protocol = config.cluster.protocol
+    visible_devices = [i for i in range(config.cluster.world_size)]
+    if protocol == "ucx":
+        cluster = LocalCUDACluster(
+            protocol=protocol,
+            CUDA_VISIBLE_DEVICES=visible_devices,
+            rmm_pool_size=get_rmm_size(device_pool_size),
+            local_directory=dask_space,
+            device_memory_limit=None,
+            enable_tcp_over_ucx=True,
+            enable_nvlink=True)
+    else:
+        cluster = LocalCUDACluster(
+            protocol=protocol,
+            CUDA_VISIBLE_DEVICES=visible_devices,
+            rmm_pool_size=get_rmm_size(device_pool_size),
+            local_directory=dask_space,
+            device_memory_limit=None,
+        )
+            
+    client = Client(cluster)
+    return client

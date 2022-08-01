@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,30 +33,25 @@ class MetricsCalculator(BaseMetricsCalculator):
     def __init__(self, model_dir):
         with open(os.path.join(model_dir, ".hydra/config_merged.yaml"), "rb") as f:
             self.config = OmegaConf.load(f)
-        self.config._target_ = self.config.config.evaluator._target_
-        self.evaluator = hydra.utils.call(self.config)
-        self.config= self.config.config
-        self.output_selector = self.config.model.get("preds_test_output_selector", -1)
+        
+        train, valid, test = hydra.utils.call(self.config.dataset)
+        del train, valid
+        self.evaluator = hydra.utils.call(self.config.evaluator, test_data=test)
         self.predictions = []
         self.targets = []
         self.ids = []
-        if self.config.evaluator.get("use_weights", False):
-            self.weights = []
+        self.weights = []
 
 
     @property
     def metrics(self):
         targets = np.concatenate(self.targets, axis=0)
-        # targets = torch.cat(self.targets, dim=0)
         predictions = np.concatenate(self.predictions, axis=0)
-        # predictions = torch.cat(self.predictions, dim=0)
-
+        weights = np.concatenate(self.weights, axis=0)
         ids = np.concatenate(self.ids, axis=0)
-        if self.config.evaluator.get("use_weights", False):
-            weights = torch.cat(self.weights).cpu().numpy()
-        else:
-            weights = np.zeros((0, 0))
-        return self.evaluator(targets, predictions, weights, ids=ids)
+        if np.isnan(weights).any():
+            weights = np.empty([0])
+        return self.evaluator.evaluate(targets, predictions, ids, weights)
 
     def update(
         self,
@@ -68,8 +63,7 @@ class MetricsCalculator(BaseMetricsCalculator):
         #can probably just pass all of this to the evaluator main class
         self.targets.append(y_real['target__0'][:,:,0][:,:,np.newaxis])
         self.ids.append(ids)
-        if self.config.evaluator.get("use_weights", False):
-            self.weights.append(x["weight"])
+        self.weights.append(x["weight__9"])
         preds = y_pred["target__0"]
         self.predictions.append(preds)
 

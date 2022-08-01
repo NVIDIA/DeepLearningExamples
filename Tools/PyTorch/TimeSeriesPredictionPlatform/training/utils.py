@@ -1,42 +1,23 @@
-# SPDX-License-Identifier: Apache-2.0
-import logging
-import os
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#           http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import dgl
-import dllogger
-import numpy as np
 import torch
+import numpy as np
 
 
-def save_checkpoint(trainer, filename="checkpoint.pth.tar", checkpoint_dir="./"):
-    if trainer.ema:
-        module_to_save = trainer.ema.module if trainer.world_size == 1 else trainer.ema
-    else:
-        module_to_save = trainer.model
-    state = {
-        "epoch": trainer.epoch + 1,
-        "global_step": trainer.global_step,
-        "model_state_dict": module_to_save.state_dict(),
-        "optimizer_state_dict": trainer.optimizer.state_dict(),
-    }
-    checkpoint_path = os.path.join(checkpoint_dir, filename)
-    trainer.logger.log(step=[], data={"String": f"Saving checkpoint to {filename}"}, verbosity=dllogger.Verbosity.DEFAULT)
-    torch.save(state, checkpoint_path)
-
-
-def maybe_restore_checkpoint(trainer, checkpoint_path):
-    if checkpoint_path and os.path.isfile(checkpoint_path):
-        trainer.logger.log(
-            step=[], data={"String": f"Restoring checkpoint from {checkpoint_path}"}, verbosity=dllogger.Verbosity.DEFAULT
-        )
-        checkpoint = torch.load(checkpoint_path, map_location=trainer.device)
-        trainer.model.load_state_dict(checkpoint["model_state_dict"])
-        trainer.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-        trainer.global_step = checkpoint["global_step"]
-        trainer.epoch = checkpoint["epoch"]
-
-
-def round_dict(input_data, decimal=2):
+def round_dict(input_data, decimal=4):
     rounded_data = {
         key: (np.around(value, decimal) if isinstance(value, (np.floating, float)) else value)
         for key, value in input_data.items()
@@ -49,5 +30,26 @@ def to_device(batch, device=None):
         return batch.to(device=device)
     if isinstance(batch, dict):
         return {k: t.to(device=device) if t.numel() else None for k, t in batch.items()}
-    elif isinstance(batch, dgl.DGLGraph):
+    if isinstance(batch, dgl.DGLGraph):
         return batch.to(device=device)
+    elif batch is None:
+        return None
+
+
+def set_seed(seed):
+    if seed is None:
+        return
+    if not isinstance(seed, int):
+        raise ValueError(f"Seed has to be an integer or None, but got type {type(seed)}")
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+
+
+def get_optimization_objectives(config, metrics):
+    objectives = tuple(v if v == v else float('inf') for k,v in metrics.items() if k in config.get('optuna_objectives', []))
+    if len(objectives) == 1:
+        return objectives[0]
+    elif not objectives:
+        return None
+    return objectives

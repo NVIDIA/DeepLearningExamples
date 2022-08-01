@@ -1,54 +1,36 @@
-from omegaconf import OmegaConf, open_dict
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#           http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-from data.data_utils import DataTypes, InputTypes, translate_features
+from omegaconf import OmegaConf
+from data.data_utils import InputTypes, DataTypes, FeatureSpec
 
+OmegaConf.register_new_resolver("and", lambda x, y: x and y, use_cache=True)
+OmegaConf.register_new_resolver("feature.selector",
+        lambda x,feat_type,embed_type:
+            OmegaConf.create([elem for elem in x if elem.feature_type == feat_type and elem.feature_embed_type == embed_type])
+        )
+OmegaConf.register_new_resolver("add", lambda x,y: x + y)
+OmegaConf.register_new_resolver("if", lambda x,y,z: y if x else z)
+OmegaConf.register_new_resolver("feature.cardinalities", lambda x: OmegaConf.create([elem.cardinality for elem in x]))
+OmegaConf.register_new_resolver("len", len)
+OmegaConf.register_new_resolver("cmp", lambda x, y: x == y)
+OmegaConf.register_new_resolver("cont.lower", lambda x, y: y.lower() in x.lower())
 
-def append_derived_config_fields(config):
-    OmegaConf.set_struct(config, False)
-    config = config.config
-    features = translate_features(config.dataset.features)
-    with open_dict(config):
-        config.model.example_length = config.dataset.example_length
-        config.model.encoder_length = config.dataset.encoder_length
-        config.model.temporal_known_continuous_inp_size = len(
-            [x for x in features if x.feature_type == InputTypes.KNOWN and x.feature_embed_type == DataTypes.CONTINUOUS]
-        )
-        config.model.temporal_observed_continuous_inp_size = len(
-            [x for x in features if x.feature_type == InputTypes.OBSERVED and x.feature_embed_type == DataTypes.CONTINUOUS]
-        )
-        config.model.temporal_target_size = len([x for x in features if x.feature_type == InputTypes.TARGET])
-        config.model.static_continuous_inp_size = len(
-            [x for x in features if x.feature_type == InputTypes.STATIC and x.feature_embed_type == DataTypes.CONTINUOUS]
-        )
-        config.model.static_categorical_inp_lens = [
-            # XXX: this might be a bad idea. It is better make cardinality required.
-            x.get("cardinality", 100)
-            for x in features
-            if x.feature_type == InputTypes.STATIC and x.feature_embed_type == DataTypes.CATEGORICAL
-        ]
+# XXX I don't know whether it is the best idea to allow user to sum over nested structure without checks
+def sum_nested(*args):
+    if len(args) == 1 and isinstance(args[0], (int, float)):
+        return args[0]
+    return sum(arg if isinstance(arg, (int, float)) else sum_nested(*arg) for arg in args)
 
-        config.model.temporal_known_categorical_inp_lens = [
-            x.get("cardinality", 100)
-            for x in features
-            if x.feature_type == InputTypes.KNOWN and x.feature_embed_type == DataTypes.CATEGORICAL
-        ]
-        config.model.temporal_observed_categorical_inp_lens = [
-            x.get("cardinality", 100)
-            for x in features
-            if x.feature_type == InputTypes.OBSERVED and x.feature_embed_type == DataTypes.CATEGORICAL
-        ]
-
-        config.model.num_static_vars = config.model.static_continuous_inp_size + len(
-            config.model.static_categorical_inp_lens
-        )
-        config.model.num_future_vars = config.model.temporal_known_continuous_inp_size + len(
-            config.model.temporal_known_categorical_inp_lens
-        )
-        config.model.num_historic_vars = sum(
-            [
-                config.model.num_future_vars,
-                config.model.temporal_observed_continuous_inp_size,
-                config.model.temporal_target_size,
-                len(config.model.temporal_observed_categorical_inp_lens),
-            ]
-        )
+OmegaConf.register_new_resolver("sum", sum_nested)

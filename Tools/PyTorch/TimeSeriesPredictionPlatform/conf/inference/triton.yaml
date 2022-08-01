@@ -1,15 +1,20 @@
-# SPDX-License-Identifier: Apache-2.0
-# @package _global_
-config:
-  evaluator:
-    checkpoint: ???
-  inference:
-    _target_: inference.deployer.run_deployment
-    batch_size: 64
-    precision: fp32
-    optimize: False
-    skip_conversion: False
-    just_deploy: False
-    accelerator: none
-    gpu: 0
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#           http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
+_target_: inference.inference_triton.run_inference_triton
+config:
+    checkpoint: ???
+    batch_size: 64
+    evaluator:
+        _target_: evaluators.triton_evaluator.TritonEvaluator

@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,6 @@ import torch.nn.functional as F
 from apex.normalization.fused_layer_norm import FusedLayerNorm
 from torch import Tensor
 
-from data.data_utils import DataTypes, InputTypes, translate_features
 from models.tft_pyt.modeling import *
 
 
@@ -32,57 +31,9 @@ class LSTM(nn.Module):
     def __init__(self, config):
         super().__init__()
 
-        self.encoder_steps = config.dataset.encoder_length  # this determines from how distant past we want to use data from
+        self.encoder_steps = config.encoder_length  # this determines from how distant past we want to use data from
 
-        self.mask_nans = config.model.missing_data_strategy == "mask"
-        self.features = translate_features(config.dataset.features)
-        config = config.model
-
-        config.temporal_known_continuous_inp_size = len(
-            [x for x in self.features if x.feature_type == InputTypes.KNOWN and x.feature_embed_type == DataTypes.CONTINUOUS]
-        )
-        config.temporal_observed_continuous_inp_size = len(
-            [
-                x
-                for x in self.features
-                if x.feature_type == InputTypes.OBSERVED and x.feature_embed_type == DataTypes.CONTINUOUS
-            ]
-        )
-        config.temporal_target_size = len([x for x in self.features if x.feature_type == InputTypes.TARGET])
-        config.static_continuous_inp_size = len(
-            [
-                x
-                for x in self.features
-                if x.feature_type == InputTypes.STATIC and x.feature_embed_type == DataTypes.CONTINUOUS
-            ]
-        )
-        config.static_categorical_inp_lens = [
-            x.get("cardinality", 100)
-            for x in self.features
-            if x.feature_type == InputTypes.STATIC and x.feature_embed_type == DataTypes.CATEGORICAL
-        ]
-
-        config.temporal_known_categorical_inp_lens = [
-            x.get("cardinality", 100)
-            for x in self.features
-            if x.feature_type == InputTypes.KNOWN and x.feature_embed_type == DataTypes.CATEGORICAL
-        ]
-        config.temporal_observed_categorical_inp_lens = [
-            x.get("cardinality", 100)
-            for x in self.features
-            if x.feature_type == InputTypes.OBSERVED and x.feature_embed_type == DataTypes.CATEGORICAL
-        ]
-
-        config.num_static_vars = config.static_continuous_inp_size + len(config.static_categorical_inp_lens)
-        config.num_future_vars = config.temporal_known_continuous_inp_size + len(config.temporal_known_categorical_inp_lens)
-        config.num_historic_vars = sum(
-            [
-                config.num_future_vars,
-                config.temporal_observed_continuous_inp_size,
-                config.temporal_target_size,
-                len(config.temporal_observed_categorical_inp_lens),
-            ]
-        )
+        self.mask_nans = config.missing_data_strategy == "mask"
 
         self.embedding = TFTEmbedding(config)
         self.static_encoder = StaticCovariateEncoder(config)

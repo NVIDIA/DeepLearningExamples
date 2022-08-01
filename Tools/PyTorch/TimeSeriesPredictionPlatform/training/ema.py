@@ -1,4 +1,4 @@
-# Copyright 2021 NVIDIA CORPORATION
+# Copyright 2021-2022 NVIDIA Corporation
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,12 +25,11 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-""" 
+"""
 Exponential Moving Average (EMA) of model updates
 """
 
 import logging
-from collections import OrderedDict
 from copy import deepcopy
 
 import torch
@@ -48,12 +47,12 @@ class ModelEmaV2(nn.Module):
 
     """
 
-    def __init__(self, config, model, device=None):
+    def __init__(self, model, decay=0.999, device=None):
         super(ModelEmaV2, self).__init__()
         # make a copy of the model for accumulating moving average of weights
         self.module = deepcopy(model)
         self.module.eval()
-        self.decay = config.trainer.ema.get("decay", 0.999)
+        self.decay = decay
         self.device = device  # perform ema on different device from model if set
         if self.device is not None:
             self.module.to(device=device)

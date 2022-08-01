@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,6 @@
 
 import os
 from abc import ABC
-from functools import partial
 
 import dgl
 import dllogger
@@ -22,200 +21,154 @@ import hydra
 import numpy as np
 import torch
 import torch.nn as nn
-from apex import amp
+import importlib
+try:
+    from apex import amp
+except ImportError:
+    print("Nvidia apex not available. Can't use apex Automatic Mixed Precision (AMP) for training.\
+    Please check: https://github.com/NVIDIA/apex for installation")
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
-from torch.utils.data.dataloader import default_collate
 
 from callbacks.ctl_callbacks import CTLCallbackContainer
-from data.data_utils import TSBaseDataset, sample_data
-from distributed_utils import (
-    get_device,
-    init_distributed,
-    is_main_process,
-    log,
-    reduce_tensor,
-)
-from evaluators.evaluation_metrics import MetricEvaluator
+from data.datasets import TSBaseDataset, get_collate_fn
+from distributed_utils import reduce_tensor, get_mp_context
 from loggers.log_helper import setup_logger
 from training.ema import ModelEmaV2
-from training.utils import (
-    maybe_restore_checkpoint,
-    round_dict,
-    save_checkpoint,
-    to_device,
-)
+from criterion import TSPP_criterion_wrapper
+from training.checkpoint_utils import maybe_continue_run
+from training.utils import to_device
 
 
 class Trainer(ABC):
     def train(self):
         return
 
-    def evaluate(self):
-        return
-
 
 class CTLTrainer(Trainer):
     def __init__(
-        self,
-        model: nn.Module,
-        train_dataset: TSBaseDataset,
-        valid_dataset: TSBaseDataset,
-        test_dataset: TSBaseDataset,
-        optimizer,
-        evaluator: MetricEvaluator,
-        criterion,
-        config,
+            self,
+            model: nn.Module,
+            train_dataset: TSBaseDataset,
+            valid_dataset: TSBaseDataset,
+            optimizer,
+            criterion,
+            callbacks,
+            config,
     ):
         self.config = config
-
         self._stop_training = False
 
         self.metrics = {}
 
-        callbacks = [hydra.utils.call(callback_config) for callback_config in self.config.trainer.callback.values()]
+        callbacks = callbacks.values()
         self.callbacks = CTLCallbackContainer(self, callbacks)
 
-        self.world_size = self.config.device.get("world_size", 1)
-        train_dataset = sample_data(train_dataset, self.config.dataset.get("train_samples", -1))
-        valid_dataset = sample_data(valid_dataset, self.config.dataset.get("valid_samples", -1))
+        self.world_size = int(os.environ.get('WORLD_SIZE', 1))
+        self.local_rank = int(os.environ.get("LOCAL_RANK", 0))
+
+        self.device = next(model.parameters()).device
+
         self.valid_dataset_len = len(valid_dataset)
         self.train_dataset_len = len(train_dataset)
         self.train_sampler = None
         self.valid_sampler = None
+        self.example_length = config.example_length
+        self.encoder_length = config.encoder_length
+
         if self.world_size > 1:
-            local_rank = int(self.config.device.get("local_rank", os.environ.get("LOCAL_RANK", 0)))
-            self.device = get_device(local_rank, self.config.device.get("name", "cpu"))
-            self.is_distributed = init_distributed(
-                int(self.config.device.get("world_size", os.environ.get("WORLD_SIZE", 1)))
-            )
-            torch.cuda.synchronize()
+            # XXX: is the seed argument here needed for reproducibility?
+            # It should be set in launch_training.py with other seeds
             self.train_sampler = DistributedSampler(
-                train_dataset, config.device.world_size, seed=config.trainer.get("seed", 0), drop_last=True
+                train_dataset, self.world_size, seed=config.get("seed", 1), drop_last=True
             )
             self.valid_sampler = DistributedSampler(
-                valid_dataset, config.device.world_size, seed=config.trainer.get("seed", 0), drop_last=False
+                valid_dataset, self.world_size, seed=config.get("seed", 1), drop_last=False
             )
-        elif self.config.device.get("local_rank", None):
-            self.device = get_device(self.config.device.get("local_rank"), self.config.device.get("name", "cpu"))
-        else:
-            self.device = torch.device(self.config.device.get("name", "cpu"))
         self.logger = setup_logger(self.config)
         self.optimizer = optimizer
-        self.amp_enabled = self.config.trainer.get("AMP", False)
-        self.model = model.to(self.device)
+        self.amp_enabled = self.config.get("amp", False)
+        if not importlib.util.find_spec("apex"):
+            self.amp_enabled = False
+        self.model = model
+        self.global_step = 0
+        self.epoch = 0
 
-        if config.trainer.get("ema", None) is not None:
-            self.ema = ModelEmaV2(config, model, self.device)
+        if not self.config.get('force_rerun'):
+            maybe_continue_run(self)
+
+        if config.get("ema", False):
+            self.ema = ModelEmaV2(model, decay=self.config.get('ema_decay', 0.999), device=self.device)
         else:
             self.ema = None
         if self.amp_enabled:
             self.model, self.optimizer = amp.initialize(self.model, self.optimizer, opt_level="O2", loss_scale="dynamic")
         if self.world_size > 1:
-            self.model = DDP(self.model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
+            self.model = DDP(self.model, device_ids=[self.local_rank], output_device=self.local_rank, find_unused_parameters=True)
 
-        # TODO: line below has to go somewhere else. Or use default print. Logging module alters std streams which prevents us from
-        # capturing their outputs.
-        # log(config.pretty())
-
-        # XXX: Not sure about this. Maybe this should be isolated in collate_fn inside a DataLoader. Or maybe we should abstract it away in data_utils?
-        # For sure we have to rename this. This suggests that masked target is somehow different from
-        # regular target.
-        self.train_target = "target_masked" if config.model.get("train_target_mask", True) else "target"
-        self.eval_target = "target_masked" if config.model.get("eval_target_mask", True) else "target"
-        self.test_target = "target_masked" if config.model.get("test_target_mask", True) else "target"
-
-        if self.config.dataset.get("graph", False) and self.config.model.get("graph_eligible", False):
-
-            def _collate_graph(samples, target):
-                batch = dgl.batch(samples)
-                labels = batch.ndata["target"]
-                # XXX: we need discuss how to do this neatly
-                if target == "target_masked":
-                    labels = labels[:, self.config.dataset.encoder_length :, :]
-
-                return batch, labels
-
-            _collate = _collate_graph
-        else:
-
-            def _collate_dict(samples, target):
-                batch = default_collate(samples)
-                labels = batch["target"]
-                if target == "target_masked":
-                    labels = labels[:, self.config.dataset.encoder_length :, :]
-                return batch, labels
-
-            _collate = _collate_dict
+        mp_context = get_mp_context()
 
         self.train_dataloader = DataLoader(
             train_dataset,
-            batch_size=self.config.trainer.batch_size,
-            num_workers=self.config.trainer.num_workers,
+            batch_size=self.config.batch_size,
+            num_workers=self.config.num_workers,
             sampler=self.train_sampler,
             shuffle=True if self.train_sampler is None else False,
             pin_memory=True,
-            collate_fn=partial(_collate, target=self.train_target),
+            collate_fn=get_collate_fn(config.model_type, config.encoder_length),
+            multiprocessing_context=mp_context
         )
         self.valid_dataloader = DataLoader(
             valid_dataset,
-            batch_size=self.config.trainer.batch_size,
-            num_workers=self.config.trainer.num_workers,
+            batch_size=self.config.batch_size,
+            num_workers=self.config.num_workers,
             sampler=self.valid_sampler,
-            shuffle=True if self.valid_sampler is None else False,
             pin_memory=True,
-            collate_fn=partial(_collate, target=self.eval_target),
+            collate_fn=get_collate_fn(config.model_type, config.encoder_length),
+            multiprocessing_context=mp_context
         )
-        self.test_dataloader = DataLoader(
-            test_dataset,
-            batch_size=self.config.trainer.batch_size,
-            num_workers=1,
-            pin_memory=True,
-            collate_fn=partial(_collate, target=self.test_target),
-        )
+
+        # TODO: make it reccursively instantiated
         if self.config.get("scheduler", None):
+            self.config.scheduler._target_ = self.config.scheduler.target
+            del self.config.scheduler.target
             self.scheduler = hydra.utils.instantiate(self.config.scheduler, optimizer)
         else:
             self.scheduler = None
 
-        self.evaluator = evaluator
-        self.criterion = criterion
+        cl_start_horizon = config.get("cl_start_horizon")
+        cl_update = config.get("cl_update")
+
+        self.criterion = TSPP_criterion_wrapper(criterion, cl_start_horizon, cl_update)
 
         self.log_path = self.config.get("log_path", os.getcwd())
-        self.global_step = 0
-        self.epoch = 0
 
-        self.preds_train_output_selector = config.model.get("preds_train_output_selector", -1)
-        self.preds_eval_output_selector = config.model.get("preds_eval_output_selector", -1)
-        self.preds_test_output_selector = config.model.get("preds_test_output_selector", -1)
+    def prep_data(self, batch, labels, weights):
+        batch = to_device(batch, device=self.device)
+        labels = to_device(labels, device=self.device)
+        weights = to_device(weights, device=self.device)
 
-        model_ref = self.model.module if self.world_size > 1 else self.model
-        test_method_name = config.model.get("test_method", "__call__")
-        self.test_method = getattr(model_ref, test_method_name)
+        return batch, labels, weights
 
-        checkpoint_path = config.trainer.get("checkpoint_path", None)
-        maybe_restore_checkpoint(self, checkpoint_path)
-
-    def assess_valid(self):
+    def validate(self):
         self.model.eval()
+        self.criterion.eval()
         with torch.no_grad():
             running_losses = 0
 
-            for i, (batch, labels) in enumerate(self.valid_dataloader):
-                batch = to_device(batch, device=self.device)
-                labels = to_device(labels, device=self.device)
+            for i, (batch, labels, weights) in enumerate(self.valid_dataloader):
+                batch, labels, weights = self.prep_data(batch, labels, weights)
+
                 if self.ema:
                     preds = self.ema.module(batch)
                 else:
                     preds = self.model(batch)
-                if self.preds_eval_output_selector >= 0:
-                    preds = preds[..., self.preds_eval_output_selector : self.preds_eval_output_selector + 1]
 
-                losses = self.criterion(preds, labels)
+                losses = self.criterion(preds, labels, weights=weights)
                 losses = reduce_tensor(losses, self.world_size).detach()
                 running_losses += losses
 
-        running_losses = running_losses / (len(self.valid_dataloader.dataset) / self.config.trainer.batch_size)
+        running_losses = running_losses / (len(self.valid_dataloader.dataset) / self.config.batch_size)
         if len(running_losses.size()) < 1:
             running_losses = running_losses.unsqueeze(0)
         running_losses = [loss.item() for loss in running_losses]
@@ -225,29 +178,26 @@ class CTLTrainer(Trainer):
         self.logger.log(step=self.global_step, data=data, verbosity=dllogger.Verbosity.VERBOSE)
 
         self.model.train()
+        self.criterion.train()
         return sum(running_losses)
 
     def train(self):
 
         self.callbacks.on_train_begin()
-        self.global_step = 0
-        for epoch in range(self.epoch, self.config.trainer.num_epochs):
-            self.callbacks.on_epoch_begin(epoch)
+        while self.epoch < self.config.num_epochs:
+            self.callbacks.on_epoch_begin(self.epoch)
 
-            self.logger.log(step=self.global_step, data={"epoch": epoch}, verbosity=dllogger.Verbosity.VERBOSE)
+            self.logger.log(step=self.global_step, data={"epoch": self.epoch}, verbosity=dllogger.Verbosity.VERBOSE)
 
-            for i, (batch, labels) in enumerate(self.train_dataloader):
+            for i, (batch, labels, weights) in enumerate(self.train_dataloader):
                 self.callbacks.on_batch_begin(i)
 
                 self.optimizer.zero_grad()
-                batch = to_device(batch, device=self.device)
-                labels = to_device(labels, device=self.device)
+                batch, labels, weights = self.prep_data(batch, labels, weights)
 
                 preds = self.model(batch)
-                if self.preds_train_output_selector >= 0:
-                    preds = preds[..., self.preds_train_output_selector : self.preds_train_output_selector + 1]
 
-                losses = self.criterion(preds, labels)
+                losses = self.criterion(preds, labels, weights=weights)
                 loss = losses.sum()
 
                 if self.amp_enabled:
@@ -255,6 +205,9 @@ class CTLTrainer(Trainer):
                         scaled_loss.backward()
                 else:
                     loss.backward()
+
+                if self.config.get("gradient_norm", 0.0) > 0:
+                    nn.utils.clip_grad_norm(self.model.parameters(), self.config.gradient_norm)
                 self.optimizer.step()
 
                 losses = reduce_tensor(losses, self.world_size, average=True)
@@ -267,147 +220,80 @@ class CTLTrainer(Trainer):
 
                 self.logger.log(step=self.global_step, data=data, verbosity=dllogger.Verbosity.VERBOSE)
 
-                if self.config.optimizer.get("gradient_norm", 0.0) > 0:
-                    nn.utils.clip_grad_norm(self.model.parameters(), self.config.optimizer.gradient_norm)
-                # XXX: shouldn't we move logging to a callback?
-                if self.global_step % self.config.trainer.log_interval == 0:
-                    self.logger.flush()
-                self.global_step += 1
                 self.callbacks.on_batch_end(i, logs=data)
                 if self.ema:
                     self.ema.update(self.model)
+                self.global_step += 1
             if self.scheduler:
                 self.scheduler.step()
-            self.callbacks.on_valid_begin(epoch)
-            validation_loss = self.assess_valid()
+            self.callbacks.on_valid_begin(self.epoch)
+            validation_loss = self.validate()
+            if validation_loss != validation_loss: #NaN check
+                self._stop_training = True
             data = {"val_loss": validation_loss}
-            self.callbacks.on_valid_end(epoch, logs=data)
-
-            if is_main_process():
-                save_checkpoint(self, checkpoint_dir=self.log_path)
+            self.callbacks.on_valid_end(self.epoch, logs=data)
 
             if self.train_sampler:
-                self.train_sampler.set_epoch(epoch)
-                self.valid_sampler.set_epoch(epoch)
+                self.train_sampler.set_epoch(self.epoch)
+                self.valid_sampler.set_epoch(self.epoch)
 
-            self.callbacks.on_epoch_end(epoch, logs=data)
+            self.callbacks.on_epoch_end(self.epoch, logs=data)
 
             if self._stop_training:
                 break
+            self.epoch += 1
 
         self.callbacks.on_train_end(logs=self.metrics)
 
-    def evaluate(self):
-        self.callbacks.on_evaluate_begin()
-        maybe_restore_checkpoint(self, os.path.join(self.log_path, "best_checkpoint.pth.tar"))
-        self.model.eval()
-
-        with torch.no_grad():
-
-            preds_full = []
-            labels_full = []
-            weights_full = []
-            ids_full = []
-
-            for i, (batch, labels) in enumerate(self.test_dataloader):
-                batch = to_device(batch, device=self.device)
-                labels = to_device(labels, device=self.device)
-
-                if self.config.evaluator.get("use_weights", False):
-                    weights = batch["weight"]
-                else:
-                    weights = None
-
-                # XXX we should abstract this away
-                ids = batch.ndata["id"] if isinstance(batch, dgl.DGLGraph) else batch["id"]
-                ids = ids[
-                    :, 0, ...
-                ]  # Assumes that time dimension is at index 1. We don't check whether te examle is constructed correctly
-
-                labels_full.append(labels)
-                weights_full.append(weights)
-                preds = self.test_method(batch)
-                if self.preds_test_output_selector >= 0:
-                    preds = preds[..., self.preds_test_output_selector : self.preds_test_output_selector + 1]
-                ids_full.append(ids)
-                preds_full.append(preds)
-
-            preds_full = torch.cat(preds_full, dim=0).cpu().numpy()
-            labels_full = torch.cat(labels_full, dim=0).cpu().numpy()
-
-            if self.config.evaluator.get("use_weights", False):
-                weights_full = torch.cat(weights_full).cpu().numpy()
-            else:
-                weights_full = np.zeros((0, 0))
-            ids_full = torch.cat(ids_full).cpu().numpy()
-            eval_metrics = self.evaluator(labels_full, preds_full, weights_full, ids_full)
-
-            self.metrics.update(eval_metrics)
-
-            self.logger.log(
-                step=[], data={k: float(v) for k, v in self.metrics.items()}, verbosity=dllogger.Verbosity.VERBOSE
-            )
-            self.callbacks.on_evaluate_end(logs=round_dict(self.metrics, decimal=3))
-            return round_dict(self.metrics, decimal=3)
-
 
 class StatTrainer(Trainer):
-    def __init__(self, dataset, evaluator: MetricEvaluator, config, model):
+    def __init__(self,
+                 config,
+                 model,
+                 train_dataset,
+                 valid_dataset
+                 ):
         self.config = config
-        self.evaluator = evaluator
-        self.dataloader = dataset
+        self.train_dataset = train_dataset
         self.global_step = 0
         self.epoch = 0
         self.model = model
-        setup_logger(self.config)
+        self.logger = setup_logger(self.config)
 
-    def evaluate(self):
+    def train(self):
+        for train_batch in self.train_dataset:
+            self.model.fit(train_batch["endog"], train_batch["exog"])
 
-        preds_full = []
-        labels_full = []
-        weights_full = []
-        ids_full = []
+        self.model.save()
 
-        for train, test in self.dataloader:
-
-            labels = test["endog"]
-            if self.config.evaluator.get("use_weights", False):
-                weights = test["weight"]
-            else:
-                weights = None
-            ids = test["id"].iloc[0]
-            self.model.fit(train["endog"], train["exog"])
-            preds = self.model.predict(test["exog"])
-            labels_full.append(labels)
-            weights_full.append(weights)
-
-            ids_full.append(ids)
-            preds_full.append(preds)
-
-        preds_full = np.stack(preds_full)
-        labels_full = np.stack(labels_full)
-
-        if self.config.evaluator.get("use_weights", False):
-            weights_full = np.stack(weights_full)
-        else:
-            weights_full = np.zeros((0, 0))
-        ids_full = np.stack(ids_full)
-        metrics = self.evaluator(labels_full, preds_full, weights_full, ids_full)
-
-        return metrics
+    def validate(self):
+        raise RuntimeError("Validation is not supported for StatTrainer")
 
 
-def numpy_normalised_quantile_loss(y, y_pred, quantile):
-    prediction_underflow = y - y_pred
-    losses = []
+class XGBTrainer(Trainer):
+    def __init__(self, config, callbacks, model, train_dataset, valid_dataset):
+        '''
+        The idea behind this trainer is that we are given data at a time step t and want to create models to predict the value of a target
+        from t+1 to t+n.  At time step t we have access to every feature including the target, and if we are trying to predict at time step
+        t+i, we have access to the known and static values from there, using the function target_shift.  To aid in prediction and
+        give the model access to the history, lag and moving features can be specified in the configs.
+        Lag features can either be specifed by a min value and max value or a list of values.  If a min and max
+        value are specified then the range(min, max+1) is used as the list.  Moving average (or rolling features) are specified
+        by a window size.  These values are added with the feat_adder function.  A new model is trained for every step we want
+        to predict.  The trainer is not recursive so each model is independent and does not rely on the previous trained models.
+        '''
+        self.config = config
+        self.logger = setup_logger(config)
+        self.train_dataset = train_dataset
+        self.valid_dataset = valid_dataset
+        self.patience = callbacks.early_stopping.patience
+        self.log_interval = config.get('log_interval', 25)
+        self.model = model
 
-    weighted_errors = quantile * np.maximum(prediction_underflow, 0.0) + (1.0 - quantile) * np.maximum(
-        -prediction_underflow, 0.0
-    )
-    losses.append(weighted_errors.mean())
+    def train(self):
+        for i, ((train_step, labels), (valid_step, valid_labels)) in enumerate(zip(self.train_dataset, self.valid_dataset)):
+            self.model.fit(train_step, labels, valid_step, valid_labels,
+                           patience=self.patience,
+                           log_interval=self.log_interval)
+        self.model.save(os.getcwd())
 
-    normalizer = abs(y).mean()
-
-    losses = 2 * losses / normalizer
-
-    return losses

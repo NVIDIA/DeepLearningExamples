@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -83,10 +83,12 @@ def main():
 
     metric_names_with_space = [name for name in metrics if any([c in string.whitespace for c in name])]
     if metric_names_with_space:
-        raise ValueError(f"Metric names shall have no spaces; Incorrect names: {', '.join(metric_names_with_space)}")
+        raise ValueError(f"Metric names shall have no spaces; Incorrect names: {', '.join(metric_names_with_space)}") 
     LOGGER.info("Results:")
     for key, value in metrics.items():
         LOGGER.info(f"    {key}: {value}")
+
+
     csv_path = Path(args.csv)
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     with csv_path.open("w") as csv_file:

@@ -1,9 +1,9 @@
-# Time-Series Prediction Platform 1.0 for PyTorch
+# Time-Series Prediction Platform 1.1 for PyTorch
 
 Time-series prediction is a common problem in multiple domains for various applications, including retail, industry, smart cities, and financial services. Research in the time-series field is growing exponentially, with hundreds of deep learning time-series forecasting paper submissions to ICML, ECML, ITISE, and multiple journals every year. However, there is currently no common framework to compare the accuracy and performance of all the models from the industry or academia.
 
 ## Solution Overview
-Time-Series Prediction Platform (TSPP) enables users to mix and match datasets and models. In this case, the user has complete control over the following settings, and can compare side-by-side results obtained from various solutions. These include:
+Time-Series Prediction Platform (TSPP) enables users to mix and match datasets and models. In this case, the user has complete control over the following settings and can compare side-by-side results obtained from various solutions. These include:
 - Evaluation metrics 
 - Evaluation datasets 
 - Prediction horizons 
@@ -17,7 +17,7 @@ The platform has the following architecture.
 
 ![Time-series Prediction Platform architecture
 ](TSPP_Architecture.png)
-In the previous figure, the command line feeds input to the TSPP launcher, which uses said input to configure the components required to train and test the model.
+In the previous figure, the command line feeds the input to the TSPP launcher, which uses said input to configure the components required to train and test the model.
 
 
 The platform is designed to support multiple data types for input features, including the observed values of the forecasted time-series, known data supporting the forecasts (for example, day of the week), and static data (for example, user ID). This is summarized in the following figure.
@@ -33,8 +33,10 @@ The platform is designed to support multiple data types for input features, incl
 The TSPP utilizes the default configurations provided by each model for each accompanying dataset. More information on individual model configurations can be found within the respective model repositories. By default, Temporal Fusion Transformer (TFT) is included within the TSPP.
 
 ### Models
--  [Temporal Fusion Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Forecasting/TFT)
--  AutoARIMA
+    - Temporal Fusion Transformers
+    - XGBoost
+    - AutoARIMA
+    - LSTM
 
 ### Feature support matrix
 This tool supports the following features: 
@@ -47,9 +49,9 @@ This tool supports the following features:
 
 #### Features
 
-**Automatic Mixed Precision (AMP)**[Automatic mixed precision](https://pytorch.org/docs/stable/amp.html) is a mode of computation for PyTorch models that allows operations to use float16 operations instead of float32 operations, potentially accelerating selected operations and total model runtime. More information can be found under the Mixed precision training section.
+[Automatic mixed precision](https://pytorch.org/docs/stable/amp.html) is a mode of computation for PyTorch models that allows operations to use float16 operations instead of float32 operations, potentially accelerating selected operations and total model runtime. More information can be found under the Mixed precision training section.
 
-**Multi-GPU training with PyTorch Distributed Data Parallel (DDP)**[DDP](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html) is a mode of computation for PyTorch models that allows operations to be executed across multiple GPUs in parallel to accelerate computation.
+Multi-GPU training with [PyTorch Distributed Data Parallel](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html) is a mode of computation for PyTorch models that allows operations to be executed across multiple GPUs in parallel to accelerate computation.
 
 **TorchScript, ONNX, and TRT conversion and NVIDIA Triton Deployment** refer to the conversion of a model to the aforementioned formats and the ability to deploy the resulting converted models to an NVIDIA Triton inference server.  More detail about this process and native inference can be found in the Advanced tab under the Conversion, Deployment, and Inference subsection.
 
@@ -71,19 +73,18 @@ For information about:
 
 #### Enabling mixed precision
 
-Mixed precision can be enabled by specifying `amp=True` in the launch call. Note that for some cases, when the batch size is small, the overhead of scheduling kernels for mixed precision can be larger than the performance gain from using lower precision, effectively succeeding with lower throughput.
+Mixed precision can be enabled by specifying `trainer.config.amp=True` in the launch call. For some cases, when the batch size is small, the overhead of scheduling kernels for mixed precision can be larger than the performance gain from using lower precision, effectively succeeding with lower throughput.
 ## Setup
-The following section lists the requirements that you need to meet in order to run the Time-Series Prediction Platform.
+The following section lists the requirements you need to meet to run the Time-Series Prediction Platform.
 
 
 ### Requirements
 
 This repository contains a Dockerfile that extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 - [NVIDIA Ampere Architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/), [NVIDIA Volta](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/) or [NVIDIA Turing](https://www.nvidia.com/en-us/geforce/turing/) based GPU
-- Ubuntu 18.04
+- Ubuntu 20.04
 - [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-- [docker-compose](https://docs.docker.com/compose/install/). For an up-to-date version, installing from the web is recommended
-- Custom Docker containers built for this model. Refer to the steps in the [Quick Start Guide](#quick-start-guide).
+- Custom Docker containers built for this tool. Refer to the steps in the [Quick Start Guide](#quick-start-guide).
 
 For more information about how to get started with NGC containers, refer to the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
 -   [Getting Started Using NVIDIA GPU Cloud](https://docs.nvidia.com/ngc/ngc-getting-started-guide/index.html)
@@ -95,68 +96,60 @@ For those unable to set up the required environment or create your own container
 ## Quick start guide
 
 ### Getting Started
-1. Clone the NVIDIA Deep Learning Examples repository:
-```
-git clone https://github.com/NVIDIA/DeepLearningExamples.git
-```
-2. Create a dataset directory.  The directory can be arbitrary, and it is recommended not to include it in the TimeSeriesPredictionPlatform directory.  This arbitrary directory will be mounted to the TSPP container later.  In the following steps this directory will be referred to as /your/datasets/.
+1. Create a dataset directory.  The directory can be arbitrary, and it is recommended not to include it in the TimeSeriesPredictionPlatform directory.  This arbitrary directory will be mounted to the TSPP container later.  In the following steps, this directory will be referred to as /your/datasets/.
 
-3. Enter the Deep Learning Examples TSPP repository:
+2. Enter the Deep Learning Examples TSPP repository:
 
 ```
-cd DeeplearningExamples/Tools/PyTorch/TimeSeriesPredictionPlatform
+cd DeeplearningExamples/Tools/TimeSeriesPredictionPlatform
 ```
-4. Run repository setup
+3. Copy the relevant temporal fusion transformer code to the TSPP:
 ```
-source scripts/setup.sh
+mkdir -p models/tft_pyt/ && cp ../../PyTorch/Forecasting/TFT/modeling.py models/tft_pyt/
 ```
-
-5. Build the docker image:
+4. Build the docker image:
 ```
 docker build -t tspp .
 ```
 
-6. Next we will start our container and mount the dataset directory, which means that /workspace/datasets/ points to /your/datasets/.  Any changes made to this folder in the docker container are reflected in the original directory and vice versa.  If we want to mount additional folders we can add ‘-v /path/on/local/:/path/in/container/’ to the run command.  This will be useful if we want to save the outputs from training or inference once we close the container. To start the docker container:
+5. Next, we will start our container and mount the dataset directory, which means that /workspace/datasets/ points to /your/datasets/.  Any changes made to this folder in the docker container are reflected in the original directory and vice versa.  If we want to mount additional folders, we can add ‘-v /path/on/local/:/path/in/container/’ to the run command.  This will be useful if we want to save the outputs from training or inference once we close the container. To start the docker container:
 ```
 docker run -it --gpus all --ipc=host --network=host -v /your/datasets/:/workspace/datasets/ tspp bash
 ```
 
-7. After running the previous command you will be placed inside the docker container in the /workspace directory.  Inside the container, download either the electricity or traffic dataset:
+6. After running the previous command, you will be placed inside the docker container in the /workspace directory.  Inside the container, download either the `electricity` or `traffic` dataset:
 ```
 python data/script_download_data.py --dataset {dataset_name} --output_dir /workspace/datasets/
 ```
-The raw electricity dataset is the 15 minute electricity consumption of 370 customers from the UCI Electricity Load Diagrams.  We aggregate to an hourly forecast and use the previous week to predict the following day.
-The raw traffic dataset is the 10 minute occupancy rate of San Francisco freeways from 440 sensors downloaded from the UCI PEMS-SF Data Set.  We again aggregate to an hourly forecast and use the previous week to predict the following day.  
+The raw electricity dataset is the 15-minute  electricity consumption of 370 customers from the UCI Electricity Load Diagrams.  We aggregate to an hourly forecast and use the previous week to predict the following day.
+The raw traffic dataset is the 10-minute  occupancy rate of San Francisco freeways from 440 sensors downloaded from the UCI PEMS-SF Data Set.  We again aggregate to an hourly forecast and use the previous week to predict the following day.  
 
-8. Preprocess the dataset:
+7. Preprocess the dataset:
 ```
-python launch_preproc.py dataset={dataset}
+python launch_preproc.py dataset={dataset_name}
 ```
-
-9. Launch the training, validation, and testing process using the temporal fusion transformer model:
+8. Launch the training, validation, and testing process using the temporal fusion transformer model:
 ```
-python launch_tspp.py model=tft dataset={dataset} criterion=quantile
+python launch_training.py model=tft dataset={dataset_name} trainer/criterion=quantile
 ```
 Outputs are stored in /workspace/outputs/{date}/{time}
 
 
 ### Adding a new dataset
 
-The TSPP has been designed to work with most CSV input. In order to add an arbitrary dataset to the TSPP:
+The TSPP has been designed to work with most CSV sources. To add an arbitrary dataset to the TSPP:
 
 1. Enter the Deep Learning Examples TSPP repository:
 
 ```
-cd DeeplearningExamples/Tools/PyTorch/TimeSeriesPredictionPlatform
+cd DeeplearningExamples/Tools/TimeSeriesPredictionPlatform
 ```
 
-2. Include the target dataset in the directory in which you want to keep your datasets. The directory can be arbitrary, and it is recommended not to include it in the TimeSeriesPredictionPlatform directory. This arbitrary directory will be mounted to the TSPP container later 
+2. Do a preliminary data transposition. TSPP `launch_preproc.py` script is designed to work with CSV input. Each row should contain only a single datapoint. CSV should contain at least three columns: one for time feature, one for labels, and one for dataset ID (we assume a single file will contain data for multiple correlated time series). For reference, see `data/script_download_data.py` script.
 
-```
-cp -r /PATH/TO/YOUR/DATASET /your/datasets/
-```
+3. Include the target dataset in the directory where you want to keep your datasets. The directory can be arbitrary, and it is recommended not to include it in the TimeSeriesPredictionPlatform directory. This arbitrary directory will be mounted to the TSPP container later 
 
-3. Create a configuration file for your dataset, found in TimeSeriesPredictionPlatform/conf/dataset, that includes the following values:
+4. Create a configuration file for your dataset, found in TimeSeriesPredictionPlatform/conf/dataset, that includes the following values:
 
  	* source_path: The path to the CSV that contains your dataset
 
@@ -164,7 +157,7 @@ cp -r /PATH/TO/YOUR/DATASET /your/datasets/
 
  	* time_ids: The name of the column within your source CSV that is the feature to split your training, validation, and test datasets on.
 
- 	* train_range, valid_range, test_range: The ranges that mark the edges of the train, validation, and test subsets. Remember  that there can be overlap between subsets since predicting the first ‘unseen element’ requires the input of the seen elements before it.
+ 	* train_range, valid_range, test_range: The ranges that mark the edges of the train, validation, and test subsets. Remember that subsets can overlap  since predicting the first ‘unseen element’ requires the input of the seen elements before it. As an alternative, a valid_boundary can be specified, which marks the end of training.  Then from the valid boundary, the next horizon length number of entries are for validation, and finally, following the end of the validation set, the next horizon length number of entries are for testing.
 
  	* dataset_stride: The stride the dataloader uses to walk the sliding window through the dataset. Default: 1
     
@@ -172,9 +165,9 @@ cp -r /PATH/TO/YOUR/DATASET /your/datasets/
    
  	* encoder_length: The length of data known up until the ‘present’
 
- 	* example_length: The length of all data, including data known into the future. The target you are predicting lies on the difference between the example_length and encoder_length.
+ 	* example_length: The length of all data, including data known into the future. The prediction horizon is the difference between example_length and encoder_length.
 
- 	* features: A list of the features that the model takes as input. Each feature should be represented by an object containing descriptive attributes. All features should have at least a feature_type (ID, TIME, TARGET, WEIGHT, SAMPLE_WEIGHT, KNOWN, OBSERVED, or STATIC) and feature_embed_type (CONTINUOUS or CATEGORICAL). Continuous features may have a scaler attribute that represents the type of scaler used in preprocessing. Categorical columns should have a cardinality attribute that represents the number of unique values that that feature takes. Examples can be found in the files in /TimeSeriesPredictionPlatform/conf/dataset/. Required features are one TIME feature, at least one ID feature, one TARGET feature, and at least one KNOWN, OBSERVED, or STATIC feature.
+ 	* features: A list of the features that the model takes as input. Each feature should be represented by an object containing descriptive attributes. All features should have at least a feature_type (ID, TIME, TARGET, WEIGHT, SAMPLE_WEIGHT, KNOWN, OBSERVED, or STATIC) and feature_embed_type (CONTINUOUS or CATEGORICAL). Continuous features may have a scaler attribute that represents the type of scaler used in preprocessing. Categorical columns should have a cardinality attribute that represents the number of unique values the feature takes plus one (this is due to mapping NaNs to 0 in all cases). Examples can be found in the files in /TimeSeriesPredictionPlatform/conf/dataset/. Required features are one TIME feature, at least one ID feature, one TARGET feature, and at least one KNOWN, OBSERVED, or STATIC feature.
 
 
  	* train_samples: The number of samples that should be taken at train time to use as train input to your model for a single epoch
@@ -186,7 +179,7 @@ cp -r /PATH/TO/YOUR/DATASET /your/datasets/
  	* time_series_count: The number of unique time-series contained in the dataset.
 
 
-4. After a specification has been written, it is ready to be preprocessed with:
+5. After a specification has been written, it is ready to be preprocessed with:
 
 ```
 docker build -t tspp .
@@ -194,31 +187,25 @@ docker run -it --gpus all -v /your/datasets/:/workspace/datasets/ --ipc=host tsp
 python launch_preproc.py dataset={dataset_name}
 ```
 
-For some models, additional parameters are required per each dataset. As mentioned in the Adding a new model section, there are examples of these model-dataset combination files in `TimeSeriesPredictionPlatform/conf/model_dataset/`. An example here would be model A requiring a specific hidden size when used on dataset B. In this case, TimeSeriesPredictionPlatform/conf/model_dataset/A_B.yaml should contain the desired hidden size under config.model.hidden_size
-5. Test your dataset by training and evaluating a temporal fusion transformer. Training, validation, and testing are all included by default using the launch_tspp.py command shown below:
+For some models, additional parameters are required per dataset. As mentioned in the Adding a new model section, there are examples of these model-dataset combination files in `TimeSeriesPredictionPlatform/conf/model_dataset/`. An example would be model A requiring a specific hidden size when used on dataset B. In this case, TimeSeriesPredictionPlatform/conf/model_dataset/A_B.yaml should contain the desired hidden size under model.config.hidden_size
+
+6. Test your dataset by training and evaluating a Temporal Fusion Transformer. Training, validation, and testing are all included by default using the launch_training.py command shown below:
 
 
 ```
 docker run -it --gpus all -v /your/datasets/:/workspace/datasets/ --ipc=host tspp bash
-python launch_tspp.py dataset={YOUR_DATASET} model=tft criterion=quantile
+python launch_training.py dataset={YOUR_DATASET} model=tft trainer/criterion=quantile
 ```
-
-If you encounter errors stating that srcIndex < value, verify that your categorical cardinalities are the correct size, as this error indicates that the value of a categorical you are trying to embed is too large for its respective embedding table.
-
-
-
-
-
-
-
-
-
 
 
 
 ### Adding a new model
 
-Models added to the prediction platform are subject to a few key constraints. Namely, the models should be constructed using vanilla PyTorch. Models should be handling the forecasting task (anomaly detection and classification are planned); models should expect that the data is fed in a sliding window and that tensors will be aggregated by Temporal/Data Type. An example of how this works can be found in data/data_utils.py. Integrated models should be expecting the data to be in the format described by the feature spec for a specific dataset (output being a dictionary of tensors aggregated based on temporal and feature type).
+Models added to the prediction platform are subject to a few key constraints. Namely, the models should be constructed using vanilla PyTorch. Models should handle  the forecasting task (anomaly detection and classification are planned); models should expect that the data is fed in a sliding window and that tensors will be aggregated by Temporal/Data Type. An example of this can be found in data/dataset.py. \
+The default format of the data batch is a dictionary with tensors representing different kinds of covariates. A complete list of the tensors can be found in a batch:
+```
+FEAT_NAMES = ["s_cat", "s_cont", "k_cat", "k_cont", "o_cat", "o_cont", "target", "weight", "sample_weight", "id"]
+```
 
 To integrate a model into the TSPP: 
 
@@ -228,34 +215,33 @@ To integrate a model into the TSPP:
 cd DeeplearningExamples
 ```
 
-2. Copy the model files into the Deep Learning Examples PyTorch/Forecasting/ directory:
+2. Copy the model files into the Deep Learning Examples DeeplearningExamples/Tools/PyTorch/TimeSeriesPredictionPlatform/models/ directory:
 
 ```
-cp -r /PATH/TO/YOUR/MODEL PyTorch/Forecasting/
+cp -r /PATH/TO/YOUR/MODEL Tools/PyTorch/TimeSeriesPredictionPlatform/models
 ```
 
 3. Write a configuration file for the model in `DeeplearningExamples/Tools/TimeSeriesPredictionPlatform/conf/model`. 
 
-This configuration file should reflect the default configuration for your model. Within this file, the _target_ of the model component should be set to point to your model class. If your model needs additional configuration values based on the dataset, you should create a configuration file in `DeeplearningExamples/Tools/TimeSeriesPredictionPlatform/conf/model_dataset/{modelname_dataset_name.yaml}` named according to the model and dataset names. Examples can be found in the `DeeplearningExamples/Tools/TimeSeriesPredictionPlatform/conf/model/tft.yaml` and `DeeplearningExamples/Tools/TimeSeriesPredictionPlatform/conf/model_dataset/tft_traffic.yaml` files.
+This configuration file should reflect the default configuration for your model. Within this file, the _target_ of the model component should be set to point to your model class. If your model needs additional configuration values based on the dataset, you should create a configuration file in `DeeplearningExamples/Tools/TimeSeriesPredictionPlatform/conf/model_dataset/{modelname_datasetname.yaml}` named according to the model and dataset names. Examples can be found in the `DeeplearningExamples/Tools/TimeSeriesPredictionPlatform/conf/model/tft.yaml` and `DeeplearningExamples/Tools/TimeSeriesPredictionPlatform/conf/model_dataset/tft_traffic.yaml` files.
 
 4. Build and launch container:
 ```
-cd DeeplearningExamples/Tools/PyTorch
-source scripts/setup.sh
+cd DeeplearningExamples/Tools/
 docker build -t tspp TimeSeriesPredictionPlatform
-docker run -it --rm --ipc=host --network=host --gpus all -v /PATH/TO/YOUR/DATASET/FOLDER/:/workspace/datasets/ tspp bash
+docker run -it --rm --ipc=host --network=host --gpus all -v /your/datasets/:/workspace/datasets/ tspp bash
 ```
 
 5. Verify that the model can be run within the TSPP:
 ```
-python launch_tspp.py model={model_name}
+python launch_training.py model={model_name}
 ```
-Some additional values may be needed in this call. For example, if your model requires the Adam optimizer, you will need to append optimizer=Adam to your call.
+Some additional values may be needed in this call. For example, if your model requires the Gaussian NLL criterion, you will need to append trainer/criterion=GLL to your call.
 
 
 
 ## Advanced
-The following sections provide greater details of changing the dataset, altering the data preprocessing, and comparing the training results.
+The following sections provide more details about  changing the dataset, altering the data preprocessing, and comparing the training results.
 
 
 ### Running multi-GPU experiments
@@ -263,103 +249,101 @@ The following sections provide greater details of changing the dataset, altering
 
 Launching on multi-GPU requires no changes to model code and can be executed as follows within a TSPP container:
 ```
-python -m torch.distributed.run --nproc_per_node={num_GPUS} launch_tspp.py {override parameters} +config.device.world_size={num_GPUS}
+python launch_training.py -m hydra/launcher=torchrun hydra.launcher.nproc_per_node={num_gpus} {override parameters} 
 ```
 
-Statistical models (like AutoARIMA)are not run on GPU, so they are not suitable for multi-GPU acceleration.
+Statistical models (like AutoARIMA) are not run on GPU, so they are unsuitable  for multi-GPU acceleration.  In addition, XGBoost has a separate way of doing multi-GPU acceleration.
+
+### Parallel training
+
+While doing seed sweeps or hp searches on a machine with more than one GPU, we can parallelize the workload by using the `joblib` hydra plugin. To use the plugin, one has to specify `hydra/launcher=joblib` together with the number of parallel jobs `hydra.launcher.n_jobs=8`. For example:
+```bash
+python launch_training.py \
+	-m \
+	seed='range(1,17)' \
+	model=tft \
+	dataset=electricity \
+	trainer/criterion=quantile \
+	trainer.config.num_epochs=3 \
+    hydra/launcher=joblib \
+    hydra.launcher.n_jobs=8 \
+    hydra.sweeper.max_batch_size=8
+```
+
+*Warning*: Sweeper sends jobs to a launcher in batches. In order to avoid race conditions, specify sweeper batch size to exactly match the number of parallel jobs. For the default sweeper it would be: `hydra.sweeper.max_batch_size=8`, and for optuna sweeper: `hydra.sweeper.n_jobs=8`.
 
 ### Running experiments with Exponential Moving Averaging
 
 Exponential moving averaging is a technique in which, while training, the model weights are integrated into a weighted moving average, and the weighted moving average is used in lieu of the directly trained model weights at test time. Our experiments have found this technique improves the convergence properties of most models and datasets we work with. The full paper of EMA can be found here (https://arxiv.org/pdf/1803.05407.pdf)
 
-To activate EMA in the TSPP, simply specify ‘ema=True’ in the command line call at runtime. The decay parameter in the moving average can be modified using the config.trainer.ema.decay parameter
+To activate EMA in the TSPP, specify `trainer.config.ema=True` in the command line call at runtime. The decay parameter in the moving average can be modified using the `+trainer.config.ema_decay={decay}`.
+
+### Running experiments with Curriculum Learning
+
+To use curriculum learning in your training, specify `trainer.config.cl_start_horizon` and `trainer.config.cl_update` config fields. [More on CL](https://dl.acm.org/doi/pdf/10.1145/1553374.1553380)
+
 ### Hyperparameter Search
 
-Hyperparameter search can be used to find semi-optimal hyperparameter configurations for a given model or dataset. In the TSPP, hyperparameter search is driven by Optuna.
+Hyperparameter searches can be used to find close-to-optimal hyperparameter configurations for a given model or dataset. In the TSPP, hyperparameter searches are driven by Optuna. To launch a hyperparameter search, use:
+```bash
+python launch_training.py -m hydra/sweeper=optuna hydra.sweeper.n_trials={N} {parameter_ranges}
+```
+For more info how to properly set up {parameter_ranges} visit [hydra docs](https://hydra.cc/docs/plugins/optuna_sweeper/#search-space-configuration)
 
-To launch hyperparameter search, one must first have a base config. One can be generated by running launch_tspp.py with desired values and +config.save_config=True and +config.save_path=/path/to/conf.yaml
+### XGBoost Training
 
-Once a config file has been generated in /path/to/conf.yaml, open it and replace any field you want to include as a searchable hyperparameter with an optuna variable config. This optuna variable config describes the value you are searching on as well as the distribution that value is pulled from.
-The possible Optuna sampling objects and the parameters that you can use are:
-
-- categorical: samples from values uniformly.
-	- values: The values categorical sampling can take
-- int_uniform: samples uniformly from the range specified by (min_value, max_value, step_value)
-	- min_value: the minimum value that int_unfiorm sampling can take
-	- max_value: the maximum value that int_unfiorm sampling can take
-- step_value (optional): the size of the steps in between possible samples
-- float_uniform: samples uniformly from the range specified by (min_value, max_value)
-	- min_value: the minimum value that float_unfiorm sampling can take
-	- max_value: the maximum value that float_unfiorm sampling can take
-- log_uniform: samples using the log distribution from the range specified by (min_value, max_value)
-	- min_value: the minimum value that log_unfiorm sampling can take
-	- max_value: the maximum value that log_unfiorm sampling can take
-- discrete_uniform: samples uniformly from the range specified by (min_value, max_value, step_value)
-	- min_value: the minimum value that discrete_uniform sampling can take
-	- max_value: the maximum value that discrete_uniform sampling can take
-- step_value (optional): the size of the steps in between possible samples
-
-For example, to sample batch size between 512 and 1024, replace the batch size object with:
-
-batch_size:
-  sampling: categorical
-  values:
-    - 512
-    - 1024
-
-To sample learning rate with uniform probability between .1 and 1, we can replace the lr with:
-
-lr: 
-	sampling: float_uniform
-	min_value: .1
-	max_value: 1.0
-
-
-
-
-
-
-
-
-
-
-
-
-
-Once all desired values have been replaced with Optuna objects, append an Optuna field within the config to the bottom, with sub field n_trials to denote how many Optuna trials should be run and optionally a description of the Optuna sampler to use.
-Once this config file is saved, you can run python launch_optuna.py --config_path /path/to/conf.yaml.  This script attempts to make use of all visible GPUs.  Currently, we do not support using a varied number of GPUs for separate searches, meaning the world_size config field should be an integer instead of a list.  In addition, we do not support the use of multi-process dataloading in parameter searches meaning the num_workers is set to 0.  The number of concurrent trials being run is equal to the floor of the number of GPUs divided by the fixed world size.  Outputs will still be saved to /workspace/outputs/{DATE}/{TIME}/.  Each concurrent trial will perform independent n_trial different runs, yet all outputs are saved by the same optuna study.  This means that if 4 subprocesses are launched with 10 trials specified in the config, then 40 trials are run. Optuna will always run n_trials trials, and will not necessarily run the entire set of possible runs if the set size is bounded. For example, if you ran a set of 4 trials, where the only Optuna object being optimized is a categorical with 3 values, not all 3 values would necessarily occur within the trials.
+XGBoost and RAPIDS packages are now automatically present in the base NGC PyTorch containers.  The TSPP is able to leverage this and allow users to perform training, inference, and deployment on XGBoost and Dask XGBoost using the same commands as Neural Network models.  To train:
+```bash
+python launch_training.py model={xgboost, dask_xgboost} dataset={dataset}
+```
+Note: All stages of XGBoost are run on GPU. CPU training is currently not supported.
+This launches training using CSV  files from the output of preprocessing.  Validation data is automatically used for early stopping if applicable.  
+The TSPP trains a separate XGBoost model for each step in the horizon.  If some arbitrary row in the dataframe is at time `t`, then for the ith model, we train it to predict timestep `t+i`.  As a part of this, we give the model access to all the features at time step t and bring up the static and known features at timestep `t+i`. Each ID is handled separately, so for any given training/prediction sample, there is only data from 1 ID. 
+XGBoost itself cannot create new features or process features in the same way as neural networks.  To this end, we have created a framework where one can specify lag_features and moving_average_features.  Lag_features allow the XGBoost model to have access to the values of the given feature in the past, while moving_average_features allow the model to have access to the moving average of the given feature to some number of previous time steps.  For an example of  how to specify these features, take a look at conf/model_dataset/xgboost_electricity.yaml.  To specify a lag_feature, one needs to select a feature, a min value, and a max value.  The TSPP then automatically adds the values of that feature at timestep `t-min_value` to `t-max_value`.  Instead of specifying min and max, one can also specify value, which is a list of values for finer control.  Note the values must be greater than 0 and must be natural numbers.
+To specify a moveing_average_feature, one needs to select a feature and a window_size.  This window_size indicates that a new feature will be added that is the average of the values of the feature from `t-window_size` to `t`.  
+For model parameters, the standard XGBoost parameters can be passed using `model.config.{parameter}`, some may require `+model.config.{parameter}` if the parameter is not set inside the conf/ directory.  In addition, one can specify the number of boosting rounds using `model.config.n_rounds`.  
+There are a few additional parameters that are used exclusively for DaskXGBoost for initialization of the LocalCUDACluster: `model.config.cluster.world_size`, which sets the number of GPUs to use, `model.config.cluster.device_pool_frac`, which sets the amount of memory to allocate on the GPUs, `model.config.cluster.protocol` which sets the protocol to use on the cluster, and `model.config.cluster.npartitions` which sets the number of partitions to use for converting to Dask-cuDF.
+Finally, `trainer.callbacks.early_stopping.patience` can be used to set the early stopping patience of the XGBoost rounds, and `trainer.config.log_interval` can be used to set the frequency of the logging for XGBoost. 
 
 ### Conversion, Deployment, and Inference
 
-Inference takes place after a model has been trained and one wants to run data through.  Since this only entails using a forward function, the model can be optimized and converted to many different formats that  can perform the forward pass more efficiently.  In addition, one can set up a [NVIDIA Triton inference server](https://github.com/triton-inference-server/server), which allows for a continuous stream of data to be presented to and passed through the model. The server provides an inference service via an HTTP or gRPC endpoint at ports 8000 and 8001, respectively, on the “bridge” docker network.  
+Inference takes place after a model has been trained and one wants to run data through.  Since this only entails using a forward function, the model can be optimized and converted to many different formats that can perform the forward pass more efficiently.  In addition, one can set up a [NVIDIA Triton inference server](https://github.com/triton-inference-server/server), which allows for a continuous stream of data to be presented to and passed through the model. The server provides an inference service via an HTTP or gRPC endpoint at ports 8000 and 8001, respectively, on the “bridge” docker network.  
  
 
 The TSPP supports a few versions of inference, including native inference and NVIDIA Triton deployment. Both use the test_forward function specified in the model config (defaults to forward()) as the forward function.
 
-To launch native inference, one must have a checkpoint directory from a TSPP training call that includes a .hydra directory and a best_checkpoint.pth.tar.  Then run 
+To launch native inference, one must have a checkpoint directory from a TSPP training call that includes a .hydra directory and a best_checkpoint.zip from training a Neural Net, a populated checkpoints directory from training an XGBoost, or an arima.pkl file from training an ARIMA model.  Then run 
 ```
-python launch_inference.py device={device} config.evaluator.checkpoint=/path/to/checkpoint/directory
+python launch_inference.py checkpoint=/path/to/checkpoint/directory
 ```
-Note: Do not confuse the checkpoint directory with the TimeSeriesPredictionPlatform/outputs/ directory.  The directory to use in the inference call is two levels lower (for example, /path/to/TimeSeriesPredictionPlatform/outputs/2021-08-23/03-03-11/).  
+Note: Do not confuse the checkpoint directory with the TimeSeriesPredictionPlatform/outputs/ directory.  The directory to use in the inference call is typically two levels lower (for example, /path/to/TimeSeriesPredictionPlatform/outputs/2021-08-23/03-03-11/).  
 
-The device argument refers to the device that one would like the model to be built on and run on.  Note that multi-GPU inference launches are not supported.  By default, the evaluator uses the configs specified in the .hydra/config.yaml file from the checkpoint directory.  One can override these by including them in the launch.  For example, if one wanted to adjust the metrics to use MAE and RMSE only and to set the device to the CPU.
+The device argument refers to the device that one would like the model to be built on and run on.  Note that multi-GPU inference launches are not supported.  By default, the evaluator uses the configs specified in the .hydra/config.yaml file from the checkpoint directory.  One can override these by including them in the launch.  For example, if one wanted to adjust the metrics to use MAE and RMSE only.
 ```
-python launch_inference device=cpu config.evaluator.checkpoint=/path/to/checkpoint/directory “+config.evaluator.metrics=[‘MAE’, ‘RMSE’]”
+python launch_inference.py checkpoint=/path/to/checkpoint/directory “+inference.config.evaluator.config.metrics=[‘MAE’, ‘RMSE’]”
 ```
 Note: Be sure to include the + when overriding any of the evaluator configs.
 
-Prior to the next section, make sure that the TSPP container is run with the following arguments from the TSPP directory
+Prior to the next section, make sure that the TSPP container is run with the following arguments from the TSPP directory.  We recommend an outputs_dir is created that can be used to mount the outputs directory and the multirun folder from multi-GPU runs.  
 ```
-docker run -it --rm --gpus all --ipc=host --network=host -v /your/datasets/:/workspace/datasets/  -v /your/outputs/:/your/outputs/ -v $(pwd):$(pwd) -v /your/outputs/:/workspace/outputs/ -v /var/run/docker.sock:/var/run/docker.sock tspp
+docker run -it --rm --gpus all --ipc=host --network=host -v /your/datasets/:/workspace/datasets/  -v /your/outputs_dir/:/your/outputs_dir/ -v $(pwd):$(pwd) -v /your/outputs_dir/outputs/:/workspace/outputs/ -v /your/outputs_dir/multirun/:/workspace/multirun/ -v /var/run/docker.sock:/var/run/docker.sock tspp
 ```
-In the previous command, note that five different directories are mounted.  The datasets are mounted to the usual location, but we have two different mount locations for outputs.  Mounting the outputs to /workspace/outputs/ allows usual training calls to be saved in your output directory.  The second output mount is mounted to the same path as the output directory is in the host.  This is essential due to the way we deploy to NVIDIA Triton, the directory of the output in the docker must match the directory of the output on the host machine.  Additionally, the mount for /var/run/docker.sock allows the tspp docker container to launch another container, in our case this is the NVIDIA Triton server. In subsequent calls to launch_deployment.py, the /path/to/checkpoint/directory/ must be of the form /your/outputs/{checkpoint_dir} instead of /workspace/outputs/{checkpoint_dir} and should be absolute paths. From testing, the best output directory to use appears to be TSPP/outputs.
+Note that `/your/outputs_dir/{outputs/multirun}` is equivalent to the python script `os.path.join(/your/outputs_dir/, outputs)`.
+In the previous command, note that six different directories are mounted.  The datasets are mounted to the usual location, but we have two different mount locations for outputs.  Mounting the outputs to /workspace/outputs/ allows usual training calls to be saved in your output directory. Similarly, mounting the multirun to /workspace/multirun/ allows multi-GPU to be saved.  The second output mount is mounted to the same path as the output directory is in the host.  This is essential due to the way we deploy to NVIDIA Triton. The directory of the output in the docker must match the directory of the output on the host machine.  Additionally, the mount for /var/run/docker.sock allows the tspp docker container to launch another container. In our case, this is the NVIDIA Triton server. In subsequent calls to launch_triton_configure.py, the /path/to/checkpoint/directory/ must be of the form /your/outputs_dir/{checkpoint_dir} instead of /workspace/{checkpoint_dir} and should be absolute paths. 
+Remember  that multi-GPU runs are stored in `multirun` instead of `outputs`.
 
-Finally, note that to run the deployment script, you must be in the same directory path in the container as the TSPP is stored on your machine. This means that simply being in /workspace in the container may not work for running the deployment.  If outside the container your TimeSeriesPredictionPlatform is at /home/user/TimeSeriesPredictionPlatform, you must be at the same path in your docker container (/home/user/TimeSeriesPredictionPlatform). This is the purpose of the -v $(pwd):$(pwd) in the run script. 
-
-
-To launch conversion and deployment, one must again have a checkpoint directory from a TSPP training call that includes a .hydra directory and a best_checkpoint.pth.tar.  In addition, the model that will be converted must already support conversion to the required format.  In the current version of the TSPP, we first export the model to either TorchScript-Script or TorchScript-Trace and subsequently convert to TorchScript, Onnx, or TRT using the model-navigator package.  We also support export to Onnx and conversion to both Onnx and TRT.  To run
+To use deployment, the simplest way is to use the directories `multirun` and `outputs` directly inside the TSPP. This can be achieved by launching the docker as follows.
 ```
-python launch_deployment export={ts-trace, ts-script, onnx} convert={torchscript, onnx, trt} config.evaluator.checkpoint=/path/to/checkpoint/directory
+docker run -it --rm --gpus all --ipc=host --network=host -v /your/datasets/:/workspace/datasets/  -v $(pwd)/multirun:/workspace/multirun -v $(pwd)/outputs:/workspace/outputs -v $(pwd):$(pwd) /var/run/docker.sock:/var/run/docker.sock tspp
+```
+
+
+Finally, note that to run the deployment script, you must be in the same directory path in the container as the TSPP is stored on your machine. This means that being in /workspace in the container may not work for running the deployment.  If outside the container your TimeSeriesPredictionPlatform is at /home/user/TimeSeriesPredictionPlatform, you must be at the same path in your docker container (/home/user/TimeSeriesPredictionPlatform). This is the purpose of the `-v $(pwd):$(pwd)` in the run script. 
+
+
+To launch conversion and deployment, one must again have a checkpoint directory from a TSPP training call that includes a .hydra directory and a best_checkpoint.zip from a Neural Net training or a populated checkpoints directory from an XGBoost training.  Stats model, such as Arima, are not supported for deployment. In addition, the model that will be converted must already support conversion to the required format.  In the current version of the TSPP, we first export the model to either TorchScript-Script or TorchScript-Trace and subsequently convert it to TorchScript, Onnx, or TRT using the model-navigator package.  We also support export to Onnx and conversion to both Onnx and TRT.  For XGBoost models, we format the checkpoints and deploy using the FIL backend; there are no extra steps necessary.  To run export and conversion (for XGBoost, the deployment/export and deployment/convert fields can be ignored, and no other deployment options are functional):
+```
+python launch_triton_configure.py deployment/export={ts-trace, ts-script, onnx} deployment/convert={torchscript, onnx, trt} checkpoint=/path/to/checkpoint/directory
 ```
 The format mapping is listed below
 TorchScript-Script: ts-script
@@ -368,26 +352,40 @@ TorchScript: torchscript
 Onnx: onnx
 TRT: trt
 
-Note that the conversions do not support the apex fused LayerNorm library.  In order to get around this, we set the os environ variable ‘TFT_SCRIPTING” to True when loading the model for deployment.  This changes the apex LayerNorm to vanilla torch LayerNorm.
-
-Similarly to the native inference, one can again override the evaluator configs.  In addition, one can select the batch size and precision of the conversion, using config.inference.batch_size and config.inference.precision=Choice[ fp32, fp16 ] respectively.  Once export and conversion have been done, the results are stored in /path/to/checkpoint/directory/deployment.  Subsequently, the converted model’s NVIDIA Triton config is generated in the /path/to/checkpoint/directory/deployment/navigator_workspace/model-store/ directory. In addition a docker NVIDIA Triton server is launched based on this directory and inference is run through NVIDIA Triton. Finally, the outputs of this inference are used to calculate the metrics. The outputs of this inference and results of the metric calculation are stored in the brand new output directory created at TimeSeriesPredictionPlatform/outputs/today’s date/time at launch/.  Within this directory the metrics are stored in metrics.csv, and the raw outputs of the inference are stored in the raw/ directory.  The NVIDIA Triton model name is set as the second directory to the model.  For example, in the case of our TFT model, whose path is models.tft_pyt.TemporalFusionTransformer, the name of the NVIDIA Triton model is tft_pyt.  
-
-An additional option in running deployment is selecting whether to run the basics of conversion and NVIDIA Triton config creation or to run the full pipeline of conversion, NVIDIA Triton config creation, profiling, analysis, and helm chart creation.  Setting config.inference.optimize=True during launch switches to the full pipeline.  Another part of optimization is setting the backend accelerator for NVIDIA Triton config generation. Setting config.inference.accelerator=Choice[none, trt] changes the accelerator specified.  Note that this defaults to ‘none’ and ‘trt’ is only compatible with the Onnx conversion. If one wants to launch the NVIDIA Triton inference server using a specific GPU, the cuda index can be specified with the config option config.inference.gpu, which defaults to 0.
+Note that some conversions do not support the apex FusedLayerNorm library.  To get around this, we set the operating system environment variable ‘TFT_SCRIPTING” to True when loading the model for deployment.  This changes the apex LayerNorm to vanilla torch LayerNorm.  In addition, one can select the batch size and precision of the conversion, using +inference.config.evaluator.config.batch_size and inference.config.precision=Choice[ fp32, fp16 ] respectively.
+Once export and conversion have been done, the results are stored in /path/to/checkpoint/directory/deployment.  Subsequently, the converted model’s NVIDIA Triton config is generated in the /path/to/checkpoint/directory/deployment/navigator_workspace/model-store/ directory.
+An additional option in running conversion is selecting whether to run the basics of conversion and NVIDIA Triton config creation or to run the full pipeline of conversion, NVIDIA Triton config creation, profiling, analysis, and helm chart creation.  Setting config.inference.optimize=True during launch switches to the full pipeline.  Another part of optimization is setting the backend accelerator for NVIDIA Triton config generation. Setting config.inference.accelerator=Choice[none, trt] changes the accelerator specified.  Note that this defaults to ‘none’ and ‘trt’ is only compatible with the Onnx conversion. If one wants to launch the NVIDIA Triton inference server using a specific GPU, the CUDA index can be specified with the config option config.inference.gpu, which defaults to 0.
 
 More information on the conversion is located here:
-https://github.com/triton-inference-server/model_navigator/blob/main/docs/conversion.md
+https://github.com/triton-inference-server/model_navigator/blob/v0.2.7/docs/conversion.md
 
-More information on the NVIDIA Triton config creation is located here: https://github.com/triton-inference-server/model_navigator/blob/main/docs/triton_model_configurator.md
+More information on the NVIDIA Triton config creation is located here: https://github.com/triton-inference-server/model_navigator/blob/v0.2.7/docs/triton_model_configurator.md
 
 More information on the full pipeline is located here: 
-https://github.com/triton-inference-server/model_navigator/blob/main/docs/run.md
+https://github.com/triton-inference-server/model_navigator/blob/v0.2.7/docs/run.md
 
-If one only wants to run the latter part of the launch_deployment script, which includes the NVIDIA Triton server initialization, inference, and metrics calculation, set the option config.inference.skip_conversion=True at launch.  The call still requires the checkpoint directory and for that directory to be set up in the same format as the result for a regular launch_deployment call (contains a deployment/navigator_workspace/model-store/ directory with the NVIDIA Triton models).  
-For this option of skipping the conversion, there is a config option +config.inference.model_name, which can be set to the NVIDIA Triton model name.  This does not set the name of the model, but rather selects which of the possible models in the model-store directory will be used for inference.  This is useful after a call using the optimize option, which can generate multiple different models in the model-store. 
-If one only wants to launch the NVIDIA Triton server and keep it live, set the option config.inference.just_deploy=True at launch.  Again, like the previous option of skipping conversion, the checkpoint directory is still required and must conform to the format for the NVIDIA Triton models.  This will not run inference automatically nor perform any other actions, it will solely start the NVIDIA Triton server using the given models.  
 
-For both the launch_inference and launch_deployment one can specify what dataset and target_scalers to use (if any) as long as the data shapes do not conflict with the already trained model. To specify a dataset directory use +config.inference.dataset_dir=/path/to/dataset. The dataset directory must contain a composite_scaler.bin file as well as either train.bin/valid.bin/test.bin or train.csv/valid.csv/test.csv depending on the configuration option config.dataset.binarized (this option cannot be changed during deployment or inference).  Once the path has been set, deployment and inference both use the test dataset.  
+After running `launch_triton_configure.py`, the directories are set up  for quick Triton deployment.  To start the server:
+```
+python launch_inference_server.py checkpoint=/path/to/checkpoint/directory
+```
 
+Once the script finishes running, the Triton server will run in the background waiting for inputs until it is closed.  In order to run inference on the test dataset, the checkpoint was trained on:
+```
+python launch_inference.py inference=triton checkpoint=/path/to/checkpoint/directory
+```
+Similar  to the native inference, one can again override the evaluator configs.  The NVIDIA Triton model name is set as the second directory to the model.  For example, in the case of our TFT model, whose path is models.tft_pyt.TemporalFusionTransformer, the name of the NVIDIA Triton model is tft_pyt. In the case of XGBoost, there is a different model name for each model in the horizon length, specified as `xgb_{i}`.
+There is a config option +inference.config.model_name, which can be set to the NVIDIA Triton model name.  This does not set the name of the model but instead  selects which of the possible models in the model-store directory will be used for inference.  This is useful after a call using the optimize option, which can generate multiple different models in the model-store. 
+
+
+
+For both the native and triton launch_inference, one can specify what dataset and target_scalers to use (if any) as long as the data shapes do not conflict with the already trained model. To specify a dataset directory use +inference.config.dataset_dir=/path/to/dataset. The dataset directory must contain a tspp_preprocess.bin file as well as either train.bin/valid.bin/test.bin or train.csv/valid.csv/test.csv, depending on the configuration option dataset.config.binarized (this option cannot be changed during deployment or inference).  Once the path has been set, deployment and inference both use the test dataset.  
+
+#### Online Inference
+
+The TSPP also supports an online inference solution for both XGBoost models and Neural models.  Given raw data (not preprocessed by TSPP), both native and NVIDIA Triton inference can preprocess and pass the data through the models.  When running, specify `+inference.config.dataset_path=/path/to/raw/data/csv` and if applicable `+inference.config.preproc_state_path=/path/to/tspp_preprocess.bin` (if the preprocess state is saved elsewhere).  Note this is not yet supported on ARIMA models.
+
+As a final note, make sure to close the NVIDIA Triton Inference Server docker container when finished using `docker stop trt_server_cont`.
 Our TFT model supports export to TorchScript-Trace and conversion to all formats.  
 
 If you encounter an error such as 
@@ -398,98 +396,47 @@ Or
 ```
 ERROR root Exception in callback <function InferenceServerClient.async_infer.<locals>.wrapped_callback at 0x7f9437b469d0>: AttributeError("'InferenceServerException' object has no attribute 'get_response'")
 ```
-There are a few possible reasons for this to come up. First, make sure that when the TSPP docker container was launched the network argument was set to host.  Next, one can run “docker ps”; if the container “trt_server_cont” shows up, close it using “docker stop trt_server_cont”.  After this, one should try rerunning the command.  If neither of these steps is applicable or the problem persists, it is a more specific issue that requires more debugging.
+There are a few possible reasons for this to come up. First, make sure that when the TSPP docker container was launched, the network argument was set to host.  Second, ensure  the correct initial path is used, so something of the form /home/user/TimeSeriesPredictionPlatform instead of /workspace.  Next, one can run “docker ps”; if the container “trt_server_cont” shows up, close it using “docker stop trt_server_cont”.  After this, one should try rerunning the command.  If neither of these steps is applicable or the problem persists, it is a more specific issue that requires more debugging.
 
 
 
 ### Parameters
 
-Parameters for each individual component are stored in 
+Config structure reflects the internal design of the tool. Most components have their config stored in
 ```
 /workspace/conf/{component_type}/{component_name}.yaml
 ```
+With a few exceptions where components are strictly dependent (for example, optimizer can be used only during training, so its  configuration is stored in `/workspace/conf/trainer/optimizer/{optimizer_name}.yaml`)
 
-For example, the default parameters for TFT are stored in 
-```
-/workspace/conf/model/tft.yaml
-```
-
-For component selection, the options are:
-
-**dataset**: `electricity`, `traffic`
-**model**: `tft`, `auto_arima`, `trivial_model`  
-**criterion**: `GLL`, `MSE`, `quantile`  
-**device**: `cuda`, `cuda_8GPU`, `cpu`  
-**optimizer**: refer to `/workspace/conf/optimizer`  
-**ema**: `True`, this is assumed False by default.  
-**amp**: `True`, this is assumed False by default.
-
-
-
-If a parameter does not exist in the config, you must prepend `+` to its reference in the command line call. For example, `+config.evaluator.target_scalers=...` adds target_scalers to config.evaluator, but config.evaluator.target_scalers=... errors.
-
-Non-individual component-specific parametrization is listed below. Parameters are listed hierarchically, that is the config has an attribute trainer, which has an attribute `num_epochs` that controls the length of training:
-
-`config.log_path`: where to save your logs  
-`config.trainer.batch_size`: the batch size to use  
-`config.trainer.num_workers`: the number of workers to use for dataloading  
-`config.trainer.num_epochs`: the number of epochs to train the model for  
-`config.trainer.AMP`: whether to enable AMP for accelerated training  
-`config.dataset.source_path`: where the original file (before preproc) is stored  
-`config.dataset.dest_path`: the directory from which to save/read the preprocessed dataset  
-`config.dataset.time_ids`: the feature on which to split the dataset into `train`, `valid`, `test`  
-`config.dataset.train_range`: the range of the time feature that represents the `train` set  
-`config.dataset.valid_range`: the range of the time feature that represents the `validation` set  
-`config.dataset.test_range`: the range of the time feature that represents the `test` set  
-`config.dataset.dataset_stride`: the stride to use when creating the dataset  
-`config.dataset.scale_per_id`: whether to scale each series based on series statistics (`True`) or statistics across all series (`False`)  
-`config.dataset.encoder_length`: the length of past data that is fed to the model  
-`config.dataset.example_length`: the length of the full data that we are passing to the model. The length of the prediction horizon is the difference between encoder and example length  
-`config.dataset.features`: the features that the model will be using  
-`config.dataset.train_samples`: the number of examples to sample for our `train` dataset from our `train` partition  
-`config.dataset.valid_samples`: the number of examples to sample for our `validation` dataset from our `validation` partition  
-`config.dataset.binarized`: whether or not to use a binarized dataset for speedup  
-`config.device.world_size`: the number of GPUs the launcher is running on  
-`config.optimizer.gradient_norm`: the maximum norm of gradients allowed via gradient clipping  
-`config.optimizer.lr`: the learning rate to use for the optimizer
-NOTE: Any optimizer from `torch.optim` can be used, and all keywords can be specified by changing `config.optimizer` with an additional attribute  
-`config.evaluator.use_weights`: whether to weight metrics by weights specified in the input. Note: There must be a `WEIGHT` feature specified in `config.dataset.features` for this feature to work  
-`config.evaluator.target_scalers`: scalers used to unscale targets so that non-normalized predictions and targets are used for metric calculation  
-`config.evaluator.output_selector`: selects which output to use if the model has multiple outputs per time step (quantiles are an example)  
-`config.evaluator.label_selector`: selects which label to use if the labels have multiple values per time step  
-`config.evaluator.precision`: the precision to format the output metrics to  
-`config.evaluator.metrics`: a list of metrics to calculate on the test set  
-`config.evaluator.checkpoint`: path to the checkpoint directory containing the checkpoint to be loaded for inference/deployment
-
-`config.inference.batch_size`: the batch size to be used for inference or deployment  
-`config.inference.precision`: the precision of the exported model  
-`config.inference.optimize`: setting to True runs the model-navigator run script over the convert and triton-config-model  
-`config.inference.skip_conversion`: during deployment, skips the export, conversion, and configuration. Instead, starts the inference server, run inference, and calculate metrics  
-
-`config.inference.just_deploy`: starts the NVIDIA Triton server based on the NVIDIA Triton model specified in the checkpoint directory  
-`config.inference.dataset_dir`: overrides the default dataset path  
-`config.inference.model_name`: uses the model listed under this model name when deploying to the NVIDIA Triton server. This will not change the default name assigned to the models in the model-store directory  
-`config.inference.accelerator`: switches the backend accelerator in the triton-config-model step of the process,   
-`config.inference.gpu`: uses the gpu at this cuda index when launching the NVIDIA Triton inference server
-
-
-
-
-
-
+If a parameter does not exist in the config, you must prepend `+` to its reference in the command line call. For example, `+trainer.config.force_rerun=...` adds force_rerun to trainer.config, but trainer.config.force_rerun=... errors.
 
 
 ## Release Notes
 
-We’re constantly refining and improving our performance on AI and HPC workloads, even on the same hardware with frequent updates to our software stack. For our latest performance data, refer to these pages for [AI](#https://developer.nvidia.com/deep-learning-performance-training-inference) and [HPC](#https://developer.nvidia.com/hpc-application-performance) benchmarks.
+We’re constantly refining and improving our performance on AI and HPC workloads with frequent updates to our software stack. For our latest performance data, refer to these pages for [AI](https://developer.nvidia.com/deep-learning-performance-training-inference) and [HPC](https://developer.nvidia.com/hpc-application-performance) benchmarks.
 
 
 ### Changelog
 November 2021
 - Initial release
+July 2022
+- Reworked config structure
+- Added parallel execution
+- Fixed race condition when using torch distributed
+- Switched to optuna plugin instead of having custom code
+- Added basic suspend resume utility
+- Added curriculum learning option
+- Weights are allowed for arbitrary loss function
+- Removed visualization (will be added in a future release)
+- Added XGBoost model
+- Added multi ID dataset for models like Informer
+- Added example scripts
+- Criterions and optimizers no longer require dummy wrappers
 
 ### Known issues
-There are no known issues with this tool.
+
+If you encounter errors stating `srcIndex < value`, verify that your categorical cardinalities are the correct size, this indicates that the value of a categorical you are trying to embed is too large for its respective embedding table.
+
 
 
 

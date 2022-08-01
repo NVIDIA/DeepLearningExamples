@@ -1,9 +1,0 @@
-# SPDX-License-Identifier: Apache-2.0
-# @package _global_
-config:
-  optimizer:
-    _target_: optimizers.optimizer_wrapped
-    lr: 0.01
-    etas: [0.5, 1.2]
-    step_sizes: [1e-06, 50]
-    name: Rprop

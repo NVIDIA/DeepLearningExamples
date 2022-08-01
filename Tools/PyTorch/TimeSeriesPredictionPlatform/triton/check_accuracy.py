@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -69,10 +69,11 @@ def _get_args():
     Runner: BaseRunner = runners.get(args.export_type)
     ArgParserGenerator(Runner).update_argparser(parser)
 
-    Loader: BaseLoader = loaders.get(args.convert_type)
-    ArgParserGenerator(Loader, module_path=args.convert_model).update_argparser(parser)
-    Runner: BaseRunner = runners.get(args.convert_type)
-    ArgParserGenerator(Runner).update_argparser(parser)
+    if args.convert_type != 'trt':
+        Loader: BaseLoader = loaders.get(args.convert_type)
+        ArgParserGenerator(Loader, module_path=args.convert_model).update_argparser(parser)
+        Runner: BaseRunner = runners.get(args.convert_type)
+        ArgParserGenerator(Runner).update_argparser(parser)
 
 
     if args.dataloader is not None:

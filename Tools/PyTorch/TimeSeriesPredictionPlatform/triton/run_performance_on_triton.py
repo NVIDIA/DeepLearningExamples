@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@ import logging
 import os
 import pathlib
 import shutil
+import sys
 from distutils.version import LooseVersion
 from enum import Enum
-from importlib.metadata import version
 from typing import Any, Dict, List
 
 import yaml
@@ -40,7 +40,16 @@ from .deployment_toolkit.warmup import performance_evaluation_warmup
 
 LOGGER = logging.getLogger("run_performance_on_triton")
 
-TRITON_CLIENT_VERSION = LooseVersion(version("tritonclient"))
+if LooseVersion(sys.version) >= LooseVersion("3.8.0"):
+    from importlib.metadata import version
+
+    TRITON_CLIENT_VERSION = LooseVersion(version("tritonclient"))
+    TRITON_MODEL_ANALYZER_VERSION = LooseVersion(version("triton-model-analyzer"))
+else:
+    import pkg_resources
+
+    TRITON_CLIENT_VERSION = LooseVersion(pkg_resources.get_distribution("tritonclient").version)
+    TRITON_MODEL_ANALYZER_VERSION = LooseVersion(pkg_resources.get_distribution("triton-model-analyzer").version)
 
 
 def _log_dict(title: str, dict_: Dict[str, Any]):
@@ -67,7 +76,7 @@ def _calculate_average_latency(r):
 
 def _update_performance_data(results: List, batch_size: int, performance_partial_file: str):
     row: Dict = {"Batch": batch_size}
-    with open(performance_partial_file, "r") as csvfile:
+    with open(performance_partial_file) as csvfile:
         reader = csv.DictReader(csvfile)
         for r in reader:
             avg_latency = _calculate_average_latency(r)
@@ -91,8 +100,9 @@ def _model_analyzer_evaluation(
     evaluation_mode: EvaluationMode,
     offline_mode: OfflineMode,
     model_repository: str,
-    result_path: str,
-    verbose: bool,
+    result_path: pathlib.Path,
+    output_shared_memory_size: int = 102400,
+    verbose: bool = False,
 ):
     _log_dict(
         "Selected configuration",
@@ -111,6 +121,7 @@ def _model_analyzer_evaluation(
             "batching_mode": batching_mode,
             "evaluation_mode": evaluation_mode,
             "offline_mode": offline_mode,
+            "output_shared_memory_size": output_shared_memory_size,
             "model_repository": model_repository,
             "result_path": result_path,
             "verbose": verbose,
@@ -118,10 +129,13 @@ def _model_analyzer_evaluation(
     )
 
     perf_analyzer_config = {
-        "input-data": input_data,
         "measurement-interval": measurement_interval,
-        "verbose": verbose
     }
+
+    if TRITON_MODEL_ANALYZER_VERSION >= LooseVersion("1.8.0"):
+        perf_analyzer_config["input-data"] = [input_data]
+    else:
+        perf_analyzer_config["input-data"] = input_data
 
     if TRITON_CLIENT_VERSION >= LooseVersion("2.11.0"):
         perf_analyzer_config["measurement-mode"] = measurement_mode.value
@@ -129,11 +143,14 @@ def _model_analyzer_evaluation(
 
     if evaluation_mode == EvaluationMode.OFFLINE:
         perf_analyzer_config["shared-memory"] = offline_mode.value
+        perf_analyzer_config["output-shared-memory-size"] = output_shared_memory_size
 
-    for shape in input_shapes:
-        perf_analyzer_config["shape"] = shape
-        LOGGER.warning("Model Analyzer support only single shape param for Perf Analyzer.")
-        break
+    if input_shapes:
+        if TRITON_MODEL_ANALYZER_VERSION > LooseVersion("1.8.0"):
+            perf_analyzer_config["shape"] = input_shapes
+        else:
+            perf_analyzer_config["shape"] = input_shapes[0]
+            LOGGER.warning("Model Analyzer <= 1.8.0 support only single shape param for Perf Analyzer.")
 
     if batching_mode == BatchingMode.STATIC:
         batch_sizes = batch_sizes
@@ -184,7 +201,6 @@ def _model_analyzer_evaluation(
     model_analyzer = ModelAnalyzer(config=config)
     model_analyzer.run(mode=ModelAnalyzerMode.PROFILE, verbose=verbose)
 
-    result_path = pathlib.Path(result_path)
     result_path.mkdir(parents=True, exist_ok=True)
 
     for file in checkpoints.iterdir():
@@ -264,8 +280,9 @@ def _perf_analyzer_evaluation(
     batching_mode: BatchingMode,
     evaluation_mode: EvaluationMode,
     offline_mode: OfflineMode,
-    result_path: str,
-    verbose: bool,
+    result_path: pathlib.Path,
+    output_shared_memory_size: int = 102400,
+    verbose: bool = False,
 ):
     protocol, host, port = parse_server_url(server_url)
 
@@ -301,6 +318,7 @@ def _perf_analyzer_evaluation(
             "batching_mode": batching_mode,
             "evaluation_mode": evaluation_mode,
             "offline_mode": offline_mode,
+            "output_shared_memory_size": output_shared_memory_size,
             "result_path": result_path,
             "verbose": verbose,
         },
@@ -309,9 +327,7 @@ def _perf_analyzer_evaluation(
     results: List[Dict] = list()
     for batch_size in batch_sizes:
         for concurrency in range(min_concurrency, max_concurrency + step, step):
-            performance_partial_file = (
-                f"triton_performance_{evaluation_mode.value.lower()}_{batching_mode.value.lower()}_partial_{batch_size}_{concurrency}.csv"
-            )
+            performance_partial_file = f"triton_performance_{evaluation_mode.value.lower()}_{batching_mode.value.lower()}_partial_{batch_size}_{concurrency}.csv"
 
             params = {
                 "model-name": model_name,
@@ -327,8 +343,6 @@ def _perf_analyzer_evaluation(
 
             if verbose:
                 params["extra-verbose"] = True
-            else:
-                params["verbose"] = True
 
             if TRITON_CLIENT_VERSION >= LooseVersion("2.11.0"):
                 params["measurement-mode"] = measurement_mode.value
@@ -336,6 +350,7 @@ def _perf_analyzer_evaluation(
 
             if evaluation_mode == EvaluationMode.OFFLINE:
                 params["shared-memory"] = offline_mode.value
+                params["output-shared-memory-size"] = output_shared_memory_size
 
             if verbose:
                 _log_dict(f"Perf Analyzer config for batch_size: {batch_size} and concurrency: {concurrency}", params)
@@ -354,7 +369,7 @@ def _perf_analyzer_evaluation(
 
     results = sort_results(results=results)
 
-    save_results(filename=result_path, data=results)
+    save_results(filename=result_path.as_posix(), data=results)
     show_results(results=results)
 
 
@@ -373,15 +388,29 @@ def _run_performance_analysis(
     batching_mode: BatchingMode,
     evaluation_mode: EvaluationMode,
     offline_mode: OfflineMode,
+    output_shared_memory_size: int,
     performance_tool: PerformanceTool,
     model_repository: str,
-    result_path: str,
+    result_path: pathlib.Path,
     warmup: bool,
     verbose: bool,
 ):
     log_level = logging.INFO if not verbose else logging.DEBUG
     log_format = "%(asctime)s %(levelname)s %(name)s %(message)s"
     logging.basicConfig(level=log_level, format=log_format)
+
+    if performance_tool == PerformanceTool.MODEL_ANALYZER:
+        if result_path.suffix:
+            raise ValueError(
+                "Results path for Model Analyzer is invalid. Please, provide the directory name. Example: results"
+            )
+    elif performance_tool == PerformanceTool.PERF_ANALYZER:
+        if result_path.suffix != ".csv":
+            raise ValueError(
+                "Results path for Perf Analyzer is invalid. Please, provide the CSV file name. Example: results.csv"
+            )
+    else:
+        raise ValueError(f"Unsupported performance tool {performance_tool}")
 
     if warmup:
         LOGGER.info("Running warmup before the main test")
@@ -399,6 +428,7 @@ def _run_performance_analysis(
             batching_mode=batching_mode,
             evaluation_mode=evaluation_mode,
             offline_mode=offline_mode,
+            output_shared_memory_size=output_shared_memory_size,
         )
 
     if performance_tool == PerformanceTool.MODEL_ANALYZER:
@@ -418,6 +448,7 @@ def _run_performance_analysis(
             batching_mode=batching_mode,
             evaluation_mode=evaluation_mode,
             offline_mode=offline_mode,
+            output_shared_memory_size=output_shared_memory_size,
             model_repository=model_repository,
             result_path=result_path,
             verbose=verbose,
@@ -439,6 +470,7 @@ def _run_performance_analysis(
             batching_mode=batching_mode,
             evaluation_mode=evaluation_mode,
             offline_mode=offline_mode,
+            output_shared_memory_size=output_shared_memory_size,
             result_path=result_path,
             verbose=verbose,
         )
@@ -461,7 +493,7 @@ def main():
         "--server-url",
         type=str,
         required=False,
-        default="grpc://127.0.0.1:8001",
+        default="http://127.0.0.1:8000",
         help="Url to Triton server",
     )
     parser.add_argument(
@@ -558,6 +590,13 @@ def main():
         "'cuda' pass tensors through GPU RAM memory.",
     )
     parser.add_argument(
+        "--output-shared-memory-size",
+        default=100240,
+        type=int,
+        help="Size of memory buffer allocated for output with dynamic shapes in bytes. "
+        "Has to be equal to maximal size of output tensor.",
+    )
+    parser.add_argument(
         "--performance-tool",
         choices=[item.value for item in PerformanceTool],
         default=PerformanceTool.MODEL_ANALYZER.value,
@@ -572,7 +611,7 @@ def main():
         type=str,
         help="Path to model repository. Valid when using Model Analyzer",
     )
-    parser.add_argument("--result-path", type=str, required=True, help="Path where results files is stored.")
+    parser.add_argument("--result-path", type=pathlib.Path, required=True, help="Path where results files is stored.")
     parser.add_argument(
         "--warmup", help="Enable model warmup before performance test", action="store_true", default=False
     )
@@ -596,6 +635,7 @@ def main():
         batching_mode=BatchingMode(args.batching_mode),
         evaluation_mode=EvaluationMode(args.evaluation_mode),
         offline_mode=OfflineMode(args.offline_mode),
+        output_shared_memory_size=args.output_shared_memory_size,
         performance_tool=PerformanceTool(args.performance_tool),
         model_repository=args.model_repository,
         result_path=args.result_path,

@@ -1,0 +1,31 @@
+NGC: &NGC
+  hostname: ngc
+  instance: dgx1v.32g.8.norm
+
+  job_name: "ml-model.tft traffic HP search"
+
+  docker_image: nvcr.io/nvidian/swdl/jbaczek:tft_pyt
+  datasets:
+    /data: 78291
+  workspaces:
+    /ws: VUMFFB3uSv25FDlkXg80Vw
+  download_dir: /home/jbaczek/Downloads
+
+jobs:
+  - steps:
+      - DATASET=traffic NGPU=8 DROPOUT=0.3 LR=5e-4 H_SIZE=128 N_HEADS=4 bash scripts/run_hp_search.sh
+    backend: *NGC
+
+  - steps:
+      - DATASET=traffic NGPU=8 DROPOUT=0.3 LR=5e-3 H_SIZE=128 N_HEADS=4 bash scripts/run_hp_search.sh
+    backend: *NGC
+
+  - steps:
+      - DATASET=traffic NGPU=8 DROPOUT=0.3 LR=1e-3 H_SIZE=128 N_HEADS=4 bash scripts/run_hp_search.sh
+    backend: *NGC
+
+reports:
+  filename: traffoc
+  types:
+    - xls
+
