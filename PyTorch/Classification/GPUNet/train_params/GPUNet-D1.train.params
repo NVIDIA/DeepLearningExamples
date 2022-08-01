@@ -7,4 +7,4 @@
 --img-size 456 --amp \
 --test-teacher False \
 --teacher tf_efficientnet_b5_ns \
---teacher-img-size 456 \
+--teacher-img-size 456
