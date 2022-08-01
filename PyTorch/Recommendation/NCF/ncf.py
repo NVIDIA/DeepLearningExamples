@@ -105,7 +105,7 @@ def parse_args():
 
 
 def init_distributed(args):
-    args.world_size = int(os.environ['WORLD_SIZE'])
+    args.world_size = int(os.environ.get('WORLD_SIZE', default=1))
     args.distributed = args.world_size > 1
 
     if args.distributed:
@@ -124,7 +124,7 @@ def init_distributed(args):
         args.local_rank = 0
 
 
-def val_epoch(model, dataloader: dataloading.TestDataLoader, k, distributed=False):
+def val_epoch(model, dataloader: dataloading.TestDataLoader, k, distributed=False, world_size=1):
     model.eval()
     user_feature_name = dataloader.channel_spec[USER_CHANNEL_NAME][0]
     item_feature_name = dataloader.channel_spec[ITEM_CHANNEL_NAME][0]
@@ -165,7 +165,8 @@ def val_epoch(model, dataloader: dataloading.TestDataLoader, k, distributed=Fals
     if distributed:
         torch.distributed.all_reduce(hits, op=torch.distributed.ReduceOp.SUM)
         torch.distributed.all_reduce(ndcg, op=torch.distributed.ReduceOp.SUM)
-        torch.distributed.all_reduce(total_validation_loss, op=torch.distributed.ReduceOp.AVG)
+        torch.distributed.all_reduce(total_validation_loss, op=torch.distributed.ReduceOp.SUM)
+        total_validation_loss = total_validation_loss / world_size
 
 
     num_test_cases = dataloader.raw_dataset_length / dataloader.samples_in_series
@@ -268,7 +269,8 @@ def main():
 
     if args.mode == 'test':
         start = time.time()
-        hr, ndcg, val_loss = val_epoch(model, test_loader, args.topk, distributed=args.distributed)
+        hr, ndcg, val_loss = val_epoch(model, test_loader, args.topk,
+                                       distributed=args.distributed, world_size=args.world_size)
         val_time = time.time() - start
         eval_size = test_loader.raw_dataset_length
         eval_throughput = eval_size / val_time
@@ -327,7 +329,8 @@ def main():
         train_throughput = epoch_samples / train_time
         train_throughputs.append(train_throughput)
 
-        hr, ndcg, val_loss = val_epoch(model, test_loader, args.topk, distributed=args.distributed)
+        hr, ndcg, val_loss = val_epoch(model, test_loader, args.topk,
+                                       distributed=args.distributed, world_size=args.world_size)
 
         val_time = time.time() - begin
         eval_size = test_loader.raw_dataset_length
@@ -335,7 +338,8 @@ def main():
         eval_throughputs.append(eval_throughput)
 
         if args.distributed:
-            torch.distributed.all_reduce(loss, op=torch.distributed.ReduceOp.AVG)
+            torch.distributed.all_reduce(loss, op=torch.distributed.ReduceOp.SUM)
+            loss = loss / args.world_size
 
         dllogger.log(step=(epoch,),
                      data={'train_throughput': train_throughput,
