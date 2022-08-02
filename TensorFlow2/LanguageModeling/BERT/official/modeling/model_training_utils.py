@@ -607,5 +607,6 @@ def run_customized_training_loop(
 
       if dllogging and perf_wo_n != 0:
         dllogging.logger.log(step=(), data={"throughput_train": perf_wo/perf_wo_n}, verbosity=Verbosity.DEFAULT)
+        dllogging.logger.log(step=(), data={"total_loss": training_summary['train_loss']}, verbosity=Verbosity.DEFAULT)
 
     return model
