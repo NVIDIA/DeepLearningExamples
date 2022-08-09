@@ -418,7 +418,8 @@ We’re constantly refining and improving our performance on AI and HPC workload
 
 ### Changelog
 November 2021
-- Initial release
+- Initial release 
+
 July 2022
 - Reworked config structure
 - Added parallel execution
