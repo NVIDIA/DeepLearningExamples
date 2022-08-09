@@ -3,14 +3,14 @@
 set -e
 
 MODEL_NAMES="$@"
-[ -z "$MODEL_NAMES" ] && { echo "Usage: $0 [model_name ...]"; exit 1; }
+[ -z "$MODEL_NAMES" ] && { echo "Usage: $0 [fastpitch|waveglow|hifigan|hifigan-finetuned-fastpitch]"; exit 1; }
 
 function download_ngc_model() {
   mkdir -p "$MODEL_DIR"
 
   if [ ! -f "${MODEL_DIR}/${MODEL_ZIP}" ]; then
     echo "Downloading ${MODEL_ZIP} ..."
-    wget --content-disposition -qO ${MODEL_DIR}/${MODEL_ZIP} ${MODEL_URL} \
+    wget --content-disposition -O ${MODEL_DIR}/${MODEL_ZIP} ${MODEL_URL} \
          || { echo "ERROR: Failed to download ${MODEL_ZIP} from NGC"; exit 1; }
   fi
 
@@ -37,12 +37,16 @@ do
       MODEL_URL="https://api.ngc.nvidia.com/v2/models/nvidia/fastpitch_pyt_fp32_ckpt_v1_1/versions/21.05.0/zip"
       ;;
     "hifigan")
-      echo "HifFi-GAN model download not yet available"
-      exit 2
       MODEL_DIR="pretrained_models/hifigan"
-      MODEL_ZIP=""
-      MODEL=""
-      MODEL_URL=""
+      MODEL_ZIP="hifigan__pyt_ckpt_ds-ljs22khz_21.08.0_amp.zip"
+      MODEL="hifigan_gen_checkpoint_6500.pt"
+      MODEL_URL="https://api.ngc.nvidia.com/v2/models/nvidia/dle/hifigan__pyt_ckpt_ds-ljs22khz/versions/21.08.0_amp/zip"
+      ;;
+    "hifigan-finetuned-fastpitch")
+      MODEL_DIR="pretrained_models/hifigan"
+      MODEL_ZIP="hifigan__pyt_ckpt_mode-finetune_ds-ljs22khz_21.08.0_amp.zip"
+      MODEL="hifigan_gen_checkpoint_10000_ft.pt"
+      MODEL_URL="https://api.ngc.nvidia.com/v2/models/nvidia/dle/hifigan__pyt_ckpt_mode-finetune_ds-ljs22khz/versions/21.08.0_amp/zip"
       ;;
     "waveglow")
       MODEL_DIR="pretrained_models/waveglow"

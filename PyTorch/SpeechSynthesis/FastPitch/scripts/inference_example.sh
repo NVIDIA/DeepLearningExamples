@@ -10,6 +10,7 @@ export CUDNN_V8_API_ENABLED=1
 : ${WARMUP:=0}
 : ${REPEATS:=1}
 : ${CPU:=false}
+: ${PHONE:=true}
 
 # Mel-spectrogram generator (optional)
 : ${FASTPITCH="pretrained_models/fastpitch/nvidia_fastpitch_210824.pt"}
@@ -17,6 +18,9 @@ export CUDNN_V8_API_ENABLED=1
 # Vocoder; set only one
 : ${WAVEGLOW="pretrained_models/waveglow/nvidia_waveglow256pyt_fp16.pt"}
 : ${HIFIGAN=""}
+
+[[ "$FASTPITCH" == "pretrained_models/fastpitch/nvidia_fastpitch_210824.pt" && ! -f "$FASTPITCH" ]] && { echo "Downloading $FASTPITCH from NGC..."; bash scripts/download_models.sh fastpitch; }
+[[ "$WAVEGLOW" == "pretrained_models/waveglow/nvidia_waveglow256pyt_fp16.pt" && ! -f "$WAVEGLOW" ]] && { echo "Downloading $WAVEGLOW from NGC..."; bash scripts/download_models.sh waveglow; }
 
 # Synthesis
 : ${SPEAKER:=0}
@@ -49,12 +53,13 @@ ARGS+=" --denoising-strength $DENOISING"
 ARGS+=" --warmup-steps $WARMUP"
 ARGS+=" --repeats $REPEATS"
 ARGS+=" --speaker $SPEAKER"
-[ "$CPU" = false ]          && ARGS+=" --cuda"
-[ "$CPU" = false ]          && ARGS+=" --cudnn-benchmark"
+[ "$CPU" = false ]        && ARGS+=" --cuda"
+[ "$CPU" = false ]        && ARGS+=" --cudnn-benchmark"
 [ "$AMP" = true ]         && ARGS+=" --amp"
 [ "$TORCHSCRIPT" = true ] && ARGS+=" --torchscript"
 [ -n "$HIFIGAN" ]         && ARGS+=" --hifigan $HIFIGAN"
 [ -n "$WAVEGLOW" ]        && ARGS+=" --waveglow $WAVEGLOW"
 [ -n "$FASTPITCH" ]       && ARGS+=" --fastpitch $FASTPITCH"
+[ "$PHONE" = true ]       && ARGS+=" --p-arpabet 1.0"
 
 python inference.py $ARGS "$@"
