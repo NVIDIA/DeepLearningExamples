@@ -166,7 +166,7 @@ def map_scalers(features):
 class Log1pScaler(FunctionTransformer):
     @staticmethod
     def _inverse(x):
-        return np.exp(x) + 1
+        return np.expm1(x)
 
     def __init__(self):
         super().__init__(func=np.log1p, inverse_func=Log1pScaler._inverse, validate=False)
