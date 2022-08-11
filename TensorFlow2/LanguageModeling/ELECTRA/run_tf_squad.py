@@ -502,6 +502,9 @@ def main():
                 # Optimize the model
                 loss_value = train_step(model, inputs, loss, USE_AMP, opt, (iter == 0 and epoch == 0),
                                         v2=args.version_2_with_negative, loss_class=loss_class, fp16=USE_AMP)
+                #introduce CPU-GPU sync for training perf computation
+                loss_numpy = loss_value.numpy()
+                
                 epoch_perf_avg.update_state(1. * BATCH_SIZE / (time.time() - iter_start))
                 if iter % args.log_freq == 0:
                     if is_main_process():
