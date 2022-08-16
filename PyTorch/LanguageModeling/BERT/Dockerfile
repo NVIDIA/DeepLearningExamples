@@ -29,7 +29,7 @@ COPY . .
 
 # Install lddl
 RUN conda install -y jemalloc
-RUN pip install /workspace/bert/lddl
+RUN pip install git+https://github.com/NVIDIA/lddl.git
 RUN python -m nltk.downloader punkt
 
 RUN pip install lamb_amp_opt/
