@@ -27,6 +27,8 @@
 
 from typing import Optional
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -52,7 +54,7 @@ def regulate_len(durations, enc_out, pace: float = 1.0,
                                dim=1)[:, None, :]
     reps_cumsum = reps_cumsum.to(dtype)
 
-    range_ = torch.arange(max_len).to(enc_out.device)[None, :, None]
+    range_ = torch.arange(max_len, device=enc_out.device)[None, :, None]
     mult = ((reps_cumsum[:, :, :-1] <= range_) &
             (reps_cumsum[:, :, 1:] > range_))
     mult = mult.to(dtype)
@@ -218,13 +220,17 @@ class FastPitch(nn.Module):
         """
         b_size = attn.shape[0]
         with torch.no_grad():
-            attn_cpu = attn.data.cpu().numpy()
-            attn_out = torch.zeros_like(attn)
+            attn_out_cpu = np.zeros(attn.data.shape, dtype=np.float32)
+            log_attn_cpu = torch.log(attn.data).to(device='cpu', dtype=torch.float32)
+            log_attn_cpu = log_attn_cpu.numpy()
+            out_lens_cpu = out_lens.cpu()
+            in_lens_cpu = in_lens.cpu()
             for ind in range(b_size):
                 hard_attn = mas_width1(
-                    attn_cpu[ind, 0, :out_lens[ind], :in_lens[ind]])
-                attn_out[ind, 0, :out_lens[ind], :in_lens[ind]] = torch.tensor(
-                    hard_attn, device=attn.get_device())
+                    log_attn_cpu[ind, 0, :out_lens_cpu[ind], :in_lens_cpu[ind]])
+                attn_out_cpu[ind, 0, :out_lens_cpu[ind], :in_lens_cpu[ind]] = hard_attn
+            attn_out = torch.tensor(
+                attn_out_cpu, device=attn.get_device(), dtype=attn.dtype)
         return attn_out
 
     def binarize_attention_parallel(self, attn, in_lens, out_lens):
@@ -235,8 +241,8 @@ class FastPitch(nn.Module):
             attn: B x 1 x max_mel_len x max_text_len
         """
         with torch.no_grad():
-            attn_cpu = attn.data.cpu().numpy()
-            attn_out = b_mas(attn_cpu, in_lens.cpu().numpy(),
+            log_attn_cpu = torch.log(attn.data).cpu().numpy()
+            attn_out = b_mas(log_attn_cpu, in_lens.cpu().numpy(),
                              out_lens.cpu().numpy(), width=1)
         return torch.from_numpy(attn_out).to(attn.get_device())
 
@@ -245,6 +251,7 @@ class FastPitch(nn.Module):
         (inputs, input_lens, mel_tgt, mel_lens, pitch_dense, energy_dense,
          speaker, attn_prior, audiopaths) = inputs
 
+        text_max_len = inputs.size(1)
         mel_max_len = mel_tgt.size(2)
 
         # Calculate speaker embedding
@@ -257,32 +264,31 @@ class FastPitch(nn.Module):
         # Input FFT
         enc_out, enc_mask = self.encoder(inputs, conditioning=spk_emb)
 
-        # Alignment
-        text_emb = self.encoder.word_emb(inputs)
-
-        # make sure to do the alignments before folding
-        attn_mask = mask_from_lens(input_lens)[..., None] == 0
-        # attn_mask should be 1 for unused timesteps in the text_enc_w_spkvec tensor
-
-        attn_soft, attn_logprob = self.attention(
-            mel_tgt, text_emb.permute(0, 2, 1), mel_lens, attn_mask,
-            key_lens=input_lens, keys_encoded=enc_out, attn_prior=attn_prior)
-
-        attn_hard = self.binarize_attention_parallel(
-            attn_soft, input_lens, mel_lens)
-
-        # Viterbi --> durations
-        attn_hard_dur = attn_hard.sum(2)[:, 0, :]
-        dur_tgt = attn_hard_dur
-
-        assert torch.all(torch.eq(dur_tgt.sum(dim=1), mel_lens))
-
         # Predict durations
         log_dur_pred = self.duration_predictor(enc_out, enc_mask).squeeze(-1)
         dur_pred = torch.clamp(torch.exp(log_dur_pred) - 1, 0, max_duration)
 
         # Predict pitch
         pitch_pred = self.pitch_predictor(enc_out, enc_mask).permute(0, 2, 1)
+
+        # Alignment
+        text_emb = self.encoder.word_emb(inputs)
+
+        # make sure to do the alignments before folding
+        attn_mask = mask_from_lens(input_lens, max_len=text_max_len)
+        attn_mask = attn_mask[..., None] == 0
+        # attn_mask should be 1 for unused timesteps in the text_enc_w_spkvec tensor
+
+        attn_soft, attn_logprob = self.attention(
+            mel_tgt, text_emb.permute(0, 2, 1), mel_lens, attn_mask,
+            key_lens=input_lens, keys_encoded=enc_out, attn_prior=attn_prior)
+
+        attn_hard = self.binarize_attention(attn_soft, input_lens, mel_lens)
+
+        # Viterbi --> durations
+        attn_hard_dur = attn_hard.sum(2)[:, 0, :]
+        dur_tgt = attn_hard_dur
+        assert torch.all(torch.eq(dur_tgt.sum(dim=1), mel_lens))
 
         # Average pitch over characters
         pitch_tgt = average_pitch(pitch_dense, dur_tgt)
