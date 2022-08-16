@@ -675,6 +675,12 @@ We're constantly refining and improving our performance on AI and HPC workloads 
 
 ### Changelog
 
+July 2022
+- Performance optimizations, speedups up to 2x (DGX-1) and 2.5x (DGX A100)
+
+June 2022
+- MHA bug fix affecting models with > 1 attention heads
+
 August 2021
 - Improved quality of synthesized audio
 - Added capability to automatically align audio to transcripts during training without a pre-trained Tacotron 2 aligning model
