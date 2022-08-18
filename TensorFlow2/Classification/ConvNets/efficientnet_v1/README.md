@@ -172,7 +172,7 @@ As an alternative  to the use of the Tensorflow2 NGC container, to set up the re
 
 For multi-node, the sample provided in this repository requires [Enroot](https://github.com/NVIDIA/enroot) and [Pyxis](https://github.com/NVIDIA/pyxis) set up on a [SLURM](https://slurm.schedmd.com) cluster.
 
-# Quick Start Guide
+## Quick Start Guide
 
 To train your model using mixed or TF32 precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the EfficientNet model on the ImageNet dataset. For the specifics concerning training and inference, refer to the [Advanced](#advanced) section.
 
