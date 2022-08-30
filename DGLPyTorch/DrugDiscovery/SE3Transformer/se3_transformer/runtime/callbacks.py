@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -18,7 +18,7 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 #
-# SPDX-FileCopyrightText: Copyright (c) 2021 NVIDIA CORPORATION & AFFILIATES
+# SPDX-FileCopyrightText: Copyright (c) 2021-2022 NVIDIA CORPORATION & AFFILIATES
 # SPDX-License-Identifier: MIT
 
 import logging
@@ -34,7 +34,7 @@ from se3_transformer.runtime.metrics import MeanAbsoluteError
 
 
 class BaseCallback(ABC):
-    def on_fit_start(self, optimizer, args):
+    def on_fit_start(self, optimizer, args, start_epoch):
         pass
 
     def on_fit_end(self):
@@ -64,17 +64,17 @@ class LRSchedulerCallback(BaseCallback):
         self.logger = logger
         self.scheduler = None
 
-        self.logger.log_metadata('learning rate', {'unit': None})
-
     @abstractmethod
-    def get_scheduler(self, optimizer, args):
+    def get_scheduler(self, optimizer, args, last_epoch):
         pass
 
-    def on_fit_start(self, optimizer, args):
-        self.scheduler = self.get_scheduler(optimizer, args)
+    def on_fit_start(self, optimizer, args, start_epoch):
+        self.scheduler = self.get_scheduler(optimizer, args, start_epoch - 1)
+        if hasattr(self, 'state_dict'):
+            self.scheduler.load_state_dict(self.state_dict)
 
     def on_checkpoint_load(self, checkpoint):
-        self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        self.state_dict = checkpoint['scheduler_state_dict']
 
     def on_checkpoint_save(self, checkpoint):
         checkpoint['scheduler_state_dict'] = self.scheduler.state_dict()
@@ -95,9 +95,6 @@ class QM9MetricCallback(BaseCallback):
         self.prefix = prefix
         self.best_mae = float('inf')
         self.last_mae = None
-
-        self.logger.log_metadata(f'{self.prefix} MAE', {'unit': None})
-        self.logger.log_metadata(f'{self.prefix} best MAE', {'unit': None})
 
     def on_validation_step(self, input, target, pred):
         self.mae(pred.detach(), target.detach())
@@ -120,9 +117,9 @@ class QM9LRSchedulerCallback(LRSchedulerCallback):
         super().__init__(logger)
         self.epochs = epochs
 
-    def get_scheduler(self, optimizer, args):
+    def get_scheduler(self, optimizer, args, last_epoch):
         min_lr = args.min_learning_rate if args.min_learning_rate else args.learning_rate / 10.0
-        return torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, self.epochs, eta_min=min_lr)
+        return torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, self.epochs, eta_min=min_lr, last_epoch=last_epoch)
 
 
 class PerformanceCallback(BaseCallback):
@@ -133,12 +130,6 @@ class PerformanceCallback(BaseCallback):
         self.timestamps = []
         self.mode = mode
         self.logger = logger
-
-        logger.log_metadata(f"throughput_{self.mode}", {'unit': 'molecules/s'})
-        logger.log_metadata(f"total_time_{self.mode}", {'unit': 's'})
-        logger.log_metadata(f"latency_{self.mode}_mean", {'unit': 's'})
-        for level in [90, 95, 99]:
-            logger.log_metadata(f"latency_{self.mode}_{level}", {'unit': 's'})
 
     def on_batch_start(self):
         if self.epoch >= self.warmup_epochs:

@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -18,7 +18,7 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 #
-# SPDX-FileCopyrightText: Copyright (c) 2021 NVIDIA CORPORATION & AFFILIATES
+# SPDX-FileCopyrightText: Copyright (c) 2021-2022 NVIDIA CORPORATION & AFFILIATES
 # SPDX-License-Identifier: MIT
 
 from typing import List
@@ -109,9 +109,11 @@ if __name__ == '__main__':
 
     if is_distributed:
         nproc_per_node = torch.cuda.device_count()
-        affinity = gpu_affinity.set_affinity(local_rank, nproc_per_node)
+        affinity = gpu_affinity.set_affinity(local_rank, nproc_per_node, scope='socket')
         model = DistributedDataParallel(model, device_ids=[local_rank], output_device=local_rank)
         model._set_static_graph()
+
+    torch.set_float32_matmul_precision('high')
 
     test_dataloader = datamodule.test_dataloader() if not args.benchmark else datamodule.train_dataloader()
     evaluate(model,
