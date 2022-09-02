@@ -3,6 +3,9 @@
 ## Introduction
 This repository provides State-of-the-Art Deep Learning examples that are easy to train and deploy, achieving the best reproducible accuracy and performance with NVIDIA CUDA-X software stack running on NVIDIA Volta, Turing and Ampere GPUs.
 
+The Deep Learning Examples repository offers a unique value proposition that it provides end-to-end deep learning solutions from data preprocessing, data loading, training, inference, and deployment, customizable with your own data.
+
+
 ## NVIDIA GPU Cloud (NGC) Container Registry
 These examples, along with our NVIDIA deep learning software stack, are provided in a monthly updated Docker container on the NGC container registry (https://ngc.nvidia.com). These containers include:  
 
@@ -12,6 +15,7 @@ These examples, along with our NVIDIA deep learning software stack, are provided
 - [Monthly release notes](https://docs.nvidia.com/deeplearning/dgx/index.html#nvidia-optimized-frameworks-release-notes) for each of the NVIDIA optimized containers
 
 
+<<<<<<< Updated upstream
 ## Computer Vision
 | Models                                                                                                                              | Framework    | A100 | AMP | Multi-GPU | Multi-Node  | TRT | ONNX  | Triton | DLC | NB |
 |-------------------------------------------------------------------------------------------------------------------------------------|--------------|------| ------------- | ------------- | ------------- |-----|------------- |------------- |------------- |------------- |
@@ -40,8 +44,53 @@ These examples, along with our NVIDIA deep learning software stack, are provided
 | [U-Net 3D](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_3D_Medical)                      | TensorFlow   | Yes  | Yes  | Yes  | -  | -   | -  |   -  | Yes | - |
 | [U-Net Med](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Segmentation/UNet_Medical)                       | TensorFlow2  | Yes  | Yes  | Yes  | -  | -   |-  |   -  | Yes  | - |
 | [V-Net Med](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/VNet)                                | TensorFlow   | Yes  | Yes  | Yes  | -  | -   | -  |   -  | Yes | - |
+=======
+## Table Of Contents
 
-## Natural Language Processing
+| [Computer-Vision](README.md#Computer-Vision) | [Natural Language Processing](README.md#Natural-Language-Processing) | [Recommender Systems](README.md#Recommender-Systems) | [Speech to Text](README.md#Speech-to-Text) | [Text to Speech](README.md#Text-to-Speech) | [Graph Neural Networks](README.md#Graph-Neural-Networks) |
+| ------------ | --------------- | --------------- | ------------ | --------------- | --------------- | 
+ 
+- [Computer Vision](#Computer-Vision)
+<!--     * [Model architecture](#model-architecture)
+    * [Default configuration](#default-configuration)
+    * [Feature support matrix](#feature-support-matrix)
+        * [Features](#features) -->
+- [Natural Language Processing](#Natural-Language-Processing)
+- [Recommender Systems](#Recommender-Systems)
+- [Speech to Text](#Speech-to-Text)
+- [Text to Speech](#Text-to-Speech)
+- [Graph Neural Networks](#Graph-Neural-Networks)
+
+
+## <summary>Computer Vision</summary>
+| Models  | Framework | A100 | AMP | Multi-GPU | Multi-Node  | TRT  | ONNX  | Triton | DLC | NB |
+| ------------- | ------------- | ------------- | ------------- | ------------- | ------------- |------------- |------------- |------------- |------------- |------------- |
+| [ResNet-50](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets/resnet50v1.5)  |PyTorch  | Yes  | Yes  | Yes  | -  | Yes  | -  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets/triton/resnet50)  | Yes  | - |
+| [ResNeXt-101](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets/resnext101-32x4d)  |PyTorch  | Yes  | Yes  | Yes  | -  | Yes  |   -  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets/triton/resnext101-32x4d)  | Yes  | - |
+| [SE-ResNeXt-101](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets/se-resnext101-32x4d)  |PyTorch  | Yes  | Yes  | Yes  | -  | Yes  | -  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets/triton/se-resnext101-32x4d)  | Yes  | - |
+| [EfficientNet-B0](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets/efficientnet)  |PyTorch  | Yes  | Yes  | Yes  | -  | - | - | - | Yes  | - |
+| [EfficientNet-B4](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets/efficientnet)  |PyTorch  | Yes  | Yes  | Yes  | -  | - | - | - | Yes  | - |
+| [EfficientNet-WideSE-B0](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets/efficientnet)  |PyTorch  | Yes  | Yes  | Yes  | -  | - | - | - | Yes  | - |
+| [EfficientNet-WideSE-B4](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Classification/ConvNets/efficientnet)  |PyTorch  | Yes  | Yes  | Yes  | -  | - | - | - | Yes  | - |
+| [Mask R-CNN](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Segmentation/MaskRCNN) |PyTorch  | Yes  | Yes  | Yes  | -  | -  |   -  | -  | -  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/Segmentation/MaskRCNN/pytorch/notebooks/pytorch_MaskRCNN_pyt_train_and_inference.ipynb) |
+| [nnUNet](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Segmentation/nnUNet) |PyTorch  | Yes  | Yes  | Yes  | -  | -  |   -  | -  | Yes  | - |
+| [SSD](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Detection/SSD) |PyTorch  | Yes  | Yes  | Yes  | -  | -  |   -  | -  | -  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/blob/master/PyTorch/Detection/SSD/examples/inference.ipynb) |
+| [ResNet-50](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Classification/ConvNets/resnet50v1.5) |TensorFlow  | Yes  | Yes  | Yes  | -  | -  | -  | -  | Yes  | - |
+| [ResNeXt101](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Classification/ConvNets/resnext101-32x4d)  |TensorFlow  | Yes  | Yes  | Yes  | -  | -  |   -  | -  | Yes  | - |
+| [SE-ResNeXt-101](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Classification/ConvNets/se-resnext101-32x4d)  |TensorFlow  | Yes  | Yes  | Yes  | -  | -  | -  | -  | Yes  | - |
+| [Mask R-CNN](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Segmentation/MaskRCNN) |TensorFlow  | Yes  | Yes  | Yes  | -  | -  |   -  | -  | Yes  | - |
+| [SSD](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Detection/SSD) | TensorFlow  | Yes  | Yes  | Yes  | -  | -  | -  | -  | Yes  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/blob/master/TensorFlow/Detection/SSD/models/research/object_detection/object_detection_tutorial.ipynb) |
+| [U-Net Ind](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Industrial) |TensorFlow  | Yes  | Yes  | Yes  | -  | -  |   -  | -  | Yes  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Industrial/notebooks) |
+| [U-Net Med](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_Medical) | TensorFlow  | Yes  | Yes  | Yes  | -  |  -  |-  |   -  | Yes  | - |
+| [U-Net 3D](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/UNet_3D_Medical) | TensorFlow  | Yes  | Yes  | Yes  | -  |  -  | -  |   -  | Yes | - |
+| [V-Net Med](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow/Segmentation/VNet) | TensorFlow  | Yes  | Yes  | Yes  | -  |  -  | -  |   -  | Yes | - |
+| [U-Net Med](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Segmentation/UNet_Medical) | TensorFlow2  | Yes  | Yes  | Yes  | -  |  -  |-  |   -  | Yes  | - |
+| [Mask R-CNN](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Segmentation/MaskRCNN) |TensorFlow2  | Yes  | Yes  | Yes  | -  |  -  |-  |   -  | Yes  | - |
+| [EfficientNet](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Classification/ConvNets/efficientnet) |TensorFlow2  | Yes  | Yes  | Yes  | Yes  |  -  |-  |   -  | Yes  | - |
+| [ResNet-50](https://github.com/NVIDIA/DeepLearningExamples/tree/master/MxNet/Classification/RN50v1.5) | MXNet  | -  | Yes  | Yes  | -  | -  |   -  | -  | -  | - |
+>>>>>>> Stashed changes
+
+## <summary>Natural Language Processing</summary>
 | Models  | Framework | A100 | AMP | Multi-GPU | Multi-Node  | TRT  | ONNX  | Triton | DLC | NB |
 | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- |------------- |------------- |------------- |------------- |------------- |
 | [BERT](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/LanguageModeling/BERT) |PyTorch  | Yes  | Yes  | Yes  | Yes  | -  |   -  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/LanguageModeling/BERT/triton)  | Yes  | - |
@@ -57,7 +106,7 @@ These examples, along with our NVIDIA deep learning software stack, are provided
 | [Faster Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/FasterTransformer) | Tensorflow  | -  | -  | -  | -  | Yes  |   -  | -  | -  | - |
 
 
-## Recommender Systems
+## <summary>Recommender Systems</summary>
 | Models  | Framework | A100 | AMP | Multi-GPU | Multi-Node  | TRT  | ONNX  | Triton | DLC | NB |
 | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- |------------- |------------- |------------- |------------- |------------- |
 | [DLRM](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Recommendation/DLRM) |PyTorch  | Yes  | Yes  | Yes  | -  |  -  | Yes  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Recommendation/DLRM/triton)  | Yes | [Yes](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/Recommendation/DLRM/notebooks) |
@@ -70,20 +119,20 @@ These examples, along with our NVIDIA deep learning software stack, are provided
 | [SIM](https://github.com/NVIDIA/DeepLearningExamples/tree/master/TensorFlow2/Recommendation/SIM) | TensorFlow2  | Yes  | Yes  | Yes  | -  | -  |   -  | -  | Yes  | - |
 
 
-## Speech to Text
+## <summary>Speech to Text</summary>
 | Models  | Framework | A100 | AMP | Multi-GPU | Multi-Node  | TRT  | ONNX  | Triton | DLC | NB |
 | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- |------------- |------------- |------------- |------------- |------------- |
-| [Jasper](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechRecognition/Jasper) |PyTorch  | Yes  | Yes  | Yes  | -  | Yes  |   Yes  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechRecognition/Jasper/trtis)  | Yes  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechRecognition/Jasper/notebooks) |
+| [Jasper](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechRecognition/Jasper) |PyTorch  | Yes  | Yes  | Yes  | -  | Yes  |   Yes  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechRecognition/Jasper/triton)  | Yes  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechRecognition/Jasper/notebooks) |
 | [Hidden Markov Model](https://github.com/NVIDIA/DeepLearningExamples/tree/master/Kaldi/SpeechRecognition) | Kaldi  | -  | -  | Yes  | -  | -  |   -  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/tree/master/Kaldi/SpeechRecognition)  | -  | - |
 
-## Text to Speech
+## <summary>Text to Speech</summary>
 | Models  | Framework | A100 | AMP | Multi-GPU | Multi-Node  | TRT  | ONNX  | Triton | DLC | NB | 
 | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- |------------- |------------- |------------- |------------- |------------- |
 | [FastPitch](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/FastPitch) | PyTorch  | Yes  | Yes  | Yes  | - | - | - | - | Yes | - |
 | [FastSpeech](https://github.com/NVIDIA/DeepLearningExamples/tree/master/CUDA-Optimized/FastSpeech) | PyTorch  | -  | Yes  | Yes  | - | Yes | - | - | - | - |
 | [Tacotron 2 and WaveGlow](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2) | PyTorch  | Yes  | Yes  | Yes  | -  | Yes  |   Yes  | [Yes](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2/trtis_cpp)  | Yes  | - |
 
-## Graph Neural Networks
+## <summary>Graph Neural Networks</summary>
 | Models  | Framework | A100 | AMP | Multi-GPU | Multi-Node  | TRT  | ONNX  | Triton | DLC | NB | 
 | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- |------------- |------------- |------------- |------------- |------------- |
 | [SE(3)-Transformer](https://github.com/NVIDIA/DeepLearningExamples/tree/master/DGLPyTorch/DrugDiscovery/SE3Transformer) | PyTorch  | Yes  | Yes  | Yes  | - | - | - | - | - | - |
