@@ -611,6 +611,10 @@ Metrics gathered through both training and evaluation:
  - `train.lr` - learning rate
 
 
+### Checkpoints
+We offered a checkpoint which is well pretrained on the ImageNet dataset with AMP mode. It achieves 77.11% top 1 accuracy on the test dataset. You can find out that checkpoint from [ResNet50 checkpoints (PaddlePaddle, AMP, ImageNet)](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/resnet_50_paddle_ckpt), and resume training via the instructions in [Training process](#training-process).
+
+
 ### Automatic SParsity training process:
 To enable automatic sparsity training workflow, turn on `--amp` and `--prune-mode` when training launches. Refer to [Command-line options](#command-line-options)
 
