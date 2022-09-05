@@ -271,14 +271,15 @@ def evaluating(model):
 
 
 def validate(model, criterion, valset, epoch, batch_iter, batch_size,
-             world_size, collate_fn, distributed_run, rank, batch_to_gpu, amp_run):
+             world_size, collate_fn, distributed_run, perf_bench, batch_to_gpu, amp_run):
     """Handles all the validation scoring and printing"""
     with evaluating(model), torch.no_grad():
         val_sampler = DistributedSampler(valset) if distributed_run else None
         val_loader = DataLoader(valset, num_workers=1, shuffle=False,
                                 sampler=val_sampler,
                                 batch_size=batch_size, pin_memory=False,
-                                collate_fn=collate_fn)
+                                collate_fn=collate_fn,
+                                drop_last=(True if perf_bench else False))
 
         val_loss = 0.0
         num_iters = 0
@@ -310,11 +311,12 @@ def validate(model, criterion, valset, epoch, batch_iter, batch_size,
             val_items_per_sec += items_per_sec
             num_iters += 1
 
-        val_loss = val_loss/(i + 1)
+        val_loss = val_loss/num_iters
+        val_items_per_sec = val_items_per_sec/num_iters
+
 
         DLLogger.log(step=(epoch,), data={'val_loss': val_loss})
-        DLLogger.log(step=(epoch,), data={'val_items_per_sec':
-                                         (val_items_per_sec/num_iters if num_iters > 0 else 0.0)})
+        DLLogger.log(step=(epoch,), data={'val_items_per_sec': val_items_per_sec})
 
         return val_loss, val_items_per_sec
 
@@ -536,7 +538,7 @@ def main():
         val_loss, val_items_per_sec = validate(model, criterion, valset, epoch,
                                                iteration, args.batch_size,
                                                world_size, collate_fn,
-                                               distributed_run, local_rank,
+                                               distributed_run, args.bench_class=="perf-train",
                                                batch_to_gpu,
                                                args.amp)
 
