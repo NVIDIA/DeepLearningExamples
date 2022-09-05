@@ -113,6 +113,7 @@ def _categorical_embedding_lookup(table, inputs, feature_name, combiner):
         embeddings = tf.gather(table, x)
 
         # Remove padded values
+        # This is an inverse of dataloader pad_batch
         mask_array = tf.cast(x >= 0, embeddings.dtype)
         mask = tf.expand_dims(mask_array, -1)
         embeddings = tf.math.multiply(embeddings, mask)

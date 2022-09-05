@@ -1,0 +1,76 @@
+channel_spec:
+  label:
+  - clicked
+  map: []
+  multihot_categorical: []
+  numerical:
+  - document_id_document_id_promo_sim_categories
+  - document_id_document_id_promo_sim_topics
+  - document_id_document_id_promo_sim_entities
+  - document_id_promo_ctr
+  - publisher_id_promo_ctr
+  - source_id_promo_ctr
+  - document_id_promo_count
+  - publish_time_days_since_published
+  - ad_id_ctr
+  - advertiser_id_ctr
+  - campaign_id_ctr
+  - ad_id_count
+  - publish_time_promo_days_since_published
+  onehot_categorical: []
+feature_spec:
+  ad_id_count: {}
+  ad_id_ctr: {}
+  advertiser_id_ctr: {}
+  campaign_id_ctr: {}
+  clicked: {}
+  document_id_document_id_promo_sim_categories: {}
+  document_id_document_id_promo_sim_entities: {}
+  document_id_document_id_promo_sim_topics: {}
+  document_id_promo_count: {}
+  document_id_promo_ctr: {}
+  publish_time_days_since_published: {}
+  publish_time_promo_days_since_published: {}
+  publisher_id_promo_ctr: {}
+  source_id_promo_ctr: {}
+metadata: {}
+source_spec:
+  test:
+  - features:
+    - clicked
+    - document_id_document_id_promo_sim_categories
+    - document_id_document_id_promo_sim_topics
+    - document_id_document_id_promo_sim_entities
+    - document_id_promo_ctr
+    - publisher_id_promo_ctr
+    - source_id_promo_ctr
+    - document_id_promo_count
+    - publish_time_days_since_published
+    - ad_id_ctr
+    - advertiser_id_ctr
+    - campaign_id_ctr
+    - ad_id_count
+    - publish_time_promo_days_since_published
+    files:
+    - valid.csv
+    type: csv
+  train:
+  - features:
+    - clicked
+    - document_id_document_id_promo_sim_categories
+    - document_id_document_id_promo_sim_topics
+    - document_id_document_id_promo_sim_entities
+    - document_id_promo_ctr
+    - publisher_id_promo_ctr
+    - source_id_promo_ctr
+    - document_id_promo_count
+    - publish_time_days_since_published
+    - ad_id_ctr
+    - advertiser_id_ctr
+    - campaign_id_ctr
+    - ad_id_count
+    - publish_time_promo_days_since_published
+    files:
+    - train.csv
+    type: csv
+

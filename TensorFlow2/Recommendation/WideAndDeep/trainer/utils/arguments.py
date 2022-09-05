@@ -27,19 +27,24 @@ def parse_args():
     locations = parser.add_argument_group("location of datasets")
 
     locations.add_argument(
-        "--train_data_pattern",
+        "--dataset_path",
         type=str,
-        default=f"{DEFAULT_DIR}/data/train/*.parquet",
-        help="Pattern of training file names. For example if training files are part_0.parquet, "
-             "part_0.parquet then --train_data_pattern is *.parquet",
+        default=f"{DEFAULT_DIR}/data",
+        help="Dataset base directory, relative to which path to feature_spec and paths in feature_spec are resolved"
     )
 
     locations.add_argument(
-        "--eval_data_pattern",
+        "--fspec_file",
         type=str,
-        default=f"{DEFAULT_DIR}/data/valid/*.parquet",
-        help="Pattern of eval file names. For example if evaluation files are part_0.parquet, "
-             "part_0.parquet then --eval_data_pattern is *.parquet",
+        default="feature_spec.yaml",
+        help="Path to the feature spec file, relative to dataset_path"
+    )
+
+    locations.add_argument(
+        "--embedding_sizes_file",
+        type=str,
+        default="data/outbrain/embedding_sizes.json",
+        help="Path to the file containing a dictionary of embedding sizes for categorical features"
     )
 
     locations.add_argument(
@@ -53,7 +58,7 @@ def parse_args():
         "--model_dir",
         type=str,
         default=f"{DEFAULT_DIR}/checkpoints",
-        help="Destination where model checkpoint will be saved",
+        help="Destination where the model checkpoint will be saved",
     )
 
     locations.add_argument(
@@ -76,14 +81,14 @@ def parse_args():
         "--global_batch_size",
         type=int,
         default=131072,
-        help="Total size of training batch",
+        help="Total (global) size of training batch",
     )
 
     training_params.add_argument(
         "--eval_batch_size",
         type=int,
         default=131072,
-        help="Total size of evaluation batch",
+        help="Total (global) size of evaluation batch",
     )
 
     training_params.add_argument(
@@ -157,6 +162,21 @@ def parse_args():
     run_params = parser.add_argument_group("run mode parameters")
 
     run_params.add_argument(
+        "--num_auc_thresholds",
+        type=int,
+        default=8000,
+        help="Number of thresholds for the AUC computation",
+    )
+
+    run_params.add_argument(
+        "--disable_map_calculation",
+        dest="map_calculation_enabled",
+        action="store_false",
+        default=True,
+        help="Disable calculation of MAP metric. See ReadMe for additional dataset requirements keeping it enabled introduces."
+    )
+
+    run_params.add_argument(
         "--evaluate",
         default=False,
         action="store_true",
@@ -174,7 +194,7 @@ def parse_args():
         "--benchmark_warmup_steps",
         type=int,
         default=500,
-        help="Number of warmup steps before start of the benchmark",
+        help="Number of warmup steps before the start of the benchmark",
     )
 
     run_params.add_argument(

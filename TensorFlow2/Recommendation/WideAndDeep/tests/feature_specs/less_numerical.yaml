@@ -1,0 +1,147 @@
+channel_spec:
+  label:
+  - clicked
+  map: []
+  multihot_categorical:
+  - topic_id_list
+  - entity_id_list
+  - category_id_list
+  numerical:
+  - document_id_promo_ctr
+  - publisher_id_promo_ctr
+  - source_id_promo_ctr
+  - document_id_promo_count
+  - publish_time_days_since_published
+  - ad_id_ctr
+  - advertiser_id_ctr
+  - campaign_id_ctr
+  - ad_id_count
+  - publish_time_promo_days_since_published
+  onehot_categorical:
+  - ad_id
+  - document_id
+  - platform
+  - document_id_promo
+  - campaign_id
+  - advertiser_id
+  - source_id
+  - geo_location
+  - geo_location_country
+  - geo_location_state
+  - publisher_id
+  - source_id_promo
+  - publisher_id_promo
+feature_spec:
+  ad_id:
+    cardinality: 250000
+  ad_id_count: {}
+  ad_id_ctr: {}
+  advertiser_id:
+    cardinality: 2500
+  advertiser_id_ctr: {}
+  campaign_id:
+    cardinality: 5000
+  campaign_id_ctr: {}
+  category_id_list:
+    cardinality: 100
+    max_hotness: 3
+  clicked: {}
+  document_id:
+    cardinality: 300000
+  document_id_promo:
+    cardinality: 100000
+  document_id_promo_count: {}
+  document_id_promo_ctr: {}
+  entity_id_list:
+    cardinality: 10000
+    max_hotness: 3
+  geo_location:
+    cardinality: 2500
+  geo_location_country:
+    cardinality: 300
+  geo_location_state:
+    cardinality: 2000
+  platform:
+    cardinality: 4
+  publish_time_days_since_published: {}
+  publish_time_promo_days_since_published: {}
+  publisher_id:
+    cardinality: 1000
+  publisher_id_promo:
+    cardinality: 1000
+  publisher_id_promo_ctr: {}
+  source_id:
+    cardinality: 4000
+  source_id_promo:
+    cardinality: 4000
+  source_id_promo_ctr: {}
+  topic_id_list:
+    cardinality: 350
+    max_hotness: 3
+metadata: {}
+source_spec:
+  test:
+  - features:
+    - clicked
+    - ad_id
+    - document_id
+    - platform
+    - document_id_promo
+    - campaign_id
+    - advertiser_id
+    - source_id
+    - geo_location
+    - geo_location_country
+    - geo_location_state
+    - publisher_id
+    - source_id_promo
+    - publisher_id_promo
+    - topic_id_list
+    - entity_id_list
+    - category_id_list
+    - document_id_promo_ctr
+    - publisher_id_promo_ctr
+    - source_id_promo_ctr
+    - document_id_promo_count
+    - publish_time_days_since_published
+    - ad_id_ctr
+    - advertiser_id_ctr
+    - campaign_id_ctr
+    - ad_id_count
+    - publish_time_promo_days_since_published
+    files:
+    - valid.csv
+    type: csv
+  train:
+  - features:
+    - clicked
+    - ad_id
+    - document_id
+    - platform
+    - document_id_promo
+    - campaign_id
+    - advertiser_id
+    - source_id
+    - geo_location
+    - geo_location_country
+    - geo_location_state
+    - publisher_id
+    - source_id_promo
+    - publisher_id_promo
+    - topic_id_list
+    - entity_id_list
+    - category_id_list
+    - document_id_promo_ctr
+    - publisher_id_promo_ctr
+    - source_id_promo_ctr
+    - document_id_promo_count
+    - publish_time_days_since_published
+    - ad_id_ctr
+    - advertiser_id_ctr
+    - campaign_id_ctr
+    - ad_id_count
+    - publish_time_promo_days_since_published
+    files:
+    - train.csv
+    type: csv
+

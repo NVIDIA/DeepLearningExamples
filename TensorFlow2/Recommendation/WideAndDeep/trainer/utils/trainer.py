@@ -19,8 +19,7 @@ import dllogger
 import horovod.tensorflow as hvd
 import numpy as np
 import tensorflow as tf
-from data.outbrain.dataloader import pad_batch
-from trainer.model.widedeep import get_dummy_inputs
+from data.outbrain.dataloader import make_padding_function
 
 
 class Trainer:
@@ -36,6 +35,7 @@ class Trainer:
             args,
             train_dataset,
             evaluator,
+            multihot_hotnesses_dict
     ):
         self.model = model
         self.scheduler = scheduler
@@ -49,12 +49,11 @@ class Trainer:
         self.evaluator = evaluator
         self.compiled_loss = compiled_loss
         self.logger = logging.getLogger("tensorflow")
+        self.multihot_hotnesses_dict = multihot_hotnesses_dict
+        self.padding_function = make_padding_function(self.multihot_hotnesses_dict)
 
         with tf.device("/CPU:0"):
             self.current_step_var = tf.Variable(0, trainable=False, dtype=tf.int64)
-            self.display_id_counter = tf.Variable(
-                0.0, trainable=False, dtype=tf.float64
-            )
 
         self._init_checkpoint_manager()
         self.max_steps = steps
@@ -174,7 +173,7 @@ class Trainer:
 
         # Graph mode part
         for i, (x, y) in enumerate(self.train_dataset, current_step):
-            x = pad_batch(x)
+            x = self.padding_function(x)
             self.train_step(x, y)
             if not self.args.benchmark and (
                     i % self.steps_per_epoch == 0 or i == self.max_steps
