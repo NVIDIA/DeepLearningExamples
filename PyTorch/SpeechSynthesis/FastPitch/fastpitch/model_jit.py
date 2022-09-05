@@ -30,6 +30,7 @@ from typing import Optional
 import torch
 from torch import nn as nn
 
+from common import filter_warnings
 from fastpitch.model import TemporalPredictor
 from fastpitch.transformer_jit import FFTransformer
 

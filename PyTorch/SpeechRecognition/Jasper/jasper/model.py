@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from common import monkey_patch
+from common import filter_warnings
 
 
 activations = {

@@ -45,7 +45,7 @@ import torch.nn.functional as F
 from torch.nn import AvgPool1d, Conv1d, Conv2d, ConvTranspose1d
 from torch.nn.utils import remove_weight_norm, spectral_norm, weight_norm
 
-from common import monkey_patch
+from common import filter_warnings
 from common.stft import STFT
 from common.utils import AttrDict, init_weights, get_padding
 
