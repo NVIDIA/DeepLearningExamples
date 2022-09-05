@@ -16,8 +16,9 @@
 import cupy
 import horovod.tensorflow as hvd
 import tensorflow as tf
-from data.outbrain.features import CATEGORICAL_COLUMNS, MULTIHOT_COLUMNS, NUMERIC_COLUMNS
 from nvtabular.loader.tensorflow import KerasSequenceLoader
+from data.outbrain.defaults import LABEL_CHANNEL, MAP_FEATURE_CHANNEL, NUMERICAL_CHANNEL, ONEHOT_CHANNEL, \
+    MULTIHOT_CHANNEL
 
 cupy.random.seed(None)
 
@@ -36,15 +37,22 @@ def seed_fn():
     return reduced_seed % max_rand
 
 
-def train_input_fn(
-        train_paths, records_batch_size, buffer_size=0.1, parts_per_chunk=1, shuffle=True
-):
-    train_dataset_tf = KerasSequenceLoader(
-        train_paths,
-        batch_size=records_batch_size,
-        label_names=["clicked"],
-        cat_names=CATEGORICAL_COLUMNS,
-        cont_names=NUMERIC_COLUMNS,
+def get_dataset(feature_spec, mapping, batch_size, buffer_size=0.1, parts_per_chunk=1,
+                map_channel_enabled=False, shuffle=True):
+
+    data_paths = feature_spec.get_paths_by_mapping(mapping)
+    label_names = feature_spec.get_names_by_channel(LABEL_CHANNEL)
+    cat_names = feature_spec.get_names_by_channel(ONEHOT_CHANNEL) + feature_spec.get_names_by_channel(MULTIHOT_CHANNEL)
+    cont_names = feature_spec.get_names_by_channel(NUMERICAL_CHANNEL)
+    if map_channel_enabled:
+        cat_names += feature_spec.get_names_by_channel(MAP_FEATURE_CHANNEL)
+
+    tf_dataset = KerasSequenceLoader(
+        data_paths,
+        batch_size=batch_size,
+        label_names=label_names,
+        cat_names=cat_names,
+        cont_names=cont_names,
         engine="parquet",
         shuffle=shuffle,
         buffer_size=buffer_size,
@@ -54,39 +62,20 @@ def train_input_fn(
         seed_fn=seed_fn,
     )
 
-    return train_dataset_tf
+    return tf_dataset
 
+def make_padding_function(multihot_hotness_dict):
+    @tf.function(experimental_relax_shapes=True)
+    def pad_batch(batch):
+        batch = batch.copy()
+        for feature, hotness in multihot_hotness_dict.items():
+            multihot_tuple = batch[feature]
+            values = multihot_tuple[0][:, 0]
+            row_lengths = multihot_tuple[1][:, 0]
+            padded = tf.RaggedTensor.from_row_lengths(
+                values, row_lengths, validate=False
+            ).to_tensor(default_value=-1, shape=[None, hotness])
+            batch[feature] = padded
+        return batch
 
-def eval_input_fn(
-        valid_paths, records_batch_size, buffer_size=0.1, parts_per_chunk=1, shuffle=False
-):
-    valid_dataset_tf = KerasSequenceLoader(
-        valid_paths,
-        batch_size=records_batch_size,
-        label_names=["clicked"],
-        cat_names=CATEGORICAL_COLUMNS + ["display_id"],
-        cont_names=NUMERIC_COLUMNS,
-        engine="parquet",
-        shuffle=shuffle,
-        buffer_size=buffer_size,
-        parts_per_chunk=parts_per_chunk,
-        global_size=hvd.size(),
-        global_rank=hvd.rank(),
-        seed_fn=seed_fn,
-    )
-
-    return valid_dataset_tf
-
-
-@tf.function(experimental_relax_shapes=True)
-def pad_batch(batch):
-    batch = batch.copy()
-    for feature, hotness in MULTIHOT_COLUMNS.items():
-        multihot_tuple = batch[feature]
-        values = multihot_tuple[0][:, 0]
-        row_lengths = multihot_tuple[1][:, 0]
-        padded = tf.RaggedTensor.from_row_lengths(
-            values, row_lengths, validate=False
-        ).to_tensor(default_value=-1, shape=[None, hotness])
-        batch[feature] = padded
-    return batch
+    return pad_batch

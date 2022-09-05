@@ -1,12 +1,10 @@
-#!/bin/bash
-
-# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022 NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#     http://www.apache.org/licenses/LICENSE-2.0
+#       http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,16 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e
+import numpy as np
 
-function usage() {
-  echo "Usage: bash scripts/preproc.sh"
-}
+ONEHOT_CHANNEL = "onehot_categorical"
+MULTIHOT_CHANNEL = "multihot_categorical"
+NUMERICAL_CHANNEL = "numerical"
+LABEL_CHANNEL = "label"
+MAP_FEATURE_CHANNEL = "map"
 
-if [ ! -d "scripts" ] || [ ! "$(ls -A 'scripts')" ]; then
-  echo "You are probably calling this script from wrong directory"
-  usage
-  exit 1
-fi
+TRAIN_MAPPING = "train"
+TEST_MAPPING = "test"
 
-time python -m data.outbrain.nvtabular.preproc "$@"
+PARQUET_TYPE = "parquet"

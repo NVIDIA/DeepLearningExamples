@@ -16,6 +16,8 @@ from types import SimpleNamespace
 from typing import List
 
 import tensorflow as tf
+
+from data.outbrain.features import get_outbrain_feature_spec, EMBEDDING_DIMENSIONS
 from trainer.model.widedeep import wide_deep_model
 
 
@@ -35,7 +37,6 @@ def update_argparser(parser):
     parser.add_argument('--checkpoint-dir', type=str, required=True,
                         help='Path to directory containing checkpoint')
 
-
 def get_model(
         *,
         deep_hidden_units: List[int],
@@ -53,7 +54,10 @@ def get_model(
 
     args = SimpleNamespace(**args)
 
-    model, features = wide_deep_model(args)
+    #This will be changed in the future when feature spec support for triton is added
+    feature_spec = get_outbrain_feature_spec("")
+    embedding_dimensions = EMBEDDING_DIMENSIONS
+    model, features = wide_deep_model(args, feature_spec, embedding_dimensions)
 
     checkpoint = tf.train.Checkpoint(model=model)
     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()

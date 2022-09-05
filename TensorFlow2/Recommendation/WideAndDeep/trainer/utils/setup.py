@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import glob
 import json
 import logging
 import multiprocessing
@@ -21,7 +20,10 @@ import os
 import dllogger
 import horovod.tensorflow.keras as hvd
 import tensorflow as tf
-from data.outbrain.dataloader import eval_input_fn, train_input_fn
+
+from data.feature_spec import FeatureSpec
+from data.outbrain.dataloader import get_dataset
+from data.outbrain.defaults import TEST_MAPPING, TRAIN_MAPPING, MULTIHOT_CHANNEL, ONEHOT_CHANNEL
 from trainer.utils.gpu_affinity import set_affinity
 
 
@@ -67,6 +69,7 @@ def init_gpu(args, logger):
     assert pValue.contents.value == 128
 
 
+
 def init_logger(args, full, logger):
     if full:
         logger.setLevel(logging.INFO)
@@ -95,6 +98,13 @@ def init_logger(args, full, logger):
     dllogger.metadata("train_throughput", {"unit": "samples/s"})
     dllogger.metadata("validation_throughput", {"unit": "samples/s"})
 
+def check_embedding_sizes(embedding_sizes: dict, feature_spec: FeatureSpec) -> None:
+    onehot_features = feature_spec.get_names_by_channel(ONEHOT_CHANNEL)
+    multihot_features = feature_spec.get_names_by_channel(MULTIHOT_CHANNEL)
+    embedded_features = onehot_features + multihot_features
+    for feature in embedded_features:
+        assert feature in embedding_sizes
+        assert isinstance(embedding_sizes[feature], int)
 
 def create_config(args):
     assert not (
@@ -115,21 +125,33 @@ def create_config(args):
     train_batch_size = args.global_batch_size // num_gpus
     eval_batch_size = args.eval_batch_size // num_gpus
 
-    train_paths = sorted(glob.glob(args.train_data_pattern))
-    valid_paths = sorted(glob.glob(args.eval_data_pattern))
-
-    train_spec_input_fn = train_input_fn(
-        train_paths=train_paths,
-        records_batch_size=train_batch_size,
+    fspec_path = os.path.join(args.dataset_path, args.fspec_file)
+    feature_spec = FeatureSpec.from_yaml(fspec_path)
+    feature_spec.check_feature_spec(require_map_channel=args.map_calculation_enabled, world_size=hvd.size())
+    train_dataset = get_dataset(
+        feature_spec=feature_spec,
+        mapping=TRAIN_MAPPING,
+        batch_size=train_batch_size,
+        shuffle=True,
+        map_channel_enabled=False
     )
 
-    eval_spec_input_fn = eval_input_fn(
-        valid_paths=valid_paths, records_batch_size=eval_batch_size
+    eval_dataset = get_dataset(
+        feature_spec=feature_spec,
+        mapping=TEST_MAPPING,
+        batch_size=eval_batch_size,
+        shuffle=False,
+        map_channel_enabled=args.map_calculation_enabled
     )
 
+    with open(args.embedding_sizes_file) as opened:
+        embedding_sizes = json.load(opened)
+    check_embedding_sizes(embedding_sizes, feature_spec)
     config = {
-        "train_dataset": train_spec_input_fn,
-        "eval_dataset": eval_spec_input_fn,
+        "train_dataset": train_dataset,
+        "eval_dataset": eval_dataset,
+        "feature_spec": feature_spec,
+        "embedding_dimensions": embedding_sizes
     }
 
     return config
