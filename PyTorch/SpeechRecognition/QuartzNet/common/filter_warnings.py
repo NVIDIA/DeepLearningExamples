@@ -21,7 +21,7 @@ warnings.filterwarnings(
     message='positional arguments and argument "destination" are deprecated.'
             ' nn.Module.state_dict will not accept them in the future.')
 
-# 22.08-py3 RC
+# 22.08-py3 container
 warnings.filterwarnings(
     "ignore",
     message="is_namedtuple is deprecated, please use the python checks")

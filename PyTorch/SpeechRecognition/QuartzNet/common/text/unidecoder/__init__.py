@@ -18,8 +18,6 @@ import warnings
 from .homoglyphs import homoglyphs
 from .replacements import replacements
 
-warnings.simplefilter('always', UserWarning)
-
 
 _replacements = {uni: asc for uni, asc in replacements}
 _homoglyphs = {g: asc for asc, glyphs in homoglyphs.items() for g in glyphs}
