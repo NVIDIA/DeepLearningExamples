@@ -519,16 +519,29 @@ def main(args, model=None) -> SummarizationModule:
 
     lower_is_better = args.val_metric == "loss"
 
+    log_callback = Seq2SeqLoggingCallback()
+
     trainer: pl.Trainer = generic_train(
         model,
         args,
-        logging_callback=Seq2SeqLoggingCallback(),
+        logging_callback=log_callback,
         checkpoint_callback=get_checkpoint_callback(
             args.output_dir, model.val_metric, args.save_top_k, lower_is_better
         ),
         extra_callbacks=extra_callbacks,
         logger=logger,
     )
+
+    if get_rank() == 0:
+        dllogger.init(backends=[dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE,
+                                                           filename=args.json_summary),
+                                dllogger.StdOutBackend(verbosity=dllogger.Verbosity.VERBOSE, step_format=format_step)])
+        dllogger.metadata("avg_train_time", {"unit": "s"})
+        dllogger.metadata("avg_train_throughput", {"unit": "tokens/s"})
+        dllogger.log(step=tuple(), data={"avg_train_tokens":log_callback.tokens, "avg_train_time":log_callback.train_time, "total_train_epochs":log_callback.epochs, "avg_train_throughput":log_callback.tokens/log_callback.train_time})
+        print("Avg Tokens = %d Avg Train Time = %.2f Total Epochs = %d"%(log_callback.tokens, log_callback.train_time, log_callback.epochs))
+        print("Avg steps per sec = %d Avg Throughput (tok/s) = %d"%(log_callback.avg_steps_per_sec, log_callback.tokens/log_callback.train_time))
+        dllogger.flush()
 
     pickle_save(model.hparams, model.output_dir / "hparams.pkl")
     if args.do_predict and not args.do_train:
@@ -553,16 +566,5 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if get_rank() == 0:
-        dllogger.init(backends=[dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE,
-                                                           filename=args.json_summary),
-                                dllogger.StdOutBackend(verbosity=dllogger.Verbosity.VERBOSE, step_format=format_step)])
-    else:
-        dllogger.init(backends=[])
-
-    dllogger.metadata("avg_train_time", {"unit": "s"})
-    dllogger.metadata("avg_train_throughput", {"unit": "tokens/s"})
-
     main(args)
 
-    dllogger.flush()
