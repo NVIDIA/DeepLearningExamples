@@ -25,7 +25,6 @@ from pytorch_lightning.utilities import rank_zero_only
 from utils.utils import save_json
 from utils.distributed_utils import all_reduce_item, get_world_size
 import time
-import dllogger
 
 def count_trainable_parameters(model):
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
@@ -79,6 +78,7 @@ class Seq2SeqLoggingCallback(pl.Callback):
             generations_file.open("w+").write(content)
 
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx, dataloader_idx):
+        self.train_tob_list.append(outputs[0][0]["log"]["tpb"])
         self.train_time_epoch_list.append(time.time() - self.t0) #Measures ~time for forward + backward + optimizer_step
 
     def on_train_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
@@ -95,6 +95,7 @@ class Seq2SeqLoggingCallback(pl.Callback):
         # mp stands for million parameters
         trainer.logger.log_metrics({"n_params": npars, "mp": npars / 1e6, "grad_mp": n_trainable_pars / 1e6})
         self.train_time_epoch_list = []
+        self.train_tob_list = []
         self.tokens = 0
         self.train_time = 0.0
         self.avg_steps_per_sec = 0.0
@@ -103,18 +104,6 @@ class Seq2SeqLoggingCallback(pl.Callback):
             self.sync_dist = pl_module.sync_dist
         except:
             self.sync_dist = get_world_size() > 1
-
-    @rank_zero_only
-    def on_test_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
-        dllogger.log(step=(pl_module.global_step, ), data=pl_module.metrics["test"][-1])
-        # Uncommenting this will save val generations
-        # return self._write_logs(trainer, pl_module, "test")
-
-    @rank_zero_only
-    def on_validation_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
-        dllogger.log(step=(pl_module.global_step, ), data=pl_module.metrics["val"][-1])
-        # Uncommenting this will save val generations
-        # return self._write_logs(trainer, pl_module, "valid")
 
     def process_stats(self, train_times, outputs, filter_p=0.8):
         index_list = np.argsort(train_times) #sort based on train_times
@@ -125,7 +114,7 @@ class Seq2SeqLoggingCallback(pl.Callback):
 
         for i in index_list[:best_n]:
             train_time += train_times[i]
-            unpadded_tokens += outputs[i]["log"]["tpb"]
+            unpadded_tokens += outputs[i]
         avg_steps_per_sec = train_time / best_n
         return train_time, unpadded_tokens, best_n, avg_steps_per_sec
 
@@ -133,7 +122,8 @@ class Seq2SeqLoggingCallback(pl.Callback):
 
         try:
 
-            train_time, unpadded_tokens, train_batches, avg_steps_per_sec = self.process_stats(self.train_time_epoch_list, outputs[0])
+            outputs = self.train_tob_list
+            train_time, unpadded_tokens, train_batches, avg_steps_per_sec = self.process_stats(self.train_time_epoch_list, outputs)
             pl_module.log("train_throughput", unpadded_tokens/train_time, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=self.sync_dist)
             all_reduce_tokens = all_reduce_item(unpadded_tokens, "sum")
             all_reduce_time = all_reduce_item(train_time, "mean")
@@ -147,6 +137,7 @@ class Seq2SeqLoggingCallback(pl.Callback):
 
             #Reset
             self.train_time_epoch_list = []
+            self.train_tob_list = []
         except ZeroDivisionError:
             print("Train time is reported as 0? It's possible training is already complete!")
             pass
@@ -154,11 +145,17 @@ class Seq2SeqLoggingCallback(pl.Callback):
     def on_train_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
 
         if self.epochs < 1:
-            print("Ran less than one full epoch. Perf metrics unavailable!")
-        else:
-            dllogger.log(step=tuple(), data={"avg_train_tokens":self.tokens, "avg_train_time":self.train_time, "total_train_epochs":self.epochs, "avg_train_throughput":self.tokens/self.train_time})
-            print("Avg Tokens = %d Avg Train Time = %.2f Total Epochs = %d"%(self.tokens, self.train_time, self.epochs))
-            print("Avg steps per sec = %d Avg Throughput (tok/s) = %d"%(self.avg_steps_per_sec, self.tokens/self.train_time))
+            outputs = self.train_tob_list
+            train_time, unpadded_tokens, train_batches, avg_steps_per_sec = self.process_stats(self.train_time_epoch_list, outputs)
+            pl_module.log("train_throughput", unpadded_tokens/train_time, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=self.sync_dist)
+            all_reduce_tokens = all_reduce_item(unpadded_tokens, "sum")
+            all_reduce_time = all_reduce_item(train_time, "mean")
+            all_reduce_avg_steps_per_sec = all_reduce_item(avg_steps_per_sec, "mean")
+
+            #Accumulate
+            self.tokens = ((self.tokens * self.epochs) + all_reduce_tokens) / (self.epochs + 1)
+            self.train_time = ((self.train_time * self.epochs) + all_reduce_time) / (self.epochs + 1)
+            self.avg_steps_per_sec = ((self.avg_steps_per_sec * self.epochs) + all_reduce_avg_steps_per_sec) / (self.epochs + 1.0)
 
 def get_checkpoint_callback(output_dir, metric, save_top_k=1, lower_is_better=False):
     """Saves the best model by validation ROUGE2 score."""
