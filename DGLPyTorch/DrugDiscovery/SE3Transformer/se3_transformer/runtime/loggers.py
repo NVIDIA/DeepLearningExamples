@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -18,7 +18,7 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 #
-# SPDX-FileCopyrightText: Copyright (c) 2021 NVIDIA CORPORATION & AFFILIATES
+# SPDX-FileCopyrightText: Copyright (c) 2021-2022 NVIDIA CORPORATION & AFFILIATES
 # SPDX-License-Identifier: MIT
 
 import pathlib
@@ -38,11 +38,6 @@ class Logger(ABC):
     @rank_zero_only
     @abstractmethod
     def log_hyperparams(self, params):
-        pass
-
-    @rank_zero_only
-    @abstractmethod
-    def log_metadata(self, metric, metadata):
         pass
 
     @rank_zero_only
@@ -86,11 +81,6 @@ class LoggerCollection(Logger):
         for logger in self.loggers:
             logger.log_hyperparams(params)
 
-    @rank_zero_only
-    def log_metadata(self, metric, metadata):
-        for logger in self.loggers:
-            logger.log_metadata(metric, metadata)
-
 
 class DLLogger(Logger):
     def __init__(self, save_dir: pathlib.Path, filename: str):
@@ -104,10 +94,6 @@ class DLLogger(Logger):
     def log_hyperparams(self, params):
         params = self._sanitize_params(params)
         dllogger.log(step="PARAMETER", data=params)
-
-    @rank_zero_only
-    def log_metadata(self, metric, metadata):
-        dllogger.metadata(metric, metadata)
 
     @rank_zero_only
     def log_metrics(self, metrics, step=None):
@@ -139,10 +125,6 @@ class WandbLogger(Logger):
     def log_hyperparams(self, params: Dict[str, Any]) -> None:
         params = self._sanitize_params(params)
         self.experiment.config.update(params, allow_val_change=True)
-
-    @rank_zero_only
-    def log_metadata(self, metric, metadata):
-        pass
 
     @rank_zero_only
     def log_metrics(self, metrics: Dict[str, float], step: Optional[int] = None) -> None:

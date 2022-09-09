@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2021-2022, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Permission is hereby granted, free of charge, to any person obtaining a
 # copy of this software and associated documentation files (the "Software"),
@@ -18,7 +18,7 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 #
-# SPDX-FileCopyrightText: Copyright (c) 2021 NVIDIA CORPORATION & AFFILIATES
+# SPDX-FileCopyrightText: Copyright (c) 2021-2022 NVIDIA CORPORATION & AFFILIATES
 # SPDX-License-Identifier: MIT
 
 import logging
@@ -82,7 +82,7 @@ def load_state(model: nn.Module, optimizer: Optimizer, path: pathlib.Path, callb
 
 
 def train_epoch(model, train_dataloader, loss_fn, epoch_idx, grad_scaler, optimizer, local_rank, callbacks, args):
-    losses = []
+    loss_acc = torch.zeros((1,), device='cuda')
     for i, batch in tqdm(enumerate(train_dataloader), total=len(train_dataloader), unit='batch',
                          desc=f'Epoch {epoch_idx}', disable=(args.silent or local_rank != 0)):
         *inputs, target = to_cuda(batch)
@@ -94,6 +94,7 @@ def train_epoch(model, train_dataloader, loss_fn, epoch_idx, grad_scaler, optimi
             pred = model(*inputs)
             loss = loss_fn(pred, target) / args.accumulate_grad_batches
 
+        loss_acc += loss.detach()
         grad_scaler.scale(loss).backward()
 
         # gradient accumulation
@@ -106,9 +107,7 @@ def train_epoch(model, train_dataloader, loss_fn, epoch_idx, grad_scaler, optimi
             grad_scaler.update()
             model.zero_grad(set_to_none=True)
 
-        losses.append(loss.item())
-
-    return np.mean(losses)
+    return loss_acc / (i + 1)
 
 
 def train(model: nn.Module,
@@ -142,7 +141,7 @@ def train(model: nn.Module,
     epoch_start = load_state(model, optimizer, args.load_ckpt_path, callbacks) if args.load_ckpt_path else 0
 
     for callback in callbacks:
-        callback.on_fit_start(optimizer, args)
+        callback.on_fit_start(optimizer, args, epoch_start)
 
     for epoch_idx in range(epoch_start, args.epochs):
         if isinstance(train_dataloader.sampler, DistributedSampler):
@@ -151,10 +150,10 @@ def train(model: nn.Module,
         loss = train_epoch(model, train_dataloader, loss_fn, epoch_idx, grad_scaler, optimizer, local_rank, callbacks,
                            args)
         if dist.is_initialized():
-            loss = torch.tensor(loss, dtype=torch.float, device=device)
             torch.distributed.all_reduce(loss)
-            loss = (loss / world_size).item()
+            loss /= world_size
 
+        loss = loss.item()
         logging.info(f'Train loss: {loss}')
         logger.log_metrics({'train loss': loss}, epoch_idx)
 
@@ -228,8 +227,9 @@ if __name__ == '__main__':
                      QM9LRSchedulerCallback(logger, epochs=args.epochs)]
 
     if is_distributed:
-        gpu_affinity.set_affinity(gpu_id=get_local_rank(), nproc_per_node=torch.cuda.device_count())
+        gpu_affinity.set_affinity(gpu_id=get_local_rank(), nproc_per_node=torch.cuda.device_count(), scope='socket')
 
+    torch.set_float32_matmul_precision('high')
     print_parameters_count(model)
     logger.log_hyperparams(vars(args))
     increase_l2_fetch_granularity()
