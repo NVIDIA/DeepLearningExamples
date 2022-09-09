@@ -61,6 +61,8 @@ ARGS+=" --weight-decay 1e-6"
 ARGS+=" --grad-clip-thresh 1000.0"
 ARGS+=" --dur-predictor-loss-scale 0.1"
 ARGS+=" --pitch-predictor-loss-scale 0.1"
+ARGS+=" --trainloader-repeats 100"
+ARGS+=" --validation-freq 10"
 
 # Autoalign & new features
 ARGS+=" --kl-loss-start-epoch 0"
