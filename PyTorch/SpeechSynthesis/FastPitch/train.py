@@ -30,6 +30,7 @@ import copy
 import os
 import time
 from collections import defaultdict, OrderedDict
+from itertools import cycle
 
 import numpy as np
 import torch
@@ -43,6 +44,8 @@ from torch.utils.data.distributed import DistributedSampler
 import common.tb_dllogger as logger
 import models
 from common.tb_dllogger import log
+from common.repeated_dataloader import (RepeatedDataLoader,
+                                        RepeatedDistributedSampler)
 from common.text import cmudict
 from common.utils import BenchmarkStats, Checkpointer, prepare_tmp
 from fastpitch.attn_loss_function import AttentionBinarizationLoss
@@ -90,6 +93,8 @@ def parse_args(parser):
                        help='Gradually increase the hard attention loss term')
     train.add_argument('--benchmark-epochs-num', type=int, default=20,
                         help='Number of epochs for calculating final stats')
+    train.add_argument('--validation-freq', type=int, default=1,
+                       help='Validate every N epochs to use less compute')
 
     opt = parser.add_argument_group('optimization setup')
     opt.add_argument('--optimizer', type=str, default='lamb',
@@ -132,6 +137,10 @@ def parse_args(parser):
                       help='Capture leading silence with a space token')
     data.add_argument('--append-space-to-text', action='store_true',
                       help='Capture trailing silence with a space token')
+    data.add_argument('--num-workers', type=int, default=6,
+                      help='Subprocesses for train and val DataLoaders')
+    data.add_argument('--trainloader-repeats', type=int, default=100,
+                      help='Repeats the dataset to prolong epochs')
 
     cond = parser.add_argument_group('data for conditioning')
     cond.add_argument('--n-speakers', type=int, default=1,
@@ -194,19 +203,13 @@ def init_distributed(args, world_size, rank):
     print("Done initializing distributed training")
 
 
-def validate(model, epoch, total_iter, criterion, valset, batch_size,
-             collate_fn, distributed_run, batch_to_gpu, ema=False):
-    """Handles all the validation scoring and printing"""
+def validate(model, epoch, total_iter, criterion, val_loader, distributed_run,
+             batch_to_gpu, ema=False):
     was_training = model.training
     model.eval()
 
     tik = time.perf_counter()
     with torch.no_grad():
-        val_sampler = DistributedSampler(valset) if distributed_run else None
-        val_loader = DataLoader(valset, num_workers=4, shuffle=False,
-                                sampler=val_sampler,
-                                batch_size=batch_size, pin_memory=False,
-                                collate_fn=collate_fn)
         val_meta = defaultdict(float)
         val_num_frames = 0
         for i, batch in enumerate(val_loader):
@@ -221,9 +224,9 @@ def validate(model, epoch, total_iter, criterion, valset, batch_size,
             else:
                 for k, v in meta.items():
                     val_meta[k] += v
-                val_num_frames = num_frames.item()
+                val_num_frames += num_frames.item()
 
-        val_meta = {k: v / len(valset) for k, v in val_meta.items()}
+        val_meta = {k: v / len(val_loader.dataset) for k, v in val_meta.items()}
 
     val_meta['took'] = time.perf_counter() - tik
 
@@ -232,7 +235,7 @@ def validate(model, epoch, total_iter, criterion, valset, batch_size,
         data=OrderedDict([
             ('loss', val_meta['loss'].item()),
             ('mel_loss', val_meta['mel_loss'].item()),
-            ('frames/s', num_frames.item() / val_meta['took']),
+            ('frames/s', val_num_frames / val_meta['took']),
             ('took', val_meta['took'])]),
         )
 
@@ -313,6 +316,11 @@ def main():
 
     if distributed_run:
         init_distributed(args, args.world_size, args.local_rank)
+    else:
+        if args.trainloader_repeats > 1:
+            print('WARNING: Disabled --trainloader-repeats, supported only for'
+                  ' multi-GPU data loading.')
+            args.trainloader_repeats = 1
 
     device = torch.device('cuda' if args.cuda else 'cpu')
     model_config = models.get_model_config('FastPitch', args)
@@ -345,7 +353,7 @@ def main():
             model, device_ids=[args.local_rank], output_device=args.local_rank,
             find_unused_parameters=True)
 
-    train_state = {'epoch': 1, 'total_iter': 0}
+    train_state = {'epoch': 1, 'total_iter': 1}
     checkpointer = Checkpointer(args.output, args.keep_milestones)
 
     checkpointer.maybe_load(model, optimizer, scaler, train_state, args,
@@ -368,21 +376,26 @@ def main():
     valset = TTSDataset(audiopaths_and_text=args.validation_files, **vars(args))
 
     if distributed_run:
-        train_sampler, shuffle = DistributedSampler(trainset), False
+        train_sampler = RepeatedDistributedSampler(args.trainloader_repeats,
+                                                   trainset, drop_last=True)
+        val_sampler = DistributedSampler(valset)
+        shuffle = False
     else:
-        train_sampler, shuffle = None, True
+        train_sampler, val_sampler, shuffle = None, None, True
 
     # 4 workers are optimal on DGX-1 (from epoch 2 onwards)
-    train_loader = DataLoader(trainset, num_workers=4, shuffle=shuffle,
-                              sampler=train_sampler, batch_size=args.batch_size,
-                              pin_memory=True, persistent_workers=True,
-                              drop_last=True, collate_fn=collate_fn)
-
+    kw = {'num_workers': args.num_workers, 'batch_size': args.batch_size,
+          'collate_fn': collate_fn}
+    train_loader = RepeatedDataLoader(args.trainloader_repeats, trainset,
+                                      shuffle=shuffle, drop_last=True,
+                                      sampler=train_sampler, pin_memory=True,
+                                      persistent_workers=True, **kw)
+    val_loader = DataLoader(valset, shuffle=False, sampler=val_sampler,
+                            pin_memory=False, **kw)
     if args.ema_decay:
         mt_ema_params = init_multi_tensor_ema(model, ema_model)
 
     model.train()
-
     bmark_stats = BenchmarkStats()
 
     torch.cuda.synchronize()
@@ -397,22 +410,15 @@ def main():
         if distributed_run:
             train_loader.sampler.set_epoch(epoch)
 
-        accumulated_steps = 0
         iter_loss = 0
         iter_num_frames = 0
         iter_meta = {}
         iter_start_time = time.perf_counter()
 
-        epoch_iter = 0
-        num_iters = len(train_loader) // args.grad_accumulation
-        for batch in train_loader:
-
-            if accumulated_steps == 0:
-                if epoch_iter == num_iters:
-                    break
-                total_iter += 1
-                epoch_iter += 1
-
+        epoch_iter = 1
+        for batch, accum_step in zip(train_loader,
+                                     cycle(range(args.grad_accumulation))):
+            if accum_step == 0:
                 adjust_learning_rate(total_iter, optimizer, args.learning_rate,
                                      args.warmup_steps)
 
@@ -461,12 +467,11 @@ def main():
             if np.isnan(reduced_loss):
                 raise Exception("loss is NaN")
 
-            accumulated_steps += 1
             iter_loss += reduced_loss
             iter_num_frames += reduced_num_frames
             iter_meta = {k: iter_meta.get(k, 0) + meta.get(k, 0) for k in meta}
 
-            if accumulated_steps % args.grad_accumulation == 0:
+            if accum_step % args.grad_accumulation == 0:
 
                 logger.log_grads_tb(total_iter, model)
                 if args.amp:
@@ -491,6 +496,7 @@ def main():
                 epoch_num_frames += iter_num_frames
                 epoch_mel_loss += iter_mel_loss
 
+                num_iters = len(train_loader) // args.grad_accumulation
                 log((epoch, epoch_iter, num_iters), tb_total_steps=total_iter,
                     subset='train', data=OrderedDict([
                         ('loss', iter_loss),
@@ -502,11 +508,15 @@ def main():
                         ('lrate', optimizer.param_groups[0]['lr'])]),
                 )
 
-                accumulated_steps = 0
                 iter_loss = 0
                 iter_num_frames = 0
                 iter_meta = {}
                 iter_start_time = time.perf_counter()
+
+                if epoch_iter == num_iters:
+                    break
+                epoch_iter += 1
+                total_iter += 1
 
         # Finished epoch
         epoch_loss /= epoch_iter
@@ -523,13 +533,13 @@ def main():
         bmark_stats.update(epoch_num_frames, epoch_loss, epoch_mel_loss,
                            epoch_time)
 
-        validate(model, epoch, total_iter, criterion, valset, args.batch_size,
-                 collate_fn, distributed_run, batch_to_gpu)
+        if epoch % args.validation_freq == 0:
+            validate(model, epoch, total_iter, criterion, val_loader,
+                 distributed_run, batch_to_gpu)
 
-        if args.ema_decay > 0:
-            validate(ema_model, epoch, total_iter, criterion, valset,
-                     args.batch_size, collate_fn, distributed_run, batch_to_gpu,
-                     ema=True)
+            if args.ema_decay > 0:
+                validate(ema_model, epoch, total_iter, criterion, val_loader,
+                         distributed_run, batch_to_gpu, ema=True)
 
         # save before making sched.step() for proper loading of LR
         checkpointer.maybe_save(args, model, ema_model, optimizer, scaler,
@@ -538,10 +548,11 @@ def main():
 
     # Finished training
     if len(bmark_stats) > 0:
-        log((), tb_total_steps=None, subset='train_avg', data=bmark_stats.get(args.benchmark_epochs_num))
+        log((), tb_total_steps=None, subset='train_avg',
+            data=bmark_stats.get(args.benchmark_epochs_num))
 
-    validate(model, None, total_iter, criterion, valset, args.batch_size,
-             collate_fn, distributed_run, batch_to_gpu)
+    validate(model, None, total_iter, criterion, val_loader, distributed_run,
+             batch_to_gpu)
 
 
 if __name__ == '__main__':

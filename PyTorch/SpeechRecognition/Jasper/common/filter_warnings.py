@@ -12,6 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""Mutes known and unrelated PyTorch warnings.
+
+The warnings module keeps a list of filters. Importing it as late as possible
+prevents its filters from being overriden.
+"""
+
 import warnings
 
 

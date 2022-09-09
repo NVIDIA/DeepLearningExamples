@@ -12,15 +12,27 @@ export CUDNN_V8_API_ENABLED=1
 : ${CPU:=false}
 : ${PHONE:=true}
 
-# Mel-spectrogram generator (optional)
-: ${FASTPITCH="pretrained_models/fastpitch/nvidia_fastpitch_210824.pt"}
+# Paths to pre-trained models downloadable from NVIDIA NGC (LJSpeech-1.1)
+FASTPITCH_LJ="pretrained_models/fastpitch/nvidia_fastpitch_210824.pt"
+HIFIGAN_LJ="pretrained_models/hifigan/hifigan_gen_checkpoint_10000_ft.pt"
+WAVEGLOW_LJ="pretrained_models/waveglow/nvidia_waveglow256pyt_fp16.pt"
 
-# Vocoder; set only one
-: ${WAVEGLOW="pretrained_models/waveglow/nvidia_waveglow256pyt_fp16.pt"}
-: ${HIFIGAN=""}
+# Mel-spectrogram generator (optional; can synthesize from ground-truth spectrograms)
+: ${FASTPITCH=$FASTPITCH_LJ}
 
-[[ "$FASTPITCH" == "pretrained_models/fastpitch/nvidia_fastpitch_210824.pt" && ! -f "$FASTPITCH" ]] && { echo "Downloading $FASTPITCH from NGC..."; bash scripts/download_models.sh fastpitch; }
-[[ "$WAVEGLOW" == "pretrained_models/waveglow/nvidia_waveglow256pyt_fp16.pt" && ! -f "$WAVEGLOW" ]] && { echo "Downloading $WAVEGLOW from NGC..."; bash scripts/download_models.sh waveglow; }
+# Vocoder (set only one)
+: ${HIFIGAN=$HIFIGAN_LJ}
+# : ${WAVEGLOW=$WAVEGLOW_LJ}
+
+[[ "$FASTPITCH" == "$FASTPITCH_LJ" && ! -f "$FASTPITCH" ]] && { echo "Downloading $FASTPITCH from NGC..."; bash scripts/download_models.sh fastpitch; }
+[[ "$WAVEGLOW" == "$WAVEGLOW_LJ" && ! -f "$WAVEGLOW" ]] && { echo "Downloading $WAVEGLOW from NGC..."; bash scripts/download_models.sh waveglow; }
+[[ "$HIFIGAN" == "$HIFIGAN_LJ" && ! -f "$HIFIGAN" ]] && { echo "Downloading $HIFIGAN from NGC..."; bash scripts/download_models.sh hifigan-finetuned-fastpitch; }
+
+if [[ "$HIFIGAN" == "$HIFIGAN_LJ" && "$FASTPITCH" != "$FASTPITCH_LJ" ]]; then
+    echo -e "\nNOTE: Using HiFi-GAN checkpoint trained for the LJSpeech-1.1 dataset."
+    echo -e "NOTE: If you're using a different dataset, consider training a new HiFi-GAN model or switch to WaveGlow."
+    echo -e "NOTE: See $0 for details.\n"
+fi
 
 # Synthesis
 : ${SPEAKER:=0}
