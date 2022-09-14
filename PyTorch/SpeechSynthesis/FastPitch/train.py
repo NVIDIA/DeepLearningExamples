@@ -417,8 +417,8 @@ def main():
 
         epoch_iter = 1
         for batch, accum_step in zip(train_loader,
-                                     cycle(range(args.grad_accumulation))):
-            if accum_step == 0:
+                                     cycle(range(1, args.grad_accumulation + 1))):
+            if accum_step == 1:
                 adjust_learning_rate(total_iter, optimizer, args.learning_rate,
                                      args.warmup_steps)
 

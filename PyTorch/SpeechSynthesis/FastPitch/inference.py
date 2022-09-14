@@ -514,7 +514,7 @@ def main():
                             audio[-fade_len:] *= fade_w.to(audio.device)
 
                         audio = audio / torch.max(torch.abs(audio))
-                        fname = b['output'][i] if 'output' in b else f'audio_{i}.wav'
+                        fname = b['output'][i] if 'output' in b else f'audio_{all_utterances + i}.wav'
                         audio_path = Path(args.output, fname)
                         write(audio_path, args.sampling_rate, audio.cpu().numpy())
 

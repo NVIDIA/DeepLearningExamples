@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-export CUDNN_V8_API_ENABLED=1
+export CUDNN_V8_API_ENABLED=1  # Keep the flag for older containers
+export TORCH_CUDNN_V8_API_ENABLED=1
 
 : ${DATASET_DIR:="data/LJSpeech-1.1"}
 : ${BATCH_SIZE:=32}
@@ -55,7 +56,7 @@ echo -e "\nAMP=$AMP, batch_size=$BATCH_SIZE\n"
 
 ARGS=""
 ARGS+=" --cuda"
-ARGS+=" --cudnn-benchmark"
+# ARGS+=" --cudnn-benchmark"  # Enable for benchmarking or long operation
 ARGS+=" --dataset-path $DATASET_DIR"
 ARGS+=" -i $FILELIST"
 ARGS+=" -o $OUTPUT_DIR"
