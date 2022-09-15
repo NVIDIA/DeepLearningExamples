@@ -58,7 +58,7 @@ def set_tf_flags(args):
     tf.config.threading.set_inter_op_parallelism_threads(max(2, (multiprocessing.cpu_count() // hvd.size()) - 2))
 
     if args.amp:
-        tf.keras.mixed_precision.experimental.set_policy("mixed_float16")
+        tf.keras.mixed_precision.set_global_policy("mixed_float16")
 
 
 def is_main_process():
