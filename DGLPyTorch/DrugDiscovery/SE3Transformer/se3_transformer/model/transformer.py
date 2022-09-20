@@ -127,7 +127,9 @@ class SE3Transformer(nn.Module):
                                      fiber_edge=fiber_edge,
                                      self_interaction=True,
                                      use_layer_norm=use_layer_norm,
-                                     max_degree=self.max_degree))
+                                     max_degree=self.max_degree,
+                                     fuse_level=self.fuse_level,
+                                     low_memory=low_memory))
         self.graph_modules = Sequential(*graph_modules)
 
         if pooling is not None:
