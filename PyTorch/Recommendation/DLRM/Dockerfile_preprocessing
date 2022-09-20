@@ -25,6 +25,7 @@ ARG SPARK_VERSION
 ARG DGX_VERSION
 ARG NUMBER_OF_GPUS
 
+RUN apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/3bf863cc.pub
 RUN apt update &&                  \
     apt install -y openjdk-8-jdk && \
     apt install -y curl
