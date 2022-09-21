@@ -131,6 +131,7 @@ class HybridTrainPipe(Pipeline):
             random_aspect_ratio=[0.75, 4.0 / 3.0],
             random_area=[0.08, 1.0],
             num_attempts=100,
+            antialias=False,
         )
 
         self.cmnp = ops.CropMirrorNormalize(
@@ -181,7 +182,10 @@ class HybridValPipe(Pipeline):
 
         self.decode = ops.ImageDecoder(device="mixed", output_type=types.RGB)
         self.res = ops.Resize(
-            device="gpu", resize_shorter=size, interp_type=interpolation
+            device="gpu",
+            resize_shorter=size,
+            interp_type=interpolation,
+            antialias=False,
         )
         self.cmnp = ops.CropMirrorNormalize(
             device="gpu",
