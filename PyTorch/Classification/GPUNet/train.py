@@ -1504,6 +1504,7 @@ def main():
 
             dllogger.log(step=epoch, data={"val_loss": eval_metrics["loss"], "val_top1": eval_metrics["top1"], "val_top5": eval_metrics["top5"]}, verbosity=1)
             dllogger.log(step=(), data={"val_loss": eval_metrics["loss"], "val_top1": eval_metrics["top1"], "val_top5": eval_metrics["top5"]}, verbosity=1)
+            dllogger.flush()
             if lr_scheduler is not None:
                 # step LR for next epoch
                 lr_scheduler.step(epoch + 1, eval_metrics[eval_metric])
