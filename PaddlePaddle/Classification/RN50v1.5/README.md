@@ -330,19 +330,26 @@ python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
 Note that for initializing training with checkpoints or pretrained parameters, refer to [Training process](#training-process) for more details.
 
 ### 6. Start validation/evaluation.
-To evaluate the validation dataset located in `/imagenet/val`, you need to specify the pretrained parameters by `--from-pretrained-params` and set `eval_only` to `--run-scope`.
+To evaluate the validation dataset located in `/imagenet/val`, you need to specify the pretrained weights by `--from-pretrained-params` and set `eval_only` to `--run-scope`.
+
+You can download pretrained weights from NGC:
+```shell
+wget --content-disposition https://api.ngc.nvidia.com/v2/models/nvidia/dle/resnet_50_paddle_ckpt/versions/22.05.0_amp/zip -O resnet_50_paddle_ckpt_22.05.0_amp.zip
+unzip -d <path_to_downloaded_ckpt> resnet_50_paddle_ckpt_22.05.0_amp.zip
+```
+This checkpoint is well pretrained on the ImageNet dataset with AMP mode. It achieves 77.11% top 1 accuracy on the test dataset.
 
 Example:
 * TF32
 ```bash
 # For single GPU evaluation
 python -m paddle.distributed.launch --gpus=0 train.py \
-  --from-pretrained-params <path_to_pretrained_params> \
+  --from-pretrained-params <path_to_downloaded_ckpt> \
   --run-scope eval_only
 
 # For 8 GPUs evaluation
 python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
-  --from-pretrained-params <path_to_pretrained_params> \
+  --from-pretrained-params <path_to_downloaded_ckpt> \
   --run-scope eval_only
 ```
 
@@ -350,14 +357,14 @@ python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
 ```bash
 # For single GPU evaluation
 python -m paddle.distributed.launch --gpus=0 train.py \
-  --from-pretrained-params <path_to_pretrained_params> \
+  --from-pretrained-params <path_to_downloaded_ckpt> \
   --run-scope eval_only \
   --amp \
   --data-layout NHWC
 
 # For 8 GPUs evaluation
 python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
-  --from-pretrained-params <path_to_pretrained_params> \
+  --from-pretrained-params <path_to_downloaded_ckpt> \
   --run-scope eval_only \
   --amp \
   --data-layout NHWC
@@ -609,10 +616,6 @@ Metrics gathered through both training and evaluation:
 
  Metrics gathered through training only
  - `train.lr` - learning rate
-
-
-### Checkpoints
-We offered a checkpoint which is well pretrained on the ImageNet dataset with AMP mode. It achieves 77.11% top 1 accuracy on the test dataset. You can find out that checkpoint from [ResNet50 checkpoints (PaddlePaddle, AMP, ImageNet)](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/resnet_50_paddle_ckpt), and resume training via the instructions in [Training process](#training-process).
 
 
 ### Automatic SParsity training process:
