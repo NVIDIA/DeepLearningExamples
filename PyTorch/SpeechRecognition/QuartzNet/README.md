@@ -13,6 +13,7 @@ This repository provides a script and recipe to train the QuartzNet model to ach
         * [Enabling mixed precision](#enabling-mixed-precision)
         * [Enabling TF32](#enabling-tf32)
     * [Glossary](#glossary)
+    * [Language support and NeMo compatibility](#language-support-and-nemo-compatibility)
 - [Setup](#setup)
     * [Requirements](#requirements)
 - [Quick Start Guide](#quick-start-guide)
@@ -143,6 +144,23 @@ Assigns a probability distribution over a sequence of words. Given a sequence of
 
 **Pre-training**
 Training a model on vast amounts of data on the same (or different) task to build general understandings.
+
+### Language support and NeMo compatibility
+
+This repository allows to train and run models in laguages other than English.
+
+During inference, QuartzNet models trained with [NVIDIA NeMo](https://github.com/NVIDIA/NeMo) can also be used, for instance one of pre-trained models
+for Catalan, French, German, Italian, Mandarin Chinese, Polish, Russian or Spanish available on [NGC](https://ngc.nvidia.com/).
+To download automatically, run:
+```bash
+bash scripts/download_quartznet.sh [ca|fr|de|it|zh|pl|ru|es]
+```
+
+Pre-trained models can be explicitly converted from the `.nemo` checkpoint format to `.pt` and vice versa.
+For more details, run:
+```bash
+python nemo_dle_model_converter.py --help
+```
 
 ## Setup
 
