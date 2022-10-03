@@ -35,8 +35,9 @@ from common.dataset import (AudioDataset, FilelistDataset, get_data_loader,
                             SingleAudioDataset)
 from common.features import BaseFeatures, FilterbankFeatures
 from common.helpers import print_once, process_evaluation_epoch
-from quartznet.model import GreedyCTCDecoder, QuartzNet
 from common.tb_dllogger import stdout_metric_format, unique_log_fpath
+from nemo_dle_model_converter import load_nemo_ckpt
+from quartznet.model import GreedyCTCDecoder, QuartzNet
 
 
 def get_parser():
@@ -189,7 +190,25 @@ def main():
         distrib.init_process_group(backend='nccl', init_method='env://')
         print_once(f'Inference with {distrib.get_world_size()} GPUs')
 
-    cfg = config.load(args.model_config)
+    if args.ckpt is not None:
+        print(f'Loading the model from {args.ckpt} ...')
+        print(f'{args.model_config} will be overriden.')
+        if args.ckpt.lower().endswith('.nemo'):
+            ckpt, cfg = load_nemo_ckpt(args.ckpt)
+        else:
+            cfg = config.load(args.model_config)
+            ckpt = torch.load(args.ckpt, map_location='cpu')
+
+        sd_key = 'ema_state_dict' if args.ema else 'state_dict'
+        if args.ema and 'ema_state_dict' not in ckpt:
+            print(f'WARNING: EMA weights are unavailable in {args.ckpt}.')
+            sd_key = 'state_dict'
+        state_dict = ckpt[sd_key]
+
+    else:
+        cfg = config.load(args.model_config)
+        state_dict = None
+
     config.apply_config_overrides(cfg, args)
 
     symbols = helpers.add_ctc_blank(cfg['labels'])
@@ -267,11 +286,7 @@ def main():
     model = QuartzNet(encoder_kw=config.encoder(cfg),
                       decoder_kw=config.decoder(cfg, n_classes=len(symbols)))
 
-    if args.ckpt is not None:
-        print(f'Loading the model from {args.ckpt} ...')
-        checkpoint = torch.load(args.ckpt, map_location="cpu")
-        key = 'ema_state_dict' if args.ema else 'state_dict'
-        state_dict = checkpoint[key]
+    if state_dict is not None:
         model.load_state_dict(state_dict, strict=True)
 
     model.to(device)

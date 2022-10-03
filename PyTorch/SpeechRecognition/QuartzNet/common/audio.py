@@ -75,7 +75,7 @@ class AudioSegment(object):
         self._samples = samples
         self._sample_rate = sample_rate
         if self._samples.ndim >= 2:
-            self._samples = np.mean(self._samples, 1)
+            self._samples = np.mean(self._samples, 0)
 
     def __eq__(self, other):
         """Return whether two objects are equal."""
