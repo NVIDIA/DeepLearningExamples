@@ -83,6 +83,7 @@ class PartitionSignalHandler():
         return bool(self.t[0] > 0)
 
     def _signal_handler(self, signum, frame):
+        print("Signal reveived")
         self.t[0] = 1
 
 
@@ -152,6 +153,8 @@ def add_fit_args(parser):
                        help='file where to save the dllogger log from the experiment')
     train.add_argument('--workspace', type=str, default='./',
                        help='path to directory where results will be stored')
+    train.add_argument('--logdir', type=str, default=None,
+                       help="path to directory where logs will be stored")
     train.add_argument('--no-metrics', action='store_true',
                        help='do not calculate evaluation metrics (for benchmarking)')
     train.add_argument('--benchmark-iters', type=int, default=None,
@@ -199,13 +202,18 @@ def load_model(args, model):
     file = list(glob.glob(
         f"{args.workspace}/{args.model_prefix}_*.params"))
     if len(file) == 0:
-        return 0
+        return -1
 
-    file = [x for x in sorted(file) if "best.params" not in x][-1]
+    file = [x for x in sorted(file) if "best.params" not in x]
+
+    if len(file) == 0:
+        return -1
+
+    file = file[-1]
 
     epoch = re.match(f".*{args.model_prefix}_([0-9]*)\.params", file)
     if epoch is None:
-        return 0
+        return -1
 
     epoch = int(epoch.group(1))
     model.load_parameters(file)
@@ -427,6 +435,8 @@ def model_fit(args, net, train_data, eval_metric, optimizer,
 
                 durations.append(time.time() - tic)
                 tic = time.time()
+        else:
+            break
 
         durations = durations[min(len(durations) // 10, 100):]
         dllogger_epoch_data = {
@@ -453,8 +463,8 @@ def model_fit(args, net, train_data, eval_metric, optimizer,
             accuracy = score.get('accuracy', -1)
             save_checkpoint(net, epoch, accuracy, best_accuracy,
                             model_prefix, args.workspace,
-                            args.save_frequency, kvstore,
-                            force_save=should_break)
+                            args.save_frequency if args.mode == "train_val" else -1,
+                            kvstore, force_save=should_break)
             best_accuracy = max(best_accuracy, accuracy)
         global_metrics.update_dict(dllogger_epoch_data)
         dllogger.log(step=(epoch,), data=dllogger_epoch_data)
@@ -473,6 +483,11 @@ def fit(args, model, data_loader):
     # select gpu for horovod process
     if 'horovod' in args.kv_store:
         args.gpus = [args.gpus[hvd.local_rank()]]
+        ctx = mx.gpu(hvd.local_rank())
+
+        tensor1 = mx.nd.zeros(shape=(1,), dtype='float32', ctx=ctx)
+        tensor2 = mx.nd.zeros(shape=(1,), dtype='float32', ctx=ctx)
+        tensor1, tensor2 = hvd.grouped_allreduce([tensor1,tensor2])
 
     if args.amp:
         amp.init()
@@ -516,11 +531,12 @@ def fit(args, model, data_loader):
                 tic = time.time()
         return
 
-    start_epoch = load_model(args, model)
+    start_epoch = load_model(args, model) + 1
     if start_epoch == 0:
         # all initializers should be specified in the model definition.
         # if not, this will raise an error
         model.initialize(mx.init.Initializer())
+    logging.info(f"starting epoch {start_epoch}")
 
     # devices for training
     devs = list(map(mx.gpu, args.gpus))
@@ -598,7 +614,7 @@ def fit(args, model, data_loader):
             optimizer=args.optimizer,
             optimizer_params=optimizer_params,
             lr_scheduler=lr_scheduler,
-            model_prefix=os.path.join(args.workspace, args.model_prefix),
+            model_prefix=args.model_prefix,
         )
     elif args.mode == 'val':
         for epoch in range(args.num_epochs):  # loop for benchmarking
