@@ -409,13 +409,13 @@ class TrainingMetrics(Metrics):
 
 
 class ValidationMetrics(Metrics):
-    def __init__(self, logger, prefix):
+    def __init__(self, logger, prefix, topk):
         super().__init__(logger)
         if self.logger is not None:
             self.map = {
                 "loss": [f"{prefix}.loss"],
                 "top1": [f"{prefix}.top1"],
-                "top5": [f"{prefix}.top5"],
+                f"top{topk}": [f"{prefix}.top{topk}"],
                 "compute_ips": [f"{prefix}.compute_ips"],
                 "total_ips": [f"{prefix}.total_ips"],
                 "data_time": [f"{prefix}.data_time"],
@@ -433,7 +433,7 @@ class ValidationMetrics(Metrics):
                 metadata=Metrics.ACC_METADATA,
             )
             logger.register_metric(
-                f"{prefix}.top5",
+                f"{prefix}.top{topk}",
                 ACC_METER(),
                 verbosity=dllogger.Verbosity.DEFAULT,
                 metadata=Metrics.ACC_METADATA,
