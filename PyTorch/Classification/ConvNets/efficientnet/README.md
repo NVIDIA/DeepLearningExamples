@@ -369,7 +369,7 @@ To use your own dataset, divide it into directories. For example:
  - Training images - `train/<class id>/<image>`
  - Validation images - `val/<class id>/<image>`
 
-If your dataset has a number of classes different than 1000, you need to pass the `--num-classes N` flag to the training script.
+If your dataset has a number of classes different than 1000, you need to pass the `--num_classes N` flag to the training script.
 
 ### Training process
 

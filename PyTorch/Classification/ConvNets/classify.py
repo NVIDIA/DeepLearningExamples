@@ -34,6 +34,7 @@ from image_classification.models import (
     efficientnet_quant_b4,
 )
 
+
 def available_models():
     models = {
         m.name: m
@@ -50,6 +51,7 @@ def available_models():
         ]
     }
     return models
+
 
 def add_parser_arguments(parser):
     model_names = available_models().keys()
@@ -98,27 +100,41 @@ def load_jpeg_from_file(path, image_size, cuda=True):
 
 
 def check_quant_weight_correctness(checkpoint_path, model):
-    state_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
-    state_dict = {k[len("module."):] if k.startswith("module.") else k: v for k, v in state_dict.items()}
-    quantizers_sd_keys = {f'{n[0]}._amax' for n in model.named_modules() if 'quantizer' in n[0]}
+    state_dict = torch.load(checkpoint_path, map_location=torch.device("cpu"))
+    state_dict = {
+        k[len("module.") :] if k.startswith("module.") else k: v
+        for k, v in state_dict.items()
+    }
+    quantizers_sd_keys = {
+        f"{n[0]}._amax" for n in model.named_modules() if "quantizer" in n[0]
+    }
     sd_all_keys = quantizers_sd_keys | set(model.state_dict().keys())
-    assert set(state_dict.keys()) == sd_all_keys, (f'Passed quantized architecture, but following keys are missing in '
-                                                   f'checkpoint: {list(sd_all_keys - set(state_dict.keys()))}')
+    assert set(state_dict.keys()) == sd_all_keys, (
+        f"Passed quantized architecture, but following keys are missing in "
+        f"checkpoint: {list(sd_all_keys - set(state_dict.keys()))}"
+    )
 
 
 def main(args, model_args):
     imgnet_classes = np.array(json.load(open("./LOC_synset_mapping.json", "r")))
-    model = available_models()[args.arch](**model_args.__dict__)
-    if args.arch in ['efficientnet-quant-b0', 'efficientnet-quant-b4']:
+    try:
+        model = available_models()[args.arch](**model_args.__dict__)
+    except RuntimeError as e:
+        print_in_box(
+            "Error when creating model, did you forget to run checkpoint2model script?"
+        )
+        raise e
+
+    if args.arch in ["efficientnet-quant-b0", "efficientnet-quant-b4"]:
         check_quant_weight_correctness(model_args.pretrained_from_file, model)
-        
+
     if not args.cpu:
         model = model.cuda()
     model.eval()
 
     input = load_jpeg_from_file(args.image, args.image_size, cuda=not args.cpu)
 
-    with torch.no_grad(), autocast(enabled = args.precision == "AMP"):
+    with torch.no_grad(), autocast(enabled=args.precision == "AMP"):
         output = torch.nn.functional.softmax(model(input), dim=1)
 
     output = output.float().cpu().view(-1).numpy()
@@ -127,6 +143,12 @@ def main(args, model_args):
     print(args.image)
     for c, v in zip(imgnet_classes[top5], output[top5]):
         print(f"{c}: {100*v:.1f}%")
+
+
+def print_in_box(msg):
+    print("#" * (len(msg) + 10))
+    print(f"#### {msg} ####")
+    print("#" * (len(msg) + 10))
 
 
 if __name__ == "__main__":

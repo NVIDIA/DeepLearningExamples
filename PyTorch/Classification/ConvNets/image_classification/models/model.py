@@ -47,6 +47,7 @@ def torchhub_docstring(name: str):
         pretrained (bool, True): If True, returns a model pretrained on IMAGENET dataset.
     """
 
+
 class EntryPoint:
     @staticmethod
     def create(name: str, model: Model):
@@ -119,7 +120,7 @@ class EntryPoint:
                     state_dict_key_map_fn(k): v for k, v in state_dict.items()
                 }
 
-            if hasattr(model, "ngc_checkpoint_remap"):
+            if pretrained and hasattr(model, "ngc_checkpoint_remap"):
                 remap_fn = model.ngc_checkpoint_remap(url=self.model.checkpoint_url)
                 state_dict = {remap_fn(k): v for k, v in state_dict.items()}
 

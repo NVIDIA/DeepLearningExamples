@@ -278,7 +278,7 @@ unzip seresnext101_32x4d_pyt_amp_20.06.0.zip
 
 To run inference on ImageNet, run:
 
-`python ./main.py --arch se-resnext101-32x4d --evaluate --epochs 1 --pretrained-weights nvidia_se-resnext101-32x4d_200821.pth.tar -b <batch size> <path to imagenet>`
+`python ./main.py --arch se-resnext101-32x4d --evaluate --epochs 1 --pretrained-from-file nvidia_se-resnext101-32x4d_200821.pth.tar -b <batch size> <path to imagenet>`
 
 To run inference on JPEG image using pretrained weights:
 
@@ -316,12 +316,12 @@ To see the full list of available options and their descriptions, use the `-h` o
 
 ```
 usage: main.py [-h] [--data-backend BACKEND] [--arch ARCH]
-               [--model-config CONF] [--num-classes N] [-j N] [--epochs N]
+               [--model-config CONF] [-j N] [--epochs N]
                [--run-epochs N] [-b N] [--optimizer-batch-size N] [--lr LR]
                [--lr-schedule SCHEDULE] [--warmup E] [--label-smoothing S]
                [--mixup ALPHA] [--momentum M] [--weight-decay W]
                [--bn-weight-decay] [--nesterov] [--print-freq N]
-               [--resume PATH] [--pretrained-weights PATH]
+               [--resume PATH] [--pretrained-from-file PATH]
                [--static-loss-scale STATIC_LOSS_SCALE] [--dynamic-loss-scale]
                [--prof N] [--amp] [--seed SEED] [--gather-checkpoints]
                [--raport-file RAPORT_FILE] [--evaluate] [--training-only]
@@ -347,7 +347,6 @@ optional arguments:
   --model-config CONF, -c CONF
                         model configs: classic | fanin | grp-fanin | grp-
                         fanout(default: classic)
-  --num-classes N       number of classes in the dataset
   -j N, --workers N     number of data loading workers (default: 5)
   --epochs N            number of total epochs to run
   --run-epochs N        run only N epochs, used for checkpointing runs
@@ -370,7 +369,7 @@ optional arguments:
   --nesterov            use nesterov momentum, (default: false)
   --print-freq N, -p N  print frequency (default: 10)
   --resume PATH         path to latest checkpoint (default: none)
-  --pretrained-weights PATH
+  --pretrained-from-file PATH
                         load weights from here
   --static-loss-scale STATIC_LOSS_SCALE
                         Static loss scale, positive power of 2 values can
@@ -403,7 +402,7 @@ To use your own dataset, divide it in directories as in the following scheme:
  - Training images - `train/<class id>/<image>`
  - Validation images - `val/<class id>/<image>`
 
-If your dataset's has number of classes different than 1000, you need to pass `--num-classes N` flag to the training script.
+If your dataset's has number of classes different than 1000, you need to pass `--num_classes N` flag to the training script.
 
 ### Training process
 
@@ -423,7 +422,7 @@ Metrics gathered through training:
 
 To restart training from checkpoint use `--resume` option.
 
-To start training from pretrained weights (e.g. downloaded from NGC) use `--pretrained-weights` option.
+To start training from pretrained weights (e.g. downloaded from NGC) use `--pretrained-from-file` option.
 
 The difference between those two is that the pretrained weights contain only model weights,
 and checkpoints, apart from model weights, contain optimizer state, LR scheduler state.
@@ -461,7 +460,7 @@ Then run classification script:
 
 You can also run ImageNet validation on pretrained weights:
 
-`python ./main.py --arch se-resnext101-32x4d --evaluate --epochs 1 --pretrained-weights <path to pretrained weights> -b <batch size> <path to imagenet>`
+`python ./main.py --arch se-resnext101-32x4d --evaluate --epochs 1 --pretrained-from-file <path to pretrained weights> -b <batch size> <path to imagenet>`
 
 #### NGC Pretrained weights:
 
@@ -474,7 +473,7 @@ unzip seresnext101_32x4d_pyt_amp_20.06.0.zip
 ```
 To run inference on ImageNet, run:
 
-`python ./main.py --arch se-resnext101-32x4d --evaluate --epochs 1 --pretrained-weights nvidia_se-resnext101-32x4d_200821.pth.tar -b <batch size> <path to imagenet>`
+`python ./main.py --arch se-resnext101-32x4d --evaluate --epochs 1 --pretrained-from-file nvidia_se-resnext101-32x4d_200821.pth.tar -b <batch size> <path to imagenet>`
 
 To run inference on JPEG image using pretrained weights:
 

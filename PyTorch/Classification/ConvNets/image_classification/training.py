@@ -252,7 +252,7 @@ def train(
     return interrupted
 
 
-def validate(infer_fn, val_loader, log_fn, prof=-1, with_loss=True):
+def validate(infer_fn, val_loader, log_fn, prof=-1, with_loss=True, topk=5):
     top1 = log.AverageMeter()
     # switch to evaluate mode
 
@@ -270,23 +270,18 @@ def validate(infer_fn, val_loader, log_fn, prof=-1, with_loss=True):
             output = infer_fn(input)
 
         with torch.no_grad():
-            prec1, prec5 = utils.accuracy(output.data, target, topk=(1, 5))
+            precs = utils.accuracy(output.data, target, topk=(1, topk))
 
             if torch.distributed.is_initialized():
                 if with_loss:
                     reduced_loss = utils.reduce_tensor(loss.detach())
-                prec1 = utils.reduce_tensor(prec1)
-                prec5 = utils.reduce_tensor(prec5)
+                precs = map(utils.reduce_tensor, precs)
             else:
                 if with_loss:
                     reduced_loss = loss.detach()
 
-        prec1 = prec1.item()
-        prec5 = prec5.item()
-        infer_result = {
-            "top1": (prec1, bs),
-            "top5": (prec5, bs),
-        }
+        precs = map(lambda t: t.item(), precs)
+        infer_result = {f"top{k}": (p, bs) for k, p in zip((1, topk), precs)}
 
         if with_loss:
             infer_result["loss"] = (reduced_loss.item(), bs)
@@ -295,7 +290,7 @@ def validate(infer_fn, val_loader, log_fn, prof=-1, with_loss=True):
 
         it_time = time.time() - end
 
-        top1.record(prec1, bs)
+        top1.record(infer_result["top1"][0], bs)
 
         log_fn(
             compute_ips=utils.calc_ips(bs, it_time - data_time),
@@ -332,6 +327,7 @@ def train_loop(
     checkpoint_dir="./",
     checkpoint_filename="checkpoint.pth.tar",
     keep_last_n_checkpoints=0,
+    topk=5,
 ):
     checkpointer = utils.Checkpointer(
         last_filename=checkpoint_filename,
@@ -340,7 +336,7 @@ def train_loop(
     )
     train_metrics = TrainingMetrics(logger)
     val_metrics = {
-        k: ValidationMetrics(logger, k) for k in trainer.validation_steps().keys()
+        k: ValidationMetrics(logger, k, topk) for k in trainer.validation_steps().keys()
     }
     training_step = trainer.train_step
 
@@ -389,6 +385,7 @@ def train_loop(
                         data_iter,
                         val_metrics[k].log,
                         prof=prof,
+                        topk=topk,
                     )
 
                     if k == "val":
