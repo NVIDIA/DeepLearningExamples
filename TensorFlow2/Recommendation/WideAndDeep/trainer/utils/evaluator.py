@@ -265,7 +265,7 @@ class Evaluator:
                     eval_data["streaming_map_val"] = np.around(map_value, 4)
 
                 for metric_name, metric in zip(self.metric_names, hand_reduced_metrics):
-                    eval_data[metric_name] = np.around(metric.result().numpy(), 4)
+                    eval_data[metric_name] = np.around(metric.result().numpy().astype(np.float64), 4)
 
                 self.log(eval_data, current_step)
 
