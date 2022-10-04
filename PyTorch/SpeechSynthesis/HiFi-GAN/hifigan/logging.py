@@ -33,17 +33,16 @@ def init_logger(output_dir, log_file, ema_decay=0.0):
 
     local_rank = 0 if not dist.is_initialized() else dist.get_rank()
 
-    print('logger init', local_rank)
-
     if local_rank == 0:
         Path(output_dir).mkdir(parents=False, exist_ok=True)
         log_fpath = log_file or Path(output_dir, 'nvlog.json')
 
         dllogger.init(backends=[
+            JSONStreamBackend(Verbosity.DEFAULT, log_fpath, append=True),
             JSONStreamBackend(Verbosity.DEFAULT, unique_log_fpath(log_fpath)),
             StdOutBackend(Verbosity.VERBOSE, step_format=stdout_step_format,
-                          metric_format=stdout_metric_format)])
-
+                          metric_format=stdout_metric_format)
+        ])
         init_train_metadata()
     else:
         dllogger.init(backends=[])

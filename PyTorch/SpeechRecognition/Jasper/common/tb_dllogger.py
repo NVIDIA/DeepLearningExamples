@@ -2,8 +2,9 @@ import atexit
 import glob
 import os
 import re
-import numpy as np
+from pathlib import Path
 
+import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
@@ -55,17 +56,11 @@ class TBLogger:
                                stat=stat)
 
 
-def unique_log_fpath(log_fpath):
-
-    if not os.path.isfile(log_fpath):
-        return log_fpath
-
-    # Avoid overwriting old logs
-    saved = sorted([int(re.search('\.(\d+)', f).group(1))
-                    for f in glob.glob(f'{log_fpath}.*')])
-
-    log_num = (saved[-1] if saved else 0) + 1
-    return f'{log_fpath}.{log_num}'
+def unique_log_fpath(fpath):
+    """Have a unique log filename for every separate run"""
+    log_num = max([0] + [int(re.search("\.(\d+)", Path(f).suffix).group(1))
+                         for f in glob.glob(f"{fpath}.*")])
+    return f"{fpath}.{log_num + 1}"
 
 
 def stdout_step_format(step):
@@ -94,11 +89,12 @@ def init_log(args):
     enabled = (args.local_rank == 0)
     if enabled:
         fpath = args.log_file or os.path.join(args.output_dir, 'nvlog.json')
-        backends = [JSONStreamBackend(Verbosity.DEFAULT,
-                                      unique_log_fpath(fpath)),
-                    StdOutBackend(Verbosity.VERBOSE,
-                                  step_format=stdout_step_format,
-                                  metric_format=stdout_metric_format)]
+        backends = [
+            JSONStreamBackend(Verbosity.DEFAULT, fpath, append=True),
+            JSONStreamBackend(Verbosity.DEFAULT, unique_log_fpath(fpath)),
+            StdOutBackend(Verbosity.VERBOSE, step_format=stdout_step_format,
+                          metric_format=stdout_metric_format)
+        ]
     else:
         backends = []
 

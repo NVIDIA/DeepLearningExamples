@@ -55,14 +55,10 @@ class TBLogger:
 
 
 def unique_log_fpath(fpath):
-
-    if not Path(fpath).is_file():
-        return fpath
-
-    # Avoid overwriting old logs
-    saved = [re.search('\.(\d+)$', f) for f in glob.glob(f'{fpath}.*')]
-    saved = [0] + [int(m.group(1)) for m in saved if m is not None]
-    return f'{fpath}.{max(saved) + 1}'
+    """Have a unique log filename for every separate run"""
+    log_num = max([0] + [int(re.search("\.(\d+)", Path(f).suffix).group(1))
+                         for f in glob.glob(f"{fpath}.*")])
+    return f"{fpath}.{log_num + 1}"
 
 
 def stdout_step_format(step):
@@ -90,11 +86,12 @@ def stdout_metric_format(metric, metadata, value):
 def init(log_fpath, log_dir, enabled=True, tb_subsets=[], **tb_kw):
 
     if enabled:
-        backends = [JSONStreamBackend(Verbosity.DEFAULT,
-                                      unique_log_fpath(log_fpath)),
-                    StdOutBackend(Verbosity.VERBOSE,
-                                  step_format=stdout_step_format,
-                                  metric_format=stdout_metric_format)]
+        backends = [
+            JSONStreamBackend(Verbosity.DEFAULT, log_fpath, append=True),
+            JSONStreamBackend(Verbosity.DEFAULT, unique_log_fpath(log_fpath)),
+            StdOutBackend(Verbosity.VERBOSE, step_format=stdout_step_format,
+                          metric_format=stdout_metric_format)
+        ]
     else:
         backends = []
 

@@ -1,4 +1,3 @@
-git+https://github.com/NVIDIA/dllogger#egg=dllogger
 inflect
 librosa==0.9.0
 numpy
@@ -7,3 +6,4 @@ pynvml==11.0.0
 pysoundfile
 scipy
 tensorboardX==2.0
+git+https://github.com/NVIDIA/dllogger@v1.0.0#egg=dllogger

@@ -155,11 +155,11 @@ def main():
     args = parser.parse_args()
 
     log_fpath = args.log_file or str(Path(args.output_dir, 'nvlog_infer.json'))
-    log_fpath = unique_log_fpath(log_fpath)
-    dllogger.init(backends=[JSONStreamBackend(Verbosity.DEFAULT, log_fpath),
-                            StdOutBackend(Verbosity.VERBOSE,
-                                          metric_format=stdout_metric_format)])
-
+    dllogger.init(backends=[
+        JSONStreamBackend(Verbosity.DEFAULT, log_fpath, append=True),
+        JSONStreamBackend(Verbosity.DEFAULT, unique_log_fpath(log_fpath)),
+        StdOutBackend(Verbosity.VERBOSE, metric_format=stdout_metric_format)
+    ])
     [dllogger.log("PARAMETER", {k: v}) for k, v in vars(args).items()]
 
     for step in ['DNN', 'data+DNN', 'data']:

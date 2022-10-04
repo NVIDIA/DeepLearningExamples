@@ -7,4 +7,4 @@ pyyaml>=5.4
 soundfile
 sox==1.4.1
 tqdm==4.53.0
-git+https://github.com/NVIDIA/dllogger@v0.1.0#egg=dllogger
+git+https://github.com/NVIDIA/dllogger@v1.0.0#egg=dllogger
