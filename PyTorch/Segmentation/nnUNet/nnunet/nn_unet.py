@@ -29,6 +29,7 @@ from skimage.transform import resize
 from utils.logger import DLLogger
 from utils.utils import get_config_file, print0
 
+from nnunet.brats22_model import UNet3D
 from nnunet.loss import Loss, LossBraTS
 from nnunet.metrics import Dice
 
@@ -69,6 +70,14 @@ class NNUnet(pl.LightningModule):
         return self.tta_inference(img) if self.args.tta else self.do_inference(img)
 
     def compute_loss(self, preds, label):
+        if self.args.brats22_model:
+            loss = self.loss(preds[0], label)
+            for i, pred in enumerate(preds[1:]):
+                downsampled_label = nn.functional.interpolate(label, pred.shape[2:])
+                loss += 0.5 ** (i + 1) * self.loss(pred, downsampled_label)
+            c_norm = 1 / (2 - 2 ** (-len(preds)))
+            return c_norm * loss
+
         if self.args.deep_supervision:
             loss, weights = 0.0, 0.0
             for i in range(preds.shape[1]):
@@ -152,21 +161,24 @@ class NNUnet(pl.LightningModule):
         if self.args.brats:
             out_channels = 3
 
-        self.model = DynUNet(
-            self.args.dim,
-            in_channels,
-            out_channels,
-            kernels,
-            strides,
-            strides[1:],
-            filters=self.args.filters,
-            norm_name=("INSTANCE", {"affine": True}),
-            act_name=("leakyrelu", {"inplace": True, "negative_slope": 0.01}),
-            deep_supervision=self.args.deep_supervision,
-            deep_supr_num=self.args.deep_supr_num,
-            res_block=self.args.res_block,
-            trans_bias=True,
-        )
+        if self.args.brats22_model:
+            self.model = UNet3D(kernels, strides)
+        else:
+            self.model = DynUNet(
+                self.args.dim,
+                in_channels,
+                out_channels,
+                kernels,
+                strides,
+                strides[1:],
+                filters=self.args.filters,
+                norm_name=("INSTANCE", {"affine": True}),
+                act_name=("leakyrelu", {"inplace": True, "negative_slope": 0.01}),
+                deep_supervision=self.args.deep_supervision,
+                deep_supr_num=self.args.deep_supr_num,
+                res_block=self.args.res_block,
+                trans_bias=True,
+            )
         print0(f"Filters: {self.model.filters},\nKernels: {kernels}\nStrides: {strides}")
 
     def do_inference(self, image):
