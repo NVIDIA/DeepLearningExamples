@@ -101,7 +101,7 @@ if __name__ == "__main__":
     elif args.exec_mode == "train":
         trainer.fit(model, datamodule=data_module, ckpt_path=ckpt_path)
     elif args.exec_mode == "evaluate":
-        trainer.validate(model, val_dataloaders=data_module.val_dataloader())
+        trainer.validate(model, dataloaders=data_module.val_dataloader())
     elif args.exec_mode == "predict":
         if args.save_preds:
             ckpt_name = "_".join(args.ckpt_path.split("/")[-1].split(".")[:-1])
@@ -113,4 +113,4 @@ if __name__ == "__main__":
             model.save_dir = save_dir
             make_empty_dir(save_dir)
         model.args = args
-        trainer.test(model, test_dataloaders=data_module.test_dataloader(), ckpt_path=ckpt_path)
+        trainer.test(model, dataloaders=data_module.test_dataloader(), ckpt_path=ckpt_path)
