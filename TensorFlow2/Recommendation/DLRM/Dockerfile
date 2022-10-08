@@ -22,12 +22,13 @@ WORKDIR /dlrm
 
 ADD requirements.txt .
 
-RUN pip install -r requirements.txt
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
 RUN rm -rf distributed-embeddings &&\
     git clone https://github.com/NVIDIA-Merlin/distributed-embeddings.git &&\
     cd distributed-embeddings &&\
-    git checkout 427f869ac &&\
+    git checkout v0.2 &&\
+    git submodule init && git submodule update &&\
     pip uninstall -y distributed-embeddings &&\
     make clean &&\
     make pip_pkg -j all &&\
