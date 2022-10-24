@@ -32,11 +32,13 @@
 import argparse
 import logging
 import os
+import glob
+import re
+from pathlib import Path
 import time
 from collections import OrderedDict
 from contextlib import suppress
 from datetime import datetime
-import itertools
 import dllogger
 
 import torch
@@ -1008,6 +1010,11 @@ def _parse_args():
     args_text = yaml.safe_dump(args.__dict__, default_flow_style=False)
     return args, args_text
 
+def unique_log_fpath(fpath):
+    """Have a unique log filename for every separate run"""
+    log_num = max([0] + [int(re.search("\.(\d+)", Path(f).suffix).group(1))
+                         for f in glob.glob(f"{fpath}.*")])
+    return f"{fpath}.{log_num + 1}"
 
 def main():
 
@@ -1101,16 +1108,10 @@ def main():
         if dllogger_dir and not os.path.exists(dllogger_dir):
             os.makedirs(dllogger_dir, exist_ok=True)
         log_path = args.dllogger_name
-        original_log_path = log_path
-        if os.path.exists(log_path):
-            for i in itertools.count():
-                s_fname = original_log_path.split('.')
-                log_path = '.'.join(s_fname[:-1]) + f'_{i}.' + s_fname[-1]
-                if not os.path.exists(log_path):
-                    break
         dllogger.init(
             backends=[
-                dllogger.JSONStreamBackend(verbosity=1, filename=log_path),
+                dllogger.JSONStreamBackend(verbosity=1, filename=log_path, append=True),
+                dllogger.JSONStreamBackend(verbosity=1, filename=unique_log_fpath(log_path)),
                 dllogger.StdOutBackend(verbosity=0),
             ]
         )
