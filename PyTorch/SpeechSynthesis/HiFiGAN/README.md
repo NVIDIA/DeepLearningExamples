@@ -167,7 +167,7 @@ To train your model using mixed or TF32 precision with Tensor Cores or using FP3
 1. Clone the repository.
    ```bash
    git clone https://github.com/NVIDIA/DeepLearningExamples.git
-   cd DeepLearningExamples/PyTorch/SpeechSynthesis/HiFi-GAN
+   cd DeepLearningExamples/PyTorch/SpeechSynthesis/HiFiGAN
    ```
 
 2. Build and run the HiFi-GAN PyTorch NGC container.
