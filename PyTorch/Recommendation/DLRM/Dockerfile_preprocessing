@@ -30,9 +30,9 @@ RUN apt update &&                  \
     apt install -y openjdk-8-jdk && \
     apt install -y curl
 
-RUN curl https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop2.7.tgz -o /opt/spark.tgz && \
+RUN curl https://dlcdn.apache.org/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop3.tgz -o /opt/spark.tgz && \
     tar zxf /opt/spark.tgz -C /opt/ && \
-    mv /opt/spark-$SPARK_VERSION-bin-hadoop2.7 /opt/spark && \
+    mv /opt/spark-$SPARK_VERSION-bin-hadoop3 /opt/spark && \
     rm /opt/spark.tgz && \
     curl https://repo1.maven.org/maven2/ai/rapids/cudf/0.18.1/cudf-0.18.1-cuda11.jar -o /opt/cudf.jar && \
     curl https://repo1.maven.org/maven2/com/nvidia/rapids-4-spark_2.12/0.4.0/rapids-4-spark_2.12-0.4.0.jar  -o /opt/rapids-4-spark.jar && \
