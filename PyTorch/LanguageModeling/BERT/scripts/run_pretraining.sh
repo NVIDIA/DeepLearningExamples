@@ -90,7 +90,7 @@ if [ ! -d "${DATA_DIR_PHASE1}" ] || [ -z "$(ls -A ${DATA_DIR_PHASE1})" ]; then
          --oversubscribe \
          --allow-run-as-root \
          -np ${num_dask_workers} \
-         -x LD_PRELOAD=/opt/conda/lib/libjemalloc.so \
+         -x LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so \
             preprocess_bert_pretrain \
                --schedule mpi \
                --vocab-file ${VOCAB_FILE} \
@@ -255,7 +255,7 @@ if [ ! -d "${DATA_DIR_PHASE2}" ] || [ -z "$(ls -A ${DATA_DIR_PHASE2})" ]; then
          --oversubscribe \
          --allow-run-as-root \
          -np ${num_dask_workers} \
-         -x LD_PRELOAD=/opt/conda/lib/libjemalloc.so \
+         -x LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so \
             preprocess_bert_pretrain \
                --schedule mpi \
                --vocab-file ${VOCAB_FILE} \

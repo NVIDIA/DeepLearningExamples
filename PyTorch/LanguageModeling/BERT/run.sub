@@ -241,7 +241,7 @@ if [ ! -d "${host_pretrain_parquet}" ] || [ -z "$(ls -A "${host_pretrain_parquet
   fi
   # Should we use jemalloc for the LDDL preprocessor?
   if [ "${USE_JEMALLOC}" == "true" ]; then
-    readonly use_jemalloc_flag="--export=ALL,LD_PRELOAD=/opt/conda/lib/libjemalloc.so"
+    readonly use_jemalloc_flag="--export=ALL,LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so"
   elif [ "${USE_JEMALLOC}" == "false" ]; then
     readonly use_jemalloc_flag=""
   else

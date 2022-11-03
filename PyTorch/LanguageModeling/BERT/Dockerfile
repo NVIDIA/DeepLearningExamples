@@ -28,7 +28,7 @@ RUN apt-get install -y iputils-ping
 COPY . .
 
 # Install lddl
-RUN conda install -y jemalloc
+RUN apt-get install -y libjemalloc-dev
 RUN pip install git+https://github.com/NVIDIA/lddl.git
 RUN python -m nltk.downloader punkt
 
