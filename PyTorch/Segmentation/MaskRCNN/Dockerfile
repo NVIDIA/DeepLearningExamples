@@ -23,7 +23,8 @@ RUN pip install --upgrade --no-cache-dir pip \
  && pip install --no-cache-dir \
       mlperf-compliance==0.0.10 \
       git+https://github.com/NVIDIA/dllogger \
-      yacs
+      yacs \
+      dtrx
 
 # Copy detectron code and build
 WORKDIR /workspace/object_detection
