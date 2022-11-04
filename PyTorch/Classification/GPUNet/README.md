@@ -126,8 +126,9 @@ cd DeepLearningExamples/PyTorch/Classification/GPUNet
 ```
 
 2. Download and preprocess the dataset.
+```
 Run the script download_dataset.sh to download, extract and preprocess the ImageNet2012 dataset in $IMAGENET_DIR directory (on the host).
-
+```
 
 3. Build and run the GPUNet PyTorch container, assuming you have installed the docker.
 ```

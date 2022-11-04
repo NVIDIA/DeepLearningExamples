@@ -266,44 +266,23 @@ git clone https://github.com/NVIDIA/DeepLearningExamples
 cd DeepLearningExamples/PyTorch/Classification/
 ```
 
-2. Download and pre-process the dataset.
+2. Download and preprocess the dataset.
+```
+Run the script download_dataset.sh to download, extract and preprocess the ImageNet2012 dataset in $IMAGENET_DIR directory (on the host).
+```
 
-The EfficientNet script operates on ImageNet 1k, a widely popular image classification dataset from the ILSVRC challenge.
-
-PyTorch can work directly on JPEGs, therefore, pre-processing/augmentation is not needed.
-
-
-3. [Download the images](http://image-net.org/download-images).
-
-4. Extract the training data:
-  ```bash
-  mkdir train && mv ILSVRC2012_img_train.tar train/ && cd train
-  tar -xvf ILSVRC2012_img_train.tar && rm -f ILSVRC2012_img_train.tar
-  find . -name "*.tar" | while read NAME ; do mkdir -p "${NAME%.tar}"; tar -xvf "${NAME}" -C "${NAME%.tar}"; rm -f "${NAME}"; done
-  cd ..
-  ```
-
-5. Extract the validation data and move the images to subfolders:
-  ```bash
-  mkdir val && mv ILSVRC2012_img_val.tar val/ && cd val && tar -xvf ILSVRC2012_img_val.tar
-  wget -qO- https://raw.githubusercontent.com/soumith/imagenetloader.torch/master/valprep.sh | bash
-  ```
-
-The directory in which the `train/` and `val/` directories are placed, is referred to as `<path to imagenet>` in this document.
-
-6. Build the EfficientNet PyTorch NGC container.
+3. Build the EfficientNet PyTorch NGC container.
 
 ```
 docker build . -t nvidia_efficientnet
 ```
 
-7. Start an interactive session in the NGC container to run training/inference.
+4. Start an interactive session in the NGC container to run training/inference.
 ```
 nvidia-docker run --rm -it -v <path to imagenet>:/imagenet --ipc=host nvidia_efficientnet
 ```
 
-
-8. Start training
+5. Start training
 
 To run training for a standard configuration (DGX A100/DGX-1V, AMP/TF32/FP32, 400 Epochs),
 run one of the scripts in the `./efficientnet/training` directory
@@ -314,7 +293,7 @@ Ensure ImageNet is mounted in the `/imagenet` directory.
 For example:
     `bash ./efficientnet/training/AMP/DGXA100_efficientnet-b0_AMP.sh <path were to store checkpoints and logs>`
 
-9. Start inference
+6. Start inference
 
 You can download pre-trained weights from NGC:
 
