@@ -267,8 +267,19 @@ cd DeepLearningExamples/PyTorch/Classification/
 ```
 
 2. Download and preprocess the dataset.
-```
 Run the script download_dataset.sh to download, extract and preprocess the ImageNet2012 dataset in $IMAGENET_DIR directory (on the host).
+```
+./download_dataset.sh
+```
+By default, the data is organized into the following structure:
+```
+</imagenet>
+  train/
+    n*/
+      ILSVRC2012_train_*.JPEG
+  val/
+    n*/
+      ILSVRC2012_val_*.JPEG
 ```
 
 3. Build the EfficientNet PyTorch NGC container.
