@@ -1,4 +1,3 @@
-  GNU nano 6.2                                  test_download.sh                                            
 #!/bin/bash
 #
 # script to fully prepare ImageNet dataset
@@ -25,4 +24,3 @@ wget -qO- https://raw.githubusercontent.com/soumith/imagenetloader.torch/master/
 cd ..
 rm *.tar
 cd $dir
-
