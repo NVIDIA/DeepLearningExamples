@@ -10,7 +10,6 @@ GPUNet is a new family of Convolutional Neural Networks designed to max out the 
 - [Setup](#setup)
   * [Requirements](#requirements)
 - [Quick Start Guide](#quick-start-guide)
-    * [Prepare the dataset](#prepare-the-dataset)
     * [Training](#training)
     * [Inference](#inference)
 - [Advanced Usage](#advanced-usage)
@@ -126,35 +125,15 @@ git clone https://github.com/NVIDIA/DeepLearningExamples
 cd DeepLearningExamples/PyTorch/Classification/GPUNet
 ```
 
-2. Download ImageNet from the [offical website](https://image-net.org/download-images). Recursively unzip the dataset, and locate the train and val folders. Refer to [Prepare the dataset](#prepare-the-dataset) for more details.
+2. Download and preprocess the dataset.
+Run the script download_dataset.sh to download, extract and preprocess the ImageNet2012 dataset in $IMAGENET_DIR directory (on the host).
 
 
 3. Build and run the GPUNet PyTorch container, assuming you have installed the docker.
 ```
 docker build -t gpunet .
-docker run --gpus all -it --rm --network=host --shm-size 600G --ipc=host -v /path/to/imagenet:/root/data/imagenet/ gpunet
+docker run --gpus all -it --rm --network=host --shm-size 600G --ipc=host $IMAGENET_DIR:/root/data/imagenet/ gpunet
 ```
-
-### Prepare the Dataset
-
-1. [Download the ImageNet](http://image-net.org/download-images).
-
-2. Extract the training data:
-  ```bash
-  mkdir train && mv ILSVRC2012_img_train.tar train/ && cd train
-  tar -xvf ILSVRC2012_img_train.tar && rm -f ILSVRC2012_img_train.tar
-  find . -name "*.tar" | while read NAME ; do mkdir -p "${NAME%.tar}"; tar -xvf "${NAME}" -C "${NAME%.tar}"; rm -f "${NAME}"; done
-  cd ..
-  ```
-
-3. Extract the validation data and move the images to subfolders:
-  ```bash
-  mkdir val && mv ILSVRC2012_img_val.tar val/ && cd val && tar -xvf ILSVRC2012_img_val.tar
-  wget -qO- https://raw.githubusercontent.com/soumith/imagenetloader.torch/master/valprep.sh | bash
-  ```
-
-The directory where the `train/` and `val/` directories are placed is referred to as `/path/to/imagenet/` in this document.
-
 
 ### Training
 
@@ -305,7 +284,7 @@ The following sections provide greater details of the dataset, running training 
 - Inference
   * We also provide `validate.py` to evaluate a customized model.
 ```
-python validate.py /path/to/imagenet/val 
+python validate.py $IMAGENET_DIR/val 
 --model gpunet_0                                                                    >>Model name.
 -b 200                                                                              >>Batch size.
 -j 8                                     
