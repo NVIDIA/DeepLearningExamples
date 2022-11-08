@@ -207,7 +207,7 @@ def train(args, model, dataset, logger):
         metrics = {
             "train_loss": round(total_train_loss / steps_per_epoch, 5),
             "val_loss": round(1 - float(dice_score), 5),
-            "dice": round(float(dice_metrics.metrics["value"]), 5),
+            "dice": round(float(dice_metrics.metrics["max"].result()), 5),
         }
         logger.log_metrics(metrics=metrics)
         logger.flush()
