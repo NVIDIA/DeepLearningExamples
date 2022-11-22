@@ -284,7 +284,7 @@ def main(_):
                       [labels['groundtruth_data'], 
                       postprocess.transform_detections(detections)], [])
 
-  if FLAGS.benchmark == False and FLAGS.training_mode == 'train':
+  if FLAGS.benchmark == False and (FLAGS.training_mode == 'train' or FLAGS.num_epochs < 200):
 
     # Evaluator for AP calculation.
     label_map = label_util.get_label_map(eval_config.label_map)
@@ -319,12 +319,16 @@ def main(_):
       csv_metrics = ['AP','AP50','AP75','APs','APm','APl']
       csv_format = ",".join([str(ckpt_epoch)] + [str(round(metric_dict[key] * 100, 2)) for key in csv_metrics])
       print(FLAGS.model_name, metric_dict, "csv format:", csv_format)
+      DLLogger.log(step=(), data={'epoch': ckpt_epoch,
+                    'validation_accuracy_mAP': round(metric_dict['AP'] * 100, 2)})
+      DLLogger.flush()
 
     MPI.COMM_WORLD.Barrier()
 
   if is_main_process():
     stats['e2e_training_time'] = time.time() - begin
     DLLogger.log(step=(), data=stats)
+    DLLogger.flush()
 
 
 if __name__ == '__main__':
