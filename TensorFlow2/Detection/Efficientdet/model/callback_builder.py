@@ -180,6 +180,7 @@ class TimeHistory(tf.keras.callbacks.Callback):
       self.timestamp_log.append(BatchTimestamp(self.global_steps, now))
       elapsed_time_str='{:.2f} seconds'.format(elapsed_time)
       self.logger.log(step='PARAMETER', data={'Latency': elapsed_time_str, 'fps': examples_per_second, 'steps': (self.last_log_step, self.global_steps)})
+      self.logger.flush()
 
       if self.summary_writer:
         with self.summary_writer.as_default():
@@ -371,13 +372,14 @@ class StopEarlyCallback(tf.keras.callbacks.Callback):
 
 
 class COCOEvalCallback(tf.keras.callbacks.Callback):
-  def __init__(self, eval_dataset, eval_freq, start_eval_epoch, eval_params, **kwargs):
+  def __init__(self, eval_dataset, eval_freq, start_eval_epoch, eval_params, logger, **kwargs):
     super(COCOEvalCallback, self).__init__(**kwargs)
     self.dataset = eval_dataset
     self.eval_freq = eval_freq
     self.start_eval_epoch = start_eval_epoch
     self.eval_params = eval_params
     self.ema_opt = None
+    self.logger = logger
 
     label_map = label_util.get_label_map(eval_params['label_map'])
     self.evaluator = coco_metric.EvaluationMetric(
@@ -425,6 +427,8 @@ class COCOEvalCallback(tf.keras.callbacks.Callback):
       csv_metrics = ['AP','AP50','AP75','APs','APm','APl']
       csv_format = ",".join([str(epoch+1)] + [str(round(metric_dict[key] * 100, 2)) for key in csv_metrics])
       print(metric_dict, "csv format:", csv_format)
+      self.logger.log(step=(), data={'epoch': epoch+1,
+                                  'validation_accuracy_mAP': round(metric_dict['AP'] * 100, 2)})
 
     if self.eval_params['moving_average_decay'] > 0:
       self.ema_opt.swap_weights() # get base weights
@@ -492,7 +496,8 @@ def get_callbacks(
     cocoeval = COCOEvalCallback(eval_dataset, 
                 eval_freq=params['checkpoint_period'], 
                 start_eval_epoch=200, 
-                eval_params=eval_params)
+                eval_params=eval_params,
+                logger=logger)
     callbacks.append(cocoeval)
 
   if params['moving_average_decay']:
