@@ -30,6 +30,8 @@ Usage: bash scripts/run_model.sh
 --log_filename          Name of output log file within results_dir. Default: log.json.
 --save_checkpoint_path  Path to output checkpoint after training.
 --load_checkpoint_path  Path from which to restore checkpoint for inference or suspend/resume training.
+--prebatch_train_size
+--prebatch_test_size
 EOF
 }
 
@@ -82,10 +84,12 @@ results_dir_option=$(get_option_or_use_default --results_dir $results_dir)
 log_filename_option=$(get_option_or_use_default --log_filename $log_filename)
 save_checkpoint_path_option=$(get_option_or_use_default --save_checkpoint_path $save_checkpoint_path)
 load_checkpoint_path_option=$(get_option_or_use_default --load_checkpoint_path $load_checkpoint_path)
+prebatch_train_size_option=$(get_option_or_use_default --prebatch_train_size $prebatch_train_size)
+prebatch_test_size_option=$(get_option_or_use_default --prebatch_test_size $prebatch_test_size)
 
 command="mpiexec --allow-run-as-root --bind-to socket -np ${gpus} python main.py --dataset_dir ${data_path} --drop_remainder ${epochs_option} 
 ${xla_arg} ${amp_arg} ${benchmark_arg} ${mode_option} ${benchmark_steps_option} ${batch_size_option} ${results_dir_option} ${log_filename_option}
-${save_checkpoint_path_option} ${load_checkpoint_path_option}"
+${save_checkpoint_path_option} ${load_checkpoint_path_option} ${prebatch_train_size_option} ${prebatch_test_size_option}"
 
 printf "[INFO] Running:\n%s\n" "${command}"
 # run

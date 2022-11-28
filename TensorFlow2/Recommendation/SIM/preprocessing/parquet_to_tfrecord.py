@@ -21,9 +21,11 @@ from functools import partial
 
 import click
 import pandas as pd
+import numpy as np
 import tensorflow as tf
 
 from sim.data.feature_spec import FeatureSpec
+from sim.data.defaults import TRAIN_MAPPING, TEST_MAPPING, REMAINDER_FILENAME, FILES_SELECTOR
 
 # Docker image sets it to "python" for NVTabular purposes (bugfix), which slows down the script 20x
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "cpp"
@@ -34,46 +36,31 @@ logging.basicConfig(
     format="[%(asctime)s] %(levelname)s: %(message)s",
 )
 
-
-def _int64_feature(value, islist=False):
-    """Returns an int64_list from a bool / enum / int / uint."""
-    if not islist:
-        value = [value]
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
-
-
-def process_chunk(df, sequential_data_start):
-    feature_values_lists = [df.iloc[:, i].values for i in range(sequential_data_start)]
-
-    for i in range(sequential_data_start, df.shape[1]):
-        values = df.iloc[:, i].values.tolist()
-        feature_values_lists.append(values)
-
-    return zip(*feature_values_lists)
-
-
-def prepare_record(sample, all_feature_names, sequential_data_start):
-
+def prepare_record(sample, all_feature_names, sequential_data_start, prebatch):
     feature = {}
-    for idx, (f_name, data) in enumerate(zip(all_feature_names, sample)):
-        islist = idx >= sequential_data_start
-        feature[f_name] = _int64_feature(data, islist)
+    for idx, (f_name, data) in enumerate(zip(all_feature_names, sample.values())):
+        if idx >= sequential_data_start:
+            if prebatch:
+                data = np.array(data).flatten()
+        else:
+            if not prebatch:
+                data = [data]
 
-    record_bytes = tf.train.Example(features=tf.train.Features(feature=feature)).SerializeToString()
-    return record_bytes
+        feature[f_name] = tf.train.Feature(int64_list=tf.train.Int64List(value=data))
 
+    return tf.train.Example(features=tf.train.Features(feature=feature)).SerializeToString()
 
-def create_default_feature_spec(user_features_cardinalities, item_features_cardinalities,
-                                max_seq_len, tfrecord_output_dir, train_output_file, test_output_file):
+def save_records(output_path, records, base_output_path, feature_spec, mapping):
 
-    train_output = tfrecord_output_dir / train_output_file
-    test_output = tfrecord_output_dir / test_output_file
+    with tf.io.TFRecordWriter(str(output_path)) as file_writer:
+        for record_bytes in records:
+            file_writer.write(record_bytes)
 
-    f_spec = FeatureSpec.get_default_feature_spec(user_features_cardinalities, item_features_cardinalities,
-                                                  max_seq_len, train_output, test_output)
+    feature_spec.source_spec[mapping][0][FILES_SELECTOR].append(
+        str(output_path.relative_to(base_output_path))
+    )
 
-    save_path = tfrecord_output_dir / 'feature_spec.yaml'
-    f_spec.to_yaml(save_path)
+    logging.info(f'Created: {output_path}')
 
 
 @click.command()
@@ -91,14 +78,15 @@ def create_default_feature_spec(user_features_cardinalities, item_features_cardi
 )
 @click.option(
     "--number_of_user_features",
-    required=True,
-    help="number of user specific features.",
+    default=1,
+    help="number of user specific features. Default is 1 for amazon books dataset (user_id).",
     type=int
 )
 @click.option(
     "--max_seq_len",
     default=100,
-    help="maximum possible length of history. (Entries will be padded to that length later)."
+    help="maximum possible length of history. (Entries will be padded to that length later).",
+    type=int
 )
 @click.option(
     "--n_proc",
@@ -109,29 +97,56 @@ def create_default_feature_spec(user_features_cardinalities, item_features_cardi
 @click.option(
     "--train_split_dir",
     default='train',
-    help="name of directory within amazon dataset directory containing train data."
+    help="Name of directory within amazon dataset directory containing train data.",
+    type=str
 )
 @click.option(
     "--test_split_dir",
     default='test',
-    help="name of directory within amazon dataset directory containing test data."
+    help="Name of directory within amazon dataset directory containing test data.",
+    type=str,
 )
 @click.option(
     "--metadata_file",
     default='metadata.json',
-    help="name of metadata file within amazon dataset directory (containing feature cardinalities)."
-)
-@click.option(
-    "--train_output_file",
-    default='train.tfrecord',
-    help='name of train file within output directory.',
+    help="Name of metadata file within amazon dataset directory (containing feature cardinalities).",
     type=str
 )
 @click.option(
-    "--test_output_file",
-    default='test.tfrecord',
-    help='name of test file within output directory.',
+    "--train_output_dir",
+    default='train',
+    help="Name of train directory within output directory.",
     type=str
+)
+@click.option(
+    "--test_output_dir",
+    default='test',
+    help='Name of test directory within output directory.',
+    type=str
+)
+@click.option(
+    "--train_parts",
+    default=8,
+    help="Number of output train files.",
+    type=int
+)
+@click.option(
+    "--test_parts",
+    default=4,
+    help="Number of output test files.",
+    type=int
+)
+@click.option(
+    "--prebatch_train_size",
+    default=0,
+    help='Apply batching to data in preprocessing. If prebatch_size == 0, no prebatching is done.',
+    type=int
+)
+@click.option(
+    "--prebatch_test_size",
+    default=0,
+    help='Apply batching to data in preprocessing. If prebatch_size == 0, no prebatching is done.',
+    type=int
 )
 def main(
         amazon_dataset_path: str,
@@ -142,8 +157,12 @@ def main(
         train_split_dir: str,
         test_split_dir: str,
         metadata_file: str,
-        train_output_file: str,
-        test_output_file: str
+        train_output_dir: str,
+        test_output_dir: str,
+        train_parts: int,
+        test_parts: int,
+        prebatch_train_size: int,
+        prebatch_test_size: int
 ):
     """
     read_parquet()
@@ -160,11 +179,12 @@ def main(
         amazon_dataset_path / test_split_dir
     ]
 
-    os.makedirs(tfrecord_output_dir, exist_ok=True)
     output_splits = [
-        tfrecord_output_dir / train_output_file,
-        tfrecord_output_dir / test_output_file
+        tfrecord_output_dir / train_output_dir,
+        tfrecord_output_dir / test_output_dir
     ]
+    for split_dir in output_splits:
+        os.makedirs(split_dir, exist_ok=True)
 
     with open(amazon_dataset_path / metadata_file, 'r') as file:
         metadata = json.load(file)
@@ -176,35 +196,55 @@ def main(
     user_features_cardinalities = feature_cardinalities[:number_of_user_features]
     item_features_cardinalities = feature_cardinalities[number_of_user_features:]
 
-    create_default_feature_spec(user_features_cardinalities, item_features_cardinalities, max_seq_len,
-                                tfrecord_output_dir, train_output_file, test_output_file)
+    feature_spec = FeatureSpec.get_default_feature_spec(user_features_cardinalities, item_features_cardinalities, max_seq_len)
 
     number_of_item_features = len(item_features_cardinalities)
     sequential_data_start = 1 + number_of_user_features + number_of_item_features
     all_feature_names = FeatureSpec.get_default_features_names(number_of_user_features, number_of_item_features)
-    prepare_record_function = partial(prepare_record, all_feature_names=all_feature_names,
-                                      sequential_data_start=sequential_data_start)
+    
+    prebatch_per_split = [prebatch_train_size, prebatch_test_size]
+    parts_per_split = [train_parts, test_parts]
+    mappings = [TRAIN_MAPPING, TEST_MAPPING]
 
-    for input_dir, output_file in zip(input_splits, output_splits):
+    for mapping, input_dir, output_dir, output_parts, prebatch_size in zip(mappings, input_splits, output_splits, parts_per_split, prebatch_per_split):
 
-        files = input_dir.glob("part.*.parquet")
-        def num_order(p): return int(p.name.split(".")[1])
-        paths = sorted(files, key=num_order)
+        prebatch = prebatch_size > 0
+        prepare_record_function = partial(prepare_record, all_feature_names=all_feature_names,
+                                        sequential_data_start=sequential_data_start, prebatch=prebatch)
+        save_records_function = partial(save_records, base_output_path=tfrecord_output_dir, feature_spec=feature_spec, mapping=mapping)
 
-        logging.info(f"Started conversion, will output to {output_file}")
+        logging.info(f"Started conversion, will output to {output_dir}")
 
-        with tf.io.TFRecordWriter(str(output_file)) as file_writer:
-            with multiprocessing.Pool(n_proc) as pool:
-                for path in paths:
-                    df = pd.read_parquet(path)
+        df = pd.read_parquet(input_dir, engine='pyarrow')
 
-                    zipped_data = process_chunk(df, sequential_data_start)
+        logging.info("Parquet loaded")
 
-                    records = pool.map(prepare_record_function, zipped_data)
-                    for record_bytes in records:
-                        file_writer.write(record_bytes)
+        if prebatch:
+            df['batch_index'] = df.index // prebatch_size
+            df = df.groupby('batch_index').agg(list)
+            if len(df.iloc[-1, 0]) < prebatch_size:
+                remainder = df[-1:].to_dict('records')[0]
+                remainder = prepare_record_function(remainder)
 
-                    logging.info(f"Processed {path}")
+                df = df[:-1]
+
+            logging.info("Prebatching applied")
+
+        df = df.to_dict('records')
+        with multiprocessing.Pool(n_proc) as pool:
+            records = pool.map(prepare_record_function, df)
+
+        logging.info("Records created")
+
+        records = np.array_split(records, output_parts)
+        for i, records_part in enumerate(records):
+            if len(records_part) > 0:
+                save_records_function(output_dir / f'part_{i}.tfrecord', records_part)
+
+        if prebatch:
+            save_records_function(output_dir / REMAINDER_FILENAME, [remainder])
+
+    feature_spec.to_yaml(tfrecord_output_dir / 'feature_spec.yaml')
 
 
 if __name__ == "__main__":

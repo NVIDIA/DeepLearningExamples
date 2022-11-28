@@ -25,7 +25,7 @@ import dask_cudf
 import rmm
 
 from preprocessing.io import load_metadata, load_review_data, save_metadata
-from preprocessing.ops import ExplodeSequence, add_negative_sequence, list_slice
+from preprocessing.ops import ExplodeSequence, add_negative_sequence, list_slice, slice_and_pad_left
 
 DASK_TRAIN_DATASET_CHUNKSIZE = 15_000
 TRAIN_DATA_DIR = "train"
@@ -179,11 +179,12 @@ def add_negative_sampling(df: cudf.DataFrame, sampling_df: cudf.DataFrame) -> cu
     return df
 
 
-def slice_sequences(df: cudf.DataFrame, max_elements: int) -> cudf.DataFrame:
-    df["item_sequence"] = list_slice(df["item_sequence"], -max_elements)
-    df["cat_sequence"] = list_slice(df["cat_sequence"], -max_elements)
-    df["neg_item_sequence"] = list_slice(df["neg_item_sequence"], -max_elements)
-    df["neg_cat_sequence"] = list_slice(df["neg_cat_sequence"], -max_elements)
+def pad_with_zeros(df: cudf.DataFrame, max_elements: int) -> cudf.DataFrame:
+    df["item_sequence"] = slice_and_pad_left(df["item_sequence"], max_elements)
+    df["cat_sequence"] = slice_and_pad_left(df["cat_sequence"], max_elements)
+    df["neg_item_sequence"] = slice_and_pad_left(df["neg_item_sequence"], max_elements)
+    df["neg_cat_sequence"] = slice_and_pad_left(df["neg_cat_sequence"], max_elements)
+
     return df
 
 
@@ -202,6 +203,7 @@ def create_train_dataset(
 
         df = explode_sequence(df, min_elements, max_elements)
         df = add_negative_sampling(df, sampling_df)
+        df = pad_with_zeros(df, max_elements)
         df = df.sort_values(by=["uid"])
         df.reset_index(drop=True, inplace=True)
         df = df[list(OUTPUT_META)]
@@ -222,7 +224,7 @@ def create_test_dataset(
     output_path: str,
 ) -> None:
     df = add_negative_sampling(df, sampling_df)
-    df = slice_sequences(df, max_elements)
+    df = pad_with_zeros(df, max_elements)
     df = df.sort_values(by=["uid"])
     df.reset_index(drop=True, inplace=True)
     df = df[list(OUTPUT_META)]

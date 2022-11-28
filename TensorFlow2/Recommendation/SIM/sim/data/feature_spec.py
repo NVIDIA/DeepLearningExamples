@@ -72,8 +72,7 @@ class FeatureSpec:
         return [label_feature_name] + user_features_names + item_features_names
 
     @staticmethod
-    def get_default_feature_spec(user_features_cardinalities, item_features_cardinalities,
-                                 max_seq_len, train_output, test_output):
+    def get_default_feature_spec(user_features_cardinalities, item_features_cardinalities, max_seq_len):
 
         number_of_user_features = len(user_features_cardinalities)
         number_of_item_features = len(item_features_cardinalities)
@@ -127,9 +126,9 @@ class FeatureSpec:
                 {
                     'type': 'tfrecord',
                     'features': all_features_names,
-                    'files': [filepath.name]
+                    'files': []
                 }
-            ] for split, filepath in zip([TRAIN_MAPPING, TEST_MAPPING], [train_output, test_output])
+            ] for split in [TRAIN_MAPPING, TEST_MAPPING]
         }
 
         return FeatureSpec(feature_spec=feature_spec, channel_spec=channel_spec, source_spec=source_spec)

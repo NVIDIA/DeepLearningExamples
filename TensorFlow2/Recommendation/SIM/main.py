@@ -93,8 +93,8 @@ def init_logger(results_dir, filename):
 
 
 # In the future, select one of available dataloaders there (tfrecord, csv, etc...)
-def get_data_iterator(paths, feature_spec, batch_size, num_gpus, long_seq_length, prefetch_size, repeat_count=0,
-                      drop_remainder=False, amp=False, disable_cache=False):
+def get_data_iterator(paths, feature_spec, batch_size, num_gpus, long_seq_length, prefetch_size, num_parallel_calls=None, repeat_count=0,
+                      drop_remainder=False, amp=False, disable_cache=False, prebatch_size=0):
     return get_dataloader_tfrecord(
         paths,
         feature_spec=feature_spec,
@@ -105,7 +105,9 @@ def get_data_iterator(paths, feature_spec, batch_size, num_gpus, long_seq_length
         drop_remainder=drop_remainder,
         repeat_count=repeat_count,
         disable_cache=disable_cache,
-        prefetch_buffer_size=prefetch_size
+        prefetch_buffer_size=prefetch_size,
+        num_parallel_calls=num_parallel_calls,
+        prebatch_size=prebatch_size
     )
 
 
@@ -243,10 +245,24 @@ def eval(model_fn, data_iterator, num_thresholds=8000, prefix=""):
         local_targets.append(targets)
         local_total_losses.append(loss_dict["total_loss"])
 
-    # concat all local variables into a single tensor
-    logits = tf.concat(local_logits, 0)
-    targets = tf.concat(local_targets, 0)
-    total_losses = tf.concat(local_total_losses, 0)
+    locals = [local_logits, local_targets, local_total_losses]
+    for i, local in enumerate(locals):
+
+        # wrap empty lists in tensor to allow tf.concat
+        if len(local) == 0:
+            local = tf.constant(local)
+
+        # concat all local variables into a single tensor
+        local = tf.concat(local, 0)
+
+        # for single element lists, tf.concat will produce shape=() instead of shape=(1,).
+        # reshape it for hvd.allgather to work
+        if len(local.shape) == 0:
+            local = tf.reshape(local, -1)
+
+        locals[i] = local
+    
+    logits, targets, total_losses = locals
 
     if distributed:
         # gather from all nodes
@@ -456,6 +472,9 @@ def inference(model, data_iterator, benchmark, performance_calculator):
     "--global_batch_size", default=131072, help="Batch size used to train/eval the model.", type=int
 )
 @click.option(
+    "--num_parallel_calls", default=None, help="Parallelism level for tf.data API. If None, heuristic based on number of CPUs and number of GPUs will be used."
+)
+@click.option(
     "--epochs", default=3, help="Train for the following number of epochs.", type=int
 )
 @click.option("--disable_cache", help="disable dataset caching.", is_flag=True)
@@ -521,10 +540,8 @@ def inference(model, data_iterator, benchmark, performance_calculator):
 )
 @click.option(
     "--prefetch_train_size",
-    default=-1,
+    default=10,
     help="Number of batches to prefetch in training. "
-    "If == 0: No prefetching is done. "
-    "If < 0: Prefetch size is set to train_dataset_size // global_batch_size. ",
 )
 @click.option(
     "--prefetch_test_size",
@@ -532,9 +549,14 @@ def inference(model, data_iterator, benchmark, performance_calculator):
     help="Number of batches to prefetch in testing"
 )
 @click.option(
-    "--train_dataset_size",
-    default=11796480,
-    help="Number of train samples. Used to set prefetching size (see --prefetch_train_size for more information."
+    "--prebatch_train_size",
+    default=0,
+    help="Information about batch size applied during preprocessing to train dataset"
+)
+@click.option(
+    "--prebatch_test_size",
+    default=0,
+    help="Information about batch size applied during preprocessing to test dataset"
 )
 def main(
         mode: str,
@@ -554,6 +576,7 @@ def main(
         weight_decay: float,
         embedding_dim: int,
         global_batch_size: int,
+        num_parallel_calls: int,
         epochs: int,
         disable_cache: bool,
         drop_remainder: bool,
@@ -570,7 +593,8 @@ def main(
         intra_op_parallelism: int,
         prefetch_train_size: int,
         prefetch_test_size: int,
-        train_dataset_size: int
+        prebatch_train_size: int,
+        prebatch_test_size: int
 ):
     hvd.init()
 
@@ -636,20 +660,19 @@ def main(
     # since each tfrecord file must include all of the features, it is enough to read first chunk for each split. 
     train_files = [dataset_dir / file for file in feature_spec.source_spec[TRAIN_MAPPING][0][FILES_SELECTOR]]
 
-    if prefetch_train_size < 0:
-        prefetch_train_size = train_dataset_size // global_batch_size
-
     data_iterator_train = get_data_iterator(
         train_files, feature_spec, batch_size, num_gpus, long_seq_length,
         repeat_count=repeat_count, drop_remainder=drop_remainder,
-        amp=amp, disable_cache=disable_cache, prefetch_size=prefetch_train_size
+        amp=amp, disable_cache=disable_cache, prefetch_size=prefetch_train_size,
+        num_parallel_calls=num_parallel_calls, prebatch_size=prebatch_train_size
     )
 
     if mode == "train":
         test_files = [dataset_dir / file for file in feature_spec.source_spec[TEST_MAPPING][0][FILES_SELECTOR]]
         data_iterator_test = get_data_iterator(
             test_files, feature_spec, batch_size, num_gpus, long_seq_length,
-            amp=amp, disable_cache=disable_cache, prefetch_size=prefetch_test_size
+            amp=amp, disable_cache=disable_cache, prefetch_size=prefetch_test_size, num_parallel_calls=num_parallel_calls,
+            prebatch_size=prebatch_test_size
         )
     else:
         data_iterator_test = []  # otherwise not used

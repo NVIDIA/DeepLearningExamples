@@ -73,6 +73,39 @@ def _preserve_data(offsets, values, new_values):
             new_values[i] = values[rowid]
 
 
+@numba.cuda.jit
+def _slice_rjust(max_elements, offsets, elements, new_offsets, new_elements):
+    rowid = numba.cuda.grid(1)
+    if rowid < new_offsets.size - 1:
+        row_size = min(offsets[rowid + 1] - offsets[rowid], max_elements)
+        offset = offsets[rowid + 1] - row_size
+        new_start = new_offsets[rowid + 1] - row_size
+
+        for i in range(row_size):
+            new_elements[new_start + i] = elements[offset + i]
+
+
+def slice_and_pad_left(seq_col, max_elements, pad_value=0):
+    c = seq_col._column
+    offsets = c.offsets.values
+    elements = c.elements.values
+
+    threads = THREADS
+    blocks = (offsets.size + threads - 1) // threads
+
+    new_offsets = cupy.arange(offsets.size, dtype=offsets.dtype) * max_elements
+
+    new_elements = cupy.full(
+        new_offsets[-1].item(), fill_value=pad_value, dtype=elements.dtype
+    )
+    _slice_rjust[blocks, threads](
+        max_elements, offsets, elements, new_offsets, new_elements
+    )
+
+    new_col = nvt_build_list_column(new_elements, new_offsets)
+    return new_col
+
+
 class ExplodeSequence:
     """
     For each row create a new one with a subsequence of the original list columns.
