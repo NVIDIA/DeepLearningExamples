@@ -13,7 +13,7 @@
 # limitations under the License.
 model_navigator[pyt] @ git+https://github.com/triton-inference-server/model_navigator.git@v0.2.5#egg=model_navigator
 natsort>=7.0.0
-networkx==2.5
+networkx==2.6
 pycuda>=2019.1.2
 PyYAML>=5.2
 tabulate>=0.8.7
