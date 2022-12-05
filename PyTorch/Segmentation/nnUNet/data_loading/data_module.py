@@ -34,6 +34,7 @@ class DataModule(LightningDataModule):
             "seed": self.args.seed,
             "gpus": self.args.gpus,
             "nvol": self.args.nvol,
+            "layout": self.args.layout,
             "overlap": self.args.overlap,
             "benchmark": self.args.benchmark,
             "num_workers": self.args.num_workers,
@@ -57,6 +58,11 @@ class DataModule(LightningDataModule):
             self.kwargs.update({"orig_lbl": orig_lbl, "meta": meta})
             self.train_imgs, self.train_lbls = get_split(imgs, train_idx), get_split(lbls, train_idx)
             self.val_imgs, self.val_lbls = get_split(imgs, val_idx), get_split(lbls, val_idx)
+
+            if self.args.gpus > 1:
+                rank = int(os.getenv("LOCAL_RANK", "0"))
+                self.val_imgs = self.val_imgs[rank :: self.args.gpus]
+                self.val_lbls = self.val_lbls[rank :: self.args.gpus]
         else:
             self.kwargs.update({"meta": test_meta})
         print0(f"{len(self.train_imgs)} training, {len(self.val_imgs)} validation, {len(self.test_imgs)} test examples")

@@ -22,7 +22,6 @@ from apex.optimizers import FusedAdam, FusedSGD
 from data_loading.data_module import get_data_path, get_test_fnames
 from monai.inferers import sliding_window_inference
 from monai.networks.nets import DynUNet
-from monai.optimizers.lr_scheduler import WarmupCosineSchedule
 from pytorch_lightning.utilities import rank_zero_only
 from scipy.special import expit, softmax
 from skimage.transform import resize
@@ -87,9 +86,8 @@ class NNUnet(pl.LightningModule):
         return self.loss(preds, label)
 
     def training_step(self, batch, batch_idx):
-        if batch_idx == 0:
-            self.train_loss = []
         img, lbl = self.get_train_data(batch)
+        img, lbl = self.convert_data(img, lbl)
         pred = self.model(img)
         loss = self.compute_loss(pred, lbl)
         self.train_loss.append(loss.item())
@@ -99,6 +97,7 @@ class NNUnet(pl.LightningModule):
         if self.current_epoch < self.args.skip_first_n_eval:
             return None
         img, lbl = batch["image"], batch["label"]
+        img, lbl = self.convert_data(img, lbl)
         pred = self._forward(img)
         loss = self.loss(pred, lbl)
         if self.args.invert_resampled_y:
@@ -110,6 +109,11 @@ class NNUnet(pl.LightningModule):
         if self.args.exec_mode == "evaluate":
             return self.validation_step(batch, batch_idx)
         img = batch["image"]
+        img = self.convert_ncdhw_to_ndhwc(img)
+        if self.args.benchmark:
+            pred = self._forward(img)
+            return
+
         pred = self._forward(img).squeeze(0).cpu().detach().numpy()
         if self.args.save_preds:
             meta = batch["meta"][0].cpu().detach().numpy()
@@ -155,8 +159,22 @@ class NNUnet(pl.LightningModule):
         kernels.append(len(spacings) * [3])
         return config["in_channels"], config["n_class"], kernels, strides, patch_size
 
+    def convert_ncdhw_to_ndhwc(self, tensor):
+        if self.args.layout == "NCDHW":
+            return tensor
+        strides = tensor.stride()
+        shape = tensor.shape
+        tensor = torch.as_strided(
+            tensor, (shape[0], shape[-1], *shape[1:-1]), (strides[0], strides[-1], *strides[1:-1])
+        )
+        return tensor
+
+    def convert_data(self, img, lbl):
+        img, lbl = self.convert_ncdhw_to_ndhwc(img), self.convert_ncdhw_to_ndhwc(lbl)
+        return img, lbl
+
     def build_nnunet(self):
-        in_channels, out_channels, kernels, strides, self.patch_size = self.get_unet_params()
+        self.in_channels, out_channels, kernels, strides, self.patch_size = self.get_unet_params()
         self.n_class = out_channels - 1
         if self.args.brats:
             out_channels = 3
@@ -166,19 +184,21 @@ class NNUnet(pl.LightningModule):
         else:
             self.model = DynUNet(
                 self.args.dim,
-                in_channels,
+                self.in_channels,
                 out_channels,
                 kernels,
                 strides,
                 strides[1:],
                 filters=self.args.filters,
-                norm_name=("INSTANCE", {"affine": True}),
-                act_name=("leakyrelu", {"inplace": True, "negative_slope": 0.01}),
+                norm_name=(self.args.norm.upper(), {"affine": True}),
+                act_name=("leakyrelu", {"inplace": False, "negative_slope": 0.01}),
                 deep_supervision=self.args.deep_supervision,
                 deep_supr_num=self.args.deep_supr_num,
                 res_block=self.args.res_block,
                 trans_bias=True,
             )
+        if self.args.layout == "NDHWC" and self.args.dim == 3:
+            self.model.to(memory_format=torch.channels_last_3d)
         print0(f"Filters: {self.model.filters},\nKernels: {kernels}\nStrides: {strides}")
 
     def do_inference(self, image):
@@ -225,10 +245,9 @@ class NNUnet(pl.LightningModule):
 
     def validation_epoch_end(self, outputs):
         if self.current_epoch < self.args.skip_first_n_eval:
-            self.log("dice", 0.0)
+            self.log("dice", 0.0, sync_dist=False)
             self.dice.reset()
             return None
-
         dice, loss = self.dice.compute()
         self.dice.reset()
 
@@ -244,15 +263,15 @@ class NNUnet(pl.LightningModule):
         metrics["Val Loss"] = self.round(loss)
         metrics["Max Dice"] = self.round(self.best_mean_dice)
         metrics["Best epoch"] = self.best_epoch
-        metrics["Train Loss"] = round(sum(self.train_loss) / len(self.train_loss), 4)
+        metrics["Train Loss"] = (
+            0 if len(self.train_loss) == 0 else round(sum(self.train_loss) / len(self.train_loss), 4)
+        )
         if self.n_class > 1:
             metrics.update({f"D{i+1}": self.round(m) for i, m in enumerate(dice)})
 
         self.dllogger.log_metrics(step=self.current_epoch, metrics=metrics)
         self.dllogger.flush()
-        if self.args.tb_logs:
-            self.logger.log_metrics(metrics, step=self.current_epoch)
-        self.log("dice", metrics["Dice"])
+        self.log("dice", metrics["Dice"], sync_dist=False)
 
     def test_epoch_end(self, outputs):
         if self.args.exec_mode == "evaluate":
@@ -260,7 +279,7 @@ class NNUnet(pl.LightningModule):
 
     @rank_zero_only
     def on_fit_end(self):
-        if not self.args.benchmark:
+        if not self.args.benchmark and self.args.skip_first_n_eval == 0:
             metrics = {}
             metrics["dice_score"] = round(self.best_mean.item(), 2)
             metrics["train_loss"] = round(sum(self.train_loss) / len(self.train_loss), 4)
@@ -276,15 +295,7 @@ class NNUnet(pl.LightningModule):
         }[self.args.optimizer.lower()]
 
         if self.args.scheduler:
-            scheduler = {
-                "scheduler": WarmupCosineSchedule(
-                    optimizer=optimizer,
-                    warmup_steps=250,
-                    t_total=self.args.epochs * len(self.trainer.datamodule.train_dataloader()),
-                ),
-                "interval": "step",
-                "frequency": 1,
-            }
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 4096, eta_min=8e-5)
             return {"optimizer": optimizer, "monitor": "val_loss", "lr_scheduler": scheduler}
         return {"optimizer": optimizer, "monitor": "val_loss"}
 
@@ -304,10 +315,10 @@ class NNUnet(pl.LightningModule):
 
 
 def layout_2d(img, lbl):
-    batch_size, depth, channels, height, weight = img.shape
-    img = torch.reshape(img, (batch_size * depth, channels, height, weight))
+    batch_size, depth, channels, height, width = img.shape
+    img = torch.reshape(img, (batch_size * depth, channels, height, width))
     if lbl is not None:
-        lbl = torch.reshape(lbl, (batch_size * depth, 1, height, weight))
+        lbl = torch.reshape(lbl, (batch_size * depth, 1, height, width))
         return img, lbl
     return img
 

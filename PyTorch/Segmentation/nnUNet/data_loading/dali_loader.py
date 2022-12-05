@@ -36,10 +36,12 @@ class GenericPipeline(Pipeline):
         self.kwargs = kwargs
         self.dim = kwargs["dim"]
         self.device = device_id
+        self.layout = kwargs["layout"]
         self.patch_size = kwargs["patch_size"]
         self.load_to_gpu = kwargs["load_to_gpu"]
         self.input_x = self.get_reader(kwargs["imgs"])
         self.input_y = self.get_reader(kwargs["lbls"]) if kwargs["lbls"] is not None else None
+        self.cdhw2dhwc = ops.Transpose(device="gpu", perm=[1, 2, 3, 0])
 
     def get_reader(self, data):
         return ops.readers.Numpy(
@@ -66,6 +68,10 @@ class GenericPipeline(Pipeline):
             lbl = fn.reshape(lbl, layout="CDHW")
             return img, lbl
         return img
+
+    def make_dhwc_layout(self, img, lbl):
+        img, lbl = self.cdhw2dhwc(img), self.cdhw2dhwc(lbl)
+        return img, lbl
 
     def crop(self, data):
         return fn.crop(data, crop=self.patch_size, out_of_bounds_policy="pad")
@@ -154,6 +160,8 @@ class TrainPipeline(GenericPipeline):
         img = self.contrast_fn(img)
         if self.dim == 2:
             img, lbl = self.transpose_fn(img, lbl)
+        if self.layout == "NDHWC" and self.dim == 3:
+            img, lbl = self.make_dhwc_layout(img, lbl)
         return img, lbl
 
 
@@ -171,6 +179,8 @@ class EvalPipeline(GenericPipeline):
             meta = self.input_meta(name="ReaderM")
             orig_lbl = self.input_orig_y(name="ReaderO")
             return img, lbl, meta, orig_lbl
+        if self.layout == "NDHWC" and self.dim == 3:
+            img, lbl = self.make_dhwc_layout(img, lbl)
         return img, lbl
 
 
@@ -204,6 +214,8 @@ class BenchmarkPipeline(GenericPipeline):
         img, lbl = self.crop_fn(img, lbl)
         if self.dim == 2:
             img, lbl = self.transpose_fn(img, lbl)
+        if self.layout == "NDHWC" and self.dim == 3:
+            img, lbl = self.make_dhwc_layout(img, lbl)
         return img, lbl
 
 
@@ -250,6 +262,10 @@ def fetch_dali_loader(imgs, lbls, batch_size, mode, **kwargs):
         pipe_kwargs.update({"patch_size": [batch_size_2d] + kwargs["patch_size"]})
 
     rank = int(os.getenv("LOCAL_RANK", "0"))
+    if mode == "eval":  # We sharded the data for evaluation manually.
+        rank = 0
+        pipe_kwargs["gpus"] = 1
+
     pipe = pipeline(batch_size, kwargs["num_workers"], rank, **pipe_kwargs)
     return LightningWrapper(
         pipe,

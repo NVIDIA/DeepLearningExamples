@@ -14,9 +14,11 @@
 
 import os
 
+import torch
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint, ModelSummary, RichProgressBar
-from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.plugins.io import AsyncCheckpointIO
+from pytorch_lightning.strategies import DDPStrategy
 
 from data_loading.data_module import DataModule
 from nnunet.nn_unet import NNUnet
@@ -24,9 +26,40 @@ from utils.args import get_main_args
 from utils.logger import LoggingCallback
 from utils.utils import make_empty_dir, set_cuda_devices, set_granularity, verify_ckpt_path
 
-if __name__ == "__main__":
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
+
+
+def get_trainer(args, callbacks):
+    return Trainer(
+        logger=False,
+        default_root_dir=args.results,
+        benchmark=True,
+        deterministic=False,
+        max_epochs=args.epochs,
+        precision=16 if args.amp else 32,
+        gradient_clip_val=args.gradient_clip_val,
+        enable_checkpointing=args.save_ckpt,
+        callbacks=callbacks,
+        num_sanity_val_steps=0,
+        accelerator="gpu",
+        devices=args.gpus,
+        num_nodes=args.nodes,
+        plugins=[AsyncCheckpointIO()],
+        strategy=DDPStrategy(
+            find_unused_parameters=False,
+            static_graph=True,
+            gradient_as_bucket_view=True,
+        ),
+        limit_train_batches=1.0 if args.train_batches == 0 else args.train_batches,
+        limit_val_batches=1.0 if args.test_batches == 0 else args.test_batches,
+        limit_test_batches=1.0 if args.test_batches == 0 else args.test_batches,
+    )
+
+
+def main():
     args = get_main_args()
-    set_granularity()  # Increase maximum fetch granularity of L2 to 128 bytes
+    set_granularity()
     set_cuda_devices(args)
     if args.seed is not None:
         seed_everything(args.seed)
@@ -34,9 +67,11 @@ if __name__ == "__main__":
     data_module.setup()
     ckpt_path = verify_ckpt_path(args)
 
-    model = NNUnet(args)
+    if ckpt_path is not None:
+        model = NNUnet.load_from_checkpoint(ckpt_path, strict=False, args=args)
+    else:
+        model = NNUnet(args)
     callbacks = [RichProgressBar(), ModelSummary(max_depth=2)]
-    logger = False
     if args.benchmark:
         batch_size = args.batch_size if args.exec_mode == "train" else args.val_batch_size
         filnename = args.logname if args.logname is not None else "perf.json"
@@ -51,13 +86,6 @@ if __name__ == "__main__":
             )
         )
     elif args.exec_mode == "train":
-        if args.tb_logs:
-            logger = TensorBoardLogger(
-                save_dir=f"{args.results}/tb_logs",
-                name=f"task={args.task}_dim={args.dim}_fold={args.fold}_precision={16 if args.amp else 32}",
-                default_hp_metric=False,
-                version=0,
-            )
         if args.save_ckpt:
             callbacks.append(
                 ModelCheckpoint(
@@ -69,26 +97,7 @@ if __name__ == "__main__":
                 )
             )
 
-    trainer = Trainer(
-        logger=logger,
-        default_root_dir=args.results,
-        benchmark=True,
-        deterministic=False,
-        max_epochs=args.epochs,
-        precision=16 if args.amp else 32,
-        gradient_clip_val=args.gradient_clip_val,
-        enable_checkpointing=args.save_ckpt,
-        callbacks=callbacks,
-        num_sanity_val_steps=0,
-        accelerator="gpu",
-        devices=args.gpus,
-        num_nodes=args.nodes,
-        strategy="ddp" if args.gpus > 1 else None,
-        limit_train_batches=1.0 if args.train_batches == 0 else args.train_batches,
-        limit_val_batches=1.0 if args.test_batches == 0 else args.test_batches,
-        limit_test_batches=1.0 if args.test_batches == 0 else args.test_batches,
-    )
-
+    trainer = get_trainer(args, callbacks)
     if args.benchmark:
         if args.exec_mode == "train":
             trainer.fit(model, train_dataloaders=data_module.train_dataloader())
@@ -99,7 +108,7 @@ if __name__ == "__main__":
             model.start_benchmark = 1
             trainer.test(model, dataloaders=data_module.test_dataloader(), verbose=False)
     elif args.exec_mode == "train":
-        trainer.fit(model, datamodule=data_module, ckpt_path=ckpt_path)
+        trainer.fit(model, datamodule=data_module)
     elif args.exec_mode == "evaluate":
         trainer.validate(model, dataloaders=data_module.val_dataloader())
     elif args.exec_mode == "predict":
@@ -113,4 +122,8 @@ if __name__ == "__main__":
             model.save_dir = save_dir
             make_empty_dir(save_dir)
         model.args = args
-        trainer.test(model, dataloaders=data_module.test_dataloader(), ckpt_path=ckpt_path)
+        trainer.test(model, dataloaders=data_module.test_dataloader())
+
+
+if __name__ == "__main__":
+    main()

@@ -55,11 +55,8 @@ def get_main_args(strings=None):
     arg("--gradient_clip_val", type=float, default=0, help="Gradient clipping norm value")
     arg("--negative_slope", type=float, default=0.01, help="Negative slope for LeakyReLU")
     arg("--tta", action="store_true", help="Enable test time augmentation")
-    arg("--tb_logs", action="store_true", help="Log metrics to tensoboard")
     arg("--brats", action="store_true", help="Enable BraTS specific training and inference")
-    arg("--brats22_model", action="store_true", help="Use BraTS22 model")
     arg("--deep_supervision", action="store_true", help="Enable deep supervision")
-    arg("--more_chn", action="store_true", help="Create encoder with more channels")
     arg("--invert_resampled_y", action="store_true", help="Resize predictions to match label size before resampling")
     arg("--amp", action="store_true", help="Enable automatic mixed precision")
     arg("--benchmark", action="store_true", help="Run model benchmarking")
@@ -82,13 +79,21 @@ def get_main_args(strings=None):
     arg("--num_workers", type=non_negative_int, default=8, help="Number of subprocesses to use for data loading")
     arg("--epochs", type=non_negative_int, default=1000, help="Number of training epochs.")
     arg("--warmup", type=non_negative_int, default=5, help="Warmup iterations before collecting statistics")
-    arg("--norm", type=str, choices=["instance", "batch", "group"], default="instance", help="Normalization layer")
     arg("--nvol", type=positive_int, default=4, help="Number of volumes which come into single batch size for 2D model")
     arg("--depth", type=non_negative_int, default=5, help="The depth of the encoder")
     arg("--min_fmap", type=non_negative_int, default=4, help="Minimal dimension of feature map in the bottleneck")
     arg("--deep_supr_num", type=non_negative_int, default=2, help="Number of deep supervision heads")
     arg("--res_block", action="store_true", help="Enable residual blocks")
     arg("--filters", nargs="+", help="[Optional] Set U-Net filters", default=None, type=int)
+    arg("--layout", type=str, default="NCDHW")
+    arg("--brats22_model", action="store_true", help="Use BraTS22 model")
+    arg(
+        "--norm",
+        type=str,
+        choices=["instance", "instance_nvfuser", "batch", "group"],
+        default="instance",
+        help="Normalization layer",
+    )
     arg(
         "--data2d_dim",
         choices=[2, 3],
@@ -105,7 +110,7 @@ def get_main_args(strings=None):
     arg(
         "--overlap",
         type=float_0_1,
-        default=0.5,
+        default=0.25,
         help="Amount of overlap between scans during sliding window inference",
     )
     arg(
@@ -124,7 +129,7 @@ def get_main_args(strings=None):
         "--blend",
         type=str,
         choices=["gaussian", "constant"],
-        default="gaussian",
+        default="constant",
         help="How to blend output of overlapping windows",
     )
     arg(
