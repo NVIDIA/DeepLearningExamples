@@ -19,7 +19,7 @@ import tensorflow as tf
 from runtime.utils import get_config_file, get_tta_flips, is_main_process
 from skimage.transform import resize
 
-from models.sliding_window import sliding_window_inference
+from models.sliding_window import get_importance_kernel, sliding_window_inference
 from models.unet import UNet
 
 
@@ -41,6 +41,8 @@ class NNUnet(tf.keras.Model):
 
             self.model = wrapped_model
         else:
+            if not self.args.xla and self.args.norm == "instance":
+                self.args.norm = "atex_instance"
             self.model = UNet(
                 input_shape=input_shape,
                 n_class=n_class,
@@ -54,9 +56,26 @@ class NNUnet(tf.keras.Model):
             if is_main_process():
                 print(f"Filters: {self.model.filters},\nKernels: {kernels}\nStrides: {strides}")
         self.tta_flips = get_tta_flips(self.args.dim)
+        if self.args.dim == 3:
+            self.predictor = self.sw_inference
+        elif self.args.benchmark:
+            self.predictor = self.call
+        else:
+            self.predictor = self.call_2d
 
-    @tf.function(experimental_relax_shapes=True)
+        if args.dim == 3:
+            importance_kernel = get_importance_kernel(self.patch_size, args.blend_mode, 0.125)
+            self.importance_map = tf.tile(
+                tf.reshape(importance_kernel, shape=[1, *self.patch_size, 1]),
+                multiples=[1, 1, 1, 1, n_class],
+            )
+
+    @tf.function
     def call(self, *args, **kwargs):
+        return self.model(*args, **kwargs)
+
+    @tf.function(reduce_retracing=True)
+    def call_2d(self, *args, **kwargs):
         return self.model(*args, **kwargs)
 
     @tf.function
@@ -77,21 +96,19 @@ class NNUnet(tf.keras.Model):
         return sliding_window_inference(
             inputs=img,
             roi_size=self.patch_size,
-            sw_batch_size=self.args.sw_batch_size,
             model=self.model,
             overlap=self.args.overlap,
             n_class=self.n_class,
-            blend_mode=self.args.blend_mode,
+            importance_map=self.importance_map,
             **kwargs,
         )
 
     def inference(self, img):
-        predictor = self.call if self.args.dim == 2 else self.sw_inference
-        pred = predictor(img, training=False)
+        pred = self.predictor(img, training=False)
         if self.args.tta:
             for flip_axes in self.tta_flips:
                 flipped_img = tf.reverse(img, axis=flip_axes)
-                flipped_pred = predictor(flipped_img, training=False)
+                flipped_pred = self.predictor(flipped_img, training=False)
                 pred = pred + tf.reverse(flipped_pred, axis=flip_axes)
             pred = pred / (len(self.tta_flips) + 1)
         return pred

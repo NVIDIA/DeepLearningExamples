@@ -44,9 +44,6 @@ class DataModule:
             "nvol": self.args.nvol,
             "bench_steps": self.args.bench_steps,
             "meta": load_data(self.data_path, "*_meta.npy"),
-            "read_roi": self.args.read_roi,
-            "use_cpu": self.args.dali_use_cpu,
-            "sw_benchmark": self.args.sw_benchmark,
         }
 
     def setup(self, stage=None):

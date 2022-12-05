@@ -15,7 +15,6 @@
 import multiprocessing
 import os
 import pickle
-import random
 import shutil
 import sys
 from functools import wraps
@@ -29,7 +28,6 @@ from tqdm import tqdm
 
 def hvd_init():
     hvd.init()
-
     gpus = tf.config.experimental.list_physical_devices("GPU")
     for gpu in gpus:
         tf.config.experimental.set_memory_growth(gpu, True)
@@ -38,24 +36,31 @@ def hvd_init():
 
 
 def set_tf_flags(args):
-    os.environ["CUDA_CACHE_DISABLE"] = "1"
+    os.environ["CUDA_CACHE_DISABLE"] = "0"
     os.environ["HOROVOD_GPU_ALLREDUCE"] = "NCCL"
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
     os.environ["TF_GPU_THREAD_MODE"] = "gpu_private"
-    os.environ["TF_USE_CUDNN_BATCHNORM_SPATIAL_PERSISTENT"] = "0"
+    os.environ["TF_GPU_THREAD_COUNT"] = str(hvd.size())
+    os.environ["TF_USE_CUDNN_BATCHNORM_SPATIAL_PERSISTENT"] = "1"
     os.environ["TF_ADJUST_HUE_FUSED"] = "1"
     os.environ["TF_ADJUST_SATURATION_FUSED"] = "1"
     os.environ["TF_ENABLE_WINOGRAD_NONFUSED"] = "1"
     os.environ["TF_SYNC_ON_FINISH"] = "0"
     os.environ["TF_AUTOTUNE_THRESHOLD"] = "2"
     os.environ["TF_ENABLE_AUTO_MIXED_PRECISION"] = "0"
+    os.environ["TF_ENABLE_LAYOUT_NHWC"] = "1"
+    os.environ["TF_CPP_VMODULE"] = "4"
 
     if args.xla:
+        os.environ["TF_XLA_ENABLE_GPU_GRAPH_CAPTURE"] = "1"
+        if args.amp:
+            os.environ["XLA_FLAGS"] = "--xla_gpu_force_conv_nhwc"
         tf.config.optimizer.set_jit(True)
 
-    tf.config.optimizer.set_experimental_options({"remapping": False})
-    tf.config.threading.set_intra_op_parallelism_threads(1)
-    tf.config.threading.set_inter_op_parallelism_threads(max(2, (multiprocessing.cpu_count() // hvd.size()) - 2))
+    if hvd.size() > 1:
+        tf.config.threading.set_inter_op_parallelism_threads(max(2, (multiprocessing.cpu_count() // hvd.size()) - 2))
+    else:
+        tf.config.threading.set_inter_op_parallelism_threads(8)
 
     if args.amp:
         tf.keras.mixed_precision.set_global_policy("mixed_float16")
@@ -81,7 +86,6 @@ def rank_zero_only(fn):
 
 
 def set_seed(seed):
-    seed = seed or random.randrange(2 ** 31)
     np.random.seed(seed)
     tf.random.set_seed(seed)
 
@@ -101,8 +105,7 @@ def get_config_file(args):
 def get_tta_flips(dim):
     if dim == 2:
         return [[1], [2], [1, 2]]
-    else:
-        return [[1], [2], [3], [1, 2], [1, 3], [2, 3], [1, 2, 3]]
+    return [[1], [2], [3], [1, 2], [1, 3], [2, 3], [1, 2, 3]]
 
 
 def make_empty_dir(path, force=False):

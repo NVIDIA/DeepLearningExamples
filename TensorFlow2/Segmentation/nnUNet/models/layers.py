@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import nv_norms
 import tensorflow as tf
 import tensorflow_addons as tfa
 
@@ -26,7 +27,7 @@ convolutions = {
 class KaimingNormal(tf.keras.initializers.VarianceScaling):
     def __init__(self, negative_slope, seed=None):
         super().__init__(
-            scale=2.0 / (1 + negative_slope ** 2), mode="fan_in", distribution="untruncated_normal", seed=seed
+            scale=2.0 / (1 + negative_slope**2), mode="fan_in", distribution="untruncated_normal", seed=seed
         )
 
     def get_config(self):
@@ -38,6 +39,8 @@ def get_norm(name):
         return tfa.layers.GroupNormalization(32, axis=-1, center=True, scale=True)
     elif "batch" in name:
         return tf.keras.layers.BatchNormalization(axis=-1, center=True, scale=True)
+    elif "atex_instance" in name:
+        return nv_norms.InstanceNormalization(axis=-1)
     elif "instance" in name:
         return tfa.layers.InstanceNormalization(axis=-1, center=True, scale=True)
     elif "none" in name:
