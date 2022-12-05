@@ -54,7 +54,7 @@ def get_main_args():
         "--exec-mode",
         "--exec_mode",
         type=str,
-        choices=["train", "evaluate", "predict", "export", "nav"],
+        choices=["train", "evaluate", "predict", "export"],
         default="train",
         help="Execution mode to run the model",
     )
@@ -66,7 +66,6 @@ def get_main_args():
     p.flag("--benchmark", help="Run model benchmarking")
     p.boolean_flag("--tta", default=False, help="Enable test time augmentation")
     p.boolean_flag("--save-preds", "--save_preds", default=False, help="Save predictions")
-    p.boolean_flag("--sw-benchmark", "--sw_benchmark", default=False)
 
     # Logging
     p.arg("--results", type=Path, default=Path("/results"), help="Path to results directory")
@@ -74,10 +73,9 @@ def get_main_args():
     p.flag("--quiet", help="Minimalize stdout/stderr output")
     p.boolean_flag("--use-dllogger", "--use_dllogger", default=True, help="Use DLLogger logging")
 
-    # Optimalization
+    # Performance optimization
     p.boolean_flag("--amp", default=False, help="Enable automatic mixed precision")
     p.boolean_flag("--xla", default=False, help="Enable XLA compiling")
-    p.boolean_flag("--read-roi", "--read_roi", default=False, help="Use DALI direct ROI loading feature")
 
     # Training hyperparameters and loss fn customization
     p.arg("--batch-size", "--batch_size", type=positive_int, default=2, help="Batch size")
@@ -86,15 +84,15 @@ def get_main_args():
     p.arg(
         "--scheduler",
         type=str,
-        default="none",
+        default="cosine_annealing",
         choices=["none", "poly", "cosine", "cosine_annealing"],
         help="Learning rate scheduler",
     )
-    p.arg("--end-learning-rate", type=float, default=0.00008, help="End learning rate for poly scheduler")
+    p.arg("--end-learning-rate", type=float, default=0.00001, help="End learning rate for poly scheduler")
     p.arg(
         "--cosine-annealing-first-cycle-steps",
         type=positive_int,
-        default=512,
+        default=4096,
         help="Length of a cosine decay cycle in steps, only with 'cosine_annealing' scheduler",
     )
     p.arg(
@@ -145,7 +143,7 @@ def get_main_args():
     p.arg(
         "--nvol",
         type=positive_int,
-        default=4,
+        default=2,
         help="Number of volumes which come into single batch size for 2D model",
     )
     p.arg(
@@ -160,14 +158,12 @@ def get_main_args():
         default=8,
         help="Number of subprocesses to use for data loading",
     )
-    p.boolean_flag("--dali-use-cpu", default=False, help="Use CPU for data augmentation instead of GPU")
 
     # Sliding window inference
-    p.arg("--sw-batch-size", type=positive_int, default=2, help="Sliding window inference batch size")
     p.arg(
         "--overlap",
         type=float_0_1,
-        default=0.5,
+        default=0.25,
         help="Amount of overlap between scans during sliding window inference",
     )
     p.arg(
@@ -176,7 +172,7 @@ def get_main_args():
         dest="blend_mode",
         type=str,
         choices=["gaussian", "constant"],
-        default="gaussian",
+        default="constant",
         help="How to blend output of overlapping windows",
     )
 
@@ -184,7 +180,7 @@ def get_main_args():
     p.arg("--nfolds", type=positive_int, default=5, help="Number of cross-validation folds")
     p.arg("--fold", type=non_negative_int, default=0, help="Fold number")
     p.arg("--epochs", type=positive_int, default=1000, help="Number of epochs")
-    p.arg("--skip-eval", type=positive_int, default=0, help="Skip evaluation for the first N epochs.")
+    p.arg("--skip-eval", type=non_negative_int, default=0, help="Skip evaluation for the first N epochs.")
     p.arg(
         "--steps-per-epoch",
         type=positive_int,
@@ -195,13 +191,13 @@ def get_main_args():
     p.arg(
         "--bench-steps",
         type=non_negative_int,
-        default=100,
+        default=200,
         help="Number of benchmarked steps in total",
     )
     p.arg(
         "--warmup-steps",
         type=non_negative_int,
-        default=25,
+        default=100,
         help="Number of warmup steps before collecting benchmarking statistics",
     )
 

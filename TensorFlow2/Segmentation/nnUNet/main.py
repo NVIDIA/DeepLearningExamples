@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import ctypes
-import os
-
 from data_loading.data_module import DataModule
 from models.nn_unet import NNUnet
 from runtime.args import get_main_args
@@ -25,17 +22,6 @@ from runtime.utils import hvd_init, set_seed, set_tf_flags
 
 
 def main(args):
-    os.environ["TF_GPU_THREAD_MODE"] = "gpu_private"
-    os.environ["TF_GPU_THREAD_COUNT"] = "1"
-
-    _libcudart = ctypes.CDLL("libcudart.so")
-    # Set device limit on the current device
-    # cudaLimitMaxL2FetchGranularity = 0x05
-    pValue = ctypes.cast((ctypes.c_int * 1)(), ctypes.POINTER(ctypes.c_int))
-    _libcudart.cudaDeviceSetLimit(ctypes.c_int(0x05), ctypes.c_int(128))
-    _libcudart.cudaDeviceGetLimit(pValue, ctypes.c_int(0x05))
-    assert pValue.contents.value == 128
-
     hvd_init()
     if args.seed is not None:
         set_seed(args.seed)

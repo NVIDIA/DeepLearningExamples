@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from time import time
+import time
 
 import horovod.tensorflow as hvd
 import numpy as np
@@ -30,7 +30,7 @@ def update_best_metrics(old, new, start_time, iteration, watch_metric=None):
     did_change = False
     for metric, value in new.items():
         if metric not in old or old[metric]["value"] < value:
-            old[metric] = {"value": value, "timestamp": time() - start_time, "iter": int(iteration)}
+            old[metric] = {"value": value, "timestamp": time.time() - start_time, "iter": int(iteration)}
             if watch_metric == metric:
                 did_change = True
     return did_change
@@ -50,7 +50,7 @@ def get_scheduler(args, total_steps):
         "cosine_annealing": tf.keras.optimizers.schedules.CosineDecayRestarts(
             initial_learning_rate=args.learning_rate,
             first_decay_steps=args.cosine_annealing_first_cycle_steps,
-            m_mul=args.cosine_annealing_peak_decay,
+            alpha=0.1,
         ),
         "none": args.learning_rate,
     }[args.scheduler.lower()]
@@ -77,10 +77,9 @@ def get_epoch_size(args, batch_size, dataset_size):
     return (dataset_size + div - 1) // div
 
 
-def process_performance_stats(timestamps, batch_size, mode):
-    deltas = np.diff(timestamps)
-    deltas_ms = 1000 * deltas
-    throughput_imgps = (1000.0 * batch_size / deltas_ms).mean()
+def process_performance_stats(deltas, batch_size, mode):
+    deltas_ms = 1000 * np.array(deltas)
+    throughput_imgps = 1000.0 * batch_size / deltas_ms.mean()
     stats = {f"throughput_{mode}": throughput_imgps, f"latency_{mode}_mean": deltas_ms.mean()}
     for level in [90, 95, 99]:
         stats.update({f"latency_{mode}_{level}": np.percentile(deltas_ms, level)})
@@ -90,7 +89,7 @@ def process_performance_stats(timestamps, batch_size, mode):
 
 def benchmark(args, step_fn, data, steps, warmup_steps, logger, mode="train"):
     assert steps > warmup_steps, "Number of benchmarked steps has to be greater then number of warmup steps"
-    timestamps = []
+    deltas = []
     wrapped_data = progress_bar(
         enumerate(data),
         quiet=args.quiet,
@@ -99,19 +98,18 @@ def benchmark(args, step_fn, data, steps, warmup_steps, logger, mode="train"):
         postfix={"phase": "warmup"},
         total=steps,
     )
+    start = time.perf_counter()
     for step, (images, labels) in wrapped_data:
         output_map = step_fn(images, labels, warmup_batch=step == 0)
-        if mode == "predict":
-            with tf.device("/device:CPU:0"):
-                output_map = tf.experimental.numpy.copy(output_map)
         if step >= warmup_steps:
-            timestamps.append(time())
+            deltas.append(time.perf_counter() - start)
             if step == warmup_steps and is_main_process() and not args.quiet:
                 wrapped_data.set_postfix(phase="benchmark")
+        start = time.perf_counter()
         if step >= steps:
             break
 
-    stats = process_performance_stats(timestamps, args.gpus * args.batch_size, mode=mode)
+    stats = process_performance_stats(deltas, args.gpus * args.batch_size, mode=mode)
     logger.log_metrics(stats)
 
 
@@ -174,7 +172,7 @@ def train(args, model, dataset, logger):
             unit="step",
             total=total_steps - int(tstep),
         )
-        start_time = time()
+        start_time = time.time()
         total_train_loss, dice_score = 0.0, 0.0
         for images, labels in wrapped_data:
             if tstep >= total_steps:
@@ -193,7 +191,7 @@ def train(args, model, dataset, logger):
                     metrics = dice_metrics.logger_metrics()
                     metrics.update(make_class_logger_metrics(dice))
                     if did_improve:
-                        metrics["time_to_train"] = time() - start_time
+                        metrics["time_to_train"] = time.time() - start_time
                     logger.log_metrics(metrics=metrics, step=int(tstep))
                     checkpoint.update(float(dice_score))
                     logger.flush()
@@ -245,20 +243,17 @@ def evaluate(args, model, dataset, logger):
 def predict(args, model, dataset, logger):
     if args.benchmark:
 
+        @tf.function
         def predict_bench_fn(features, labels, warmup_batch):
             if args.dim == 2:
                 features = features[0]
-
-            if args.sw_benchmark:
-                output_map = model.inference(features)
-            else:
-                output_map = model(features, training=False)
+            output_map = model(features, training=False)
             return output_map
 
         benchmark(
             args,
             predict_bench_fn,
-            dataset.train_dataset(),
+            dataset.test_dataset(),
             args.bench_steps,
             args.warmup_steps,
             logger,

@@ -17,7 +17,6 @@ import itertools
 import horovod.tensorflow as hvd
 import numpy as np
 import nvidia.dali.fn as fn
-import nvidia.dali.math as math
 import nvidia.dali.ops as ops
 import nvidia.dali.plugin.tf as dali_tf
 import nvidia.dali.types as types
@@ -57,7 +56,6 @@ class GenericPipeline(Pipeline):
         shuffle_input=True,
         input_x_files=None,
         input_y_files=None,
-        use_cpu=False,
     ):
         super().__init__(
             batch_size=batch_size,
@@ -85,19 +83,12 @@ class GenericPipeline(Pipeline):
 
         self.dim = dim
         self.internal_seed = seed
-        self.use_cpu = use_cpu
-
-    def mark_pipeline_start(self, x, y):
-        if not self.use_cpu:
-            x, y = x.gpu(), y.gpu()
-        return x, y
 
 
 class TrainPipeline(GenericPipeline):
-    def __init__(self, imgs, lbls, oversampling, patch_size, read_roi=False, batch_size_2d=None, **kwargs):
+    def __init__(self, imgs, lbls, oversampling, patch_size, batch_size_2d=None, **kwargs):
         super().__init__(input_x_files=imgs, input_y_files=lbls, shuffle_input=True, **kwargs)
         self.oversampling = oversampling
-        self.read_roi = read_roi
         self.patch_size = patch_size
         if self.dim == 2 and batch_size_2d is not None:
             self.patch_size = [batch_size_2d] + self.patch_size
@@ -129,7 +120,7 @@ class TrainPipeline(GenericPipeline):
             roi_end=roi_end,
             crop_shape=[*self.patch_size, 1],
         )
-        anchor = fn.slice(anchor, 0, 3, axes=[0])  # drop channel from anchor
+        anchor = fn.slice(anchor, 0, 3, axes=[0])
         img, lbl = fn.slice(
             [img, lbl],
             anchor,
@@ -138,40 +129,7 @@ class TrainPipeline(GenericPipeline):
             out_of_bounds_policy="pad",
             device="cpu",
         )
-
-        return img.gpu(), lbl.gpu()
-
-    def load_roi(self):
-        lbl = self.input_y(name="ReaderY")
-        lbl = fn.reshape(lbl, layout="DHWC")
-        roi_start, roi_end = fn.segmentation.random_object_bbox(
-            lbl,
-            format="start_end",
-            foreground_prob=self.oversampling,
-            k_largest=2,
-            device="cpu",
-            cache_objects=True,
-        )
-        anchor = fn.roi_random_crop(lbl, roi_start=roi_start, roi_end=roi_end, crop_shape=[1, *self.patch_size])
-        anchor = fn.slice(anchor, 1, 3, axes=[0])  # drop channel from anchor
-        lbl = fn.slice(
-            lbl,
-            anchor,
-            self.crop_shape,
-            axis_names="DHW",
-            out_of_bounds_policy="pad",
-            device="cpu",
-        )
-
-        img = self.input_x(
-            name="ReaderX",
-            roi_start=fn.cast(anchor, dtype=types.INT32),
-            roi_axes=[1, 2, 3],
-            roi_shape=self.patch_size,
-            out_of_bounds_policy="pad",
-        )
-        img = fn.reshape(img, layout="DHWC")
-
+        img, lbl = img.gpu(), lbl.gpu()
         return img, lbl
 
     def zoom_fn(self, img, lbl):
@@ -189,22 +147,18 @@ class TrainPipeline(GenericPipeline):
         return img, lbl
 
     def noise_fn(self, img):
-        img_noised = img + fn.random.normal(img, stddev=fn.random.uniform(range=(0.0, 0.33)))
+        img_noised = fn.noise.gaussian(img, stddev=fn.random.uniform(range=(0.0, 0.3)))
         return random_augmentation(0.15, img_noised, img)
 
     def blur_fn(self, img):
         img_blurred = fn.gaussian_blur(img, sigma=fn.random.uniform(range=(0.5, 1.5)))
         return random_augmentation(0.15, img_blurred, img)
 
-    def brightness_fn(self, img):
-        brightness_scale = random_augmentation(0.15, fn.random.uniform(range=(0.7, 1.3)), 1.0)
-        return img * brightness_scale
-
-    def contrast_fn(self, img):
-        min_, max_ = fn.reductions.min(img), fn.reductions.max(img)
-        scale = random_augmentation(0.15, fn.random.uniform(range=(0.65, 1.5)), 1.0)
-        img = math.clamp(img * scale, min_, max_)
-        return img
+    def brightness_contrast_fn(self, img):
+        img_transformed = fn.brightness_contrast(
+            img, brightness=fn.random.uniform(range=(0.7, 1.3)), contrast=fn.random.uniform(range=(0.65, 1.5))
+        )
+        return random_augmentation(0.15, img_transformed, img)
 
     def flips_fn(self, img, lbl):
         kwargs = {
@@ -216,16 +170,13 @@ class TrainPipeline(GenericPipeline):
         return fn.flip(img, **kwargs), fn.flip(lbl, **kwargs)
 
     def define_graph(self):
-        if self.read_roi:
-            img, lbl = self.load_roi()
-        else:
-            img, lbl = self.load_data()
-            img, lbl = self.biased_crop_fn(img, lbl)
-        img, lbl = img.gpu(), lbl.gpu()
+        img, lbl = self.load_data()
+        img, lbl = self.biased_crop_fn(img, lbl)
         img, lbl = self.zoom_fn(img, lbl)
         img, lbl = self.flips_fn(img, lbl)
-        img = self.brightness_fn(img)
-        img = self.contrast_fn(img)
+        img = self.noise_fn(img)
+        img = self.blur_fn(img)
+        img = self.brightness_contrast_fn(img)
         return img, lbl
 
 
@@ -251,12 +202,11 @@ class TestPipeline(GenericPipeline):
 
 
 class BenchmarkPipeline(GenericPipeline):
-    def __init__(self, imgs, lbls, patch_size, batch_size_2d=None, sw_benchmark=False, **kwargs):
+    def __init__(self, imgs, lbls, patch_size, batch_size_2d=None, **kwargs):
         super().__init__(input_x_files=imgs, input_y_files=lbls, shuffle_input=False, **kwargs)
         self.patch_size = patch_size
         if self.dim == 2 and batch_size_2d is not None:
             self.patch_size = [batch_size_2d] + self.patch_size
-        self.crop = not sw_benchmark
 
     def crop_fn(self, img, lbl):
         img = fn.crop(img, crop=self.patch_size, out_of_bounds_policy="pad")
@@ -265,9 +215,8 @@ class BenchmarkPipeline(GenericPipeline):
 
     def define_graph(self):
         img, lbl = self.input_x(name="ReaderX").gpu(), self.input_y(name="ReaderY").gpu()
+        img, lbl = self.crop_fn(img, lbl)
         img, lbl = fn.reshape(img, layout="DHWC"), fn.reshape(lbl, layout="DHWC")
-        if self.crop:
-            img, lbl = self.crop_fn(img, lbl)
         return img, lbl
 
 
@@ -293,7 +242,6 @@ def fetch_dali_loader(imgs, lbls, batch_size, mode, **kwargs):
         "batch_size": batch_size,
         "num_threads": kwargs["num_workers"],
         "shard_id": device_id,
-        "use_cpu": kwargs["use_cpu"],
     }
     if kwargs["dim"] == 2:
         if kwargs["benchmark"]:
@@ -308,13 +256,9 @@ def fetch_dali_loader(imgs, lbls, batch_size, mode, **kwargs):
 
     output_dtypes = (tf.float32, tf.uint8)
     if kwargs["benchmark"]:
-        pipeline = BenchmarkPipeline(
-            imgs, lbls, kwargs["patch_size"], sw_benchmark=kwargs["sw_benchmark"], **pipe_kwargs
-        )
+        pipeline = BenchmarkPipeline(imgs, lbls, kwargs["patch_size"], **pipe_kwargs)
     elif mode == "train":
-        pipeline = TrainPipeline(
-            imgs, lbls, kwargs["oversampling"], kwargs["patch_size"], kwargs["read_roi"], **pipe_kwargs
-        )
+        pipeline = TrainPipeline(imgs, lbls, kwargs["oversampling"], kwargs["patch_size"], **pipe_kwargs)
     elif mode == "eval":
         pipeline = EvalPipeline(imgs, lbls, kwargs["patch_size"], **pipe_kwargs)
     else:

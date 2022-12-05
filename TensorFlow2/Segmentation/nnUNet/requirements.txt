@@ -1,4 +1,5 @@
 git+https://github.com/NVIDIA/dllogger
+git+https://github.com/NVIDIA/mlperf-common.git
 nibabel==3.1.1
 joblib==0.16.0
 scikit-learn==0.23.2

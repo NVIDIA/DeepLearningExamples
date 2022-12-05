@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import dllogger
 import pathlib
 from abc import ABC, abstractmethod
+from typing import Callable
+
+import dllogger
 from dllogger import Verbosity
-from typing import Dict, Any, Callable, Optional
 
 from runtime.utils import rank_zero_only
 
@@ -89,7 +90,7 @@ class LoggerCollection(Logger):
 
 
 class DLLogger(Logger):
-    def __init__(self, save_dir: pathlib.Path, filename: str, append: bool, quiet: bool):
+    def __init__(self, save_dir, filename, append, quiet):
         super().__init__()
         self._initialize_dllogger(save_dir, filename, append, quiet)
 
@@ -97,16 +98,10 @@ class DLLogger(Logger):
     def _initialize_dllogger(self, save_dir, filename, append, quiet):
         save_dir.mkdir(parents=True, exist_ok=True)
         backends = [
-            dllogger.JSONStreamBackend(
-                Verbosity.DEFAULT, str(save_dir / filename), append=append
-            ),
+            dllogger.JSONStreamBackend(Verbosity.DEFAULT, str(save_dir / filename), append=append),
         ]
         if not quiet:
-            backends.append(
-                dllogger.StdOutBackend(
-                    Verbosity.VERBOSE, step_format=lambda step: f"Step: {step} "
-                )
-            )
+            backends.append(dllogger.StdOutBackend(Verbosity.VERBOSE, step_format=lambda step: f"Step: {step} "))
         dllogger.init(backends=backends)
 
     @rank_zero_only
