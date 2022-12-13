@@ -26,12 +26,12 @@ def add_dali_args(parser):
     group = parser.add_argument_group('DALI data backend', 'entire group applies only to dali data backend')
     group.add_argument('--dali-separ-val', action='store_true',
                       help='each process will perform independent validation on whole val-set')
-    group.add_argument('--dali-threads', type=int, default=4, help="number of threads" +\
+    group.add_argument('--dali-threads', type=int, default=6, help="number of threads" +\
                        "per GPU for DALI")
     group.add_argument('--dali-validation-threads', type=int, default=10, help="number of threads" +\
                        "per GPU for DALI for validation")
-    group.add_argument('--dali-prefetch-queue', type=int, default=2, help="DALI prefetch queue depth")
-    group.add_argument('--dali-nvjpeg-memory-padding', type=int, default=64, help="Memory padding value for nvJPEG (in MB)")
+    group.add_argument('--dali-prefetch-queue', type=int, default=5, help="DALI prefetch queue depth")
+    group.add_argument('--dali-nvjpeg-memory-padding', type=int, default=256, help="Memory padding value for nvJPEG (in MB)")
     group.add_argument('--dali-fuse-decoder', type=int, default=1, help="0 or 1 whether to fuse decoder or not")
 
     group.add_argument('--dali-nvjpeg-width-hint', type=int, default=5980, help="Width hint value for nvJPEG (in pixels)")

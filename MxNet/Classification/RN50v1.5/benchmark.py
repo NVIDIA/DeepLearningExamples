@@ -79,7 +79,7 @@ for n in args.ngpus:
         try:
 
             with open(log_file, 'r') as f:
-                lines = f.read().splitlines()
+                lines = [line for line in f.read().splitlines() if 'step' in line]
                 log_data = [json.loads(line[5:]) for line in lines]
                 epochs_report = list(filter(lambda x: len(x['step']) == 1, log_data))
 

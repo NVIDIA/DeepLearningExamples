@@ -168,7 +168,7 @@ The following section lists the requirements that you need to meet in order to s
 
 This repository contains Dockerfile which extends the MXNet NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 -   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
--   [MXNet 20.12-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia%2Fmxnet)
+-   [MXNet 22.10-py3 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia%2Fmxnet)
 Supported GPUs:
 - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
 - [NVIDIA Turing architecture](https://www.nvidia.com/en-us/design-visualization/technologies/turing-architecture/)
@@ -585,18 +585,18 @@ The following sections provide details on how we achieved our performance and ac
 
 **90 epochs configuration**
 
-Our results were obtained by running 8 times the `./runner -n <number of gpus> -b 256 --dtype float32` script for TF32 and the `./runner -n <number of gpus> -b 256` script for mixed precision in the mxnet-20.12-py3 NGC container on NVIDIA DGX A100 with (8x A100 80GB) GPUs.
+Our results were obtained by running 8 times the `./runner -n <number of gpus> -b 512 --dtype float32` script for TF32 and the `./runner -n <number of gpus> -b 512` script for mixed precision in the mxnet-22.10-py3 NGC container on NVIDIA DGX A100 with (8x A100 80GB) GPUs.
 
 | **GPUs** | **Accuracy - mixed precision** | **Accuracy - TF32** | **Time to train - mixed precision** | **Time to train - TF32** | **Time to train - speedup** |
-|:---:|:---:|:---:|:---:|:---:|:---:|
-|1|77.185|77.184|14.6|31.26|2.13|
-|8|77.185|77.184|1.8|4.0|2.12|
+|:---:|:---:|:---:|:--:|:---:|:---:|
+|1|77.185|77.184|8.75|29.39|3.36|
+|8|77.185|77.184|1.14|3.82|3.35|
 
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
 
 **90 epochs configuration**
 
-Our results were obtained by running the `./runner -n <number of gpus> -b 96 --dtype float32` training script for FP32 and the `./runner -n <number of gpus> -b 192` training script for mixed precision in the mxnet-20.12-py3 NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs.
+Our results were obtained by running the `./runner -n <number of gpus> -b 96 --dtype float32` training script for FP32 and the `./runner -n <number of gpus> -b 192` training script for mixed precision in the mxnet-22.10-py3 NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs.
 
 | **GPUs** | **Accuracy - mixed precision** | **Accuracy - FP32** | **Time to train - mixed precision** | **Time to train - FP32** | **Time to train - speedup** |
 |:---:|:---:|:---:|:---:|:---:|:---:|
@@ -641,18 +641,17 @@ Here are example graphs of FP32 and mixed precision training on 8 GPU 250 epochs
 ##### Training performance: NVIDIA DGX A100 (8x A100 80GB)
 
 The following results were obtained by running the 
-`python benchmark.py -n 1,2,4,8 -b 256 --dtype float32 -o benchmark_report_tf32.json -i 500 -e 3 -w 1 --num-examples 32000 --mode train` script for TF32 and the
-`python benchmark.py -n 1,2,4,8 -b 256 --dtype float16 -o benchmark_report_fp16.json -i 500 -e 3 -w 1 --num-examples 32000 --mode train` script for mixed precision in the mxnet-20.12-py3 NGC container on NVIDIA DGX A100 with (8x A100 80GB) GPUs.
+`python benchmark.py -n 1,4,8 -b 512 --dtype float32 -o benchmark_report_tf32.json -i 500 -e 3 -w 1 --num-examples 32000 --mode train` script for TF32 and the
+`python benchmark.py -n 1,4,8 -b 512 --dtype float16 -o benchmark_report_fp16.json -i 500 -e 3 -w 1 --num-examples 32000 --mode train` script for mixed precision in the mxnet-22.10-py3 NGC container on NVIDIA DGX A100 with (8x A100 80GB) GPUs.
 
 Training performance reported as Total IPS (data + compute time taken into account).
 Weak scaling is calculated as a ratio of speed for given number of GPUs to speed for 1 GPU.
 
 | **GPUs** | **Throughput - mixed precision** | **Throughput - TF32** | **Throughput speedup (TF32 - mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - TF32** |
 |:---:|:---:|:---:|:---:|:---:|:---:|
-|1|2180 |1022 |2.18 |1.00 |1.00 |
-|2|4332 |2032 |2.13 |1.98 |1.98 |
-|4|8587 |4035 |2.12 |3.93 |3.94 |
-|8|16925|8001 |2.11 |7.76 |7.82 |
+|1|3410.52 |1055.78 |2.18 |1.00 |1.00 |
+|4|13442.66 |4182.30 |3.24 |3.97 |3.96 |
+|8|26673.72|8247.44 |3.23 |7.82 |7.81 |
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
 
@@ -693,23 +692,24 @@ Weak scaling is calculated as a ratio of speed for given number of GPUs to speed
 
 The following results were obtained by running the
 `python benchmark.py -n 1 -b 1,2,4,8,16,32,64,128,192,256 --dtype float16 -o inferbenchmark_report_fp16.json -i 500 -e 3 -w 1 --mode val` script for mixed precision and the
-`python benchmark.py -n 1 -b 1,2,4,8,16,32,64,128,192,256 --dtype float32 -o inferbenchmark_report_tf32.json -i 500 -e 3 -w 1 --mode val` script for TF32 in the mxnet-20.12-py3 NGC container on NVIDIA DGX A100 with (8x A100 80GB) GPUs.
+`python benchmark.py -n 1 -b 1,2,4,8,16,32,64,128,192,256 --dtype float32 -o inferbenchmark_report_tf32.json -i 500 -e 3 -w 1 --mode val` script for TF32 in the mxnet-22.10-py3 NGC container on NVIDIA DGX A100 with (8x A100 80GB) GPUs.
 
 Inference performance reported as Total IPS (data + compute time taken into account).
 Reported mixed precision speedups are relative to TF32 numbers for corresponding configuration.
 
 | **Batch size** | **Throughput (img/sec) - mixed precision** | **Throughput - speedup** | **Avg latency (ms) - mixed precision** | **Avg latency - speedup** | **50% latency (ms) - mixed precision** | **50% latency - speedup** | **90% latency (ms) - mixed precision** | **90% latency - speedup** | **95% latency (ms) - mixed precision** | **95% latency - speedup** | **99% latency (ms) - mixed precision** | **99% latency - speedup** |
 |:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| 1   | 463 | 1.72 | 2.15 | 1.72 | 2.10 | 1.58 | 2.23 | 1.58 | 2.39 | 1.56 | 2.94 | 1.79 |
-| 2   | 880 | 1.62 | 2.27 | 1.62 | 2.14 | 1.66 | 2.52 | 1.54 | 2.73 | 1.50 | 3.70 | 1.42 |
-| 4   | 1668| 1.76 | 2.39 | 1.76 | 2.21 | 1.86 | 2.70 | 1.66 | 3.30 | 1.44 | 5.72 | 1.01 |
-| 8   | 2522| 1.75 | 3.17 | 1.75 | 2.74 | 2.00 | 4.26 | 1.35 | 5.36 | 1.10 | 10.43| 0.65 |
-| 16  | 3704| 1.90 | 4.31 | 1.90 | 3.83 | 2.13 | 6.00 | 1.43 | 7.20 | 1.24 | 12.77| 0.85 |
-| 32  | 2964| 1.51 | 10.79| 1.51 | 10.45| 1.52 | 14.52| 1.37 | 16.07| 1.32 | 22.76| 1.21 |
-| 64  | 4547| 1.80 | 14.07| 1.80 | 13.75| 1.82 | 17.16| 1.67 | 19.04| 1.59 | 28.12| 1.28 |
-| 128 | 5530| 1.94 | 23.14| 1.94 | 23.63| 1.82 | 29.04| 1.71 | 32.75| 1.56 | 41.45| 1.34 |
-| 192 | 6198| 2.19 | 30.97| 2.19 | 31.02| 2.21 | 40.04| 1.81 | 44.03| 1.68 | 51.44| 1.51 |
-| 256 | 6120| 2.19 | 41.82| 2.19 | 42.01| 2.19 | 50.72| 1.89 | 55.09| 1.77 | 63.08| 1.60 |
+| 1 | 1431.99 | 1.9 | 0.7 | 1.9 | 0.68 | 1.95 | 0.71 | 1.9 | 0.84 | 1.65 | 0.88 | 1.7 | 
+ | 2 | 2530.66 | 2.19 | 0.79 | 2.19 | 0.74 | 2.31 | 0.86 | 2.05 | 0.93 | 2.0 | 2.0 | 0.97 | 
+ | 4 | 3680.74 | 2.11 | 1.09 | 2.11 | 0.92 | 2.49 | 1.21 | 1.98 | 1.64 | 1.51 | 6.03 | 0.45 | 
+ | 8 | 2593.88 | 1.11 | 3.08 | 1.11 | 2.89 | 1.17 | 4.09 | 0.89 | 4.72 | 0.8 | 9.85 | 0.55 | 
+ | 16 | 4340.08 | 1.52 | 3.69 | 1.52 | 3.31 | 1.68 | 4.73 | 1.24 | 6.3 | 0.95 | 12.31 | 0.54 | 
+ | 32 | 6808.22 | 2.1 | 4.7 | 2.1 | 4.0 | 2.46 | 6.44 | 1.58 | 9.01 | 1.15 | 15.88 | 0.68 | 
+ | 64 | 7659.96 | 2.21 | 8.36 | 2.21 | 7.44 | 2.48 | 10.76 | 1.75 | 13.91 | 1.37 | 21.96 | 0.9 | 
+ | 128 | 8017.67 | 2.23 | 15.96 | 2.23 | 15.0 | 2.37 | 18.95 | 1.9 | 21.65 | 1.67 | 30.36 | 1.23 | 
+ | 192 | 8240.8 | 2.26 | 23.3 | 2.26 | 22.49 | 2.33 | 25.65 | 2.07 | 27.54 | 1.94 | 37.19 | 1.5 | 
+ | 256 | 7909.62 | 2.15 | 32.37 | 2.15 | 31.66 | 2.2 | 34.27 | 2.05 | 37.02 | 1.9 | 42.83 | 1.66 | 
+ | 512 | 7213.43 | 2.07 | 70.98 | 2.07 | 70.48 | 2.08 | 73.21 | 2.04 | 74.38 | 2.03 | 79.15 | 1.99 |
 
 
 ##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
@@ -771,7 +771,10 @@ Reported mixed precision speedups are relative to FP32 numbers for corresponding
 3. February, 2021
   * DGX-A100 performance results
   * Container version upgraded to 20.12
-
+4. December, 2022
+  * Container version upgraded to 22.10
+  * Updated the A100 performance results. V100 and T4 performance results reflect the performance using the 20.12 container
+  
 
 ### Known Issues
 

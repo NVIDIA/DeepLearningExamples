@@ -83,7 +83,7 @@ class PartitionSignalHandler():
         return bool(self.t[0] > 0)
 
     def _signal_handler(self, signum, frame):
-        print("Signal reveived")
+        print("Signal received")
         self.t[0] = 1
 
 
