@@ -5,6 +5,7 @@ pretrained_models/
 tb_*/
 data
 ! data/filelists
+! data/cmudict
 
 *.pyc
 __pycache__
