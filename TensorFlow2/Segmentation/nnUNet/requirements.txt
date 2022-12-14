@@ -7,4 +7,3 @@ pynvml==8.0.4
 fsspec==0.8.0
 scikit-image==0.18.2
 tqdm==4.62
-tensorflow-addons==0.14.0
