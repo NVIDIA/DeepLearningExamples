@@ -370,6 +370,7 @@ class TrainingMetrics(Metrics):
                 "data_time": ["train.data_time"],
                 "compute_time": ["train.compute_time"],
                 "lr": ["train.lr"],
+                "grad_scale": ["train.grad_scale"],
             }
             logger.register_metric(
                 "train.loss",
@@ -405,6 +406,12 @@ class TrainingMetrics(Metrics):
                 "train.lr",
                 LR_METER(),
                 verbosity=dllogger.Verbosity.DEFAULT,
+            )
+            logger.register_metric(
+                "train.grad_scale",
+                PERF_METER(),
+                verbosity=dllogger.Verbosity.DEFAULT,
+                metadata=Metrics.LOSS_METADATA,
             )
 
 

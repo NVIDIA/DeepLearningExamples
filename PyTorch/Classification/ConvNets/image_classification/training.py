@@ -206,6 +206,7 @@ def train(
     train_step,
     train_loader,
     lr_scheduler,
+    grad_scale_fn,
     log_fn,
     timeout_handler,
     prof=-1,
@@ -238,6 +239,7 @@ def train(
             compute_time=it_time - data_time,
             lr=lr,
             loss=reduced_loss.item(),
+            grad_scale=grad_scale_fn(),
         )
 
         end = time.time()
@@ -364,6 +366,7 @@ def train_loop(
                     training_step,
                     data_iter,
                     lambda i: lr_scheduler(trainer.optimizer, i, epoch),
+                    trainer.executor.scaler.get_scale,
                     train_metrics.log,
                     timeout_handler,
                     prof=prof,

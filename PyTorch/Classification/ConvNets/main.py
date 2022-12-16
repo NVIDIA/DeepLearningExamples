@@ -416,6 +416,7 @@ def prepare_for_training(args, model_args, model_arch):
         print("BSM: {}".format(batch_size_multiplier))
 
     start_epoch = 0
+    best_prec1 = 0
     # optionally resume from a checkpoint
     if args.resume is not None:
         if os.path.isfile(args.resume):
@@ -603,13 +604,12 @@ def prepare_for_training(args, model_args, model_arch):
         val_loader,
         logger,
         start_epoch,
+        best_prec1,
     )
 
 
 def main(args, model_args, model_arch):
     exp_start_time = time.time()
-    global best_prec1
-    best_prec1 = 0
 
     (
         trainer,
@@ -619,6 +619,7 @@ def main(args, model_args, model_arch):
         val_loader,
         logger,
         start_epoch,
+        best_prec1,
     ) = prepare_for_training(args, model_args, model_arch)
 
     train_loop(
