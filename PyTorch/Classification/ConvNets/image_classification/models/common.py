@@ -289,13 +289,13 @@ class StochasticDepthResidual(nn.Module):
             return torch.add(residual, other=x)
         else:
             with torch.no_grad():
-                F.dropout(
+                mask = F.dropout(
                     self.mask,
                     p=1 - self.survival_prob,
                     training=self.training,
                     inplace=False,
                 )
-            return torch.addcmul(residual, self.mask, x)
+            return torch.addcmul(residual, mask, x)
 
 class Flatten(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
