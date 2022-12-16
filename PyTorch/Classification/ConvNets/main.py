@@ -266,12 +266,6 @@ def add_parser_arguments(parser, skip_arch=False):
         help="Static loss scale, positive power of 2 values can improve amp convergence.",
     )
     parser.add_argument(
-        "--dynamic-loss-scale",
-        action="store_true",
-        help="Use dynamic loss scaling.  If supplied, this argument supersedes "
-        + "--static-loss-scale.",
-    )
-    parser.add_argument(
         "--prof", type=int, default=-1, metavar="N", help="Run only N iterations"
     )
     parser.add_argument(
@@ -483,7 +477,7 @@ def prepare_for_training(args, model_args, model_arch):
         init_scale=args.static_loss_scale,
         growth_factor=2,
         backoff_factor=0.5,
-        growth_interval=100 if args.dynamic_loss_scale else 1000000000,
+        growth_interval=100,
         enabled=args.amp,
     )
 
