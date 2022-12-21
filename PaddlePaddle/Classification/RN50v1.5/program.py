@@ -30,7 +30,7 @@ import paddle
 import paddle.nn.functional as F
 from paddle.distributed import fleet
 from paddle.distributed.fleet import DistributedStrategy
-from paddle.static import sparsity
+from paddle.incubate import asp
 from paddle.distributed.fleet.meta_optimizers.common import CollectiveHelper
 
 
@@ -228,7 +228,7 @@ def build(args, main_prog, startup_prog, step_each_epoch, is_train=True):
                 out, feeds, class_num, args.label_smoothing, mode=mode)
 
             if args.asp:
-                sparsity.set_excluded_layers(main_prog, [model.fc.weight.name])
+                asp.set_excluded_layers(main_prog, [model.fc.weight.name])
 
             lr_scheduler = None
             optimizer = None
