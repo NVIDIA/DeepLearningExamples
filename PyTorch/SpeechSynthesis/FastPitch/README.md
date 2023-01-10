@@ -197,7 +197,7 @@ The following section lists the requirements that you need to meet in order to s
 
 This repository contains Dockerfile which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 -   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
--   [PyTorch 21.05-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
+-   [PyTorch 22.08-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
 or newer
 - supported GPUs:
     - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
@@ -319,7 +319,7 @@ The repository is structured similarly to the [NVIDIA Tacotron2 Deep Learning ex
 In this section, we list the most important hyperparameters and command-line arguments,
 together with their default values that are used to train FastPitch.
 
-* `--epochs` - number of epochs (default: 1500)
+* `--epochs` - number of epochs (default: 1000)
 * `--learning-rate` - learning rate (default: 0.1)
 * `--batch-size` - batch size for a single forward-backward step (default: 16)
 * `--grad-accumulation` - number of steps over which gradients are accumulated (default: 2)
@@ -542,7 +542,7 @@ and accuracy in training and inference.
 
 ##### Training accuracy: NVIDIA DGX A100 (8x A100 80GB)
 
-Our results were obtained by running the `./platform/DGXA100_FastPitch_{AMP,TF32}_8GPU.sh` training script in the 21.05-py3 NGC container on NVIDIA DGX A100 (8x A100 80GB) GPUs.
+Our results were obtained by running the `./platform/DGXA100_FastPitch_{AMP,TF32}_8GPU.sh` training script in the PyTorch 21.05-py3 NGC container on NVIDIA DGX A100 (8x A100 80GB) GPUs.
 
 | Loss (Model/Epoch)   |    50 |   250 |   500 |   750 |  1000 |  1250 |  1500 |
 |:---------------------|------:|------:|------:|------:|------:|------:|------:|
@@ -570,50 +570,49 @@ All of the results were produced using the `train.py` script as described in the
 
 ##### Training performance: NVIDIA DGX A100 (8x A100 80GB)
 
-Our results were obtained by running the `./platform/DGXA100_FastPitch_{AMP,TF32}_8GPU.sh` training script in the 21.05-py3 NGC container on NVIDIA DGX A100 (8x A100 80GB) GPUs. Performance numbers, in output mel-scale spectrogram frames per second, were averaged over
+Our results were obtained by running the `./platform/DGXA100_FastPitch_{AMP,TF32}_8GPU.sh` training script in the PyTorch 22.08-py3 NGC container on NVIDIA DGX A100 (8x A100 80GB) GPUs. Performance numbers, in output mel-scale spectrogram frames per second, were averaged over
 an entire training epoch.
 
-| Batch size / GPU | Grad accumulation | GPUs | Throughput - TF32 | Throughput - mixed precision | Throughput speedup (TF32 to mixed precision) | Weak scaling - TF32 | Weak scaling - mixed precision |
-|---:|--:|--:|--------:|--------:|-----:|-----:|-----:|
-| 32 | 8 | 1 |  97,735 | 101,730 | 1.04 | 1.00 | 1.00 |
-| 32 | 2 | 4 | 337,163 | 352,300 | 1.04 | 3.45 | 3.46 |
-| 32 | 1 | 8 | 599,221 | 623,498 | 1.04 | 6.13 | 6.13 |
+| Batch size / GPU | GPUs | Grad accumulation | Throughput - TF32 | Throughput - mixed precision | Throughput speedup (TF32 to mixed precision) | Strong scaling - TF32 | Strong scaling - mixed precision |
+|-----:|--:|---:|--------:|----------:|--------:|-----:|------:|
+|  128 | 1 |  2 | 141,028 |   148,149 |    1.05 | 1.00 |  1.00 |
+|   64 | 4 |  1 | 525,879 |   614,857 |    1.17 | 3.73 |  4.15 |
+|   32 | 8 |  1 | 914,350 | 1,022,722 |    1.12 | 6.48 |  6.90 |
 
 ###### Expected training time
 
-The following table shows the expected training time for convergence for 1500 epochs:
+The following table shows the expected training time for convergence for 1000 epochs:
 
 | Batch size / GPU | GPUs | Grad accumulation | Time to train with TF32 (Hrs) | Time to train with mixed precision (Hrs) | Speed-up with mixed precision|
-|---:|--:|--:|-----:|-----:|-----:|
-| 32 | 1 | 8 | 32.8 | 31.6 | 1.04 |
-| 32 | 4 | 2 |  9.6 |  9.2 | 1.04 |
-| 32 | 8 | 1 |  5.5 |  5.3 | 1.04 |
+|----:|--:|--:|-----:|-----:|-----:|
+| 128 | 1 | 2 | 14.5 | 13.8 | 1.05 |
+| 64  | 4 | 1 |  4.1 |  3.3 | 1.17 |
+| 32  | 8 | 1 |  2.2 |  2.0 | 1.12 |
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
 
 Our results were obtained by running the `./platform/DGX1_FastPitch_{AMP,FP32}_8GPU.sh`
-training script in the PyTorch 21.05-py3 NGC container on NVIDIA DGX-1 with
+training script in the PyTorch 22.08-py3 NGC container on NVIDIA DGX-1 with
 8x V100 16GB GPUs. Performance numbers, in output mel-scale spectrogram frames per second, were averaged over
 an entire training epoch.
 
 | Batch size / GPU | GPUs | Grad accumulation | Throughput - FP32 | Throughput - mixed precision | Throughput speedup (FP32 to mixed precision) | Strong scaling - FP32 | Strong scaling - mixed precision |
-|---:|--:|---:|--------:|--------:|-----:|-----:|-----:|
-| 16 | 1 | 16 |  33,456 |  63,986 | 1.91 | 1.00 | 1.00 |
-| 16 | 4 |  4 | 120,393 | 209,335 | 1.74 | 3.60 | 3.27 |
-| 16 | 8 |  2 | 222,161 | 356,522 | 1.60 | 6.64 | 5.57 |
-
+|-----:|---:|-----:|---------:|----------:|--------:|-----:|------:|
+|   16 |  1 |   16 |   31,863 |    83,761 |    2.63 | 1.00 |  1.00 |
+|   16 |  4 |    4 |  117,971 |   269,143 |    2.28 | 3.70 |  3.21 |
+|   16 |  8 |    2 |  225,826 |   435,799 |    1.93 | 7.09 |  5.20 |
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
 ###### Expected training time
 
-The following table shows the expected training time for convergence for 1500 epochs:
+The following table shows the expected training time for convergence for 1000 epochs:
 
 | Batch size / GPU | GPUs | Grad accumulation | Time to train with FP32 (Hrs) | Time to train with mixed precision (Hrs) | Speed-up with mixed precision|
 |---:|--:|---:|-----:|-----:|-----:|
-| 16 | 1 | 16 | 89.3 | 47.4 | 1.91 |
-| 16 | 4 |  4 | 24.9 | 14.6 | 1.74 |
-| 16 | 8 |  2 | 13.6 |  8.6 | 1.60 |
+| 16 | 1 | 16 | 64.2 | 24.4 | 2.63 |
+| 16 | 4 |  4 | 17.4 |  7.6 | 2.28 |
+| 16 | 8 |  2 |  9.1 |  4.7 | 1.93 |
 
 Note that most of the quality is achieved after the initial 1000 epochs.
 
@@ -628,46 +627,110 @@ The used WaveGlow model is a 256-channel model.
 Note that performance numbers are related to the length of input. The numbers reported below were taken with a moderate length of 128 characters. Longer utterances yield higher RTF, as the generator is fully parallel.
 ##### Inference performance: NVIDIA DGX A100 (1x A100 80GB)
 
-Our results were obtained by running the `./scripts/inference_benchmark.sh` inferencing benchmarking script in the 21.05-py3 NGC container on NVIDIA DGX A100 (1x A100 80GB) GPU.
+Our results were obtained by running the `./scripts/inference_benchmark.sh` inferencing benchmarking script in the PyTorch 22.08-py3 NGC container on NVIDIA DGX A100 (1x A100 80GB) GPU.
 
-|Batch size|Precision|Avg latency (s)|Latency tolerance interval 90% (s)|Latency tolerance interval 95% (s)|Latency tolerance interval 99% (s)|Throughput (samples/sec)|Speed-up with mixed precision|Avg RTF|
-|-----:|-------:|----------:|--------:|--------:|--------:|---------------:|----------:|------:|
-|    1 | FP16   |     0.091 |   0.092 |   0.092 |   0.092 |      1,879,189 | 1.28      | 85.22 |
-|    4 | FP16   |     0.335 |   0.337 |   0.337 |   0.338 |      2,043,641 | 1.21      | 23.17 |
-|    8 | FP16   |     0.652 |   0.654 |   0.654 |   0.655 |      2,103,765 | 1.21      | 11.93 |
-|    1 | TF32   |     0.117 |   0.117 |   0.118 |   0.118 |      1,473,838 | -         | 66.84 |
-|    4 | TF32   |     0.406 |   0.408 |   0.408 |   0.409 |      1,688,141 | -         | 19.14 |
-|    8 | TF32   |     0.792 |   0.794 |   0.794 |   0.795 |      1,735,463 | -         |  9.84 |
+FastPitch (TorchScript, denoising)
+|   Batch size | Precision   | Avg latency (s)   | Latency tolerance interval 90% (s)   | Latency tolerance interval 95% (s)   | Latency tolerance interval 99% (s)   | Throughput (frames/sec)   | Speed-up with mixed precision   | Avg RTF   |
+|--------------|-------------|-------------------|--------------------------------------|--------------------------------------|--------------------------------------|----------------------------|---------------------------------|-----------|
+|            1 | FP16        | 0.005            | 0.006                               | 0.006                               | 0.006                               | 120,333                    | 0.97                           | 1397.07  |
+|            4 | FP16        | 0.006            | 0.006                               | 0.006                               | 0.006                               | 424,053                    | 1.12                           | 1230.81  |
+|            8 | FP16        | 0.008            | 0.010                               | 0.010                               | 0.011                               | 669,549                    | 1.12                           | 971.68   |
+|            1 | TF32        | 0.005            | 0.006                               | 0.006                               | 0.007                               | 123,718                    | -                               | 1436.37  |
+|            4 | TF32        | 0.007            | 0.007                               | 0.007                               | 0.007                               | 379,980                    | -                               | 1102.89  |
+|            8 | TF32        | 0.009            | 0.009                               | 0.009                               | 0.009                               | 600,435                    | -                               | 871.38   |
+
+FastPitch + HiFi-GAN (TorchScript, denoising)
+|   Batch size | Precision   | Avg latency (s)   | Latency tolerance interval 90% (s)   | Latency tolerance interval 95% (s)   | Latency tolerance interval 99% (s)   | Throughput (samples/sec)   | Speed-up with mixed precision   | Avg RTF   |
+|--------------|-------------|-------------------|--------------------------------------|--------------------------------------|--------------------------------------|----------------------------|---------------------------------|-----------|
+|            1 | FP16        | 0.015            | 0.016                               | 0.016                               | 0.016                               | 11,431,335                 | 1.28                           | 518.43   |
+|            4 | FP16        | 0.038            | 0.040                               | 0.040                               | 0.040                               | 17,670,528                 | 1.42                           | 200.35   |
+|            8 | FP16        | 0.069            | 0.069                               | 0.070                               | 0.070                               | 19,750,759                 | 1.46                           | 111.97   |
+|            1 | TF32        | 0.019            | 0.020                               | 0.020                               | 0.020                               | 8,912,296                  | -                               | 404.19   |
+|            4 | TF32        | 0.054            | 0.055                               | 0.055                               | 0.055                               | 12,471,624                 | -                               | 141.40   |
+|            8 | TF32        | 0.100            | 0.100                               | 0.100                               | 0.101                               | 13,543,317                 | -                               | 76.78    |
+
+FastPitch + WaveGlow (TorchScript, denoising)
+|   Batch size | Precision   | Avg latency (s)   | Latency tolerance interval 90% (s)   | Latency tolerance interval 95% (s)   | Latency tolerance interval 99% (s)   | Throughput (samples/sec)   | Speed-up with mixed precision   | Avg RTF   |
+|--------------|-------------|-------------------|--------------------------------------|--------------------------------------|--------------------------------------|----------------------------|---------------------------------|-----------|
+|            1 | FP16        | 0.076            | 0.077                               | 0.077                               | 0.078                               | 2,223,336                  | 1.38                           | 100.83   |
+|            4 | FP16        | 0.265            | 0.267                               | 0.267                               | 0.267                               | 2,552,577                  | 1.36                           | 28.94    |
+|            8 | FP16        | 0.515            | 0.515                               | 0.516                               | 0.516                               | 2,630,328                  | 1.37                           | 14.91    |
+|            1 | TF32        | 0.105            | 0.106                               | 0.106                               | 0.107                               | 1,610,266                  | -                               | 73.03    |
+|            4 | TF32        | 0.362            | 0.363                               | 0.363                               | 0.363                               | 1,872,327                  | -                               | 21.23    |
+|            8 | TF32        | 0.708            | 0.709                               | 0.709                               | 0.709                               | 1,915,577                  | -                               | 10.86    |
+
 
 ##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
 
 Our results were obtained by running the `./scripts/inference_benchmark.sh` script in
-the PyTorch 21.05-py3 NGC container. The input utterance has 128 characters, synthesized audio has 8.05 s.
+the PyTorch 22.08-py3 NGC container. The input utterance has 128 characters, synthesized audio has 8.05 s.
 
+FastPitch (TorchScript, denoising)
+|   Batch size | Precision   | Avg latency (s)   | Latency tolerance interval 90% (s)   | Latency tolerance interval 95% (s)   | Latency tolerance interval 99% (s)   | Throughput (frames/sec)   | Speed-up with mixed precision   | Avg RTF   |
+|--------------|-------------|-------------------|--------------------------------------|--------------------------------------|--------------------------------------|----------------------------|---------------------------------|-----------|
+|            1 | FP16        | 0.007            | 0.008                               | 0.008                               | 0.008                               | 88,908                     | 1.10                           | 1032.23  |
+|            4 | FP16        | 0.010            | 0.010                               | 0.010                               | 0.010                               | 272,564                    | 1.73                           | 791.12   |
+|            8 | FP16        | 0.013            | 0.013                               | 0.013                               | 0.013                               | 415,263                    | 2.35                           | 602.65   |
+|            1 | FP32        | 0.008            | 0.008                               | 0.008                               | 0.009                               | 80,558                     | -                               | 935.28   |
+|            4 | FP32        | 0.017            | 0.017                               | 0.017                               | 0.017                               | 157,114                    | -                               | 456.02   |
+|            8 | FP32        | 0.030            | 0.030                               | 0.030                               | 0.030                               | 176,754                    | -                               | 256.51   |
 
-|Batch size|Precision|Avg latency (s)|Latency tolerance interval 90% (s)|Latency tolerance interval 95% (s)|Latency tolerance interval 99% (s)|Throughput (samples/sec)|Speed-up with mixed precision|Avg RTF|
-|-----:|-------:|----------:|--------:|--------:|--------:|---------------:|----------:|------:|
-|    1 | FP16   |     0.149 |   0.150 |   0.150 |   0.151 |      1,154,061 | 2.64      | 52.34 |
-|    4 | FP16   |     0.535 |   0.538 |   0.538 |   0.539 |      1,282,680 | 2.71      | 14.54 |
-|    8 | FP16   |     1.055 |   1.058 |   1.059 |   1.060 |      1,300,261 | 2.71      |  7.37 |
-|    1 | FP32   |     0.393 |   0.395 |   0.395 |   0.396 |        436,961 | -         | 19.82 |
-|    4 | FP32   |     1.449 |   1.452 |   1.452 |   1.453 |        473,515 | -         |  5.37 |
-|    8 | FP32   |     2.861 |   2.865 |   2.866 |   2.867 |        479,642 | -         |  2.72 |
+FastPitch + HiFi-GAN (TorchScript, denoising)
+|   Batch size | Precision   | Avg latency (s)   | Latency tolerance interval 90% (s)   | Latency tolerance interval 95% (s)   | Latency tolerance interval 99% (s)   | Throughput (samples/sec)   | Speed-up with mixed precision   | Avg RTF   |
+|--------------|-------------|-------------------|--------------------------------------|--------------------------------------|--------------------------------------|----------------------------|---------------------------------|-----------|
+|            1 | FP16        | 0.025            | 0.025                               | 0.025                               | 0.025                               | 6,788,274                  | 2.09                           | 307.86   |
+|            4 | FP16        | 0.067            | 0.068                               | 0.068                               | 0.068                               | 10,066,291                 | 2.63                           | 114.13   |
+|            8 | FP16        | 0.123            | 0.124                               | 0.124                               | 0.124                               | 10,992,774                 | 2.78                           | 62.32    |
+|            1 | FP32        | 0.052            | 0.053                               | 0.053                               | 0.053                               | 3,246,699                  | -                               | 147.24   |
+|            4 | FP32        | 0.177            | 0.178                               | 0.179                               | 0.179                               | 3,829,018                  | -                               | 43.41    |
+|            8 | FP32        | 0.343            | 0.345                               | 0.345                               | 0.346                               | 3,953,920                  | -                               | 22.41    |
+
+FastPitch + WaveGlow (TorchScript, denoising)
+|   Batch size | Precision   | Avg latency (s)   | Latency tolerance interval 90% (s)   | Latency tolerance interval 95% (s)   | Latency tolerance interval 99% (s)   | Throughput (samples/sec)   | Speed-up with mixed precision   | Avg RTF   |
+|--------------|-------------|-------------------|--------------------------------------|--------------------------------------|--------------------------------------|----------------------------|---------------------------------|-----------|
+|            1 | FP16        | 0.134            | 0.135                               | 0.135                               | 0.135                               | 1,259,550                  | 2.89                           | 57.12    |
+|            4 | FP16        | 0.503            | 0.504                               | 0.505                               | 0.505                               | 1,346,145                  | 2.88                           | 15.26    |
+|            8 | FP16        | 0.995            | 0.999                               | 0.999                               | 1.001                               | 1,360,952                  | 2.89                           | 7.72     |
+|            1 | FP32        | 0.389            | 0.391                               | 0.392                               | 0.393                               | 435,564                    | -                               | 19.75    |
+|            4 | FP32        | 1.453            | 1.455                               | 1.456                               | 1.457                               | 466,685                    | -                               | 5.29     |
+|            8 | FP32        | 2.875            | 2.879                               | 2.880                               | 2.882                               | 471,602                    | -                               | 2.67     |
+
 
 ##### Inference performance: NVIDIA T4
 
 Our results were obtained by running the `./scripts/inference_benchmark.sh` script in
-the PyTorch 21.05-py3 NGC container.
+the PyTorch 22.08-py3 NGC container.
 The input utterance has 128 characters, synthesized audio has 8.05 s.
 
-|Batch size|Precision|Avg latency (s)|Latency tolerance interval 90% (s)|Latency tolerance interval 95% (s)|Latency tolerance interval 99% (s)|Throughput (samples/sec)|Speed-up with mixed precision|Avg RTF|
-|-----:|-------:|----------:|--------:|--------:|--------:|--------------:|----------:|------:|
-|    1 | FP16   |     0.446 |   0.449 |   0.449 |   0.450 |       384,743 | 2.72      | 17.45 |
-|    4 | FP16   |     1.822 |   1.826 |   1.827 |   1.828 |       376,480 | 2.70      |  4.27 |
-|    8 | FP16   |     3.656 |   3.662 |   3.664 |   3.666 |       375,329 | 2.70      |  2.13 |
-|    1 | FP32   |     1.213 |   1.218 |   1.219 |   1.220 |       141,403 | -         |  6.41 |
-|    4 | FP32   |     4.928 |   4.937 |   4.939 |   4.942 |       139,208 | -         |  1.58 |
-|    8 | FP32   |     9.853 |   9.868 |   9.871 |   9.877 |       139,266 | -         |  0.79 |
+FastPitch (TorchScript, denoising)
+|   Batch size | Precision   |   Avg latency (s) |   Latency tolerance interval 90% (s) |   Latency tolerance interval 95% (s) |   Latency tolerance interval 99% (s) | Throughput (frames/sec)   | Speed-up with mixed precision   |   Avg RTF |
+|--------------|-------------|-------------------|--------------------------------------|--------------------------------------|--------------------------------------|----------------------------|---------------------------------|-----------|
+|            1 | FP16        |             0.008 |                                0.008 |                                0.008 |                                0.008 | 87,937                     | 1.69                            |   1020.95 |
+|            4 | FP16        |             0.017 |                                0.017 |                                0.017 |                                0.018 | 154,880                    | 2.55                            |    449.54 |
+|            8 | FP16        |             0.029 |                                0.030 |                                0.030 |                                0.030 | 181,776                    | 2.61                            |    263.80 |
+|            1 | FP32        |             0.013 |                                0.013 |                                0.013 |                                0.013 | 52,062                     | -                               |    604.45 |
+|            4 | FP32        |             0.044 |                                0.045 |                                0.045 |                                0.045 | 60,733                     | -                               |    176.28 |
+|            8 | FP32        |             0.076 |                                0.077 |                                0.077 |                                0.077 | 69,685                     | -                               |    101.13 |
+
+FastPitch + HiFi-GAN (TorchScript, denoising)
+|   Batch size | Precision   |   Avg latency (s) |   Latency tolerance interval 90% (s) |   Latency tolerance interval 95% (s) |   Latency tolerance interval 99% (s) | Throughput (samples/sec)   | Speed-up with mixed precision   |   Avg RTF |
+|--------------|-------------|-------------------|--------------------------------------|--------------------------------------|--------------------------------------|----------------------------|---------------------------------|-----------|
+|            1 | FP16        |             0.055 |                                0.056 |                                0.056 |                                0.057 | 3,076,809                  | 2.55                            |    139.54 |
+|            4 | FP16        |             0.201 |                                0.203 |                                0.204 |                                0.204 | 3,360,014                  | 2.67                            |     38.10 |
+|            8 | FP16        |             0.393 |                                0.395 |                                0.396 |                                0.397 | 3,444,245                  | 2.65                            |     19.53 |
+|            1 | FP32        |             0.140 |                                0.142 |                                0.142 |                                0.142 | 1,208,678                  | -                               |     54.82 |
+|            4 | FP32        |             0.538 |                                0.542 |                                0.543 |                                0.545 | 1,260,627                  | -                               |     14.29 |
+|            8 | FP32        |             1.045 |                                1.049 |                                1.050 |                                1.051 | 1,297,726                  | -                               |      7.36 |
+
+FastPitch + WaveGlow (TorchScript, denoising)
+|   Batch size | Precision   |   Avg latency (s) |   Latency tolerance interval 90% (s) |   Latency tolerance interval 95% (s) |   Latency tolerance interval 99% (s) | Throughput (samples/sec)   | Speed-up with mixed precision   |   Avg RTF |
+|--------------|-------------|-------------------|--------------------------------------|--------------------------------------|--------------------------------------|----------------------------|---------------------------------|-----------|
+|            1 | FP16        |             0.409 |                                0.411 |                                0.411 |                                0.412 | 414,019                    | 2.65                            |     18.78 |
+|            4 | FP16        |             1.619 |                                1.622 |                                1.623 |                                1.624 | 418,010                    | 2.91                            |      4.74 |
+|            8 | FP16        |             3.214 |                                3.219 |                                3.220 |                                3.222 | 421,148                    | 2.72                            |      2.39 |
+|            1 | FP32        |             1.084 |                                1.087 |                                1.088 |                                1.089 | 156,345                    | -                               |      7.09 |
+|            4 | FP32        |             4.721 |                                4.735 |                                4.738 |                                4.743 | 143,585                    | -                               |      1.63 |
+|            8 | FP32        |             8.764 |                                8.777 |                                8.779 |                                8.784 | 154,694                    | -                               |      0.88 |
 
 ## Release notes
 
@@ -675,8 +738,11 @@ We're constantly refining and improving our performance on AI and HPC workloads 
 
 ### Changelog
 
+October 2022
+- Updated performance tables
+
 July 2022
-- Performance optimizations, speedups up to 2x (DGX-1) and 2.5x (DGX A100)
+- Performance optimizations, speedups up to 1.2x (DGX-1) and 1.6x (DGX A100)
 
 June 2022
 - MHA bug fix affecting models with > 1 attention heads
