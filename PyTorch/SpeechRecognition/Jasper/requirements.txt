@@ -2,7 +2,6 @@ inflect==5.3.0
 ipdb
 librosa==0.8.0
 pandas==1.1.4
-pycuda==2020.1
 pyyaml>=5.4
 soundfile
 sox==1.4.1
