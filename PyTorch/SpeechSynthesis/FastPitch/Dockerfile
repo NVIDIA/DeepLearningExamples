@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.05-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:22.08-py3
 FROM ${FROM_IMAGE_NAME}
 
 ENV PYTHONPATH /workspace/fastpitch
