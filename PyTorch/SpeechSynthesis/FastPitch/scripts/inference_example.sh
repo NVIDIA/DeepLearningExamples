@@ -12,6 +12,7 @@ export TORCH_CUDNN_V8_API_ENABLED=1
 : ${REPEATS:=1}
 : ${CPU:=false}
 : ${PHONE:=true}
+: ${CUDNN_BENCHMARK:=false}
 
 # Paths to pre-trained models downloadable from NVIDIA NGC (LJSpeech-1.1)
 FASTPITCH_LJ="pretrained_models/fastpitch/nvidia_fastpitch_210824.pt"
@@ -54,9 +55,7 @@ mkdir -p "$OUTPUT_DIR"
 
 echo -e "\nAMP=$AMP, batch_size=$BATCH_SIZE\n"
 
-ARGS=""
 ARGS+=" --cuda"
-# ARGS+=" --cudnn-benchmark"  # Enable for benchmarking or long operation
 ARGS+=" --dataset-path $DATASET_DIR"
 ARGS+=" -i $FILELIST"
 ARGS+=" -o $OUTPUT_DIR"
@@ -67,12 +66,12 @@ ARGS+=" --warmup-steps $WARMUP"
 ARGS+=" --repeats $REPEATS"
 ARGS+=" --speaker $SPEAKER"
 [ "$CPU" = false ]        && ARGS+=" --cuda"
-[ "$CPU" = false ]        && ARGS+=" --cudnn-benchmark"
 [ "$AMP" = true ]         && ARGS+=" --amp"
 [ "$TORCHSCRIPT" = true ] && ARGS+=" --torchscript"
 [ -n "$HIFIGAN" ]         && ARGS+=" --hifigan $HIFIGAN"
 [ -n "$WAVEGLOW" ]        && ARGS+=" --waveglow $WAVEGLOW"
 [ -n "$FASTPITCH" ]       && ARGS+=" --fastpitch $FASTPITCH"
 [ "$PHONE" = true ]       && ARGS+=" --p-arpabet 1.0"
+[[ "$CUDNN_BENCHMARK" = true && "$CPU" = false ]] && ARGS+=" --cudnn-benchmark"
 
 python inference.py $ARGS "$@"

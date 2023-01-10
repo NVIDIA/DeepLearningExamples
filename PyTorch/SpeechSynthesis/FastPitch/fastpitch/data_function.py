@@ -38,7 +38,7 @@ from scipy import ndimage
 from scipy.stats import betabinom
 
 import common.layers as layers
-from common.text.text_processing import TextProcessing
+from common.text.text_processing import get_text_processing
 from common.utils import load_wav_to_torch, load_filepaths_and_text, to_gpu
 
 
@@ -179,7 +179,7 @@ class TTSDataset(torch.utils.data.Dataset):
             'Only 0.0 and 1.0 p_arpabet is currently supported. '
             'Variable probability breaks caching of betabinomial matrices.')
 
-        self.tp = TextProcessing(symbol_set, text_cleaners, p_arpabet=p_arpabet)
+        self.tp = get_text_processing(symbol_set, text_cleaners, p_arpabet)
         self.n_speakers = n_speakers
         self.pitch_tmp_dir = pitch_online_dir
         self.f0_method = pitch_online_method
@@ -323,6 +323,14 @@ class TTSDataset(torch.utils.data.Dataset):
             torch.save(pitch_mel, cached_fpath)
 
         return pitch_mel
+
+
+def ensure_disjoint(*tts_datasets):
+    paths = [set(list(zip(*d.audiopaths_and_text))[0]) for d in tts_datasets]
+    assert sum(len(p) for p in paths) == len(set().union(*paths)), (
+        "Your datasets (train, val) are not disjoint. "
+        "Review filelists and restart training."
+    )
 
 
 class TTSCollate:

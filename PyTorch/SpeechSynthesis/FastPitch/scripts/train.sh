@@ -42,7 +42,7 @@ GBS=$(($NUM_GPUS * $BATCH_SIZE * $GRAD_ACCUMULATION))
 echo -e "\nAMP=$AMP, ${NUM_GPUS}x${BATCH_SIZE}x${GRAD_ACCUMULATION}" \
         "(global batch size ${GBS})\n"
 
-ARGS=""
+# ARGS=""
 ARGS+=" --cuda"
 ARGS+=" -o $OUTPUT_DIR"
 ARGS+=" --log-file $LOG_FILE"
@@ -54,7 +54,7 @@ ARGS+=" --grad-accumulation $GRAD_ACCUMULATION"
 ARGS+=" --optimizer lamb"
 ARGS+=" --epochs $EPOCHS"
 ARGS+=" --epochs-per-checkpoint $EPOCHS_PER_CHECKPOINT"
-ARGS+=" --resume"
+
 ARGS+=" --warmup-steps $WARMUP_STEPS"
 ARGS+=" -lr $LEARNING_RATE"
 ARGS+=" --weight-decay 1e-6"
@@ -70,16 +70,17 @@ ARGS+=" --kl-loss-warmup-epochs $KL_LOSS_WARMUP"
 ARGS+=" --text-cleaners $TEXT_CLEANERS"
 ARGS+=" --n-speakers $NSPEAKERS"
 
-[ "$AMP" = "true" ]                && ARGS+=" --amp"
-[ "$PHONE" = "true" ]              && ARGS+=" --p-arpabet 1.0"
-[ "$ENERGY" = "true" ]             && ARGS+=" --energy-conditioning"
-[ "$SEED" != "" ]                  && ARGS+=" --seed $SEED"
-[ "$LOAD_MEL_FROM_DISK" = true ]   && ARGS+=" --load-mel-from-disk"
-[ "$LOAD_PITCH_FROM_DISK" = true ] && ARGS+=" --load-pitch-from-disk"
-[ "$PITCH_ONLINE_DIR" != "" ]      && ARGS+=" --pitch-online-dir $PITCH_ONLINE_DIR"  # e.g., /dev/shm/pitch
-[ "$PITCH_ONLINE_METHOD" != "" ]   && ARGS+=" --pitch-online-method $PITCH_ONLINE_METHOD"
-[ "$APPEND_SPACES" = true ]        && ARGS+=" --prepend-space-to-text"
-[ "$APPEND_SPACES" = true ]        && ARGS+=" --append-space-to-text"
+[ "$AMP" = "true" ]                    && ARGS+=" --amp"
+[ "$PHONE" = "true" ]                  && ARGS+=" --p-arpabet 1.0"
+[ "$ENERGY" = "true" ]                 && ARGS+=" --energy-conditioning"
+[ "$SEED" != "" ]                      && ARGS+=" --seed $SEED"
+[ "$LOAD_MEL_FROM_DISK" = true ]       && ARGS+=" --load-mel-from-disk"
+[ "$LOAD_PITCH_FROM_DISK" = true ]     && ARGS+=" --load-pitch-from-disk"
+[ "$PITCH_ONLINE_DIR" != "" ]          && ARGS+=" --pitch-online-dir $PITCH_ONLINE_DIR"  # e.g., /dev/shm/pitch
+[ "$PITCH_ONLINE_METHOD" != "" ]       && ARGS+=" --pitch-online-method $PITCH_ONLINE_METHOD"
+[ "$APPEND_SPACES" = true ]            && ARGS+=" --prepend-space-to-text"
+[ "$APPEND_SPACES" = true ]            && ARGS+=" --append-space-to-text"
+[[ "$ARGS" != *"--checkpoint-path"* ]] && ARGS+=" --resume"
 
 if [ "$SAMPLING_RATE" == "44100" ]; then
   ARGS+=" --sampling-rate 44100"

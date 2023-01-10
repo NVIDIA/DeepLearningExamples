@@ -137,6 +137,27 @@ def get_padding(kernel_size, dilation=1):
     return int((kernel_size*dilation - dilation)/2)
 
 
+def load_pretrained_weights(model, ckpt_fpath):
+    model = getattr(model, "module", model)
+    weights = torch.load(ckpt_fpath, map_location="cpu")["state_dict"]
+    weights = {re.sub("^module.", "", k): v for k, v in weights.items()}
+
+    ckpt_emb = weights["encoder.word_emb.weight"]
+    new_emb = model.state_dict()["encoder.word_emb.weight"]
+
+    ckpt_vocab_size = ckpt_emb.size(0)
+    new_vocab_size = new_emb.size(0)
+    if ckpt_vocab_size != new_vocab_size:
+        print("WARNING: Resuming from a checkpoint with a different size "
+              "of embedding table. For best results, extend the vocab "
+              "and ensure the common symbols' indices match.")
+        min_len = min(ckpt_vocab_size, new_vocab_size)
+        weights["encoder.word_emb.weight"] = ckpt_emb if ckpt_vocab_size > new_vocab_size else new_emb
+        weights["encoder.word_emb.weight"][:min_len] = ckpt_emb[:min_len]
+
+    model.load_state_dict(weights)
+
+
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):
         super(AttrDict, self).__init__(*args, **kwargs)

@@ -9,6 +9,7 @@ set -a
 : ${WARMUP:=64}
 : ${REPEATS:=500}
 : ${AMP:=false}
+: ${CUDNN_BENCHMARK:=true}
 
 for BATCH_SIZE in $BS_SEQUENCE ; do
     LOG_FILE="$OUTPUT_DIR"/perf-infer_amp-${AMP}_bs${BATCH_SIZE}.json

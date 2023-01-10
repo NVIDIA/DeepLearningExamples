@@ -25,6 +25,7 @@ This repository provides a script and recipe to train the FastPitch model to ach
         * [Multi-dataset](#multi-dataset)
     * [Training process](#training-process)
     * [Inference process](#inference-process)
+    * [Example: Training a model on Mandarin Chinese](#example-training-a-model-on-mandarin-chinese)
 - [Performance](#performance)
     * [Benchmarking](#benchmarking)
         * [Training performance benchmark](#training-performance-benchmark)
@@ -50,22 +51,22 @@ This repository provides a script and recipe to train the FastPitch model to ach
 [FastPitch](https://arxiv.org/abs/2006.06873) is one of two major components in a neural, text-to-speech (TTS) system:
 
 * a mel-spectrogram generator such as [FastPitch](https://arxiv.org/abs/2006.06873) or [Tacotron 2](https://arxiv.org/abs/1712.05884), and
-* a waveform synthesizer such as [WaveGlow](https://arxiv.org/abs/1811.00002) (see [NVIDIA example code](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2)).
+* a waveform synthesizer such as [WaveGlow](https://arxiv.org/abs/1811.00002) (refer to [NVIDIA example code](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2)).
 
-Such two-component TTS system is able to synthesize natural sounding speech from raw transcripts.
+Such a two-component TTS system is able to synthesize natural-sounding speech from raw transcripts.
 
 The FastPitch model generates mel-spectrograms and predicts a pitch contour from raw input text.
 In version 1.1, it does not need any pre-trained aligning model to bootstrap from.
-It allows to exert additional control over the synthesized utterances, such as:
+It allows exerting additional control over the synthesized utterances, such as:
 * modify the pitch contour to control the prosody,
-* increase or decrease the fundamental frequency in a naturally sounding way, that preserves the perceived identity of the speaker,
+* increase or decrease the fundamental frequency in a natural sounding way, that preserves the perceived identity of the speaker,
 * alter the rate of speech,
 * adjust the energy,
 * specify input as graphemes or phonemes,
 * switch speakers when the model has been trained with data from multiple speakers.
 Some of the capabilities of FastPitch are presented on the website with [samples](https://fastpitch.github.io/).
 
-Speech synthesized with FastPitch has state-of-the-art quality, and does not suffer from missing/repeating phrases like Tacotron 2 does.
+Speech synthesized with FastPitch has state-of-the-art quality, and does not suffer from missing/repeating phrases as Tacotron 2 does.
 This is reflected in Mean Opinion Scores ([details](https://arxiv.org/abs/2006.06873)).
 
 | Model          | Mean Opinion Score (MOS) |
@@ -93,7 +94,7 @@ The FastPitch model is similar to [FastSpeech2](https://arxiv.org/abs/2006.04558
 FastPitch is trained on a publicly
 available [LJ Speech dataset](https://keithito.com/LJ-Speech-Dataset/).
 
-This model is trained with mixed precision using Tensor Cores on Volta, Turing, and the NVIDIA Ampere GPU architectures. Therefore, researchers can get results from 2.0x to 2.7x faster than training without Tensor Cores, while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
+This model is trained with mixed precision using Tensor Cores on NVIDIA Volta, NVIDIA Turing, and the NVIDIA Ampere GPU architectures. Therefore, researchers can get results from 2.0x to 2.7x faster than training without Tensor Cores while experiencing the benefits of mixed precision training. This model is tested against each NGC monthly container release to ensure consistent accuracy and performance over time.
 
 ### Model architecture
 
@@ -105,14 +106,14 @@ from raw text (Figure 1). The entire process is parallel, which means that all i
 </p>
 <p align="center">
   <em>Figure 1. Architecture of FastPitch (<a href=”https://arxiv.org/abs/2006.06873”>source</a>). The model is composed of a bidirectional Transformer backbone (also known as a Transformer encoder), a pitch predictor, and a duration predictor. After passing through the first *N* Transformer blocks, encoding, the signal is augmented with pitch information and discretely upsampled. Then it goes through another set of *N* Transformer blocks, with the goal of
-smoothing out the upsampled signal, and constructing a mel-spectrogram.
+smoothing out the upsampled signal and constructing a mel-spectrogram.
   </em>
 </p>
 
 ### Default configuration
 
 The FastPitch model supports multi-GPU and mixed precision training with dynamic loss
-scaling (see Apex code
+scaling (refer to Apex code
 [here](https://github.com/NVIDIA/apex/blob/master/apex/fp16_utils/loss_scaler.py)),
 as well as mixed precision inference.
 
@@ -123,9 +124,9 @@ The following features were implemented in this model:
 training,
 * gradient accumulation for reproducible results regardless of the number of GPUs.
 
-Pitch contours and mel-spectrograms can be generated on-line during training.
+Pitch contours and mel-spectrograms can be generated online during training.
 To speed-up training, those could be generated during the pre-processing step and read
-directly from the disk during training. For more information on data pre-processing refer to [Dataset guidelines
+directly from the disk during training. For more information on data pre-processing, refer to [Dataset guidelines
 ](#dataset-guidelines) and the [paper](https://arxiv.org/abs/2006.06873).
 
 ### Feature support matrix
@@ -144,21 +145,21 @@ implementation of mixed precision training. It allows us to use FP16 training
 with FP32 master weights by modifying just a few lines of code.
 
 DistributedDataParallel (DDP) - The model uses PyTorch Lightning implementation
-of distributed data parallelism at the module level which can run across
+of distributed data parallelism at the module level, which can run across
 multiple machines.
 
 ### Mixed precision training
 
-Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [Tensor Cores](https://developer.nvidia.com/tensor-cores) in Volta, and following with both the Turing and Ampere architectures, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using mixed precision training requires two steps:
+Mixed precision is the combined use of different numerical precisions in a computational method. [Mixed precision](https://arxiv.org/abs/1710.03740) training offers significant computational speedup by performing operations in half-precision format while storing minimal information in single-precision to retain as much information as possible in critical parts of the network. Since the introduction of [Tensor Cores](https://developer.nvidia.com/tensor-cores) in NVIDIA Volta, and following with both the Turing and Ampere architectures, significant training speedups are experienced by switching to mixed precision -- up to 3x overall speedup on the most arithmetically intense model architectures. Using mixed precision training requires two steps:
 1.  Porting the model to use the FP16 data type where appropriate.
 2.  Adding loss scaling to preserve small gradient values.
 
 The ability to train deep learning networks with lower precision was introduced in the Pascal architecture and first supported in [CUDA 8](https://devblogs.nvidia.com/parallelforall/tag/fp16/) in the NVIDIA Deep Learning SDK.
 
 For information about:
--   How to train using mixed precision, see the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html) documentation.
--   Techniques used for mixed precision training, see the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
--   APEX tools for mixed precision training, see the [NVIDIA Apex: Tools for Easy Mixed-Precision Training in PyTorch](https://devblogs.nvidia.com/apex-pytorch-easy-mixed-precision-training/).
+-   How to train using mixed precision, refer to the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html) documentation.
+-   Techniques used for mixed precision training, refer to the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
+-   APEX tools for mixed precision training, refer to the [NVIDIA Apex: Tools for Easy Mixed-Precision Training in PyTorch](https://devblogs.nvidia.com/apex-pytorch-easy-mixed-precision-training/).
 
 #### Enabling mixed precision
 
@@ -167,9 +168,9 @@ Mixed precision is using [native PyTorch implementation](https://pytorch.org/blo
 
 #### Enabling TF32
 
-TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs.
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math, also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs.
 
-TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
+TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require a high dynamic range for weights or activations.
 
 For more information, refer to the [TensorFloat-32 in the A100 GPU Accelerates AI Training, HPC up to 20x](https://blogs.nvidia.com/blog/2020/05/14/tensorfloat-32-precision-format/) blog post.
 
@@ -178,10 +179,10 @@ TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by defaul
 ### Glossary
 
 **Character duration**
-The time during which a character is being articulated. Could be measured in milliseconds, mel-spectrogram frames, etc. Some characters are not pronounced, and thus have 0 duration.
+The time during which a character is being articulated. It could be measured in milliseconds, mel-spectrogram frames, and so on. Some characters are not pronounced, and thus, have 0 duration.
 
 **Fundamental frequency**
-The lowest vibration frequency of a periodic soundwave, for example, produced by a vibrating instrument. It is perceived as the loudest. In the context of speech, it refers to the frequency of vibration of vocal chords.  Abbreviated as *f0*.
+The lowest vibration frequency of a periodic soundwave, for example, is produced by a vibrating instrument, and it is perceived as the loudest. In the context of speech, it refers to the frequency of vibration of vocal cords. It is abbreviated as *f0*.
 
 **Pitch**
 A perceived frequency of vibration of music or sound.
@@ -195,7 +196,7 @@ The following section lists the requirements that you need to meet in order to s
 
 ### Requirements
 
-This repository contains Dockerfile which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
+This repository contains Dockerfile that extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 -   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
 -   [PyTorch 22.08-py3 NGC container](https://ngc.nvidia.com/registry/nvidia-pytorch)
 or newer
@@ -205,16 +206,16 @@ or newer
     - [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
 
 
-For more information about how to get started with NGC containers, see the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
+For more information about how to get started with NGC containers, refer to the following sections from the NVIDIA GPU Cloud Documentation and the Deep Learning Documentation:
 -   [Getting Started Using NVIDIA GPU Cloud](https://docs.nvidia.com/ngc/ngc-getting-started-guide/index.html)
 -   [Accessing And Pulling From The NGC Container Registry](https://docs.nvidia.com/deeplearning/frameworks/user-guide/index.html#accessing_registry)
 -   [Running PyTorch](https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/running.html#running)
 
-For those unable to use the PyTorch NGC container, to set up the required environment or create your own container, see the versioned [NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html).
+For those unable to use the PyTorch NGC container, to set up the required environment or create your own container, refer to the versioned [NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/frameworks/support-matrix/index.html).
 
 ## Quick Start Guide
 
-To train your model using mixed or TF32 precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the FastPitch model on the LJSpeech 1.1 dataset. For the specifics concerning training and inference, see the [Advanced](#advanced) section. Pre-trained FastPitch models are available for download on [NGC](https://ngc.nvidia.com/catalog/models?query=FastPitch&quickFilter=models).
+To train your model using mixed or TF32 precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the FastPitch model on the LJSpeech 1.1 dataset. For the specifics concerning training and inference, refer to the [Advanced](#advanced) section. Pre-trained FastPitch models are available for download on [NGC](https://ngc.nvidia.com/catalog/models?query=FastPitch&quickFilter=models).
 
 1. Clone the repository.
    ```bash
@@ -224,7 +225,7 @@ To train your model using mixed or TF32 precision with Tensor Cores or using FP3
 
 2. Build and run the FastPitch PyTorch NGC container.
 
-   By default the container will use all available GPUs.
+   By default, the container will use all available GPUs.
    ```bash
    bash scripts/docker/build.sh
    bash scripts/docker/interactive.sh
@@ -232,20 +233,20 @@ To train your model using mixed or TF32 precision with Tensor Cores or using FP3
 
 3. Download and preprocess the dataset.
 
-   Use the scripts to automatically download and preprocess the training, validation and test datasets:
+   Use the scripts to automatically download and preprocess the training, validation, and test datasets:
    ```bash
    bash scripts/download_dataset.sh
    bash scripts/prepare_dataset.sh
    ```
 
-   The data is downloaded to the `./LJSpeech-1.1` directory (on the host).  The
+   The data is downloaded to the `./LJSpeech-1.1` directory (on the host). The
    `./LJSpeech-1.1` directory is mounted under the `/workspace/fastpitch/LJSpeech-1.1`
    location in the NGC container. The complete dataset has the following structure:
    ```bash
    ./LJSpeech-1.1
-   ├── mels             # (optional) Pre-calculated target mel-spectrograms; may be calculated on-line
+   ├── mels             # (optional) Pre-calculated target mel-spectrograms; can be calculated online
    ├── metadata.csv     # Mapping of waveforms to utterances
-   ├── pitch            # Fundamental frequency countours for input utterances; may be calculated on-line
+   ├── pitch            # Fundamental frequency contours for input utterances; can be calculated online
    ├── README
    └── wavs             # Raw waveforms
    ```
@@ -309,10 +310,10 @@ given model
 * `<model_name>/loss_function.py` - loss function for the model
 
 In the root directory `./` of this repository, the `./train.py` script is used for
-training while inference can be executed with the `./inference.py` script. The
-script `./models.py` is used to construct a model of requested type and properties.
+training, while inference can be executed with the `./inference.py` script. The
+script `./models.py` is used to construct a model of the requested type and properties.
 
-The repository is structured similarly to the [NVIDIA Tacotron2 Deep Learning example](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2), so that they could be combined in more advanced use cases.
+The repository is structured similarly to the [NVIDIA Tacotron2 Deep Learning example](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechSynthesis/Tacotron2) so that they could be combined in more advanced use cases.
 
 ### Parameters
 
@@ -330,8 +331,8 @@ together with their default values that are used to train FastPitch.
 
 ### Command-line options
 
-To see the full list of available options and their descriptions, use the `-h`
-or `--help` command line option, for example:
+To review the full list of available options and their descriptions, use the `-h`
+or `--help` command-line option, for example:
 ```bash
 python train.py --help
 ```
@@ -351,7 +352,7 @@ The `./scripts/download_dataset.sh` script will automatically download and extra
 
 #### Dataset guidelines
 
-The LJSpeech dataset has 13,100 clips that amount to about 24 hours of speech of a single, female speaker. Since the original dataset does not define a train/dev/test split of the data, we provide a split in the form of three file lists:
+The LJSpeech dataset has 13,100 clips that amount to about 24 hours of speech of a single female speaker. Since the original dataset does not define a train/dev/test split of the data, we provide a split in the form of three file lists:
 ```bash
 ./filelists
 ├── ljs_audio_pitch_text_train_v3.txt
@@ -359,10 +360,10 @@ The LJSpeech dataset has 13,100 clips that amount to about 24 hours of speech of
 └── ljs_audio_pitch_text_val.txt
 ```
 
-FastPitch predicts character durations just like [FastSpeech](https://arxiv.org/abs/1905.09263) does.
+FastPitch predicts character durations just as [FastSpeech](https://arxiv.org/abs/1905.09263) does.
 FastPitch 1.1 aligns input symbols to output mel-spectrogram frames automatically and does not rely
 on any external aligning model. FastPitch training can now be started on raw waveforms
-without any pre-processing: pitch values and mel-spectrograms will be calculated on-line.
+without any pre-processing: pitch values and mel-spectrograms will be calculated online.
 
 For every mel-spectrogram frame, its fundamental frequency in Hz is estimated with
 the Probabilistic YIN algorithm.
@@ -371,8 +372,8 @@ the Probabilistic YIN algorithm.
   <img src="./img/pitch.png" alt="Pitch contour estimate" />
 </p>
 <p align="center">
-  <em>Figure 2. Pitch estimates for mel-spectrogram frames of phrase "in being comparatively"
-(in blue) averaged over characters (in red). Silent letters have duration 0 and are omitted.</em>
+  <em>Figure 2. Pitch estimates for mel-spectrogram frames of the phrase "in being comparatively"
+(in blue) averaged over characters (in red). Silent letters have a duration of 0 and are omitted.</em>
 </p>
 
 #### Multi-dataset
@@ -385,7 +386,7 @@ Follow these steps to use datasets different from the default LJSpeech dataset.
    └── wavs
    ```
 
-2. Prepare filelists with transcripts and paths to .wav files. They define training/validation split of the data (test is currently unused):
+2. Prepare filelists with transcripts and paths to .wav files. They define the training/validation split of the data (the test is currently unused):
    ```bash
    ./filelists
    ├── my-dataset_audio_text_train.txt
@@ -424,7 +425,7 @@ In order to use the prepared dataset, pass the following to the `train.py` scrip
 
 ### Training process
 
-FastPitch is trained to generate mel-spectrograms from raw text input. It uses short time Fourier transform (STFT)
+FastPitch is trained to generate mel-spectrograms from raw text input. It uses short-time Fourier transform (STFT)
 to generate target mel-spectrograms from audio waveforms to be the training targets.
 
 The training loss is averaged over an entire training epoch, whereas the
@@ -478,8 +479,131 @@ Pitch can be adjusted by transforming those pitch cues. A few simple examples ar
 
 The flags can be combined. Modify these functions directly in the `inference.py` script to gain more control over the final result.
 
-You can find all the available options by calling `python inference.py --help`.
+You can find all the available options by callng `python inference.py --help`.
 More examples are presented on the website with [samples](https://fastpitch.github.io/).
+
+### Example: Training a model on Mandarin Chinese
+
+FastPitch can easily be trained or fine-tuned on datasets in various languages.
+We present an example of training on the Mandarin Chinese dataset capable of pronouncing
+phrases in English (for example, brand names).
+For an overview of the deployment of this model in Chunghwa Telecom,
+refer to the [blogpost](https://blogs.nvidia.com.tw/2022/06/20/cht-bilingual-speech-synthesis-enables-more-realistic-interactions/) (in Chinese).
+
+
+1. Set up the repository and run a Docker container
+
+    Follow stetps 1. and 2. of the [Quick Start Guide](#quick-start-guide).
+
+2. Download the data
+
+   The dataset for this section has been provided by Chunghwa Telecom Laboratories
+   and is available for [download on NGC](https://catalog.ngc.nvidia.com/orgs/nvidia/resources/sf_bilingual_speech_zh_en)
+   under the CC BY-NC 4.0 license.
+
+   The dataset can be downloaded manually after signing in to NGC as `files.zip` or `SF_bilingual.zip`, depending on the method (manual or via command line).
+   Afterward, it has to be pre-processed to extract pitch for training and prepare train/dev/test filelists:
+   ```bash
+   pip install -r scripts/mandarin_chinese/requirements.txt
+   bash scripts/mandarin_chinese/prepare_dataset.sh path/to/files.zip
+   ```
+
+   The procedure should take about half an hour. If it completes successfully,
+   `./data/SF_bilingual prepared successfully.` will be written to the standard output.
+
+   After pre-processing, the dataset will be located at `./data/SF_bilingual`,
+   and training/inference filelists at `./filelists/sf_*`.
+
+3. Add support for textual inputs in the target language.
+
+   The model is trained end-to-end, and supporting a new language requires
+   to specify the input `symbol set`, `text normalization` routines,
+   and (optionally) grapheme-to-phoneme (G2P) conversion for phoneme-based synthesis.
+   Our main modifications touch the following files:
+
+   ```bash
+   ./common/text
+   ├── symbols.py
+   ├── text_processing.py
+   └── zh
+       ├── chinese.py
+       ├── mandarin_text_processing.py
+       └── pinyin_dict.txt
+   ```
+   We make small changes to `symbols.py` and `text_processing.py` and keep
+   the crucial code in the `zh` directory.
+
+   We design our Mandarin Chinese symbol set as an extension of the English
+   symbol set, appending to `symbols` lists of `_mandarin_phonemes` and `_chinese_punctuation`:
+
+   ```python
+   # common/text/symbols.py
+
+   def get_symbols(symbol_set='english_basic'):
+
+       # ...
+
+       elif symbol_set == 'english_mandarin_basic':
+           from .zh.chinese import chinese_punctuations, valid_symbols as mandarin_valid_symbols
+
+           # Prepend "#" to mandarin phonemes to ensure uniqueness (some are the same as uppercase letters):
+           _mandarin_phonemes = ['#' + s for s in mandarin_valid_symbols]
+
+           _pad = '_'
+           _punctuation = '!\'(),.:;? '
+           _chinese_punctuation = ["#" + p for p in chinese_punctuations]
+           _special = '-'
+           _letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+           symbols = list(_pad + _special + _punctuation + _letters) + _arpabet + _mandarin_phonemes + _chinese_punctuation
+   ```
+
+   Text normalization and G2P are performed by a `TextProcessing` instance. We implement Mandarin text processing
+   inside a `MandarinTextProcessing` class. For G2P, an off-shelf [pypinyin](https://github.com/mozillazg/python-pinyin) phonemizer and [the CMU Dictionary](http://www.speech.cs.cmu.edu/cgi-bin/cmudict) are used.
+   `MandarinTextProcessing` is applied to the data only if `english_mandarin_basic` symbol set is in use:
+
+   ```python
+   # common/text/text_processing.py
+
+   def get_text_processing(symbol_set, text_cleaners, p_arpabet):
+       if symbol_set in ['englh_basic', 'english_basic_lowercase', 'english_expanded']:
+           return TextProcessing(symbol_set, text_cleaners, p_arpabet=p_arpabet)
+       elif symbol_set == 'english_mandarin_basic':
+           from common.text.zh.mandarin_text_processing import MandarinTextProcessing
+           return MandarinTextProcessing(symbol_set, text_cleaners, p_arpabet=p_arpabet)
+   ```
+
+   Note that text normalization is dependent on the target language, domain, and assumptions
+   on how normalized the input already is.
+
+4. Train the model
+
+   The `SF dataset` is rather small (4.5 h compared to 24 h in `LJSpeech-1.1`).
+   There are numerous English phrases in the transcriptions, such as technical terms
+   and proper nouns. Thus, it is beneficial to initialize model weights with
+   a pre-trained English model from NGC, using the flag `--init-from-checkpoint`.
+
+   Note that by initializing with another model, possibly trained on a different symbol set,
+   we also initialize grapheme/phoneme embedding tables. For this reason, we design
+   the `english_mandarin_basic` symbol set as an extension of `english_basic`,
+   so that the same English phonemes would retain their embeddings.
+
+   In order to train, issue
+   ```bash
+   NUM_GPUS=<available_gpus> GRAD_ACCUMULATION=<number> bash scripts/mandarin_chinese/train.sh
+   ```
+   Adjust the variables to satisfy `$NUM_GPUS x $GRAD_ACCUMULATION = 256`.
+
+   The model will be trained for 1000 epochs. Note that we have disabled mixed-precision
+   training, as we found it unstable at times on this dataset.
+
+5. Synthesize
+
+   After training, samples can be synthesized ([audio sample](./audio/com_SF_ce1514_fastpitch_waveglow.wav)):
+   ```bash
+   bash scripts/mandarin_chinese/inference.sh
+   ```
+   Paths to specific checkpoints can be supplied as env variables or changed
+   directly in the `.sh` files.
 
 ## Performance
 
@@ -508,7 +632,7 @@ To benchmark the training performance on a specific batch size, run:
         AMP=false NUM_GPUS=8 BS=16 GRAD_ACCUMULATION=2 EPOCHS=10 bash scripts/train.sh
     ```
 
-Each of these scripts runs for 10 epochs and for each epoch measures the
+Each of these scripts runs for 10 epochs, and for each epoch, measures the
 average number of items per second. The performance results can be read from
 the `nvlog.json` files produced by the commands.
 
@@ -529,7 +653,7 @@ To benchmark the inference performance on a specific batch size, run:
 The output log files will contain performance numbers for the FastPitch model
 (number of output mel-spectrogram frames per second, reported as `generator_frames/s w
 `)
-and for WaveGlow (number of output samples per second, reported as ` waveglow_samples/s
+and for WaveGlow (nuber of output samples per second, reported as ` waveglow_samples/s
 `).
 The `inference.py` script will run a few warm-up iterations before running the benchmark. Inference will be averaged over 100 runs, as set by the `REPEATS` env variable.
 
@@ -546,8 +670,8 @@ Our results were obtained by running the `./platform/DGXA100_FastPitch_{AMP,TF32
 
 | Loss (Model/Epoch)   |    50 |   250 |   500 |   750 |  1000 |  1250 |  1500 |
 |:---------------------|------:|------:|------:|------:|------:|------:|------:|
-| FastPitch AMP        | 3.35 |  2.89 |  2.79 |  2.71 |   2.68 |   2.64 |   2.61 |
-| FastPitch TF32       | 3.37 |  2.88 |  2.78 |  2.71 |   2.68 |   2.63 |   2.61 |
+| FastPitch AMP        | 3.35 |  2.89 |  2.79 |  2.71 |   2.68 |  2.64 |  2.61 |
+| FastPitch TF32       | 3.37 |  2.88 |  2.78 |  2.71 |   2.68 |  2.63 |  2.61 |
 
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
 
@@ -558,8 +682,8 @@ All of the results were produced using the `train.py` script as described in the
 
 | Loss (Model/Epoch)   |    50 |   250 |   500 |   750 |  1000 |  1250 |  1500 |
 |:---------------------|------:|------:|------:|------:|------:|------:|------:|
-| FastPitch AMP        | 3.38 |  2.88 |  2.79 |  2.71 |   2.68 |   2.64 |   2.61 |
-| FastPitch FP32       | 3.38 |  2.89 |  2.80 |  2.71 |   2.68 |   2.65 |   2.62 |
+| FastPitch AMP        | 3.38 |  2.88 |  2.79 |  2.71 |   2.68 |  2.64 |  2.61 |
+| FastPitch FP32       | 3.38 |  2.89 |  2.80 |  2.71 |   2.68 |  2.65 |  2.62 |
 
 
 <div style="text-align:center" align="center">
@@ -621,7 +745,7 @@ Note that most of the quality is achieved after the initial 1000 epochs.
 The following tables show inference statistics for the FastPitch and WaveGlow
 text-to-speech system, gathered from 100 inference runs. Latency is measured from the start of FastPitch inference to
 the end of WaveGlow inference. Throughput is measured
-as the number of generated audio samples per second at 22KHz. RTF is the real-time factor which denotes the number of seconds of speech generated in a second of wall-clock time, per input utterance.
+as the number of generated audio samples per second at 22KHz. RTF is the real-time factor that denotes the number of seconds of speech generated in a second of wall-clock time per input utterance.
 The used WaveGlow model is a 256-channel model.
 
 Note that performance numbers are related to the length of input. The numbers reported below were taken with a moderate length of 128 characters. Longer utterances yield higher RTF, as the generator is fully parallel.
@@ -734,7 +858,7 @@ FastPitch + WaveGlow (TorchScript, denoising)
 
 ## Release notes
 
-We're constantly refining and improving our performance on AI and HPC workloads even on the same hardware with frequent updates to our software stack. For our latest performance data please refer to these pages for AI and HPC benchmarks.
+We're constantly refining and improving our performance on AI and HPC workloads even on the same hardware, with frequent updates to our software stack. For our latest performance data, refer to these pages for AI and HPC benchmarks.
 
 ### Changelog
 
@@ -769,4 +893,4 @@ May 2020
 
 ### Known issues
 
-There are no known issues with this model with this model.
+There are no known issues with this model.

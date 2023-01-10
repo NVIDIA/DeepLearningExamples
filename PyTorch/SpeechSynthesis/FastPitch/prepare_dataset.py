@@ -77,6 +77,11 @@ def parse_args(parser):
     # Performance
     parser.add_argument('-b', '--batch-size', default=1, type=int)
     parser.add_argument('--n-workers', type=int, default=16)
+    
+    # Language
+    parser.add_argument('--symbol_set', default='english_basic',
+                        choices=['english_basic', 'english_mandarin_basic'],
+                        help='Symbols in the dataset')
     return parser
 
 
@@ -101,7 +106,7 @@ def main():
 
     if args.save_alignment_priors:
         Path(args.dataset_path, 'alignment_priors').mkdir(parents=False, exist_ok=True)
-
+        
     for filelist in args.wav_text_filelists:
 
         print(f'Processing {filelist}...')
@@ -111,6 +116,7 @@ def main():
             filelist,
             text_cleaners=['english_cleaners_v2'],
             n_mel_channels=args.n_mel_channels,
+            symbol_set=args.symbol_set,
             p_arpabet=0.0,
             n_speakers=args.n_speakers,
             load_mel_from_disk=False,

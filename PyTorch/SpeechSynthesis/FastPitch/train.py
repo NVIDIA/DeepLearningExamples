@@ -47,9 +47,10 @@ from common.tb_dllogger import log
 from common.repeated_dataloader import (RepeatedDataLoader,
                                         RepeatedDistributedSampler)
 from common.text import cmudict
-from common.utils import BenchmarkStats, Checkpointer, prepare_tmp
+from common.utils import (BenchmarkStats, Checkpointer,
+                          load_pretrained_weights, prepare_tmp)
 from fastpitch.attn_loss_function import AttentionBinarizationLoss
-from fastpitch.data_function import batch_to_gpu, TTSCollate, TTSDataset
+from fastpitch.data_function import batch_to_gpu, ensure_disjoint, TTSCollate, TTSDataset
 from fastpitch.loss_function import FastPitchLoss
 
 
@@ -95,6 +96,8 @@ def parse_args(parser):
                         help='Number of epochs for calculating final stats')
     train.add_argument('--validation-freq', type=int, default=1,
                        help='Validate every N epochs to use less compute')
+    train.add_argument('--init-from-checkpoint', type=str, default=None,
+                       help='Initialize model weights with a pre-trained ckpt')
 
     opt = parser.add_argument_group('optimization setup')
     opt.add_argument('--optimizer', type=str, default='lamb',
@@ -326,6 +329,9 @@ def main():
     model_config = models.get_model_config('FastPitch', args)
     model = models.get_model('FastPitch', model_config, device)
 
+    if args.init_from_checkpoint is not None:
+        load_pretrained_weights(model, args.init_from_checkpoint)
+
     attention_kl_loss = AttentionBinarizationLoss()
 
     # Store pitch mean/std as params to translate from Hz during inference
@@ -374,6 +380,7 @@ def main():
 
     trainset = TTSDataset(audiopaths_and_text=args.training_files, **vars(args))
     valset = TTSDataset(audiopaths_and_text=args.validation_files, **vars(args))
+    ensure_disjoint(trainset, valset)
 
     if distributed_run:
         train_sampler = RepeatedDistributedSampler(args.trainloader_repeats,
