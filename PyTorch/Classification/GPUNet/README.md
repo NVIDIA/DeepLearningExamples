@@ -413,7 +413,7 @@ We benchmark the training results following the steps in [Training](#training). 
 ##### NVIDIA DGX V100 (8x V100 32GB)
 | **Model**|**Batch**| **Epochs** | **GPUs** | **FP32 Top1**  | **AMP Top1**   | **FP32 (hours)<br />Train Time** | **AMP (hours)<br />Train Time** | **Training speedup<br />(FP32 / AMP)** |
 |:--------:|:------:|:----------:|:--------:|:--------------:|:--------------:|:-------------------:|:-----------------------:|:--------------------------------:|
-| GPUNet-0  |192     |    450     |    8     | 77.90<sub>+/-0.03</sub> | 77.96<sub>+/-0.05</sub> |71.63|46.56|    1.54  x                         |
+| GPUNet-0  |192     |    450     |    8     | 78.90<sub>+/-0.03</sub> | 78.96<sub>+/-0.05</sub> |71.63|46.56|    1.54  x                         |
 | GPUNet-1  |192     |    450     |    8     | 80.4-<sub>+/-0.03</sub>  | 80.5<sub>+/-0.03</sub> |67.5 |43.5 |    1.55  x                         |
 | GPUNet-2  |192     |    450     |    8     | 82.1-<sub>+/-0.04</sub>  | 82.2<sub>+/-0.04</sub> |171  |84.25|    2.03  x                         |
 
