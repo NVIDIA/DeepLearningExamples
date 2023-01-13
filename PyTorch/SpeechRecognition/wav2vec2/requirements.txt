@@ -1,0 +1,8 @@
+editdistance==0.6.0
+librosa==0.8.0
+omegaconf==2.0.6  # optional for handling certain Fairseq ckpts
+pyarrow==6.0.1
+soundfile==0.10.3.post1
+sox==1.4.1
+tqdm==4.53.0
+git+https://github.com/NVIDIA/dllogger@v1.0.0#egg=dllogger
