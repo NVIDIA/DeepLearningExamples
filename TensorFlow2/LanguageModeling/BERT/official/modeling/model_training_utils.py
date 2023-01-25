@@ -598,11 +598,11 @@ def run_customized_training_loop(
       if hvd:
         logging.info("Multi-GPU training with TF Horovod")
         logging.info("hvd.size() = %d", hvd.size())
-      logging.info("Total Training Time = %0.2f for Sentences = %d", total_time, total_sentences)
+      logging.info("Total Training Time = %0.2f for Sequences = %d", total_time, total_sentences)
       if total_time != 0:
-        logging.info("Throughput Average (sentences/sec) with overhead = %0.2f", total_sentences/total_time)
+        logging.info("Throughput Average (sequences/sec) with overhead = %0.2f", total_sentences/total_time)
       if perf_wo_n != 0:
-        logging.info("Throughput Average (sentences/sec) = %0.2f", perf_wo/perf_wo_n)
+        logging.info("Throughput Average (sequences/sec) = %0.2f", perf_wo/perf_wo_n)
       logging.info("-----------------------------")
 
       if dllogging and perf_wo_n != 0:

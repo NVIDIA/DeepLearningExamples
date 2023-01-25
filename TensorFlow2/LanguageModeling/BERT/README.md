@@ -713,7 +713,7 @@ The following tables compare `F1` scores across 5 different training runs with d
 
 ##### Pre-training training performance: Single-node on NVIDIA DGX-2 V100 (16x V100 32GB)
 
-Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX-2 with 16x V100 32GB GPUs. Performance (in sentences per second) is the steady state throughput.
+Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX-2 with 16x V100 32GB GPUs. Performance (in sequences per second) is the steady state throughput.
 
 | **GPUs** | **Sequence Length** | **Batch size / GPU: mixed precision, FP32** | **Gradient Accumulation: mixed precision, FP32** | **Global Batch Size: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 - mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
 |:--------:|:-------------------:|:-------------------------------------------:|--------------------------------------------------|:--------------------------------------------:|:--------------------------------:|:---------------------:|-------------------------------------------------|------------------------------------|-------------------------|
@@ -730,7 +730,7 @@ Note: The respective values for FP32 runs that use a batch size of 60 and 10 in 
 
 ##### Pre-training training performance: Multi-node on NVIDIA DGX-2H V100 (16x V100 32GB)
 
-Our results were obtained by running the `run.sub` training script in the TensorFlow 21.02-py3 NGC container using multiple NVIDIA DGX-2 with 16x V100 32GB GPUs. Performance (in sentences per second) is the steady state throughput.
+Our results were obtained by running the `run.sub` training script in the TensorFlow 21.02-py3 NGC container using multiple NVIDIA DGX-2 with 16x V100 32GB GPUs. Performance (in sequences per second) is the steady state throughput.
 
 | **Num Nodes** | **Sequence Length** | **Batch size / GPU: mixed precision, FP32** | **Gradient Accumulation: mixed precision, FP32** | **Global Batch Size: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 - mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling - FP32** |
 |:-------------:|:-------------------:|:-------------------------------------------:|--------------------------------------------------|:--------------------------------------------:|:--------------------------------:|:---------------------:|-------------------------------------------------|------------------------------------|-------------------------|
@@ -747,7 +747,7 @@ Note: The respective values for FP32 runs that use a batch size of 60 and 10 in 
 
 ##### Pre-training training performance: Single-node on NVIDIA DGX A100 (8x A100 80GB)
 
-Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX A100 with 8x A100 80GB GPUs. Performance (in sentences per second) is the steady state throughput.
+Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX A100 with 8x A100 80GB GPUs. Performance (in sequences per second) is the steady state throughput.
 
 | **GPUs** | **Sequence Length** | **Batch size / GPU: mixed precision, TF32** | **Gradient Accumulation: mixed precision, TF32** | **Global Batch Size: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - TF32** | **Throughput speedup (TF32 - mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling -TF32** |
 |:--------:|:-------------------:|:-------------------------------------------:|--------------------------------------------------|:--------------------------------------------:|:--------------------------------:|:---------------------:|-------------------------------------------------|------------------------------------|------------------------|
@@ -760,7 +760,7 @@ Note: The respective values for TF32 runs that use a batch size of 312 and 40 in
 
 ##### Pre-training training performance: Multi-node on NVIDIA DGX A100 (8x A100 80GB)
 
-Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX A100 with 8x A100 40GB GPUs. Performance (in sentences per second) is the steady state throughput.
+Our results were obtained by running the `scripts/run_pretraining_lamb.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX A100 with 8x A100 40GB GPUs. Performance (in sequences per second) is the steady state throughput.
 
 | **Num Nodes** | **Sequence Length** | **Batch size / GPU: mixed precision, TF32** | **Gradient Accumulation: mixed precision, TF32** | **Global Batch Size: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - TF32** | **Throughput speedup (TF32 - mixed precision)** | **Weak scaling - mixed precision** | **Weak scaling -TF32** |
 |:-------------:|:-------------------:|:-------------------------------------------:|--------------------------------------------------|:--------------------------------------------:|:--------------------------------:|:---------------------:|-------------------------------------------------|------------------------------------|------------------------|
@@ -777,7 +777,7 @@ Note: The respective values for TF32 runs that use a batch size of 312 and 40 in
 
 ##### Fine-tuning training performance for SQuAD v1.1 on NVIDIA DGX-1 V100 (8x V100 16GB)
 
-Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX-1 with 8x V100 16GB GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX-1 with 8x V100 16GB GPUs. Performance (in sequences per second) is the mean throughput from 2 epochs.
 
 | **GPUs** | **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
 |:---:|:---:|:------:|:-----:|:----:|:----:|:----:|
@@ -791,7 +791,7 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 ##### Fine-tuning training performance for SQuAD v1.1 on NVIDIA DGX-1 V100 (8x V100 32GB)
 
-Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX-1 with 8x V100 32GB GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX-1 with 8x V100 32GB GPUs. Performance (in sequences per second) is the mean throughput from 2 epochs.
 
 
 | **GPUs** | **Batch size / GPU: mixed precision, FP32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
@@ -806,7 +806,7 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 ##### Fine-tuning training performance for SQuAD v1.1 on NVIDIA DGX A100 (8x A100 80GB)
 
-Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX-2 with 16x V100 32GB GPUs. Performance (in sentences per second) is the mean throughput from 2 epochs.
+Our results were obtained by running the `scripts/run_squad.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX-2 with 16x V100 32GB GPUs. Performance (in sequences per second) is the mean throughput from 2 epochs.
 
 | **GPUs** | **Batch size / GPU: mixed precision, TF32** | **Throughput - mixed precision** | **Throughput - FP32** | **Throughput speedup (FP32 to mixed precision)** | **Weak scaling - FP32** | **Weak scaling - mixed precision** |
 |---|---|------|------|----|-----|-----|
@@ -823,11 +823,11 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 ##### Fine-tuning inference performance for SQuAD v1.1 on NVIDIA DGX-1 V100 (1x V100 16GB)
 
-Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX-1 with 1x V100 16GB GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1000 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
+Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX-1 with 1x V100 16GB GPUs. Performance numbers (throughput in sequences per second and latency in milliseconds) were averaged from 1000 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 
 BERT-LARGE FP16
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 105.04	| 1.277237354	| 9.52	| 9.67	| 9.77	| 10.16  |
 | 128 | 2 | 184.9	   | 1.671487977	| 10.82	| 11.15	| 11.27	| 11.8   |
@@ -840,7 +840,7 @@ BERT-LARGE FP16
 
 BERT-Large FP32
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 82.24	   | 12.16	   | 12.28	| 12.33	| 12.92  |
 | 128 | 2 | 110.62	| 18.08	   | 18.22	| 18.28	| 18.88  |
@@ -853,7 +853,7 @@ BERT-Large FP32
 
 BERT-Base FP16
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 236.26	| 1.179589595	| 4.23	| 4.37	| 4.49	| 4.59   |
 | 128 | 2 | 425.1	   | 1.441554478	| 4.7	   | 4.84	| 4.97	| 5.26   |
@@ -866,7 +866,7 @@ BERT-Base FP16
 
 BERT-Base FP32
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 200.29	| 4.99	| 5.08	| 5.16	| 5.53   |
 | 128 | 2 | 294.89	| 6.78	| 6.89	| 6.93	| 7.37   |
@@ -881,11 +881,11 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 ##### Fine-tuning inference performance for SQuAD v1.1 on NVIIDA DGX-1 V100 (1x V100 32GB)
 
-Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX-1 with 1x V100 32GB GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1000 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
+Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX-1 with 1x V100 32GB GPUs. Performance numbers (throughput in sequences per second and latency in milliseconds) were averaged from 1000 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 
 BERTLarge FP16
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 101.58	| 1.242112986	| 9.84	| 9.99	| 10.06	| 10.39  |
 | 128 | 2 | 181.89	| 1.651593571	| 11	   | 11.14	| 11.2	| 11.87  |
@@ -898,7 +898,7 @@ BERTLarge FP16
 
 BERT-Large FP32
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 81.78	   | 12.23	| 12.37	| 12.43	| 13.2   |
 | 128 | 2 | 110.13	| 18.16	| 18.29	| 18.37	| 19.27  |
@@ -911,7 +911,7 @@ BERT-Large FP32
 
 BERT-Base FP16
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 234.85	| 1.217533309	| 4.26	| 4.33	| 4.37	| 4.62   |
 | 128 | 2 | 415.86	| 1.435782351	| 4.81	| 4.92	| 5.06	| 5.55   |
@@ -924,7 +924,7 @@ BERT-Base FP16
 
 BERT-Base FP32
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 192.89	| 5.18	| 5.3	   | 5.36	| 5.65   |
 | 128 | 2 | 289.64	| 6.91	| 7	   | 7.22	| 7.83   |
@@ -940,11 +940,11 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 ##### Fine-tuning inference performance for SQuAD v1.1 on NVIDIA DGX A100 (1x A100 80GB)
 
-Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX-2 with 1x V100 32GB GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1000 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
+Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA DGX-2 with 1x V100 32GB GPUs. Performance numbers (throughput in sequences per second and latency in milliseconds) were averaged from 1000 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 
 BERT-Large FP16
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 145.21	| 0.9435347628	| 6.89	| 7.14	| 7.4	   | 8.35  |
 | 128 | 2 | 272.81	| 1.093953003	| 7.33	| 7.61	| 7.77	| 8.35  |
@@ -957,7 +957,7 @@ BERT-Large FP16
 
 BERT-Large TF32
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 153.9	   | 6.5	   | 6.76	| 6.86	| 7.4   |
 | 128 | 2 | 249.38	| 8.02	| 8.22	| 8.34	| 9.45  |
@@ -970,7 +970,7 @@ BERT-Large TF32
 
 BERT-Base FP16
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 295.01	| 1.014023992	| 3.39	| 3.59	| 3.65	| 3.73   |
 | 128 | 2 | 594.81	| 1.048455898	| 3.36	| 3.59	| 3.68	| 4.19   |
@@ -983,7 +983,7 @@ BERT-Base FP16
 
 BERT-Base TF32
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 290.93	| 3.44	| 3.61	| 3.73	| 4.69  |
 | 128 | 2 | 567.32	| 3.53	| 3.64	| 3.96	| 5.01  |
@@ -998,11 +998,11 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 
 ##### Fine-tuning inference performance for SQuAD v1.1 on NVIDIA Tesla T4 (1x T4 16GB)
 
-Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA Tesla T4 with 1x T4 16GB GPUs. Performance numbers (throughput in sentences per second and latency in milliseconds) were averaged from 1000 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
+Our results were obtained by running the `scripts/finetune_inference_benchmark.sh` training script in the TensorFlow 21.02-py3 NGC container on NVIDIA Tesla T4 with 1x T4 16GB GPUs. Performance numbers (throughput in sequences per second and latency in milliseconds) were averaged from 1000 iterations. Latency is computed as the time taken for a batch to process as they are fed in one after another in the model ie no pipelining.
 
 BERT-Large FP16
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 57.6	   | 1.364605544	| 17.36	| 18.16	| 19.02	| 21.67  |
 | 128 | 2 | 102.76	| 2.17988969	| 19.46	| 20.68	| 21.27	| 22.2   |
@@ -1015,7 +1015,7 @@ BERT-Large FP16
 
 BERT-Large FP32
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 42.21	| 23.69	| 24.8	| 25.02	| 25.48  |
 | 128 | 2 | 47.14	| 42.42	| 43.48	| 43.63	| 44.32  |
@@ -1028,7 +1028,7 @@ BERT-Large FP32
 
 BERT-Base FP16
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Throughput speedup (FP32 to mixed precision) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|----------------------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 116.56	| 1.039878669	| 8.58	| 9.53	| 10.84	| 11.74 |
 | 128 | 2 | 238.62	| 1.675937632	| 8.38	| 9.09	| 9.27	| 12.33 |
@@ -1042,7 +1042,7 @@ BERT-Base FP16
 
 BERT-Base FP32
 
-| Sequence Length | Batch Size | Throughput-Average(sent/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
+| Sequence Length | Batch Size | Throughput-Average(seq/sec) | Latency-Average(ms) | Latency-90%(ms) | Latency-95%(ms) | Latency-99%(ms) |
 |-----------------|------------|------------------------------|---------------------|-----------------|-----------------|-----------------|
 | 128 | 1 | 112.09	| 8.92	| 9.12	| 9.49	| 10.93  |
 | 128 | 2 | 142.38	| 14.05	| 14.34	| 14.48	| 15.03  |
