@@ -15,13 +15,12 @@
 import os
 
 import torch
+from data_loading.data_module import DataModule
+from nnunet.nn_unet import NNUnet
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint, ModelSummary, RichProgressBar
 from pytorch_lightning.plugins.io import AsyncCheckpointIO
 from pytorch_lightning.strategies import DDPStrategy
-
-from data_loading.data_module import DataModule
-from nnunet.nn_unet import NNUnet
 from utils.args import get_main_args
 from utils.logger import LoggingCallback
 from utils.utils import make_empty_dir, set_cuda_devices, set_granularity, verify_ckpt_path
