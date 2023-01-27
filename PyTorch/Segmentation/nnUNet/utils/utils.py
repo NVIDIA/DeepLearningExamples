@@ -58,7 +58,7 @@ def verify_ckpt_path(args):
             return resume_path_results
         print("[Warning] Checkpoint not found. Starting training from scratch.")
         return None
-    if not os.path.isfile(args.ckpt_path):
+    if args.ckpt_path is None or not os.path.isfile(args.ckpt_path):
         print(f"Provided checkpoint {args.ckpt_path} is not a file. Starting training from scratch.")
         return None
     return args.ckpt_path
