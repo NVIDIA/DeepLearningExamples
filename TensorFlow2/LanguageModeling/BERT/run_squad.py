@@ -295,7 +295,7 @@ def predict_squad_customized(strategy, input_meta_data, bert_config,
     cf_100 = max(time_list[:int(len(time_list) * 1)])
     ss_sentences_per_second = num_sentences * 1.0 / eval_time_wo_overhead
 
-    logging.info("Total Inference Time W/O Overhead = %0.2f for Sentences = %d", eval_time_wo_overhead,
+    logging.info("Total Inference Time W/O Overhead = %0.2f for Sequences = %d", eval_time_wo_overhead,
       (num_steps - 4) * FLAGS.predict_batch_size)
     logging.info("Latency Confidence Level 50 (ms) = %0.2f", cf_50 * 1000)
     logging.info("Latency Confidence Level 90 (ms) = %0.2f", cf_90 * 1000)
@@ -303,7 +303,7 @@ def predict_squad_customized(strategy, input_meta_data, bert_config,
     logging.info("Latency Confidence Level 99 (ms) = %0.2f", cf_99 * 1000)
     logging.info("Latency Confidence Level 100 (ms) = %0.2f", cf_100 * 1000)
     logging.info("Latency Average (ms) = %0.2f", avg * 1000)
-    logging.info("Throughput Average (sentences/sec) = %0.2f", ss_sentences_per_second)
+    logging.info("Throughput Average (sequences/sec) = %0.2f", ss_sentences_per_second)
 
     dllogging = input_meta_data['dllogging']
     dllogging.logger.log(step=(), data={"throughput_val": ss_sentences_per_second}, verbosity=Verbosity.DEFAULT)
