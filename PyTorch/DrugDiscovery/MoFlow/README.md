@@ -198,10 +198,10 @@ For those unable to use the [framework name] NGC container, to set up the requir
 To train your model using mixed or TF32 precision with Tensor Cores or using FP32, perform the following steps using the default parameters of the MoFlow model on the ZINC 250k dataset. For the specifics concerning training and inference, refer to the [Advanced](#advanced) section.
 
 1. Clone the repository.
-	```
-	git clone [https://github.com/NVIDIA/DeepLearningExamples](https://github.com/NVIDIA/DeepLearningExamples)
-	cd [DeepLearningExamples](https://github.com/NVIDIA/DeepLearningExamples)/PyTorch/DrugDiscovery/MoFlow
-	```
+```
+git clone [https://github.com/NVIDIA/DeepLearningExamples](https://github.com/NVIDIA/DeepLearningExamples)
+cd [DeepLearningExamples](https://github.com/NVIDIA/DeepLearningExamples)/PyTorch/DrugDiscovery/MoFlow
+```
 
 2.  Build the MoFlow PyTorch NGC container.
 ```
@@ -233,7 +233,14 @@ bash scripts/prepare_datasets.sh
 bash scripts/train.sh
 ```
 
-6. Start inference/predictions.
+6. Start inference.
+
+You can train the model yourself (see the prevoius step) or download the pretrained weights from NGC:
+```
+wget 'https://api.ngc.nvidia.com/v2/models/nvidia/dle/moflow__pyt_ckpt/versions/22.11.0_amp/files/model_snapshot_epoch_300' -O /results/model_snapshot_epoch_300
+```
+Then you can run the inference:
+
 ```
 bash scripts/predict.sh
 ```
