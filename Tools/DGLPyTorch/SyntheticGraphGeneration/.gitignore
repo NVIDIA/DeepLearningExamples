@@ -1,0 +1,8 @@
+/save/
+/data/
+__pycache__
+.ipynb_checkpoints/
+*.csv
+*.txt
+dask-worker-space
+exp

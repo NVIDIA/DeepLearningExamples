@@ -1,0 +1,14 @@
+**/.idea
+**/save
+**/.ipynb_checkpoints
+**/__pycache__
+**/.gitkeep
+**/dask-worker-space
+**/preprocessed
+docker_scripts
+generated*
+.git
+.gitignore
+Dockerfile
+.dockerignore
+README.md
