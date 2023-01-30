@@ -1,4 +1,5 @@
 # coding=utf-8
+# Copyright (c) 2022 NVIDIA CORPORATION. All rights reserved.
 # Copyright 2020 The HuggingFace Inc. team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -312,8 +313,6 @@ class PreTrainedTokenizer(PreTrainedTokenizerBase):
                 elif i == len(split_text) - 1:
                     if sub_text:
                         result += [sub_text]
-                    else:
-                        pass
                 else:
                     if sub_text:
                         result += [sub_text]

@@ -20,6 +20,8 @@ import math
 import os
 import pickle
 import socket
+import time
+import logging
 from logging import getLogger
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Union
@@ -30,13 +32,14 @@ import numpy as np
 import torch
 import torch.distributed as dist
 from rouge_score import rouge_scorer, scoring
-from sacrebleu import corpus_bleu
 from torch import nn
-from torch.utils.data import Dataset, Sampler
+from torch.utils.data import Dataset, Sampler, IterableDataset
 
 from bart.tokenization.tokenization_bart import BartTokenizer
 from utils.file_utils import cached_property
-
+from lddl.torch.datasets import ParquetDataset
+from lddl.torch.log import DatasetLogger
+from lddl.torch.utils import get_node_rank, get_nproc_per_node
 
 try:
     from fairseq.data.data_utils import batch_by_size
@@ -101,7 +104,7 @@ def trim_batch(
     num_keeps = torch.count_nonzero(keep_column_mask)
 
     #Pad to multiples of 8
-    pad_num_keeps = num_keeps if num_keeps % 8 == 0 else (num_keeps//8 + 1) * 8
+    pad_num_keeps = num_keeps if num_keeps % 8 == 0 else (torch.div(num_keeps, 8, rounding_mode='floor') + 1) * 8
     keep_column_mask[num_keeps:pad_num_keeps] = True
 
     if attention_mask is None:
@@ -232,6 +235,7 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
             "labels": target_ids,
         }
 
+
     def collate_fn(self, batch) -> Dict[str, torch.Tensor]:
         input_ids = torch.stack([x["input_ids"] for x in batch])
         masks = torch.stack([x["attention_mask"] for x in batch])
@@ -246,6 +250,130 @@ class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
         }
         return batch
 
+
+class PretrainingSeq2SeqDataset(ParquetDataset):
+    def __init__(
+        self,
+        path,
+        tokenizer,
+        max_source_length,
+        type_path="train",
+        n_obs=None, #@TODO fix n_obs input, not used
+        prefix="",
+        log_dir=None,
+        log_level=logging.INFO,
+        **dataset_kwargs
+    ):
+
+        logger = DatasetLogger(
+            log_dir=log_dir,
+            node_rank=get_node_rank(nproc_per_node=get_nproc_per_node(dataset_kwargs["local_rank"])),
+            local_rank=dataset_kwargs["local_rank"],
+            log_level=log_level,
+        )
+
+        super().__init__(
+            path,
+            transform=dataset_kwargs["transform"],
+            local_rank=dataset_kwargs["local_rank"],
+            shuffle_buffer_size=dataset_kwargs["shuffle_buffer_size"],
+            shuffle_buffer_warmup_factor=dataset_kwargs["shuffle_buffer_warmup_factor"],
+            base_seed=dataset_kwargs["base_seed"],
+            logger=logger
+        )
+
+        self.max_source_length = max_source_length
+        self.tokenizer = tokenizer
+        self.prefix = prefix if prefix is not None else ""
+
+        self.pad_token_id = self.tokenizer.pad_token_id
+        self.dataset_kwargs = dataset_kwargs
+        dataset_kwargs.update({"add_prefix_space": True} if isinstance(self.tokenizer, BartTokenizer) else {})
+
+    def _decode_record_batch(self, batch):
+        batch = batch.to_pydict()
+
+        for source_line in batch["sentences"]:
+            source_line = self.prefix + source_line.rstrip("\n")
+            assert source_line, f"empty source line for index {index}"
+            source_inputs = encode_line(self.tokenizer, source_line, self.max_source_length)
+
+            source_ids = source_inputs["input_ids"].squeeze()
+            src_mask = source_inputs["attention_mask"].squeeze()
+            yield {
+                "input_ids": source_ids,
+                "attention_mask": src_mask,
+            }
+
+
+class LegacySeq2SeqDataset(AbstractSeq2SeqDataset):
+    def __getitem__(self, index) -> Dict[str, torch.Tensor]:
+        """Call tokenizer on src and tgt_lines"""
+        index = index + 1  # linecache starts at 1
+        source_line = self.prefix + linecache.getline(str(self.src_file), index).rstrip("\n")
+        tgt_line = linecache.getline(str(self.tgt_file), index).rstrip("\n")
+        # assert source_line, f"empty source line for index {index}"
+        # assert tgt_line, f"empty tgt line for index {index}"
+        # Some CNN/dm source lines are empty
+        source_inputs = encode_line(self.tokenizer, source_line, self.max_source_length)
+        target_inputs = encode_line(self.tokenizer, tgt_line, self.max_target_length)
+
+        source_ids = source_inputs["input_ids"].squeeze()
+        target_ids = target_inputs["input_ids"].squeeze()
+        src_mask = source_inputs["attention_mask"].squeeze()
+        return {
+            "input_ids": source_ids,
+            "attention_mask": src_mask,
+            "labels": target_ids,
+        }
+
+    def collate_fn(self, batch) -> Dict[str, torch.Tensor]:
+        input_ids = torch.stack([x["input_ids"] for x in batch])
+        masks = torch.stack([x["attention_mask"] for x in batch])
+        target_ids = torch.stack([x["labels"] for x in batch])
+        pad_token_id = self.pad_token_id
+        y = trim_batch(target_ids, pad_token_id)
+        source_ids, source_mask = trim_batch(input_ids, pad_token_id, attention_mask=masks)
+        batch = {
+            "input_ids": source_ids,
+            "attention_mask": source_mask,
+            "labels": y,
+        }
+        return batch
+
+
+class ShuffleAndChainDataset(IterableDataset):
+  def __init__(self, datasets, buffer_size):
+    super().__init__()
+    self.datasets = datasets
+    self.buffer_size = buffer_size
+
+  def chain_iter(self):
+    for i, d in enumerate(self.datasets):
+        for j, x in enumerate(d):
+            yield x
+
+  def __iter__(self):
+    shufbuf = []
+    try:
+        dataset_iter = self.chain_iter()
+        for i in range(self.buffer_size):
+            shufbuf.append(next(dataset_iter))
+    except:
+        self.buffer_size = len(shufbuf)
+    try:
+        while True:
+            try:
+                item = next(dataset_iter)
+                evict_idx = random.randint(0, self.buffer_size - 1)
+                yield shufbuf[evict_idx]
+                shufbuf[evict_idx] = item
+            except StopIteration:
+                break
+        while len(shufbuf) > 0:
+            yield shufbuf.pop()
+    except GeneratorExit:
+        pass
 
 class Seq2SeqDataset(AbstractSeq2SeqDataset):
     """A dataset that calls prepare_seq2seq_batch."""
@@ -527,3 +655,33 @@ def format_step(step):
     if len(step) > 0:
         s += "Global Step : {} ".format(step[0])
     return s
+
+def get_readable_time(elapsed):
+    d, h, m, s = [int(x) for x in time.strftime("%d:%H:%M:%S", time.gmtime(elapsed)).split(':')]
+    d -= 1
+    return '{:2d}h{:2d}m{:2d}s'.format(24*d + h, m, s)
+
+class Mean:
+    def __init__(self, **kwargs):
+        self.reset()
+
+    def reset(self):
+        self._total = 0.0
+        self._num_examples = 0
+
+    def update(self, values, sample_weight=None):
+        if sample_weight is None:
+            if not isinstance(values, torch.Tensor):
+                values = torch.tensor(values)
+            if len(values.shape) == 0:
+                values = values.unsqueeze(-1)
+            self._total += torch.sum(values).item()
+            self._num_examples += values.shape[0]
+        else:
+            self._total += torch.sum(values * sample_weight).item()
+            self._num_examples += torch.sum(sample_weight).item()
+
+    def result(self):
+        if self._num_examples == 0:
+            return float("nan")
+        return self._total / self._num_examples

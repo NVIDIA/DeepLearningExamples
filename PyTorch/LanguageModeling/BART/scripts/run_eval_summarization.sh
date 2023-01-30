@@ -1,14 +1,3 @@
-INIT_CKPT=${1}
-
-if [ ! -f "$INIT_CKPT" ]; then
-    echo "$INIT_CKPT does not exist. Cannot run inference without a valid checkpoint"
-    exit -1
-fi
-
-PRED_BS=${2:-96}
-NUM_GPU=${3:-8}
-PRECISION=${4:-fp16}
-EVAL_BEAMS=${5:-4}
 # Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,11 +13,23 @@ EVAL_BEAMS=${5:-4}
 # limitations under the License.
 # ==============================================================================
 
+INIT_CKPT=${1}
+
+if [ ! -f "$INIT_CKPT" ]; then
+    echo "$INIT_CKPT does not exist. Cannot run inference without a valid checkpoint"
+    exit -1
+fi
+
+PRED_BS=${2:-96}
+NUM_GPU=${3:-8}
+PRECISION=${4:-fp16}
+EVAL_BEAMS=${5:-4}
 MAX_SOURCE_LEN=${6:-1024}
 MAX_TARGET_LEN=${7:-142}
 
 DATA_DIR=${8:-data/cnn_dm}
 CONFIG_PATH=${9:-"configs/config.json"}
+PRELN=${10:-true}
 
 printf -v TAG "bart_pyt_inference"
 DATESTAMP=`date +'%y%m%d%H%M%S'`
@@ -38,10 +39,19 @@ mkdir -p $RESULTS_DIR
 if [ "$PRECISION" = "fp16" ] ; then
     echo "fp16 activated!"
     USE_FP16="--fp16"
-
+elif [ "$PRECISION" = "bf16" ] ; then
+    echo "bf16 activated!"
+    USE_FP16="--bf16"
 else
     echo "fp32/tf32 activated!"
     USE_FP16=""
+fi
+
+if [ "$PRELN" = "true" ] ; then
+    echo "Use PreLN"
+    USE_FP16="--pre_ln $USE_FP16"
+else
+    echo "Use PostLN"
 fi
 
 python -m torch.distributed.launch --nproc_per_node=$NUM_GPU run_eval.py \

@@ -91,6 +91,8 @@ def generate_summaries_or_translations(
     batch_size: int = 8,
     device: str = DEFAULT_DEVICE,
     fp16=False,
+    bf16=False,
+    pre_ln=False,
     task="summarization",
     prefix=None,
     max_source_length=1024,
@@ -117,7 +119,14 @@ def generate_summaries_or_translations(
     # Config from "https://s3.amazonaws.com/models.huggingface.co/bert/facebook/bart-large-cnn/config.json
     # Vocab modified to 50265 to be consistent with facebook/bart-large default
     config = BartConfig(**json.load(open(config_path, "r")))
-    config.fp16 = fp16
+    if fp16:
+        config.dtype = torch.float16
+    elif bf16:
+        config.dtype = torch.bfloat16
+    else:
+        config.dtype = None
+    config.pre_ln = pre_ln
+
     model = BartForConditionalGeneration.from_pretrained(model_path, config=config).to(device)
 
     # if distilling, change model
@@ -126,6 +135,8 @@ def generate_summaries_or_translations(
 
     if fp16:
         model = model.half()
+    elif bf16:
+        model = model.bfloat16()
     model.eval()
 
     tokenizer = BartTokenizer.from_pretrained('facebook/bart-large-cnn')
@@ -220,6 +231,7 @@ def run_generate(verbose=True):
         "--num_return_sequences", type=int, default=1, required=False, help="How many sequences to return"
     )
     parser.add_argument("--fp16", action="store_true")
+    parser.add_argument("--bf16", action="store_true")
     parser.add_argument("--dump-args", action="store_true", help="print the custom hparams with the results")
     parser.add_argument(
         "--info",
@@ -259,6 +271,11 @@ def run_generate(verbose=True):
     parser.add_argument('--layers', type=str, default=None, help="string indicating which teacher layers remain, split by '-' (ex. 0-6-11)")
     parser.add_argument('--do_encoder', action="store_true", default=False, help="if true encoder distilled")
     parser.add_argument('--do_decoder', action="store_true", default=False, help="if true decoder distilled")
+    parser.add_argument("--pre_ln",
+        default=False,
+        action='store_true',
+        help="Whether to use Pre-LN architecture."
+    )
 
     dist = parser.add_argument_group('distributed setup')
     dist.add_argument('--local_rank',  type=int,
@@ -291,10 +308,6 @@ def run_generate(verbose=True):
     else:
         dllogger.init(backends=[])
 
-    dllogger.metadata("inference_throughput_mean", {"unit": "tokens/s"})
-    for suffix in ["mean", "conf_50", "conf_90", "conf_95", "conf_99", "conf_100"]:
-        dllogger.metadata(f"inference_latency_{suffix}", {"unit": "s"})
-
     if parsed_args and verbose:
         print(f"parsed the following generate kwargs: {parsed_args}")
 
@@ -315,6 +328,8 @@ def run_generate(verbose=True):
         batch_size=args.bs,
         device=args.device,
         fp16=args.fp16,
+        bf16=args.bf16,
+        pre_ln=args.pre_ln,
         task=args.task,
         prefix=args.prefix,
         eval_beams=args.eval_beams,

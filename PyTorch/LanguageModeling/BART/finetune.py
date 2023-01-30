@@ -22,14 +22,14 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Tuple
 import json
+import random
 
 import numpy as np
-import pytorch_lightning as pl
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-from lightning_base import BaseTransformer, add_generic_args, generic_train
+from training_base import BaseTransformer, add_generic_args, generic_test, generic_train
 from bart.tokenization.tokenization_mbart import MBartTokenizer
 from bart.modeling.modeling_t5 import T5ForConditionalGeneration
 
@@ -37,7 +37,6 @@ from bart.configuration.configuration_bart import BartConfig
 from bart.tokenization.tokenization_bart import BartTokenizer
 from bart.modeling.modeling_bart import BartForConditionalGeneration, shift_tokens_right
 
-from utils.callbacks import Seq2SeqLoggingCallback, get_checkpoint_callback, get_early_stopping_callback, CheckpointEveryNSteps
 from utils.utils import (
     ROUGE_KEYS,
     LegacySeq2SeqDataset,
@@ -54,9 +53,10 @@ from utils.utils import (
     save_git_info,
     save_json,
     use_task_specific_params,
-    format_step,
+    format_step
 )
-from utils.distributed_utils import get_rank
+from utils.gpu_affinity import set_affinity
+from utils.distributed_utils import get_rank, get_device_count, get_world_size
 import dllogger
 import time
 
@@ -130,6 +130,8 @@ class SummarizationModule(BaseTransformer):
             self.eval_max_length = self.model.config.max_length
         self.val_metric = self.default_val_metric if self.hparams.val_metric is None else self.hparams.val_metric
 
+        self.config = self.model.config
+
     def freeze_embeds(self):
         """Freeze token embeddings and positional embeddings for bart, just token embeddings for t5."""
         try:
@@ -158,7 +160,7 @@ class SummarizationModule(BaseTransformer):
         if isinstance(self.model, T5ForConditionalGeneration):
             decoder_input_ids = self.model._shift_right(tgt_ids)
         else:
-            decoder_input_ids = shift_tokens_right(tgt_ids, pad_token_id, self.model.config.decoder_start_token_id)
+            decoder_input_ids = shift_tokens_right(tgt_ids, pad_token_id, self.config.decoder_start_token_id)
 
         outputs = self(src_ids, attention_mask=src_mask, decoder_input_ids=decoder_input_ids, use_cache=False)
         lm_logits = outputs[0]
@@ -166,7 +168,7 @@ class SummarizationModule(BaseTransformer):
             # Same behavior as modeling_bart.py, besides ignoring pad_token_id
             ce_loss_fct = torch.nn.CrossEntropyLoss(ignore_index=pad_token_id)
 
-            assert lm_logits.shape[-1] == self.model.config.vocab_size
+            assert lm_logits.shape[-1] == self.config.vocab_size
             loss = ce_loss_fct(lm_logits.view(-1, lm_logits.shape[-1]), tgt_ids.view(-1))
         else:
             lprobs = torch.nn.functional.log_softmax(lm_logits, dim=-1)
@@ -179,7 +181,7 @@ class SummarizationModule(BaseTransformer):
     def pad(self) -> int:
         return self.tokenizer.pad_token_id
 
-    def training_step(self, batch, batch_idx) -> Dict:
+    def training_step(self, batch) -> Dict:
         loss_tensors, logits = self._step(batch)
         logs = {name: loss for name, loss in zip(self.loss_names, loss_tensors)}
         # tokens per batch
@@ -191,14 +193,14 @@ class SummarizationModule(BaseTransformer):
         logs["src_pad_frac"] = batch["input_ids"].eq(self.pad).float().mean()
         # TODO(SS): make a wandb summary metric for this
 
-        self.log("train_loss_ddp_avg", loss_tensors[0], on_step=True, prog_bar=True, logger=True, sync_dist=self.sync_dist)
-        return {"loss": loss_tensors[0], "log": logs, "progress_bar":{"global_step":self.global_step}}
+        # self.log("train_loss_ddp_avg", loss_tensors[0], on_step=True, prog_bar=True, logger=True, sync_dist=self.sync_dist)
+        return {"loss": loss_tensors[0], "log": logs}
 
     # Can remove after pytorch lightning fix
     def training_epoch_end(self, outputs) -> None:
         return
 
-    def validation_step(self, batch, batch_idx) -> Dict:
+    def validation_step(self, batch) -> Dict:
         return self._generative_step(batch)
 
     def validation_epoch_end(self, outputs, prefix="val") -> Dict:
@@ -262,7 +264,7 @@ class SummarizationModule(BaseTransformer):
         base_metrics.update(gen_time=gen_time, gen_len=summ_len, preds=preds, target=target, **rouge)
         return base_metrics
 
-    def test_step(self, batch, batch_idx):
+    def test_step(self, batch):
         return self._generative_step(batch)
 
     def test_epoch_end(self, outputs):
@@ -303,10 +305,8 @@ class SummarizationModule(BaseTransformer):
                 dataset,
                 batch_sampler=batch_sampler,
                 collate_fn=dataset.collate_fn,
-                # shuffle=False,
                 num_workers=self.num_workers,
                 pin_memory=True,
-                # batch_size=None,
             )
         else:
             return DataLoader(
@@ -395,6 +395,9 @@ class SummarizationModule(BaseTransformer):
         parser.add_argument('--layers', type=str, default=None, help="string indicating which layers to distill for SFT, split by '-' (ex. 0-6-11)")
         parser.add_argument('--do_encoder', action="store_true", default=False, help="if true distills the encoder")
         parser.add_argument('--do_decoder', action="store_true", default=False, help="if true distills the decoder")
+        parser.add_argument("--local_rank", type=int, default=os.getenv('LOCAL_RANK', 0), help="local_rank for distributed training on gpus")
+        parser.add_argument("--gpus", type=int, default=1, help="number of gpus to train on applied per node")
+        parser.add_argument("--load_model_weights_only", action="store_true", help="Only load model weights, ignoring other ckpt states. useful at the start of phase2 training")
 
         return parser
 
@@ -412,6 +415,29 @@ class TranslationModule(SummarizationModule):
 
     def calc_generative_metrics(self, preds, target) -> dict:
         return calculate_bleu(preds, target)
+
+def set_seed(args):
+    random.seed(args.seed + get_rank())
+    np.random.seed(args.seed + get_rank())
+    torch.manual_seed(args.seed + get_rank())
+
+def save_final_checkpoint(args, model):
+    output_filename = os.path.join(args.output_dir, "final_step.ckpt")
+
+    if get_rank() == 0:
+        model_to_save = model.module if hasattr(model, "module") else model
+        torch.save(model_to_save.state_dict(),
+                   output_filename)
+
+def load_checkpoint(args, path, model, optimizer, scaler):
+    checkpoint = torch.load(path, map_location=args.device)
+    model.load_state_dict(checkpoint["model"])
+
+    if not args.load_model_weights_only:
+        if 'optimizer' in checkpoint:
+            optimizer.load_state_dict(checkpoint["optimizer"])
+        if 'scaler' in checkpoint:
+            scaler.load_state_dict(checkpoint["scaler"])
 
 def distill(layers, pick_layers):
     sft_layers = nn.ModuleList()
@@ -449,13 +475,54 @@ def main(args, model=None) -> SummarizationModule:
     print(args)
     Path(args.output_dir).mkdir(exist_ok=True)
 
+    # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
+    torch.cuda.set_device(args.local_rank)
+    device = torch.device("cuda", args.local_rank)
+    torch.distributed.init_process_group(backend="nccl")
+    args.device = device
+
+    # Set GPU affinity
+    if args.affinity != 'disabled':
+        affinity = set_affinity(
+            get_rank(),
+            get_device_count(),
+            args.affinity
+        )
+        logger.warning(f'{get_rank()}: thread affinity: {affinity}')
+
+    # Set seed
+    set_seed(args)
+
+    # Setup logging
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        level=logging.INFO if get_rank() in [-1, 0] else logging.WARN,
+    )
+    logger.warning(
+        "Process global rank: %s, device: %s, distributed training: %s, 16-bits training: %s",
+        get_rank(),
+        device,
+        bool(get_rank() != -1),
+        (args.fp16 or args.bf16),
+    )
+
+    checkpoints = list(sorted(glob.glob(os.path.join(args.output_dir, "_step*.ckpt"), recursive=True),
+                        key=lambda x:int(x.split("step")[1].split(".")[0])))
+
     if model is None:
         if "summarization" in args.task:
             ### Define BART model
             # Config from "https://s3.amazonaws.com/models.huggingface.co/bert/facebook/bart-large-cnn/config.json
             # Vocab modified to 50265 to be consistent with facebook/bart-large default
             config = BartConfig(**json.load(open(args.config_path, "r")))
-            config.fp16 = args.fp16
+            if args.fp16:
+                config.dtype = torch.float16
+            elif args.bf16:
+                config.dtype = torch.bfloat16
+            else:
+                config.dtype = None
+            config.pre_ln = args.pre_ln
 
             if args.distill: # if distilling, start from finetuned checkpoint
                 if Path(args.data_dir).name == "cnn_dm":
@@ -471,100 +538,81 @@ def main(args, model=None) -> SummarizationModule:
                     checkpoint = args.resume_from_checkpoint
                     if args.distill: # set resume from checkpoint to None (state dict is different)
                         args.resume_from_checkpoint = None
+                    model = BartForConditionalGeneration(config=config)
                 else:
-                    checkpoints = list(sorted(glob.glob(os.path.join(args.output_dir, "*.ckpt"), recursive=True)))
                     if len(checkpoints) > 0: #No checkpoints available
                         checkpoint = checkpoints[-1]
                         args.resume_from_checkpoint = checkpoint
+                        model = BartForConditionalGeneration(config=config)
                     else:
                         args.resume_from_checkpoint = None
                         print("No valid checkpoint to resume from. Using ", checkpoint)
+                        model = BartForConditionalGeneration.from_pretrained(checkpoint, config=config)
+
+            else:
+                model = BartForConditionalGeneration.from_pretrained(checkpoint, config=config)
 
             print("Loading BART model checkpoint using ", checkpoint)
-            model = BartForConditionalGeneration.from_pretrained(checkpoint, config=config)
 
             if args.distill == "sft":
                 model = distill_sft(model)
 
             tokenizer = BartTokenizer.from_pretrained(
                 'facebook/bart-large')  # Downloads vocab and merges file automatically
-            model: SummarizationModule = SummarizationModule(args, model=model, config=config, tokenizer=tokenizer)
+            trainer: SummarizationModule = SummarizationModule(args, model=model, config=config, tokenizer=tokenizer)
         else:
             raise ValueError("Translation not supported at this time")
             model: SummarizationModule = TranslationModule(args)
     dataset = Path(args.data_dir).name
-    if (
-        args.logger_name == "default"
-        or args.fast_dev_run
-        or str(args.output_dir).startswith("/tmp")
-        or str(args.output_dir).startswith("/var")
-    ):
-        logger = True  # don't pollute wandb logs unnecessarily
-    elif args.logger_name == "wandb":
-        from pytorch_lightning.loggers import WandbLogger
+    trainer.model.to(device)
 
-        project = os.environ.get("WANDB_PROJECT", dataset)
-        logger = WandbLogger(name=model.output_dir.name, project=project)
+    # Set up optimizer and scheduler
+    optimizer, scheduler = trainer.configure_optimizers()
+    optimizer = optimizer[0]
+    scheduler = scheduler[0]['scheduler']
+    scaler = torch.cuda.amp.GradScaler(enabled=args.fp16)
 
-    elif args.logger_name == "wandb_shared":
-        from pytorch_lightning.loggers import WandbLogger
+    step = 0
+    if args.resume_from_checkpoint:
+            logger.info("Loading BART model checkpoint using %s", checkpoint)
+            checkpoint_suffix = checkpoint.split("step")[-1].split(".")[0]
+            step = int(checkpoint_suffix) + 1
+            load_checkpoint(args, checkpoint, trainer.model, optimizer, scaler)
 
-        logger = WandbLogger(name=model.output_dir.name, project=f"hf_{dataset}")
+    if args.distill or args.load_model_weights_only:
+        args.resume_from_checkpoint = None
+        step = 0
 
-    # if args.early_stopping_patience >= 0:
-    #     extra_callbacks = [get_early_stopping_callback(f"val_{model.val_metric}", args.early_stopping_patience)]
-    # else:
-    #     extra_callbacks = []
-    extra_callbacks = [CheckpointEveryNSteps(args.output_dir, args.max_steps-1)]
+    # Distributed training (should be after apex fp16 initialization)
+    if args.local_rank != -1:
+        trainer.model = torch.nn.parallel.DistributedDataParallel(
+            trainer.model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True
+        )
 
-    lower_is_better = args.val_metric == "loss"
+    generic_train(args, trainer, optimizer, scheduler, scaler, checkpoints, step)
 
-    log_callback = Seq2SeqLoggingCallback()
+    pickle_save(trainer.hparams, trainer.output_dir / "hparams.pkl")
+    save_final_checkpoint(args, trainer.model)
 
-    trainer: pl.Trainer = generic_train(
-        model,
-        args,
-        logging_callback=log_callback,
-        checkpoint_callback=get_checkpoint_callback(
-            args.output_dir, model.val_metric, args.save_top_k, lower_is_better
-        ),
-        extra_callbacks=extra_callbacks,
-        logger=logger,
-    )
+    if args.do_predict:
+        # Testing from a checkpoint
+        generic_test(args, trainer)
+    return trainer
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser = SummarizationModule.add_model_specific_args(parser, os.getcwd())
+
+    args = parser.parse_args()
 
     if get_rank() == 0:
         dllogger.init(backends=[dllogger.JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE,
                                                            filename=args.json_summary),
                                 dllogger.StdOutBackend(verbosity=dllogger.Verbosity.VERBOSE, step_format=format_step)])
-        dllogger.metadata("avg_train_time", {"unit": "s"})
-        dllogger.metadata("avg_train_throughput", {"unit": "tokens/s"})
-        dllogger.log(step=tuple(), data={"avg_train_tokens":log_callback.tokens, "avg_train_time":log_callback.train_time, "total_train_epochs":log_callback.epochs, "avg_train_throughput":log_callback.tokens/log_callback.train_time})
-        print("Avg Tokens = %d Avg Train Time = %.2f Total Epochs = %d"%(log_callback.tokens, log_callback.train_time, log_callback.epochs))
-        print("Avg steps per sec = %d Avg Throughput (tok/s) = %d"%(log_callback.avg_steps_per_sec, log_callback.tokens/log_callback.train_time))
-        dllogger.flush()
-
-    pickle_save(model.hparams, model.output_dir / "hparams.pkl")
-    if args.do_predict and not args.do_train:
-        # Testing from a checkpoint
-        trainer.test(model)
-    elif args.do_predict and args.do_train:
-        # test() without a model tests using the best checkpoint automatically
-        model.hparams.test_checkpoint = ""
-        checkpoints = list(sorted(glob.glob(os.path.join(args.output_dir, "*.ckpt"), recursive=True)))
-        if checkpoints:
-            model.hparams.test_checkpoint = checkpoints[-1]
-            trainer.resume_from_checkpoint = checkpoints[-1]
-        trainer.logger.log_hyperparams(model.hparams)
-        trainer.test()
-    return model
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser = pl.Trainer.add_argparse_args(parser)
-    parser = SummarizationModule.add_model_specific_args(parser, os.getcwd())
-
-    args = parser.parse_args()
 
     main(args)
 
+    dllogger.flush()
+
+    torch.distributed.barrier()

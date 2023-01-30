@@ -71,30 +71,3 @@ class Seq2SeqDataLoader(DataLoader):
             src_lang="", tgt_lang=""
         )
         return dataset
-
-
-    # def train_dataloader(self) -> DataLoader:
-    #     dataloader = self.get_dataloader("train", batch_size=self.hparams.train_batch_size, shuffle=True)
-    #     return dataloader
-
-    # def val_dataloader(self) -> DataLoader:
-    #     return self.get_dataloader("val", batch_size=self.hparams.eval_batch_size)
-
-    # def test_dataloader(self) -> DataLoader:
-    #     return self.get_dataloader("test", batch_size=self.hparams.eval_batch_size)
-
-    # def __iter__(self):
-    #     # index iterator
-    #     epoch_indices = np.random.permutation(len(self.data) // self.batch_size) if self.shuffle \
-    #         else np.array(range(len(self.data) // self.batch_size))
-
-    #     if self.labels:
-    #         # sentence iterator
-    #         for idx in epoch_indices:
-    #             yield (self.data[idx: idx + self.batch_size], self.labels[idx: idx + self.batch_size])
-    #     else:
-    #         # sentence iterator
-    #         for idx in epoch_indices:
-    #             yield self.data[idx: idx + self.batch_size]
-    # def __len__(self):
-    #     return len(self.data) // self.batch_size

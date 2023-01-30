@@ -1,3 +1,4 @@
+# Copyright (c) 2022 NVIDIA CORPORATION. All rights reserved.
 # Copyright 2020 The HuggingFace Team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -656,7 +657,7 @@ class DataCollatorForBART(DataCollatorForLanguageModeling):
     Data collator used for language modeling.
 
     - collates batches of tensors, honoring their tokenizer's pad_token
-    - preprocesses batches for masked language modeling 
+    - preprocesses batches for masked language modeling
     - includes sentence permutation and whole work masking
     """
     permute_sentence_ratio: float = 1.0
@@ -816,7 +817,7 @@ class DataCollatorForBART(DataCollatorForLanguageModeling):
         inputs_left_shift = torch.cat((inputs[:, 1:], torch.zeros(inputs.shape[0],1)), dim=-1)
         mask_left_shift = torch.not_equal((inputs - inputs_left_shift), 0)
         mask = torch.cat((torch.full((inputs.shape[0],1),True), mask_left_shift[:, :-1]), dim=-1) | torch.not_equal(inputs, mask_token_id)
-        
+
         inputs = [torch.masked_select(inputs[i,:], mask[i,:]) for i in range(inputs.shape[0])]
         if attention_mask is not None:
             attention_mask = [torch.masked_select(attention_mask[i, :], mask[i,:]) for i in range(attention_mask.shape[0])]

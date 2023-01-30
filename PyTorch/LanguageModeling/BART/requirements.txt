@@ -1,0 +1,7 @@
+dataclasses
+gitpython==3.1.29
+rouge-score==0.1.2
+pynvml==8.0.4
+tqdm==4.64.1
+git+https://github.com/NVIDIA/dllogger
+git+https://github.com/NVIDIA/lddl.git

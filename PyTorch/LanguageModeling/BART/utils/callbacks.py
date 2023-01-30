@@ -157,7 +157,7 @@ class Seq2SeqLoggingCallback(pl.Callback):
             self.train_time = ((self.train_time * self.epochs) + all_reduce_time) / (self.epochs + 1)
             self.avg_steps_per_sec = ((self.avg_steps_per_sec * self.epochs) + all_reduce_avg_steps_per_sec) / (self.epochs + 1.0)
 
-def get_checkpoint_callback(output_dir, metric, save_top_k=1, lower_is_better=False):
+def get_checkpoint_callback(output_dir, metric, save_top_k=1):
     """Saves the best model by validation ROUGE2 score."""
     monitor = f"val_{metric}"
     if metric == "rouge2":
@@ -219,6 +219,17 @@ class CheckpointEveryNSteps(pl.Callback):
                 filename = f"{self.prefix}_epoch{epoch}_step{global_step}.ckpt"
             ckpt_path = os.path.join(self.output_dir, filename)
             trainer.save_checkpoint(ckpt_path)
+
+    def on_train_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
+
+        epoch = trainer.current_epoch
+        global_step = trainer.global_step
+        if self.use_modelcheckpoint_filename:
+            filename = trainer.checkpoint_callback.filename
+        else:
+            filename = f"{self.prefix}_epoch{epoch}_step{global_step}.ckpt"
+        ckpt_path = os.path.join(self.output_dir, filename)
+        trainer.save_checkpoint(ckpt_path)
 
 def get_early_stopping_callback(metric, patience):
     return EarlyStopping(

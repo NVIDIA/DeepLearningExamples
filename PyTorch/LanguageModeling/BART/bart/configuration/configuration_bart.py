@@ -1,4 +1,5 @@
 # coding=utf-8
+# Copyright (c) 2022 NVIDIA CORPORATION. All rights reserved.
 # Copyright 2020 The Fairseq Authors and The HuggingFace Inc. team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -88,8 +89,6 @@ BART_CONFIG_ARGS_DOC = r"""
             Google "layerdrop arxiv", as its not explainable in one line.
         decoder_layerdrop: (:obj:`float`, optional, defaults to 0.0):
             Google "layerdrop arxiv", as its not explainable in one line.
-        extra_pos_embeddings: (:obj:`int`, optional, defaults to 2):
-            How many extra learned positional embeddings to use. Should be pad_token_id+1 for bart.
         num_labels: (:obj:`int`, optional, defaults to 2):
             for SequenceClassification
         is_encoder_decoder (:obj:`int`, optional, defaults to True):
@@ -109,7 +108,6 @@ class BartConfig(PretrainedConfig):
     def __init__(
         self,
         activation_dropout=0.0,
-        extra_pos_embeddings=2,  # FIXME(@sshleifer): delete?
         activation_function="gelu",
         vocab_size=50265,
         d_model=1024,
@@ -193,9 +191,6 @@ class BartConfig(PretrainedConfig):
 
         # Classifier stuff
         self.classif_dropout = classifier_dropout
-
-        # pos embedding offset
-        self.extra_pos_embeddings = self.pad_token_id + 1
 
         self.force_bos_token_to_be_generated = force_bos_token_to_be_generated
         self.attention_bias = attention_bias

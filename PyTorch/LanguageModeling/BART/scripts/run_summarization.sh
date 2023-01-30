@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,30 +16,39 @@
 # ==============================================================================
 
 DATA_DIR=${1:-data/cnn_dm/}
-CONFIG_PATH=${2:-"configs/config.json"}
-NUM_GPU=${3:-2}
-LR=${4:-1e-4}
-BS=${5:-8}
-ACCUM=${6:-1}
-PREC=${7:-"fp16"}
-TRAIN_STEPS=${8:-20000}
-WARMUP_STEPS=${9:-500}
-MAX_SOURCE_LEN=${10:-1024}
-MAX_TARGET_LEN=${11:-142}
-EVAL_BEAMS=${12:-4}
-EVAL_BS=${13:-128}
-PRED_BS=${14:-64}
-VAL_CHECK_INTERVAL=${15:-0.3}
-PATIENCE=${16:-2}
+CKPT_PATH=${2:-data/nvidia_pretrained/bart_large}
+CONFIG_PATH=${3:-"configs/config.json"}
+NUM_GPU=${4:-8}
+LR=${5:-1.25e-4}
+BS=${6:-40}
+ACCUM=${7:-1}
+PREC=${8:-"bf16"}
+TRAIN_STEPS=${9:-2000}
+WARMUP_STEPS=${10:-50}
+MAX_SOURCE_LEN=${11:-1024}
+MAX_TARGET_LEN=${12:-142}
+EVAL_BEAMS=${13:-4}
+EVAL_BS=${14:-128}
+PRED_BS=${15:-64}
+PRELN=${16:-true}
 
 if [ "$PREC" = "fp16" ] ; then
     echo "fp16 activated!"
     USE_FP16="--fp16"
+elif [ "$PREC" = "bf16" ] ; then
+    echo "bf16 activated!"
+    USE_FP16="--bf16"
 else
     echo "fp32/tf32 activated!"
     USE_FP16=""
 fi
 
+if [ "$PRELN" = "true" ] ; then
+    echo "Trained with PreLN"
+    USE_FP16="--pre_ln $USE_FP16"
+else
+    echo "Trained with PostLN"
+fi
 
 printf -v TAG "bart_pyt"
 DATESTAMP=`date +'%y%m%d%H%M%S'`
@@ -45,7 +56,7 @@ RESULTS_DIR=${RESULTS_DIR:-results/${TAG}_${DATESTAMP}}
 mkdir -p ${RESULTS_DIR}
 
 export TOKENIZERS_PARALLELISM="true"
-python finetune.py \
+python -m torch.distributed.launch --nproc_per_node=${NUM_GPU:-8} finetune.py \
     --data_dir=${DATA_DIR} \
     --config_path=${CONFIG_PATH} \
     --output_dir=${RESULTS_DIR} \
@@ -57,7 +68,6 @@ python finetune.py \
     --train_batch_size=${BS} --gradient_accumulation_steps=${ACCUM} \
     --eval_batch_size=${EVAL_BS} \
     --max_steps ${TRAIN_STEPS} --warmup_steps ${WARMUP_STEPS} \
-    --min_epochs=0 --val_check_interval ${VAL_CHECK_INTERVAL} \
     --max_source_length=${MAX_SOURCE_LEN} --max_target_length=${MAX_TARGET_LEN} \
     --val_max_target_length=${MAX_TARGET_LEN} --eval_max_gen_length=${MAX_TARGET_LEN} \
     --sortish_sampler \
@@ -65,18 +75,18 @@ python finetune.py \
     --label_smoothing 0.1 \
     --weight_decay 0.1 \
     --dropout 0.1 --attention_dropout 0.1 --gradient_clip_val=0.1 \
-    --early_stopping_patience=${PATIENCE} \
-    --num_sanity_val_steps=0 --eval_beams 0 --freeze_embeds \
-    --amp_level=O1 --seed ${SEED:-42} \
+    --eval_beams 0 --freeze_embeds \
+    --seed ${SEED:-42} \
+    --resume_from_checkpoint=${CKPT_PATH} --load_model_weights_only \
     ${@:17} |& tee ${RESULTS_DIR}/joblog.log
 
 
 echo "completed training! Begin test" |& tee -a ${RESULTS_DIR}/joblog.log
 
-INIT_CKPT=$(ls ${RESULTS_DIR}/_epoch*.ckpt | sort -n | tail -1)
+INIT_CKPT=$(ls ${RESULTS_DIR}/final_step.ckpt | sort -n | tail -1)
 
 
-python -m torch.distributed.launch --nproc_per_node=$NUM_GPU run_eval.py \
+python -m torch.distributed.launch --nproc_per_node=${NUM_GPU:-8} run_eval.py \
     --task summarization \
     --bs ${PRED_BS} --max_source_length=${MAX_SOURCE_LEN} --max_target_length=${MAX_TARGET_LEN} \
     --eval_max_gen_length=${MAX_TARGET_LEN} --eval_beams=${EVAL_BEAMS} ${USE_FP16} \

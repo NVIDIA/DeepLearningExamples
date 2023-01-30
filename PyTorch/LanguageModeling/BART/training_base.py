@@ -1,4 +1,4 @@
-# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,9 +18,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any, Dict
-
-import pytorch_lightning as pl
-from pytorch_lightning.utilities import rank_zero_info
+import time
 
 from bart.configuration.configuration_bart import BartConfig
 from bart.tokenization.tokenization_bart import BartTokenizer
@@ -34,9 +32,12 @@ from utils.optimization import (
     get_polynomial_decay_schedule_with_warmup,
 )
 from utils.gpu_affinity import set_affinity
-from utils.distributed_utils import get_rank, get_device_count
-from apex.optimizers import FusedAdam, FusedLAMB
+from utils.distributed_utils import get_rank, get_device_count, get_world_size
+from utils.utils import get_readable_time, Mean
+from apex.optimizers import FusedAdam, FusedMixedPrecisionLamb
+import dllogger
 logger = logging.getLogger(__name__)
+
 
 
 MODEL_MODES = {
@@ -62,7 +63,7 @@ arg_to_scheduler_choices = sorted(arg_to_scheduler.keys())
 arg_to_scheduler_metavar = "{" + ", ".join(arg_to_scheduler_choices) + "}"
 
 
-class BaseTransformer(pl.LightningModule):
+class BaseTransformer():
     def __init__(
         self,
         hparams: argparse.Namespace,
@@ -75,12 +76,9 @@ class BaseTransformer(pl.LightningModule):
     ):
         """Initialize a model, tokenizer and config."""
         super().__init__()
-        # TODO: move to self.save_hyperparameters()
-        # self.save_hyperparameters()
-        # can also expand arguments into trainer signature for easier reading
 
-        self.save_hyperparameters(hparams)
         self.step_count = 0
+        self.hparams = hparams
         self.output_dir = Path(self.hparams.output_dir)
         cache_dir = self.hparams.cache_dir if self.hparams.cache_dir else None
         if config is None:
@@ -117,6 +115,9 @@ class BaseTransformer(pl.LightningModule):
         else:
             self.model = model
 
+    def __call__(self, input_ids, **kwargs):
+        return self.forward(input_ids, **kwargs)
+
     def load_hf_checkpoint(self, *args, **kwargs):
         self.model = self.model_type.from_pretrained(*args, **kwargs)
 
@@ -144,9 +145,15 @@ class BaseTransformer(pl.LightningModule):
             },
         ]
         if self.hparams.lamb:
-            optimizer = FusedLAMB(
-                optimizer_grouped_parameters, lr=self.hparams.learning_rate, eps=self.hparams.adam_epsilon)
-
+            optimizer_reduced_precision_type = self.config.dtype if self.hparams.allreduce_post_accumulation_half_precision else None
+            optimizer = FusedMixedPrecisionLamb(
+                optimizer_grouped_parameters,
+                lr=self.hparams.learning_rate,
+                eps=self.hparams.adam_epsilon,
+                max_grad_norm=self.hparams.gradient_clip_val,
+                reduced_precision_dtype=optimizer_reduced_precision_type)
+        elif self.hparams.allreduce_post_accumulation_half_precision:
+            raise ValueError("--allreduce_post_accumulation_half_precision is only supported on LAMB optimizer")
         elif self.hparams.adafactor:
             optimizer = Adafactor(
                 optimizer_grouped_parameters, lr=self.hparams.learning_rate, scale_parameter=False, relative_step=False
@@ -178,15 +185,11 @@ class BaseTransformer(pl.LightningModule):
             dataset_size = len(self.train_loader.dataset)
             return (dataset_size / effective_batch_size) * self.hparams.max_epochs
 
-    def setup(self, mode):
-        if mode == "fit":
-            self.train_loader = self.get_dataloader("train", self.hparams.train_batch_size, shuffle=True)
-
     def get_dataloader(self, type_path, batch_size, shuffle=False):
         raise NotImplementedError("You must implement this for your task")
 
     def train_dataloader(self):
-        return self.train_loader
+        return self.get_dataloader("train", self.hparams.train_batch_size, shuffle=True)
 
     def val_dataloader(self):
         return self.get_dataloader("dev", self.hparams.eval_batch_size, shuffle=False)
@@ -204,7 +207,6 @@ class BaseTransformer(pl.LightningModule):
             ),
         )
 
-    @pl.utilities.rank_zero_only
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
         save_path = self.output_dir.joinpath("best_tfmr")
         self.model.config.save_step = self.step_count
@@ -219,6 +221,13 @@ class BaseTransformer(pl.LightningModule):
             default="",
             type=str,
             help="Where do you want to store the pre-trained models downloaded from s3",
+        )
+        parser.add_argument(
+            "--resume_from_checkpoint",
+            type=str,
+            help="""Path/URL of the checkpoint from which training is resumed. If there is no checkpoint file at
+                  the path, start from scratch. If resuming from mid-epoch checkpoint, training will start from
+                  the beginning of the next epoch.""",
         )
         parser.add_argument(
             "--encoder_layerdrop",
@@ -250,7 +259,9 @@ class BaseTransformer(pl.LightningModule):
             help="Learning rate scheduler",
         )
         parser.add_argument("--weight_decay", default=0.0, type=float, help="Weight decay if we apply some.")
+        parser.add_argument("--gradient_clip_val", default=0.5, type=float, help="The value at which to clip gradients.")
         parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.")
+        parser.add_argument("--max_steps", default=10, type=int, help="Stop training after this number of steps.")
         parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps.")
         parser.add_argument("--num_workers", default=4, type=int, help="kwarg passed to DataLoader")
         parser.add_argument("--min_num_train_epochs", dest="min_epochs", default=0, type=int)
@@ -265,36 +276,12 @@ class BaseTransformer(pl.LightningModule):
                                       'socket_unique_continuous',
                                       'disabled'],
                              help='type of CPU affinity')
-
-
-class LoggingCallback(pl.Callback):
-    def on_batch_end(self, trainer, pl_module):
-        lr_scheduler = trainer.lr_schedulers[0]["scheduler"]
-        lrs = {f"lr_group_{i}": lr for i, lr in enumerate(lr_scheduler.get_lr())}
-        pl_module.logger.log_metrics(lrs)
-
-    def on_validation_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
-        rank_zero_info("***** Validation results *****")
-        metrics = trainer.callback_metrics
-        # Log results
-        for key in sorted(metrics):
-            if key not in ["log", "progress_bar"]:
-                rank_zero_info("{} = {}\n".format(key, str(metrics[key])))
-
-    def on_test_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule):
-        rank_zero_info("***** Test results *****")
-        metrics = trainer.callback_metrics
-        # Log and save results to file
-        output_test_results_file = os.path.join(pl_module.hparams.output_dir, "test_results.txt")
-        with open(output_test_results_file, "w") as writer:
-            for key in sorted(metrics):
-                if key not in ["log", "progress_bar"]:
-                    rank_zero_info("{} = {}\n".format(key, str(metrics[key])))
-                    writer.write("{} = {}\n".format(key, str(metrics[key])))
-
+        parser.add_argument('--allreduce_post_accumulation_half_precision',
+                            default=False,
+                            action='store_true',
+                            help="Whether to do fp16/bf16 allreduce post accumulation.")
 
 def add_generic_args(parser, root_dir) -> None:
-    #  TODO(SS): allow all pl args? parser = pl.Trainer.add_argparse_args(parser)
     parser.add_argument(
         "--output_dir",
         default=None,
@@ -305,7 +292,12 @@ def add_generic_args(parser, root_dir) -> None:
     parser.add_argument(
         "--fp16",
         action="store_true",
-        help="Whether to use 16-bit (mixed) precision (through NVIDIA apex) instead of 32-bit",
+        help="Whether to use 16-bit (mixed) precision instead of 32-bit",
+    )
+    parser.add_argument(
+        "--bf16",
+        action="store_true",
+        help="Whether to use BFloat 16 mixed precision instead of 32-bit",
     )
     parser.add_argument("--n_tpu_cores", dest="tpu_cores", type=int)
     parser.add_argument("--max_grad_norm", dest="gradient_clip_val", default=1.0, type=float, help="Max gradient norm")
@@ -326,63 +318,183 @@ def add_generic_args(parser, root_dir) -> None:
         required=True,
         help="The input data dir. Should contain the training files for the CoNLL-2003 NER task.",
     )
-
-
-def generic_train(
-    model: BaseTransformer,
-    args: argparse.Namespace,
-    logging_callback=None,
-    checkpoint_callback=None,
-    extra_callbacks=[],
-    logger=True,  # can pass WandbLogger() here
-    **extra_train_kwargs
-):
-    pl.seed_everything(args.seed)
-
-    # init model
-    odir = Path(model.hparams.output_dir)
-    odir.mkdir(exist_ok=True)
-
-    # add custom checkpoints
-    if checkpoint_callback is None:
-        checkpoint_callback = pl.callbacks.ModelCheckpoint(
-            filepath=args.output_dir, prefix="checkpoint", monitor="val_loss", mode="min", save_top_k=1
-        )
-    if logging_callback is None:
-        logging_callback = LoggingCallback()
-
-    train_params = {}
-
-    train_params["limit_val_batches"] = 2
-
-    # TODO: remove with PyTorch 1.6 since pl uses native amp
-    if args.fp16:
-        train_params["precision"] = 16
-        train_params["amp_level"] = args.amp_level
-
-    if args.gpus > 1 or args.num_nodes > 1:
-        train_params["distributed_backend"] = "ddp"
-        train_params["accelerator"] = "ddp"
-
-    trainer = pl.Trainer.from_argparse_args(
-        args,
-        weights_summary=None,
-        callbacks=[logging_callback] + extra_callbacks,
-        logger=logger,
-        checkpoint_callback=checkpoint_callback,
-        **train_params,
+    parser.add_argument("--log_freq", type=int, default=100, help="Log every X updates steps.")
+    parser.add_argument("--save_checkpoint_steps", type=int, default=100, required=False, help="How many checkpoints to save")
+    parser.add_argument(
+        "--profile",
+        action="store_true",
+    )
+    parser.add_argument("--pre_ln",
+        default=True,
+        action='store_true',
+        help="Whether to use Pre-LN architecture."
     )
 
-    if args.affinity != 'disabled':
-        affinity = set_affinity(
-            get_rank(),
-            get_device_count(),
-            args.affinity
-        )
-        print(f'{get_rank()}: thread affinity: {affinity}')
+def save_checkpoint(args, checkpoints, model, optimizer, scaler, step):
+    output_filename = os.path.join(args.output_dir, "_step{}.ckpt".format(step))
+
+    if get_rank() == 0:
+        model_to_save = model
+        while(hasattr(model_to_save, "module")):
+            model_to_save = model_to_save.module
+        torch.save({"model": model_to_save.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "scaler": scaler.state_dict()},
+                   output_filename)
+
+def train_one_step(args, trainer, optimizer, scheduler, features, local_step, scaler):
+    if args.fp16:
+        cast_dtype = torch.float16
+    elif args.bf16:
+        cast_dtype = torch.bfloat16
+    else:
+        cast_dtype = None
+    with torch.cuda.amp.autocast(dtype=cast_dtype, enabled=(args.fp16 or args.bf16) and not args.allreduce_post_accumulation_half_precision):
+        result = trainer.training_step(features)
+        total_loss = result["loss"]
+        loss = total_loss
+        if args.accumulate_grad_batches > 1:
+            total_loss = total_loss / args.accumulate_grad_batches
+
+    if local_step % args.accumulate_grad_batches == 0:
+        scaler.scale(total_loss).backward()
+
+        if not args.lamb:
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(trainer.model.parameters(), args.gradient_clip_val)
+
+        scheduler.step()  # Update learning rate schedule
+        scaler.step(optimizer)
+        optimizer.zero_grad()
+
+        skip_optimizer_step = scaler._found_inf_per_device(optimizer)[args.device] if scaler.is_enabled() else 0
+        result["log"]["skip_optimizer_step"] = int(skip_optimizer_step)
+        scaler.update()
+    else:
+        with trainer.model.no_sync():
+            scaler.scale(total_loss).backward()
+
+    return loss, result["log"]
+
+def generic_train(
+    args,
+    trainer,
+    optimizer,
+    scheduler,
+    scaler,
+    checkpoints,
+    step,
+    **extra_train_kwargs
+):
+    device = args.device
+
+    # Set up dataset
+    dataloader = trainer.train_dataloader()
+
+    # Set up metrics
+    metrics = {}
+    metrics["avg_train_throughput"] = Mean(name="train_perf")
+    metrics["total_loss"] = Mean(name="total_loss")
+
+    trainer.model.train()
+    local_step = 0
+    train_start, start_step = time.time(), step - 1
+    resume_step = step
+    skipped_optimizer_steps = 0
+
+    if get_rank() == 0:
+        dllogger.metadata("avg_train_time", {"unit": "s"})
+        dllogger.metadata("avg_train_throughput", {"unit": "seq/s"})
+
+    while step <= args.max_steps:
+        for batch in dataloader:
+            batch = {k: v.to(device) for k, v in batch.items()}
+            local_step += 1
+            iter_start = time.time()
+
+            total_loss, logs = train_one_step(args, trainer, optimizer, scheduler, batch, local_step, scaler)
+            train_perf = logs["bs"] * get_world_size() / (time.time() - iter_start)
 
 
-    if args.do_train:
-        trainer.fit(model)
+            metrics["total_loss"].update(total_loss)
+            metrics["avg_train_throughput"].update(train_perf)
+            if local_step % args.accumulate_grad_batches == 0:
+                static_optimizer_step = local_step // args.accumulate_grad_batches
+                skipped_optimizer_steps += logs["skip_optimizer_step"]
+                opt_step = static_optimizer_step - skipped_optimizer_steps + resume_step
 
-    return trainer
+                if args.log_freq > 0 and step != opt_step and (
+                        step % args.log_freq == 0 or step == args.max_steps):
+                    log_info_dict = {k:v.result() for k, v in metrics.items()}
+                    if get_rank() == 0:
+                        dllogger.log(step=(step,), data=log_info_dict, verbosity=0)
+                    print(
+                        'Step:{step:6d}, Loss:{total_loss:10.6f}, Perf:{train_perf:4.2f}, Loss Scaler: {loss_scale}, '
+                        'Elapsed: {elapsed}, ETA: {eta}'.format(
+                            step=step,
+                            total_loss=total_loss,
+                            train_perf=train_perf,
+                            loss_scale=scaler.get_scale(),
+                            elapsed=get_readable_time(time.time() - train_start),
+                            eta=get_readable_time(
+                                (time.time() - train_start) / (step - start_step) * (args.max_steps - step))),
+                            flush=True
+                    )
+
+                    if step == args.max_steps:
+                        final_metrics = {}
+                        log_info_dict['avg_train_time'] = time.time() - train_start
+                        for key, v in log_info_dict.items():
+                            val = torch.tensor(v, device=device)
+                            torch.distributed.all_reduce(val, op=torch.distributed.ReduceOp.SUM)
+                            val /= get_world_size()
+                            final_metrics[key] = val.item()
+                        if get_rank() == 0:
+                            dllogger.log(step=(), data=log_info_dict, verbosity=0)
+                        logger.info('<FINAL STEP METRICS> Step:{step:6d}, Loss:{total_loss:10.6f}, Perf:{avg_train_throughput:4.2f}, Train time:{avg_train_time}s'.format(
+                                        step=step, **final_metrics))
+
+                    for key, m in metrics.items():
+                        if key != 'avg_train_throughput':
+                            m.reset()
+
+                    if get_rank() == 0:
+                        dllogger.flush()
+
+                if args.save_checkpoint_steps > 0 and step != opt_step and \
+                        ((step % args.save_checkpoint_steps == 0 and step > 0) or step == args.max_steps):
+                    save_checkpoint(args, checkpoints, trainer.model, optimizer, scaler, step)
+                    logger.info(f" ** Saved model checkpoint for step {step}")
+
+                step = opt_step
+            if step > args.max_steps:
+                break
+
+def generic_test(
+    args,
+    trainer
+):
+    device = args.device
+
+    # Set up dataset
+    dataloader = trainer.test_dataloader()
+
+    metrics = {k: Mean(name=k) for k in trainer.loss_names + trainer.metric_names}
+
+    for batch in dataloader:
+        batch = {k: v.to(device) for k, v in batch.items()}
+
+        result_metric = trainer.test_step(batch)
+        for k, v in result_metric:
+            metrics[k].update(v)
+
+    log_info_dict = {k:v.result() for k, v in metrics.items()}
+    final_metrics = {}
+    for key, v in log_info_dict.items():
+        val = torch.tensor(v, device=device)
+        torch.distributed.all_reduce(val, op=torch.distributed.ReduceOp.SUM)
+        val /= get_world_size()
+        final_metrics[key] = val.item()
+    if get_rank() == 0:
+        dllogger.log(step=(), data=log_info_dict, verbosity=0)
+    print(final_metrics)
