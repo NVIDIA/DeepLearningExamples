@@ -1,4 +1,5 @@
 # coding=utf-8
+# Copyright (c) 2022 NVIDIA CORPORATION. All rights reserved.
 # Copyright 2010, The T5 Authors and HuggingFace Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");

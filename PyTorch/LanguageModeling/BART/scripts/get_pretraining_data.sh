@@ -19,13 +19,16 @@ data_folder=${1:-"/workspace/bart/data/"}
 
 mkdir -p $data_folder
 
-# Download and unzip the stories directories into data folder from https://cs.nyu.edu/~kcho/DMQA/ for both CNN and Daily Mail.
-cd $data_folder && gdown "0BwmD_VLjROrfTHk4NFg2SndKcjQ&confirm=t" && tar xf cnn_stories.tgz
-gdown "0BwmD_VLjROrfM1BxdkxVaTY2bWs&confirm=t" && tar xf dailymail_stories.tgz
+# Get wikipedia data
+download_wikipedia --outdir $data_folder/wiki
 
-cnn_stories=/workspace/bart/data/cnn/stories
-dailymail_stories=/workspace/bart/data/dailymail/stories
+# Get Common Crawl data
+download_common_crawl \
+    --outdir $data_folder/common_crawl \
+    --warc-files-start-date 2016-09-01 \
+    --warc-files-end-date 2019-02-28 \
+    --start-date 2016-09-01 \
+    --end-date 2019-02-28
 
-cd /workspace/cnn-dailymail && python /workspace/bart/utils/make_datafiles.py $cnn_stories $dailymail_stories && mv cnn_dm ${data_folder}
-
-cd ${data_folder} && wget https://s3.amazonaws.com/datasets.huggingface.co/summarization/xsum.tar.gz && tar -xvf xsum.tar.gz
+# Get OpenWebText data
+download_open_webtext --outdir $data_folder/openwebtext

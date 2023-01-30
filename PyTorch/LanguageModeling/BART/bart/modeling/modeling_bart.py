@@ -1,4 +1,5 @@
 # coding=utf-8
+# Copyright (c) 2022 NVIDIA CORPORATION. All rights reserved.
 # Copyright 2020 The Facebook AI Research Team Authors and The HuggingFace Inc. team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -291,6 +292,7 @@ class BartEncoderLayer(nn.Module):
         self.fc1 = nn.Linear(self.embed_dim, config.encoder_ffn_dim)
         self.fc2 = nn.Linear(config.encoder_ffn_dim, self.embed_dim)
         self.final_layer_norm = LayerNorm(self.embed_dim)
+        self.pre_ln = config.pre_ln
 
     def forward(
         self,
@@ -312,24 +314,44 @@ class BartEncoderLayer(nn.Module):
         """
         residual = hidden_states
 
-        hidden_states, attn_weights, _ = self.self_attn(
-            hidden_states=hidden_states,
-            attention_mask=attention_mask,
-            layer_head_mask=layer_head_mask,
-            output_attentions=output_attentions,
-        )
-        hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
-        dtype = hidden_states.dtype
-        hidden_states = residual + hidden_states
-        hidden_states = self.self_attn_layer_norm(hidden_states).to(dtype)
+        if self.pre_ln:
+            dtype = hidden_states.dtype
+            hidden_states = self.self_attn_layer_norm(hidden_states).to(dtype)
+            hidden_states, attn_weights, _ = self.self_attn(
+                hidden_states=hidden_states,
+                attention_mask=attention_mask,
+                layer_head_mask=layer_head_mask,
+                output_attentions=output_attentions,
+            )
+            hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
+            hidden_states = residual + hidden_states
 
-        residual = hidden_states
-        hidden_states = self.activation_fn(self.fc1(hidden_states)).to(dtype)
-        hidden_states = F.dropout(hidden_states, p=self.activation_dropout, training=self.training)
-        hidden_states = self.fc2(hidden_states)
-        hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
-        hidden_states = residual + hidden_states
-        hidden_states = self.final_layer_norm(hidden_states).to(dtype)
+            residual = hidden_states
+            hidden_states = self.final_layer_norm(hidden_states).to(dtype)
+            hidden_states = self.activation_fn(self.fc1(hidden_states)).to(dtype)
+            hidden_states = F.dropout(hidden_states, p=self.activation_dropout, training=self.training)
+            hidden_states = self.fc2(hidden_states)
+            hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
+            hidden_states = residual + hidden_states
+        else:
+            hidden_states, attn_weights, _ = self.self_attn(
+                hidden_states=hidden_states,
+                attention_mask=attention_mask,
+                layer_head_mask=layer_head_mask,
+                output_attentions=output_attentions,
+            )
+            hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
+            dtype = hidden_states.dtype
+            hidden_states = residual + hidden_states
+            hidden_states = self.self_attn_layer_norm(hidden_states).to(dtype)
+
+            residual = hidden_states
+            hidden_states = self.activation_fn(self.fc1(hidden_states)).to(dtype)
+            hidden_states = F.dropout(hidden_states, p=self.activation_dropout, training=self.training)
+            hidden_states = self.fc2(hidden_states)
+            hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
+            hidden_states = residual + hidden_states
+            hidden_states = self.final_layer_norm(hidden_states).to(dtype)
 
         if torch.isinf(hidden_states).any() or torch.isnan(hidden_states).any():
             clamp_value = torch.finfo(hidden_states.dtype).max - 1000
@@ -369,6 +391,7 @@ class BartDecoderLayer(nn.Module):
         self.fc1 = nn.Linear(self.embed_dim, config.decoder_ffn_dim)
         self.fc2 = nn.Linear(config.decoder_ffn_dim, self.embed_dim)
         self.final_layer_norm = LayerNorm(self.embed_dim)
+        self.pre_ln = config.pre_ln
 
     def forward(
         self,
@@ -405,49 +428,94 @@ class BartDecoderLayer(nn.Module):
         # decoder uni-directional self-attention cached key/values tuple is at positions 1,2
         self_attn_past_key_value = past_key_value[:2] if past_key_value is not None else None
         # add present self-attn cache to positions 1,2 of present_key_value tuple
-        hidden_states, self_attn_weights, present_key_value = self.self_attn(
-            hidden_states=hidden_states,
-            past_key_value=self_attn_past_key_value,
-            attention_mask=attention_mask,
-            layer_head_mask=layer_head_mask,
-            output_attentions=output_attentions,
-        )
-        hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
-        dtype = hidden_states.dtype
-        hidden_states = residual + hidden_states
-        hidden_states = self.self_attn_layer_norm(hidden_states).to(dtype)
-
-        # Cross-Attention Block
-        cross_attn_present_key_value = None
-        cross_attn_weights = None
-        if encoder_hidden_states is not None:
-            residual = hidden_states
-
-            # cross_attn cached key/values tuple is at positions 3,4 of present_key_value tuple
-            cross_attn_past_key_value = past_key_value[-2:] if past_key_value is not None else None
-            hidden_states, cross_attn_weights, cross_attn_present_key_value = self.encoder_attn(
+        if self.pre_ln:
+            dtype = hidden_states.dtype
+            hidden_states = self.self_attn_layer_norm(hidden_states).to(dtype)
+            hidden_states, self_attn_weights, present_key_value = self.self_attn(
                 hidden_states=hidden_states,
-                key_value_states=encoder_hidden_states,
-                attention_mask=encoder_attention_mask,
-                layer_head_mask=encoder_layer_head_mask,
-                past_key_value=cross_attn_past_key_value,
+                past_key_value=self_attn_past_key_value,
+                attention_mask=attention_mask,
+                layer_head_mask=layer_head_mask,
                 output_attentions=output_attentions,
             )
             hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
             hidden_states = residual + hidden_states
-            hidden_states = self.encoder_attn_layer_norm(hidden_states).to(dtype)
 
-            # add cross-attn to positions 3,4 of present_key_value tuple
-            present_key_value = present_key_value + cross_attn_present_key_value
+            # Cross-Attention Block
+            cross_attn_present_key_value = None
+            cross_attn_weights = None
+            if encoder_hidden_states is not None:
+                residual = hidden_states
 
-        # Fully Connected
-        residual = hidden_states
-        hidden_states = self.activation_fn(self.fc1(hidden_states)).to(dtype)
-        hidden_states = F.dropout(hidden_states, p=self.activation_dropout, training=self.training)
-        hidden_states = self.fc2(hidden_states)
-        hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
-        hidden_states = residual + hidden_states
-        hidden_states = self.final_layer_norm(hidden_states).to(dtype)
+                # cross_attn cached key/values tuple is at positions 3,4 of present_key_value tuple
+                cross_attn_past_key_value = past_key_value[-2:] if past_key_value is not None else None
+                hidden_states = self.encoder_attn_layer_norm(hidden_states).to(dtype)
+                hidden_states, cross_attn_weights, cross_attn_present_key_value = self.encoder_attn(
+                    hidden_states=hidden_states,
+                    key_value_states=encoder_hidden_states,
+                    attention_mask=encoder_attention_mask,
+                    layer_head_mask=encoder_layer_head_mask,
+                    past_key_value=cross_attn_past_key_value,
+                    output_attentions=output_attentions,
+                )
+                hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
+                hidden_states = residual + hidden_states
+
+                # add cross-attn to positions 3,4 of present_key_value tuple
+                present_key_value = present_key_value + cross_attn_present_key_value
+
+            # Fully Connected
+            residual = hidden_states
+            hidden_states = self.final_layer_norm(hidden_states).to(dtype)
+            hidden_states = self.activation_fn(self.fc1(hidden_states)).to(dtype)
+            hidden_states = F.dropout(hidden_states, p=self.activation_dropout, training=self.training)
+            hidden_states = self.fc2(hidden_states)
+            hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
+            hidden_states = residual + hidden_states
+        else:
+            hidden_states, self_attn_weights, present_key_value = self.self_attn(
+                hidden_states=hidden_states,
+                past_key_value=self_attn_past_key_value,
+                attention_mask=attention_mask,
+                layer_head_mask=layer_head_mask,
+                output_attentions=output_attentions,
+            )
+            hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
+            dtype = hidden_states.dtype
+            hidden_states = residual + hidden_states
+            hidden_states = self.self_attn_layer_norm(hidden_states).to(dtype)
+
+            # Cross-Attention Block
+            cross_attn_present_key_value = None
+            cross_attn_weights = None
+            if encoder_hidden_states is not None:
+                residual = hidden_states
+
+                # cross_attn cached key/values tuple is at positions 3,4 of present_key_value tuple
+                cross_attn_past_key_value = past_key_value[-2:] if past_key_value is not None else None
+                hidden_states, cross_attn_weights, cross_attn_present_key_value = self.encoder_attn(
+                    hidden_states=hidden_states,
+                    key_value_states=encoder_hidden_states,
+                    attention_mask=encoder_attention_mask,
+                    layer_head_mask=encoder_layer_head_mask,
+                    past_key_value=cross_attn_past_key_value,
+                    output_attentions=output_attentions,
+                )
+                hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
+                hidden_states = residual + hidden_states
+                hidden_states = self.encoder_attn_layer_norm(hidden_states).to(dtype)
+
+                # add cross-attn to positions 3,4 of present_key_value tuple
+                present_key_value = present_key_value + cross_attn_present_key_value
+
+            # Fully Connected
+            residual = hidden_states
+            hidden_states = self.activation_fn(self.fc1(hidden_states)).to(dtype)
+            hidden_states = F.dropout(hidden_states, p=self.activation_dropout, training=self.training)
+            hidden_states = self.fc2(hidden_states)
+            hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
+            hidden_states = residual + hidden_states
+            hidden_states = self.final_layer_norm(hidden_states).to(dtype)
 
         outputs = (hidden_states,)
 
@@ -642,7 +710,7 @@ class BartEncoder(BartPretrainedModel):
     def __init__(self, config: BartConfig, embed_tokens: Optional[nn.Embedding] = None):
         super().__init__(config)
 
-        self.fp16 = config.fp16
+        self.cast_dtype = config.dtype
         self.dropout = config.dropout
         self.layerdrop = config.encoder_layerdrop
 
@@ -663,6 +731,9 @@ class BartEncoder(BartPretrainedModel):
         )
         self.layers = nn.ModuleList([BartEncoderLayer(config) for _ in range(config.encoder_layers)])
         self.layernorm_embedding = LayerNorm(embed_dim)
+        self.pre_ln = config.pre_ln
+        if self.pre_ln:
+            self.last_layernorm = LayerNorm(embed_dim)
 
         self.init_weights()
 
@@ -737,12 +808,12 @@ class BartEncoder(BartPretrainedModel):
         if attention_mask is not None:
             # [bsz, seq_len] -> [bsz, 1, tgt_seq_len, src_seq_len]
             attention_mask = _expand_mask(attention_mask, inputs_embeds.dtype)
-            if self.fp16:
-                attention_mask = attention_mask.to(torch.float16)
+            if self.cast_dtype:
+                attention_mask = attention_mask.to(self.cast_dtype)
 
 
-        if self.fp16:
-            hidden_states = hidden_states.to(torch.float16)
+        if self.cast_dtype:
+            hidden_states = hidden_states.to(self.cast_dtype)
 
         encoder_states = () if output_hidden_states else None
         all_attentions = () if output_attentions else None
@@ -787,6 +858,11 @@ class BartEncoder(BartPretrainedModel):
             if output_attentions:
                 all_attentions = all_attentions + (layer_outputs[1],)
 
+        if self.pre_ln:
+            hidden_states = self.last_layernorm(hidden_states)
+            if self.cast_dtype:
+                hidden_states = hidden_states.to(self.cast_dtype)
+
         if output_hidden_states:
             encoder_states = encoder_states + (hidden_states,)
 
@@ -807,7 +883,7 @@ class BartDecoder(BartPretrainedModel):
 
     def __init__(self, config: BartConfig, embed_tokens: Optional[nn.Embedding] = None):
         super().__init__(config)
-        self.fp16 = config.fp16
+        self.cast_dtype = config.dtype
         self.dropout = config.dropout
         self.layerdrop = config.decoder_layerdrop
         self.padding_idx = config.pad_token_id
@@ -826,6 +902,9 @@ class BartDecoder(BartPretrainedModel):
         )
         self.layers = nn.ModuleList([BartDecoderLayer(config) for _ in range(config.decoder_layers)])
         self.layernorm_embedding = LayerNorm(config.d_model)
+        self.pre_ln = config.pre_ln
+        if self.pre_ln:
+            self.last_layernorm = LayerNorm(config.d_model)
 
         self.init_weights()
 
@@ -961,12 +1040,12 @@ class BartDecoder(BartPretrainedModel):
 
         hidden_states = F.dropout(hidden_states, p=self.dropout, training=self.training)
 
-        if self.fp16:
-            hidden_states = hidden_states.to(torch.float16)
+        if self.cast_dtype:
+            hidden_states = hidden_states.to(self.cast_dtype)
             if attention_mask is not None:
-                attention_mask = attention_mask.to(torch.float16)
-            assert encoder_hidden_states.dtype==torch.float16
-            encoder_attention_mask = encoder_attention_mask.to(torch.float16)
+                attention_mask = attention_mask.to(self.cast_dtype)
+            assert encoder_hidden_states.dtype==self.cast_dtype
+            encoder_attention_mask = encoder_attention_mask.to(self.cast_dtype)
 
         # decoder layers
         all_hidden_states = () if output_hidden_states else None
@@ -1038,6 +1117,11 @@ class BartDecoder(BartPretrainedModel):
 
                 if encoder_hidden_states is not None:
                     all_cross_attentions += (layer_outputs[2],)
+
+        if self.pre_ln:
+            hidden_states = self.last_layernorm(hidden_states)
+            if self.cast_dtype:
+                hidden_states = hidden_states.to(self.cast_dtype)
 
         # add hidden states from the last decoder layer
         if output_hidden_states:

@@ -1,4 +1,5 @@
 # coding=utf-8
+# Copyright (c) 2022 NVIDIA CORPORATION. All rights reserved.
 # Copyright 2018 Mesh TensorFlow authors, T5 Authors and HuggingFace Inc. team.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
