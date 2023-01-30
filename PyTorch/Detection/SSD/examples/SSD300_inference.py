@@ -28,7 +28,7 @@ def load_checkpoint(model, model_file):
 
 
 def build_predictor(model_file, backbone='resnet50'):
-    ssd300 = SSD300(backbone=ResNet(backbone))
+    ssd300 = SSD300(backbone=ResNet(backbone=backbone))
     load_checkpoint(ssd300, model_file)
 
     return ssd300

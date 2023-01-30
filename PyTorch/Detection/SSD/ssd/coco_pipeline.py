@@ -21,6 +21,7 @@ import torch
 # DALI imports
 import nvidia.dali as dali
 from nvidia.dali.pipeline import Pipeline
+from nvidia.dali.types import to_numpy_type
 
 
 class COCOPipeline(Pipeline):
@@ -124,14 +125,14 @@ class COCOPipeline(Pipeline):
         return (images, bboxes.gpu(), labels.gpu())
 
 to_torch_type = {
-    np.dtype(np.float32) : torch.float32,
-    np.dtype(np.float64) : torch.float64,
-    np.dtype(np.float16) : torch.float16,
-    np.dtype(np.uint8)   : torch.uint8,
-    np.dtype(np.int8)    : torch.int8,
-    np.dtype(np.int16)   : torch.int16,
-    np.dtype(np.int32)   : torch.int32,
-    np.dtype(np.int64)   : torch.int64
+    np.float32 : torch.float32,
+    np.float64 : torch.float64,
+    np.float16 : torch.float16,
+    np.uint8   : torch.uint8,
+    np.int8    : torch.int8,
+    np.int16   : torch.int16,
+    np.int32   : torch.int32,
+    np.int64   : torch.int64
 }
 
 def feed_ndarray(dali_tensor, arr):
@@ -242,9 +243,9 @@ class DALICOCOIterator(object):
                     labels_shape[j].append(lshape)
 
             # We always need to alocate new memory as bboxes and labels varies in shape
-            images_torch_type = to_torch_type[np.dtype(images[0].dtype())]
-            bboxes_torch_type = to_torch_type[np.dtype(bboxes[0][0].dtype())]
-            labels_torch_type = to_torch_type[np.dtype(labels[0][0].dtype())]
+            images_torch_type = to_torch_type[to_numpy_type(images[0].dtype)]
+            bboxes_torch_type = to_torch_type[to_numpy_type(bboxes[0][0].dtype)]
+            labels_torch_type = to_torch_type[to_numpy_type(labels[0][0].dtype)]
 
             torch_gpu_device = torch.device('cuda', dev_id)
             torch_cpu_device = torch.device('cpu')

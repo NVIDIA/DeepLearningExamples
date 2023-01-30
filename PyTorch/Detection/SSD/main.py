@@ -67,6 +67,9 @@ def make_parser():
                         help='manually set random seed for torch')
     parser.add_argument('--checkpoint', type=str, default=None,
                         help='path to model checkpoint file')
+    parser.add_argument('--torchvision-weights-version', type=str, default="IMAGENET1K_V2",
+                        choices=['IMAGENET1K_V1', 'IMAGENET1K_V2', 'DEFAULT'],
+                        help='The torchvision weights version to use when --checkpoint is not specified')
     parser.add_argument('--save', type=str, default=None,
                         help='save model checkpoints in the specified directory')
     parser.add_argument('--mode', type=str, default='training',
@@ -97,9 +100,19 @@ def make_parser():
                              ' backbone model declared with the --backbone argument.'
                              ' When it is not provided, pretrained model from torchvision'
                              ' will be downloaded.')
-    parser.add_argument('--num-workers', type=int, default=4)
-    parser.add_argument('--amp', action='store_true',
-                        help='Whether to enable AMP ops. When false, uses TF32 on A100 and FP32 on V100 GPUS.')
+    parser.add_argument('--num-workers', type=int, default=8)
+    parser.add_argument("--amp", dest='amp', action="store_true",
+                        help="Enable Automatic Mixed Precision (AMP).")
+    parser.add_argument("--no-amp", dest='amp', action="store_false",
+                        help="Disable Automatic Mixed Precision (AMP).")
+    parser.set_defaults(amp=True)
+    parser.add_argument("--allow-tf32", dest='allow_tf32', action="store_true",
+                        help="Allow TF32 computations on supported GPUs.")
+    parser.add_argument("--no-allow-tf32", dest='allow_tf32', action="store_false",
+                        help="Disable TF32 computations.")
+    parser.set_defaults(allow_tf32=True)
+    parser.add_argument('--data-layout', default="channels_last", choices=['channels_first', 'channels_last'],
+                        help="Model data layout. It's recommended to use channels_first with --no-amp")
     parser.add_argument('--log-interval', type=int, default=20,
                         help='Logging interval.')
     parser.add_argument('--json-summary', type=str, default=None,
@@ -150,7 +163,9 @@ def train(train_loop_func, logger, args):
     val_dataset = get_val_dataset(args)
     val_dataloader = get_val_dataloader(val_dataset, args)
 
-    ssd300 = SSD300(backbone=ResNet(args.backbone, args.backbone_path))
+    ssd300 = SSD300(backbone=ResNet(backbone=args.backbone,
+                                    backbone_path=args.backbone_path,
+                                    weights=args.torchvision_weights_version))
     args.learning_rate = args.learning_rate * args.N_gpu * (args.batch_size / 32)
     start_epoch = 0
     iteration = 0
@@ -223,6 +238,7 @@ def train(train_loop_func, logger, args):
                 obj['model'] = ssd300.module.state_dict()
             else:
                 obj['model'] = ssd300.state_dict()
+            os.makedirs(args.save, exist_ok=True)
             save_path = os.path.join(args.save, f'epoch_{epoch}.pt')
             torch.save(obj, save_path)
             logger.log('model path', save_path)
@@ -261,6 +277,8 @@ if __name__ == "__main__":
     if args.local_rank == 0:
         os.makedirs('./models', exist_ok=True)
 
+    torch.backends.cuda.matmul.allow_tf32 = args.allow_tf32
+    torch.backends.cudnn.allow_tf32 = args.allow_tf32
     torch.backends.cudnn.benchmark = True
 
     # write json only on the main thread

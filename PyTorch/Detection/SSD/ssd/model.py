@@ -18,22 +18,22 @@ from torchvision.models.resnet import resnet18, resnet34, resnet50, resnet101, r
 
 
 class ResNet(nn.Module):
-    def __init__(self, backbone='resnet50', backbone_path=None):
+    def __init__(self, backbone='resnet50', backbone_path=None, weights="IMAGENET1K_V1"):
         super().__init__()
         if backbone == 'resnet18':
-            backbone = resnet18(pretrained=not backbone_path)
+            backbone = resnet18(weights=None if backbone_path else weights)
             self.out_channels = [256, 512, 512, 256, 256, 128]
         elif backbone == 'resnet34':
-            backbone = resnet34(pretrained=not backbone_path)
+            backbone = resnet34(weights=None if backbone_path else weights)
             self.out_channels = [256, 512, 512, 256, 256, 256]
         elif backbone == 'resnet50':
-            backbone = resnet50(pretrained=not backbone_path)
+            backbone = resnet50(weights=None if backbone_path else weights)
             self.out_channels = [1024, 512, 512, 256, 256, 256]
         elif backbone == 'resnet101':
-            backbone = resnet101(pretrained=not backbone_path)
+            backbone = resnet101(weights=None if backbone_path else weights)
             self.out_channels = [1024, 512, 512, 256, 256, 256]
         else:  # backbone == 'resnet152':
-            backbone = resnet152(pretrained=not backbone_path)
+            backbone = resnet152(weights=None if backbone_path else weights)
             self.out_channels = [1024, 512, 512, 256, 256, 256]
         if backbone_path:
             backbone.load_state_dict(torch.load(backbone_path))
@@ -108,7 +108,7 @@ class SSD300(nn.Module):
     def bbox_view(self, src, loc, conf):
         ret = []
         for s, l, c in zip(src, loc, conf):
-            ret.append((l(s).view(s.size(0), 4, -1), c(s).view(s.size(0), self.label_num, -1)))
+            ret.append((l(s).reshape(s.size(0), 4, -1), c(s).reshape(s.size(0), self.label_num, -1)))
 
         locs, confs = list(zip(*ret))
         locs, confs = torch.cat(locs, 2).contiguous(), torch.cat(confs, 2).contiguous()

@@ -52,10 +52,8 @@ def evaluate(model, coco, cocoGt, encoder, inv_map, args):
 
                 try:
                     result = encoder.decode_batch(ploc_i, plabel_i, 0.50, 200)[0]
-                except:
-                    # raise
-                    print("")
-                    print("No object detected in idx: {}".format(idx))
+                except Exception as e:
+                    print("Skipping idx {}, failed to decode with message {}, Skipping.".format(idx, e))
                     continue
 
                 htot, wtot = img_size[0][idx].item(), img_size[1][idx].item()

@@ -1,3 +1,6 @@
-Cython>=0.28.4
-scikit-image>=0.15.0
-ujson>=4.0.2
+Cython>=0.29.32
+scikit-image>=0.19.3
+ujson>=5.5.0
+pybind11>=2.10.0
+git+https://github.com/NVIDIA/cocoapi.git@v0.7.3#subdirectory=PythonAPI
+git+https://github.com/NVIDIA/dllogger.git#egg=dllogger

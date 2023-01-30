@@ -44,6 +44,8 @@ def train_loop(model, loss_func, scaler, epoch, optim, train_dataloader, val_dat
         label = label.view(N, M)
 
         with torch.cuda.amp.autocast(enabled=args.amp):
+            if args.data_layout == 'channels_last':
+                img = img.to(memory_format=torch.channels_last)
             ploc, plabel = model(img)
 
             ploc, plabel = ploc.float(), plabel.float()
@@ -101,6 +103,8 @@ def benchmark_train_loop(model, loss_func, scaler, epoch, optim, train_dataloade
         label = label.view(N, M)
 
         with torch.cuda.amp.autocast(enabled=args.amp):
+            if args.data_layout == 'channels_last':
+                img = img.to(memory_format=torch.channels_last)
             ploc, plabel = model(img)
 
             ploc, plabel = ploc.float(), plabel.float()
