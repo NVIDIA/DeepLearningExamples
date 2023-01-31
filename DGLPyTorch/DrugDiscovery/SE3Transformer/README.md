@@ -285,7 +285,7 @@ To train your model using mixed or TF32 precision with Tensor Cores or FP32, per
 3.  Start an interactive session in the NGC container to run training/inference.
     ```
     mkdir -p results
-    docker run -it --runtime=nvidia --shm-size=8g --ulimit memlock=-1 --ulimit stack=67108864 --rm -v ${PWD}/results:/results se3-transformer:latest
+    docker run -it --runtime=nvidia --shm-size=8g --ulimit memlock=-1 --ulimit stack=67108864 --rm -v ${PWD}/results:/workspace/se3-transformer/results se3-transformer:latest
     ```
 
 4. Start training.
