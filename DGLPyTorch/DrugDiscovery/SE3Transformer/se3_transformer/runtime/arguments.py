@@ -33,7 +33,7 @@ PARSER = argparse.ArgumentParser(description='SE(3)-Transformer')
 paths = PARSER.add_argument_group('Paths')
 paths.add_argument('--data_dir', type=pathlib.Path, default=pathlib.Path('./data'),
                    help='Directory where the data is located or should be downloaded')
-paths.add_argument('--log_dir', type=pathlib.Path, default=pathlib.Path('/results'),
+paths.add_argument('--log_dir', type=pathlib.Path, default=pathlib.Path('./results'),
                    help='Directory where the results logs should be saved')
 paths.add_argument('--dllogger_name', type=str, default='dllogger_results.json',
                    help='Name for the resulting DLLogger JSON file')
