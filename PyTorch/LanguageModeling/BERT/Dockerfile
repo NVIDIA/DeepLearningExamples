@@ -20,7 +20,7 @@ WORKDIR /workspace
 
 WORKDIR /workspace/bert
 RUN pip install --no-cache-dir \
- tqdm boto3 requests six ipdb h5py nltk progressbar onnxruntime tokenizers>=0.7\
+ tqdm boto3 requests six ipdb h5py nltk progressbar onnxruntime==1.12.0 tokenizers>=0.7\
  git+https://github.com/NVIDIA/dllogger wget
 
 RUN apt-get install -y iputils-ping
