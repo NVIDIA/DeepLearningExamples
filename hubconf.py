@@ -24,3 +24,6 @@ from PyTorch.SpeechSynthesis.Tacotron2.tacotron2 import nvidia_tacotron2
 from PyTorch.SpeechSynthesis.Tacotron2.tacotron2 import nvidia_tts_utils
 from PyTorch.SpeechSynthesis.Tacotron2.waveglow import nvidia_waveglow
 sys.path.append(os.path.join(sys.path[0], 'PyTorch/SpeechSynthesis/Tacotron2'))
+
+from PyTorch.Forecasting.TFT.tft_torchhub import nvidia_tft, nvidia_tft_data_utils
+sys.path.append(os.path.join(sys.path[0], 'PyTorch/Forecasting/TFT'))

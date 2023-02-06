@@ -265,7 +265,7 @@ class InterpretableMultiHeadAttention(nn.Module):
         out = self.out_proj(m_attn_vec)
         out = self.out_dropout(out)
 
-        return out, attn_vec
+        return out, attn_prob
 
 
 
