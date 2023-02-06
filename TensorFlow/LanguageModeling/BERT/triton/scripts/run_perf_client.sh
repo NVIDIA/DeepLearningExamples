@@ -69,4 +69,4 @@ ARGS="\
 
 echo "Using args:  $(echo "$ARGS" | sed -e 's/   -/\n-/g')"
 
-bash scripts/docker/launch.sh /workspace/install/bin/perf_client $ARGS
+bash scripts/docker/launch.sh perf_client $ARGS

@@ -15,13 +15,8 @@ RUN git clone https://github.com/titipata/pubmed_parser
 
 RUN pip3 install /workspace/pubmed_parser
 
-#Copy the perf_client over
-ARG TRTIS_CLIENTS_URL=https://github.com/NVIDIA/triton-inference-server/releases/download/v2.2.0/v2.2.0_ubuntu1804.clients.tar.gz
-RUN mkdir -p /workspace/install \
-    && curl -L ${TRTIS_CLIENTS_URL} | tar xvz -C /workspace/install
-
-#Install the python wheel with pip
-RUN pip install /workspace/install/python/triton*.whl
+#Install tritonclient
+RUN pip install tritonclient[all]==2.5.0
 
 WORKDIR /workspace/bert
 COPY . .
