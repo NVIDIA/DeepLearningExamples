@@ -63,7 +63,8 @@ def init_bn(module):
 
 
 def get_model(model_name, model_config, cpu_run,
-              uniform_initialize_bn_weight=False, forward_is_infer=False):
+              uniform_initialize_bn_weight=False, forward_is_infer=False,
+              jittable=False):
     """ Code chooses a model based on name"""
     model = None
     if model_name == 'Tacotron2':
@@ -75,13 +76,11 @@ def get_model(model_name, model_config, cpu_run,
         else:
             model = Tacotron2(**model_config)
     elif model_name == 'WaveGlow':
+
+        model = WaveGlow(**model_config)
         if forward_is_infer:
-            class WaveGlow__forward_is_infer(WaveGlow):
-                def forward(self, spect, sigma=1.0):
-                    return self.infer(spect, sigma)
-            model = WaveGlow__forward_is_infer(**model_config)
-        else:
-            model = WaveGlow(**model_config)
+            model.forward = model.infer
+
     else:
         raise NotImplementedError(model_name)
 

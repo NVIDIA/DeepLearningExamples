@@ -106,13 +106,15 @@ def unwrap_distributed(state_dict):
     return new_state_dict
 
 
-def load_and_setup_model(model_name, parser, checkpoint, fp16_run, cpu_run, forward_is_infer=False):
+def load_and_setup_model(model_name, parser, checkpoint, fp16_run, cpu_run,
+                         forward_is_infer=False, jittable=False):
     model_parser = models.model_parser(model_name, parser, add_help=False)
     model_args, _ = model_parser.parse_known_args()
 
     model_config = models.get_model_config(model_name, model_args)
     model = models.get_model(model_name, model_config, cpu_run=cpu_run,
-                             forward_is_infer=forward_is_infer)
+                             forward_is_infer=forward_is_infer,
+                             jittable=jittable)
 
     if checkpoint is not None:
         if cpu_run:
@@ -207,11 +209,14 @@ def main():
     tacotron2 = load_and_setup_model('Tacotron2', parser, args.tacotron2,
                                      args.fp16, args.cpu, forward_is_infer=True)
     waveglow = load_and_setup_model('WaveGlow', parser, args.waveglow,
-                                    args.fp16, args.cpu, forward_is_infer=True)
+                                    args.fp16, args.cpu, forward_is_infer=True,
+                                    jittable=True)
     denoiser = Denoiser(waveglow)
     if not args.cpu:
         denoiser.cuda()
 
+    waveglow.make_ts_scriptable()
+    jitted_waveglow = torch.jit.script(waveglow)
     jitted_tacotron2 = torch.jit.script(tacotron2)
 
     texts = []
@@ -231,7 +236,7 @@ def main():
         for i in range(3):
             with torch.no_grad():
                 mel, mel_lengths, _ = jitted_tacotron2(sequence, input_lengths)
-                _ = waveglow(mel)
+                _ = jitted_waveglow(mel)
 
     measurements = {}
 
@@ -241,7 +246,7 @@ def main():
         mel, mel_lengths, alignments = jitted_tacotron2(sequences_padded, input_lengths)
 
     with torch.no_grad(), MeasureTime(measurements, "waveglow_time", args.cpu):
-        audios = waveglow(mel, sigma=args.sigma_infer)
+        audios = jitted_waveglow(mel, sigma=args.sigma_infer)
         audios = audios.float()
     with torch.no_grad(), MeasureTime(measurements, "denoiser_time", args.cpu):
         audios = denoiser(audios, strength=args.denoising_strength).squeeze(1)
