@@ -14,6 +14,7 @@
 ARG TRITONSERVER_IMAGE=nvcr.io/nvidia/tritonserver:21.05-py3
 ARG KALDI_IMAGE=nvcr.io/nvidia/kaldi:21.08-py3
 ARG PYTHON_VER=3.8
+ARG MAKEFLAGS=-j$(nproc)
 
 
 #
