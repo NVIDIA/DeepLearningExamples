@@ -30,14 +30,22 @@ dgxa100-80g_8gpu_amp ()
     warmup_proportion_phase2="0.128"
     train_steps_phase2=1563
     gradient_accumulation_steps_phase2=128
-    DATASET=hdf5_lower_case_1_seq_len_128_max_pred_20_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/wikicorpus_en # change this for other datasets
+    DATASET=pretrain/phase1/unbinned/parquet # change this for other datasets
     DATA_DIR_PHASE1="$BERT_PREP_WORKING_DIR/${DATASET}/"
-    DATASET2=hdf5_lower_case_1_seq_len_512_max_pred_80_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/wikicorpus_en # change this for other datasets
+    DATASET2=pretrain/phase2/bin_size_64/parquet # change this for other datasets
     DATA_DIR_PHASE2="$BERT_PREP_WORKING_DIR/${DATASET2}/"
     CODEDIR=/workspace/bert
     init_checkpoint="None"
+    VOCAB_FILE=vocab/bert-large-uncased-vocab.txt
     RESULTS_DIR=$CODEDIR/results
     CHECKPOINTS_DIR=$RESULTS_DIR
+    wikipedia_source=$BERT_PREP_WORKING_DIR/wikipedia/source/
+    num_dask_workers=128
+    num_shards_per_worker=128
+    num_workers=4
+    sample_ratio="0.9"
+    phase2_bin_size=64
+    masking=static
     BERT_CONFIG=bert_configs/bert-large-uncased.json
     enable_benchmark="false"
     benchmark_steps=10  # It takes effect only after the enable_benchmark is set to true
@@ -45,9 +53,11 @@ dgxa100-80g_8gpu_amp ()
     echo $train_batch_size $learning_rate $precision $num_gpus \
          $warmup_proportion $train_steps $save_checkpoint_steps \
          $create_logfile $gradient_accumulation_steps $seed $job_name \
-	 $train_batch_size_phase2 $learning_rate_phase2 \
+         $train_batch_size_phase2 $learning_rate_phase2 \
          $warmup_proportion_phase2 $train_steps_phase2 $gradient_accumulation_steps_phase2 \
          $DATA_DIR_PHASE1 $DATA_DIR_PHASE2 $CODEDIR $init_checkpoint \
+         $wikipedia_source $num_dask_workers $num_shards_per_worker $num_workers \
+         $sample_ratio $phase2_bin_size $masking \
          $BERT_CONFIG $enable_benchmark $benchmark_steps $benchmark_warmup_steps
 }
 
@@ -69,14 +79,22 @@ dgxa100-80g_8gpu_tf32 ()
     warmup_proportion_phase2="0.128"
     train_steps_phase2=1563
     gradient_accumulation_steps_phase2=256
-    DATASET=hdf5_lower_case_1_seq_len_128_max_pred_20_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/wikicorpus_en # change this for other datasets
+    DATASET=pretrain/phase1/unbinned/parquet # change this for other datasets
     DATA_DIR_PHASE1="$BERT_PREP_WORKING_DIR/${DATASET}/"
-    DATASET2=hdf5_lower_case_1_seq_len_512_max_pred_80_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/wikicorpus_en # change this for other datasets
+    DATASET2=pretrain/phase2/bin_size_64/parquet # change this for other datasets
     DATA_DIR_PHASE2="$BERT_PREP_WORKING_DIR/${DATASET2}/"
     CODEDIR=/workspace/bert
     init_checkpoint="None"
+    VOCAB_FILE=vocab/bert-large-uncased-vocab.txt
     RESULTS_DIR=$CODEDIR/results
     CHECKPOINTS_DIR=$RESULTS_DIR
+    wikipedia_source=$BERT_PREP_WORKING_DIR/wikipedia/source/
+    num_dask_workers=128
+    num_shards_per_worker=128
+    num_workers=4
+    sample_ratio="0.9"
+    phase2_bin_size=64
+    masking=static
     BERT_CONFIG=bert_configs/bert-large-uncased.json
     enable_benchmark="false"
     benchmark_steps=10  # It takes effect only after the enable_benchmark is set to true
@@ -84,8 +102,10 @@ dgxa100-80g_8gpu_tf32 ()
     echo $train_batch_size $learning_rate $precision $num_gpus \
          $warmup_proportion $train_steps $save_checkpoint_steps \
          $create_logfile $gradient_accumulation_steps $seed $job_name \
-	 $train_batch_size_phase2 $learning_rate_phase2 \
+         $train_batch_size_phase2 $learning_rate_phase2 \
          $warmup_proportion_phase2 $train_steps_phase2 $gradient_accumulation_steps_phase2 \
          $DATA_DIR_PHASE1 $DATA_DIR_PHASE2 $CODEDIR $init_checkpoint \
+         $wikipedia_source $num_dask_workers $num_shards_per_worker $num_workers \
+         $sample_ratio $phase2_bin_size $masking \
          $BERT_CONFIG $enable_benchmark $benchmark_steps $benchmark_warmup_steps
 }

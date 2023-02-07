@@ -89,17 +89,15 @@ class BertEmbeddings(nn.Layer):
         self.layer_norm = nn.LayerNorm(bert_config.hidden_size, epsilon=1e-12)
         self.dropout = nn.Dropout(bert_config.hidden_dropout_prob)
 
-    def forward(self, input_ids, token_type_ids=None, position_ids=None):
+    def forward(self, input_ids, token_type_ids=None):
         """
         Args:
             See class `BertModel`.
         """
-        if position_ids is None:
-            ones = paddle.ones_like(input_ids, dtype="int64")
-            seq_length = paddle.cumsum(ones, axis=-1)
-
-            position_ids = seq_length - ones
-            position_ids.stop_gradient = True
+        ones = paddle.ones_like(input_ids, dtype="int64")
+        seq_length = paddle.cumsum(ones, axis=-1)
+        position_ids = seq_length - ones
+        position_ids.stop_gradient = True
         if token_type_ids is None:
             token_type_ids = paddle.zeros_like(input_ids, dtype="int64")
 
@@ -174,18 +172,13 @@ class BertModel(nn.Layer):
                 dropout=bert_config.hidden_dropout_prob,
                 activation=bert_config.hidden_act,
                 attn_dropout=bert_config.attention_probs_dropout_prob,
-                act_dropout=0,
-                enable_cudnn=False)
+                act_dropout=0)
             self.encoder = nn.TransformerEncoder(encoder_layer,
                                                  bert_config.num_hidden_layers)
 
         self.pooler = BertPooler(bert_config.hidden_size)
 
-    def forward(self,
-                input_ids,
-                token_type_ids=None,
-                position_ids=None,
-                attention_mask=None):
+    def forward(self, input_ids, token_type_ids=None, attention_mask=None):
         """
         Args:
             input_ids(Tensor):
@@ -198,11 +191,6 @@ class BertModel(nn.Layer):
                 to a `sentence A` and type 1 corresponds to a `sentence B` token.
                 (see BERT paper for more details). Its data type should be `int64`
                 Defaults: None, which means we don't add segment embeddings.
-            position_ids(Tensor, optional):
-                An optional Tensor of shape [batch_size, num_tokens] with the position
-                indices of each input sequence tokens in the position embeddings.
-                Selected in the range [0, max_position_embeddings - 1].
-                Its data type should be `int64`. Defaults: None.
             attention_mask(Tensor, optional):
                 An optional Tensor of shape [batch_size, sequence_length] with indices of
                 mask used in multi-head attention to avoid performing attention on to some
@@ -234,9 +222,7 @@ class BertModel(nn.Layer):
                 attention_mask = attention_mask.unsqueeze(axis=[1, 2])
 
         embedding_output = self.embeddings(
-            input_ids=input_ids,
-            position_ids=position_ids,
-            token_type_ids=token_type_ids)
+            input_ids=input_ids, token_type_ids=token_type_ids)
 
         if self.fuse:
             encoder_output = embedding_output
@@ -263,11 +249,7 @@ class BertForQuestionAnswering(nn.Layer):
         self.bert = BertModel(bert_config)
         self.classifier = nn.Linear(bert_config.hidden_size, 2)
 
-    def forward(self,
-                input_ids,
-                token_type_ids=None,
-                position_ids=None,
-                attention_mask=None):
+    def forward(self, input_ids, token_type_ids=None, attention_mask=None):
         """
         Args:
             See class `BertModel`.
@@ -282,7 +264,6 @@ class BertForQuestionAnswering(nn.Layer):
         encoder_output, _ = self.bert(
             input_ids,
             token_type_ids=token_type_ids,
-            position_ids=position_ids,
             attention_mask=attention_mask)
 
         logits = self.classifier(encoder_output)
@@ -322,13 +303,7 @@ class BertLMPredictionHead(nn.Layer):
         self.decoder_bias = self.create_parameter(
             shape=[vocab_size], dtype=self.decoder_weight.dtype, is_bias=True)
 
-    def forward(self, hidden_states, masked_positions=None):
-        if masked_positions is not None:
-            hidden_states = paddle.reshape(hidden_states,
-                                           [-1, hidden_states.shape[-1]])
-            hidden_states = paddle.tensor.gather(hidden_states,
-                                                 masked_positions)
-        # gather masked tokens might be more quick
+    def forward(self, hidden_states):
         hidden_states = self.transform(hidden_states)
         hidden_states = self.activation(hidden_states)
         hidden_states = self.layer_norm(hidden_states)
@@ -362,7 +337,7 @@ class BertPretrainingHeads(nn.Layer):
                                                 activation, embedding_weights)
         self.seq_relationship = nn.Linear(hidden_size, 2)
 
-    def forward(self, encoder_output, pooled_output, masked_positions=None):
+    def forward(self, encoder_output, pooled_output, masked_lm_labels):
         """
         Args:
             sequence_output(Tensor):
@@ -384,7 +359,12 @@ class BertPretrainingHeads(nn.Layer):
                 A Tensor of shape [batch_size, 2] with the scores of next sentence prediction.
                 Its data type should be float32.
         """
-        prediction_scores = self.predictions(encoder_output, masked_positions)
+
+        sequence_flattened = paddle.index_select(
+            encoder_output.reshape([-1, encoder_output.shape[-1]]),
+            paddle.nonzero(masked_lm_labels.reshape([-1]) != -1).squeeze(),
+            axis=0)
+        prediction_scores = self.predictions(sequence_flattened)
         seq_relationship_score = self.seq_relationship(pooled_output)
         return prediction_scores, seq_relationship_score
 
@@ -406,18 +386,13 @@ class BertForPretraining(nn.Layer):
             bert_config.hidden_act,
             embedding_weights=self.bert.embeddings.word_embeddings.weight)
 
-    def forward(self,
-                input_ids,
-                token_type_ids=None,
-                position_ids=None,
-                attention_mask=None,
-                masked_positions=None):
+    def forward(self, input_ids, token_type_ids, attention_mask,
+                masked_lm_labels):
         """
 
         Args:
             input_ids(Tensor): See class `BertModel`.
             token_type_ids(Tensor, optional): See class `BertModel`.
-            position_ids(Tensor, optional): See class `BertModel`.
             attention_mask(Tensor, optional): See class `BertModel`.
             masked_positions(Tensor, optional): See class `BertPretrainingHeads`.
 
@@ -434,9 +409,8 @@ class BertForPretraining(nn.Layer):
             outputs = self.bert(
                 input_ids,
                 token_type_ids=token_type_ids,
-                position_ids=position_ids,
                 attention_mask=attention_mask)
             sequence_output, pooled_output = outputs[:2]
             prediction_scores, seq_relationship_score = self.cls(
-                sequence_output, pooled_output, masked_positions)
+                sequence_output, pooled_output, masked_lm_labels)
             return prediction_scores, seq_relationship_score

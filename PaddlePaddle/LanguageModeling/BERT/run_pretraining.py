@@ -12,11 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import time
+import logging
 import paddle
 import paddle.distributed.fleet as fleet
 
-from pretraining_dataset import create_pretraining_data_holder
 from utils.config import parse_args, print_args
 from utils.save_load import init_program
 from utils.logger import setup_loggers
@@ -24,6 +25,7 @@ from utils.affinity import set_cpu_affinity
 from utils.utility import set_seed, get_trainer_id, get_num_trainers
 import program
 import dllogger
+from lddl.paddle import get_bert_pretrain_data_loader
 
 
 def main():
@@ -42,11 +44,10 @@ def main():
     if args.show_config:
         print_args(args)
 
+    device = paddle.set_device('gpu')
     fleet.init(is_collective=True)
     if args.enable_cpu_affinity:
         set_cpu_affinity()
-
-    device = paddle.set_device('gpu')
 
     # Create the random seed for the worker
     set_seed(args.seed + get_trainer_id())
@@ -60,21 +61,34 @@ def main():
     main_program = paddle.static.default_main_program()
     startup_program = paddle.static.default_startup_program()
 
-    feeds = create_pretraining_data_holder()
-
-    model, lr_scheduler, optimizer, loss = program.build(
-        args, main_program, startup_program, feeds)
+    model, lr_scheduler, optimizer, loss, feeds = program.build(
+        args, main_program, startup_program)
 
     exe = paddle.static.Executor(device)
     exe.run(startup_program)
 
     progress = init_program(args, program=main_program, exe=exe, model=model)
+    train_dataloader = get_bert_pretrain_data_loader(
+        args.input_dir,
+        vocab_file=args.vocab_file,
+        data_loader_kwargs={
+            'batch_size': args.batch_size,
+            'num_workers': args.num_workers,
+            'persistent_workers': True,
+            'feed_list': feeds
+        },
+        base_seed=args.seed,
+        log_dir=None if args.output_dir is None else
+        os.path.join(args.output_dir, 'lddl_log'),
+        log_level=logging.WARNING,
+        start_epoch=0 if progress is None else progress.get("epoch", 0), )
 
     if args.amp:
         optimizer.amp_init(device)
 
     global_step, final_loss, train_time_raw = program.run(
-        exe, main_program, args, lr_scheduler, loss, feeds, progress)
+        exe, main_program, args, lr_scheduler, loss, train_dataloader,
+        progress)
 
     if get_trainer_id() == 0:
         e2e_time = time.time() - now
