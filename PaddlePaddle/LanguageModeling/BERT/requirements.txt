@@ -1,4 +1,0 @@
-nltk
-h5py
-tqdm
-git+https://github.com/NVIDIA/dllogger#egg=dllogger

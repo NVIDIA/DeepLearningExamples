@@ -15,7 +15,8 @@
 python3 -m paddle.distributed.launch \
 --gpus="0,1,2,3,4,5,6,7" \
 ./run_pretraining.py \
---input-dir=./data/hdf5_lower_case_1_seq_len_128_max_pred_20_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/wikicorpus_en \
+--input-dir=pretrain/phase1/unbinned/parquet \
+--vocab-file=vocab/bert-large-uncased-vocab.txt \
 --output-dir=./results/checkpoints \
 --bert-model=bert-large-uncased \
 --from-checkpoint=./results/checkpoints/bert-large-uncased/phase1 \

@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import paddle
-import paddle.nn.functional as F
 
 
 class CrossEntropyLossForSQuAD(paddle.nn.Layer):
@@ -53,7 +52,7 @@ class BertPretrainingCriterion(paddle.nn.Layer):
         self.vocab_size = vocab_size
 
     def forward(self, prediction_scores, seq_relationship_score,
-                masked_lm_labels, next_sentence_labels, masked_lm_scale):
+                masked_lm_labels, next_sentence_labels):
         """
         Args:
             prediction_scores(Tensor):
@@ -80,12 +79,11 @@ class BertPretrainingCriterion(paddle.nn.Layer):
             Its data type should be float32 and its shape is [1].
         """
         with paddle.static.amp.fp16_guard():
-            masked_lm_loss = F.cross_entropy(
-                prediction_scores,
-                masked_lm_labels,
-                reduction='none',
-                ignore_index=-1)
-            masked_lm_loss = masked_lm_loss / masked_lm_scale
-            next_sentence_loss = F.cross_entropy(
-                seq_relationship_score, next_sentence_labels, reduction='none')
-        return paddle.sum(masked_lm_loss) + paddle.mean(next_sentence_loss)
+            masked_lm_labels_flat = masked_lm_labels.reshape([-1])
+            mlm_labels = masked_lm_labels_flat[masked_lm_labels_flat != -1]
+            masked_lm_loss = self.loss_fn(prediction_scores, mlm_labels)
+            if next_sentence_labels.ndim == 1:
+                next_sentence_labels = next_sentence_labels.unsqueeze(axis=-1)
+            next_sentence_loss = self.loss_fn(seq_relationship_score,
+                                              next_sentence_labels)
+        return masked_lm_loss + next_sentence_loss

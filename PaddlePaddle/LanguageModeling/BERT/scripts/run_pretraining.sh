@@ -32,25 +32,87 @@ warmup_proportion_phase2=${14:-"0.128"}
 train_steps_phase2=${15:-1563}
 gradient_accumulation_steps_phase2=${16:-128}
 #change this for other datasets
-DATASET=hdf5_lower_case_1_seq_len_128_max_pred_20_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/wikicorpus_en
+DATASET=pretrain/phase1/unbinned/parquet
 DATA_DIR_PHASE1=${17:-$BERT_PREP_WORKING_DIR/${DATASET}/}
 #change this for other datasets
-DATASET2=hdf5_lower_case_1_seq_len_512_max_pred_80_masked_lm_prob_0.15_random_seed_12345_dupe_factor_5/wikicorpus_en
+DATASET2=pretrain/phase2/bin_size_64/parquet
 DATA_DIR_PHASE2=${18:-$BERT_PREP_WORKING_DIR/${DATASET2}/}
 CODEDIR=${19:-"/workspace/bert"}
 init_checkpoint=${20:-"None"}
+VOCAB_FILE=vocab/bert-large-uncased-vocab.txt
 RESULTS_DIR=$CODEDIR/results
 CHECKPOINTS_DIR=$RESULTS_DIR
-BERT_CONFIG=${21:-"None"}
-enable_benchmark=${22:-"false"}
-benchmark_steps=${23:-"10"}
-benchmark_warmup_steps=${24:-"10"}
+wikipedia_source=${21:-$BERT_PREP_WORKING_DIR/wikipedia/source/}
+num_dask_workers=${22:-$(nproc)}
+num_shards_per_worker=${23:-128}
+num_workers=${24:-4}
+num_nodes=1
+sample_ratio=${25:-0.9}
+phase2_bin_size=${26:-64}
+masking=${27:-static}
+BERT_CONFIG=${28:-"None"}
+enable_benchmark=${29:-"false"}
+benchmark_steps=${30:-"10"}
+benchmark_warmup_steps=${31:-"10"}
+
+# Calculate the total number of shards.
+readonly num_blocks=$((num_shards_per_worker * $(( num_workers > 0 ? num_workers : 1 )) * num_nodes * num_gpus))
+
+if [ "${phase2_bin_size}" == "none" ]; then
+   readonly phase2_bin_size_flag=""
+elif [[ "${phase2_bin_size}" =~ ^(32|64|128|256|512)$ ]]; then
+   readonly phase2_bin_size_flag="--bin-size ${phase2_bin_size}"
+else
+   echo "Error! phase2_bin_size=${phase2_bin_size} not supported!"
+   return -1
+fi
+
+if [ "${masking}" == "static" ]; then
+   readonly masking_flag="--masking"
+elif [ "${masking}" == "dynamic" ]; then
+   readonly masking_flag=""
+else
+   echo "Error! masking=${masking} not supported!"
+   return -1
+fi
 
 mkdir -p $CHECKPOINTS_DIR
 
 
-if [ ! -d "$DATA_DIR_PHASE1" ] ; then
-   echo "Warning! $DATA_DIR_PHASE1 directory missing. Training cannot start"
+if [ ! -d "${DATA_DIR_PHASE1}" ] || [ -z "$(ls -A ${DATA_DIR_PHASE1})" ]; then
+   echo "Warning! ${DATA_DIR_PHASE1} directory missing."
+   if [ ! -d "${wikipedia_source}" ] || [ -z "$(ls -A ${wikipedia_source})" ]; then
+      echo "Error! ${wikipedia_source} directory missing. Training cannot start!"
+      return -1
+   fi
+   preprocess_cmd=" \
+      mpirun \
+         --oversubscribe \
+         --allow-run-as-root \
+         -np ${num_dask_workers} \
+         -x LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so \
+            preprocess_bert_pretrain \
+               --schedule mpi \
+               --vocab-file ${VOCAB_FILE} \
+               --wikipedia ${wikipedia_source} \
+               --sink ${DATA_DIR_PHASE1} \
+               --num-blocks ${num_blocks} \
+               --sample-ratio ${sample_ratio} \
+               ${masking_flag} \
+               --seed ${seed}"
+   echo "Running ${preprocess_cmd} ..."
+   ${preprocess_cmd}
+
+   balance_load_cmd=" \
+      mpirun \
+         --oversubscribe \
+         --allow-run-as-root \
+         -np ${num_dask_workers} \
+            balance_dask_output \
+               --indir ${DATA_DIR_PHASE1} \
+               --num-shards ${num_blocks}"
+   echo "Running ${balance_load_cmd} ..."
+   ${balance_load_cmd}
 fi
 if [ ! -d "$RESULTS_DIR" ] ; then
    echo "Error! $RESULTS_DIR directory missing."
@@ -119,6 +181,7 @@ echo $DATA_DIR_PHASE1
 INPUT_DIR=$DATA_DIR_PHASE1
 CMD=" $CODEDIR/run_pretraining.py"
 CMD+=" --input-dir=$DATA_DIR_PHASE1"
+CMD+=" --vocab-file=$VOCAB_FILE"
 CMD+=" --output-dir=$CHECKPOINTS_DIR"
 CMD+=" $CONFIG "
 CMD+=" --bert-model=bert-large-uncased"
@@ -180,11 +243,49 @@ fi
 ACCUMULATE_GRADIENTS="--gradient-merge-steps=$gradient_accumulation_steps_phase2"
 
 
+if [ ! -d "${DATA_DIR_PHASE2}" ] || [ -z "$(ls -A ${DATA_DIR_PHASE2})" ]; then
+   echo "Warning! ${DATA_DIR_PHASE2} directory missing."
+   if [ ! -d "${wikipedia_source}" ] || [ -z "$(ls -A ${wikipedia_source})" ]; then
+      echo "Error! ${wikipedia_source} directory missing. Training cannot start!"
+      return -1
+   fi
+   preprocess_cmd=" \
+      mpirun \
+         --oversubscribe \
+         --allow-run-as-root \
+         -np ${num_dask_workers} \
+         -x LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so \
+            preprocess_bert_pretrain \
+               --schedule mpi \
+               --vocab-file ${VOCAB_FILE} \
+               --wikipedia ${wikipedia_source} \
+               --sink ${DATA_DIR_PHASE2} \
+               --target-seq-length 512 \
+               --num-blocks ${num_blocks} \
+               --sample-ratio ${sample_ratio} \
+               ${phase2_bin_size_flag} \
+               ${masking_flag} \
+               --seed ${seed}"
+   echo "Running ${preprocess_cmd} ..."
+   ${preprocess_cmd}
+
+   balance_load_cmd=" \
+      mpirun \
+         --oversubscribe \
+         --allow-run-as-root \
+         -np ${num_dask_workers} \
+            balance_dask_output \
+               --indir ${DATA_DIR_PHASE2} \
+               --num-shards ${num_blocks}"
+   echo "Running ${balance_load_cmd} ..."
+   ${balance_load_cmd}
+fi
 echo $DATA_DIR_PHASE2
 INPUT_DIR=$DATA_DIR_PHASE2
 PHASE1_END_CKPT_DIR="${CHECKPOINTS_DIR}/bert-large-uncased/phase1/${train_steps}"
 CMD=" $CODEDIR/run_pretraining.py"
 CMD+=" --input-dir=$DATA_DIR_PHASE2"
+CMD+=" --vocab-file=$VOCAB_FILE"
 CMD+=" --output-dir=$CHECKPOINTS_DIR"
 CMD+=" $CONFIG "
 CMD+=" --bert-model=bert-large-uncased"

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2022 NVIDIA Corporation.  All rights reserved.
+# Copyright (c) 2023 NVIDIA Corporation.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,4 +14,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-docker build --network=host . --rm --pull --no-cache -t bert
+URL=${1:-"bert"}
+PUSH=${2:-"none"}  # 'push' or 'none'
+
+set -e
+
+docker build \
+  --network=host \
+  --rm \
+  --pull \
+  --no-cache \
+  -t ${URL} \
+  .
+
+if [ "${PUSH}" == "push" ]; then
+  docker push ${URL}
+elif [ "${PUSH}" == "none" ]; then
+  echo "Keep the built image locally."
+else
+  echo "Invalid \${PUSH} option: ${PUSH} !"
+  exit 1
+fi

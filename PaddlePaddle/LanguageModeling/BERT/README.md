@@ -20,7 +20,8 @@ This repository provides a script and recipe to train the BERT model for PaddleP
     * [Scripts and sample code](#scripts-and-sample-code)
     * [Parameters](#parameters)
         * [Pre-training parameters](#pre-training-parameters)
-        * [Fine tuning parameters](#fine-tuning-parameters)    
+        * [Fine tuning parameters](#fine-tuning-parameters)
+        * [Multi-node](#multi-node)
     * [Command-line options](#command-line-options)
     * [Getting the data](#getting-the-data)
         * [Dataset guidelines](#dataset-guidelines)
@@ -43,6 +44,7 @@ This repository provides a script and recipe to train the BERT model for PaddleP
         * [Training performance results](#training-performance-results)
             * [Training performance: NVIDIA DGX A100 (8x A100 80GB)](#training-performance-nvidia-dgx-a100-8x-a100-80gb)
                 * [Pre-training NVIDIA DGX A100 (8x A100 80GB)](#pre-training-nvidia-dgx-a100-8x-a100-80gb)
+                * [Pre-training NVIDIA DGX A100 (8x A100 80GB) Multi-node Scaling](#pre-training-nvidia-dgx-a100-8x-a100-80gb-multi-node-scaling)
                 * [Fine-tuning NVIDIA DGX A100 (8x A100 80GB)](#fine-tuning-nvidia-dgx-a100-8x-a100-80gb)
         * [Inference performance results](#inference-performance-results)
             * [Inference performance: NVIDIA DGX A100 (1x A100 80GB)](#inference-performance-nvidia-dgx-a100-1x-a100-80gb)
@@ -105,13 +107,17 @@ The following features are supported by this model.
 | [Paddle AMP](https://www.paddlepaddle.org.cn/documentation/docs/en/guides/performance_improving/amp_en.html)           |   Yes    |
 | [Paddle Fleet](https://www.paddlepaddle.org.cn/documentation/docs/en/api/paddle/distributed/fleet/Fleet_en.html#fleet) |   Yes    |
 | [LAMB](https://www.paddlepaddle.org.cn/documentation/docs/en/api/paddle/optimizer/Lamb_en.html)                        |   Yes    |
+| [LDDL](https://github.com/NVIDIA/LDDL)  |   Yes    |
+| Multi-node  |   Yes   |
  
 #### Features
  
 [Fleet](https://www.paddlepaddle.org.cn/documentation/docs/en/api/paddle/distributed/fleet/Fleet_en.html#fleet) is a unified API for distributed training of PaddlePaddle.
  
 [LAMB](https://arxiv.org/pdf/1904.00962.pdf) stands for Layerwise Adaptive Moments based optimizer, which is a large batch optimization technique that helps accelerate the training of deep neural networks using large minibatches. It allows using a global batch size of 65536 and 32768 on sequence lengths 128 and 512, respectively, compared to a batch size of 256 for [Adam](https://arxiv.org/pdf/1412.6980.pdf). The optimized implementation accumulates 1024 gradient batches in phase 1 and 4096 steps in phase 2 before updating weights once. This results in a 15% training speedup. On multi-node systems, LAMB allows scaling up to 1024 GPUs resulting in training speedups of up to 72x in comparison to Adam. Adam has limitations on the learning rate that can be used since it is applied globally on all parameters, whereas LAMB follows a layerwise learning rate strategy.
- 
+
+[LDDL](https://github.com/NVIDIA/LDDL) is a library that enables scalable data preprocessing and loading. LDDL is used by this PaddlePaddle BERT example.
+
 
 ### Mixed precision training
 
@@ -193,7 +199,7 @@ The following section lists the requirements you need to meet to start training 
 This repository contains a Dockerfile that extends the CUDA NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
  
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PaddlePaddle 22.08-py3 NGC container](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/paddlepaddle) or newer
+* [PaddlePaddle 22.12-py3 NGC container](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/paddlepaddle) or newer
 * Supported GPUs:
     * [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
 
@@ -204,7 +210,11 @@ DGX Documentation:
 * [Accessing And Pulling From The NGC Container Registry](https://docs.nvidia.com/deeplearning/dgx/user-guide/index.html#accessing_registry)
 
 For those unable to use the PaddlePaddle NGC container, to set up the required environment or create your own container, refer to the versioned [NVIDIA Container Support Matrix](https://docs.nvidia.com/deeplearning/dgx/support-matrix/index.html).
+
+For multi-node, the sample provided in this repository requires [Enroot](https://github.com/NVIDIA/enroot) and [Pyxis](https://github.com/NVIDIA/pyxis) set up on a [SLURM](https://slurm.schedmd.com) cluster.
  
+More information on how to set up and launch can be found in the [Multi-node Documentation](https://docs.nvidia.com/ngc/multi-node-bert-user-guide).
+
  
 ## Quick Start Guide
  
@@ -218,7 +228,10 @@ cd DeepLearningExamples/PaddlePaddle/LanguageModeling/BERT
 ```
  
 2. Download the NVIDIA pre-trained checkpoint.
-Pre-trained checkpoints link is coming soon. 
+If you want to use a pre-trained checkpoint, visit [NGC](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/bert_large_paddle_ckpt_mode-pretrain/files). This pre-trained checkpoint is used to fine-tune on SQuAD. Ensure you unzip the downloaded file and place the checkpoint in the `checkpoints/` folder. For a checkpoint already fine-tuned for QA on SQuAD v1.1 visit [NGC](https://catalog.ngc.nvidia.com/orgs/nvidia/teams/dle/models/bert_large_paddle_ckpt_mode-qa_ds-squad11/files).
+
+
+
 
 3. Build BERT on top of the NGC container.
 ```
@@ -235,36 +248,23 @@ By default:
 - Paddle native logs are stored in the `log/` folder.
 - DLLogger's outputs are stored in the `results/` folder. 
 
-5. Download and preprocess the dataset.
+5. Download the dataset.
 
 This repository provides scripts to download, verify, and extract the following datasets:
  
--   [SQuAD](https://rajpurkar.github.io/SQuAD-explorer/) (fine-tuning for question answering)
--   Wikipedia (pre-training)
--   BookCorpus (pre-training)
+- [SQuAD](https://rajpurkar.github.io/SQuAD-explorer/) (fine-tuning for question answering)
+- Wikipedia (pre-training)
+
  
-To download, verify, extract the datasets, and create the shards in `.hdf5` format, run:  
+To download, verify, extract the datasets, run:  
 ```shell
 bash data/create_datasets_from_start.sh
 ```
 
-Note: For fine tuning only, Wikipedia and Bookscorpus dataset download and preprocessing can be skipped by commenting it out.
+Note: For fine-tuning only, downloading the Wikipedia dataset can be skipped by commenting it out.
 
-- Download Wikipedia only for pretraining
-
-The pretraining dataset is 170GB+ and takes 15+ hours to download. The BookCorpus server, most of the time, gets overloaded and contains broken links resulting in HTTP 403 and 503 errors. Hence, it is recommended to skip downloading BookCorpus data by running:
-```shell
-bash data/create_datasets_from_start.sh wiki_only
-```
-
-- Download Wikipedia and BookCorpus
-
-Users are welcome to download BookCorpus from other sources to match our accuracy or repeatedly try our script until the required number of files are downloaded by running the following:
-```shell
-bash data/create_datasets_from_start.sh wiki_books
-```
-
-Note: Ensure a complete Wikipedia download. If, in any case, the download breaks, remove the output file `wikicorpus_en.xml.bz2` and start again. If a partially downloaded file exists, the script assumes a successful download, which causes the extraction to fail. Not using BookCorpus can potentially change the final accuracy on a few downstream tasks.
+Note: Ensure a complete Wikipedia download. But if the download failed in LDDL,
+remove the output directory `data/wikipedia/` and start over again. 
 
 
 6. Start pre-training.
@@ -276,16 +276,18 @@ bash scripts/run_pretraining.sh
  
 The default hyperparameters are set to run on 8x A100 80G cards.
 
+To run on multiple nodes, refer to the [Multi-node](#multi-node) section.  
+
 7. Start fine-tuning with the SQuAD dataset.
  
 The above pre-trained BERT representations can be fine-tuned with just one additional output layer for a state-of-the-art question answering system. Running the following script launches fine-tuning for question answering with the SQuAD dataset.
 ```
-bash scripts/run_squad.sh <path to pretrained_model>
+bash scripts/run_squad.sh /workspace/bert/checkpoints/<pre-trained_checkpoint>
 ```
 
 8. Start validation/evaluation.
  
-For SQuAD, validation can be performed with the `bash scripts/run_squad.sh <path to pretrained_model>`, setting `mode` to `eval` in `scripts/run_squad.sh` as follows:
+For SQuAD, validation can be performed with the `bash scripts/run_squad.sh /workspace/bert/checkpoints/<pre-trained_checkpoint>`, setting `mode` to `eval` in `scripts/run_squad.sh` as follows:
 
 ```
 mode=${12:-"eval"}
@@ -293,7 +295,7 @@ mode=${12:-"eval"}
 
  
 9. Start inference/predictions.
-Inference can be performed with the `bash scripts/run_squad.sh <path to pretrained_model>`, setting `mode` to `prediction` in `scripts/run_squad.sh` as follows:
+Inference can be performed with the `bash scripts/run_squad.sh /workspace/bert/checkpoints/<pre-trained_checkpoint>`, setting `mode` to `prediction` in `scripts/run_squad.sh` as follows:
 
 ```
 mode=${12:-"prediction"}
@@ -366,6 +368,8 @@ The complete list of the available parameters for the `run_pretraining.py` scrip
 Global:
   --input-dir INPUT_DIR
                         The input data directory. Should be specified by users and contain .hdf5 files for the task. (default: None)
+  --vocab-file VOCAB_FILE
+                        Vocabulary mapping/file BERT was pretrainined on. (default: None)
   --output-dir OUTPUT_DIR
                         The output directory where the model checkpoints will be written. Should be specified by users. (default: None)
   --bert-model {bert-base-uncased,bert-base-cased,bert-large-uncased,bert-large-cased,custom}
@@ -466,6 +470,24 @@ Note:
 - For SQuAD fine-tuning, `<--max-steps>` is not required since it's usually trained for two or three epochs. If `<--max-steps>` is not set or set to -1, it will be trained for `<--epochs>` epochs. If `<--max-steps>` is set to a positive number, the total training steps is calculated by: `total_steps = min(max_steps, epochs * steps_per_epoch)`.
 - For pre-training, `<--max-steps>` is required and `<--epochs>` is deprecated. Because We typically train for a specified number of steps rather than epochs.
 
+#### Multi-node
+Multi-node runs can be launched on a pyxis/enroot Slurm cluster (refer to [Requirements](#requirements)) with the `run.sub` script with the following command for a 4-node DGX-A100 example for both phase 1 and phase 2:
+ 
+```
+TRAIN_BATCH_SIZE=256 GRADIENT_ACCUMULATION_STEPS=8 PHASE=1 sbatch -N4 run.sub
+TRAIN_BATCH_SIZE=32 GRADIENT_ACCUMULATION_STEPS=32 PHASE=2 sbatch -N4 run.sub
+```
+ 
+Checkpoints  after phase 1 will be saved in `checkpointdir` specified in `run.sub`. The checkpoint will be automatically picked up to resume training on phase 2. Note that phase 2 should be run after phase 1.
+ 
+ 
+The batch variables `BATCHSIZE`, `GRADIENT_STEPS`,`PHASE` refer to the Python arguments `--batch-size`, `--gradient-merge-steps`, `--phase1/--phase2` respectively.
+ 
+Note that the `run.sub` script is a starting point that has to be adapted depending on the environment. In particular, variables such as `datadir` handle the location of the files for each phase. 
+ 
+Refer to the file’s contents to find the full list of variables to adjust for your system.
+
+
 ### Command-line options
  
 To view the full list of available options and their descriptions, use the `-h` or `--help` command-line option, for example:
@@ -477,27 +499,25 @@ To view the full list of available options and their descriptions, use the `-h` 
 Detailed descriptions of command-line options can be found in the [Parameters](#parameters) section.
  
 ### Getting the data
-For pre-training BERT, we use the concatenation of Wikipedia (2500M words) and BookCorpus (800M words). For Wikipedia, we extract only the text passages and ignore headers, lists, and tables. BERT requires that datasets are structured as a document-level corpus rather than a shuffled sentence-level corpus because it is critical to extract long contiguous sentences.
- 
-The preparation of the pre-training dataset is described in the `bertPrep.py` script found in the `data/` folder. The component steps in the automated scripts to prepare the datasets are as follows:
- 
-1.  Data download and extract - the dataset is downloaded and extracted.
- 
-2.  Clean and format - document tags, and so on. are removed from the dataset.
- 
-3.  Sentence segmentation - the corpus text file is processed into separate sentences.
- 
-4.  Sharding - the sentence segmented corpus file is split into a number of uniformly distributed smaller text documents.
- 
-5.  `hdf5` file creation - each text file shard is processed by the `create_pretraining_data.py` script to produce a corresponding `hdf5` file. The script generates input data and labels for masked language modeling and sentence prediction tasks for the input text shard.
- 
-The tools used for preparing the BookCorpus and Wikipedia datasets can be applied to prepare an arbitrary corpus. The `create_datasets_from_start.sh` script in the `data/` directory applies sentence segmentation, sharding, and `hdf5` file creation given an arbitrary text file containing a document-separated text corpus.
- 
-For fine-tuning a pre-trained BERT model for specific tasks, by default this repository prepares the following dataset:
+
+For pre-training BERT, we use the Wikipedia (2500M words) dataset. We extract 
+only the text passages and ignore headers, lists, and tables. BERT requires that
+datasets are structured as a document level corpus rather than a shuffled 
+sentence-level corpus because it is critical to extract long contiguous 
+sentences. `data/create_datasets_from_start.sh` uses the LDDL downloader to 
+download the Wikipedia dataset, and `scripts/run_pretraining.sh` uses the LDDL 
+preprocessor and load balancer to preprocess the Wikipedia dataset into Parquet
+shards which are then streamed during the pre-training by the LDDL data loader.
+Refer to [LDDL's README](https://github.com/NVIDIA/LDDL/blob/main/README.md) for more 
+information on how to use LDDL. Depending on the speed of your internet 
+connection, downloading and extracting the Wikipedia dataset takes a few hours,
+and running the LDDL preprocessor and load balancer takes half an hour on a 
+single DGXA100 node.
+
+For fine-tuning a pre-trained BERT model for specific tasks, by default, this repository prepares the following dataset:
  
 -   [SQuAD](https://rajpurkar.github.io/SQuAD-explorer/): for question answering
- 
-Depending on the speed of your internet connection, this process takes about a day to complete. The BookCorpus server could sometimes get overloaded and also contain broken links resulting in HTTP 403 and 503 errors. You can either skip the missing files or retry downloading at a later time. 
+
  
 #### Dataset guidelines
  
@@ -511,8 +531,6 @@ BERT pre-training optimizes for two unsupervised classification tasks. The first
  
 The second task is next sentence prediction. One training instance of BERT pre-training is two sentences (a sentence pair). A sentence pair may be constructed by simply taking two adjacent sentences from a single document or by pairing up two random sentences with equal probability. The goal of this task is to predict whether or not the second sentence followed the first in the original document.
 
-The `create_pretraining_data.py` script takes in raw text and creates training instances for both pre-training tasks.
-
 
 ### Training process
  
@@ -522,7 +540,7 @@ The training process consists of two steps: pre-training and fine-tuning.
 
 Pre-training is performed using the `run_pretraining.py` script along with parameters defined in the `scripts/run_pretraining.sh`.
  
-The `run_pretraining.sh` script runs a job on a single node that trains the BERT-large model from scratch using Wikipedia and BookCorpus datasets as training data using the LAMB optimizer. By default, the training script runs two phases of training with a hyperparameter recipe specific to 8x A100 80G cards:
+The `run_pretraining.sh` script runs a job on a single node that trains the BERT-large model from scratch using Wikipedia datasets as training data using the LAMB optimizer. By default, the training script runs two phases of training with a hyperparameter recipe specific to 8x A100 80G cards:
 
 Phase 1: (Maximum sequence length of 128)
 -   Runs on 8 GPUs with a training batch size of 256 per GPU.
@@ -565,6 +583,13 @@ bash run_pretraining.sh \
     <dataset_dir_phase2> \
     <code_dir> \
     <init_checkpoint_dir> \
+    <wikipedia_source> \
+    <num_dask_workers> \
+    <num_shards_per_workers> \
+    <num_workers> \
+    <sample_ratio> \
+    <phase2_bin_size> \
+    <masking> \
     <bert_config_file> \
     <enable_benchmark> \
     <benchmark_steps> \
@@ -593,6 +618,13 @@ Where:
 -   `<dataset_dir_phase12` is the path to dataset of phase 2. It should be a path to the folder containing `.hdf` files.
 -   `<code_dir>` is the root path to bert code.
 -   `<init_checkpoint_dir>` is the path to the checkpoint to start the pretraining routine on (Usually a BERT pre-trained checkpoint).
+-   `wikipedia_source` is the path to the 'source' subdirectory for the Wikipedia corpus.
+-   `num_dask_workers` is the number of dask workers to preprocess the bert dataset.
+-   `num_shards_per_workers` is the number of the output parquet/txt shards per worker.
+-   `num_workers` is the number of workers for dataloading.
+-   `sample_ratio` is the ratio of how many articles/documents are sampled from each corpus.
+-   `phase2_bin_size` is the stride of the sequence length for each binbin size for phase2.
+-   `masking` LDDL supports both static and dynamic masking. Refer to [LDDL's README](https://github.com/NVIDIA/LDDL/blob/main/README.md) for more information.
 -   `<bert_config_file>` is the path to the bert config file.
 -   `<enable_benchmark>` a flag to enable benchmark. The train process will warmup for `<benchmark_warmup_steps>` and then measure the throughput of the following `<benchmark_steps>`.
 
@@ -609,7 +641,10 @@ bash scripts/run_pretraining.sh \
     /path/to/dataset/phase1 \
     /path/to/dataset/phase2 \
     /workspace/bert \
-    None None false
+    None \
+    /path/to/wikipedia/source \
+    32 128 4 0.9 64 static \
+    None false
 ```
  
 To run the pre-training routine on an initial checkpoint, point the `from-checkpoint` variable to the location of the checkpoint folder in `scripts/run_pretraining.sh`.
@@ -622,6 +657,7 @@ python3 -m paddle.distributed.launch \
     --gpus="0,1,2,3,4,5,6,7" \
     ./run_pretraining.py \
     --input-dir=/path/to/dataset/phase1 \
+    --vocab-file=vocab/bert-large-uncased-vocab.txt \
     --output-dir=./results \
     --bert-model=bert-large-uncased \
     --from-checkpoint=./results/bert-large-uncased/phase1 \
@@ -773,7 +809,10 @@ bash scripts/run_pretraining.sh \
     /path/to/dataset/phase1 \
     /path/to/dataset/phase2 \
     /workspace/bert \
-    None None true 10 10
+    None \
+    /path/to/wikipedia/source \
+    32 128 4 0.9 64 static \
+    None true 10 10
 ```
 
 To benchmark the training performance on a specific batch size for SQuAD, refer to [Fine-tuning](#fine-tuning) and turn on the `<benchmark>` flags. An example call to run training for 200 steps (100 steps for warmup and 100 steps to measure), and generate throughput numbers:
@@ -831,8 +870,8 @@ Our results were obtained by running the `scripts/run_squad.sh` and `scripts/run
 
 | DGX System         | GPUs / Node | Precision | Accumulated Batch size / GPU (Phase 1 and Phase 2) | Accumulation steps (Phase 1 and Phase 2) |     Final Loss    | Time to train(hours) | Time to train speedup (TF32 to mixed precision) |
 |--------------------|-------------|-----------|----------------------------------------------------|------------------------------------------|-------------------|----------------------|-------------------------------------------------|
-|  1 x DGX A100 80GB | 8           | AMP       | 256 and 32                                         | 32 and 128                               |       1.409       |    ~ 50 hours        | 1.72                                            |
-|  1 x DGX A100 80GB | 8           | TF32      | 128 and 16                                         | 64 and 256                               |       1.421       |    ~ 86 hours        | 1                                               |
+| 32 x DGX A100 80GB | 8           | AMP       | 256 and 128                                        | 1 and 4                                  |       1.409       |    ~ 1.2 hours       | 1.72                                            |
+| 32 x DGX A100 80GB | 8           | TF32      | 128 and 16b                                        | 2 and 8                                  |       1.421       |    ~ 2.5 hours       | 1                                               |
 
 
 ##### Pre-training loss curves
@@ -869,16 +908,34 @@ Training stability with 8 GPUs, FP16 computations, batch size of 32:
 
 ##### Training performance: NVIDIA DGX A100 (8x A100 80GB)
 
-Our results were obtained by running the script `run_pretraining.sh` in the PaddlePaddle:22.08-py3 NGC container on NVIDIA DGX A100 (8x A100 80GB) GPUs. Performance numbers (in sequences per second) were averaged over a few training iterations.
+Our results were obtained by running the script `run_pretraining.sh` in the PaddlePaddle:22.12-py3 NGC container on NVIDIA DGX A100 (8x A100 80GB) GPUs. Performance numbers (in sequences per second) were averaged over a few training iterations.
 
 ###### Pre-training NVIDIA DGX A100 (8x A100 80GB)
 
 | GPUs | Batch size / GPU (TF32 and FP16) | Accumulation steps (TF32 and FP16) | Sequence length | Throughput - TF32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (TF32 - mixed precision) | Weak scaling - TF32 | Weak scaling - mixed precision |
 |------|----------------------------------|------------------------------------|-----------------|----------------------------------|---------------------------------------------|---------------------------------------------|---------------------|--------------------------------|
-| 1    | 8192 and 8192                    | 64 and 32                          | 128             |  304                             |   529                                       | 1.74                                        | 1.00                | 1.00                           |
-| 8    | 8192 and 8192                    | 64 and 32                          | 128             | 2410                             |  4200                                       | 1.74                                        | 7.93                | 7.94                           |
-| 1    | 4096 and 4096                    | 256 and 128                        | 512             |   59                             |   103                                       | 1.75                                        | 1.00                | 1.00                           |
-| 8    | 4096 and 4096                    | 256 and 128                        | 512             |  469                             |   823                                       | 1.75                                        | 7.95                | 7.99                           |
+| 1    | 8192 and 8192                    | 64 and 32                          | 128             |  307                             |   633                                       | 2.06                                        | 1.00                | 1.00                           |
+| 8    | 8192 and 8192                    | 64 and 32                          | 128             | 2428                             |  4990                                       | 2.06                                        | 7.91                | 7.88                           |
+| 1    | 4096 and 4096                    | 256 and 128                        | 512             |  107                             |   219                                       | 2.05                                        | 1.00                | 1.00                           |
+| 8    | 4096 and 4096                    | 256 and 128                        | 512             |  851                             |  1724                                       | 2.26                                        | 7.95                | 7.87                           |
+
+
+###### Pre-training NVIDIA DGX A100 (8x A100 80GB) Multi-node Scaling
+
+| Nodes | GPUs / node | Batch size / GPU (TF32 and FP16) | Accumulated Batch size / GPU (TF32 and FP16) | Accumulation steps (TF32 and FP16) | Sequence length | Mixed Precision Throughput | Mixed Precision Strong Scaling | TF32 Throughput | TF32 Strong Scaling | Speedup (Mixed Precision to TF32) |
+|-------|-------------|----------------------------------|------------------------------------|-----------------|----------------------------|--------------------------------|-----------------|---------------------|-----------------------------------|-----|
+| 1     | 8           | 126 and 256 | 8192 and 8192                    | 64 and 32             | 128             |   4990               | 1                              |   2428          |  1                  |  2.06               |
+| 2     | 8           | 126 and 256 | 4096 and 4096                    | 32 and 16             | 128             |   9581               | 1.92                           |   4638          |  1.91               |  2.07               |
+| 4     | 8           | 126 and 256 | 2048 and 2048                    | 16 and 8              | 128             |   19262              | 3.86                           |   9445          |  3.89               |  2.04               |
+| 8     | 8           | 126 and 256 | 1024 and 1024                    | 8 and 4               | 128             |   37526              | 7.52                           |   18335         |  7.55               |  2.05               |
+| 16    | 8           | 126 and 256 | 512 and 512                      | 4 and 2               | 128             |   71156              | 14.26                          |   35526         |  14.63              |  2.00               |
+| 32    | 8           | 126 and 256 | 256 and 256                      | 2 and 1               | 128             |   142087             | 28.47                          |   69701         |  28.71              |  2.04               |
+| 1     | 8           | 16  and 32  | 4096 and 4096                    | 256 and 128           | 512             |   1724               | 1                              |   851           |  1                  |  2.03               |
+| 2     | 8           | 16  and 32  | 2048 and 2048                    | 128 and 64            | 512             |   3305               | 1.92                           |   1601          |  1.88               |  2.06               |
+| 4     | 8           | 16  and 32  | 1024 and 1024                    | 64 and 32             | 512             |   6492               | 3.77                           |   3240          |  3.81               |  2.00               |
+| 8     | 8           | 16  and 32  | 512 and 512                      | 32 and 16             | 512             |   12884              | 7.47                           |   6329          |  7.44               |  2.04               |
+| 16    | 8           | 16  and 32  | 256 and 256                      | 16 and 8              | 512             |   25493              | 14.79                          |   12273         |  14.42              |  2.08               |
+| 32    | 8           | 16  and 32  | 128 and 128                      | 8 and 4               | 512             |   49307              | 28.60                          |   24047         |  28.26              |  2.05               |
 
 
 ###### Fine-tuning NVIDIA DGX A100 (8x A100 80GB)
@@ -912,7 +969,11 @@ The inference performance metrics used were items/second.
 ## Release notes
  
 ### Changelog
- 
+
+January 2023
+- [Pre-training using Language Datasets and Data Loaders (LDDL)](https://github.com/NVIDIA/LDDL)
+- Binned pretraining for phase2 with LDDL using a bin size of 64
+
 August 2022
 - Pre-training support with LAMB optimizer.
 - Updated Data download and Preprocessing.

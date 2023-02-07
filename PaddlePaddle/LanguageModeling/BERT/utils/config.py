@@ -157,6 +157,7 @@ def add_global_args(parser, task=Task.pretrain):
             required=True,
             help='The input data directory. Should be specified by users and contain .hdf5 files for the task.'
         )
+        group.add_argument('--num-workers', default=4, type=int)
     if task == Task.squad:
         group.add_argument(
             '--train-file',
@@ -170,12 +171,6 @@ def add_global_args(parser, task=Task.pretrain):
             help='SQuAD json for predictions. E.g., dev-v1.1.json or test-v1.1.json'
         )
         group.add_argument(
-            '--vocab-file',
-            type=str,
-            default=None,
-            required=True,
-            help="Vocabulary mapping/file BERT was pretrainined on")
-        group.add_argument(
             "--eval-script",
             help="Script to evaluate squad predictions",
             default="evaluate.py",
@@ -186,6 +181,12 @@ def add_global_args(parser, task=Task.pretrain):
             default=3,
             help='The number of epochs for training.')
 
+    group.add_argument(
+        '--vocab-file',
+        type=str,
+        default=None,
+        required=True,
+        help="Vocabulary mapping/file BERT was pretrainined on")
     group.add_argument(
         '--output-dir',
         type=str,
