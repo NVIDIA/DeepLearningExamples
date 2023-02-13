@@ -182,6 +182,8 @@ class Translator:
         output = []
 
         for i, (src, indices) in enumerate(loader):
+            if device.type == 'cuda':
+                torch.cuda.synchronize()
             translate_timer = time.time()
             src, src_length = src
             stats['total_enc_len'] = int(src_length.sum())
@@ -207,12 +209,14 @@ class Translator:
                     detok = self.tokenizer.detokenize(pred)
                     output.append(detok)
 
+            if device.type == 'cuda':
+                torch.cuda.synchronize()
             elapsed = time.time() - translate_timer
             batch_time.update(elapsed, batch_size)
 
             total_tokens = stats['total_dec_len'] + stats['total_enc_len']
             ttps = total_tokens / elapsed
-            tot_tok_per_sec.update(ttps, batch_size)
+            tot_tok_per_sec.update(ttps, elapsed)
 
             iterations.update(stats['iters'])
             enc_seq_len.update(stats['total_enc_len'] / batch_size, batch_size)

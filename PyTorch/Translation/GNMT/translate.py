@@ -352,12 +352,10 @@ def main():
             latency_table.write('Inference latency', 'fp16',
                                 relative=relative, reverse_speedup=True)
 
-    avg_throughput = np.array(stats['throughputs']).mean()
-    avg_latency = np.array(stats['runtimes']).mean()
     summary = {
-        'eval_throughput': avg_throughput,
+        'eval_throughput': stats['tokens_per_sec'],
         'eval_bleu': stats['bleu'],
-        'eval_avg_latency': avg_latency,
+        'eval_avg_latency': np.array(stats['runtimes']).mean(),
         }
     for p in args.percentiles:
         summary[f'eval_{p}%_latency'] = np.percentile(stats['runtimes'], p)

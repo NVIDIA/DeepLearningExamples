@@ -634,7 +634,7 @@ def main():
     logging.info(f'Total training time {training_time:.0f} s')
 
     table = TrainingTable()
-    avg_training_perf = sum(training_perf) / len(training_perf)
+    avg_training_perf = len(training_perf) / sum(1 / v for v in training_perf)
     table.add(utils.get_world_size(), args.train_batch_size, test_bleu,
               avg_training_perf, training_time)
     if utils.get_rank() == 0:
