@@ -51,8 +51,6 @@ import soundfile  # flac
 
 import matplotlib
 
-matplotlib.use("Agg")
-import matplotlib.pylab as plt
 import numpy as np
 import torch
 import torch.distributed as dist
@@ -173,6 +171,8 @@ def print_once(*msg):
 
 
 def plot_spectrogram(spectrogram):
+    matplotlib.use("Agg")
+    import matplotlib.pylab as plt
     fig, ax = plt.subplots(figsize=(10, 2))
     im = ax.imshow(spectrogram, aspect="auto", origin="lower",
                    interpolation='none')
