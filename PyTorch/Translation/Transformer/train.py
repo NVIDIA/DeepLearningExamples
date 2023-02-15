@@ -164,6 +164,7 @@ def train(args, trainer, epoch_itr):
 
     max_update = args.max_update or math.inf
     num_batches = len(epoch_itr)
+    torch.cuda.synchronize()
     begin = time.time()
 
     # reset meters
@@ -189,6 +190,7 @@ def train(args, trainer, epoch_itr):
         if trainer.get_num_updates() >= max_update:
             break
 
+    torch.cuda.synchronize()
     print('Epoch time:', time.time() - begin)
 
     # Print epoch stats and reset training meters
@@ -235,6 +237,7 @@ def validate(args, trainer, datasets, subsets):
 
 def score(args, trainer, dataset, src_dict, tgt_dict, ref_file):
 
+    torch.cuda.synchronize()
     begin = time.time()
 
     src_dict = deepcopy(src_dict)  # This is necessary, generation of translations
@@ -324,6 +327,7 @@ def score(args, trainer, dataset, src_dict, tgt_dict, ref_file):
             float(args.distributed_world_size)/gen_timer.avg
             ))
 
+    torch.cuda.synchronize()
     print('| Eval completed in: {:.2f}s | {}CASED BLEU {:.2f}'.format(
         time.time()-begin,
         '' if args.test_cased_bleu else 'UN',
