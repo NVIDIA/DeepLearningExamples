@@ -237,8 +237,9 @@ def main():
         init_distributed(args, args.world_size, args.local_rank)
 
     metrics = Metrics(scopes=['train', 'train_avg'],
-                      benchmark_epochs=args.benchmark_epochs_num)
-    val_metrics = Metrics(scopes=['val'])
+                      benchmark_epochs=args.benchmark_epochs_num,
+                      cuda=args.cuda)
+    val_metrics = Metrics(scopes=['val'], cuda=args.cuda)
     init_logger(args.output, args.log_file, args.ema_decay)
     logger.parameters(vars(args), tb_subset='train')
 
