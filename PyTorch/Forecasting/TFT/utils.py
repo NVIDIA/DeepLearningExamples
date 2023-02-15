@@ -13,12 +13,17 @@
 # limitations under the License.
 
 import time
+import torch.distributed as dist
+import torch
 
 class PerformanceMeter():
-    def __init__(self):
+    def __init__(self, benchmark_mode=True):
+        self.benchmark_mode = benchmark_mode
         self.reset()
 
     def reset(self):
+        if self.benchmark_mode:
+            torch.cuda.synchronize()
         self.avg = 0
         self.count = 0
         self.total_time = 0
@@ -26,6 +31,8 @@ class PerformanceMeter():
         self.intervals = []
 
     def update(self, n, exclude_from_total=False):
+        if self.benchmark_mode:
+            torch.cuda.synchronize()
         delta = time.time() - self.last_update_time
         self.intervals.append(delta)
         if not exclude_from_total:
@@ -37,10 +44,16 @@ class PerformanceMeter():
         return n/delta
 
     def reset_current_lap(self):
+        if self.benchmark_mode:
+            torch.cuda.synchronize()
         self.last_update_time = time.time()
 
     def p(self, i):
         assert i <= 100
         idx = int(len(self.intervals) * i / 100)
         return sorted(self.intervals)[idx]
+
+def print_once(*args, **kwargs):
+    if not dist.is_initialized() or dist.get_rank() == 0:
+        print(*args, **kwargs)
 

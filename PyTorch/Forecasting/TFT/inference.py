@@ -76,7 +76,7 @@ def predict(args, config, model, data_loader, scalers, cat_encodings, extend_tar
     predictions = []
     targets = []
     ids = []
-    perf_meter = PerformanceMeter()
+    perf_meter = PerformanceMeter(benchmark_mode=not args.disable_benchmark)
     n_workers = args.distributed_world_size if hasattr(args, 'distributed_world_size') else 1
 
     for step, batch in enumerate(data_loader):
@@ -235,5 +235,6 @@ if __name__=='__main__':
     parser.add_argument('--save_predictions', action='store_true')
     parser.add_argument('--results', type=str, default='/results')
     parser.add_argument('--log_file', type=str, default='dllogger.json')
+    parser.add_argument("--disable_benchmark", action='store_true', help='Disable benchmarking mode')
     ARGS = parser.parse_args()
     main(ARGS)
