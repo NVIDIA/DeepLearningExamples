@@ -8,6 +8,7 @@ from collections import OrderedDict
 import dllogger
 from dllogger import Backend, JSONStreamBackend
 from tensorboardX import SummaryWriter
+import torch
 
 
 class AverageMeter():
@@ -43,6 +44,7 @@ class PerformanceMeter():
 
     def reset(self):
         self.updated = False
+        torch.cuda.synchronize()
         self.start = time.time()
         self.n = 0
 
@@ -56,6 +58,7 @@ class PerformanceMeter():
 
     @property
     def elapsed_time(self):
+        torch.cuda.synchronize()
         return time.time() - self.start
 
 
@@ -70,6 +73,7 @@ class AggregatorBackend(Backend):
         self.metrics.flushed = True
         self.step = 0
         self.epoch = 0
+        torch.cuda.synchronize()
         self.start_time = time.time()
 
     @property
@@ -115,6 +119,7 @@ class AggregatorBackend(Backend):
                 result_string += _name + ' {:.3f} |'.format(agg.value)
                 agg.reset()
 
+        torch.cuda.synchronize()
         result_string += 'walltime {:.3f} |'.format(time.time() - self.start_time)
         self.metrics.flushed = True
         print(result_string)

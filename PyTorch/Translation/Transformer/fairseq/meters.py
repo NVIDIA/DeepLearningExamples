@@ -6,6 +6,7 @@
 # can be found in the PATENTS file in the same directory.
 
 import time
+import torch
 
 
 class AverageMeter(object):
@@ -33,12 +34,14 @@ class TimeMeter(object):
 
     def reset(self, init=0):
         self.init = init
+        torch.cuda.synchronize()
         self.start = time.time()
         self.n = 0
         self.last_update = time.time()
 
     def update(self, val=1):
         self.n += val
+        torch.cuda.synchronize()
         self.last_update = time.time()
 
     @property
@@ -47,6 +50,7 @@ class TimeMeter(object):
 
     @property
     def elapsed_time(self):
+        torch.cuda.synchronize()
         return self.init + (time.time() - self.start)
 
     @property
@@ -61,9 +65,11 @@ class StopwatchMeter(object):
         self.intervals = []
 
     def start(self):
+        torch.cuda.synchronize()
         self.start_time = time.time()
 
     def stop(self, n=1):
+        torch.cuda.synchronize()
         if self.start_time is not None:
             delta = time.time() - self.start_time
             self.intervals.append(delta)
