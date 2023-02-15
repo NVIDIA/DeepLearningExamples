@@ -334,7 +334,7 @@ def main():
                 feats, feat_lens = feat_proc(audio, audio_lens)
 
             sync()
-            t1 = time.perf_counter()
+            t1 = time.time()
 
             if args.amp:
                 feats = feats.half()
@@ -347,7 +347,7 @@ def main():
             preds = greedy_decoder(log_probs)
 
             sync()
-            t2 = time.perf_counter()
+            t2 = time.time()
 
             # burn-in period; wait for a new loader due to num_workers
             if it >= 1 and (args.steps == 0 or it >= args.warmup_steps):
@@ -365,7 +365,7 @@ def main():
                 break
 
             sync()
-            t0 = time.perf_counter()
+            t0 = time.time()
 
         # communicate the results
         if args.transcribe_wav:

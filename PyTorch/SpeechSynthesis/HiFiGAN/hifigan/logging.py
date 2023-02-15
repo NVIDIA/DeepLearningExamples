@@ -123,7 +123,7 @@ class Metrics(dict):
     def __init__(self, scopes=['train', 'train_avg'],
                  dll_keys=['loss_gen', 'loss_discrim', 'loss_mel',
                            'frames/s', 'took', 'lrate_gen', 'lrate_discrim'],
-                 benchmark_epochs=0):
+                 benchmark_epochs=0, cuda=True):
         super().__init__()
 
         self.dll_keys = dll_keys
@@ -133,6 +133,7 @@ class Metrics(dict):
         self.benchmark_epochs = benchmark_epochs
         if benchmark_epochs > 0:
             self.metrics['train_benchmark'] = defaultdict(list)
+        self.cuda = cuda
 
     def __setitem__(self, key, val):
         if type(val) is dict:
@@ -182,15 +183,21 @@ class Metrics(dict):
         self.start_accumulating(iter, start_timer, 'train')
 
     def start_epoch(self, epoch, start_timer=True):
+        if self.cuda:
+            torch.cuda.synchronize()
         self.start_accumulating(epoch, start_timer, 'train_avg')
 
     def start_val(self, start_timer=True):
+        if self.cuda:
+            torch.cuda.synchronize()
         self.start_accumulating(None, start_timer, 'val')
 
     def finish_iter(self, stop_timer=True):
         self.finish_accumulating(stop_timer, 'train')
 
     def finish_epoch(self, stop_timer=True):
+        if self.cuda:
+            torch.cuda.synchronize()
         self.finish_accumulating(stop_timer, 'train_avg')
 
         metr = self.metrics['train_benchmark']
@@ -201,6 +208,8 @@ class Metrics(dict):
                 metr[k].pop(0)
 
     def finish_val(self, stop_timer=True):
+        if self.cuda:
+            torch.cuda.synchronize()
         self.finish_accumulating(stop_timer, 'val')
 
     def get_metrics(self, scope='train', target='dll'):

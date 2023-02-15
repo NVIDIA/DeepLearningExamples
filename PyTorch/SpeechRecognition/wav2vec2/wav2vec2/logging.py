@@ -111,7 +111,7 @@ def init_infer_metadata():
 
 class W2v2Metrics(MetricsAggregator):
 
-    def __init__(self, benchmark_epochs, scopes=('train', 'train_avg')):
+    def __init__(self, benchmark_epochs, scopes=('train', 'train_avg'), cuda=True):
         super().__init__(
             benchmark_epochs=benchmark_epochs,
             benchmark_keys=('took', 'accuracy', 'loss', 'ntokens/s'),
@@ -120,7 +120,8 @@ class W2v2Metrics(MetricsAggregator):
                            'code_perplexity',
                            'took', 'loss_scale', 'lr', 'ntokens/s'),
             reduce_mean=('temp', 'prob_perplexity', 'code_perplexity'),
-            reduce_last=('lr', 'loss_scale'))
+            reduce_last=('lr', 'loss_scale'),
+            cuda=cuda)
 
     def accumulate(self, scopes=None):
         if 'ignore' not in self.partials or self.partials['ignore'] == 0.0:
@@ -155,11 +156,12 @@ class W2v2FineTuningMetrics(MetricsAggregator):
                            'prob_perplexity', 'took', 'ntokens/s', 'uer',
                            'wer', 'raw_wer'),
             reduce_mean=('temp', 'prob_perplexity', 'code_perplexity'),
-            reduce_last=('lr',)):
+            reduce_last=('lr',),
+            cuda=True):
         super().__init__(
             benchmark_epochs=benchmark_epochs, benchmark_keys=benchmark_keys,
             scopes=scopes, dllogger_keys=dllogger_keys,
-            reduce_mean=reduce_mean, reduce_last=reduce_last)
+            reduce_mean=reduce_mean, reduce_last=reduce_last, cuda=cuda)
 
     def accumulate(self, scopes=None):
         if 'ignore' not in self.partials or self.partials['ignore'] == 0.0:

@@ -142,6 +142,7 @@ def evaluate(epoch, step, val_loader, val_feat_proc, labels, model,
             continue
 
         model.eval()
+        torch.cuda.synchronize()
         start_time = time.time()
         agg = {'losses': [], 'preds': [], 'txts': []}
 
@@ -166,6 +167,7 @@ def evaluate(epoch, step, val_loader, val_feat_proc, labels, model,
             agg['txts'] += helpers.gather_transcripts([txt], [txt_lens], labels)
 
         wer, loss = process_evaluation_epoch(agg)
+        torch.cuda.synchronize()
         log(() if epoch is None else (epoch,),
             step, subset, {'loss': loss, 'wer': 100.0 * wer,
                            'took': time.time() - start_time})
@@ -379,11 +381,11 @@ def main():
         if multi_gpu and not use_dali:
             train_loader.sampler.set_epoch(epoch)
 
+        torch.cuda.synchronize()
+        epoch_start_time = time.time()
         epoch_utts = 0
         epoch_loss = 0
         accumulated_batches = 0
-        epoch_start_time = time.time()
-        epoch_eval_time = 0
 
         for batch in train_loader:
 
@@ -461,7 +463,6 @@ def main():
                 step_start_time = time.time()
 
                 if step % args.eval_frequency == 0:
-                    tik = time.time()
                     wer = evaluate(epoch, step, val_loader, val_feat_proc,
                                    symbols, model, ema_model, ctc_loss,
                                    greedy_decoder, args.amp, use_dali)
@@ -470,7 +471,6 @@ def main():
                         checkpointer.save(model, ema_model, optimizer, scaler,
                                           epoch, step, best_wer, is_best=True)
                         best_wer = wer
-                    epoch_eval_time += time.time() - tik
 
                 step += 1
                 accumulated_batches = 0
@@ -481,6 +481,7 @@ def main():
             if not use_dali and step > steps_per_epoch * epoch:
                 break
 
+        torch.cuda.synchronize()
         epoch_time = time.time() - epoch_start_time
         epoch_loss /= steps_per_epoch
         log((epoch,), None, 'train_avg', {'throughput': epoch_utts / epoch_time,

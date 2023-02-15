@@ -75,7 +75,8 @@ class MetricsAggregator:
                  benchmark_epochs=0,
                  reduce_mean=(),
                  reduce_last=(),
-                 group_tb_entries=False):
+                 group_tb_entries=False,
+                 cuda=True):
         """
         Args:
             scopes: possible scopes of metrics accumulation
@@ -100,9 +101,10 @@ class MetricsAggregator:
         self.benchmark_keys = benchmark_keys
         self.scopes = scopes
         self.group_tb_entries = group_tb_entries
+        self.cuda = cuda
 
     def log_scalar(self, key, val, accum_reduction=None):
-        """ Main primitive for logging partial metrics from single batch.
+        """Main primitive for logging partial metrics from single batch.
 
         NOTE: Assumption: `log_scalar` cannot be called with different
         `accum_reduction` for the same `key`. This results in undefined behavior
@@ -197,9 +199,13 @@ class MetricsAggregator:
         self._start_accumulating(iter, True, 'train')
 
     def start_epoch(self, epoch):
+        if self.cuda:
+            torch.cuda.synchronize()
         self._start_accumulating(epoch, True, 'train_avg')
 
     def start_val(self):
+        if self.cuda:
+            torch.cuda.synchronize()
         self._start_accumulating(None, True, 'val')
 
     def finish_iter(self):
@@ -209,6 +215,8 @@ class MetricsAggregator:
         self._finish_accumulating('train')
 
     def finish_epoch(self):
+        if self.cuda:
+            torch.cuda.synchronize()
         self._accumulate_time('train_avg')
         self._finish_accumulating('train_avg')
 
@@ -220,6 +228,8 @@ class MetricsAggregator:
                 metr[k].pop(0)
 
     def finish_val(self, scope='val'):
+        if self.cuda:
+            torch.cuda.synchronize()
         self._accumulate_time(scope)
         self._finish_accumulating(scope)
 
