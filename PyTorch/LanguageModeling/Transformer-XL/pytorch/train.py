@@ -513,6 +513,7 @@ def train(tr_iter, va_iter, model, para_model, mems, model_config, optimizer,
     cur_loss = float('inf')
     target_tokens = 0
     log_step = 0
+    utils.distributed.barrier()
     log_start_time = time.time()
 
     if args.varlen:
@@ -586,16 +587,18 @@ def train(tr_iter, va_iter, model, para_model, mems, model_config, optimizer,
             cur_loss = utils.distributed.all_reduce_item(cur_loss, op='mean')
             train_loss = 0
 
-            elapsed = time.time() - log_start_time
+            utils.distributed.barrier()
+            current_time = time.time()
+            elapsed = current_time - log_start_time
             avg_elapsed = elapsed / log_step
             avg_elapsed = utils.distributed.all_reduce_item(avg_elapsed, op='max')
-            log_start_time = time.time()
+            log_start_time = current_time
             log_step = 0
 
             lr = optimizer.param_groups[0]['lr']
             throughput = target_tokens / elapsed
             throughput = utils.distributed.all_reduce_item(throughput, op='sum')
-            meters['train_throughput'].update(throughput)
+            meters['train_throughput'].update(throughput, elapsed)
             target_tokens = 0
 
             log_str = '| epoch {:3d} step {:>8d} | batches {:>6d} / {:d} | lr {:.3e} ' \
@@ -634,21 +637,26 @@ def train(tr_iter, va_iter, model, para_model, mems, model_config, optimizer,
         interrupted = timeout_handler.interrupted
 
         if (do_periodic_eval or is_final_step or interrupted) and not args.no_eval:
+            utils.distributed.barrier()
             eval_start_time = time.time()
+
             val_loss = evaluate(va_iter, model, args)
             val_loss = utils.distributed.all_reduce_item(val_loss, op='mean')
+
+            utils.distributed.barrier()
+            eval_elapsed = time.time() - eval_start_time
 
             logging.info('-' * 100)
             log_str = '| Eval {:3d} at step {:>8d} | time: {:5.2f}s ' \
                       '| valid loss {:5.2f}'.format(
                           train_step // args.eval_interval,
                           train_step,
-                          (time.time() - eval_start_time),
+                          eval_elapsed,
                           val_loss,
                           )
 
             dllogger_data = {
-                'valid_elapsed': (time.time() - eval_start_time),
+                'valid_elapsed': eval_elapsed,
                 'valid_loss': val_loss,
                 }
 
@@ -683,6 +691,7 @@ def train(tr_iter, va_iter, model, para_model, mems, model_config, optimizer,
                     scheduler_sparse.step(val_loss)
 
             # subtract eval time from timers for training
+            utils.distributed.barrier()
             log_start_time += time.time() - eval_start_time
 
         if interrupted:
@@ -1022,7 +1031,10 @@ def main():
     ###########################################################################
     # Loop over epochs.
     # At any point you can hit Ctrl + C to break out of training early.
+
+    utils.distributed.barrier()
     start_time = time.time()
+
     with TimeoutHandler() as timeout_handler:
         try:
             for epoch in itertools.count(start=start_epoch):
@@ -1046,6 +1058,7 @@ def main():
         except KeyboardInterrupt:
             logging.info('-' * 100)
             logging.info('Exiting from training early')
+    utils.distributed.barrier()
     elapsed = time.time() - start_time
 
     ###########################################################################
@@ -1064,9 +1077,13 @@ def main():
         model.load_state_dict(checkpoint['model_state'])
 
         # Run on test data.
+        utils.distributed.barrier()
         test_start_time = time.time()
+
         test_loss = evaluate(te_iter, model, args)
         test_loss = utils.distributed.all_reduce_item(test_loss, 'mean')
+
+        utils.distributed.barrier()
         test_elapsed = time.time() - test_start_time
 
         logging.info('=' * 100)

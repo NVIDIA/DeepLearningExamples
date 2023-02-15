@@ -168,7 +168,9 @@ def format_log(loss, split, args):
     return log_str
 
 
-def evaluate(eval_iter, model, meters, log_interval, max_size=None, repeat=1):
+def evaluate(
+    eval_iter, model, device, meters, log_interval, max_size=None, repeat=1
+):
     total_len, total_loss = 0, 0.
     eval_step = 0
 
@@ -176,8 +178,9 @@ def evaluate(eval_iter, model, meters, log_interval, max_size=None, repeat=1):
     log_latency = 0
     log_loss = 0
 
-    torch.cuda.synchronize()
+    utils.distributed.barrier()
     start_time = time.time()
+
     with torch.no_grad():
         mems = None
         for _ in range(repeat):
@@ -186,10 +189,12 @@ def evaluate(eval_iter, model, meters, log_interval, max_size=None, repeat=1):
                     break
                 eval_step += 1
 
-                torch.cuda.synchronize()
+                utils.distributed.barrier()
                 start_iter = time.time()
+
                 loss, mems = model(data, target, mems)
-                torch.cuda.synchronize()
+
+                utils.distributed.barrier()
                 elapsed = time.time() - start_iter
 
                 loss = loss.float().mean()
@@ -204,7 +209,7 @@ def evaluate(eval_iter, model, meters, log_interval, max_size=None, repeat=1):
                 target_tokens = target.numel()
                 throughput = target_tokens / elapsed
                 throughput = utils.distributed.all_reduce_item(throughput, op='sum')
-                meters['eval_throughput'].update(throughput)
+                meters['eval_throughput'].update(throughput, elapsed)
                 log_throughput += throughput
 
                 if eval_step % log_interval == 0:
@@ -238,8 +243,8 @@ def evaluate(eval_iter, model, meters, log_interval, max_size=None, repeat=1):
                     log_loss = 0
 
     utils.distributed.barrier()
-    torch.cuda.synchronize()
     total_time = time.time() - start_time
+
     logging.info('Time : {:.2f}s, {:.2f}ms/segment'.format(
             total_time, 1000 * total_time / (idx+1)))
 
@@ -251,13 +256,18 @@ def evaluate(eval_iter, model, meters, log_interval, max_size=None, repeat=1):
 def compile_model(model, device, args):
     inp = torch.randint(0, 1000, (args.tgt_len, args.batch_size)).to(device)
     tgt = torch.randint(0, 1000, (args.tgt_len, args.batch_size)).to(device)
+
+    utils.distributed.barrier()
     start = time.time()
+
     with torch.no_grad():
         mems = None
         for _ in range(2):
             _, mems = model(inp, tgt, mems)
-    torch.cuda.synchronize()
+
+    utils.distributed.barrier()
     stop = time.time()
+
     logging.info(f'Building the model took {stop - start:.2f} seconds')
 
 
@@ -450,7 +460,7 @@ def main():
     meters['eval_throughput'] = AverageMeter(warmup=warmup, keep=args.save_data)
     meters['eval_latency'] = AverageMeter(warmup=warmup, keep=args.save_data)
 
-    loss = evaluate(iter, model, meters, args.log_interval, args.max_size, args.repeat)
+    loss = evaluate(iter, model, device, meters, args.log_interval, args.max_size, args.repeat)
     perplexity = math.exp(loss)
     log_str = format_log(loss, args.split, args)
 
@@ -476,7 +486,9 @@ def main():
             }
         with open(data_path, 'wb') as f:
             pickle.dump(data, f)
-        logging.info(f'Throughput Avg: {throughput_data.mean():.2f} tok/s')
+
+        avg_throughput = meters['eval_throughput'].avg
+        logging.info(f'Throughput Avg: {avg_throughput:.2f} tok/s')
         logging.info(f'Latency Avg: {1000.0 * latency_data.mean():.2f} ms')
         for p in args.percentiles:
             logging.info(f'Latency {p}%: {1000.0 * np.percentile(latency_data, p):.2f} ms')
@@ -484,7 +496,7 @@ def main():
         logging.info('=' * 100)
 
         summary.update({
-            'eval_throughput': throughput_data.mean(),
+            'eval_throughput': avg_throughput,
             'eval_avg_latency': 1000 * latency_data.mean(),
             })
         for p in args.percentiles:
