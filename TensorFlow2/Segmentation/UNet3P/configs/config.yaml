@@ -1,0 +1,118 @@
+# project root working directory, automatically read by hydra (.../UNet3P)
+WORK_DIR: ${hydra:runtime.cwd}
+
+DATA_PREPARATION:
+  # unprocessed LiTS scan data paths, for custom data training skip this section details
+  SCANS_TRAIN_DATA_PATH: "/data/Training Batch 2/"
+  SCANS_VAL_DATA_PATH: "/data/Training Batch 1/"
+
+  # Resize scans to model input size
+  RESIZED_HEIGHT: ${INPUT.HEIGHT}
+  RESIZED_WIDTH: ${INPUT.WIDTH}
+
+  # Clip scans value in given range
+  SCAN_MIN_VALUE: -200
+  SCAN_MAX_VALUE: 250
+
+DATASET:
+  # paths should be relative from project root path
+  TRAIN:
+    IMAGES_PATH: "/data/train/images"
+    MASK_PATH: "/data/train/mask"
+  VAL:
+    IMAGES_PATH: "/data/val/images"
+    MASK_PATH: "/data/val/mask"
+
+
+MODEL:
+  # available variants are unet3plus, unet3plus_deepsup, unet3plus_deepsup_cgm
+  TYPE: "unet3plus"
+  WEIGHTS_FILE_NAME: model_${MODEL.TYPE}
+  BACKBONE:
+    # available variants are unet3plus, vgg16, vgg19
+    TYPE: "vgg19"
+
+DATA_GENERATOR_TYPE: "DALI_GENERATOR"  # options are TF_GENERATOR or DALI_GENERATOR
+SEED: 5  # for result's reproducibility
+VERBOSE: 1  # For logs printing details, available options are 0, 1, 2
+DATALOADER_WORKERS: 3  # number of workers used for data loading
+SHOW_CENTER_CHANNEL_IMAGE: True  # only true for UNet3+ for custom dataset it should be False
+
+# Model input shape
+INPUT:
+  HEIGHT: 320
+  WIDTH: 320
+  CHANNELS: 3
+
+# Model output classes
+OUTPUT:
+  CLASSES: 2
+
+
+HYPER_PARAMETERS:
+  EPOCHS: 100
+  BATCH_SIZE: 16  # specify per gpu batch size
+  LEARNING_RATE: 5e-5  # 0.1, 1e-3, 3e-4, 5e-5
+
+
+CALLBACKS:
+  # paths should be relative from project root path
+  TENSORBOARD:
+    PATH: "/checkpoint/tb_logs"
+
+  EARLY_STOPPING:
+    PATIENCE: 100
+
+  MODEL_CHECKPOINT:
+    PATH: "/checkpoint"
+    SAVE_WEIGHTS_ONLY: True
+    SAVE_BEST_ONLY: True
+
+  CSV_LOGGER:
+    PATH: "/checkpoint"
+    APPEND_LOGS: False
+
+
+PREPROCESS_DATA:
+  RESIZE:
+    VALUE: False  # if True, resize to input height and width
+    HEIGHT: ${INPUT.HEIGHT}
+    WIDTH: ${INPUT.WIDTH}
+
+  IMAGE_PREPROCESSING_TYPE: "normalize"
+
+  NORMALIZE_MASK:
+    VALUE: False  # if True, divide mask by given value
+    NORMALIZE_VALUE: 255
+
+  SHUFFLE:
+    TRAIN:
+      VALUE: True
+    VAL:
+      VALUE: False
+
+
+USE_MULTI_GPUS:
+  VALUE: True  # If True use multiple gpus for training
+  # GPU_IDS: Could be integer or list of integers.
+  # In case Integer: if integer value is -1 then it uses all available gpus.
+  # otherwise if positive number, then use given number of gpus.
+  # In case list of Integers: each integer will be considered as gpu id
+  # e.g. [4, 5, 7] means use gpu 5,6 and 8 for training/evaluation
+  GPU_IDS: -1
+
+
+OPTIMIZATION:
+  AMP: True  # Automatic Mixed Precision(AMP)
+  XLA: True  # Accelerated Linear Algebra(XLA)
+
+
+# to stop hydra from storing logs files
+# logs will be stored in outputs directory
+defaults:
+  - _self_
+  - override hydra/hydra_logging: disabled
+  - override hydra/job_logging: disabled
+
+hydra:
+  output_subdir: null
