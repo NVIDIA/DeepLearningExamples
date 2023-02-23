@@ -133,6 +133,7 @@ class PerformanceCallback(BaseCallback):
 
     def on_batch_start(self):
         if self.epoch >= self.warmup_epochs:
+            torch.cuda.synchronize()
             self.timestamps.append(time.time() * 1000.0)
 
     def _log_perf(self):
@@ -153,7 +154,7 @@ class PerformanceCallback(BaseCallback):
     def process_performance_stats(self):
         timestamps = np.asarray(self.timestamps)
         deltas = np.diff(timestamps)
-        throughput = (self.batch_size / deltas).mean()
+        throughput = self.batch_size / deltas.mean()
         stats = {
             f"throughput_{self.mode}": throughput,
             f"latency_{self.mode}_mean": deltas.mean(),

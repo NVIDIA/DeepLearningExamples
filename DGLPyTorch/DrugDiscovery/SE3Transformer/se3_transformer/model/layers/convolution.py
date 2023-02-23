@@ -113,7 +113,7 @@ class RadialProfile(nn.Module):
             nn.Linear(mid_dim, num_freq * channels_in * channels_out, bias=False)
         ]
 
-        self.net = nn.Sequential(*[m for m in modules if m is not None])
+        self.net = torch.jit.script(nn.Sequential(*[m for m in modules if m is not None]))
 
     def forward(self, features: Tensor) -> Tensor:
         return self.net(features)

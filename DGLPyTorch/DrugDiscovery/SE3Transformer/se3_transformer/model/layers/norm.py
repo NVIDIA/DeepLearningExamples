@@ -32,6 +32,15 @@ from torch.cuda.nvtx import range as nvtx_range
 from se3_transformer.model.fiber import Fiber
 
 
+@torch.jit.script
+def clamped_norm(x, clamp: float):
+    return x.norm(p=2, dim=-1, keepdim=True).clamp(min=clamp)
+
+@torch.jit.script
+def rescale(x, norm, new_norm):
+    return x / norm * new_norm
+
+
 class NormSE3(nn.Module):
     """
     Norm-based SE(3)-equivariant nonlinearity.
@@ -63,7 +72,7 @@ class NormSE3(nn.Module):
             output = {}
             if hasattr(self, 'group_norm'):
                 # Compute per-degree norms of features
-                norms = [features[str(d)].norm(dim=-1, keepdim=True).clamp(min=self.NORM_CLAMP)
+                norms = [clamped_norm(features[str(d)], self.NORM_CLAMP)
                          for d in self.fiber.degrees]
                 fused_norms = torch.cat(norms, dim=-2)
 
@@ -73,11 +82,11 @@ class NormSE3(nn.Module):
 
                 # Scale features to the new norms
                 for norm, new_norm, d in zip(norms, new_norms, self.fiber.degrees):
-                    output[str(d)] = features[str(d)] / norm * new_norm
+                    output[str(d)] = rescale(features[str(d)], norm, new_norm)
             else:
                 for degree, feat in features.items():
-                    norm = feat.norm(dim=-1, keepdim=True).clamp(min=self.NORM_CLAMP)
+                    norm = clamped_norm(feat, self.NORM_CLAMP)
                     new_norm = self.nonlinearity(self.layer_norms[degree](norm.squeeze(-1)).unsqueeze(-1))
-                    output[degree] = new_norm * feat / norm
+                    output[degree] = rescale(new_norm, feat, norm)
 
             return output
