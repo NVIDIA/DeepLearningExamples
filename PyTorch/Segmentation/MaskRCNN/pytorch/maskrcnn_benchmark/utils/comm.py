@@ -116,3 +116,9 @@ def reduce_dict(input_dict, average=True):
             values /= world_size
         reduced_dict = {k: v for k, v in zip(names, values)}
     return reduced_dict
+
+
+def synchronized_timestamp():
+    torch.cuda.synchronize()
+    return time.time()
+

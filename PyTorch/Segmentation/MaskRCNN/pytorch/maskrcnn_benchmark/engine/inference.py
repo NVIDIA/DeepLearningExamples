@@ -10,9 +10,7 @@ import torch
 from tqdm import tqdm
 
 from maskrcnn_benchmark.data.datasets.evaluation import evaluate
-from ..utils.comm import is_main_process
-from ..utils.comm import all_gather
-from ..utils.comm import synchronize
+from ..utils.comm import is_main_process, all_gather, synchronize, synchronized_timestamp
 
 
 def compute_on_dataset(model, data_loader, device, steps=-1):
@@ -83,7 +81,7 @@ def inference(
     )
     dataset = data_loader.dataset
     dllogger.log(step="PARAMETER", data={"eval_dataset_name": dataset_name, "eval_num_samples":len(dataset)})
-    start_time = time.time()
+    start_time = synchronized_timestamp()
     with torch.autograd.profiler.emit_nvtx(enabled=profile):
         predictions, latency = compute_on_dataset(model, data_loader, device, steps=steps)
     # wait for all processes to complete before measuring the time
