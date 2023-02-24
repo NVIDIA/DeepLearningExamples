@@ -8,7 +8,7 @@ AMP=${2:-true}
 CUDA_VISIBLE_DEVICES=0 python -m se3_transformer.runtime.training \
   --amp "$AMP" \
   --batch_size "$BATCH_SIZE" \
-  --epochs 6 \
+  --epochs 16 \
   --use_layer_norm \
   --norm \
   --save_ckpt_path model_qm9.pth \

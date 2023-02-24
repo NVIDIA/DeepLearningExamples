@@ -252,9 +252,9 @@ The following section lists the requirements that you need to meet in order to s
 
 ### Requirements
 
-This repository contains a Dockerfile which extends the PyTorch 21.07 NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
+This repository contains a Dockerfile which extends the PyTorch 23.01 NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 - [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-- PyTorch 21.07+ NGC container
+- PyTorch 23.01+ NGC container
 - Supported GPUs:
     - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
     - [NVIDIA Turing architecture](https://www.nvidia.com/en-us/design-visualization/technologies/turing-architecture/)
@@ -290,7 +290,7 @@ To train your model using mixed or TF32 precision with Tensor Cores or FP32, per
 
 4. Start training.
    ```
-   bash scripts/train.sh
+   bash scripts/train.sh  # or scripts/train_multi_gpu.sh
    ```
 
 5. Start inference/predictions.
@@ -474,7 +474,7 @@ The following sections provide details on how we achieved our performance and ac
 
 ##### Training accuracy: NVIDIA DGX A100 (8x A100 80GB)
 
-Our results were obtained by running the `scripts/train.sh` training script in the PyTorch 21.07 NGC container on NVIDIA DGX A100 (8x A100 80GB) GPUs.
+Our results were obtained by running the `scripts/train.sh` and `scripts/train_multi_gpu.sh` training scripts in the PyTorch 23.01 NGC container on NVIDIA DGX A100 (8x A100 80GB) GPUs.
 
 | GPUs | Batch size / GPU | Absolute error - TF32 | Absolute error - mixed precision | Time to train - TF32 | Time to train - mixed precision | Time to train speedup (mixed precision to TF32) |       
 |:----:|:----------------:|:---------------------:|:--------------------------------:|:--------------------:|:-------------------------------:|:-----------------------------------------------:|
@@ -484,7 +484,7 @@ Our results were obtained by running the `scripts/train.sh` training script in t
 
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
 
-Our results were obtained by running the `scripts/train.sh` training script in the PyTorch 21.07 NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs.
+Our results were obtained by running the `scripts/train.sh` and `scripts/train_multi_gpu.sh` training scripts in the PyTorch 23.01 NGC container on NVIDIA DGX-1 with (8x V100 16GB) GPUs.
 
 | GPUs | Batch size / GPU | Absolute error - FP32 | Absolute error - mixed precision | Time to train - FP32 | Time to train - mixed precision | Time to train speedup (mixed precision to FP32) |      
 |:----:|:----------------:|:---------------------:|:--------------------------------:|:--------------------:|:-------------------------------:|:-----------------------------------------------:|
@@ -497,14 +497,14 @@ Our results were obtained by running the `scripts/train.sh` training script in t
 
 ##### Training performance: NVIDIA DGX A100 (8x A100 80GB)
 
-Our results were obtained by running the `scripts/benchmark_train.sh` and `scripts/benchmark_train_multi_gpu.sh` benchmarking scripts in the PyTorch 21.07 NGC container on NVIDIA DGX A100 with 8x A100 80GB GPUs. Performance numbers (in molecules per millisecond) were averaged over five  entire training epochs after a warmup epoch.
+Our results were obtained by running the `scripts/benchmark_train.sh` and `scripts/benchmark_train_multi_gpu.sh` benchmarking scripts in the PyTorch 23.01 NGC container on NVIDIA DGX A100 with 8x A100 80GB GPUs. Performance numbers (in molecules per millisecond) were averaged over five  entire training epochs after a warmup epoch.
 
 |       GPUs       |  Batch size / GPU   | Throughput - TF32 [mol/ms] | Throughput - mixed precision [mol/ms] | Throughput speedup (mixed precision - TF32) | Weak scaling - TF32 | Weak scaling - mixed precision |
 |:----------------:|:-------------------:|:--------------------------:|:-------------------------------------:|:-------------------------------------------:|:-------------------:|:------------------------------:|
-|        1         |         240         |            2.61            |                 3.35                  |                    1.28x                    |                     |                                |
-|        1         |         120         |            1.94            |                 2.07                  |                    1.07x                    |                     |                                |
-|        8         |         240         |           18.80            |                 23.90                 |                    1.27x                    |        7.20         |              7.13              |
-|        8         |         120         |           14.10            |                 14.52                 |                    1.03x                    |        7.27         |              7.01              |
+|        1         |         240         |            2.59            |                 3.23                  |                    1.25x                    |                     |                                |
+|        1         |         120         |            1.89            |                 1.89                  |                    1.00x                    |                     |                                |
+|        8         |         240         |           18.38            |                 21.42                 |                    1.17x                    |        7.09         |              6.63              |
+|        8         |         120         |           13.23            |                 13.23                 |                    1.00x                    |        7.00         |              7.00              |
 
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
@@ -512,14 +512,14 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
 
-Our results were obtained by running the `scripts/benchmark_train.sh` and `scripts/benchmark_train_multi_gpu.sh` benchmarking scripts in the PyTorch 21.07 NGC container on NVIDIA DGX-1 with 8x V100 16GB GPUs. Performance numbers (in molecules per millisecond) were averaged over five  entire training epochs after a warmup epoch.
+Our results were obtained by running the `scripts/benchmark_train.sh` and `scripts/benchmark_train_multi_gpu.sh` benchmarking scripts in the PyTorch 23.01 NGC container on NVIDIA DGX-1 with 8x V100 16GB GPUs. Performance numbers (in molecules per millisecond) were averaged over five  entire training epochs after a warmup epoch.
 
 |       GPUs       |   Batch size / GPU   | Throughput - FP32 [mol/ms] | Throughput - mixed precision  [mol/ms] | Throughput speedup (FP32 - mixed precision) | Weak scaling - FP32 | Weak scaling - mixed precision |
 |:----------------:|:--------------------:|:--------------------------:|:--------------------------------------:|:-------------------------------------------:|:-------------------:|:------------------------------:|
-|        1         |         240          |            1.33            |                  2.12                  |                    1.59x                    |                     |                                |
-|        1         |         120          |            1.11            |                  1.45                  |                    1.31x                    |                     |                                |
-|        8         |         240          |            9.32            |                 13.40                  |                    1.44x                    |        7.01         |              6.32              |
-|        8         |         120          |            6.90            |                  8.39                  |                    1.22x                    |        6.21         |              5.79              |
+|        1         |         240          |            1.23            |                  1.91                  |                    1.55x                    |                     |                                |
+|        1         |         120          |            1.01            |                  1.23                  |                    1.22x                    |                     |                                |
+|        8         |         240          |            8.44            |                 11.28                  |                    1.34x                    |         6.8         |              5.90              |
+|        8         |         120          |            6.06            |                  7.36                  |                    1.21x                    |        6.00         |              5.98              |
 
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
@@ -530,23 +530,23 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 ##### Inference performance: NVIDIA DGX A100 (1x A100 80GB)
 
-Our results were obtained by running the `scripts/benchmark_inference.sh` inferencing benchmarking script in the PyTorch 21.07 NGC container on NVIDIA DGX A100 with 1x A100 80GB GPU.
+Our results were obtained by running the `scripts/benchmark_inference.sh` inferencing benchmarking script in the PyTorch 23.01 NGC container on NVIDIA DGX A100 with 1x A100 80GB GPU.
 
 AMP
 
 | Batch size | Throughput Avg [mol/ms] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
 |:----------:|:-----------------------:|:----------------:|:----------------:|:----------------:|:----------------:|
-|    1600    |          13.54          |      121.44      |      118.07      |      119.00      |      366.64      |
-|    800     |          12.63          |      64.11       |      63.78       |      64.37       |      68.19       |
-|    400     |          10.65          |      37.97       |      39.02       |      39.67       |      42.87       |
+|    1600    |          9.71           |      175.2       |      190.2       |      191.8       |      432.4       |
+|    800     |          7.90           |      114.5       |      134.3       |      135.8       |      140.2       |
+|    400     |          7.18           |      75.49       |      108.6       |      109.6       |      113.2       |
 
 TF32
 
 | Batch size | Throughput Avg [mol/ms] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
 |:----------:|:-----------------------:|:----------------:|:----------------:|:----------------:|:----------------:|
-|    1600    |          8.97           |      180.85      |      178.31      |      178.92      |      375.33      |
-|    800     |          8.86           |      90.76       |      90.77       |      91.11       |      92.96       |
-|    400     |          8.49           |      47.42       |      47.65       |      48.15       |      50.74       |
+|    1600    |          8.19           |      198.2       |      206.8       |      208.5       |      377.0       |
+|    800     |          7.56           |      107.5       |      119.6       |      120.5       |      125.7       |
+|    400     |          6.97           |       59.8       |       75.1       |       75.7       |       81.3       |
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
 
@@ -554,23 +554,23 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 ##### Inference performance: NVIDIA DGX-1 (1x V100 16GB)
 
-Our results were obtained by running the `scripts/benchmark_inference.sh` inferencing benchmarking script in the PyTorch 21.07 NGC container on NVIDIA DGX-1 with 1x V100 16GB GPU.
+Our results were obtained by running the `scripts/benchmark_inference.sh` inferencing benchmarking script in the PyTorch 23.01 NGC container on NVIDIA DGX-1 with 1x V100 16GB GPU.
 
 AMP
 
 | Batch size | Throughput Avg [mol/ms] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
 |:----------:|:-----------------------:|:----------------:|:----------------:|:----------------:|:----------------:|
-|    1600    |          6.59           |      248.02      |      242.11      |      242.62      |      674.60      |
-|    800     |          6.38           |      126.49      |      125.96      |      126.31      |      127.72      |
-|    400     |          5.90           |      68.24       |      68.53       |      69.02       |      70.87       |
+|    1600    |          5.39           |      306.6       |      321.2       |      324.9       |      819.1       |
+|    800     |          4.67           |      179.8       |      201.5       |      203.8       |      213.3       |
+|    400     |          4.25           |      108.2       |      142.0       |      143.0       |      149.0       |
 
 FP32
 
 | Batch size | Throughput Avg [mol/ms] | Latency Avg [ms] | Latency 90% [ms] | Latency 95% [ms] | Latency 99% [ms] |
 |:----------:|:-----------------------:|:----------------:|:----------------:|:----------------:|:----------------:|
-|    1600    |          3.33           |      482.20      |      483.50      |      485.28      |      754.84      |
-|    800     |          3.35           |      239.09      |      242.21      |      243.13      |      244.91      |
-|    400     |          3.27           |      122.68      |      123.60      |      124.18      |      125.85      |
+|    1600    |          3.14           |      510.9       |      518.83      |      521.1       |      808.0       |
+|    800     |          3.10           |      258.7       |      269.4       |      271.1       |      278.9       |
+|    400     |          2.93           |      137.3       |      147.5       |      148.8       |      151.7       |
 
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
@@ -579,6 +579,10 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 ## Release notes
 
 ### Changelog
+
+February 2023:
+- Upgraded base container
+- Fixed benchmarking code
 
 August 2022:
 - Slight performance improvements
@@ -604,3 +608,4 @@ August 2021
 ### Known issues
 
 If you encounter `OSError: [Errno 12] Cannot allocate memory` during the Dataloader iterator creation (more precisely during the `fork()`, this is most likely due to the use of the `--precompute_bases` flag. If you cannot add more RAM or Swap to your machine, it is recommended to turn off bases precomputation by removing the `--precompute_bases` flag or using `--precompute_bases false`.
+

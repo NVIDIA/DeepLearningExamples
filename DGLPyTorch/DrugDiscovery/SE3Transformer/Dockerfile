@@ -24,7 +24,7 @@
 # run docker daemon with --default-runtime=nvidia for GPU detection during build
 # multistage build for DGL with CUDA and FP16
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:22.08-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:23.01-py3
 
 FROM ${FROM_IMAGE_NAME} AS dgl_builder
 
@@ -33,7 +33,7 @@ RUN apt-get update \
     && apt-get install -y git build-essential python3-dev make cmake \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /dgl
-RUN git clone --branch 0.9.0 --recurse-submodules --depth 1 https://github.com/dmlc/dgl.git .
+RUN git clone --branch 1.0.0 --recurse-submodules --depth 1 https://github.com/dmlc/dgl.git .
 WORKDIR build
 RUN export NCCL_ROOT=/usr \
     && cmake .. -GNinja -DCMAKE_BUILD_TYPE=Release \
