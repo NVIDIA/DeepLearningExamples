@@ -43,7 +43,7 @@ class CocoDetection(data.Dataset):
 
     def __init__(self, root, ann_file, config, transform=None):
         super(CocoDetection, self).__init__()
-        if isinstance(root, torch._six.string_classes):
+        if isinstance(root, (str, bytes)):
             root = os.path.expanduser(root)
         self.root = root
         self.transform = transform
