@@ -124,5 +124,5 @@ class TrafficConfig():
 
 
 CONFIGS = {'electricity':  ElectricityConfig,
-           'traffic':      TrafficConfig, 
+           'traffic':      TrafficConfig,
            }

@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:21.12-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:22.11-py3
+
 FROM ${FROM_IMAGE_NAME}
 
 # Set workdir and python path

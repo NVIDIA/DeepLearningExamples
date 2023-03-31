@@ -23,10 +23,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributed as dist
 from torch.utils.data import DataLoader, DistributedSampler, RandomSampler
-from apex import amp
 from apex.optimizers import FusedAdam
-#from torch.nn.parallel import DistributedDataParallel as DDP
-from apex.parallel import DistributedDataParallel as DDP
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.cuda import amp
 
 import numpy as np
 
@@ -34,47 +33,13 @@ import dllogger
 
 from modeling import TemporalFusionTransformer
 from configuration import CONFIGS
-from data_utils import TFTBinaryDataset, sample_data
+from data_utils import load_dataset
 from log_helper import setup_logger
 from criterions import QuantileLoss
 from inference import predict
-from utils import PerformanceMeter
+from utils import PerformanceMeter, print_once
 import gpu_affinity
 from ema import ModelEma
-
-def load_dataset(args, config):
-    train_split = TFTBinaryDataset(os.path.join(args.data_path, 'train.bin'), config)
-    train_split = sample_data(train_split, args.sample_data[0])
-    if args.distributed_world_size > 1:
-        data_sampler = DistributedSampler(train_split, args.distributed_world_size, args.distributed_rank, seed=args.seed + args.distributed_rank, drop_last=True)
-    else:
-        data_sampler = RandomSampler(train_split)
-    train_loader = DataLoader(train_split, batch_size=args.batch_size, num_workers=4, sampler=data_sampler, pin_memory=True)
-
-    valid_split = TFTBinaryDataset(os.path.join(args.data_path, 'valid.bin'), config)
-    valid_split = sample_data(valid_split, args.sample_data[1])
-    if args.distributed_world_size > 1:
-        data_sampler = DistributedSampler(valid_split, args.distributed_world_size, args.distributed_rank, shuffle=False, drop_last=False)
-    else:
-        data_sampler = None
-    valid_loader = DataLoader(valid_split, batch_size=args.batch_size, sampler=data_sampler, num_workers=4, pin_memory=True)
-
-    test_split = TFTBinaryDataset(os.path.join(args.data_path, 'test.bin'), config)
-    if args.distributed_world_size > 1:
-        data_sampler = DistributedSampler(test_split, args.distributed_world_size, args.distributed_rank, shuffle=False, drop_last=False)
-    else:
-        data_sampler = None
-    test_loader = DataLoader(test_split, batch_size=args.batch_size, sampler=data_sampler, num_workers=4, pin_memory=True)
-
-    print_once(f'Train split length: {len(train_split)}')
-    print_once(f'Valid split length: {len(valid_split)}')
-    print_once(f'Test split length: {len(test_split)}')
-
-    return train_loader, valid_loader, test_loader
-
-def print_once(*args, **kwargs):
-    if not dist.is_initialized() or dist.get_rank() == 0:
-        print(*args, **kwargs)
 
 
 def main(args):
@@ -113,23 +78,28 @@ def main(args):
 
     dllogger.log(step='HPARAMS', data={**vars(args), **vars(config)}, verbosity=1)
 
+    train_loader, valid_loader, test_loader = load_dataset(args, config)
+
     model = TemporalFusionTransformer(config).cuda()
     if args.ema_decay:
         model_ema = ModelEma(model, decay=args.ema_decay)
 
-    print_once('Model params: {}'.format(sum(p.numel() for p in model.parameters())))
+    # Run dummy iteration to initialize lazy modules
+    dummy_batch = next(iter(train_loader))
+    dummy_batch = {key: tensor.cuda() if tensor.numel() else None for key, tensor in dummy_batch.items()}
+    model(dummy_batch)
+
     criterion = QuantileLoss(config).cuda()
     optimizer = FusedAdam(model.parameters(), lr=args.lr)
-    if args.use_amp:
-        model, optimizer = amp.initialize(model, optimizer, opt_level="O2", loss_scale="dynamic")
     if args.distributed_world_size > 1:
-        #model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True)
-        model = DDP(model)
+        model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank, find_unused_parameters=True)
 
-    train_loader, valid_loader, test_loader = load_dataset(args, config)
 
+    print_once('Model params: {}'.format(sum(p.numel() for p in model.parameters())))
     global_step = 0
     perf_meter = PerformanceMeter(benchmark_mode=not args.disable_benchmark)
+    if args.use_amp:
+        scaler = amp.GradScaler(init_scale=32768.0)
 
     for epoch in range(args.epochs):
         start = time.time()
@@ -139,20 +109,28 @@ def main(args):
         for local_step, batch in enumerate(train_loader):
             perf_meter.reset_current_lap()
             batch = {key: tensor.cuda() if tensor.numel() else None for key, tensor in batch.items()}
-            predictions = model(batch)
-            targets = batch['target'][:,config.encoder_length:,:]
-            p_losses = criterion(predictions, targets)
-            loss = p_losses.sum()
-
+            with torch.jit.fuser("fuser2"), amp.autocast(enabled=args.use_amp):
+                predictions = model(batch)
+                targets = batch['target'][:,config.encoder_length:,:]
+                p_losses = criterion(predictions, targets)
+                loss = p_losses.sum()
+            if global_step == 0 and args.ema_decay:
+                model_ema(batch)
             if args.use_amp:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
+                scaler.scale(loss).backward()
+
             else:
                 loss.backward()
             if not args.grad_accumulation or (global_step+1) % args.grad_accumulation == 0:
+                if args.use_amp:
+                    scaler.unscale_(optimizer)
                 if args.clip_grad:
                     torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad)
-                optimizer.step()
+                if args.use_amp:
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    optimizer.step()
                 optimizer.zero_grad()
                 if args.ema_decay:
                     model_ema.update(model)
@@ -164,7 +142,7 @@ def main(args):
 
             torch.cuda.synchronize()
             ips = perf_meter.update(args.batch_size * args.distributed_world_size,
-                    exclude_from_total=local_step in [0, len(train_loader)-1])
+                    exclude_from_total=local_step in [0, 1, 2, len(train_loader)-1])
 
             log_dict = {'P10':p_losses[0].item(), 'P50':p_losses[1].item(), 'P90':p_losses[2].item(), 'loss': loss.item(), 'items/s':ips}
             dllogger.log(step=global_step, data=log_dict, verbosity=1)
@@ -188,6 +166,10 @@ def main(args):
     cat_encodings = pickle.load(open(os.path.join(args.data_path,'cat_encodings.bin'), 'rb'))
 
     unscaled_predictions, unscaled_targets, _, _ = predict(args, config, model, test_loader, tgt_scalers, cat_encodings)
+
+    unscaled_predictions = torch.from_numpy(unscaled_predictions).contiguous()
+    unscaled_targets = torch.from_numpy(unscaled_targets).contiguous()
+
     losses = QuantileLoss(config)(unscaled_predictions, unscaled_targets)
     normalizer = unscaled_targets.abs().mean()
     quantiles = 2 * losses / normalizer
@@ -212,7 +194,7 @@ def validate(args, config, model, criterion, dataloader, global_step):
     torch.cuda.synchronize()
     validation_start = time.time()
     for batch in dataloader:
-        with torch.no_grad():
+        with torch.jit.fuser("fuser2"), amp.autocast(enabled=args.use_amp), torch.no_grad():
             batch = {key: tensor.cuda() if tensor.numel() else None for key, tensor in batch.items()}
             predictions = model(batch)
             targets = batch['target'][:,config.encoder_length:,:]

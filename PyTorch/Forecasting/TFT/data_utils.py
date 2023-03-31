@@ -41,7 +41,8 @@ import numpy as np
 from bisect import bisect
 
 import torch
-from torch.utils.data import Dataset,IterableDataset,DataLoader
+from torch.utils.data import Dataset, IterableDataset, DataLoader, DistributedSampler, RandomSampler
+from torch.utils.data.dataloader import default_collate
 
 class DataTypes(enum.IntEnum):
     """Defines numerical types of each column."""
@@ -401,6 +402,51 @@ def sample_data(dataset, num_samples):
     else:
         return torch.utils.data.Subset(dataset, np.random.choice(np.arange(len(dataset)), size=num_samples, replace=False))
 
+def load_dataset(args, config, collate_fn=default_collate):
+    from utils import print_once
+    train_split = TFTBinaryDataset(os.path.join(args.data_path, 'train.bin'), config)
+    train_split = sample_data(train_split, args.sample_data[0])
+    if args.distributed_world_size > 1:
+        data_sampler = DistributedSampler(train_split, args.distributed_world_size, args.distributed_rank, seed=args.seed + args.distributed_rank, drop_last=True)
+    else:
+        data_sampler = RandomSampler(train_split)
+    train_loader = DataLoader(train_split,
+                              batch_size=args.batch_size,
+                              num_workers=4,
+                              sampler=data_sampler, 
+                              collate_fn=collate_fn,
+                              pin_memory=True)
+
+    valid_split = TFTBinaryDataset(os.path.join(args.data_path, 'valid.bin'), config)
+    valid_split = sample_data(valid_split, args.sample_data[1])
+    if args.distributed_world_size > 1:
+        data_sampler = DistributedSampler(valid_split, args.distributed_world_size, args.distributed_rank, shuffle=False, drop_last=False)
+    else:
+        data_sampler = None
+    valid_loader = DataLoader(valid_split, 
+                              batch_size=args.batch_size, 
+                              sampler=data_sampler, 
+                              num_workers=4, 
+                              collate_fn=collate_fn,
+                              pin_memory=True)
+
+    test_split = TFTBinaryDataset(os.path.join(args.data_path, 'test.bin'), config)
+    if args.distributed_world_size > 1:
+        data_sampler = DistributedSampler(test_split, args.distributed_world_size, args.distributed_rank, shuffle=False, drop_last=False)
+    else:
+        data_sampler = None
+    test_loader = DataLoader(test_split,
+                             batch_size=args.batch_size, 
+                             sampler=data_sampler, 
+                             num_workers=4, 
+                             collate_fn=collate_fn,
+                             pin_memory=True)
+
+    print_once(f'Train split length: {len(train_split)}')
+    print_once(f'Valid split length: {len(valid_split)}')
+    print_once(f'Test split length: {len(test_split)}')
+
+    return train_loader, valid_loader, test_loader
 
 def standarize_electricity(path):
     """Code taken from https://github.com/google-research/google-research/blob/master/tft/script_download_data.py"""
@@ -573,5 +619,4 @@ def standarize_traffic(path):
     flat_df['categorical_time_on_day'] = flat_df['time_on_day'].copy()
   
     flat_df.to_csv(os.path.join(path, 'standarized.csv'))
-
 

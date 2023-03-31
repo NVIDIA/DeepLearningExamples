@@ -123,9 +123,6 @@ For information about:
   Training of Deep Neural
   Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/)
   blog.
-* APEX tools for mixed precision training, refer to the [NVIDIA Apex: Tools for Easy Mixed-Precision Training in
-  PyTorch](https://devblogs.nvidia.com/apex-pytorch-easy-mixed-precision-training/)
-  .
 
 
 #### Enabling mixed precision
@@ -169,7 +166,7 @@ The following section lists the requirements that you need to meet in order to s
 
 This repository contains Dockerfile, which extends the PyTorch NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 -   [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
--   [PyTorch 21.12 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
+-   [PyTorch 22.11 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch)
 -   Supported GPUs:
 - [NVIDIA Volta architecture](https://www.nvidia.com/en-us/data-center/volta-gpu-architecture/)
 - [NVIDIA Turing architecture](https://www.nvidia.com/en-us/design-visualization/technologies/turing-architecture/)
@@ -371,7 +368,7 @@ The [NVIDIA Triton Inference Server](https://github.com/triton-inference-server/
 
 ### Benchmarking
 
-The following section shows how to run benchmarks measuring the model performance in training and inference modes.
+The following section shows how to run benchmarks measuring the model performance in training and inference modes. Note that the first 3 steps of each epoch are not used in the throughput or latency calculation.  This is due to the fact that the nvFuser performs the optimizations on the 3rd step of the first epoch causing a multi-second pause.
 
 #### Training performance benchmark
 
@@ -390,24 +387,24 @@ We conducted an extensive hyperparameter search along with stability tests. The 
 
 ##### Training accuracy: NVIDIA DGX A100 (8x A100 80GB)
 
-Our results were obtained by running the `train.sh` training script in the [PyTorch 21.06 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA A100 (8x A100 80GB) GPUs.
+Our results were obtained by running the `train.sh` training script in the [PyTorch 22.11 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA A100 (8x A100 80GB) GPUs.
 
 | Dataset | GPUs | Batch size / GPU    | Accuracy - TF32  | Accuracy - mixed precision  |   Time to train - TF32  |  Time to train - mixed precision | Time to train speedup (TF32 to mixed precision)     
 |-------------|---|------|-----------------------|-----------------------|-------|-------|-------
-| Electricity | 8 | 1024 | 0.027 / 0.057 / 0.029 | 0.028 / 0.057 / 0.029 | 216s  | 176s  | 1.227x
-| Traffic     | 8 | 1024 | 0.043 / 0.108 / 0.079 | 0.042 / 0.107 / 0.078 | 151s  | 126s  | 1.198x
+| Electricity | 8 | 1024 | 0.026 / 0.056 / 0.029 | 0.028 / 0.058 / 0.029 | 200s  | 176s  | 1.136x
+| Traffic     | 8 | 1024 | 0.044 / 0.108 / 0.078 | 0.044 / 0.109 / 0.079 | 140s  | 129s  | 1.085x
 
 
 
 
 ##### Training accuracy: NVIDIA DGX-1 (8x V100 16GB)
 
-Our results were obtained by running the `train.sh` training script in the [PyTorch 21.06 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA DGX-1 with (8x V100 16GB) GPUs.
+Our results were obtained by running the `train.sh` training script in the [PyTorch 22.11 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA DGX-1 with (8x V100 16GB) GPUs.
 
 | Dataset | GPUs    | Batch size / GPU    | Accuracy - FP32  | Accuracy - mixed precision  |   Time to train - FP32  |  Time to train - mixed precision | Time to train speedup (FP32 to mixed precision)        
 |-------------|---|------|-----------------------|-----------------------|-------|-------|-----------
-| Electricity | 8 | 1024 | 0.028 / 0.057 / 0.029 | 0.027 / 0.057 / 0.029 | 381s  | 261s  | 1.460x   
-| Traffic     | 8 | 1024 | 0.042 / 0.106 / 0.076 | 0.040 / 0.103 / 0.074 | 256s  | 176s  | 1.455x
+| Electricity | 8 | 1024 | 0.028 / 0.057 / 0.028 | 0.027 / 0.059 / 0.030 | 371s  | 269s  | 1.379x   
+| Traffic     | 8 | 1024 | 0.042 / 0.110 / 0.080 | 0.043 / 0.109 / 0.080 | 251s  | 191s  | 1.314x
 
 
 
@@ -417,22 +414,22 @@ In order to get a greater picture of the model’s accuracy, we performed a hype
 
 | Dataset     | #GPU | Hidden size | #Heads | Local BS | LR   | Gradient clipping | Dropout | Mean q-risk | Std q-risk | Min q-risk | Max q-risk
 |-------------|------|-------------|--------|----------|------|-------------------|---------|-------------|------------| -----------|------ 
-| Electricity | 8    | 128         | 4      | 1024     | 1e-3 | 0.0               | 0.1     | 0.1131      | 0.0025     | 0.1080     | 0.1200
-| Traffic     | 8    | 128         | 4      | 1024     | 1e-3 | 0.0               | 0.3     | 0.2180      | 0.0049     | 0.2069     | 0.2336
+| Electricity | 8    | 128         | 4      | 1024     | 1e-3 | 0.0               | 0.1     | 0.1129      | 0.0025     | 0.1074     | 0.1244
+| Traffic     | 8    | 128         | 4      | 1024     | 1e-3 | 0.0               | 0.3     | 0.2262      | 0.0027     | 0.2207     | 0.2331
 
 
 #### Training performance results
 
 ##### Training performance: NVIDIA DGX A100 (8x A100 80GB)
 
-Our results were obtained by running the `train.sh` training script in the [PyTorch 21.06 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA A100 (8x A100 80GB) GPUs. Performance numbers (in items/images per second) were averaged over an entire training epoch.
+Our results were obtained by running the `train.sh` training script in the [PyTorch 22.11 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA A100 (8x A100 80GB) GPUs. Performance numbers (in items/images per second) were averaged over an entire training epoch.
 
 | Dataset | GPUs   | Batch size / GPU   | Throughput - TF32    | Throughput - mixed precision    | Throughput speedup (TF32 - mixed precision)   | Weak scaling - TF32    | Weak scaling - mixed precision        
 |-------------|---|------|--------|--------|-------|-------|-----
-| Electricity | 1 | 1024 | 10173  | 13703  | 1.35x | 1     | 1
-| Electricity | 8 | 1024 | 80596  | 107761 | 1.34x | 7.92x | 7.86x
-| Traffic     | 1 | 1024 | 10197  | 13779  | 1.35x | 1     | 1
-| Traffic     | 8 | 1024 | 80692  | 107979 | 1.34x | 7.91x | 7.84x
+| Electricity | 1 | 1024 | 12435  | 17608  | 1.42x | 1     | 1
+| Electricity | 8 | 1024 | 94389  | 130769 | 1.39x | 7.59x | 7.42x
+| Traffic     | 1 | 1024 | 12509  | 17591  | 1.40x | 1     | 1
+| Traffic     | 8 | 1024 | 94476  | 130992 | 1.39x | 7.55x | 7.45x
 
 
 To achieve these same results, follow the steps in the [Quick Start Guide](#quick-start-guide).
@@ -442,14 +439,14 @@ The performance metrics used were items per second.
 
 ##### Training performance: NVIDIA DGX-1 (8x V100 16GB)
 
-Our results were obtained by running the `train.sh` training script in the [PyTorch 21.06 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA DGX-1 with (8x V100 16GB) GPUs. Performance numbers (in items/images per second) were averaged over an entire training epoch.
+Our results were obtained by running the `train.sh` training script in the [PyTorch 22.11 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA DGX-1 with (8x V100 16GB) GPUs. Performance numbers (in items/images per second) were averaged over an entire training epoch.
 
 | Dataset | GPUs   | Batch size / GPU   | Throughput - FP32    | Throughput - mixed precision    | Throughput speedup (FP32 - mixed precision)   | Weak scaling - FP32    | Weak scaling - mixed precision        
 |-------------|---|------|-------|-------|-------|------|----
-| Electricity | 1 | 1024 | 5580  | 9148  | 1.64x | 1     | 1
-| Electricity | 8 | 1024 | 43351 | 69855 | 1.61x | 7.77x | 7.64x
-| Traffic     | 1 | 1024 | 5593  | 9194  | 1.64x | 1     | 1
-| Traffic     | 8 | 1024 | 43426 | 69983 | 1.61x | 7.76x | 7.61x
+| Electricity | 1 | 1024 | 5932  | 10163 | 1.71x | 1     | 1
+| Electricity | 8 | 1024 | 45566 | 75660 | 1.66x | 7.68x | 7.44x
+| Traffic     | 1 | 1024 | 5971  | 10166 | 1.70x | 1     | 1
+| Traffic     | 8 | 1024 | 45925 | 75640 | 1.64x | 7.69x | 7.44x
 
 
 
@@ -463,38 +460,43 @@ The performance metrics used were items per second.
 
 ##### Inference Performance: NVIDIA DGX A100
 
-Our results were obtained by running the `inference.py` script in the [PyTorch 21.12 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA DGX A100.  Throughput is measured in items per second and latency is measured in milliseconds.
+Our results were obtained by running the `inference.py` script in the [PyTorch 22.11 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA DGX A100.  Throughput is measured in items per second and latency is measured in milliseconds.
 To benchmark the inference performance on a specific batch size and dataset, run the `inference.py` script.
 | Dataset | GPUs   | Batch size / GPU   | Throughput - mixed precision (item/s)    | Average Latency (ms) | Latency p90 (ms) | Latency p95 (ms) | Latency p99 (ms)
 |-------------|--------|-----|---------------------------------|-----------------|-------------|-------------|------------
-| Electricity | 1      | 1   | 144.37   | 6.93 | 7.00 | 7.04 | 7.25
-| Electricity | 1      | 2   | 277.53   | 7.21 | 7.25 | 7.27 | 7.48
-| Electricity | 1      | 4   | 564.37   | 7.09 | 7.13 | 7.15 | 7.64
-| Electricity | 1      | 8   | 1399.25  | 5.72 | 5.71 | 5.77 | 7.51
-| Traffic     | 1      | 1   | 145.26   | 6.88 | 6.91 | 6.95 | 7.60
-| Traffic     | 1      | 2   | 277.97   | 7.19 | 7.28 | 7.30 | 7.46
-| Traffic     | 1      | 4   | 563.05   | 7.10 | 7.14 | 7.16 | 7.42
-| Traffic     | 1      | 8   | 1411.62  | 5.67 | 5.69 | 5.79 | 6.21
+| Electricity | 1      | 1   | 272.43   | 3.67 | 3.70 | 3.87 | 4.18
+| Electricity | 1      | 2   | 518.13   | 3.86 | 3.88 | 3.93 | 4.19
+| Electricity | 1      | 4   | 1039.31  | 3.85 | 3.89 | 3.97 | 4.15
+| Electricity | 1      | 8   | 2039.54  | 3.92 | 3.93 | 3.95 | 4.32
+| Traffic     | 1      | 1   | 269.59   | 3.71 | 3.74 | 3.79 | 4.30
+| Traffic     | 1      | 2   | 518.73   | 3.86 | 3.78 | 3.91 | 4.66
+| Traffic     | 1      | 4   | 1021.49  | 3.92 | 3.94 | 3.95 | 4.25
+| Traffic     | 1      | 8   | 2005.54  | 3.99 | 4.01 | 4.03 | 4.39
 
 
 ##### Inference Performance: NVIDIA DGX-1 V100
 
-Our results were obtained by running the `inference.py` script in the [PyTorch 21.12 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA DGX-1 V100.  Throughput is measured in items per second and latency is measured in milliseconds.
+Our results were obtained by running the `inference.py` script in the [PyTorch 22.11 NGC container](https://ngc.nvidia.com/catalog/containers/nvidia:pytorch) on NVIDIA DGX-1 V100.  Throughput is measured in items per second and latency is measured in milliseconds.
 To benchmark the inference performance on a specific batch size and dataset, run the `inference.py` script.
 | Dataset | GPUs   | Batch size / GPU   | Throughput - mixed precision (item/s)    | Average Latency (ms) | Latency p90 (ms) | Latency p95 (ms) | Latency p99 (ms)
 |-------------|--------|-----|---------------------------------|-----------------|-------------|-------------|------------
-| Electricity | 1      | 1   | 95.65  | 10.45 | 11.30 | 11.95 | 12.13 
-| Electricity | 1      | 2   | 193.15  | 10.35 | 10.80 | 11.46 | 12.16 
-| Electricity | 1      | 4   | 381.09  | 10.49 | 10.75 | 12.29 | 12.41
-| Electricity | 1      | 8   | 805.49 | 9.93 | 10.41 | 10.48 | 10.91
-| Traffic     | 1      | 1   | 96.72  | 10.34 | 10.53 | 11.99 | 12.13
-| Traffic     | 1      | 2   | 192.93  | 10.37 | 10.80 | 11.97 | 12.12
-| Traffic     | 1      | 4   | 379.00  | 10.55 | 10.88 | 11.09 | 11.96
-| Traffic     | 1      | 8   | 859.69 | 9.30 | 10.58 | 10.65 | 11.28
+| Electricity | 1      | 1   | 171.68  | 5.82 | 5.99 | 6.17 | 7.00 
+| Electricity | 1      | 2   | 318.92  | 6.27 | 6.43 | 6.60 | 7.51 
+| Electricity | 1      | 4   | 684.79  | 5.84 | 6.02 | 6.08 | 6.47
+| Electricity | 1      | 8   | 1275.54 | 6.27 | 7.31 | 7.36 | 7.51
+| Traffic     | 1      | 1   | 183.39  | 5.45 | 5.64 | 5.86 | 6.73
+| Traffic     | 1      | 2   | 340.73  | 5.87 | 6.07 | 6.77 | 7.25
+| Traffic     | 1      | 4   | 647.33  | 6.18 | 6.35 | 7.99 | 8.07
+| Traffic     | 1      | 8   | 1364.39 | 5.86 | 6.07 | 6.40 | 7.31
 ## Release notes
 The performance measurements in this document were conducted at the time of publication and may not reflect the performance achieved from NVIDIA’s latest software release. For the most up-to-date performance measurements, go to https://developer.nvidia.com/deep-learning-performance-training-inference.
 
 ### Changelog
+
+March 2023
+- 23.01 Container Update
+- Switch from NVIDIA Apex AMP and NVIDIA Apex FusedLayerNorm to Native PyTorch AMP and Native PyTorch LayerNorm
+- Acceleration using NvFuser
 
 February 2022
 - 21.12 Container Update

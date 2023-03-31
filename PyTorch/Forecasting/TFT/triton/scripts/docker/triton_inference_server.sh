@@ -41,7 +41,7 @@ docker run --rm -d \
   --ulimit memlock=-1 \
   --ulimit stack=67108864 \
   --ipc=host \
-  nvcr.io/nvidia/tritonserver:21.12-py3 tritonserver \
+  nvcr.io/nvidia/tritonserver:22.11-py3 tritonserver \
   --model-store=${MODEL_REPOSITORY_PATH} \
   --strict-model-config=false \
   --exit-on-error=true \

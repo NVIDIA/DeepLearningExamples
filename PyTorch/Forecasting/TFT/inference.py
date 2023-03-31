@@ -26,12 +26,12 @@ from modeling import TemporalFusionTransformer
 from configuration import ElectricityConfig
 from data_utils import TFTDataset
 from utils import PerformanceMeter
-from criterions import QuantileLoss
+from criterions import qrisk
 import dllogger
 from log_helper import setup_logger
+from torch.cuda import amp
 
 def _unscale_per_id(config, values, ids, scalers):
-    values = values.cpu().numpy()
     num_horizons = config.example_length - config.encoder_length + 1
     flat_values = pd.DataFrame(
             values,
@@ -51,11 +51,9 @@ def _unscale_per_id(config, values, ids, scalers):
     flat_values = pd.concat(df_list, axis=0)
 
     flat_values = flat_values[[col for col in flat_values if not 'id' in col]]
-    flat_tensor = torch.from_numpy(flat_values.values)
-    return flat_tensor
+    return flat_values.values
 
 def _unscale(config, values, scaler):
-    values = values.cpu().numpy()
     num_horizons = config.example_length - config.encoder_length + 1
     flat_values = pd.DataFrame(
             values,
@@ -68,8 +66,7 @@ def _unscale(config, values, scaler):
             flat_values[col] = _t_col
 
     flat_values = flat_values[[col for col in flat_values if not 'id' in col]]
-    flat_tensor = torch.from_numpy(flat_values.values)
-    return flat_tensor
+    return flat_values.values
 
 def predict(args, config, model, data_loader, scalers, cat_encodings, extend_targets=False):
     model.eval()
@@ -78,36 +75,37 @@ def predict(args, config, model, data_loader, scalers, cat_encodings, extend_tar
     ids = []
     perf_meter = PerformanceMeter(benchmark_mode=not args.disable_benchmark)
     n_workers = args.distributed_world_size if hasattr(args, 'distributed_world_size') else 1
+    
+    with torch.jit.fuser("fuser2"):
+        for step, batch in enumerate(data_loader):
+            perf_meter.reset_current_lap()
+            with torch.no_grad():
+                batch = {key: tensor.cuda() if tensor.numel() else None for key, tensor in batch.items()}
+                ids.append(batch['id'][:,0,:])
+                targets.append(batch['target'])
+                predictions.append(model(batch).float())
 
-    for step, batch in enumerate(data_loader):
-        perf_meter.reset_current_lap()
-        with torch.no_grad():
-            batch = {key: tensor.cuda() if tensor.numel() else None for key, tensor in batch.items()}
-            ids.append(batch['id'][:,0,:])
-            targets.append(batch['target'])
-            predictions.append(model(batch).float())
+            perf_meter.update(args.batch_size * n_workers,
+                exclude_from_total=step in [0, 1, 2, len(data_loader)-1])
 
-        perf_meter.update(args.batch_size * n_workers,
-            exclude_from_total=step in [0, len(data_loader)-1])
-
-    targets = torch.cat(targets, dim=0)
+    targets = torch.cat(targets, dim=0).cpu().numpy()
     if not extend_targets:
         targets = targets[:,config.encoder_length:,:] 
-    predictions = torch.cat(predictions, dim=0)
+    predictions = torch.cat(predictions, dim=0).cpu().numpy()
     
     if config.scale_per_id:
         ids = torch.cat(ids, dim=0).cpu().numpy()
 
-        unscaled_predictions = torch.stack(
+        unscaled_predictions = np.stack(
                 [_unscale_per_id(config, predictions[:,:,i], ids, scalers) for i in range(len(config.quantiles))], 
-                dim=-1)
-        unscaled_targets = _unscale_per_id(config, targets[:,:,0], ids, scalers).unsqueeze(-1)
+                axis=-1)
+        unscaled_targets = np.expand_dims(_unscale_per_id(config, targets[:,:,0], ids, scalers), axis=-1)
     else:
         ids = None
-        unscaled_predictions = torch.stack(
+        unscaled_predictions = np.stack(
                 [_unscale(config, predictions[:,:,i], scalers['']) for i in range(len(config.quantiles))], 
-                dim=-1)
-        unscaled_targets = _unscale(config, targets[:,:,0], scalers['']).unsqueeze(-1)
+                axis=-1)
+        unscaled_targets = np.expand_dims(_unscale(config, targets[:,:,0], scalers['']), axis=-1)
 
     return unscaled_predictions, unscaled_targets, ids, perf_meter
 
@@ -173,9 +171,11 @@ def inference(args, config, model, data_loader, scalers, cat_encodings):
                     os.makedirs(os.path.join(args.results, 'predictions', str(key)), exist_ok=True)
                     df.to_csv(os.path.join(args.results, 'predictions', str(key), q+'.csv'))
 
-    losses = QuantileLoss(config)(unscaled_predictions, unscaled_targets)
-    normalizer = unscaled_targets.abs().mean()
-    q_risk = 2 * losses / normalizer
+    #losses = QuantileLoss(config)(torch.from_numpy(unscaled_predictions).contiguous(),
+    #        torch.from_numpy(unscaled_targets).contiguous()).numpy()
+    #normalizer = np.mean(np.abs(unscaled_targets))
+    #q_risk = 2 * losses / normalizer
+    risk = qrisk(unscaled_predictions, unscaled_targets, np.array(config.quantiles))
 
     perf_dict = {
                 'throughput': perf_meter.avg,
@@ -186,7 +186,7 @@ def inference(args, config, model, data_loader, scalers, cat_encodings):
                 'total_infernece_time': perf_meter.total_time,
                 }
 
-    return q_risk, perf_dict
+    return risk, perf_dict
 
 
 def main(args):
@@ -215,7 +215,7 @@ def main(args):
     quantiles = {'test_p10': quantiles[0].item(), 'test_p50': quantiles[1].item(), 'test_p90': quantiles[2].item(), 'sum':sum(quantiles).item()}
     finish_log = {**quantiles, **perf_dict}
     dllogger.log(step=(), data=finish_log, verbosity=1)
-    print('Test q-risk: P10 {} | P50 {} | P90 {}'.format(*quantiles))
+    print('Test q-risk: P10 {test_p10} | P50 {test_p50} | P90 {test_p90}'.format(**quantiles))
     print('Latency:\n\tAverage {:.3f}s\n\tp90 {:.3f}s\n\tp95 {:.3f}s\n\tp99 {:.3f}s'.format(
         perf_dict['latency_avg'], perf_dict['latency_p90'], perf_dict['latency_p95'], perf_dict['latency_p99']))
 

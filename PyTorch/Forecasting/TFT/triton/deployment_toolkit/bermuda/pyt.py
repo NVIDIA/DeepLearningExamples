@@ -161,6 +161,8 @@ class PyTorchModelLoader(BaseLoader):
     def _trace(self, model: Model, dataloader_fn) -> Model:
         device = get_model_device(model.handle)
         dummy_input = get_sample_input(dataloader_fn(), device)
+        # Run dummy forward to initialize lazy modules
+        model.handle(*dummy_input)
         traced_model = torch.jit.trace_module(model.handle, {"forward": dummy_input})
         return Model(traced_model, precision=model.precision, inputs=model.inputs, outputs=model.outputs)
 
@@ -213,6 +215,7 @@ class PYT2ONNXSaver(BaseSaver):
 
         device = get_model_device(model.handle)
         dummy_input = get_sample_input(dataloader_fn(), device)
+        model.handle(*dummy_input)
         with torch.no_grad():
             torch.onnx.export(
                 model.handle,
