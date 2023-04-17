@@ -2,6 +2,7 @@
  
 This repository provides a script and recipe to train the 3D-UNet model to achieve state-of-the-art accuracy.
 The content of this repository is tested and maintained by NVIDIA.
+3D-UNet model for TensorFlow1 is no longer maintained and will soon become unavailable, please consider other PyTorch or TensorFlow2 models as a substitute for your requirements.
  
 ## Table of Contents
  
@@ -592,6 +593,9 @@ To achieve these same results, follow the steps in the [Inference performance be
 ## Release notes
  
 ### Changelog
+
+April 2023
+* Ceased maintenance of this model in TensorFlow1
 
 November 2021
 * Updated README tables

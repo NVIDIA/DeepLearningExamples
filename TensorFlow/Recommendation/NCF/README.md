@@ -2,6 +2,7 @@
 
 This repository provides a script and recipe to train Neural Collaborative Filtering to achieve state of the art
 accuracy, and is tested and maintained by NVIDIA.
+NCF model for TensorFlow1 is no longer maintained and will soon become unavailable, please consider DLRM and Wide & Deep models in TensorFlow2 as a substitute for your requirements.
 
 ## Table of Contents
 
@@ -518,6 +519,9 @@ FP16
 ## Release Notes
 
 ### Changelog
+
+April 2023
+- Ceased maintenance of this model in TensorFlow1
 
 June 2020
 - Updated performance tables to include A100 results

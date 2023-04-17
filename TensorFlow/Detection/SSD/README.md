@@ -1,6 +1,7 @@
 # SSD320 v1.2 For TensorFlow
 
 This repository provides a script and recipe to train SSD320 v1.2 to achieve state of the art accuracy, and is tested and maintained by NVIDIA.
+SSD model for TensorFlow1 is no longer maintained and will soon become unavailable, please consider a PyTorch version or EfficientDet TensorFlow2 model as a substitute for your requirements.
 
 ## Table Of Contents
 * [Model overview](#model-overview)
@@ -613,6 +614,9 @@ To achieve same results, follow the [Quick start guide](#quick-start-guide) outl
 ## Release notes
 
 ### Changelog
+
+April 2023
+ * Ceased maintenance of this model in TensorFlow1
 
 June 2020
  * Updated performance tables to include A100 results

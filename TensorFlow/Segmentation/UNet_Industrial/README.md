@@ -2,6 +2,7 @@
 
 This repository provides a script and recipe to train UNet Industrial to achieve state of the art
 accuracy on the dataset DAGM2007, and is tested and maintained by NVIDIA.
+UNet model for TensorFlow1 is no longer maintained and will soon become unavailable, please consider other PyTorch or TensorFlow2 models as a substitute for your requirements.
 
 
 ## Table of Contents
@@ -518,6 +519,9 @@ To achieve these same results, follow the [Quick Start Guide](#quick-start-guide
 ## Release notes
 
 ### Changelog
+
+April 2023
+* Ceased maintenance of this model
 
 June 2020
 

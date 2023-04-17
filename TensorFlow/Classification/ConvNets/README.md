@@ -1,7 +1,7 @@
 # Resnet-family Convolutional Neural Networks for Image Classification in Tensorflow
 
-In this repository you will find implementation of Resnet and its variations for image
-classification
+In this repository you will find implementation of Resnet and its variations for image classification.
+Convolutional Network models for TensorFlow1 are no longer maintained and will soon become unavailable, please consider PyTorch or TensorFlow2 models as a substitute for your requirements.
 
 ## Table Of Contents
 
@@ -84,6 +84,10 @@ three classification models side-by-side.
 ## Release notes
 
 ### Changelog
+
+April 2021
+  - Ceased maintenance of ConvNets in TensorFlow1
+
 June 2020
   - ConvNets repo restructurization
   - Initial release of ResNext and SE-Resnext
