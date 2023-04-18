@@ -4,7 +4,7 @@
 
 This repository provides a script and recipe to train UNet3+ to achieve state of the art accuracy.
 
-[//]: # (, and is tested and maintained by NVIDIA.)
+**The code and associated performance metrics were contributed by the community and are not maintained by NVIDIA.**
 
 ## Table of Contents
 
@@ -202,8 +202,7 @@ DATA_GENERATOR_TYPE=DALI_GENERATOR \
 OPTIMIZATION.AMP=True OPTIMIZATION.XLA=True
 ```
 
-To evaluate/calculate dice accuracy of model pass same parameters to `evaluate.py` file. See [Config](#config) for
-complete hyper parameter details.
+To evaluate/calculate dice accuracy of model pass same parameters to `evaluate.py` file.
 
 Please check [Config](configs/config.yaml) file for more details about default training parameters.
 
@@ -233,6 +232,8 @@ You can adjust these settings with `+warmup_steps` and `+bench_steps` parameters
 
 The following section provide details of results that are achieved in different settings of model training and
 inference.
+
+**These results were contributed by the community and are not maintained by NVIDIA.**
 
 #### Training accuracy results
 
@@ -315,4 +316,4 @@ Feb 2023
 
 We appreciate any feedback so reporting problems, and asking questions are welcomed here.
 
-Licensed under [MIT License](LICENSE)
+Licensed under [Apache-2.0 License](LICENSE)
