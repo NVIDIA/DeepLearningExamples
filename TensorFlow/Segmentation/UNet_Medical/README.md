@@ -1,6 +1,7 @@
 # UNet Medical Image Segmentation for TensorFlow 1.x
  
 This repository provides a script and recipe to train UNet Medical to achieve state of the art accuracy, and is tested and maintained by NVIDIA.
+UNet model for TensorFlow1 is no longer maintained and will soon become unavailable, please consider other PyTorch or TensorFlow2 models as a substitute for your requirements.
 
 ## Table of Contents
  
@@ -599,6 +600,9 @@ Throughput is reported in images per second. Latency is reported in milliseconds
 ## Release notes
  
 ### Changelog
+
+April 2023
+* Ceased maintenance of this model in TensorFlow1
 
 June 2020
 * Updated training and inference accuracy with A100 results

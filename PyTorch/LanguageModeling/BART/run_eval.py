@@ -160,6 +160,7 @@ def generate_summaries_or_translations(
     results = []
     with torch.no_grad():
         for batch in tqdm(data_loader):
+            torch.cuda.synchronize()
             t0 = time.time()
 
             summaries = model.generate(
@@ -180,6 +181,7 @@ def generate_summaries_or_translations(
             if num_return_sequences > 1:
                 preds = chunks(preds, num_return_sequences)  # batch size chunks, each of size num_return_seq
 
+            torch.cuda.synchronize()
             eval_time = time.time() - t0
             for i, pred in enumerate(preds):
                 store_time = eval_time if i == 0 else None #only store latency for element 0 of every batch

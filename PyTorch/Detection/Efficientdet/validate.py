@@ -208,12 +208,14 @@ def validate(args):
     bench.eval()
     batch_time = AverageMeter()
     throughput = AverageMeter()
+    torch.cuda.synchronize()
     end = time.time()
     total_time_start = time.time()
     with torch.no_grad():
         for i, (input, target) in enumerate(loader):
             with torch.cuda.amp.autocast(enabled=args.amp):
                 output = bench(input, target['img_scale'], target['img_size'])
+            torch.cuda.synchronize()
             batch_time.update(time.time() - end)
             throughput.update(input.size(0) / batch_time.val)
             evaluator.add_predictions(output, target)
@@ -235,6 +237,7 @@ def validate(args):
                 )
             end = time.time()
 
+    torch.cuda.synchronize()
     dllogger_metric['total_inference_time'] = time.time() - total_time_start
     dllogger_metric['inference_throughput'] = throughput.avg
     dllogger_metric['inference_time'] = 1000 / throughput.avg
@@ -245,6 +248,7 @@ def validate(args):
             mean_ap = evaluator.evaluate()
         else:
             evaluator.save_predictions(args.results)
+        torch.cuda.synchronize()
         dllogger_metric['map'] = mean_ap
         dllogger_metric['total_eval_time'] = time.time() - total_time_start
     else:

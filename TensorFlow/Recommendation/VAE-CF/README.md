@@ -1,6 +1,7 @@
 # Variational Autoencoder for Collaborative Filtering for TensorFlow
 
 This repository provides a script and recipe to train the Variational Autoencoder model for TensorFlow to achieve state-of-the-art accuracy on a Collaborative Filtering task and is tested and maintained by NVIDIA.
+VAE-CF model for TensorFlow1 is no longer maintained and will soon become unavailable, please consider other PyTorch or TensorFlow2 models as a substitute for your requirements.
 
 ## Table Of Contents
 
@@ -446,6 +447,9 @@ FP16
 ## Release notes
 
 ### Changelog
+
+April 2023
+- Ceased maintenance of this model in TensorFlow1
 
 July 2020
 - Updated with Ampere convergence and performance results

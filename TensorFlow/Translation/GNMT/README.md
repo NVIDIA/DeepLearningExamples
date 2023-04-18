@@ -1,6 +1,7 @@
 # GNMT v2 For TensorFlow
 
 This repository provides a script and recipe to train the GNMT v2 model to achieve state-of-the-art accuracy and is tested and maintained by NVIDIA.
+GNMT model for TensorFlow1 is no longer maintained and will soon become unavailable, please consider PyTorch or TensorFlow2 models as a substitute for your requirements.
 
 ## Table Of Contents
 - [Model overview](#model-overview)
@@ -828,6 +829,8 @@ Reported mixed precision speedups are relative to FP32 numbers for corresponding
   * Performance improvements
 3. June, 2020
   * Updated performance tables to include A100 results
+4. April 2023
+  * Ceased maintenance of this model in TensorFlow1
 
 ### Known issues
 There are no known issues in this release.

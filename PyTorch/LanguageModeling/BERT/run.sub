@@ -41,7 +41,7 @@ STEPS_THIS_RUN=${STEPS_THIS_RUN:-"none"}
 GPUS=${GPUS:-"8"}
 # The bin size for binned LDDL data loading. 'none' or an integer that divides 
 # 128 (for Phase1) or 512 (for Phase2).
-BIN_SIZE=${BIN_SIZE:-"none"}
+BIN_SIZE=${BIN_SIZE:-"64"}
 # Number of parquet shards per each LDDL data loader worker process. 'none' or 
 # an integer.
 NUM_SHARDS_PER_WORKER=${NUM_SHARDS_PER_WORKER:-"none"}

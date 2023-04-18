@@ -86,7 +86,7 @@ def main():
     if args.amp:
         optimizer.amp_init(device)
 
-    global_step, final_loss, train_time_raw = program.run(
+    global_step, actual_steps_this_run, final_loss, train_time_raw = program.run(
         exe, main_program, args, lr_scheduler, loss, train_dataloader,
         progress)
 
@@ -94,10 +94,10 @@ def main():
         e2e_time = time.time() - now
         if args.benchmark:
             training_perf = args.batch_size * args.gradient_merge_steps * (
-                global_step - args.benchmark_warmup_steps
+                actual_steps_this_run - args.benchmark_warmup_steps
             ) * get_num_trainers() / train_time_raw
         else:
-            training_perf = args.batch_size * args.gradient_merge_steps * global_step * get_num_trainers(
+            training_perf = args.batch_size * args.gradient_merge_steps * actual_steps_this_run * get_num_trainers(
             ) / train_time_raw
         dllogger.log(step=tuple(),
                      data={

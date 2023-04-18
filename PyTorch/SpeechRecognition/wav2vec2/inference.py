@@ -249,7 +249,7 @@ def main():
         batch = utils.move_to_cuda(batch)
 
         sync()
-        t1 = time.perf_counter()
+        t1 = time.time()
 
         if args.fp16:
             batch = fp_convert_batch(batch, 'fp16')
@@ -266,7 +266,7 @@ def main():
             preds = logp.argmax(dim=-1, keepdim=False).int()
 
         sync()
-        t2 = time.perf_counter()
+        t2 = time.time()
 
         # burn-in period; wait for a new loader due to num_workers
         if it >= 1 and (args.steps == 0 or it >= args.warmup_steps):
@@ -292,7 +292,7 @@ def main():
             break
 
         sync()
-        t0 = time.perf_counter()
+        t0 = time.time()
 
     tdict = target_dictionary
     agg['preds'] = [pred.replace(tdict[tdict.nspecial], ' ')

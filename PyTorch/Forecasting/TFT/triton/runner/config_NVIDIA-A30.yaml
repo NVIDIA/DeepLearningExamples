@@ -1,8 +1,8 @@
 checkpoints:
 - name: electricity_bin
-  url: https://api.ngc.nvidia.com/v2/models/nvidia/tft_pyt_ckpt_base_eletricity_amp/versions/21.06.0/zip
+  url: https://api.ngc.nvidia.com/v2/models/nvidia/dle/tft_base_pyt_ckpt_ds-electricity/versions/22.11.0_amp/zip
 - name: traffic_bin
-  url: https://api.ngc.nvidia.com/v2/models/nvidia/tft_pyt_ckpt_base_traffic_amp/versions/21.06.0/zip
+  url: https://api.ngc.nvidia.com/v2/models/nvidia/dle/tft_base_pyt_ckpt_ds-traffic/versions/22.11.0_amp/zip
 configurations:
 - accelerator: none
   batch_size:
@@ -112,7 +112,7 @@ configurations:
   triton_gpu_engine_count: 2
   triton_max_queue_delay: 1
   triton_preferred_batch_sizes: 512 1024
-container_version: '21.12'
+container_version: '22.11'
 datasets:
 - name: electricity_bin
 - name: traffic_bin

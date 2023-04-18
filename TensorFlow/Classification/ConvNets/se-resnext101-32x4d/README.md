@@ -1,6 +1,7 @@
 # SE-ResNext101-32x4d for TensorFlow
 
 This repository provides a script and recipe to train the SE-ResNext101-32x4d model to achieve state-of-the-art accuracy, and is tested and maintained by NVIDIA.
+SE-ResNext101-32x4d model for TensorFlow1 is no longer maintained and will soon become unavailable, please consider PyTorch or TensorFlow2 models as a substitute for your requirements.
 
 ## Table Of Contents
 * [Model overview](#model-overview)
@@ -784,6 +785,8 @@ on NVIDIA T4 with (1x T4 16G) GPU.
 
 ### Changelog
 
+April 2023
+  - Ceased maintenance of ConvNets in TensorFlow1
 April 2020
    - Initial release
 August 2020

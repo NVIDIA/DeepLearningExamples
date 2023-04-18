@@ -210,8 +210,11 @@ class StepTimer():
         self._new = None
         self.measured = None
 
-    def click(self):
+    def click(self, synchronize=False):
         self._previous = self._new
+
+        if synchronize:
+            torch.cuda.synchronize()
         self._new = time.time()
 
         if self._previous is not None:

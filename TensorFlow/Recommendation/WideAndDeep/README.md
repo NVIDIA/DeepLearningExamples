@@ -1,6 +1,7 @@
 # Wide & Deep Recommender Model Training For TensorFlow
 
 This repository provides a script and recipe to train the Wide and Deep Recommender model to achieve state-of-the-art accuracy and is tested and maintained by NVIDIA.
+Wide & Deep model for TensorFlow1 is no longer maintained and will soon become unavailable, please consider PyTorch or TensorFlow2 models as a substitute for your requirements.
 
 ## Table Of Contents
 
@@ -468,6 +469,9 @@ Our results were obtained by running the benchmark scripts from the `scripts` di
 ## Release notes
 
 ### Changelog
+
+April 2023
+- Ceased maintenance of this model in TensorFlow1
 
 November 2020
 - Updated performance tables to include numbers from 20.10-tf1-py3 NGC container

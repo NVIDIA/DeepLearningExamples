@@ -2,6 +2,7 @@
 
 This repository provides a script and recipe to train the Transformer-XL model
 to achieve state-of-the-art accuracy and is tested and maintained by NVIDIA.
+Transformer-XL model for TensorFlow1 is no longer maintained and will soon become unavailable, please consider other PyTorch or TensorFlow2 models as a substitute for your requirements.
 
 ## Table Of Contents
 
@@ -1049,6 +1050,9 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 ## Release notes
 
 ### Changelog
+
+April 2023
+ * Ceased maintenance of this model in TensorFlow1
 
 June 2020
  * upgrade the TensorFlow container to 20.06

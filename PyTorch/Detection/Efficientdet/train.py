@@ -521,12 +521,14 @@ def train_epoch(
 
     model.train()
 
+    torch.cuda.synchronize()
     end = time.time()
     last_idx = steps_per_epoch - 1
     num_updates = epoch * steps_per_epoch
     for batch_idx in range(steps_per_epoch):
         input, target = next(loader_iter)
         last_batch = batch_idx == last_idx
+        torch.cuda.synchronize()
         data_time_m.update(time.time() - end)
 
         with torch.cuda.amp.autocast(enabled=use_amp):
@@ -575,6 +577,7 @@ def train_epoch(
         if lr_scheduler is not None:
             lr_scheduler.step_update(num_updates=num_updates, metric=losses_m.avg)
 
+        torch.cuda.synchronize()
         end = time.time()
         if args.benchmark:
             if batch_idx >= args.benchmark_steps:
@@ -597,6 +600,7 @@ def validate(model, loader, args, evaluator=None, epoch=0, log_suffix=''):
 
     model.eval()
 
+    torch.cuda.synchronize()
     end = time.time()
     last_idx = len(loader) - 1
     with torch.no_grad():

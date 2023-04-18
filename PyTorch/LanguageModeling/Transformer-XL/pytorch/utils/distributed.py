@@ -37,10 +37,13 @@ def init_distributed(cuda):
 
 def barrier():
     """
-    Call torch.distributed.barrier() if distritubed is in use
+    Call torch.distributed.barrier() if distritubed is in use, else calls
+    torch.cuda.synchronize() if CUDA is initialized.
     """
     if torch.distributed.is_available() and torch.distributed.is_initialized():
         torch.distributed.barrier()
+    elif torch.cuda.is_available() and torch.cuda.is_initialized():
+        torch.cuda.synchronize()
 
 
 def get_rank():

@@ -150,9 +150,10 @@ def main():
         Metrics = W2v2Metrics
         criterion = Wav2vecCriterion(args)
 
-    metrics = Metrics(args.benchmark_epochs_num)
-    val_metrics = Metrics(args.benchmark_epochs_num, scopes=['val'])
-    val_ema_metrics = Metrics(args.benchmark_epochs_num, scopes=['val_ema'])
+    kw = {'benchmark_epochs': args.benchmark_epochs_num, 'cuda': not args.cpu}
+    metrics = Metrics(**kw)
+    val_metrics = Metrics(scopes=['val'], **kw)
+    val_ema_metrics = Metrics(scopes=['val_ema'], **kw)
 
     init_logger(args.output_dir, args.log_file, args.ema)
     logger.log_parameters(vars(args), tb_subset='train')

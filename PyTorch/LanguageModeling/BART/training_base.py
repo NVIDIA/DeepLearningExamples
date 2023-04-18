@@ -410,9 +410,11 @@ def generic_train(
         for batch in dataloader:
             batch = {k: v.to(device) for k, v in batch.items()}
             local_step += 1
+            torch.cuda.synchronize()
             iter_start = time.time()
 
             total_loss, logs = train_one_step(args, trainer, optimizer, scheduler, batch, local_step, scaler)
+            torch.cuda.synchronize()
             train_perf = logs["bs"] * get_world_size() / (time.time() - iter_start)
 
 

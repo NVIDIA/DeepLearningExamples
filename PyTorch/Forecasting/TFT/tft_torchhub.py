@@ -19,10 +19,8 @@ from zipfile import ZipFile
 import torch
 from torch.utils.data import DataLoader
 NGC_CHECKPOINT_URLS = {}
-NGC_CHECKPOINT_URLS["electricity"] = "https://api.ngc.nvidia.com/v2/models/nvidia/tft_pyt_ckpt_base_eletricity_amp/versions/21.06.0/zip"
-NGC_CHECKPOINT_URLS["traffic"] = "https://api.ngc.nvidia.com/v2/models/nvidia/tft_pyt_ckpt_base_traffic_amp/versions/21.06.0/zip"
-
-
+NGC_CHECKPOINT_URLS["electricity"] = "https://api.ngc.nvidia.com/v2/models/nvidia/dle/tft_base_pyt_ckpt_ds-electricity/versions/22.11.0_amp/zip"
+NGC_CHECKPOINT_URLS["traffic"] = "https://api.ngc.nvidia.com/v2/models/nvidia/dle/tft_base_pyt_ckpt_ds-traffic/versions/22.11.0_amp/zip"
 def _download_checkpoint(checkpoint, force_reload):
     model_dir = os.path.join(torch.hub._get_torch_home(), 'checkpoints')
     if not os.path.exists(model_dir):
