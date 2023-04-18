@@ -1,0 +1,29 @@
+name: "DCO Assistant"
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened,closed,synchronize]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  DCOAssistant:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "DCO Assistant"
+        if: (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the DCO Document and I hereby sign the DCO') || github.event_name == 'pull_request_target'
+        uses: contributor-assistant/github-action@v2.3.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          path-to-signatures: '.github/dco/signatures.json'
+          path-to-document: 'https://developercertificate.org/'
+          branch: 'dco-do-not-remove'
+          allowlist: user1,bot*
+          use-dco-flag: true
+          custom-notsigned-prcomment: '<br/>Thank you for your submission. Before we can accept your contribution, please sign our [Developer Certificate of Origin](https://developercertificate.org) by posting a comment with the content exactly as below.<br/>'
