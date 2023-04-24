@@ -143,23 +143,11 @@ The ability to train deep learning networks with lower precision was introduced 
 For information about:
 -   How to train using mixed precision, refer to the [Mixed Precision Training](https://arxiv.org/abs/1710.03740) paper and [Training With Mixed Precision](https://docs.nvidia.com/deeplearning/sdk/mixed-precision-training/index.html) documentation.
 -   Techniques used for mixed precision training, refer to the [Mixed-Precision Training of Deep Neural Networks](https://devblogs.nvidia.com/mixed-precision-training-deep-neural-networks/) blog.
--   APEX tools for mixed precision training, refer to the [NVIDIA Apex: Tools for Easy Mixed-Precision Training in PyTorch](https://devblogs.nvidia.com/apex-pytorch-easy-mixed-precision-training/).
 
 
 #### Enabling mixed precision
 
-Using the Automatic Mixed Precision (AMP) package requires two modifications in the source code.
-The first one is to initialize the model and the optimizer using the `amp.initialize` function:
-```python
-model, optimizer = amp.initialize(model, optimizer, opt_level="O2"
-                                          keep_batchnorm_fp32=False, loss_scale='dynamic')
-```
-
-The second one is to use the AMP's loss scaling context manager:
-```python
-with amp.scale_loss(loss, optimizer) as scaled_loss:
-    scaled_loss.backward()
-```
+Mixed precision training is turned off by default. To turn it on issue the `--amp` flag to the `main.py` script.
 
 #### Enabling TF32
 
