@@ -17,7 +17,7 @@ import itertools
 import os
 import sys
 from absl import app, flags, logging
-from apex import amp, parallel, optimizers as apex_optim
+from apex import optimizers as apex_optim
 
 from dlrm.data.feature_spec import FeatureSpec
 from dlrm.model.distributed import DistributedDlrm
@@ -500,10 +500,7 @@ def main(argv):
         if world_size <= 1:
             return model
 
-        if use_gpu:
-            model.top_model = parallel.DistributedDataParallel(model.top_model)
-        else:  # Use other backend for CPU
-            model.top_model = torch.nn.parallel.DistributedDataParallel(model.top_model)
+        model.top_model = torch.nn.parallel.DistributedDataParallel(model.top_model)
         return model
 
     if FLAGS.mode == 'test':
