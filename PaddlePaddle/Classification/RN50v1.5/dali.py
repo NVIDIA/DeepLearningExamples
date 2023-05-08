@@ -12,10 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import ctypes
 import os
 from dataclasses import dataclass
+from cuda import cudart
 import paddle
+import numpy as np
+from nvidia.dali.backend import TensorListCPU
 import nvidia.dali.ops as ops
+import nvidia.dali.fn as fn
 import nvidia.dali.types as types
 from nvidia.dali.pipeline import Pipeline
 from nvidia.dali.plugin.paddle import DALIGenericIterator
@@ -236,3 +241,54 @@ def build_dataloader(args, mode):
     """
     assert mode in Mode, "Dataset mode should be in supported Modes (train or eval)"
     return dali_dataloader(args, mode, paddle.device.get_device())
+
+
+def dali_synthetic_dataloader(args, device):
+    """
+    Define a dali dataloader with synthetic data.
+
+    Args:
+        args(Namespace): Arguments obtained from ArgumentParser.
+        device(int): Id of GPU to load data.
+    Outputs:
+        DALIGenericIterator(nvidia.dali.plugin.paddle.DALIGenericIterator)
+            Iteratable outputs of DALI pipeline,
+            including "data" in type of Paddle's Tensor.
+    """
+    assert "gpu" in device, "gpu training is required for DALI"
+
+    device_id = int(device.split(':')[1])
+
+    batch_size = args.batch_size
+    image_shape = args.image_shape
+    output_dtype = types.FLOAT16 if args.dali_output_fp16 else types.FLOAT
+    num_threads = args.dali_num_threads
+
+    class ExternalInputIterator(object):
+        def __init__(self, batch_size, image_shape):
+            n_bytes = int(batch_size * np.prod(image_shape) * 4)
+            err, mem = cudart.cudaMallocHost(n_bytes)
+            assert err == cudart.cudaError_t.cudaSuccess
+            mem_ptr = ctypes.cast(mem, ctypes.POINTER(ctypes.c_float))
+            self.synthetic_data = np.ctypeslib.as_array(mem_ptr, shape=(batch_size, *image_shape))
+            self.n = args.benchmark_steps
+
+        def __iter__(self):
+            self.i = 0
+            return self
+
+        def __next__(self):
+            if self.i >= self.n:
+                self.__iter__()
+                raise StopIteration()
+            self.i += 1
+            return TensorListCPU(self.synthetic_data, is_pinned=True)
+
+    eli = ExternalInputIterator(batch_size, image_shape)
+    pipe = Pipeline(batch_size=batch_size, num_threads=num_threads, device_id=device_id)
+    with pipe:
+        images = fn.external_source(source=eli, no_copy=True, dtype=output_dtype)
+        images = images.gpu()
+        pipe.set_outputs(images)
+    pipe.build()
+    return DALIGenericIterator([pipe], ['data'])

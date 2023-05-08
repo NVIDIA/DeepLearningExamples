@@ -504,6 +504,8 @@ Advanced Training:
                         be applied when --asp and --prune-model is set. (default: mask_1d)
 
 Paddle-TRT:
+  --device DEVICE_ID
+                        The GPU device id for Paddle-TRT inference. (default: 0)
   --trt-inference-dir TRT_INFERENCE_DIR
                         A path to store/load inference models. export_model.py would export models to this folder, then inference.py
                         would load from here. (default: ./inference)
@@ -521,7 +523,7 @@ Paddle-TRT:
                         A file in which to store JSON model exporting report. (default: ./export.json)
   --trt-log-path TRT_LOG_PATH
                         A file in which to store JSON inference report. (default: ./inference.json)
-  --trt-use-synthat TRT_USE_SYNTHAT
+  --trt-use-synthetic TRT_USE_SYNTHAT
                         Apply synthetic data for benchmark. (default: False)
 ```
 
@@ -672,16 +674,26 @@ python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
 ```
 
 #### Inference with TensorRT
-To run inference with TensorRT for the best performance, you can apply the scripts in `scripts/inference`.
+For inference with TensorRT, we provide two scopes to do benchmark with or without data preprocessing.
+
+The default scripts in `scripts/inference` use synthetic input to run inference without data preprocessing.
 
 For example,
 1. Run `bash scripts/inference/export_resnet50_AMP.sh <your_checkpoint>` to export an inference model.
-  - The default path of checkpoint is `./output/ResNet50/89`.
+  - The default path of the checkpoint is `./output/ResNet50/89`.
 2. Run `bash scripts/inference/infer_resnet50_AMP.sh` to infer with TensorRT.
 
 Or you could manually run `export_model.py` and `inference.py` with specific arguments, refer to [Command-line options](#command-line-options).
 
 Note that arguments passed to `export_model.py` and `inference.py` should be the same with arguments used in training.
+
+To run inference with data preprocessing, set the option `--trt-use-synthetic` to false and `--image-root` to the path of your own dataset. For example,
+
+```bash
+python inference.py --trt-inference-dir <path_to_model> \
+  --image-root <your_own_data_set> \
+  --trt-use-synthetic False
+```
 
 ## Performance
 
@@ -748,7 +760,7 @@ python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
 
 ##### Benchmark with TensorRT
 
-To benchmark the inference performance with TensorRT on a specific batch size, run:
+To benchmark the inference performance with TensorRT on a specific batch size, run inference.py with `--trt-use-synthetic True`. The benchmark uses synthetic input without data preprocessing.
 
 * FP32 / TF32
 ```bash
@@ -757,7 +769,8 @@ python inference.py \
     --trt-precision FP32 \
     --batch-size <batch_size> \
     --benchmark-steps 1024 \
-    --benchmark-warmup-steps 16
+    --benchmark-warmup-steps 16 \
+    --trt-use-synthetic True
 ```
 
 * FP16
@@ -767,13 +780,12 @@ python inference.py \
     --trt-precision FP16 \
     --batch-size <batch_size>
     --benchmark-steps 1024 \
-    --benchmark-warmup-steps 16
+    --benchmark-warmup-steps 16 \
+    --trt-use-synthetic True
 ```
 
 Note that arguments passed to `inference.py` should be the same with arguments used in training.
 
-The benchmark uses the validation dataset by default, which should be put in `--image-root/val`.
-For the performance benchmark of the raw model, a synthetic dataset can be used. To use synthetic dataset, add `--trt-use-synthat True` as a command line option.
 
 ### Results
 
@@ -866,96 +878,103 @@ Our results were obtained by running the applicable training script with `--run-
 #### Paddle-TRT performance: NVIDIA DGX A100 (1x A100 80GB)
 Our results for Paddle-TRT were obtained by running the `inference.py` script on NVIDIA DGX A100 with (1x A100 80G) GPU.
 
+Note that the benchmark does not include data preprocessing. Refer to [Benchmark with TensorRT](#benchmark-with-tensorrt).
+
 **TF32 Inference Latency**
 
 |**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
 |--------------|------------------|---------------|---------------|---------------|---------------|
-| 1 | 716.49 img/s | 1.40 ms | 1.96 ms | 2.20 ms | 3.01 ms |
-| 2 | 1219.98 img/s | 1.64 ms | 2.26 ms | 2.90 ms | 5.04 ms |
-| 4 | 1880.12 img/s | 2.13 ms | 3.39 ms | 4.44 ms | 7.32 ms |
-| 8 | 2404.10 img/s | 3.33 ms | 4.51 ms | 5.90 ms | 10.39 ms |
-| 16 | 3101.28 img/s | 5.16 ms | 7.06 ms | 9.13 ms | 15.18 ms |
-| 32 | 3294.11 img/s | 9.71 ms | 21.42 ms | 26.94 ms | 35.79 ms |
-| 64 | 4327.38 img/s | 14.79 ms | 25.59 ms | 30.45 ms | 45.34 ms |
-| 128 | 4956.59 img/s | 25.82 ms | 33.74 ms | 40.36 ms | 56.06 ms |
-| 256 | 5244.29 img/s | 48.81 ms | 62.11 ms | 67.56 ms | 88.38 ms |
+| 1 | 915.48 img/s | 1.09 ms | 1.09 ms | 1.18 ms | 1.19 ms |
+| 2 | 1662.70 img/s | 1.20 ms | 1.21 ms | 1.29 ms | 1.30 ms |
+| 4 | 2856.25 img/s | 1.40 ms | 1.40 ms | 1.49 ms | 1.55 ms |
+| 8 | 3988.80 img/s | 2.01 ms | 2.01 ms | 2.10 ms | 2.18 ms |
+| 16 | 5409.55 img/s | 2.96 ms | 2.96 ms | 3.05 ms | 3.07 ms |
+| 32 | 6406.13 img/s | 4.99 ms | 5.00 ms | 5.08 ms | 5.12 ms |
+| 64 | 7169.75 img/s | 8.93 ms | 8.94 ms | 9.01 ms | 9.04 ms |
+| 128 | 7616.79 img/s | 16.80 ms | 16.89 ms | 16.90 ms | 16.99 ms |
+| 256 | 7843.26 img/s | 32.64 ms | 32.85 ms | 32.88 ms | 32.93 ms |
 
 **FP16 Inference Latency**
 
 |**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
 |--------------|------------------|---------------|---------------|---------------|---------------|
-| 1 | 860.90 img/s | 1.16 ms | 1.81 ms | 2.06 ms | 2.98 ms |
-| 2 | 1464.06 img/s | 1.37 ms | 2.13 ms | 2.73 ms | 4.76 ms |
-| 4 | 2246.24 img/s | 1.78 ms | 3.17 ms | 4.20 ms | 7.39 ms |
-| 8 | 2457.44 img/s | 3.25 ms | 4.35 ms | 5.50 ms | 9.98 ms |
-| 16 | 3928.83 img/s | 4.07 ms | 6.26 ms | 8.50 ms | 15.10 ms |
-| 32 | 3853.13 img/s | 8.30 ms | 19.87 ms | 25.51 ms | 34.99 ms |
-| 64 | 5581.89 img/s | 11.46 ms | 22.32 ms | 30.75 ms | 43.35 ms |
-| 128 | 6846.77 img/s | 18.69 ms | 25.43 ms | 35.03 ms | 50.04 ms |
-| 256 | 7481.19 img/s | 34.22 ms | 40.92 ms | 51.10 ms | 65.68 ms |
+| 1 | 1265.67 img/s | 0.79 ms | 0.79 ms | 0.88 ms | 0.89 ms |
+| 2 | 2339.59 img/s | 0.85 ms | 0.86 ms | 0.94 ms | 0.96 ms |
+| 4 | 4271.30 img/s | 0.94 ms | 0.94 ms | 1.03 ms | 1.04 ms |
+| 8 | 7053.76 img/s | 1.13 ms | 1.14 ms | 1.22 ms | 1.31 ms |
+| 16 | 10225.85 img/s | 1.56 ms | 1.57 ms | 1.65 ms | 1.67 ms |
+| 32 | 12802.53 img/s | 2.50 ms | 2.50 ms | 2.59 ms | 2.61 ms |
+| 64 | 14723.56 img/s | 4.35 ms | 4.35 ms | 4.43 ms | 4.45 ms |
+| 128 | 16157.12 img/s | 7.92 ms | 7.96 ms | 8.00 ms | 8.06 ms |
+| 256 | 17054.80 img/s | 15.01 ms | 15.06 ms | 15.07 ms | 15.16 ms |
+
 
 #### Paddle-TRT performance: NVIDIA A30 (1x A30 24GB)
 Our results for Paddle-TRT were obtained by running the `inference.py` script on NVIDIA A30 with (1x A30 24G) GPU.
 
+Note that the benchmark does not include data preprocessing. Refer to [Benchmark with TensorRT](#benchmark-with-tensorrt).
+
 **TF32 Inference Latency**
 
 |**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
 |--------------|------------------|---------------|---------------|---------------|---------------|
-| 1 | 672.79 img/s | 1.49 ms | 2.01 ms | 2.29 ms | 3.04 ms |
-| 2 | 1041.47 img/s | 1.92 ms | 2.49 ms | 2.87 ms | 4.13 ms |
-| 4 | 1505.64 img/s | 2.66 ms | 3.43 ms | 4.06 ms | 6.85 ms |
-| 8 | 2001.13 img/s | 4.00 ms | 4.72 ms | 5.54 ms | 9.51 ms |
-| 16 | 2462.80 img/s | 6.50 ms | 7.71 ms | 9.32 ms | 15.54 ms |
-| 32 | 2474.34 img/s | 12.93 ms | 21.61 ms | 25.76 ms | 34.69 ms |
-| 64 | 2949.38 img/s | 21.70 ms | 29.58 ms | 34.63 ms | 47.11 ms |
-| 128 | 3278.67 img/s | 39.04 ms | 43.34 ms | 52.72 ms | 66.78 ms |
-| 256 | 3293.10 img/s | 77.74 ms | 90.51 ms | 99.71 ms | 110.80 ms |
+| 1 | 781.87 img/s | 1.28 ms | 1.29 ms | 1.38 ms | 1.45 ms |
+| 2 | 1290.14 img/s | 1.55 ms | 1.55 ms | 1.65 ms | 1.67 ms |
+| 4 | 1876.48 img/s | 2.13 ms | 2.13 ms | 2.23 ms | 2.25 ms |
+| 8 | 2451.23 img/s | 3.26 ms | 3.27 ms | 3.37 ms | 3.42 ms |
+| 16 | 2974.77 img/s | 5.38 ms | 5.42 ms | 5.47 ms | 5.53 ms |
+| 32 | 3359.63 img/s | 9.52 ms | 9.62 ms | 9.66 ms | 9.72 ms |
+| 64 | 3585.82 img/s | 17.85 ms | 18.03 ms | 18.09 ms | 18.20 ms |
+| 128 | 3718.44 img/s | 34.42 ms | 34.71 ms | 34.75 ms | 34.91 ms |
+| 256 | 3806.11 img/s | 67.26 ms | 67.61 ms | 67.71 ms | 67.86 ms |
 
 **FP16 Inference Latency**
 
 |**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
 |--------------|------------------|---------------|---------------|---------------|---------------|
-| 1 | 804.56 img/s | 1.24 ms | 1.81 ms | 2.15 ms | 3.07 ms |
-| 2 | 1435.74 img/s | 1.39 ms | 2.05 ms | 2.48 ms | 3.86 ms |
-| 4 | 2169.87 img/s | 1.84 ms | 2.72 ms | 3.39 ms | 5.94 ms |
-| 8 | 2395.13 img/s | 3.34 ms | 4.46 ms | 5.11 ms | 9.49 ms |
-| 16 | 3779.82 img/s | 4.23 ms | 5.83 ms | 7.66 ms | 14.44 ms |
-| 32 | 3620.18 img/s | 8.84 ms | 17.90 ms | 22.31 ms | 30.91 ms |
-| 64 | 4592.08 img/s | 13.94 ms | 24.00 ms | 29.38 ms | 41.41 ms |
-| 128 | 5064.06 img/s | 25.28 ms | 31.73 ms | 37.79 ms | 53.01 ms |
-| 256 | 4774.61 img/s | 53.62 ms | 59.04 ms | 67.29 ms | 80.51 ms |
+| 1 | 1133.80 img/s | 0.88 ms | 0.89 ms | 0.98 ms | 0.99 ms |
+| 2 | 2068.18 img/s | 0.97 ms | 0.97 ms | 1.06 ms | 1.08 ms |
+| 4 | 3181.06 img/s | 1.26 ms | 1.27 ms | 1.35 ms | 1.38 ms |
+| 8 | 5078.30 img/s | 1.57 ms | 1.58 ms | 1.68 ms | 1.74 ms |
+| 16 | 6240.02 img/s | 2.56 ms | 2.58 ms | 2.67 ms | 2.86 ms |
+| 32 | 7000.86 img/s | 4.57 ms | 4.66 ms | 4.69 ms | 4.76 ms |
+| 64 | 7523.45 img/s | 8.51 ms | 8.62 ms | 8.73 ms | 8.86 ms |
+| 128 | 7914.47 img/s | 16.17 ms | 16.31 ms | 16.34 ms | 16.46 ms |
+| 256 | 8225.56 img/s | 31.12 ms | 31.29 ms | 31.38 ms | 31.50 ms |
 
 
 #### Paddle-TRT performance: NVIDIA A10 (1x A10 24GB)
 Our results for Paddle-TRT were obtained by running the `inference.py` script on NVIDIA A10 with (1x A10 24G) GPU.
 
+Note that the benchmark does not include data preprocessing. Refer to [Benchmark with TensorRT](#benchmark-with-tensorrt).
+
 **TF32 Inference Latency**
 
 |**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
 |--------------|------------------|---------------|---------------|---------------|---------------|
-| 1 | 372.04 img/s | 2.69 ms | 3.64 ms | 4.20 ms | 5.28 ms |
-| 2 | 615.93 img/s | 3.25 ms | 4.08 ms | 4.59 ms | 6.42 ms |
-| 4 | 1070.02 img/s | 3.74 ms | 3.90 ms | 4.35 ms | 7.48 ms |
-| 8 | 1396.88 img/s | 5.73 ms | 6.87 ms | 7.52 ms | 10.63 ms |
-| 16 | 1522.20 img/s | 10.51 ms | 12.73 ms | 13.84 ms | 17.84 ms |
-| 32 | 1674.39 img/s | 19.11 ms | 23.23 ms | 24.63 ms | 29.55 ms |
-| 64 | 1782.14 img/s | 35.91 ms | 41.84 ms | 44.53 ms | 48.94 ms |
-| 128 | 1722.33 img/s | 74.32 ms | 85.37 ms | 89.27 ms | 94.85 ms |
-| 256 | 1576.89 img/s | 162.34 ms | 181.01 ms | 185.92 ms | 194.42 ms |
+| 1 | 563.63 img/s | 1.77 ms | 1.79 ms | 1.87 ms | 1.89 ms |
+| 2 | 777.13 img/s | 2.57 ms | 2.63 ms | 2.68 ms | 2.89 ms |
+| 4 | 1171.93 img/s | 3.41 ms | 3.43 ms | 3.51 ms | 3.55 ms |
+| 8 | 1627.81 img/s | 4.91 ms | 4.97 ms | 5.02 ms | 5.09 ms |
+| 16 | 1986.40 img/s | 8.05 ms | 8.11 ms | 8.19 ms | 8.37 ms |
+| 32 | 2246.04 img/s | 14.25 ms | 14.33 ms | 14.40 ms | 14.57 ms |
+| 64 | 2398.07 img/s | 26.69 ms | 26.87 ms | 26.91 ms | 27.06 ms |
+| 128 | 2489.96 img/s | 51.41 ms | 51.74 ms | 51.80 ms | 51.94 ms |
+| 256 | 2523.22 img/s | 101.46 ms | 102.13 ms | 102.35 ms | 102.77 ms |
 
 **FP16 Inference Latency**
 
 |**Batch Size**|**Avg throughput**|**Avg latency**|**90% Latency**|**95% Latency**|**99% Latency**|
 |--------------|------------------|---------------|---------------|---------------|---------------|
-| 1 | 365.38 img/s | 2.74 ms | 3.94 ms | 4.35 ms | 5.64 ms |
-| 2 | 612.52 img/s | 3.26 ms | 4.34 ms | 4.80 ms | 6.97 ms |
-| 4 | 1018.15 img/s | 3.93 ms | 4.95 ms | 5.55 ms | 9.16 ms |
-| 8 | 1924.26 img/s | 4.16 ms | 5.44 ms | 6.20 ms | 11.89 ms |
-| 16 | 2477.49 img/s | 6.46 ms | 8.07 ms | 9.21 ms | 15.05 ms |
-| 32 | 2896.01 img/s | 11.05 ms | 13.56 ms | 15.32 ms | 21.76 ms |
-| 64 | 3165.27 img/s | 20.22 ms | 24.20 ms | 25.94 ms | 33.18 ms |
-| 128 | 3176.46 img/s | 40.29 ms | 46.36 ms | 49.15 ms | 54.95 ms |
-| 256 | 3110.01 img/s | 82.31 ms | 93.21 ms | 96.06 ms | 99.97 ms |
+| 1 | 1296.81 img/s | 0.77 ms | 0.77 ms | 0.87 ms | 0.88 ms |
+| 2 | 2224.06 img/s | 0.90 ms | 0.90 ms | 1.00 ms | 1.01 ms |
+| 4 | 2845.61 img/s | 1.41 ms | 1.43 ms | 1.51 ms | 1.53 ms |
+| 8 | 3793.35 img/s | 2.11 ms | 2.19 ms | 2.22 ms | 2.30 ms |
+| 16 | 4315.53 img/s | 3.71 ms | 3.80 ms | 3.86 ms | 3.98 ms |
+| 32 | 4815.26 img/s | 6.64 ms | 6.74 ms | 6.79 ms | 7.15 ms |
+| 64 | 5103.27 img/s | 12.54 ms | 12.66 ms | 12.70 ms | 13.01 ms |
+| 128 | 5393.20 img/s | 23.73 ms | 23.98 ms | 24.05 ms | 24.20 ms |
+| 256 | 5505.24 img/s | 46.50 ms | 46.82 ms | 46.92 ms | 47.17 ms |
 
 ## Release notes
 

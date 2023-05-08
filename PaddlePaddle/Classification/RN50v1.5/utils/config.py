@@ -447,6 +447,12 @@ def add_training_args(parser):
 def add_trt_args(parser):
     group = parser.add_argument_group('Paddle-TRT')
     group.add_argument(
+        '--device',
+        type=int,
+        default='0',
+        help='The GPU device id for Paddle-TRT inference.'
+    )
+    group.add_argument(
         '--trt-inference-dir',
         type=str,
         default='./inference',
@@ -491,7 +497,7 @@ def add_trt_args(parser):
         default='./inference.json',
         help='A file in which to store JSON inference report.')
     group.add_argument(
-        '--trt-use-synthat',
+        '--trt-use-synthetic',
         type=distutils.util.strtobool,
         default=False,
         help='Apply synthetic data for benchmark.')
