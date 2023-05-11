@@ -18,4 +18,5 @@ python inference.py \
     --dali-num-threads 8 \
     --batch-size 256 \
     --benchmark-steps 1024 \
-    --benchmark-warmup-steps 16
+    --benchmark-warmup-steps 16 \
+    --trt-use-synthetic True

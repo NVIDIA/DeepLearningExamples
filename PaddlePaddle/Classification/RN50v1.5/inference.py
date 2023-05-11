@@ -22,7 +22,7 @@ import dllogger
 from paddle.fluid import LoDTensor
 from paddle.inference import Config, PrecisionType, create_predictor
 
-from dali import dali_dataloader
+from dali import dali_dataloader, dali_synthetic_dataloader
 from utils.config import parse_args, print_args
 from utils.mode import Mode
 from utils.logger import setup_dllogger
@@ -40,7 +40,7 @@ def init_predictor(args):
         f'There should be only 1 pdmodel in {infer_dir}, but there are {len(pdmodel_path)}'
     predictor_config = Config(pdmodel_path[0], pdiparams_path[0])
     predictor_config.enable_memory_optim()
-    predictor_config.enable_use_gpu(0, 0)
+    predictor_config.enable_use_gpu(0, args.device)
     precision = args.trt_precision
     max_batch_size = args.batch_size
     assert precision in ['FP32', 'FP16', 'INT8'], \
@@ -106,14 +106,14 @@ def benchmark_dataset(args):
     """
     predictor = init_predictor(args)
 
-    dali_iter = dali_dataloader(args, Mode.EVAL, 'gpu:0')
+    dali_iter = dali_dataloader(args, Mode.EVAL, 'gpu:' + str(args.device))
 
     # Warmup some samples for the stable performance number
     batch_size = args.batch_size
     image_shape = args.image_shape
-    image = np.zeros((batch_size, *image_shape)).astype(np.single)
+    images = np.zeros((batch_size, *image_shape)).astype(np.float32)
     for _ in range(args.benchmark_warmup_steps):
-        predict(predictor, [image])[0]
+        predict(predictor, [images])[0]
 
     total_images = 0
     correct_predict = 0
@@ -127,8 +127,8 @@ def benchmark_dataset(args):
             label = np.asarray(data['label'])
             total_images += label.shape[0]
             label = label.flatten()
-            image = data['data']
-            predict_label = predict(predictor, [image])[0]
+            images = data['data']
+            predict_label = predict(predictor, [images])[0]
             correct_predict += (label == predict_label).sum()
         batch_end_time_step = time.perf_counter()
         batch_latency = batch_end_time_step - last_time_step
@@ -152,29 +152,33 @@ def benchmark_dataset(args):
     return statistics
 
 
-def benchmark_synthat(args):
+def benchmark_synthetic(args):
     """
-    Benchmark on the synthatic data and bypass all pre-processing.
+    Benchmark on the synthetic data and bypass all pre-processing.
     The host to device copy is still included.
     This used to find the upper throughput bound when tunning the full input pipeline.
     """
 
     predictor = init_predictor(args)
+    dali_iter = dali_synthetic_dataloader(args, 'gpu:' + str(args.device))
+
     batch_size = args.batch_size
     image_shape = args.image_shape
-    image = np.random.random((batch_size, *image_shape)).astype(np.single)
+    images = np.random.random((batch_size, *image_shape)).astype(np.float32)
 
     latency = []
 
     # warmup
     for _ in range(args.benchmark_warmup_steps):
-        predict(predictor, [image])[0]
+        predict(predictor, [images])[0]
 
     # benchmark
     start = time.perf_counter()
     last_time_step = time.perf_counter()
-    for _ in range(args.benchmark_steps):
-        predict(predictor, [image])[0]
+    for dali_data in dali_iter:
+        for data in dali_data:
+            images = data['data']
+            predict(predictor, [images])[0]
         batch_end_time_step = time.perf_counter()
         batch_latency = batch_end_time_step - last_time_step
         latency.append(batch_latency)
@@ -195,14 +199,13 @@ def benchmark_synthat(args):
     }
     return statistics
 
-
 def main(args):
     setup_dllogger(args.trt_log_path)
     if args.show_config:
         print_args(args)
 
-    if args.trt_use_synthat:
-        statistics = benchmark_synthat(args)
+    if args.trt_use_synthetic:
+        statistics = benchmark_synthetic(args)
     else:
         statistics = benchmark_dataset(args)
 
