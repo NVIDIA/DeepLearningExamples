@@ -186,6 +186,7 @@ def main(args):
         translator.cuda()
 
     # Load BPE codes file
+    bpe = None
     if args.bpe_codes:
         codes = open(args.bpe_codes, 'r')
         bpe = BPE(codes)
