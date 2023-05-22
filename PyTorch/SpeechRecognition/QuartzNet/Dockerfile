@@ -24,7 +24,7 @@ COPY requirements.txt .
 RUN if [[ ! -z "$(command -v conda)" ]]; then conda install -y pyyaml==5.4.1; fi
 RUN pip install --disable-pip-version-check -U -r requirements.txt
 
-RUN pip install --extra-index-url https://developer.download.nvidia.com/compute/redist nvidia-dali-cuda110==1.2.0
+RUN pip install --extra-index-url https://developer.download.nvidia.com/compute/redist nvidia-dali-cuda110==1.9.0
 
 # Copy rest of files
 COPY . .
