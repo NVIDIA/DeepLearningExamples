@@ -129,7 +129,7 @@ cd DeepLearningExamples/PyTorch/Classification/GPUNet
 2. Download ImageNet from the [offical website](https://image-net.org/download-images). Recursively unzip the dataset, and locate the train and val folders. Refer to [Prepare the dataset](#prepare-the-dataset) for more details.
 
 
-3. Build and run the GPUNet PyTorch container, assuming you have installed the docker.
+3. Build and run the GPUNet PyTorch container, assuming you have installed docker.
 ```
 docker build -t gpunet .
 docker run --gpus all -it --rm --network=host --shm-size 600G --ipc=host -v /path/to/imagenet:/root/data/imagenet/ gpunet
