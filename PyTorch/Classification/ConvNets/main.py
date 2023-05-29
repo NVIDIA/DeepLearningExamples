@@ -280,7 +280,7 @@ def add_parser_arguments(parser, skip_arch=False):
 
     parser.add_argument(
         "--gather-checkpoints",
-        default="0",
+        default=0,
         type=int,
         help=(
             "Gather N last checkpoints throughout the training,"
