@@ -31,7 +31,7 @@ def add_dali_args(parser):
     group.add_argument('--dali-validation-threads', type=int, default=10, help="number of threads" +\
                        "per GPU for DALI for validation")
     group.add_argument('--dali-prefetch-queue', type=int, default=5, help="DALI prefetch queue depth")
-    group.add_argument('--dali-nvjpeg-memory-padding', type=int, default=256, help="Memory padding value for nvJPEG (in MB)")
+    group.add_argument('--dali-nvjpeg-memory-padding', type=int, default=64, help="Memory padding value for nvJPEG (in MB)")
     group.add_argument('--dali-fuse-decoder', type=int, default=1, help="0 or 1 whether to fuse decoder or not")
 
     group.add_argument('--dali-nvjpeg-width-hint', type=int, default=5980, help="Width hint value for nvJPEG (in pixels)")
