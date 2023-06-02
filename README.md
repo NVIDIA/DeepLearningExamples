@@ -103,7 +103,7 @@ TensorFlow XLA and PyTorch JIT and/or TorchScript
 XLA is a domain-specific compiler for linear algebra that can accelerate TensorFlow models with potentially no source code changes. The results are improvements in speed and memory usage.
 
 **PyTorch JIT and/or TorchScript**
-TorchScript is a way to create serializable and optimizable models from PyTorch code. [TorchScript](https://github.com/TouchScript/TouchScript), an intermediate representation of a PyTorch model (subclass of nn.Module) that can then be run in a high-performance environment such as C++.
+TorchScript is a way to create serializable and optimizable models from [PyTorch](https://pytorch.org/get-started/locally/) code. [TorchScript](https://github.com/TouchScript/TouchScript), an intermediate representation of a PyTorch model (subclass of nn.Module) that can then be run in a high-performance environment such as C++.
 
 **Automatic Mixed Precision (AMP)**
 Automatic Mixed Precision (AMP) enables mixed precision training on Volta, Turing, and NVIDIA Ampere GPU architectures automatically.
