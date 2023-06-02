@@ -65,16 +65,16 @@ This repository provides a script and recipe to train the Deep Learning Recommen
 
 The Deep Learning Recommendation Model (DLRM) is a recommendation model designed to make use of both categorical and numerical inputs.
 It was first described in [Deep Learning Recommendation Model for Personalization and Recommendation Systems](https://arxiv.org/abs/1906.00091).
-This repository provides a reimplementation of the code-base provided originally [here](https://github.com/facebookresearch/dlrm).
+This repository provides a reimplementation of the code base provided originally [here](https://github.com/facebookresearch/dlrm).
 The scripts enable you to train DLRM on the [Criteo Terabyte Dataset](https://labs.criteo.com/2013/12/download-terabyte-click-logs/).
 
 Using the scripts provided here, you can efficiently train models that are too large to fit into a single GPU.
 This is because we use a hybrid-parallel approach, which combines model parallelism with data parallelism for
 different parts of the neural network.
-This is explained in details in the [next section](#hybrid-parallel-multi-gpu-with-all-2-all-communication).
+This is explained in detail in the [next section](#hybrid-parallel-multi-gpu-with-all-2-all-communication).
 
 This model uses a slightly different preprocessing procedure than the one found in the original implementation.
-Most importantly, we use a technique called frequency thresholding to demonstrate models of different size.
+Most importantly, we use a technique called frequency thresholding to demonstrate models of different sizes.
 The smallest model can be trained on a single V100-32GB GPU, while the largest one needs 8xA100-80GB GPUs.  
 The table below summarizes the model sizes and frequency thresholds used in this repository:
 
@@ -88,7 +88,7 @@ You can find a detailed description of the preprocessing steps in the [Dataset g
 
 Using DLRM, you can train a high-quality general model for recommendations.
 
-This model is trained with mixed precision using Tensor Cores on Volta, Turing and NVIDIA Ampere GPU architectures.
+This model is trained with mixed precision using Tensor Cores on Volta, Turing ,and NVIDIA Ampere GPU architectures.
 Therefore, researchers can get results 2x faster than training without Tensor Cores while experiencing the
 benefits of mixed precision training. This model is tested against each NGC monthly container
 release to ensure consistent accuracy and performance over time.
@@ -96,10 +96,10 @@ release to ensure consistent accuracy and performance over time.
 
 ### Model architecture
 
-DLRM accepts two types of features: categorical and numerical. For each categorical feature, an embedding table is used to provide dense representation to each unique value. The dense features enter the model and are transformed by a simple neural network referred to as "bottom MLP".
+DLRM accepts two types of features: categorical and numerical. For each categorical feature, an embedding table is used to provide a dense representation of each unique value. The dense features enter the model and are transformed by a simple neural network referred to as "bottom MLP".
 
 This part of the network consists of a series
-of linear layers with ReLU activations. The output of the bottom MLP and the embedding vectors are then fed into the "dot interaction" operation. The output of "dot interaction" is then concatenated with the features resulting from bottom MLP and fed into the "top MLP" which is a series of dense layers with activations.
+of linear layers with ReLU activations. The output of the bottom MLP and the embedding vectors are then fed into the "dot interaction" operation. The output of "dot interaction" is then concatenated with the features resulting from the bottom MLP and fed into the "top MLP" which is a series of dense layers with activations.
 The model outputs a single number which can be interpreted as a likelihood of a certain user clicking an ad.
 
 <p align="center">
@@ -144,10 +144,10 @@ Horovod is a distributed training framework for TensorFlow, Keras, PyTorch, and 
 **Hybrid-parallel training with Merlin Distributed Embeddings**
 Our model uses Merlin Distributed Embeddings to implement efficient multi-GPU training.
 For details, see example sources in this repository or see the TensorFlow tutorial.
-For the detailed description of our multi-GPU approach, visit this [section](#hybrid-parallel-training-with-merlin-distributed-embeddings).
+For a detailed description of our multi-GPU approach, visit this [section](#hybrid-parallel-training-with-merlin-distributed-embeddings).
 
 **Multi-node training**
-This repository supports multinode training. For more information refer to the [multinode section](#multi-node-training)
+This repository supports multi-node training. For more information refer to the [multinode section](#multi-node-training)
 
 
 ### Mixed precision training
@@ -182,13 +182,13 @@ TF32 is supported in the NVIDIA Ampere GPU architecture and is enabled by defaul
 
 Many recommendation models contain very large embedding tables. As a result, the model is often too large to fit onto a single device.
 This could be easily solved by training in a model-parallel way, using either the CPU or other GPUs as "memory donors".
-However, this approach is suboptimal as the "memory donor" devices' compute is not utilized.
-In this repository, we use the model-parallel approach for the Embedding Tables while employing a usual data parallel approach
+However, this approach is suboptimal as the "memory donor" devices' computing is not utilized.
+In this repository, we use the model-parallel approach for the Embedding Tables while employing a usual data-parallel approach
 for the more compute-intensive MLPs and Dot Interaction layer. This way, we can train models much larger than what would normally fit into
 a single GPU while at the same time making the training faster by using multiple GPUs. We call this approach hybrid-parallel training.
 
 To implement this approach we use the [Merlin Distributed Embeddings](https://github.com/NVIDIA-Merlin/distributed-embeddings) library. 
-It provides a scalable model parallel wrapper called `distributed_embeddings.dist_model_parallel`. This wrapper automatically distributes embedding tables to multiple GPUs.
+It provides a scalable model parallel wrapper called `distributed_embeddings.dist_model_parallel`. This wrapper automatically distributes embedding tables to multiple GPUs.                                  
 This way embeddings can be scaled beyond single GPU’s memory capacity without
 complex code to handle cross-worker communication.
 
