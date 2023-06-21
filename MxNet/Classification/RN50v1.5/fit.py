@@ -483,11 +483,6 @@ def fit(args, model, data_loader):
     # select gpu for horovod process
     if 'horovod' in args.kv_store:
         args.gpus = [args.gpus[hvd.local_rank()]]
-        ctx = mx.gpu(hvd.local_rank())
-
-        tensor1 = mx.nd.zeros(shape=(1,), dtype='float32', ctx=ctx)
-        tensor2 = mx.nd.zeros(shape=(1,), dtype='float32', ctx=ctx)
-        tensor1, tensor2 = hvd.grouped_allreduce([tensor1,tensor2])
 
     if args.amp:
         amp.init()
@@ -579,6 +574,11 @@ def fit(args, model, data_loader):
         params = model.collect_params()
         if params is not None:
             hvd.broadcast_parameters(params, root_rank=0)
+        ctx = mx.gpu(hvd.local_rank())
+        tensor1 = mx.nd.zeros(shape=(1,), dtype='float32', ctx=ctx)
+        tensor2 = mx.nd.zeros(shape=(1,), dtype='float32', ctx=ctx)
+        tensor1, tensor2 = hvd.grouped_allreduce([tensor1,tensor2])
+        
     global_metrics = CompositeMeter()
     if args.mode in ['train_val', 'train']:
         global_metrics.register_metric('train.loss', MinMeter())
