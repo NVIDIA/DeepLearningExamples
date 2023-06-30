@@ -54,7 +54,7 @@ def parse_args():
     training.add_argument('--amp', '--fp16', action='store_true', default=False,
                           help='Use pytorch native mixed precision training')
     training.add_argument('--seed', default=42, type=int, help='Random seed')
-    training.add_argument('--local_rank', default=os.getenv('LOCAL_RANK', 0),
+    training.add_argument('--local_rank', '--local-rank', default=os.getenv('LOCAL_RANK', 0),
                           type=int, help='GPU id used for distributed training')
     training.add_argument('--pre_allocate_range', default=None, type=int, nargs=2,
                           help='Warmup with batches of length [min, max] before training')

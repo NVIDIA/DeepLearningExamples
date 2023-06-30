@@ -15,7 +15,6 @@
 #!/usr/bin/env python
 import os
 import multiprocessing
-import librosa
 import functools
 
 import sox
