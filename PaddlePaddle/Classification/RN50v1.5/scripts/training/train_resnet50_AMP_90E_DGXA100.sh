@@ -17,4 +17,5 @@ python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
     --amp \
     --scale-loss 128.0 \
     --use-dynamic-loss-scaling \
-    --data-layout NHWC
+    --data-layout NHWC \
+    --fuse-resunit

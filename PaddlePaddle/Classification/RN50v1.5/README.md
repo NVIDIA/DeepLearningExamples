@@ -303,7 +303,7 @@ Example:
 bash scripts/training/train_resnet50_TF32_90E_DGXA100.sh
 
 # For AMP and 8 GPUs training in 90 epochs
-bash scripts/training/train_resnet50_TF32_90E_DGXA100.sh
+bash scripts/training/train_resnet50_AMP_90E_DGXA100.sh
 ```
 
 Or you can manually launch training by `paddle.distributed.launch`. `paddle.distributed.launch` is a built-in module in PaddlePaddle that spawns up multiple distributed training processes on each of the training nodes.
@@ -497,6 +497,7 @@ Advanced Training:
   --use-dynamic-loss-scaling
                         Enable dynamic loss scaling in AMP training, only be applied when --amp is set. (default: False)
   --use-pure-fp16       Enable pure FP16 training, only be applied when --amp is set. (default: False)
+  --fuse-resunit        Enable CUDNNv8 ResUnit fusion, only be applied when --amp is set. (default: False)
   --asp                 Enable automatic sparse training (ASP). (default: False)
   --prune-model         Prune model to 2:4 sparse pattern, only be applied when --asp is set. (default: False)
   --mask-algo {mask_1d,mask_2d_greedy,mask_2d_best}
@@ -827,8 +828,8 @@ To achieve these same results, follow the steps in the [Quick Start Guide](#quic
 
 | **GPUs** |  **Throughput - TF32**  | **Throughput - mixed precision** | **Throughput speedup (TF32 to mixed precision)** | **TF32 Scaling** | **Mixed Precision Scaling** | **Mixed Precision Training Time (90E)** | **TF32 Training Time (90E)** |
 |:--------:|:------------:|:-------------:|:------------:|:------:|:--------:|:--------:|:--------:|
-|    1     |    993 img/s |  2711 img/s   |    2.73 x    | 1.0 x  |  1.0 x   | ~13 hours| ~40 hours|
-|    8     |  7955 img/s  |   20267 img/s |    2.54 x    | 8.01 x | 7.47 x   | ~2 hours | ~4 hours |
+|    1     |  1024 img/s  |  2897 img/s   |    2.83 x    | 1.0 x  |  1.0 x   | ~13 hours| ~40 hours|
+|    8     |  8013 img/s  |   23874 img/s |    2.98 x    | 7.83 x | 8.24 x   | ~2 hours | ~4 hours |
 
 ##### Training performance of Automatic SParsity: NVIDIA DGX A100 (8x A100 80GB)
 | **GPUs** |  **Throughput - mixed precision** | **Throughput - mixed precision+ASP** | **Overhead** |

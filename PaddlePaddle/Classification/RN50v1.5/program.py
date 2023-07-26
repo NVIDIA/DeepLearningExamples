@@ -143,6 +143,8 @@ def create_strategy(args, is_train=True):
         build_strategy.fuse_elewise_add_act_ops = True
         build_strategy.fuse_bn_add_act_ops = True
         build_strategy.enable_addto = True
+        if args.fuse_resunit and is_train:
+            build_strategy.fuse_resunit = True
 
     return build_strategy, exec_strategy
 

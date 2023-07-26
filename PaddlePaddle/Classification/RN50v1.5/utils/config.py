@@ -276,7 +276,10 @@ def add_advance_args(parser):
         '--use-pure-fp16',
         action='store_true',
         help='Enable pure FP16 training, only be applied when --amp is set.')
-
+    group.add_argument(
+        '--fuse-resunit',
+        action='store_true',
+        help='Enable CUDNNv8 ResUnit fusion, only be applied when --amp is set.')
     # ASP
     group.add_argument(
         '--asp',

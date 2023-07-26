@@ -1,4 +1,4 @@
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/paddlepaddle:23.02-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/paddlepaddle:23.06-py3
 FROM ${FROM_IMAGE_NAME}
 
 ADD requirements.txt /workspace/
