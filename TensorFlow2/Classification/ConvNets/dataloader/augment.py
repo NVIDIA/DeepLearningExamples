@@ -26,7 +26,11 @@ import math
 import tensorflow as tf
 from typing import Any, Dict, List, Optional, Text, Tuple
 
-from keras.layers.preprocessing import image_preprocessing as image_ops
+try:
+    from keras.layers.preprocessing import image_preprocessing as image_ops
+except (ImportError, ModuleNotFoundError):
+    import keras.src.layers.preprocessing.image_preprocessing as image_ops
+
 
 # This signifies the max integer that the controller RNN could predict for the
 # augmentation scheme.
