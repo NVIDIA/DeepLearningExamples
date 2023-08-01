@@ -450,9 +450,9 @@ def main():
     parser.add_argument("--max_answer_length", default=30, type=int,
                         help="The maximum length of an answer that can be generated. This is needed because the start "
                              "and end predictions are not conditioned on one another.")
-    parser.add_argument("--no_cuda",
+    parser.add_argument("--no_gpu",
                         action='store_true',
-                        help="Whether not to use CUDA when available")
+                        help="Whether not to use GPU when available")
     parser.add_argument("--do_lower_case",
                         action='store_true',
                         help="Whether to lower case the input text. True for uncased models, False for cased models.")
@@ -482,10 +482,18 @@ def main():
     torch.cuda.manual_seed(args.seed)
     
     if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+        if torch.cuda.is_available() and not args.no_gpu:
+            device = torch.device('cuda')
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available() and not args.no_gpu:
+            device = torch.device('mps') # noqa
+        else:
+            device = torch.device('cpu')
     else:
-        torch.cuda.set_device(args.local_rank)
-        device = torch.device("cuda", args.local_rank)
+        if torch.cuda.is_available():
+            torch.cuda.set_device(args.local_rank)
+            device = torch.device('cuda', args.local_rank)
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            device = torch.device('mps') # noqa
     
     tokenizer = BertTokenizer(args.vocab_file, do_lower_case=args.do_lower_case, max_len=512) # for bert large
     

@@ -140,10 +140,10 @@ def main():
                         default=-1,
                         type=int,
                         help="Total number of eval  steps to perform, otherwise use full dataset")
-    parser.add_argument("--no_cuda",
+    parser.add_argument("--no_gpu",
                         default=False,
                         action='store_true',
-                        help="Whether not to use CUDA when available")
+                        help="Whether not to use GPU when available")
     parser.add_argument("--local_rank",
                         type=int,
                         default=-1,
@@ -166,12 +166,21 @@ def main():
     if 'LOCAL_RANK' in os.environ:
         args.local_rank = int(os.environ['LOCAL_RANK'])
 
-    if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
+    if args.local_rank == -1 or args.no_gpu:
+        if torch.cuda.is_available() and not args.no_gpu:
+            device = torch.device('cuda')
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available() and not args.no_gpu:
+            device = torch.device('mps')
+        else:
+            device = torch.device('cpu')
         
     else:
-        torch.cuda.set_device(args.local_rank)
-        device = torch.device("cuda", args.local_rank)
+        if torch.cuda.is_available():
+            torch.cuda.set_device(args.local_rank)
+            device = torch.device("cuda", args.local_rank)
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            device = torch.device('mps')
+        
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
 

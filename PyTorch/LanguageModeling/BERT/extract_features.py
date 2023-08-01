@@ -210,17 +210,24 @@ def main():
                         type=int,
                         default=-1,
                         help = "local_rank for distributed training on gpus")
-    parser.add_argument("--no_cuda",
+    parser.add_argument("--no_gpu",
                         action='store_true',
-                        help="Whether not to use CUDA when available")
+                        help="Whether not to use GPU when available")
 
     args = parser.parse_args()
 
     if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-        n_gpu = torch.cuda.device_count()
+        if torch.cuda.is_available() and not args.no_gpu:
+            device = torch.device("cuda" if torch.cuda.is_available() and not args.no_gpu else "cpu")
+            n_gpu = torch.cuda.device_count()
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available() and not args.no_gpu:
+            device = torch.device('mps' if torch.backends.mps.is_available() and not args.no_gpu else 'cpu') # noqa
+            n_GPU = 1
     else:
-        device = torch.device("cuda", args.local_rank)
+        if torch.cuda.is_available():
+            device = torch.device('cuda')
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            device = torch.device('mps') # noqa
         n_gpu = 1
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.distributed.init_process_group(backend='nccl')

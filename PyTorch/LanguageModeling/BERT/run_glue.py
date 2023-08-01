@@ -439,9 +439,9 @@ def main():
                         type=float,
                         help="Proportion of training to perform linear learning rate warmup for. "
                              "E.g., 0.1 = 10%% of training.")
-    parser.add_argument("--no_cuda",
+    parser.add_argument("--no_GPU",
                         action='store_true',
-                        help="Whether not to use CUDA when available")
+                        help="Whether not to use GPU when available")
     parser.add_argument("--local_rank",
                         type=int,
                         default=-1,
@@ -495,12 +495,21 @@ def main():
         "mrpc": 2,
     }
 
-    if args.local_rank == -1 or args.no_cuda:
-        device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
-        n_gpu = torch.cuda.device_count()
+    if args.local_rank == -1 or args.no_GPU:
+        if torch.cuda.is_available() and not args.no_GPU:
+            device = torch.device('cuda')
+            n_gpu = torch.cuda.device_count()
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available() and not args.no_GPU:  #noqa
+            device = torch.device('mps')
+            n_gpu = 1
+        else:
+            device = torch.device('cpu')
     else:
-        torch.cuda.set_device(args.local_rank)
-        device = torch.device("cuda", args.local_rank)
+        if torch.cuda.is_available():
+            torch.cuda.set_device(args.local_rank)
+            device = torch.device("cuda", args.local_rank)
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():  #noqa
+            device = torch.device('mps')
         n_gpu = 1
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         torch.distributed.init_process_group(backend='nccl')
