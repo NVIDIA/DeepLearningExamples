@@ -171,25 +171,15 @@ echo "@article{sen:aim08,
 if [ "$(ls | grep -c "^cora$")" -ge 1 ]; then
   echo "CORA directory already exists, skipping ..."
 else
-  wget 'https://linqs-data.soe.ucsc.edu/public/lbc/cora.tgz'
-  tar -zxvf cora.tgz
-  rm cora.tgz
-  cd cora || exit 1
-  sed -i "s/\t/,/g" cora.cites
-  sed -i "1s/^/src,dst\n/" cora.cites
-  cd ..
+  python -m syngen preprocess --source-path=./cora --dataset=cora --download
 fi
 
 
 # Rating
 echo "Processing Rating ..."
 
-if [ "$(ls | grep -c "^ratings_data.txt$")" -ge 1 ]; then
+if [ "$(ls | grep -c "^epinions$")" -ge 1 ]; then
   echo "Rating file already exists, skipping ..."
 else
- wget 'http://www.trustlet.org/datasets/downloaded_epinions/ratings_data.txt.bz2'
- tar -xvf ratings_data.txt.bz2
- rm ratings_data.txt.bz2
- sed -i "s/ /,/g" ratings_data.txt
- sed -i '1s/^/user_id,item_id,rating\n/' ratings_data.txt
+  python -m syngen preprocess --source-path=./epinions --dataset=epinions --download
 fi

@@ -12,63 +12,38 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import logging
 import math
+import os
+import json
+import logging
+import shutil
+from typing import Optional
 
 import cudf
-import dask_cudf
+import cupy as cp
 import numpy as np
 import pandas as pd
 
+from syngen.utils.types import DataFrameType
+from syngen.configuration import SynGenDatasetFeatureSpec
 from syngen.preprocessing.base_preprocessing import BasePreprocessing
-from syngen.utils.types import DataFrameType, MetaData
-
-logger = logging.getLogger(__name__)
-log = logger
+from syngen.utils.types import MetaData
 
 
 class TabFormerPreprocessing(BasePreprocessing):
-    def __init__(
-        self,
-        cached: bool = False,
-        nrows: int = None,
-        drop_cols: list = [],
-        **kwargs,
-    ):
-        """
+    """
         preprocessing for https://github.com/IBM/TabFormer
-        Dataframe `card_transaction.v1.csv`
-        Args:
-            cached (bool): skip preprocessing and use cached files
-            nrows (int): number of rows to load from dataframe
-            drop_cols (list): list of columns to drop (default: [])
-        """
-        super().__init__(cached, nrows, drop_cols)
 
-        self.graph_info = {
-            MetaData.EDGE_DATA: {
-                MetaData.SRC_NAME: "card_id",
-                MetaData.SRC_COLUMNS: ["user", "card"],
-                MetaData.DST_NAME: "merchant_id",
-                MetaData.DST_COLUMNS: ["merchant_name"],
-            },
-            MetaData.UNDIRECTED: True,
-        }
+    """
 
-        self.graph_info[MetaData.EDGE_DATA][MetaData.CONTINUOUS_COLUMNS] = [
-            "amount"
-        ]
-        self.graph_info[MetaData.EDGE_DATA][MetaData.CATEGORICAL_COLUMNS] = [
-            "card_id",
-            "merchant_id",
-            "use_chip",
-            "errors",
-            "is_fraud",
-        ]
-
-    @staticmethod
-    def nanZero(X: DataFrameType) -> DataFrameType:
-        return X.where(X.notnull(), 0)
+    def __init__(
+            self,
+            source_path: str,
+            destination_path: Optional[str] = None,
+            download: bool = False,
+            **kwargs,
+    ):
+        super().__init__(source_path, destination_path, download, **kwargs)
 
     @staticmethod
     def nanNone(X: DataFrameType) -> DataFrameType:
@@ -83,44 +58,89 @@ class TabFormerPreprocessing(BasePreprocessing):
             .map(lambda x: math.log(x))
         )
 
-    def transform_graph(self, data: DataFrameType) -> DataFrameType:
+    def transform(self, gpu=False, use_cache=False) -> SynGenDatasetFeatureSpec:
+
+        if use_cache and os.path.exists(self.destination_path):
+            return SynGenDatasetFeatureSpec.instantiate_from_preprocessed(self.destination_path)
+
+        operator = cp if gpu else np
+        tabular_operator = cudf if gpu else pd
+
+        data = tabular_operator.read_csv(os.path.join(self.source_path, 'card_transaction.v2.csv'))
         data.columns = [
             i.lower().replace(" ", "_") for i in data.columns.tolist()
         ]
         data = data.rename(
-            columns={"is_fraud?": "is_fraud", "errors?": "errors"}
+            columns={"is_fraud?": "is_fraud", "errors?": "errors", "merchant_name": "merchant_id"}
         )
+
+        data['card_id'] = data['user'] + data['card']
+        data.drop(columns=['user', 'card'], inplace=True)
+
         data["errors"] = data["errors"].fillna(0)
         data["use_chip"] = self.nanNone(data["use_chip"])
         data["amount"] = self.amountEncoder(data["amount"])
 
-        data = self.add_graph_edge_cols(data)
-        continuous_columns = [
-            c
-            for c in data.columns
-            if c
-            in self.graph_info[MetaData.EDGE_DATA][MetaData.CONTINUOUS_COLUMNS]
-        ]
-        categorical_columns = [
-            c
-            for c in data.columns
-            if c
-            in self.graph_info[MetaData.EDGE_DATA][
-                MetaData.CATEGORICAL_COLUMNS
-            ]
-        ]
-        for col in categorical_columns:
+        cont_columns = ["amount"]
+
+        cat_columns = ["use_chip", "errors", "is_fraud"]
+
+        for col in ("card_id", "merchant_id", *cat_columns):
             data[col] = data[col].astype("category").cat.codes
             data[col] = data[col].astype(int)
 
-        columns_to_select = categorical_columns + continuous_columns
-        src_name = self.graph_info[MetaData.EDGE_DATA][MetaData.SRC_NAME]
-        dst_name = self.graph_info[MetaData.EDGE_DATA][MetaData.DST_NAME]
-        src_ids = data[src_name].unique()
-        data[dst_name] = data[dst_name].astype(int) + len(src_ids)
-        data = data[columns_to_select]
-        return {MetaData.EDGE_DATA: data}
+        structural_data = data[['card_id', 'merchant_id']]
+        tabular_data = data[[*cat_columns, *cont_columns]]
 
-    def inverse_transform(self, data):
-        data["amount"] = data["amount"].map(lambda x: "$" + str(math.exp(x)))
-        return data
+        edge_features = self._prepare_feature_list(tabular_data, cat_columns, cont_columns)
+
+        graph_metadata = {
+            MetaData.NODES: [
+                {
+                    MetaData.NAME: "card",
+                    MetaData.COUNT: int(structural_data['card_id'].max()),
+                    MetaData.FEATURES: [],
+                    MetaData.FEATURES_PATH: None,
+                },
+                {
+                    MetaData.NAME: "merchant",
+                    MetaData.COUNT: int(structural_data['merchant_id'].max()),
+                    MetaData.FEATURES: [],
+                    MetaData.FEATURES_PATH: None,
+                }
+            ],
+            MetaData.EDGES: [
+                {
+                    MetaData.NAME: "transaction",
+                    MetaData.COUNT: len(structural_data),
+                    MetaData.SRC_NODE_TYPE: "card",
+                    MetaData.DST_NODE_TYPE: "merchant",
+                    MetaData.DIRECTED: False,
+                    MetaData.FEATURES: edge_features,
+                    MetaData.FEATURES_PATH: "transaction.parquet",
+                    MetaData.STRUCTURE_PATH: "transaction_edge_list.parquet",
+                }
+            ]
+        }
+
+        shutil.rmtree(self.destination_path, ignore_errors=True)
+        os.makedirs(self.destination_path)
+
+        tabular_data.to_parquet(os.path.join(self.destination_path, "transaction.parquet"))
+        structural_data.to_parquet(os.path.join(self.destination_path, "transaction_edge_list.parquet"))
+
+        with open(os.path.join(self.destination_path, 'graph_metadata.json'), 'w') as f:
+            json.dump(graph_metadata, f, indent=4)
+
+        graph_metadata[MetaData.PATH] = self.destination_path
+        return SynGenDatasetFeatureSpec(graph_metadata)
+
+    def download(self):
+        raise NotImplementedError(
+            "TabFormer dataset does not support automatic downloading. Please run /workspace/scripts/get_datasets.sh"
+        )
+
+    def _check_files(self) -> bool:
+        files = ['card_transaction.v2.csv']
+        return all(os.path.exists(os.path.join(self.source_path, file)) for file in files)
+

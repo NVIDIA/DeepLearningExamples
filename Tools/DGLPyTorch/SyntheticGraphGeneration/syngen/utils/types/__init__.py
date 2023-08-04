@@ -13,6 +13,8 @@
 # limitations under the License.
 
 # flake8: noqa
+from .array_type import NDArray
 from .column_type import ColumnType
 from .dataframe_type import DataFrameType
 from .metadata import MetaData
+from .data_source_input_type import DataSourceInputType

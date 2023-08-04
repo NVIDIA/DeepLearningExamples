@@ -18,8 +18,9 @@ import pickle
 from abc import ABC
 from typing import List, Optional, Set, Tuple
 
-from syngen.generator.graph.fitter import BaseFitter, FastFitter
-from syngen.generator.graph.logger import BaseLogger
+import numpy as np
+
+from syngen.generator.graph.utils import BaseLogger
 from syngen.generator.graph.seeder import BaseSeeder
 
 
@@ -66,7 +67,8 @@ class BaseGraphGenerator(BaseGenerator, ABC):
         self,
         seed: Optional[int] = None,
         logdir: str = "./logs",
-        fitter: BaseFitter = None,
+        gpu: bool = True,
+        verbose: bool = False,
         *args,
         **kwargs,
     ):
@@ -75,7 +77,8 @@ class BaseGraphGenerator(BaseGenerator, ABC):
         self.seeder.reseed()
         self.logger = BaseLogger(logdir)
         self.logger.log(f"Using seed: {self.seeder.seed}")
-        self.fitter = fitter or FastFitter()
+        self.gpu = gpu
+        self.verbose = verbose
 
     def fit(
         self, graph: List[Tuple[int, int]], is_directed: bool, *args, **kwargs
@@ -95,13 +98,15 @@ class BaseGraphGenerator(BaseGenerator, ABC):
         num_edges: int,
         is_directed: bool,
         *args,
+        return_node_ids: bool = False,
         **kwargs,
-    ):
+    ) -> np.ndarray:
         """ Generates graph with approximately `num_nodes` and exactly `num_edges` from generator
         Args: 
             num_nodes (int): approximate number of nodes to be generated
             num_edges (int): exact number of edges to be generated
             is_directed (bool): flag indicating whether the generated graph has to be directed
+            return_node_ids (bool): flag indicating whether the generator has to return nodes_ids as the second output
             *args: optional positional args
             **kwargs: optional key-word args
         """
@@ -161,7 +166,8 @@ class BaseBipartiteGraphGenerator(BaseGenerator, ABC):
         self,
         seed: Optional[int] = None,
         logdir: str = "./logs",
-        fitter: Optional[BaseFitter] = None,
+        gpu: bool = True,
+        verbose: bool = False,
         *args,
         **kwargs,
     ):
@@ -171,8 +177,8 @@ class BaseBipartiteGraphGenerator(BaseGenerator, ABC):
         self.seeder.reseed()
         self.logger = BaseLogger(logdir)
         self.logger.log(f"Using seed: {self.seeder.seed}")
-        self.gpu = False
-        self.fitter = fitter or FastFitter()
+        self.gpu = gpu
+        self.verbose = verbose
 
     def fit(
         self,
@@ -180,6 +186,7 @@ class BaseBipartiteGraphGenerator(BaseGenerator, ABC):
         src_set: Set[int],
         dst_set: Set[int],
         is_directed: bool,
+        transform_graph: bool,
         *args,
         **kwargs,
     ):
@@ -202,6 +209,8 @@ class BaseBipartiteGraphGenerator(BaseGenerator, ABC):
         num_edges_src_dst: int,
         num_edges_dst_src: int,
         is_directed: bool,
+        return_node_ids: bool = False,
+        transform_graph: bool = True,
         *args,
         **kwargs,
     ):
@@ -213,6 +222,7 @@ class BaseBipartiteGraphGenerator(BaseGenerator, ABC):
             num_edges_src_dst (int): exact number of source->destination edges to be generated
             num_edges_dst_src (int): exact number of destination->source to be generated
             is_directed (bool) flag indicating whether the generated graph has to be directed
+            return_node_ids (bool): flag indicating whether the generator has to return nodes_ids as the second output
             *args: optional positional args
             **kwargs: optional key-word args
         """

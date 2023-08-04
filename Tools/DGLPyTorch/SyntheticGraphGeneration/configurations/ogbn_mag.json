@@ -1,0 +1,2828 @@
+{
+    "nodes": [
+        {
+            "name": "paper",
+            "count": 736389,
+            "features": [
+                {
+                    "name": "feat_0",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_1",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_2",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_3",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_4",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_5",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_6",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_7",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_8",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_9",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_10",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_11",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_12",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_13",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_14",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_15",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_16",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_17",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_18",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_19",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_20",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_21",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_22",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_23",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_24",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_25",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_26",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_27",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_28",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_29",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_30",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_31",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_32",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_33",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_34",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_35",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_36",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_37",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_38",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_39",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_40",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_41",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_42",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_43",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_44",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_45",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_46",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_47",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_48",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_49",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_50",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_51",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_52",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_53",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_54",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_55",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_56",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_57",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_58",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_59",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_60",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_61",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_62",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_63",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_64",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_65",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_66",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_67",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_68",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_69",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_70",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_71",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_72",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_73",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_74",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_75",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_76",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_77",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_78",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_79",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_80",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_81",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_82",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_83",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_84",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_85",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_86",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_87",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_88",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_89",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_90",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_91",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_92",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_93",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_94",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_95",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_96",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_97",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_98",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_99",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_100",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_101",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_102",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_103",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_104",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_105",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_106",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_107",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_108",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_109",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_110",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_111",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_112",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_113",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_114",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_115",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_116",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_117",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_118",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_119",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_120",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_121",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_122",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_123",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_124",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_125",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_126",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_127",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "year",
+                    "dtype": "int32",
+                    "feature_type": "categorical"
+                },
+                {
+                    "name": "venue",
+                    "dtype": "int32",
+                    "feature_type": "categorical"
+                }
+            ],
+            "features_path": "paper.parquet",
+            "[gen]tabular_generators": [
+                {
+                    "type": "kde",
+                    "features_list": -1,
+                    "data_source": {
+                        "type": "cfg",
+                        "path": "/workspace/data/ogbn_mag/syngen_preprocessed",
+                        "name": "paper"
+                    },
+                    "params": {
+                        "gpu": true
+                    }
+                }
+            ]
+        },
+        {
+            "name": "author",
+            "count": 1134649,
+            "features": [
+                {
+                    "name": "feat_0",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_1",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_2",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_3",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_4",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_5",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_6",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_7",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_8",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_9",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_10",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_11",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_12",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_13",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_14",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_15",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_16",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_17",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_18",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_19",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_20",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_21",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_22",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_23",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_24",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_25",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_26",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_27",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_28",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_29",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_30",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_31",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_32",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_33",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_34",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_35",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_36",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_37",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_38",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_39",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_40",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_41",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_42",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_43",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_44",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_45",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_46",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_47",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_48",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_49",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_50",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_51",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_52",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_53",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_54",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_55",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_56",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_57",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_58",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_59",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_60",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_61",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_62",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_63",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_64",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_65",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_66",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_67",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_68",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_69",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_70",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_71",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_72",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_73",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_74",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_75",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_76",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_77",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_78",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_79",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_80",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_81",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_82",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_83",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_84",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_85",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_86",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_87",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_88",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_89",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_90",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_91",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_92",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_93",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_94",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_95",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_96",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_97",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_98",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_99",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_100",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_101",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_102",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_103",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_104",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_105",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_106",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_107",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_108",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_109",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_110",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_111",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_112",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_113",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_114",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_115",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_116",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_117",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_118",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_119",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_120",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_121",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_122",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_123",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_124",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_125",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_126",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_127",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                }
+            ],
+            "features_path": "author.parquet",
+            "[gen]tabular_generators": [
+                {
+                    "type": "kde",
+                    "features_list": -1,
+                    "data_source": {
+                        "type": "cfg",
+                        "path": "/workspace/data/ogbn_mag/syngen_preprocessed",
+                        "name": "author"
+                    },
+                    "params": {
+                        "gpu": true
+                    }
+                }
+            ]
+        },
+        {
+            "name": "institution",
+            "count": 8740,
+            "features": [
+                {
+                    "name": "feat_0",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_1",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_2",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_3",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_4",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_5",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_6",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_7",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_8",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_9",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_10",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_11",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_12",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_13",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_14",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_15",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_16",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_17",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_18",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_19",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_20",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_21",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_22",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_23",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_24",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_25",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_26",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_27",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_28",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_29",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_30",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_31",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_32",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_33",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_34",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_35",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_36",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_37",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_38",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_39",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_40",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_41",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_42",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_43",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_44",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_45",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_46",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_47",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_48",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_49",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_50",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_51",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_52",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_53",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_54",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_55",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_56",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_57",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_58",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_59",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_60",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_61",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_62",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_63",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_64",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_65",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_66",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_67",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_68",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_69",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_70",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_71",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_72",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_73",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_74",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_75",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_76",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_77",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_78",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_79",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_80",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_81",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_82",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_83",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_84",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_85",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_86",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_87",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_88",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_89",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_90",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_91",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_92",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_93",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_94",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_95",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_96",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_97",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_98",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_99",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_100",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_101",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_102",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_103",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_104",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_105",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_106",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_107",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_108",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_109",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_110",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_111",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_112",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_113",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_114",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_115",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_116",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_117",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_118",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_119",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_120",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_121",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_122",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_123",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_124",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_125",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_126",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_127",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                }
+            ],
+            "features_path": "institution.parquet",
+            "[gen]tabular_generators": [
+                {
+                    "type": "kde",
+                    "features_list": -1,
+                    "data_source": {
+                        "type": "cfg",
+                        "path": "/workspace/data/ogbn_mag/syngen_preprocessed",
+                        "name": "institution"
+                    },
+                    "params": {
+                        "gpu": true
+                    }
+                }
+            ]
+        },
+        {
+            "name": "field_of_study",
+            "count": 59965,
+            "features": [
+                {
+                    "name": "feat_0",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_1",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_2",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_3",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_4",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_5",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_6",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_7",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_8",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_9",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_10",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_11",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_12",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_13",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_14",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_15",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_16",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_17",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_18",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_19",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_20",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_21",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_22",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_23",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_24",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_25",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_26",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_27",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_28",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_29",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_30",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_31",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_32",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_33",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_34",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_35",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_36",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_37",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_38",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_39",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_40",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_41",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_42",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_43",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_44",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_45",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_46",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_47",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_48",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_49",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_50",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_51",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_52",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_53",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_54",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_55",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_56",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_57",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_58",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_59",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_60",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_61",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_62",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_63",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_64",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_65",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_66",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_67",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_68",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_69",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_70",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_71",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_72",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_73",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_74",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_75",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_76",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_77",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_78",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_79",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_80",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_81",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_82",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_83",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_84",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_85",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_86",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_87",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_88",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_89",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_90",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_91",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_92",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_93",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_94",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_95",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_96",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_97",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_98",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_99",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_100",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_101",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_102",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_103",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_104",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_105",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_106",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_107",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_108",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_109",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_110",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_111",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_112",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_113",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_114",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_115",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_116",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_117",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_118",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_119",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_120",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_121",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_122",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_123",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_124",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_125",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_126",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "feat_127",
+                    "dtype": "float32",
+                    "feature_type": "continuous"
+                }
+            ],
+            "features_path": "field_of_study.parquet",
+            "[gen]tabular_generators": [
+                {
+                    "type": "kde",
+                    "features_list": -1,
+                    "data_source": {
+                        "type": "cfg",
+                        "path": "/workspace/data/ogbn_mag/syngen_preprocessed",
+                        "name": "field_of_study"
+                    },
+                    "params": {
+                        "gpu": true
+                    }
+                }
+            ]
+        }
+    ],
+    "edges": [
+        {
+            "name": "affiliated_with",
+            "count": 1043998,
+            "src_node_type": "author",
+            "dst_node_type": "institution",
+            "directed": false,
+            "features": [
+                {
+                    "name": "feat",
+                    "dtype": "int64",
+                    "feature_type": "categorical"
+                }
+            ],
+            "features_path": "affiliated_with_features.parquet",
+            "structure_path": "affiliated_with_list.parquet",
+            "[gen]tabular_generators": [
+                {
+                    "type": "kde",
+                    "features_list": -1,
+                    "data_source": {
+                        "type": "cfg",
+                        "path": "/workspace/data/ogbn_mag/syngen_preprocessed",
+                        "name": "affiliated_with"
+                    },
+                    "params": {
+                        "gpu": true
+                    }
+                }
+            ],
+            "[gen]structure_generator": {
+                "type": "RMAT",
+                "data_source": {
+                    "type": "cfg",
+                    "path": "/workspace/data/ogbn_mag/syngen_preprocessed",
+                    "name": "affiliated_with"
+                },
+                "params": {
+                    "seed": 42,
+                    "gpu": true
+                }
+            }
+        },
+        {
+            "name": "writes",
+            "count": 7145660,
+            "src_node_type": "author",
+            "dst_node_type": "paper",
+            "directed": false,
+            "features": [
+                {
+                    "name": "feat",
+                    "dtype": "int64",
+                    "feature_type": "categorical"
+                }
+            ],
+            "features_path": "writes_features.parquet",
+            "structure_path": "writes_list.parquet",
+            "[gen]tabular_generators": [
+                  {
+                      "type": "kde",
+                      "features_list": -1,
+                      "data_source": {
+                          "type": "cfg",
+                          "path": "/workspace/data/ogbn_mag/syngen_preprocessed",
+                          "name": "writes"
+                      },
+                      "params": {
+                          "gpu": true
+                      }
+                  }
+              ],
+              "[gen]structure_generator": {
+                  "type": "RMAT",
+                  "data_source": {
+                      "type": "cfg",
+                      "path": "/workspace/data/ogbn_mag/syngen_preprocessed",
+                      "name": "writes"
+                  },
+                  "params": {
+                      "seed": 42,
+                      "gpu": true
+                  }
+              }
+        },
+        {
+            "name": "cites",
+            "count": 5416271,
+            "src_node_type": "paper",
+            "dst_node_type": "paper",
+            "directed": false,
+            "features": [
+                {
+                    "name": "feat",
+                    "dtype": "int64",
+                    "feature_type": "categorical"
+                }
+            ],
+            "features_path": "cites_features.parquet",
+            "structure_path": "cites_list.parquet",
+            "[gen]tabular_generators": [
+                  {
+                      "type": "kde",
+                      "features_list": -1,
+                      "data_source": {
+                          "type": "cfg",
+                          "path": "/workspace/data/ogbn_mag/syngen_preprocessed",
+                          "name": "cites"
+                      },
+                      "params": {
+                          "gpu": true
+                      }
+                  }
+              ],
+              "[gen]structure_generator": {
+                  "type": "RMAT",
+                  "data_source": {
+                      "type": "cfg",
+                      "path": "/workspace/data/ogbn_mag/syngen_preprocessed",
+                      "name": "cites"
+                  },
+                  "params": {
+                      "seed": 42,
+                      "gpu": true
+                  }
+              }
+        },
+        {
+            "name": "has_topic",
+            "count": 7505078,
+            "src_node_type": "paper",
+            "dst_node_type": "field_of_study",
+            "directed": false,
+            "features": [
+                {
+                    "name": "feat",
+                    "dtype": "int64",
+                    "feature_type": "categorical"
+                }
+            ],
+            "features_path": "has_topic_features.parquet",
+            "structure_path": "has_topic_list.parquet",
+            "[gen]tabular_generators": [
+                  {
+                      "type": "kde",
+                      "features_list": -1,
+                      "data_source": {
+                          "type": "cfg",
+                          "path": "/workspace/data/ogbn_mag/syngen_preprocessed",
+                          "name": "has_topic"
+                      },
+                      "params": {
+                          "gpu": true
+                      }
+                  }
+              ],
+              "[gen]structure_generator": {
+                  "type": "RMAT",
+                  "data_source": {
+                      "type": "cfg",
+                      "path": "/workspace/data/ogbn_mag/syngen_preprocessed",
+                      "name": "has_topic"
+                  },
+                  "params": {
+                      "seed": 42,
+                      "gpu": true
+                  }
+              }
+        }
+    ]
+}

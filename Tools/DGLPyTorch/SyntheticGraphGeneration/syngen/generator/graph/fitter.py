@@ -13,53 +13,26 @@
 # limitations under the License.
 
 import warnings
-from abc import ABC
-from typing import List, Optional, Tuple
+from typing import Optional
 
 import numpy as np
 from scipy.optimize import minimize
 
-
-class BaseFitter(ABC):
-    """ Base fitter for graph generators """
-    def fit(self, graph: Optional[List[Tuple[int, int]]], *args):
-        raise NotImplementedError()
-
-
-class RandomFitter(BaseFitter):
-    """ Random fitter for RMAT generators. Implements erdos-renyi model. """
-    def fit(self, graph: Optional[List[Tuple[int, int]]], *args):
-        """ Fit method for erdos-renyi model, it is graph independent.
-        Args:
-            graph (List[Tuple[int, int]]): graph to be fitted on
-        Returns:
-            a, b, c, d: random seeding matrix
-        """
-        return 0.25, 0.25, 0.25, 0.25
-
+from syngen.utils.types import NDArray
+from syngen.generator.graph.utils import get_degree_distribution, move_ndarray_to_host
+from syngen.utils.utils import infer_operator
 
 MAXK = 1000
 
-class FastFitter(BaseFitter):
-    """ Fast version of fitter RMAT generators. Finds seeding matrix based on given degree distribution """
-    def _convert_graph_to_fitformat(self, edges, in_out_degree):
-        if in_out_degree == "out":
-            combined = edges[:, 0]
-        elif in_out_degree == "in":
-            combined = edges[:, 1]
-        else:
-            raise ValueError(
-                f"in_out_degree expected [out|in|both] got {in_out_degree}"
-            )
-        ids, counts = np.unique(combined, return_counts=True)
-        node_dd = np.stack([ids, counts], axis=1)
-        ids2, counts2 = np.unique(counts, return_counts=True)
-        dd = np.stack([ids2, counts2], axis=1)
-        num_nodes = len(ids)
-        log2_num_nodes = int(np.ceil(np.log2(num_nodes)))
-        return node_dd, dd, log2_num_nodes
 
-    def _get_p_directed_graph(self, dd, n_exp2, verbose=False):
+class RMATFitter(object):
+    def __init__(self, fast=True, random=False):
+        self._loglik = self._fast_loglik if fast else self._original_loglik
+        self.random = random
+
+    def _get_p_directed_graph(self, dd, verbose=False):
+        num_nodes = dd[:, 1].sum()
+        n_exp2 = int(np.ceil(np.log2(num_nodes)))
         E = (dd[:, 0] * dd[:, 1]).sum()
 
         mx = min(dd[-1, 0], MAXK)
@@ -90,113 +63,7 @@ class FastFitter(BaseFitter):
         )
         return res.x[0]
 
-    def _loglik(self, p, E, n_exp, count, logeck, lognci, k_cost_threeshold):
-
-        if p <= 0.0 or p >= 1.0:
-            return 1e100
-
-        q = p
-        a = 0.75 * p
-        b = p - a
-        c = q - a
-        if (a + b + c) >= 1.0:
-            return 1e100
-
-        l = np.array([0.0], dtype=np.float64)
-        for j in range(len(count)):
-            m = count[j, 0]
-            ck = np.log(count[j, 1])
-            if ck > np.log(k_cost_threeshold):
-                if m <= MAXK:
-                    current_sum = np.exp(
-                        logeck[m]
-                        + np.log(p) * (n_exp * m)
-                        + np.log(1 - p ** n_exp) * (E - m)
-                    )
-
-                    for i in range(1, n_exp + 1):
-                        current_sum = current_sum + np.exp(
-                            logeck[m]
-                            + lognci[i]
-                            + np.log(p) * (m * (n_exp - i))
-                            + np.log(1 - p) * (m * i)
-                            + np.log(1 - p ** (n_exp - i) * (1 - p) ** i)
-                            * (E - m)
-                        )
-                else:
-                    logecm = (
-                        E * np.log(E) - m * np.log(m) - (E - m) * np.log(E - m)
-                    )
-                    current_sum = np.exp(
-                        logecm
-                        + np.log(p) * (n_exp * m)
-                        + np.log(1 - p ** n_exp) * (E - m)
-                    )
-                    for i in range(1, n_exp + 1):
-                        current_sum = current_sum + np.exp(
-                            logecm
-                            + lognci[i]
-                            + np.log(p) * (m * (n_exp - i))
-                            + np.log(1 - p) * (m * i)
-                            + np.log(1 - p ** (n_exp - i) * (1 - p) ** i)
-                            * (E - m)
-                        )
-                y = np.log(current_sum)
-                y = max(0, y)
-                l = l + (np.exp(ck) - np.exp(y)) * (np.exp(ck) - np.exp(y))
-        self.optimization_steps.append((p[0], l[0]))
-        return l
-
-    def _check_optimization_history(self):
-        optimization_steps = np.array(self.optimization_steps)
-        function_values = np.unique(optimization_steps[:, 1])
-        if len(function_values) <= 1:
-            warnings.warn(
-                "the optimization function is constant for the FastFitter. Please, use Fitter class instead."
-            )
-        self.optimization_steps = []
-
-    def fit(self, graph: List[Tuple[int, int]], return_log_d=False):
-        """ Fits the graph to the degree distribution.
-        Args:
-            graph (List[Tuple[int, int]]): graph to be fitted on
-            return_log_d (bool): flag if set returns additionally log_2 from numbers of nodes
-        Returns:
-            a, b, c, d: seeding matrix
-        """
-
-        if not isinstance(graph, np.ndarray):
-            graph = np.array(graph)
-
-        (
-            node_outdd,
-            out_dd,
-            log2_from_nnodes,
-        ) = self._convert_graph_to_fitformat(graph, "out")
-        node_indd, in_dd, log2_to_nnodes = self._convert_graph_to_fitformat(
-            graph, "in"
-        )
-
-        p = self._get_p_directed_graph(out_dd, log2_from_nnodes)
-        self._check_optimization_history()
-        q = self._get_p_directed_graph(in_dd, log2_to_nnodes)
-        self._check_optimization_history()
-
-        a = 0.75 * (p + q) / 2
-        b = p - a
-        c = q - a
-        assert (a + b + c) < 1.0, "Cannot get correct RMat fit!"
-        d = 1.0 - (a + b + c)
-        if return_log_d:
-            return log2_from_nnodes, log2_to_nnodes, a, b, c, d
-        return a, b, c, d
-
-
-class Fitter(FastFitter):
-    """ Full version of fitter RMAT generators. Finds seeding matrix based on given degree distribution """
-
-    def _loglik(self, p, E, n_exp, count, logeck, lognci, k_cost_threeshold):
-
+    def _original_loglik(self, p, E, n_exp, count, logeck, lognci, k_cost_threeshold):
         if p <= 0.0 or p >= 1.0:
             return 1e100
 
@@ -305,3 +172,104 @@ class Fitter(FastFitter):
 
         self.optimization_steps.append((p[0], l[0]))
         return l
+
+    def _fast_loglik(self, p, E, n_exp, count, logeck, lognci, k_cost_threeshold):
+
+        if p <= 0.0 or p >= 1.0:
+            return 1e100
+
+        q = p
+        a = 0.75 * p
+        b = p - a
+        c = q - a
+        if (a + b + c) >= 1.0:
+            return 1e100
+
+        l = np.array([0.0], dtype=np.float64)
+        for j in range(len(count)):
+            m = count[j, 0]
+            ck = np.log(count[j, 1])
+            if ck > np.log(k_cost_threeshold):
+                if m <= MAXK:
+                    current_sum = np.exp(
+                        logeck[m]
+                        + np.log(p) * (n_exp * m)
+                        + np.log(1 - p ** n_exp) * (E - m)
+                    )
+
+                    for i in range(1, n_exp + 1):
+                        current_sum = current_sum + np.exp(
+                            logeck[m]
+                            + lognci[i]
+                            + np.log(p) * (m * (n_exp - i))
+                            + np.log(1 - p) * (m * i)
+                            + np.log(1 - p ** (n_exp - i) * (1 - p) ** i)
+                            * (E - m)
+                        )
+                else:
+                    logecm = (
+                        E * np.log(E) - m * np.log(m) - (E - m) * np.log(E - m)
+                    )
+                    current_sum = np.exp(
+                        logecm
+                        + np.log(p) * (n_exp * m)
+                        + np.log(1 - p ** n_exp) * (E - m)
+                    )
+                    for i in range(1, n_exp + 1):
+                        current_sum = current_sum + np.exp(
+                            logecm
+                            + lognci[i]
+                            + np.log(p) * (m * (n_exp - i))
+                            + np.log(1 - p) * (m * i)
+                            + np.log(1 - p ** (n_exp - i) * (1 - p) ** i)
+                            * (E - m)
+                        )
+                y = np.log(current_sum)
+                y = max(0, y)
+                l = l + (np.exp(ck) - np.exp(y)) * (np.exp(ck) - np.exp(y))
+        self.optimization_steps.append((p[0], l[0]))
+        return l
+
+    def _check_optimization_history(self):
+        optimization_steps = np.array(self.optimization_steps)
+        function_values = np.unique(optimization_steps[:, 1])
+        if len(function_values) <= 1:
+            warnings.warn(
+                "the optimization function is constant for the RMATFitter(fast=True). "
+                "Please, use RMATFitter(fast=False) instead."
+            )
+        self.optimization_steps = []
+
+    def fit(self,
+            graph: Optional[NDArray] = None,
+            is_directed=True,
+            ):
+
+        if self.random:
+            return 0.25, 0.25, 0.25, 0.25
+
+        operator = infer_operator(graph)
+
+        degree_values, degree_counts = get_degree_distribution(graph[:, 0], operator=operator)
+        out_dd = operator.stack([degree_values, degree_counts], axis=1)
+        out_dd = move_ndarray_to_host(out_dd)
+
+        if is_directed:
+            degree_values, degree_counts = get_degree_distribution(graph[:, 1], operator=operator)
+            in_dd = operator.stack([degree_values, degree_counts], axis=1)
+            in_dd = move_ndarray_to_host(in_dd)
+
+        p = self._get_p_directed_graph(out_dd)
+        self._check_optimization_history()
+
+        if is_directed:
+            q = self._get_p_directed_graph(in_dd)
+            self._check_optimization_history()
+        else:
+            q = p
+        a = 0.75 * (p + q) / 2
+        b = p - a
+        c = q - a
+        assert (a + b + c) < 1.0, "Cannot get correct RMat fit!"
+        d = 1.0 - (a + b + c)
+        return a, b, c, d

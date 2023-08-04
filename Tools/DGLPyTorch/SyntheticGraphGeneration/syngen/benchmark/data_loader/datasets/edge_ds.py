@@ -18,6 +18,7 @@ import dgl
 import numpy as np
 import torch
 
+from syngen.configuration import SynGenDatasetFeatureSpec
 from syngen.utils.types import DataFrameType, MetaData
 
 from .base_dataset import BaseDataset
@@ -46,53 +47,42 @@ class EdgeDS(BaseDataset):
 
     def get_graph(
         self,
-        edge_data: DataFrameType,
-        graph_info: dict,
-        *,
-        node_data: Optional[DataFrameType] = None,
+        feature_spec: SynGenDatasetFeatureSpec,
+        edge_name
     ):
+        struct_data = feature_spec.get_structural_data(edge_name)
 
-        src_name = graph_info[MetaData.EDGE_DATA][MetaData.SRC_NAME]
-        dst_name = graph_info[MetaData.EDGE_DATA][MetaData.DST_NAME]
-        edge_data = edge_data.fillna(0)
-        src_nodes = edge_data[src_name]
-        dst_nodes = edge_data[dst_name]
+        edge_info = feature_spec.get_edge_info(edge_name)
+
+        is_bipartite = edge_info[MetaData.SRC_NODE_TYPE] != edge_info[MetaData.DST_NODE_TYPE]
+
+        if is_bipartite:
+            offset = struct_data[:, 0].max() + 16
+            struct_data[:, 1] = struct_data[:, 1] + offset
 
         # - construct dgl graph
-        g = dgl.graph((src_nodes, dst_nodes))
+        g = dgl.graph((struct_data[:, 0], struct_data[:, 1]))
+        g.ndata["feat"] = torch.rand((g.num_nodes(), 32))
 
-        if node_data is None:
-            # - random features
-            g.ndata["feat"] = torch.rand((g.num_nodes(), 32))
-        else:
-            node_feature_columns = graph_info[MetaData.NODE_DATA].get(
-                MetaData.CONTINUOUS_COLUMNS, []
-            ) + graph_info[MetaData.NODE_DATA].get(
-                MetaData.CATEGORICAL_COLUMNS, []
-            )
-            node_feature_columns = list(set(node_feature_columns) - set(
-                [graph_info[MetaData.NODE_ID]]))
-            node_features = node_data[node_feature_columns].values
-            node_features = torch.Tensor(node_features)
-            g.ndata["feat"] = node_features
-
-        edges = edge_data[[src_name, dst_name]].values
+        assert g.num_nodes() == (struct_data.max() + 1), f"expected {(struct_data.max() + 1)}, got {g.num_nodes()}"
 
         if self.add_reverse:
-            # - add reverse edges
-            edge_reverse = np.zeros_like(edges)
-            edge_reverse[:, 0] = edges[:, 1]
-            edge_reverse[:, 1] = edges[:, 0]
-            g.add_edges(list(edge_reverse[:, 0]), list(edge_reverse[:, 1]))
+            edge_reverse = np.zeros_like(struct_data)
+            edge_reverse[:, 0] = struct_data[:, 1]
+            edge_reverse[:, 1] = struct_data[:, 0]
+            g.add_edges(edge_reverse[:, 0], edge_reverse[:, 1])
+
+        edge_data = feature_spec.get_tabular_data(MetaData.EDGES, edge_name)
+
+        feature_cols = list(set(edge_data.columns) - {self.target_col})
 
         num_rows = len(edge_data)
         num_edges = g.num_edges()
+
         # - extract edge features + labels
-        feature_cols = list(set(edge_data.columns) - set(
-            [src_name, dst_name, self.target_col]))
-        feature_cols = list(feature_cols)
-        features = edge_data[feature_cols].values
-        labels = edge_data[self.target_col].values
+        features = edge_data[feature_cols].astype(np.float32).values
+        labels = edge_data[self.target_col].fillna(0).astype(np.float32).values
+
         if num_rows == num_edges // 2:
             # - add reverse features
             features = np.concatenate([features, features], axis=0)
@@ -126,5 +116,5 @@ class EdgeDS(BaseDataset):
         g.edata["val_mask"] = val_mask
         g.edata["test_mask"] = test_mask
 
-        edge_eids = np.arange(0, len(edges))
+        edge_eids = np.arange(0, len(struct_data))
         return g, edge_eids

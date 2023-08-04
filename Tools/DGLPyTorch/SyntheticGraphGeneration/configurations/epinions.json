@@ -1,0 +1,92 @@
+{
+    "nodes": [
+        {
+            "name": "user",
+            "count": 49289,
+            "features": [],
+            "features_path": null
+        },
+        {
+            "name": "item",
+            "count": 139738,
+            "features": [],
+            "features_path": null
+        }
+    ],
+    "edges": [
+        {
+            "name": "user-item",
+            "count": 664824,
+            "src_node_type": "user",
+            "dst_node_type": "item",
+            "directed": false,
+            "features": [
+                {
+                    "name": "rating",
+                    "dtype": "int64",
+                    "feature_type": "categorical"
+                }
+            ],
+            "features_path": "user-item.parquet",
+            "structure_path": "user-item_edge_list.parquet",
+            "[gen]structure_generator": {
+                "type": "RMAT",
+                "data_source": {
+                    "type": "cfg",
+                    "path": "/workspace/data/epinions/syngen_preprocessed",
+                    "name": "user-item"
+                },
+                "params": {
+                    "seed": 42
+                }
+            },
+            "[gen]tabular_generators": [
+                {
+                    "type": "kde",
+                    "features_list": ["rating"],
+                    "data_source": {
+                        "type": "dataset",
+                        "path": "/workspace/data/epinions/syngen_preprocessed/user-item.parquet"
+                    },
+                    "params": {
+                    }
+                }
+            ]
+        },
+        {
+            "name": "user-user",
+            "count": 487183,
+            "src_node_type": "user",
+            "dst_node_type": "user",
+            "reverse_name": "user-user-rev",
+            "features": [],
+            "features_path": null,
+            "structure_path": "user-user_edge_list.parquet",
+            "[gen]structure_generator": {
+                "type": "RMAT",
+                "data_source": {
+                    "type": "cfg",
+                    "path": "/workspace/data/epinions/syngen_preprocessed",
+                    "name": "user-user"
+                },
+                "params": {
+                    "seed": 42,
+                    "has_self_loop": false
+                }
+            }
+        }
+    ],
+    "[gen]aligners": [
+        {
+            "type": "xgboost",
+            "graphs": ["user-item", "user-user"],
+            "edges": {
+                "user-item": ["rating"]
+            },
+            "nodes": {},
+            "params": {
+
+            }
+        }
+    ]
+}

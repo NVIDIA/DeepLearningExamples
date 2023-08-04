@@ -17,18 +17,16 @@ from pathlib import Path, PosixPath
 from typing import List, Union
 
 import cudf
-import cugraph
-import cugraph.dask as dask_cugraph
 import cupy
-import dask_cudf
 import pandas as pd
 import torch
 from tqdm import tqdm
 
 from syngen.utils.types import ColumnType
+from syngen.utils.cugraph import import_cugraph
 
 
-def get_graph(df, src="src", dst="dst", from_dask=False):
+def get_graph(df: cudf.DataFrame, src="src", dst="dst"):
     """Construct directed graph
 
     Args:
@@ -39,11 +37,9 @@ def get_graph(df, src="src", dst="dst", from_dask=False):
     Returns:
         `cugraph.DiGraph`
     """
+    cugraph = import_cugraph()
     graph = cugraph.DiGraph()
-    if from_dask:
-        graph.from_dask_cudf_edgelist(df, source=src, destination=dst)
-    else:
-        graph.from_cudf_edgelist(df, source=src, destination=dst)
+    graph.from_cudf_edgelist(df, source=src, destination=dst)
     return graph
 
 
@@ -71,13 +67,12 @@ def get_features(
     src: str = "src",
     dst: str = "dst",
     pagerank_kwargs: dict = {"tol": 1e-4},
-    use_dask=False,
 ):
     """Extract structural features from graph `G`
     features extracted: katz_centrality, out degree, pagerank
 
     Args:
-        df (dask_cudf.Dataframe): data containg edge list informatoin
+        df (cudf.DataFrame): data containg edge list informatoin
         G (cugraph.DiGraph): cuGraph graph descriptor containing connectivity information
         from df.
         src (str): source node column name.
@@ -85,33 +80,63 @@ def get_features(
         pagerank_kwargs (dict): page rank function arguments to pass.
     """
     # - pagerank feat
-    if use_dask:
-        pr_df = dask_cugraph.pagerank(G, **pagerank_kwargs)
-    else:
-        pr_df = cugraph.pagerank(G, **pagerank_kwargs)
+    cugraph = import_cugraph()
+
+    pr_df = cugraph.pagerank(G, **pagerank_kwargs)
     # - out-degree feat
     degree_src_df = df.groupby(src).count()
-    if use_dask:
-        degree_src_df = degree_src_df.compute()
     degree_src_df = degree_src_df.reset_index().rename(
         columns={src: "vertex", dst: "out_degree"}
     )
 
     # - in-degree feat
     degree_dst_df = df.groupby(dst).count()
-    if use_dask:
-        degree_dst_df = degree_dst_df.compute()
     degree_dst_df = degree_dst_df.reset_index().rename(
         columns={dst: "vertex", src: "in_degree"}
     )
 
     # - katz feat
-    if use_dask:
-        katz_df = dask_cugraph.katz_centrality(G, tol=1e-2, alpha=1e-3)
-    else:
-        katz_df = cugraph.katz_centrality(G, tol=1e-2, alpha=1e-3)
+    katz_df = cugraph.katz_centrality(G, tol=1e-2, alpha=1e-3)
 
     return [pr_df, degree_src_df, degree_dst_df, katz_df]
+
+
+def merge_graph_vertex_feat(old, new):
+    if old is None:
+        return new
+    merged_df = old.merge(new, on=['vertex'], how='outer')
+    merged_df = merged_df.fillna(0)
+    return merged_df
+
+
+def chunk_pd_save(
+    df: pd.DataFrame,
+    save_path: Union[str, PosixPath],
+    chunk_size: Union[int, float],
+):
+    """Chunks a large dataframe and casts to a cudf for faster save
+
+    Args:
+        df (pdDataFrame): dataframe object to dump data
+        save_path (str): data path to dump chunks
+        chunk_size (int): size of the chunks
+    """
+
+    save_path = Path(save_path)
+    num_rows = len(df)
+
+    if not save_path.exists():
+        os.makedirs(save_path)
+
+    if chunk_size > 0.0 <= 1.0:
+        chunk_size = int(num_rows * chunk_size)
+    else:
+        chunk_size = int(chunk_size)
+
+    for i in tqdm(range(num_rows // chunk_size - 1)):
+        chunk_df = df.iloc[i * chunk_size : (i + 1) * chunk_size]
+        chunk_cudf = cudf.from_pandas(chunk_df)
+        chunk_cudf.to_parquet(save_path / f"{i}_chunk.parquet", index=False)
 
 
 def z_norm(series, meta=None, compute=False):

@@ -54,7 +54,3 @@ class BaseGraphAligner(abc.ABC):
     @classmethod
     def load(cls, path):
         raise NotImplementedError()
-
-    @staticmethod
-    def add_args(parser):
-        return parser

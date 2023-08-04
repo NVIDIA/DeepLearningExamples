@@ -12,16 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import copy
 import logging
-import os
 import warnings
 from collections import Counter
 from itertools import combinations
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 
-import cudf
-import dask_cudf
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -42,7 +38,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.CRITICAL)
 
 
-class TabularMetrics:
+class TabularMetrics(object):
     def __init__(
         self,
         real: DataFrameType,
@@ -65,7 +61,7 @@ class TabularMetrics:
         """
         assert all(c in fake.columns for c in real.columns) and len(
             real.columns
-        ) == len(fake.columns), r"Real  and fake have different columns."
+        ) == len(fake.columns), r"Real and fake have different columns."
         self.real = real
         self.fake = fake[real.columns]
 
@@ -189,9 +185,9 @@ class TabularMetrics:
         for ds_name in ["real", "fake"]:
             ds = getattr(self, ds_name)
             corr_df = associations(
-                ds, nominal_columns=self.categorical_columns, nom_nom_assoc='theil'
+                ds, nominal_columns=self.categorical_columns, nom_nom_assoc='theil', compute_only=True
             )
-            values = corr_df.values
+            values = corr_df['corr'].values
             values = values[~np.eye(values.shape[0], dtype=bool)].reshape(
                 values.shape[0], -1
             )
@@ -288,7 +284,10 @@ class TabularMetrics:
             nr_rows, nr_cols, figsize=(16, row_height * nr_rows)
         )
         fig.suptitle("Cumulative Sums per feature", fontsize=16)
-        axes = ax.flatten()
+        if nr_rows == 1 and nr_cols == 1:
+            axes = [ax]
+        else:
+            axes = ax.flatten()
         for i, col in enumerate(self.real.columns):
             r = self.real[col]
             f = self.fake.iloc[:, self.real.columns.tolist().index(col)]
@@ -318,8 +317,8 @@ class TabularMetrics:
 
         ax[0].grid(True)
         ax[1].grid(True)
-        real = real._get_numeric_data()
-        fake = fake._get_numeric_data()
+        real = real.select_dtypes(include=np.number).reset_index()
+        fake = fake.select_dtypes(include=np.number).reset_index()
         real_mean = np.log(np.add(abs(real.mean()).values, 1e-5))
         fake_mean = np.log(np.add(abs(fake.mean()).values, 1e-5))
         min_mean = min(real_mean) - 1

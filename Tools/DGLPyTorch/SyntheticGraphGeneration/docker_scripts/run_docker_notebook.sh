@@ -5,7 +5,7 @@ fi
 
 IMG="${IMAGE:=graph_gen}"
 
-CMD='cd /workspace && echo -e "\nOPEN http://<your_ip>:9916/tree/demos and copy token\n\n"  && jupyter notebook --ip=0.0.0.0 --port=9916'
+CMD='cd /workspace && echo -e "\nOPEN http://<your_ip>:9916/ and copy token\n\n"  && jupyter notebook --ip=0.0.0.0 --port=9916'
 
 nvidia-docker run --rm -it \
   --ipc=host \
@@ -14,4 +14,4 @@ nvidia-docker run --rm -it \
   ${IMG} \
   bash -c "${CMD}"
 
-# OPEN http://<your_ip>:9916/tree/demos
+# OPEN http://<your_ip>:9916/

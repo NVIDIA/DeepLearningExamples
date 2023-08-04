@@ -12,16 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import json
+import os
 import logging
-import random
+import shutil
 import subprocess
-from pathlib import Path, PosixPath
-from typing import List, Union
+from typing import List, Union, Optional
 
-import cudf
-import dask_cudf
+import numpy as np
 import pandas as pd
 
+from syngen.configuration import SynGenDatasetFeatureSpec
 from syngen.preprocessing.base_preprocessing import BasePreprocessing
 from syngen.utils.types import MetaData
 
@@ -32,84 +33,28 @@ log = logger
 class CORAPreprocessing(BasePreprocessing):
     def __init__(
         self,
-        cached: bool = False,
-        nrows: int = None,
-        drop_cols: list = [],
+        source_path: str,
+        destination_path: Optional[str] = None,
+        download: bool = False,
         **kwargs,
     ):
         """
         preprocessing for https://linqs-data.soe.ucsc.edu/public/lbc/cora.tgz
-
-        Args:
-            user_ids (List[int]): list of users to filter dataframe
-            cached (bool): skip preprocessing and use cached files
-            data_path (str): path to file containing data
-            nrows (int): number of rows to load from dataframe
         """
-        super().__init__(cached, nrows, drop_cols)
+        super().__init__(source_path, destination_path, download, **kwargs)
 
-        self.graph_info = {
-            MetaData.EDGE_DATA: {
-                MetaData.SRC_NAME: "src",
-                MetaData.SRC_COLUMNS: ["src"],
-                MetaData.DST_NAME: "dst",
-                MetaData.DST_COLUMNS: ["dst"],
-                MetaData.CONTINUOUS_COLUMNS: [],
-                MetaData.CATEGORICAL_COLUMNS: ["src", "dst"],
-            },
-            MetaData.NODE_DATA: {
-                MetaData.NODE_ID: "id",
-                MetaData.CONTINUOUS_COLUMNS: [],
-                MetaData.CATEGORICAL_COLUMNS: [],
-            },
-            "undirected": True,
-        }
+    def transform(self, gpu=False, use_cache=False):
 
-    def load_data(self, data_path: str, transform_name=None, **kwargs):
-        """
-            load the cora dataset
-            files -
-                cora.content
-                cora.cites
-            Args:
-                data_path (str) : path to the directory containing cora dataset files
-        """
-        reader = kwargs.get("reader", pd)
-        data_path = Path(data_path)
+        assert not gpu, "CORA preprocessing does not support cudf preprocessing"
 
-        cora_feat_df, _ = self.parse_cora_content(
-            data_path / "cora.content", reader=reader
-        )
-        cora_graph_df = reader.read_csv(data_path / "cora.cites")
-        cora_graph_df.columns = ["src", "dst"]
-        return (
-            {
-                MetaData.EDGE_DATA: cora_graph_df,
-                MetaData.NODE_DATA: cora_feat_df,
-            },
-            False,
-        )
+        if use_cache and os.path.exists(self.destination_path):
+            return SynGenDatasetFeatureSpec.instantiate_from_preprocessed(self.destination_path)
+        tabular_operator = pd
+        operator = np
 
-    def parse_cora_content(self, in_file, train_test_ratio=1.0, reader=pd):
-        """
-            This function parses Cora content (in TSV), converts string labels to integer
-            label IDs, randomly splits the data into training and test sets, and returns
-            the training and test sets as outputs.
+        examples = {}
 
-            Args:
-                in_file: A string indicating the input file path.
-                train_percentage: A float indicating the percentage of training examples
-                over the dataset.
-            Returns:
-                train_examples: A dict with keys being example IDs (string) and values being
-                `dict` instances.
-                test_examples: A dict with keys being example IDs (string) and values being
-                `dict` instances.
-        """
-        random.seed(1)
-        train_examples = {}
-        test_examples = {}
-        with open(in_file, "r") as cora_content:
+        with open(os.path.join(self.source_path, 'cora.content'), "r") as cora_content:
             for line in cora_content:
                 entries = line.rstrip("\n").split("\t")
                 # entries contains [ID, Word1, Word2, ..., Label]; "Words" are 0/1 values.
@@ -122,44 +67,90 @@ class CORAPreprocessing(BasePreprocessing):
                 }
                 for i, w in enumerate(words):
                     features[f"w_{i}"] = w
-                if (
-                    random.uniform(0, 1) <= train_test_ratio
-                ):  # for train/test split.
-                    train_examples[example_id] = features
-                else:
-                    test_examples[example_id] = features
-
-            self.graph_info[MetaData.NODE_DATA][
-                MetaData.CATEGORICAL_COLUMNS
-            ].extend([f"w_{i}" for i in range(len(words))])
-            self.graph_info[MetaData.NODE_DATA][
-                MetaData.CATEGORICAL_COLUMNS
-            ].extend(["id", "label"])
-
-        # TODO replace with reader.Dataframe after cudf 22.12 will be stable
-        train = pd.DataFrame.from_dict(
-            train_examples, orient="index"
-        ).reset_index(drop=True)
-        if reader != pd:
-            train = reader.from_pandas(train)
-
-        test = pd.DataFrame.from_dict(
-            test_examples, orient="index"
+                examples[example_id] = features
+        tabular_data = tabular_operator.DataFrame.from_dict(
+            examples, orient="index"
         ).reset_index(drop=True)
 
-        if reader != pd:
-            test = reader.from_pandas(test)
+        node_features = [
+            {
+                MetaData.NAME: f"w_{i}",
+                MetaData.DTYPE: 'int64',
+                MetaData.FEATURE_TYPE: MetaData.CATEGORICAL,
+            }
+            for i in range(len(words))
+        ]
+        node_features.extend([
+            {
+                MetaData.NAME: name,
+                MetaData.DTYPE: 'int64',
+                MetaData.FEATURE_TYPE: MetaData.CATEGORICAL,
+            }
+            for name in ["label"]
+        ])
 
-        return train, test
+        for c in tabular_data.columns:
+            tabular_data[c] = tabular_data[c].astype("category").cat.codes.astype(int)
+        tabular_data = tabular_data.set_index('id')
 
-    def download(self, data_path: Union[PosixPath, str]):
+        structural_data = tabular_operator.read_csv(os.path.join(self.source_path, "cora.cites"))
+        structural_data.columns = ["src", "dst"]
+        for c in ["src", "dst"]:
+            structural_data[c] = structural_data[c].astype(int)
+
+        paper_ids = operator.unique(operator.concatenate([
+            structural_data["src"].values,
+            structural_data["dst"].values,
+        ]))
+
+        mapping = operator.empty(int(paper_ids.max()) + 1, dtype=int)
+        mapping[paper_ids] = operator.arange(len(paper_ids))
+
+        for c in ["src", "dst"]:
+            structural_data[c] = mapping[structural_data[c]]
+
+        graph_metadata = {
+            MetaData.NODES: [
+                {
+                    MetaData.NAME: "paper",
+                    MetaData.COUNT: len(tabular_data),
+                    MetaData.FEATURES: node_features,
+                    MetaData.FEATURES_PATH: "paper.parquet",
+                },
+            ],
+            MetaData.EDGES: [{
+                MetaData.NAME: "cite",
+                MetaData.COUNT: len(structural_data),
+                MetaData.SRC_NODE_TYPE: "paper",
+                MetaData.DST_NODE_TYPE: "paper",
+                MetaData.DIRECTED: False,
+                MetaData.FEATURES: [],
+                MetaData.FEATURES_PATH: None,
+                MetaData.STRUCTURE_PATH: "cite_edge_list.parquet",
+            }]
+        }
+        shutil.rmtree(self.destination_path, ignore_errors=True)
+        os.makedirs(self.destination_path)
+
+        tabular_data.to_parquet(os.path.join(self.destination_path, "paper.parquet"))
+        structural_data.to_parquet(os.path.join(self.destination_path, "cite_edge_list.parquet"))
+
+        with open(os.path.join(self.destination_path, 'graph_metadata.json'), 'w') as f:
+            json.dump(graph_metadata, f, indent=4)
+
+        graph_metadata[MetaData.PATH] = self.destination_path
+        return SynGenDatasetFeatureSpec(graph_metadata)
+
+    def download(self):
         log.info("downloading CORA dataset...")
         cmds = [
-            fr"mkdir -p {data_path}",
-            fr"wget 'https://linqs-data.soe.ucsc.edu/public/lbc/cora.tgz' -P {data_path}",
-            fr"tar -xf {data_path}/cora.tgz -C {data_path}",
-            fr"sed -i 's/\t/,/g' {data_path}/cora/cora.cites",
-            fr"sed -i '1s/^/src,dst\n/' {data_path}/cora/cora.cites",
+            fr"mkdir -p {self.source_path}",
+            fr"wget 'https://linqs-data.soe.ucsc.edu/public/lbc/cora.tgz' -P {self.source_path}",
+            fr"tar -xf {self.source_path}/cora.tgz -C {self.source_path}",
+            fr"sed -i 's/\t/,/g' {self.source_path}/cora/cora.cites",
+            fr"sed -i '1s/^/src,dst\n/' {self.source_path}/cora/cora.cites",
+            fr"mv {self.source_path}/cora/* {self.source_path}/.",
+            fr"rm -r {self.source_path}/cora",
         ]
         for cmd in cmds:
             try:
@@ -167,70 +158,6 @@ class CORAPreprocessing(BasePreprocessing):
             except subprocess.CalledProcessError as e:
                 raise Exception(e.output)
 
-    def inverse_transform(self, data):
-        return data
-
-    def transform_graph(self, data):
-        """Preprocess dataset
-
-        Args:
-            data (`cudf.DartaFrame`): dataframe
-        Returns:
-            data (`cudf.DataFrame`): dataframe containing preprocessed data
-        """
-        categorical_columns = self.graph_info[MetaData.EDGE_DATA][
-            MetaData.CATEGORICAL_COLUMNS
-        ]
-        continuous_columns = self.graph_info[MetaData.EDGE_DATA][
-            MetaData.CONTINUOUS_COLUMNS
-        ]
-
-        continuous_columns = [
-            c
-            for c in data[MetaData.EDGE_DATA].columns
-            if c in continuous_columns
-        ]
-        categorical_columns = [
-            c
-            for c in data[MetaData.EDGE_DATA].columns
-            if c in categorical_columns
-        ]
-
-        for col in categorical_columns:
-            data[MetaData.EDGE_DATA][col] = (
-                data[MetaData.EDGE_DATA][col].astype("category").cat.codes
-            )
-            data[MetaData.EDGE_DATA][col] = data[MetaData.EDGE_DATA][
-                col
-            ].astype(int)
-        columns_to_select = categorical_columns + continuous_columns
-        data[MetaData.EDGE_DATA] = data[MetaData.EDGE_DATA][columns_to_select]
-
-        categorical_columns = self.graph_info[MetaData.NODE_DATA][
-            MetaData.CATEGORICAL_COLUMNS
-        ]
-        continuous_columns = self.graph_info[MetaData.NODE_DATA][
-            MetaData.CONTINUOUS_COLUMNS
-        ]
-
-        continuous_columns = [
-            c
-            for c in data[MetaData.NODE_DATA].columns
-            if c in continuous_columns
-        ]
-        categorical_columns = [
-            c
-            for c in data[MetaData.NODE_DATA].columns
-            if c in categorical_columns
-        ]
-
-        for col in categorical_columns:
-            data[MetaData.NODE_DATA][col] = (
-                data[MetaData.NODE_DATA][col].astype("category").cat.codes
-            )
-            data[MetaData.NODE_DATA][col] = data[MetaData.NODE_DATA][
-                col
-            ].astype(int)
-        columns_to_select = categorical_columns + continuous_columns
-        data[MetaData.NODE_DATA] = data[MetaData.NODE_DATA][columns_to_select]
-        return data
+    def _check_files(self):
+        files = ['cora.cites', 'cora.content']
+        return all(os.path.exists(os.path.join(self.source_path, file)) for file in files)

@@ -14,5 +14,8 @@
 
 # flake8: noqa
 from syngen.graph_aligner.base_graph_aligner import BaseGraphAligner
-from syngen.graph_aligner.random_aligner import RandomAligner
 from syngen.graph_aligner.xgboost_aligner import XGBoostAligner
+
+aligner_classes = {
+    'xgboost': XGBoostAligner,
+}

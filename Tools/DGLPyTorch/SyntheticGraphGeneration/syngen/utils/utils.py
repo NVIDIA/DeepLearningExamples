@@ -15,14 +15,19 @@
 import time
 import logging
 import importlib
-from typing import Optional
+from pathlib import PosixPath
+from typing import Optional, Union
 
 import cudf
 import cupy
+import dask.dataframe as dd
 import dask_cudf
+import cupy as cp
+import numpy as np
 import pandas as pd
+import os
 
-from syngen.utils.types import DataFrameType
+from syngen.utils.types import DataFrameType, NDArray
 
 logger = logging.getLogger(__name__)
 log = logger
@@ -44,8 +49,9 @@ class CustomTimer:
 
     """
 
-    def __init__(self, path: Optional[str] = str):
+    def __init__(self, path: Optional[Union[PosixPath, str]] = str, verbose: bool = False):
         self.path = path
+        self.verbose = verbose
         self.timers = {}
         self.f = None
         if self.path:
@@ -56,9 +62,15 @@ class CustomTimer:
 
     def end_counter(self, key: str, msg: str):
         end = time.perf_counter()
-        start = self.timers.get(key)
-        if self.f and start:
-            self.f.write(f"{msg}: {end - start:.2f}\n")
+        start = self.timers.get(key, None)
+
+        if start is None:
+            return
+        message_string = f"{msg}: {end - start:.2f}\n"
+        if self.f:
+            self.f.write(message_string)
+        if self.verbose:
+            print(message_string, end='')
 
     def maybe_close(self):
         if self.f:
@@ -67,6 +79,16 @@ class CustomTimer:
 
 def current_ms_time():
     return round(time.time() * 1000)
+
+
+def to_ndarray(df: DataFrameType) -> NDArray:
+    """ Returns potentially distributed data frame to its in-memory equivalent array. """
+    if isinstance(df, (cudf.DataFrame, pd.DataFrame)):
+        return df.values
+    elif isinstance(df, (dask_cudf.DataFrame, dd.DataFrame)):
+        return df.compute().values
+    else:
+        raise NotImplementedError(f'Conversion of type {type(df)} is not supported')
 
 
 def df_to_pandas(df):
@@ -108,7 +130,7 @@ def df_to_cudf(df: DataFrameType):
 
 
 def df_to_dask_cudf(df: DataFrameType,
-                    chunksize: Optional[int]=None):
+                    chunksize: Optional[int] = None):
     """ Converts `DataFrameType` to `dask_cudf.DataFrame`
 
         Args:
@@ -147,3 +169,22 @@ def dynamic_import(object_path):
 
 def get_object_path(obj):
     return obj.__class__.__module__ + '.' + obj.__class__.__name__
+
+
+def ensure_path(path: Union[str, PosixPath]):
+    if not os.path.exists(os.path.dirname(path)):
+        os.makedirs(os.path.dirname(path))
+    return path
+
+def infer_operator(ndarray: NDArray):
+    """ Returns array backend module (numpy or cupy). """
+    if isinstance(ndarray, np.ndarray):
+        return np
+    elif isinstance(ndarray, cp.ndarray):
+        return cp
+    else:
+        logger.warning(
+            'Detected array of type %s, while one of (%s) was expected. Defaulting to using numpy',
+            type(ndarray), 'numpy.ndarray, cupy.ndarray',
+        )
+        return np

@@ -1,0 +1,339 @@
+{
+    "nodes": [
+        {
+            "name": "user",
+            "count": 17090,
+            "features": [],
+            "features_path": null
+        },
+        {
+            "name": "product",
+            "count": 197,
+            "features": [],
+            "features_path": null
+        }
+    ],
+    "edges": [
+        {
+            "name": "user-product",
+            "count": 52008,
+            "src_node_type": "user",
+            "dst_node_type": "product",
+            "directed": false,
+            "features": [
+                {
+                    "name": "TransactionDT",
+                    "dtype": "int64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "TransactionAmt",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "C1",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "C2",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "C3",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "C4",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "C5",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "C6",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "C7",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "C8",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "C9",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "C10",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "C11",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "C12",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "C14",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V279",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V280",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V284",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V285",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V286",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V287",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V290",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V291",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V292",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V293",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V294",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V295",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V297",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V298",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V299",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V302",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V303",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V304",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V305",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V306",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V307",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V308",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V309",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V310",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V311",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V312",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V316",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V317",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V318",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V319",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V320",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "V321",
+                    "dtype": "float64",
+                    "feature_type": "continuous"
+                },
+                {
+                    "name": "isFraud",
+                    "dtype": "int64",
+                    "feature_type": "categorical"
+                }
+            ],
+            "features_path": "user-product.parquet",
+            "structure_path": "user-product_edge_list.parquet",
+            "[gen]tabular_generators": [
+                {
+                    "type": "kde",
+                    "features_list": [
+                        "TransactionDT",
+                        "TransactionAmt",
+                        "C1",
+                        "C2",
+                        "C3",
+                        "C4",
+                        "C5",
+                        "C6",
+                        "C7",
+                        "C8",
+                        "C9",
+                        "C10",
+                        "C11",
+                        "C12",
+                        "C14",
+                        "V279",
+                        "V280",
+                        "V284",
+                        "V285",
+                        "V286",
+                        "V287",
+                        "V290",
+                        "V291",
+                        "V292",
+                        "V293",
+                        "V294",
+                        "V295",
+                        "V297",
+                        "V298",
+                        "V299",
+                        "V302",
+                        "V303",
+                        "V304",
+                        "V305",
+                        "V306",
+                        "V307",
+                        "V308",
+                        "V309",
+                        "V310",
+                        "V311",
+                        "V312",
+                        "V316",
+                        "V317",
+                        "V318",
+                        "V319",
+                        "V320",
+                        "V321",
+                        "isFraud"
+                    ],
+                    "data_source": {
+                        "type": "cfg",
+                        "path": "/workspace/data/ieee-preprocessed",
+                        "name": "user-product"
+                    },
+                    "params": {}
+                }
+            ],
+            "[gen]structure_generator": {
+                "type": "RMAT",
+                "data_source": {
+                    "type": "cfg",
+                    "path": "/workspace/data/ieee-preprocessed",
+                    "name": "user-product"
+                },
+                "params": {}
+            }
+        }
+    ]
+}

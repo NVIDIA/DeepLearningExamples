@@ -14,9 +14,24 @@
 
 # flake8: noqa
 from .base_tabular_generator import BaseTabularGenerator
+from .chunked_tabular_generator import ChunkedBaseTabularGenerator
 from .ctgan import CTGANGenerator
 from .gaussian_generator import GaussianGenerator
 from .kde_generator import KDEGenerator
-from .kde_generator_sk import KDEGeneratorSK
 from .random import RandomMVGenerator
 from .uniform_generator import UniformGenerator
+
+# Does not include CTGAN
+tabular_generators_classes = {
+    'kde': KDEGenerator,
+    'random': RandomMVGenerator,
+    'gaussian': GaussianGenerator,
+    'uniform': UniformGenerator,
+    'ctgan': CTGANGenerator,
+}
+
+tabular_generators_types_to_classes = {
+    cls.__class__.__name__: k
+    for k, cls in tabular_generators_classes
+    .items()
+}

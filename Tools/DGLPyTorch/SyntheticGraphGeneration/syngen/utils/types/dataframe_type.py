@@ -15,13 +15,9 @@
 from typing import Union
 
 import cudf
-import dask
-import dask_cudf
 import pandas
 
 DataFrameType = Union[
     cudf.DataFrame,
-    dask_cudf.DataFrame,
     pandas.DataFrame,
-    dask.dataframe.DataFrame,
 ]

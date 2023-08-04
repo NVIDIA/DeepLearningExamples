@@ -21,6 +21,7 @@ import torch
 from syngen.benchmark.data_loader.datasets.edge_ds import EdgeDS
 from syngen.benchmark.models import MODELS
 from syngen.utils.types import MetaData
+from syngen.configuration import SynGenDatasetFeatureSpec
 
 logger = logging.getLogger(__name__)
 log = logger
@@ -30,10 +31,9 @@ _NAME = "edge classification"
 
 def train_ec(
     args,
-    pretrain_source,
-    graph_info,
+    finetune_feature_spec: SynGenDatasetFeatureSpec,
     *,
-    finetune_source=None
+    pretrain_feature_spec: SynGenDatasetFeatureSpec = None,
 ):
     """Example edge classification training loop to pre-train on generated dataset
        with option to further finetune on a `finetune_source` dataset.
@@ -44,10 +44,10 @@ def train_ec(
     dataset = EdgeDS(**vars(args))
 
     # - pre-training
-    if args.pretrain_epochs:
+    if pretrain_feature_spec is not None:
         # - dataset
         g, edge_ids = dataset.get_graph(
-            pretrain_source[MetaData.EDGE_DATA], graph_info=graph_info
+            pretrain_feature_spec, args.pretraining_edge_name
         )
         sampler = dgl.dataloading.MultiLayerFullNeighborSampler(args.n_layers)
         dataloader = dgl.dataloading.EdgeDataLoader(
@@ -112,75 +112,75 @@ def train_ec(
         if args.timeit:
             out["pretrain-epoch-times"] = times
 
-    if finetune_source is not None:
-        g, edge_ids = dataset.get_graph(
-            finetune_source[MetaData.EDGE_DATA], graph_info=graph_info
+
+    g, edge_ids = dataset.get_graph(
+        finetune_feature_spec, args.edge_name,
+    )
+
+    sampler = dgl.dataloading.MultiLayerFullNeighborSampler(args.n_layers)
+
+    dataloader = dgl.dataloading.EdgeDataLoader(
+        g,
+        edge_ids,
+        sampler,
+        batch_size=args.batch_size,
+        shuffle=args.shuffle,
+        drop_last=False,
+        num_workers=args.num_workers,
+    )
+
+    if optimizer is None:
+        in_feats = g.ndata.get("feat").shape[1]
+        in_feats_edge = g.edata.get("feat").shape[1]
+        model = model(
+            in_dim=in_feats, in_dim_edge=in_feats_edge, **vars(args)
         )
 
-        sampler = dgl.dataloading.MultiLayerFullNeighborSampler(args.n_layers)
-
-        dataloader = dgl.dataloading.EdgeDataLoader(
-            g,
-            edge_ids,
-            sampler,
-            batch_size=args.batch_size,
-            shuffle=args.shuffle,
-            drop_last=False,
-            num_workers=args.num_workers,
+        model = model.cuda()
+        optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=args.learning_rate,
+            weight_decay=args.weight_decay,
         )
-
-        if optimizer is None:
-            in_feats = g.ndata.get("feat").shape[1]
-            in_feats_edge = g.edata.get("feat").shape[1]
-            model = model(
-                in_dim=in_feats, in_dim_edge=in_feats_edge, **vars(args)
-            )
-
-            model = model.cuda()
-            optimizer = torch.optim.Adam(
-                model.parameters(),
-                lr=args.learning_rate,
-                weight_decay=args.weight_decay,
-            )
 
     # - finetune
-    if finetune_source is not None:
-        best_val_acc, best_test_acc = 0, 0
-        for e in range(args.finetune_epochs):
-            if args.timeit:
-                t0 = time.time()
-            train_acc, val_acc, test_acc, losses = train_epoch(
-                model, dataloader, optimizer
-            )
-            if args.timeit:
-                t1 = time.time()
-                times.append(t1 - t0)
-
-            val_acc = np.mean(val_acc)
-            test_acc = np.mean(test_acc)
-            train_acc = np.mean(train_acc)
-            loss = np.mean(losses)
-
-            if best_val_acc < val_acc:
-                best_val_acc = val_acc
-                best_test_acc = test_acc
-
-            if e % args.log_interval == 0:
-                log.info(
-                    "Finetuning: In epoch {}, loss: {:.3f}, val acc: {:.3f} (best {:.3f}), test acc: {:.3f} (best {:.3f})".format(
-                        e, loss, val_acc, best_val_acc, test_acc, best_test_acc
-                    )
-                )
-
-        out = {
-            "finetune-loss": loss,
-            "finetune-val-acc": val_acc,
-            "finetune-test-acc": test_acc,
-            **out,
-        }
-
+    best_val_acc, best_test_acc = 0, 0
+    for e in range(args.finetune_epochs):
         if args.timeit:
-            out["finetune-epoch-times"] = times
+            t0 = time.time()
+        train_acc, val_acc, test_acc, losses = train_epoch(
+            model, dataloader, optimizer
+        )
+        if args.timeit:
+            t1 = time.time()
+            times.append(t1 - t0)
+
+        val_acc = np.mean(val_acc)
+        test_acc = np.mean(test_acc)
+        train_acc = np.mean(train_acc)
+        loss = np.mean(losses)
+
+        if best_val_acc < val_acc:
+            best_val_acc = val_acc
+            best_test_acc = test_acc
+
+        if e % args.log_interval == 0:
+            log.info(
+                "Finetuning: In epoch {}, loss: {:.3f}, val acc: {:.3f} (best {:.3f}), test acc: {:.3f} (best {:.3f})".format(
+                    e, loss, val_acc, best_val_acc, test_acc, best_test_acc
+                )
+            )
+
+    out = {
+        "finetune-loss": loss,
+        "finetune-val-acc": val_acc,
+        "finetune-test-acc": test_acc,
+        **out,
+    }
+
+    if args.timeit:
+        out["finetune-epoch-times"] = times
+
     return out
 
 

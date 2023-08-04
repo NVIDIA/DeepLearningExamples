@@ -14,7 +14,7 @@
 
 from typing import Any, List, Optional, Set, Tuple
 
-from syngen.generator.graph.fitter import RandomFitter
+from syngen.generator.graph.fitter import RMATFitter
 from syngen.generator.graph.rmat_bipartite import RMATBipartiteGenerator
 
 
@@ -26,13 +26,12 @@ class RandomBipartite(RMATBipartiteGenerator):
         logdir (str):
             Directory to store the logging results.
             Defaults to ./logs.
-        fitter (BaseFitter):
-            Fitter to be used.
+        fitter (RMATFitter):
+            RMATFitter to be used.
     """
 
-    def __init__(self, seed: Optional[int] = None, logdir: str = "./logs", **kwargs,):
-        fitter = RandomFitter()
-        super().__init__(seed, logdir, fitter)
+    def __init__(self, seed: Optional[int] = None, logdir: str = "./logs", gpu: bool = True, **kwargs,):
+        super().__init__(seed, logdir, gpu, fitter=RMATFitter(random=True))
         self.fit()
 
     def fit(
@@ -41,6 +40,7 @@ class RandomBipartite(RMATBipartiteGenerator):
         src_set: Optional[Set[int]] = None,
         dst_set: Optional[Set[int]] = None,
         is_directed: bool = False,
+        transform_graph: bool = True,
     ):
         """ Fits generator on the graph. For random graph it is graph independent."""
 

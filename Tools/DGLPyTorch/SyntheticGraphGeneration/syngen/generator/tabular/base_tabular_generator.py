@@ -20,9 +20,12 @@ import torch
 class BaseTabularGenerator(abc.ABC):
     """Base class for all tabular generators"""
 
+    def __init__(self, **kwargs):
+        pass
+
     @classmethod
     def get_generators(cls, include_parents=True):
-        """Recursively find sublcasses of `BaseTabularGenerator`
+        """Recursively find subclasses of `BaseTabularGenerator`
         
         Args:
             include_parents (bool): whether to include parents to other classes. (default: `True`)
@@ -57,24 +60,16 @@ class BaseTabularGenerator(abc.ABC):
         """
         raise NotImplementedError()
 
-    def set_device(self, device):
-        """set device for all modules"""
+    def save(self, path):
         raise NotImplementedError()
 
-    def save(self, path):
-        """save the trained model"""
-        device_backup = self._device
-        self.set_device(torch.device("cpu"))
-        torch.save(self, path)
-        self.set_device(device_backup)
+    @property
+    def supports_memmap(self) -> bool:
+        return False
 
     @classmethod
     def load(cls, path):
-        """load model from `path`"""
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        model = torch.load(path)
-        model.set_device(device)
-        return model
+        raise NotImplementedError()
 
     @staticmethod
     def add_args(parser):

@@ -12,5 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# flake8: noqa
-from .datasets import *
+from .cora import CORAPreprocessing
+from .epinions import EpinionsPreprocessing
+from .ogbn_mag import OGBN_MAG_Preprocessing
+from .ogbn_mag240m import MAG240mPreprocessing
+from .ieee import IEEEPreprocessing
+from .tabformer import TabFormerPreprocessing
+
+DATASETS = {
+    'cora': CORAPreprocessing,
+    'epinions': EpinionsPreprocessing,
+    'ogbn_mag': OGBN_MAG_Preprocessing,
+    'ogbn_mag240m': MAG240mPreprocessing,
+    'ieee': IEEEPreprocessing,
+    'tabformer': TabFormerPreprocessing,
+}

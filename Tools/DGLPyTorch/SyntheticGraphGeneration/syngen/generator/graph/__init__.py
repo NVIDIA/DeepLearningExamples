@@ -13,8 +13,22 @@
 # limitations under the License.
 
 # flake8: noqa
-from .base_graph_generator import *
-from .random import RandomGraph
-from .random_bipartite import RandomBipartite
+from .base_graph_generator import BaseGenerator, BaseGraphGenerator, BaseBipartiteGraphGenerator
 from .rmat import RMATGenerator
 from .rmat_bipartite import RMATBipartiteGenerator
+from .random import RandomGraph
+from .random_bipartite import RandomBipartite
+
+
+def get_structural_generator_class(type, is_bipartite, is_random):
+    if type == 'RMAT':
+        rmats = {
+            (True, True): RandomBipartite,
+            (True, False): RMATBipartiteGenerator,
+            (False, True): RandomGraph,
+            (False, False): RMATGenerator
+        }
+        return rmats[(is_bipartite, is_random)]
+    else:
+        raise ValueError("unsupported generator type")
+

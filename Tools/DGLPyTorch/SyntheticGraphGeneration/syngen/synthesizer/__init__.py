@@ -13,9 +13,5 @@
 # limitations under the License.
 
 # flake8: noqa
-from syngen.synthesizer.base_synthesizer import BaseSynthesizer
-from syngen.synthesizer.random_synthesizer import RandomSynthesizer
-from syngen.synthesizer.static_bipartite_graph_synthesizer import (
-    StaticBipartiteGraphSynthesizer,
-)
-from syngen.synthesizer.static_graph_synthesizer import StaticGraphSynthesizer
+from .base_synthesizer import BaseSynthesizer
+from .configuration_graph_synthesizer import ConfigurationGraphSynthesizer

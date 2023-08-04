@@ -14,7 +14,7 @@
 
 from typing import List, Optional, Set, Tuple
 
-from syngen.generator.graph.fitter import RandomFitter
+from syngen.generator.graph.fitter import RMATFitter
 from syngen.generator.graph.rmat import RMATGenerator
 
 
@@ -25,18 +25,18 @@ class RandomGraph(RMATGenerator):
             Seed to reproduce the results. If None then random seed will be used.
         logdir (str):
             Directory to store the logging results.
-        fitter (BaseFitter):
-            Fitter to be used.
+        fitter (RMATFitter):
+            RMATFitter to be used.
     """
-    def __init__(self, seed: Optional[int] = None, logdir: str = "./logs", **kwargs):
-        fitter = RandomFitter()
-        super().__init__(seed, logdir, fitter)
+    def __init__(self, seed: Optional[int] = None, logdir: str = "./logs", gpu: bool = True, **kwargs):
+        super().__init__(seed, logdir, gpu, fitter=RMATFitter(random=True))
         self.fit()
 
     def fit(
         self,
         graph: Optional[List[Tuple[int, int]]] = None,
         is_directed: bool = None,
+        **kwargs,
     ):
         """ Fits generator on the graph. For random graph it's graph independent."""
         self._fit_results = self.fitter.fit(graph)

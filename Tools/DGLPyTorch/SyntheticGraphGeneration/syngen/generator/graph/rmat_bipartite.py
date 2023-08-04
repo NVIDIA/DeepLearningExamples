@@ -13,23 +13,19 @@
 # limitations under the License.
 
 import math
-import os
-import subprocess
-from os.path import abspath
-from pathlib import Path
+import warnings
 from typing import List, Optional, Set, Tuple
 
 import numpy as np
 
 from syngen.generator.graph.base_graph_generator import BaseBipartiteGraphGenerator
-from syngen.generator.graph.fitter import BaseFitter
+from syngen.generator.graph.fitter import RMATFitter
 from syngen.generator.graph.utils import (
     effective_nonsquare_rmat_exact,
     generate_gpu_rmat,
     get_reversed_part,
-    graph_to_snap_file,
     rearrange_graph,
-    recreate_graph,
+    recreate_graph, generate_gpu_chunked_rmat,
 )
 
 
@@ -38,41 +34,45 @@ class RMATBipartiteGenerator(BaseBipartiteGraphGenerator):
     Args:
         seed (int): Seed to reproduce the results. If None then random seed will be used.
         logdir (str): Directory to store the logging results.
-        fitter (BaseFitter): Fitter to be used.
+        fitter (RMATFitter): RMATFitter to be used.
     """
 
     def __init__(
         self,
         seed: Optional[int] = None,
         logdir: str = "./logs",
-        fitter: Optional[BaseFitter] = None,
+        gpu: bool = True,
+        fitter: Optional[RMATFitter] = None,
         **kwargs,
     ):
-        super().__init__(seed, logdir, fitter)
-        self.gpu = True
+        super().__init__(seed, logdir, gpu)
+        self.fitter = fitter or RMATFitter()
 
     def fit(
         self,
         graph: List[Tuple[int, int]],
-        src_set: Set[int],
-        dst_set: Set[int],
+        src_set: Optional[Set[int]],
+        dst_set: Optional[Set[int]],
         is_directed: bool,
+        transform_graph: bool = True,
     ):
         """ Fits generator on the graph
         Args:
             graph (List[Tuple[int, int]]): graph to be fitted on
+            transform_graph (bool): defines if the generator should transform the input graph using src and dst node sets
             src_set (Set[int]): set of source nodes
             dst_set (Set[int]): set of destination nodes
             is_directed (bool): flag indicating whether the graph is directed
+
         """
         assert graph is not None, "Wrong graph"
-        assert isinstance(src_set, set), "Source set must be of type set"
-        assert isinstance(dst_set, set), "Destination set must be of type set"
-        assert (
-            len(src_set & dst_set) == 0
-        ), "Source and destination sets must be disjoint"
 
-        lower, upper = rearrange_graph(graph, src_set, dst_set)
+        if transform_graph:
+            lower, upper = rearrange_graph(graph, src_set, dst_set, assume_unique=True)
+        else:
+            assert not is_directed
+            upper = graph
+            lower = []
 
         if (
             len(lower) and is_directed
@@ -92,6 +92,8 @@ class RMATBipartiteGenerator(BaseBipartiteGraphGenerator):
         num_edges: int,
         noise: float,
         batch_size: int,
+        return_node_ids: bool,
+        save_path: Optional[str],
     ):
         if self.gpu:
             return self._generate_part_gpu(
@@ -99,6 +101,8 @@ class RMATBipartiteGenerator(BaseBipartiteGraphGenerator):
                 part_shape=part_shape,
                 num_edges=num_edges,
                 noise=noise,
+                return_node_ids=return_node_ids,
+                save_path=save_path,
             )
         else:
             return self._generate_part_cpu(
@@ -107,6 +111,7 @@ class RMATBipartiteGenerator(BaseBipartiteGraphGenerator):
                 num_edges=num_edges,
                 noise=noise,
                 batch_size=batch_size,
+                return_node_ids=return_node_ids,
             )
 
     def _generate_part_cpu(
@@ -116,13 +121,14 @@ class RMATBipartiteGenerator(BaseBipartiteGraphGenerator):
         num_edges: int,
         noise: float,
         batch_size: int,
+        return_node_ids: bool,
     ):
 
         a, b, c, d = fit_results
         theta = np.array([[a, b], [c, d]])
         theta /= a + b + c + d
 
-        part, _, _ = effective_nonsquare_rmat_exact(
+        res = effective_nonsquare_rmat_exact(
             theta,
             num_edges,
             part_shape,
@@ -132,9 +138,12 @@ class RMATBipartiteGenerator(BaseBipartiteGraphGenerator):
             custom_samplers=None,
             generate_back_edges=False,
             remove_selfloops=False,
+            return_node_ids=2 if return_node_ids else 0,
+            verbose=self.verbose,
         )
-
-        return part
+        if return_node_ids:
+            return res[0], res[1], res[2]
+        return res[0]
 
     def _generate_part_gpu(
         self,
@@ -142,6 +151,9 @@ class RMATBipartiteGenerator(BaseBipartiteGraphGenerator):
         part_shape: Tuple[int, int],
         num_edges: int,
         noise: float,
+        return_node_ids: bool,
+        save_path: Optional[str] = None,
+        _chunked: bool = True,
     ):
 
         a, b, c, d = fit_results
@@ -150,20 +162,39 @@ class RMATBipartiteGenerator(BaseBipartiteGraphGenerator):
         a, b, c, d = theta
         r_scale, c_scale = part_shape
 
-        part = generate_gpu_rmat(
-            a,
-            b,
-            c,
-            d,
-            r_scale=r_scale,
-            c_scale=c_scale,
-            n_edges=num_edges,
-            noise=noise,
-            is_directed=True,
-            has_self_loop=True,
-        )
-
-        return part
+        if _chunked:
+            res = generate_gpu_chunked_rmat(
+                a,
+                b,
+                c,
+                d,
+                r_scale=r_scale,
+                c_scale=c_scale,
+                n_edges=num_edges,
+                noise=noise,
+                is_directed=True,
+                has_self_loop=True,
+                return_node_ids=2 if return_node_ids else 0,
+                save_path=save_path,
+                verbose=self.verbose,
+            )
+        else:
+            res = generate_gpu_rmat(
+                a,
+                b,
+                c,
+                d,
+                r_scale=r_scale,
+                c_scale=c_scale,
+                n_edges=num_edges,
+                noise=noise,
+                is_directed=True,
+                has_self_loop=True,
+                return_node_ids=2 if return_node_ids else 0
+            )
+        if return_node_ids:
+            return res[0], res[1], res[2]
+        return res
 
     def generate(
         self,
@@ -172,8 +203,12 @@ class RMATBipartiteGenerator(BaseBipartiteGraphGenerator):
         num_edges_src_dst: int,
         num_edges_dst_src: int,
         is_directed: bool,
+        apply_edge_mirroring = True,
+        transform_graph: bool = True,
         noise: float = 0.5,
         batch_size: int = 1_000_000,
+        return_node_ids=False,
+        save_path: Optional[str] = None,
     ):
         """ Generates graph with approximately `num_nodes_src_set`/`num_nodes_dst_set` nodes
          and exactly `num_edges_src_dst`/`num_edges_dst_src` edges from generator
@@ -183,8 +218,11 @@ class RMATBipartiteGenerator(BaseBipartiteGraphGenerator):
             num_edges_src_dst (int): exact number of source->destination edges to be generated
             num_edges_dst_src (int): exact number of destination->source to be generated
             is_directed (bool): flag indicating whether the generated graph has to be directed
+            transform_graph (bool): defines if the generator should transform the output graph to avoid node id conflict between src and dst nodes
             noise (float): noise for RMAT generation to get better degree distribution
             batch_size (int): size of the edge chunk that will be generated in one generation step
+            return_node_ids (bool): flag indicating whether the generator has to return nodes_ids as the second output
+            save_path (bool): path to store the graph. if specified the method return the number of edges in the graph
         Returns:
             new_graph (np.array[int, int]): generated graph
         """
@@ -214,6 +252,9 @@ class RMATBipartiteGenerator(BaseBipartiteGraphGenerator):
                 f"Fitted {fitted} graph but requested to generate {requested} one"
             )
 
+        if apply_edge_mirroring and is_directed:
+            warnings.warn('edge mirroring works only for undirected graphs')
+
         if not is_directed:
             assert (
                 num_edges_src_dst == num_edges_dst_src
@@ -231,31 +272,62 @@ class RMATBipartiteGenerator(BaseBipartiteGraphGenerator):
         offset = int(2 ** log2_row)
 
         if self._fit_src_dst_results and num_edges_src_dst:
-            upper_part = self._generate_part(
+            upper_part_res = self._generate_part(
                 self._fit_src_dst_results,
                 part_shape_upper,
                 num_edges_src_dst,
                 noise,
                 batch_size,
+                return_node_ids=return_node_ids,
+                save_path=save_path,
             )
+            if return_node_ids:
+                upper_part, upper_part_src_node_ids, upper_part_dst_node_ids = upper_part_res
+            else:
+                upper_part = upper_part_res
         else:
             upper_part = []
 
         if self._fit_dst_src_results:
+            if save_path is not None:
+                raise NotImplementedError('save_path works only for undirected bipartite graphs')
             if num_edges_dst_src:
-                lower_part = self._generate_part(
+                lower_part_res = self._generate_part(
                     self._fit_dst_src_results,
                     part_shape_lower,
                     num_edges_dst_src,
                     noise,
                     batch_size,
+                    save_path=save_path,
+                    return_node_ids=return_node_ids,
                 )
+                if return_node_ids:
+                    lower_part, lower_part_src_node_ids, lower_part_dst_node_ids = lower_part_res
+                else:
+                    lower_part = lower_part_res
             else:
                 lower_part = []
-        elif not is_directed:  # Recreate lower part for undirected graph
+        elif not is_directed and apply_edge_mirroring:  # Recreate lower part for undirected graph
+            if return_node_ids:
+                lower_part_src_node_ids, lower_part_dst_node_ids = upper_part_dst_node_ids, upper_part_src_node_ids
             lower_part = get_reversed_part(upper_part)
         else:
             lower_part = []
 
-        new_graph = recreate_graph(lower_part, upper_part, offset)
+        if transform_graph:
+            new_graph = recreate_graph(lower_part, upper_part, offset)
+            if return_node_ids:
+                lower_part_src_node_ids = lower_part_src_node_ids + offset
+                upper_part_dst_node_ids = upper_part_dst_node_ids + offset
+                src_node_ids = np.union1d(upper_part_src_node_ids, lower_part_dst_node_ids)
+                dst_node_ids = np.union1d(upper_part_dst_node_ids, lower_part_src_node_ids)
+        else:
+            if apply_edge_mirroring:
+                raise NotImplementedError('apply edge mirroring works only with `transform_graph=True`')
+            new_graph = upper_part
+            if return_node_ids:
+                src_node_ids, dst_node_ids = upper_part_src_node_ids, upper_part_dst_node_ids
+
+        if return_node_ids:
+            return new_graph, src_node_ids, dst_node_ids
         return new_graph
