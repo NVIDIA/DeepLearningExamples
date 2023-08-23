@@ -54,6 +54,7 @@ BERT_CONFIG=${28:-"None"}
 enable_benchmark=${29:-"false"}
 benchmark_steps=${30:-"10"}
 benchmark_warmup_steps=${31:-"10"}
+fuse_mha=${32:-"true"}
 
 # Calculate the total number of shards.
 readonly num_blocks=$((num_shards_per_worker * $(( num_workers > 0 ? num_workers : 1 )) * num_nodes * num_gpus))
@@ -130,8 +131,12 @@ if [ "$BERT_CONFIG" != "None" ] ; then
 fi
 
 PREC=""
+FUSE_MHA=""
 if [ "$precision" = "amp" ] ; then
    PREC="--amp --use-dynamic-loss-scaling --scale-loss=1048576"
+   if [ "$fuse_mha" = "true" ] ; then
+      FUSE_MHA="--fuse-mha"
+   fi
 elif [ "$precision" = "fp32" ] ; then
    PREC=""
 elif [ "$precision" = "tf32" ] ; then
@@ -197,6 +202,7 @@ CMD+=" --log-freq=1"
 CMD+=" --optimizer=Lamb"
 CMD+=" --phase1"
 CMD+=" $PREC"
+CMD+=" $FUSE_MHA"
 CMD+=" $ACCUMULATE_GRADIENTS"
 CMD+=" $INIT_CHECKPOINT"
 CMD+=" $BENCH"

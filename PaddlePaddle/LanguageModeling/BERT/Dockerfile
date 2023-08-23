@@ -1,4 +1,4 @@
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/paddlepaddle:22.12-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/paddlepaddle:23.06-py3
 FROM ${FROM_IMAGE_NAME}
 RUN apt-get update && apt-get install -y pbzip2 pv bzip2 cabextract
 

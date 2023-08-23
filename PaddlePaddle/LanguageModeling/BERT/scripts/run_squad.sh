@@ -31,6 +31,7 @@ max_steps=${14:-"-1"}
 enable_benchmark=${15:-"false"}
 benchmark_steps=${16:-"100"}
 benchmark_warmup_steps=${17:-"100"}
+fuse_mha=${18:-"true"}
 
 
 echo "out dir is $OUT_DIR"
@@ -41,9 +42,13 @@ if [ ! -d "$OUT_DIR" ]; then
 fi
 
 amp=""
+FUSE_MHA=""
 if [ "$precision" = "amp" ] ; then
   echo "amp activated!"
   amp=" --amp --use-dynamic-loss-scaling --scale-loss=128.0"
+  if [ "$fuse_mha" = "true" ] ; then
+    FUSE_MHA="--fuse-mha"
+  fi
 fi
 
 CONFIG=""
@@ -119,6 +124,7 @@ CMD+=" --max-steps=$max_steps "
 CMD+=" --optimizer=AdamW "
 CMD+=" --log-freq=100 "
 CMD+=" $amp "
+CMD+=" $FUSE_MHA "
 CMD+=" $BENCH "
 CMD+=" --report-file $OUT_DIR/dllogger_${num_gpus}_${precision}.json "
 

@@ -186,8 +186,10 @@ def main(args):
 
     with paddle.static.program_guard(main_program, startup_program):
         bert_config = BertConfig.from_json_file(args.config_file)
+        bert_config.fuse_mha = args.fuse_mha
         if bert_config.vocab_size % 8 != 0:
             bert_config.vocab_size += 8 - (bert_config.vocab_size % 8)
+
 
         model = BertForQuestionAnswering(bert_config)
         criterion = CrossEntropyLossForSQuAD()

@@ -44,12 +44,12 @@ def create_pretraining_data_holder():
     ]
 
 
-def create_strategy(use_amp, use_distributed_fused_lamb=False):
+def create_strategy(args, use_distributed_fused_lamb=False):
     """
     Create paddle.static.BuildStrategy and paddle.static.ExecutionStrategy with arguments.
 
     Args:
-        use_amp(bool): Whether to use amp.
+        args(Namespace): Arguments obtained from ArgumentParser.
         use_distributed_fused_lamb(bool, optional): Whether to use distributed fused lamb.
     Returns:
         build_strategy(paddle.static.BuildStrategy): A instance of BuildStrategy.
@@ -59,8 +59,9 @@ def create_strategy(use_amp, use_distributed_fused_lamb=False):
     exec_strategy = paddle.static.ExecutionStrategy()
 
     build_strategy.enable_addto = True
-    if use_amp:
+    if args.amp:
         build_strategy.fuse_gemm_epilogue = True
+        build_strategy.fuse_dot_product_attention = args.fuse_mha
 
     if use_distributed_fused_lamb:
         build_strategy.fuse_all_reduce_ops = False
@@ -86,7 +87,7 @@ def dist_optimizer(args, optimizer):
         optimizer(fleet.distributed_optimizer): A distributed optimizer.
     """
     use_distributed_fused_lamb = True if args.optimizer == 'DistributedFusedLamb' else False
-    build_strategy, exec_strategy = create_strategy(args.amp,
+    build_strategy, exec_strategy = create_strategy(args,
                                                     use_distributed_fused_lamb)
     dist_strategy = fleet.DistributedStrategy()
 
@@ -160,6 +161,7 @@ def build(args, main_prog, startup_prog, is_train=True):
             bert_config = BertConfig.from_json_file(args.config_file)
             if bert_config.vocab_size % 8 != 0:
                 bert_config.vocab_size += 8 - (bert_config.vocab_size % 8)
+            bert_config.fuse_mha = args.fuse_mha
             model = BertForPretraining(bert_config)
             criterion = BertPretrainingCriterion(bert_config.vocab_size)
             prediction_scores, seq_relationship_score = model(
@@ -224,6 +226,7 @@ def run(exe,
     logging.info(f"Training will start at the {last_step+1}th step")
 
     max_steps = args.max_steps
+    steps_this_run = max_steps
     if args.steps_this_run is not None:
         if args.steps_this_run + last_step > max_steps:
             logging.info(
@@ -231,11 +234,13 @@ def run(exe,
             )
         else:
             steps_this_run = args.steps_this_run
-            if args.benchmark:
-                steps_this_run = min(steps_this_run, args.benchmark_warmup_steps + args.benchmark_steps)
             max_steps = steps_this_run + last_step
             logging.warning(
                 f"{steps_this_run} steps will be performed in this run.")
+
+    if args.benchmark:
+        max_steps = args.benchmark_warmup_steps + args.benchmark_steps + last_step
+
 
     total_samples = 0
     raw_train_start = time.time()

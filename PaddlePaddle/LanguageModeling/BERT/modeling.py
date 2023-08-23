@@ -172,7 +172,8 @@ class BertModel(nn.Layer):
                 dropout=bert_config.hidden_dropout_prob,
                 activation=bert_config.hidden_act,
                 attn_dropout=bert_config.attention_probs_dropout_prob,
-                act_dropout=0)
+                act_dropout=0,
+                fuse_qkv=bert_config.fuse_mha)
             self.encoder = nn.TransformerEncoder(encoder_layer,
                                                  bert_config.num_hidden_layers)
 

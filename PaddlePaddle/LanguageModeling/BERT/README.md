@@ -437,6 +437,7 @@ Advanced Training:
   --use-dynamic-loss-scaling
                         Enable dynamic loss scaling in AMP training, only applied when --amp is set. (default: False)
   --use-pure-fp16       Enable pure FP16 training, only applied when --amp is set. (default: False)
+  --fuse-mha            Enable multihead attention fusion. Require cudnn version >= 8.9.1.
 ```
 
 
@@ -463,6 +464,7 @@ Default arguments are listed below in the order `scripts/run_squad.sh` expects:
 -   Enable benchmark - The default is `false`.
 -   Benchmark steps - The default is `100`.
 -   Benchmark warmup steps - The default is `100`.
+-   Fuse MHA fusion - The default is `true`
 
 The script saves the final checkpoint to the `/results/bert-large-uncased/squad` folder.
 
@@ -593,7 +595,8 @@ bash run_pretraining.sh \
     <bert_config_file> \
     <enable_benchmark> \
     <benchmark_steps> \
-    <benchmark_warmup_steps>
+    <benchmark_warmup_steps> \
+    <fuse_mha>
 ```
 
 Where:
@@ -627,6 +630,7 @@ Where:
 -   `masking` LDDL supports both static and dynamic masking. Refer to [LDDL's README](https://github.com/NVIDIA/LDDL/blob/main/README.md) for more information.
 -   `<bert_config_file>` is the path to the bert config file.
 -   `<enable_benchmark>` a flag to enable benchmark. The train process will warmup for `<benchmark_warmup_steps>` and then measure the throughput of the following `<benchmark_steps>`.
+-   `<fuse_mha>` a flag to enable cuDNN MHA fusion.
 
 Note that: 
 - If users follow [Quick Start Guide](#quick-start-guide) to set up container and dataset, there is no need to set any parameters. For example:
@@ -670,6 +674,7 @@ python3 -m paddle.distributed.launch \
     --max-predictions-per-seq=20 \
     --gradient-merge-steps=32 \
     --amp \
+    --fuse-mha \
     --use-dynamic-loss-scaling \
     --optimizer=Lamb \
     --phase1 \
@@ -769,7 +774,8 @@ bash scripts/run_squad.sh \
     <max_steps> \
     <enable_benchmark> \
     <benchmark_steps> \
-    <benchmark_warmup_steps>
+    <benchmark_warmup_steps> \
+    <fuse_mha>
 ```
  
 By default, the `mode` argument is set to `train eval`. Refer to the [Quick Start Guide](#quick-start-guide) for explanations of each positional argument.
@@ -812,7 +818,7 @@ bash scripts/run_pretraining.sh \
     None \
     /path/to/wikipedia/source \
     32 128 4 0.9 64 static \
-    None true 10 10
+    None true 10 10 true
 ```
 
 To benchmark the training performance on a specific batch size for SQuAD, refer to [Fine-tuning](#fine-tuning) and turn on the `<benchmark>` flags. An example call to run training for 200 steps (100 steps for warmup and 100 steps to measure), and generate throughput numbers:
@@ -825,7 +831,7 @@ bash scripts/run_squad.sh \
     results/checkpoints \
     train \
     bert_configs/bert-large-uncased.json \
-    -1 true 100 100
+    -1 true 100 100 true
 ```
  
 #### Inference performance benchmark
@@ -841,7 +847,8 @@ bash scripts/run_squad.sh \
     <results directory> \
     eval \
     <BERT config path> \
-    <max steps> <benchmark> <benchmark_steps> <benchmark_warmup_steps>
+    <max steps> <benchmark> <benchmark_steps> <benchmark_warmup_steps> \
+    <fuse_mha>
 ```
  
 An example call to run inference and generate throughput numbers:
@@ -854,7 +861,7 @@ bash scripts/run_squad.sh \
     results/checkpoints \
     eval \
     bert_configs/bert-large-uncased.json \
-    -1 true 100 100
+    -1 true 100 100 true
 ```
 
  
@@ -870,7 +877,7 @@ Our results were obtained by running the `scripts/run_squad.sh` and `scripts/run
 
 | DGX System         | GPUs / Node | Precision | Accumulated Batch size / GPU (Phase 1 and Phase 2) | Accumulation steps (Phase 1 and Phase 2) |     Final Loss    | Time to train(hours) | Time to train speedup (TF32 to mixed precision) |
 |--------------------|-------------|-----------|----------------------------------------------------|------------------------------------------|-------------------|----------------------|-------------------------------------------------|
-| 32 x DGX A100 80GB | 8           | AMP       | 256 and 128                                        | 1 and 4                                  |       1.409       |    ~ 1.2 hours       | 1.72                                            |
+| 32 x DGX A100 80GB | 8           | AMP       | 256 and 128                                        | 1 and 4                                  |       1.409       |    ~ 1.1 hours       | 2.27                                            |
 | 32 x DGX A100 80GB | 8           | TF32      | 128 and 16b                                        | 2 and 8                                  |       1.421       |    ~ 2.5 hours       | 1                                               |
 
 
@@ -914,28 +921,28 @@ Our results were obtained by running the script `run_pretraining.sh` in the Padd
 
 | GPUs | Batch size / GPU (TF32 and FP16) | Accumulation steps (TF32 and FP16) | Sequence length | Throughput - TF32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (TF32 - mixed precision) | Weak scaling - TF32 | Weak scaling - mixed precision |
 |------|----------------------------------|------------------------------------|-----------------|----------------------------------|---------------------------------------------|---------------------------------------------|---------------------|--------------------------------|
-| 1    | 8192 and 8192                    | 64 and 32                          | 128             |  307                             |   633                                       | 2.06                                        | 1.00                | 1.00                           |
-| 8    | 8192 and 8192                    | 64 and 32                          | 128             | 2428                             |  4990                                       | 2.06                                        | 7.91                | 7.88                           |
-| 1    | 4096 and 4096                    | 256 and 128                        | 512             |  107                             |   219                                       | 2.05                                        | 1.00                | 1.00                           |
-| 8    | 4096 and 4096                    | 256 and 128                        | 512             |  851                             |  1724                                       | 2.26                                        | 7.95                | 7.87                           |
+| 1    | 8192 and 8192                    | 64 and 32                          | 128             |  307                             |   694                                       | 2.26                                        | 1.00                | 1.00                           |
+| 8    | 8192 and 8192                    | 64 and 32                          | 128             | 2428                             |  5541                                       | 2.28                                        | 7.91                | 7.98                           |
+| 1    | 4096 and 4096                    | 256 and 128                        | 512             |  107                             |   264                                       | 2.47                                        | 1.00                | 1.00                           |
+| 8    | 4096 and 4096                    | 256 and 128                        | 512             |  851                             |  2109                                       | 2.48                                        | 7.95                | 7.99                           |
 
 
 ###### Pre-training NVIDIA DGX A100 (8x A100 80GB) Multi-node Scaling
 
 | Nodes | GPUs / node | Batch size / GPU (TF32 and FP16) | Accumulated Batch size / GPU (TF32 and FP16) | Accumulation steps (TF32 and FP16) | Sequence length | Mixed Precision Throughput | Mixed Precision Strong Scaling | TF32 Throughput | TF32 Strong Scaling | Speedup (Mixed Precision to TF32) |
 |-------|-------------|----------------------------------|------------------------------------|-----------------|----------------------------|--------------------------------|-----------------|---------------------|-----------------------------------|-----|
-| 1     | 8           | 126 and 256 | 8192 and 8192                    | 64 and 32             | 128             |   4990               | 1                              |   2428          |  1                  |  2.06               |
-| 2     | 8           | 126 and 256 | 4096 and 4096                    | 32 and 16             | 128             |   9581               | 1.92                           |   4638          |  1.91               |  2.07               |
-| 4     | 8           | 126 and 256 | 2048 and 2048                    | 16 and 8              | 128             |   19262              | 3.86                           |   9445          |  3.89               |  2.04               |
-| 8     | 8           | 126 and 256 | 1024 and 1024                    | 8 and 4               | 128             |   37526              | 7.52                           |   18335         |  7.55               |  2.05               |
-| 16    | 8           | 126 and 256 | 512 and 512                      | 4 and 2               | 128             |   71156              | 14.26                          |   35526         |  14.63              |  2.00               |
-| 32    | 8           | 126 and 256 | 256 and 256                      | 2 and 1               | 128             |   142087             | 28.47                          |   69701         |  28.71              |  2.04               |
-| 1     | 8           | 16  and 32  | 4096 and 4096                    | 256 and 128           | 512             |   1724               | 1                              |   851           |  1                  |  2.03               |
-| 2     | 8           | 16  and 32  | 2048 and 2048                    | 128 and 64            | 512             |   3305               | 1.92                           |   1601          |  1.88               |  2.06               |
-| 4     | 8           | 16  and 32  | 1024 and 1024                    | 64 and 32             | 512             |   6492               | 3.77                           |   3240          |  3.81               |  2.00               |
-| 8     | 8           | 16  and 32  | 512 and 512                      | 32 and 16             | 512             |   12884              | 7.47                           |   6329          |  7.44               |  2.04               |
-| 16    | 8           | 16  and 32  | 256 and 256                      | 16 and 8              | 512             |   25493              | 14.79                          |   12273         |  14.42              |  2.08               |
-| 32    | 8           | 16  and 32  | 128 and 128                      | 8 and 4               | 512             |   49307              | 28.60                          |   24047         |  28.26              |  2.05               |
+| 1     | 8           | 126 and 256 | 8192 and 8192                    | 64 and 32             | 128             |   5541               | 1                              |   2428          |  1                  |  2.28               |
+| 2     | 8           | 126 and 256 | 4096 and 4096                    | 32 and 16             | 128             |   10646              | 1.92                           |   4638          |  1.91               |  2.29               |
+| 4     | 8           | 126 and 256 | 2048 and 2048                    | 16 and 8              | 128             |   21389              | 3.86                           |   9445          |  3.89               |  2.26               |
+| 8     | 8           | 126 and 256 | 1024 and 1024                    | 8 and 4               | 128             |   41681              | 7.52                           |   18335         |  7.55               |  2.27               |
+| 16    | 8           | 126 and 256 | 512 and 512                      | 4 and 2               | 128             |   79023              | 14.26                          |   35526         |  14.63              |  2.22               |
+| 32    | 8           | 126 and 256 | 256 and 256                      | 2 and 1               | 128             |   157952             | 28.51                          |   69701         |  28.71              |  2.27               |
+| 1     | 8           | 16  and 32  | 4096 and 4096                    | 256 and 128           | 512             |   2109               | 1                              |   851           |  1                  |  2.48               |
+| 2     | 8           | 16  and 32  | 2048 and 2048                    | 128 and 64            | 512             |   4051               | 1.92                           |   1601          |  1.88               |  2.53               |
+| 4     | 8           | 16  and 32  | 1024 and 1024                    | 64 and 32             | 512             |   7972               | 3.78                           |   3240          |  3.81               |  2.46               |
+| 8     | 8           | 16  and 32  | 512 and 512                      | 32 and 16             | 512             |   15760              | 7.47                           |   6329          |  7.44               |  2.49               |
+| 16    | 8           | 16  and 32  | 256 and 256                      | 16 and 8              | 512             |   31129              | 14.76                          |   12273         |  14.42              |  2.54               |
+| 32    | 8           | 16  and 32  | 128 and 128                      | 8 and 4               | 512             |   60206              | 28.55                          |   24047         |  28.26              |  2.50               |
 
 
 ###### Fine-tuning NVIDIA DGX A100 (8x A100 80GB)
@@ -944,8 +951,8 @@ Our results were obtained by running the script `run_pretraining.sh` in the Padd
   
 | GPUs | Batch size / GPU (TF32 and FP16) | Throughput - TF32(sequences/sec) | Throughput - mixed precision(sequences/sec) | Throughput speedup (TF32 - mixed precision) | Weak scaling - TF32 | Weak scaling - mixed precision |
 |------|----------------------------------|----------------------------------|---------------------------------------------|---------------------------------------------|---------------------|--------------------------------|
-| 1    | 32 and 32                        |          83                      |               120                           |               1.45                          | 1.00                | 1.00                           |
-| 8    | 32 and 32                        |         629                      |               876                           |               1.39                          | 7.59                | 7.30                           |
+| 1    | 32 and 32                        |          83                      |               123                           |               1.48                          | 1.00                | 1.00                           |
+| 8    | 32 and 32                        |         629                      |               929                           |               1.48                          | 7.59                | 7.55                           |
  
 #### Inference performance results
 
@@ -983,6 +990,13 @@ August 2022
 - SQuAD finetune support with AdamW optimizer.
 - Updated accuracy and performance tables tested on A100.
 - Initial release.
+
+March 2023
+- Pre-training using [Language Datasets and Data Loaders (LDDL)](https://github.com/NVIDIA/LDDL)
+- Binned pretraining for phase2 with LDDL using a bin size of 64
+
+July 2023
+- Optimize AMP training with cuDNN fused dot product attention kernel.
  
 ### Known issues
  

@@ -32,6 +32,7 @@ python3 -m paddle.distributed.launch \
 --amp \
 --use-dynamic-loss-scaling \
 --optimizer=Lamb \
+--fuse-mha \
 --phase2 \
 --scale-loss=1048576 \
 --learning-rate=4e-3 \

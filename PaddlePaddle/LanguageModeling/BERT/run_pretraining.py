@@ -81,7 +81,8 @@ def main():
         log_dir=None if args.output_dir is None else
         os.path.join(args.output_dir, 'lddl_log'),
         log_level=logging.WARNING,
-        start_epoch=0 if progress is None else progress.get("epoch", 0), )
+        start_epoch=0 if progress is None else progress.get("epoch", 0),
+        sequence_length_alignment=64)
 
     if args.amp:
         optimizer.amp_init(device)
