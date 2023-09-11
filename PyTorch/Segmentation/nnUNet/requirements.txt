@@ -1,7 +1,7 @@
 git+https://github.com/NVIDIA/dllogger
 git+https://github.com/NVIDIA/mlperf-common.git
 nibabel==3.2.1
-joblib==1.0.1
+joblib==1.2.0
 pytorch-lightning==1.7.7
 scikit-learn==1.0
 scikit-image==0.18.3
