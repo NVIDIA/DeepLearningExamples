@@ -7,7 +7,6 @@ tqdm
 pyyaml
 onnxruntime
 git+https://github.com/onnx/tensorflow-onnx
-tritonclient[all]==2.31
 numpy<1.24
 tabulate>=0.8.7
 natsort>=7.0.0

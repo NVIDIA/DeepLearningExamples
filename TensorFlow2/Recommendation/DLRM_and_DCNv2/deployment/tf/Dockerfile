@@ -15,6 +15,6 @@
 # author: Tomasz Grel (tgrel@nvidia.com)
 
 
-FROM nvcr.io/nvidia/tritonserver:23.02-py3 as tritonserver
+FROM nvcr.io/nvidia/tritonserver:23.06-py3 as tritonserver
 
 WORKDIR /opt/tritonserver

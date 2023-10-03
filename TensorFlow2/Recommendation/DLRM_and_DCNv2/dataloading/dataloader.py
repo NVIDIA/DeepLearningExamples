@@ -80,7 +80,8 @@ def _create_pipelines_tf_raw(**kwargs):
                                        local_categorical_feature_names=local_categorical_names,
                                        rank=kwargs['rank'],
                                        world_size=kwargs['world_size'],
-                                       concat_features=kwargs['concat_features'])
+                                       concat_features=kwargs['concat_features'],
+                                       data_parallel_categoricals=kwargs['data_parallel_input'])
 
     test_dataset = TfRawBinaryDataset(feature_spec=feature_spec,
                                       instance=TEST_MAPPING,
@@ -89,7 +90,8 @@ def _create_pipelines_tf_raw(**kwargs):
                                       local_categorical_feature_names=local_categorical_names,
                                       rank=kwargs['rank'],
                                       world_size=kwargs['world_size'],
-                                      concat_features=kwargs['concat_features'])
+                                      concat_features=kwargs['concat_features'],
+                                      data_parallel_categoricals=kwargs['data_parallel_input'])
     return train_dataset, test_dataset
 
 
@@ -113,7 +115,8 @@ def _create_pipelines_split_tfrecords(**kwargs):
 
 
 def create_input_pipelines(dataset_type, dataset_path, train_batch_size, test_batch_size,
-                           table_ids, feature_spec, rank=0, world_size=1, concat_features=False):
+                           table_ids, feature_spec, rank=0, world_size=1, concat_features=False,
+                           data_parallel_input=False):
 
     # pass along all arguments except dataset type
     kwargs = locals()

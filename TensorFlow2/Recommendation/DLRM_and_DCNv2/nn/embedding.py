@@ -265,7 +265,7 @@ class DualEmbeddingGroup(tf.keras.layers.Layer):
         reversed_sizes = self.table_sizes[idx_mapping]
 
         cumulative_size = np.cumsum(reversed_sizes)
-        cumulative_indicators = (cumulative_size > self.memory_threshold * 2 ** 30).tolist()
+        cumulative_indicators = (cumulative_size > self.memory_threshold * (10 ** 9)).tolist()
         if True in cumulative_indicators:
             index = cumulative_indicators.index(True)
         else:

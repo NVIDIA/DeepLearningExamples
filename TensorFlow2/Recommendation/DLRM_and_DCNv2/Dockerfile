@@ -14,10 +14,11 @@
 #
 # author: Tomasz Grel (tgrel@nvidia.com)
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:23.02-tf2-py3
-FROM ${FROM_IMAGE_NAME}
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/tensorflow:23.06-tf2-py3
+FROM nvcr.io/nvidia/tritonserver:23.06-py3-sdk as clientsdk
+FROM ${FROM_IMAGE_NAME} as base
 
-ARG DISTRIBUTED_EMBEDDINGS_COMMIT=c635ed84
+ARG DISTRIBUTED_EMBEDDINGS_COMMIT=45cffaa8
 
 WORKDIR /dlrm
 
@@ -38,8 +39,7 @@ RUN rm -rf distributed-embeddings &&\
     pip install artifacts/*.whl &&\
     cd ..
 
-ADD . .
-
+ADD tensorflow-dot-based-interact tensorflow-dot-based-interact
 RUN mkdir -p /usr/local/lib/python3.8/dist-packages/tensorflow/include/third_party/gpus/cuda/ &&\
     cd tensorflow-dot-based-interact &&\
     make clean &&\
@@ -48,6 +48,14 @@ RUN mkdir -p /usr/local/lib/python3.8/dist-packages/tensorflow/include/third_par
     make pkg &&\
     pip install ./artifacts/tensorflow_dot_based_interact-*.whl &&\
     cd ..
+
+COPY --from=clientsdk /workspace/install/python/tritonclient-2.35.0-py3-*.whl /dlrm/
+RUN if [[ "$(uname -m)" == "x86_64" ]]; \
+    then echo x86; pip install tritonclient-2.35.0-py3-none-manylinux1_x86_64.whl[all]; \
+    else echo arm; pip install tritonclient-2.35.0-py3-none-manylinux2014_aarch64.whl[all]; \
+    fi
+
+ADD . .
 
 ENV HOROVOD_CYCLE_TIME=0.2
 ENV HOROVOD_ENABLE_ASYNC_COMPLETION=1

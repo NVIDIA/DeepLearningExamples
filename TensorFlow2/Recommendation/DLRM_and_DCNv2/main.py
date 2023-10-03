@@ -50,7 +50,13 @@ def define_common_flags():
     flags.DEFINE_string("dist_strategy", default='memory_balanced',
                         help="Strategy for the Distributed Embeddings to use. Supported options are"
                         "'memory_balanced', 'basic' and 'memory_optimized'")
-    flags.DEFINE_integer("column_slice_threshold", default=10*1000*1000*1000,
+    flags.DEFINE_integer("column_slice_threshold", default=5*1000*1000*1000,
+                         help='Number of elements above which a distributed embedding will be sliced across'
+                         'multiple devices')
+    flags.DEFINE_integer("row_slice_threshold", default=10*1000*1000*1000,
+                         help='Number of elements above which a distributed embedding will be sliced across'
+                         'multiple devices')
+    flags.DEFINE_integer("data_parallel_threshold", default=None,
                          help='Number of elements above which a distributed embedding will be sliced across'
                          'multiple devices')
 
@@ -97,6 +103,8 @@ def define_common_flags():
     flags.DEFINE_enum("dataset_type", default="tf_raw",
                       enum_values=['tf_raw', 'synthetic', 'split_tfrecords'],
                       help='The type of the dataset to use')
+    flags.DEFINE_boolean("data_parallel_input", default=False, help="Use a data-parallel dataloader,"
+                         " i.e., load a local batch of of data for all input features")
 
     # Synthetic dataset settings
     flags.DEFINE_boolean("synthetic_dataset_use_feature_spec", default=False,
@@ -296,14 +304,18 @@ def main():
                       categorical_cardinalities=dataset_metadata.categorical_cardinalities,
                       transpose=False)
 
+    table_ids = model.sparse_model.get_local_table_ids(hvd.rank())
+    print(f'local feature ids={table_ids}')
+
     train_pipeline, validation_pipeline = create_input_pipelines(dataset_type=FLAGS.dataset_type,
                                                                  dataset_path=FLAGS.dataset_path,
                                                                  train_batch_size=FLAGS.batch_size,
                                                                  test_batch_size=FLAGS.valid_batch_size,
-                                                                 table_ids=model.sparse_model.get_local_table_ids(hvd.rank()),
+                                                                 table_ids=table_ids,
                                                                  feature_spec=FLAGS.feature_spec,
                                                                  rank=hvd.rank(), world_size=hvd.size(),
-                                                                 concat_features=FLAGS.concat_embedding)
+                                                                 concat_features=FLAGS.concat_embedding,
+                                                                 data_parallel_input=FLAGS.data_parallel_input)
 
     mlp_optimizer, embedding_optimizer = create_optimizers(FLAGS)
 
