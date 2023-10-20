@@ -214,33 +214,20 @@ cd DeepLearningExamples/PyTorch/Classification/
 ```
 
 ### 2. Download and preprocess the dataset.
-
-The ResNeXt101-32x4d script operates on ImageNet 1k, a widely popular image classification dataset from the ILSVRC challenge.
-
-PyTorch can work directly on JPEGs, therefore, preprocessing/augmentation is not needed.
-
-To train your model using mixed or TF32 precision with Tensor Cores or using FP32,
-perform the following steps using the default parameters of the resnext101-32x4d model on the ImageNet dataset.
-For the specifics concerning training and inference, see the [Advanced](#advanced) section.
-
-
-1. [Download the images](http://image-net.org/download-images).
-
-2. Extract the training data:
-  ```bash
-  mkdir train && mv ILSVRC2012_img_train.tar train/ && cd train
-  tar -xvf ILSVRC2012_img_train.tar && rm -f ILSVRC2012_img_train.tar
-  find . -name "*.tar" | while read NAME ; do mkdir -p "${NAME%.tar}"; tar -xvf "${NAME}" -C "${NAME%.tar}"; rm -f "${NAME}"; done
-  cd ..
-  ```
-
-3. Extract the validation data and move the images to subfolders:
-  ```bash
-  mkdir val && mv ILSVRC2012_img_val.tar val/ && cd val && tar -xvf ILSVRC2012_img_val.tar
-  wget -qO- https://raw.githubusercontent.com/soumith/imagenetloader.torch/master/valprep.sh | bash
-  ```
-
-The directory in which the `train/` and `val/` directories are placed, is referred to as `<path to imagenet>` in this document.
+Run the script download_dataset.sh to download, extract and preprocess the ImageNet2012 dataset in $IMAGENET_DIR directory (on the host).
+```
+./download_dataset.sh
+```
+By default, the data is organized into the following structure:
+```
+</imagenet>
+  train/
+    n*/
+      ILSVRC2012_train_*.JPEG
+  val/
+    n*/
+      ILSVRC2012_val_*.JPEG
+```
 
 ### 3. Build the ResNeXt101-32x4d PyTorch NGC container.
 
