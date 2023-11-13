@@ -93,7 +93,7 @@ class ParametricDataset(Dataset):
         self._label_file = None
         self._numerical_bytes_per_batch = bytes_per_feature[numerical_features[0]] * \
                                           len(numerical_features) * batch_size
-        self._label_bytes_per_batch = np.dtype(np.bool).itemsize * batch_size
+        self._label_bytes_per_batch = np.dtype(bool).itemsize * batch_size
         self._number_of_numerical_features = len(numerical_features)
 
         chosen_mapping = feature_spec.source_spec[mapping]
@@ -187,7 +187,7 @@ class ParametricDataset(Dataset):
     def _get_label(self, idx: int) -> torch.Tensor:
         raw_label_data = os.pread(self._label_file, self._label_bytes_per_batch,
                                   idx * self._label_bytes_per_batch)
-        array = np.frombuffer(raw_label_data, dtype=np.bool)
+        array = np.frombuffer(raw_label_data, dtype=bool)
         return torch.from_numpy(array).to(torch.float32)
 
     def _get_numerical_features(self, idx: int) -> Optional[torch.Tensor]:
