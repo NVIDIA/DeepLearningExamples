@@ -116,7 +116,7 @@ def main():
 
             # Append them to the binary files
             numerical_f.write(numerical_df.values.astype(np.float16).tobytes())
-            label_f.write(label_df.values.astype(np.bool).tobytes())
+            label_f.write(label_df.values.astype(bool).tobytes())
 
             categorical_arr = categorical_df.values
             for cat_idx, cat_feature_type in enumerate(categorical_feature_types):

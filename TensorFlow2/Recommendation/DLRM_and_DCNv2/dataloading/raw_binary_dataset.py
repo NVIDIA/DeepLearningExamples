@@ -137,7 +137,7 @@ class TfRawBinaryDataset:
             elif first_feature in set_of_label_features:
                 # Load label
                 # We verified earlier that there is only one label feature
-                label_bytes_per_batch = np.dtype(np.bool).itemsize * self._batch_size
+                label_bytes_per_batch = np.dtype(bool).itemsize * self._batch_size
                 self._label, batches = create_reader(path_to_open, label_bytes_per_batch)
             else:
                 raise ValueError("Unknown chunk type")
@@ -231,7 +231,7 @@ class TfRawBinaryDataset:
                     raw_data = feature.numpy().astype(ftype).tobytes()
                     stream.write(raw_data)
 
-                label_f.write(label.numpy().astype(np.bool).tobytes())
+                label_f.write(label.numpy().astype(bool).tobytes())
                 numerical_f.write(numerical_features.numpy().astype(np.float16).tobytes())
 
             for stream in chain(*categorical_fs, [label_f, numerical_f]):
