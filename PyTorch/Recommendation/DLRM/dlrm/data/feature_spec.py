@@ -172,7 +172,7 @@ class FeatureSpec:
                     assert len(contained_features) == 1
 
                     # check label dtype
-                    assert np.dtype(self.feature_spec[first_feature][DTYPE_SELECTOR]) == np.bool
+                    assert np.dtype(self.feature_spec[first_feature][DTYPE_SELECTOR]) == bool
 
                 else:
                     assert False, "Feature of unknown type"
@@ -202,7 +202,7 @@ class FeatureSpec:
                         zip(categorical_feature_names, cat_feature_types, categorical_feature_cardinalities)}
         for f_name in numerical_feature_names:
             feature_dict[f_name] = {DTYPE_SELECTOR: str(np.dtype(np.float16))}
-        feature_dict[label_feature_name] = {DTYPE_SELECTOR: str(np.dtype(np.bool))}
+        feature_dict[label_feature_name] = {DTYPE_SELECTOR: str(np.dtype(bool))}
 
         channel_spec = {CATEGORICAL_CHANNEL: categorical_feature_names,
                         NUMERICAL_CHANNEL: numerical_feature_names,
