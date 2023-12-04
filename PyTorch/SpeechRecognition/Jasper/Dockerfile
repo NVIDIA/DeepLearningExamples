@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:20.10-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:23.10-py3
 FROM ${FROM_IMAGE_NAME}
 
 RUN apt update && apt install -y libsndfile1 && apt install -y sox && rm -rf /var/lib/apt/lists/*
@@ -23,8 +23,6 @@ WORKDIR /workspace/jasper
 COPY requirements.txt .
 RUN if [[ ! -z "$(command -v conda)" ]]; then conda install -y pyyaml==5.4.1; fi
 RUN pip install --disable-pip-version-check -U -r requirements.txt
-
-RUN pip install --force-reinstall --extra-index-url https://developer.download.nvidia.com/compute/redist nvidia-dali-cuda110==1.27.0
 
 # Copy rest of files
 COPY . .
