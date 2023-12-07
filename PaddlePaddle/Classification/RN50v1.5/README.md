@@ -233,7 +233,7 @@ The following section lists the requirements you need to meet to start training 
 This repository contains a Dockerfile that extends the CUDA NGC container and encapsulates some dependencies. Aside from these dependencies, ensure you have the following components:
 
 * [NVIDIA Docker](https://github.com/NVIDIA/nvidia-docker)
-* [PaddlePaddle 22.05-py3 NGC container](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/paddlepaddle) or newer
+* [PaddlePaddle 23.09-py3 NGC container](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/paddlepaddle) or newer
 * Supported GPUs:
     * [NVIDIA Ampere architecture](https://www.nvidia.com/en-us/data-center/nvidia-ampere-gpu-architecture/)
 
@@ -289,7 +289,7 @@ docker build . -t nvidia_resnet50
 
 ### 4. Start an interactive session in the NGC container to run training/inference.
 ```bash
-nvidia-docker run --rm -it -v <path to imagenet>:/imagenet --ipc=host nvidia_resnet50
+nvidia-docker run --rm -it -v <path to imagenet>:/imagenet --ipc=host --e FLAGS_apply_pass_to_program=1  nvidia_resnet50
 ```
 
 ### 5. Start training
