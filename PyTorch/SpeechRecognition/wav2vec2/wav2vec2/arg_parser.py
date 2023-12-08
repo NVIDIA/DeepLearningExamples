@@ -48,7 +48,7 @@ def populate_common(parser):
                        help="Run for a number of epochs and exit")
     train.add_argument("--cudnn_benchmark", action="store_true",
                        help="Enable cudnn benchmark")
-    train.add_argument("--local_rank", default=os.getenv("LOCAL_RANK", 0),
+    train.add_argument("--local_rank", "--local-rank", default=os.getenv("LOCAL_RANK", 0),
                        type=int, help="GPU id used for distributed training")
 
     optim = parser.add_argument_group("optimization setup")
