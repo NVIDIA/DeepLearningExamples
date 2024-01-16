@@ -107,7 +107,7 @@ class LJSpeechDataset(Dataset):
 
             # Audio processing
             wav, _ = librosa.effects.trim(wav, frame_length=self.win_len, hop_length=self.hop_len)
-            
+
             if self.mels_path:
                 mel = np.load(os.path.join(self.mels_path, name + ".mel.npy"))
             else:
