@@ -90,7 +90,6 @@ class ConvAttention(torch.nn.Module):
         self.softmax = torch.nn.Softmax(dim=3)
         self.log_softmax = torch.nn.LogSoftmax(dim=3)
         self.query_proj = Invertible1x1ConvLUS(n_mel_channels)
-        self.attn_proj = torch.nn.Conv2d(n_att_channels, 1, kernel_size=1)
         self.align_query_enc_type = align_query_enc_type
         self.use_query_proj = bool(use_query_proj)
 
