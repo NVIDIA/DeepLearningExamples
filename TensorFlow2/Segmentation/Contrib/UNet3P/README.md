@@ -66,8 +66,8 @@ For details on how to enable these features while training and evaluation see [B
 * Clone code
 
 ```
-git clone https://github.com/hamidriasat/NVIDIA-DeepLearningExamples.git
-cd NVIDIA-DeepLearningExamples/TensorFlow2/Segmentation/UNet3P/
+git clone https://github.com/NVIDIA/DeepLearningExamples.git
+cd DeepLearningExamples/TensorFlow2/Segmentation/Contrib/UNet3P/
 ```
 
 * Build the UNet3P TensorFlow NGC container
