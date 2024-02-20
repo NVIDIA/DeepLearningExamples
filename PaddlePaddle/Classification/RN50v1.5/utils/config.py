@@ -100,7 +100,8 @@ def print_args(args):
     args_for_log = copy.deepcopy(args)
 
     # Due to dllogger cannot serialize Enum into JSON.
-    args_for_log.run_scope = args_for_log.run_scope.value
+    if hasattr(args_for_log, 'run_scope'):
+        args_for_log.run_scope = args_for_log.run_scope.value
 
     dllogger.log(step='PARAMETER', data=vars(args_for_log))
 
@@ -150,13 +151,19 @@ def check_and_process_args(args):
         args.eval_interval = 1
 
 
-def add_global_args(parser):
-    group = parser.add_argument_group('Global')
+def add_general_args(parser):
+    group = parser.add_argument_group('General')
     group.add_argument(
-        '--output-dir',
+        '--checkpoint-dir',
         type=str,
-        default='./output/',
+        default='./checkpoint/',
         help='A path to store trained models.')
+    group.add_argument(
+        '--inference-dir',
+        type=str,
+        default='./inference/',
+        help='A path to store inference model once the training is finished.'
+    )
     group.add_argument(
         '--run-scope',
         default='train_eval',
@@ -188,13 +195,8 @@ def add_global_args(parser):
     group.add_argument(
         '--report-file',
         type=str,
-        default='./report.json',
+        default='./train.json',
         help='A file in which to store JSON experiment report.')
-    group.add_argument(
-        '--data-layout',
-        default='NCHW',
-        choices=('NCHW', 'NHWC'),
-        help='Data format. It should be one of {NCHW, NHWC}.')
     group.add_argument(
         '--benchmark', action='store_true', help='To enable benchmark mode.')
     group.add_argument(
@@ -298,6 +300,11 @@ def add_advance_args(parser):
              '{mask_1d, mask_2d_greedy, mask_2d_best}. This only be applied ' \
              'when --asp and --prune-model is set.'
     )
+    # QAT
+    group.add_argument(
+        '--qat',
+        action='store_true',
+        help='Enable quantization aware training (QAT).')
     return parser
 
 
@@ -396,6 +403,11 @@ def add_model_args(parser):
         default=1000,
         help='The number classes of images.')
     group.add_argument(
+        '--data-layout',
+        default='NCHW',
+        choices=('NCHW', 'NHWC'),
+        help='Data format. It should be one of {NCHW, NHWC}.')
+    group.add_argument(
         '--bn-weight-decay',
         action='store_true',
         help='Apply weight decay to BatchNorm shift and scale.')
@@ -448,6 +460,9 @@ def add_training_args(parser):
 
 
 def add_trt_args(parser):
+    def int_list(x):
+        return list(map(int, x.split(',')))
+
     group = parser.add_argument_group('Paddle-TRT')
     group.add_argument(
         '--device',
@@ -456,70 +471,94 @@ def add_trt_args(parser):
         help='The GPU device id for Paddle-TRT inference.'
     )
     group.add_argument(
-        '--trt-inference-dir',
+        '--inference-dir',
         type=str,
         default='./inference',
-        help='A path to store/load inference models. ' \
-             'export_model.py would export models to this folder, ' \
-             'then inference.py would load from here.'
+        help='A path to load inference models.'
     )
     group.add_argument(
-        '--trt-precision',
+        '--data-layout',
+        default='NCHW',
+        choices=('NCHW', 'NHWC'),
+        help='Data format. It should be one of {NCHW, NHWC}.')
+    group.add_argument(
+        '--precision',
         default='FP32',
         choices=('FP32', 'FP16', 'INT8'),
         help='The precision of TensorRT. It should be one of {FP32, FP16, INT8}.'
     )
     group.add_argument(
-        '--trt-workspace-size',
+        '--workspace-size',
         type=int,
         default=(1 << 30),
         help='The memory workspace of TensorRT in MB.')
     group.add_argument(
-        '--trt-min-subgraph-size',
+        '--min-subgraph-size',
         type=int,
         default=3,
         help='The minimal subgraph size to enable PaddleTRT.')
     group.add_argument(
-        '--trt-use-static',
+        '--use-static',
         type=distutils.util.strtobool,
         default=False,
         help='Fix TensorRT engine at first running.')
     group.add_argument(
-        '--trt-use-calib-mode',
+        '--use-calib-mode',
         type=distutils.util.strtobool,
         default=False,
         help='Use the PTQ calibration of PaddleTRT int8.')
     group.add_argument(
-        '--trt-export-log-path',
-        type=str,
-        default='./export.json',
-        help='A file in which to store JSON model exporting report.')
-    group.add_argument(
-        '--trt-log-path',
+        '--report-file',
         type=str,
         default='./inference.json',
         help='A file in which to store JSON inference report.')
     group.add_argument(
-        '--trt-use-synthetic',
+        '--use-synthetic',
         type=distutils.util.strtobool,
         default=False,
         help='Apply synthetic data for benchmark.')
+    group.add_argument(
+        '--benchmark-steps',
+        type=int,
+        default=100,
+        help='Steps for benchmark run, only be applied when --benchmark is set.'
+    )
+    group.add_argument(
+        '--benchmark-warmup-steps',
+        type=int,
+        default=100,
+        help='Warmup steps for benchmark run, only be applied when --benchmark is set.'
+    )
+    group.add_argument(
+        '--show-config',
+        type=distutils.util.strtobool,
+        default=True,
+        help='To show arguments.')
     return parser
 
 
-def parse_args(including_trt=False):
+def parse_args(script='train'):
+    assert script in ['train', 'inference']
     parser = argparse.ArgumentParser(
-        description="PaddlePaddle RN50v1.5 training script",
+        description=f'PaddlePaddle RN50v1.5 {script} script',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser = add_global_args(parser)
-    parser = add_dataset_args(parser)
-    parser = add_model_args(parser)
-    parser = add_training_args(parser)
-    parser = add_advance_args(parser)
-
-    if including_trt:
+    if script == 'train':
+        parser = add_general_args(parser)
+        parser = add_dataset_args(parser)
+        parser = add_model_args(parser)
+        parser = add_training_args(parser)
+        parser = add_advance_args(parser)
+        args = parser.parse_args()
+        check_and_process_args(args)
+    else:
         parser = add_trt_args(parser)
+        parser = add_dataset_args(parser)
+        args = parser.parse_args()
+        # Precess image layout and channel
+        args.image_channel = args.image_shape[0]
+        if args.data_layout == "NHWC":
+            args.image_shape = [
+                args.image_shape[1], args.image_shape[2], args.image_shape[0]
+            ]
 
-    args = parser.parse_args()
-    check_and_process_args(args)
     return args

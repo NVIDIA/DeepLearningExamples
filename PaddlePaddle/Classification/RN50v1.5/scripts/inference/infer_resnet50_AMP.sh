@@ -14,9 +14,9 @@
 
 python inference.py \
     --data-layout NHWC \
-    --trt-inference-dir ./inference_amp \
-    --trt-precision FP16 \
+    --inference-dir ./inference_amp \
+    --precision FP16 \
     --batch-size 256 \
     --benchmark-steps 1024 \
     --benchmark-warmup-steps 16 \
-    --trt-use-synthetic True
+    --use-synthetic True

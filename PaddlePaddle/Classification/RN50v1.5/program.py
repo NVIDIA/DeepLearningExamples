@@ -188,6 +188,7 @@ def dist_optimizer(args, optimizer):
         }
 
     dist_strategy.asp = args.asp
+    dist_strategy.qat = args.qat
 
     optimizer = fleet.distributed_optimizer(optimizer, strategy=dist_strategy)
 

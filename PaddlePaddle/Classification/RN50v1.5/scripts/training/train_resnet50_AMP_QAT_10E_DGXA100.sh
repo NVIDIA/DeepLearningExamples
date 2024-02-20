@@ -15,7 +15,14 @@
 CKPT=${1:-"./output/ResNet50/89"}
 MODEL_PREFIX=${2:-"resnet_50_paddle"}
 
-python -m paddle.distributed.launch --gpus=0 export_model.py \
-    --trt-inference-dir ./inference_tf32 \
-    --from-checkpoint $CKPT \
-    --model-prefix ${MODEL_PREFIX}
+python -m paddle.distributed.launch --gpus=0,1,2,3,4,5,6,7 train.py \
+  --from-pretrained-params ${CKPT} \
+  --model-prefix ${MODEL_PREFIX} \
+  --epochs 10 \
+  --amp \
+  --scale-loss 128.0 \
+  --use-dynamic-loss-scaling \
+  --data-layout NHWC \
+  --qat \
+  --lr 0.00005 \
+  --inference-dir ./inference_qat

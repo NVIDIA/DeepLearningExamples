@@ -29,7 +29,7 @@ from utils.logger import setup_dllogger
 
 
 def init_predictor(args):
-    infer_dir = args.trt_inference_dir
+    infer_dir = args.inference_dir
     assert os.path.isdir(
         infer_dir), f'inference_dir = "{infer_dir}" is not a directory'
     pdiparams_path = glob.glob(os.path.join(infer_dir, '*.pdiparams'))
@@ -41,7 +41,7 @@ def init_predictor(args):
     predictor_config = Config(pdmodel_path[0], pdiparams_path[0])
     predictor_config.enable_memory_optim()
     predictor_config.enable_use_gpu(0, args.device)
-    precision = args.trt_precision
+    precision = args.precision
     max_batch_size = args.batch_size
     assert precision in ['FP32', 'FP16', 'INT8'], \
         'precision should be FP32/FP16/INT8'
@@ -54,12 +54,17 @@ def init_predictor(args):
     else:
         raise NotImplementedError
     predictor_config.enable_tensorrt_engine(
-        workspace_size=args.trt_workspace_size,
+        workspace_size=args.workspace_size,
         max_batch_size=max_batch_size,
-        min_subgraph_size=args.trt_min_subgraph_size,
+        min_subgraph_size=args.min_subgraph_size,
         precision_mode=precision_mode,
-        use_static=args.trt_use_static,
-        use_calib_mode=args.trt_use_calib_mode)
+        use_static=args.use_static,
+        use_calib_mode=args.use_calib_mode)
+    predictor_config.set_trt_dynamic_shape_info(
+        {"data": (1,) + tuple(args.image_shape)},
+        {"data": (args.batch_size,) + tuple(args.image_shape)},
+        {"data": (args.batch_size,) + tuple(args.image_shape)},
+    )
     predictor = create_predictor(predictor_config)
     return predictor
 
@@ -140,7 +145,7 @@ def benchmark_dataset(args):
     quantile = np.quantile(latency, [0.9, 0.95, 0.99])
 
     statistics = {
-        'precision': args.trt_precision,
+        'precision': args.precision,
         'batch_size': batch_size,
         'throughput': total_images / (end - start),
         'accuracy': correct_predict / total_images,
@@ -189,7 +194,7 @@ def benchmark_synthetic(args):
     quantile = np.quantile(latency, [0.9, 0.95, 0.99])
 
     statistics = {
-        'precision': args.trt_precision,
+        'precision': args.precision,
         'batch_size': batch_size,
         'throughput': args.benchmark_steps * batch_size / (end - start),
         'eval_latency_avg': np.mean(latency),
@@ -200,11 +205,11 @@ def benchmark_synthetic(args):
     return statistics
 
 def main(args):
-    setup_dllogger(args.trt_log_path)
+    setup_dllogger(args.report_file)
     if args.show_config:
         print_args(args)
 
-    if args.trt_use_synthetic:
+    if args.use_synthetic:
         statistics = benchmark_synthetic(args)
     else:
         statistics = benchmark_dataset(args)
@@ -213,4 +218,4 @@ def main(args):
 
 
 if __name__ == '__main__':
-    main(parse_args(including_trt=True))
+    main(parse_args(script='inference'))

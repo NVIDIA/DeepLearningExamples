@@ -28,6 +28,7 @@ from paddle.distributed import fleet
 from paddle.static.amp.fp16_lists import AutoMixedPrecisionLists
 from paddle.static.amp.fp16_utils import cast_model_to_fp16
 from paddle.incubate import asp as sparsity
+from paddle.static.quantization.quanter import quant_aware
 
 
 class MetricSummary:
@@ -107,7 +108,7 @@ def main(args):
         eval_step_each_epoch = len(eval_dataloader)
         eval_prog = paddle.static.Program()
 
-        eval_fetchs, _, _, _ = program.build(
+        eval_fetchs, _, eval_feeds, _ = program.build(
             args,
             eval_prog,
             startup_prog,
@@ -147,6 +148,14 @@ def main(args):
         sparsity.prune_model(train_prog, mask_algo=args.mask_algo)
         logging.info("Pruning model done.")
 
+    if args.qat:
+        if args.run_scope == RunScope.EVAL_ONLY:
+            eval_prog = quant_aware(eval_prog, device, for_test=True, return_program=True)
+        else:
+            optimizer.qat_init(
+                device,
+                test_program=eval_prog)
+
     if eval_prog is not None:
         eval_prog = program.compile_prog(args, eval_prog, is_train=False)
 
@@ -169,7 +178,7 @@ def main(args):
 
             # Save a checkpoint
             if epoch_id % args.save_interval == 0:
-                model_path = os.path.join(args.output_dir, args.model_arch_name)
+                model_path = os.path.join(args.checkpoint_dir, args.model_arch_name)
                 save_model(train_prog, model_path, epoch_id, args.model_prefix)
 
         # Evaluation
@@ -189,6 +198,10 @@ def main(args):
         program.log_info((), train_summary.metric_dict, Mode.TRAIN)
     if eval_summary.is_updated:
         program.log_info((), eval_summary.metric_dict, Mode.EVAL)
+
+    if eval_prog is not None:
+        model_path = os.path.join(args.inference_dir, args.model_arch_name)
+        paddle.static.save_inference_model(model_path, [eval_feeds['data']], [eval_fetchs['label'][0]], exe, program=eval_prog)
 
 
 if __name__ == '__main__':

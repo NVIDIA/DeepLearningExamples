@@ -12,12 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-CKPT=${1:-"./output/ResNet50/89"}
-MODEL_PREFIX=${2:-"resnet_50_paddle"}
-
-python -m paddle.distributed.launch --gpus=0 export_model.py \
-    --amp \
+python inference.py \
     --data-layout NHWC \
-    --trt-inference-dir ./inference_amp \
-    --from-checkpoint ${CKPT} \
-    --model-prefix ${MODEL_PREFIX}
+    --inference-dir ./inference_qat \
+    --precision INT8 \
+    --batch-size 256 \
+    --benchmark-steps 1024 \
+    --benchmark-warmup-steps 16 \
+    --use-synthetic True

@@ -13,10 +13,10 @@
 # limitations under the License.
 
 python inference.py \
-    --trt-inference-dir ./inference_tf32 \
-    --trt-precision FP32 \
+    --inference-dir ./inference_tf32 \
+    --precision FP32 \
     --dali-num-threads 8 \
     --batch-size 256 \
     --benchmark-steps 1024 \
     --benchmark-warmup-steps 16 \
-    --trt-use-synthetic True
+    --use-synthetic True
