@@ -39,9 +39,9 @@ project(TritonKaldiBackend LANGUAGES C CXX)
 option(TRITON_ENABLE_GPU "Enable GPU support in backend" ON)
 option(TRITON_ENABLE_STATS "Include statistics collections in backend" ON)
 
-set(TRITON_COMMON_REPO_TAG "r21.05" CACHE STRING "Tag for triton-inference-server/common repo")
-set(TRITON_CORE_REPO_TAG "r21.05" CACHE STRING "Tag for triton-inference-server/core repo")
-set(TRITON_BACKEND_REPO_TAG "r21.05" CACHE STRING "Tag for triton-inference-server/backend repo")
+set(TRITON_COMMON_REPO_TAG "r21.12" CACHE STRING "Tag for triton-inference-server/common repo")
+set(TRITON_CORE_REPO_TAG "r21.12" CACHE STRING "Tag for triton-inference-server/core repo")
+set(TRITON_BACKEND_REPO_TAG "r21.12" CACHE STRING "Tag for triton-inference-server/backend repo")
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)

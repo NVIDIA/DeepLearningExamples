@@ -998,16 +998,16 @@ void ModelInstanceState::SetOutput(
 
   if (output_name.compare("RAW_LATTICE") == 0) {
     assert(!results.empty());
-    kaldi::CompactLattice& clat = results[0].GetLatticeResult();
+    kaldi::CompactLattice* clat = results[0].GetLatticeResult();
 
     std::ostringstream oss;
-    kaldi::WriteCompactLattice(oss, true, clat);
+    kaldi::WriteCompactLattice(oss, true, *clat);
     SetOutputBuffer(oss.str(), response, response_output);
   } else if (output_name.compare("TEXT") == 0) {
     assert(!results.empty());
-    kaldi::CompactLattice& clat = results[0].GetLatticeResult();
+    kaldi::CompactLattice* clat = results[0].GetLatticeResult();
     std::string output;
-    nib::LatticeToString(*word_syms_, clat, &output);
+    nib::LatticeToString(*word_syms_, *clat, &output);
     SetOutputBuffer(output, response, response_output);
   } else if (output_name.compare("CTM") == 0) {
     std::ostringstream oss;

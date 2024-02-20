@@ -28,7 +28,7 @@
 
 #define FAIL_IF_ERR(X, MSG)                                        \
   {                                                                \
-    nic::Error err = (X);                                          \
+    ti::Error err = (X);                                          \
     if (!err.IsOk()) {                                             \
       std::cerr << "error: " << (MSG) << ": " << err << std::endl; \
       exit(1);                                                     \
@@ -38,15 +38,15 @@
 void TritonASRClient::CreateClientContext() {
   clients_.emplace_back();
   TritonClient& client = clients_.back();
-  FAIL_IF_ERR(nic::InferenceServerGrpcClient::Create(&client.triton_client,
+  FAIL_IF_ERR(ti::InferenceServerGrpcClient::Create(&client.triton_client,
                                                      url_, /*verbose*/ false),
               "unable to create triton client");
 
   FAIL_IF_ERR(
       client.triton_client->StartStream(
-          [&](nic::InferResult* result) {
+          [&](ti::InferResult* result) {
             double end_timestamp = gettime_monotonic();
-            std::unique_ptr<nic::InferResult> result_ptr(result);
+            std::unique_ptr<ti::InferResult> result_ptr(result);
             FAIL_IF_ERR(result_ptr->RequestStatus(),
                         "inference request failed");
             std::string request_id;
@@ -111,7 +111,7 @@ void TritonASRClient::SendChunk(uint64_t corr_id, bool start_of_sequence,
                                 bool end_of_sequence, float* chunk,
                                 int chunk_byte_size, const uint64_t index) {
   // Setting options
-  nic::InferOptions options(model_name_);
+  ti::InferOptions options(model_name_);
   options.sequence_id_ = corr_id;
   options.sequence_start_ = start_of_sequence;
   options.sequence_end_ = end_of_sequence;
@@ -120,12 +120,12 @@ void TritonASRClient::SendChunk(uint64_t corr_id, bool start_of_sequence,
                         (end_of_sequence ? "1" : "0");
 
   // Initialize the inputs with the data.
-  nic::InferInput* wave_data_ptr;
+  ti::InferInput* wave_data_ptr;
   std::vector<int64_t> wav_shape{1, samps_per_chunk_};
   FAIL_IF_ERR(
-      nic::InferInput::Create(&wave_data_ptr, "WAV_DATA", wav_shape, "FP32"),
+      ti::InferInput::Create(&wave_data_ptr, "WAV_DATA", wav_shape, "FP32"),
       "unable to create 'WAV_DATA'");
-  std::shared_ptr<nic::InferInput> wave_data_in(wave_data_ptr);
+  std::shared_ptr<ti::InferInput> wave_data_in(wave_data_ptr);
   FAIL_IF_ERR(wave_data_in->Reset(), "unable to reset 'WAV_DATA'");
   uint8_t* wave_data = reinterpret_cast<uint8_t*>(chunk);
   if (chunk_byte_size < max_chunk_byte_size_) {
@@ -136,42 +136,42 @@ void TritonASRClient::SendChunk(uint64_t corr_id, bool start_of_sequence,
               "unable to set data for 'WAV_DATA'");
 
   // Dim
-  nic::InferInput* dim_ptr;
+  ti::InferInput* dim_ptr;
   std::vector<int64_t> shape{1, 1};
-  FAIL_IF_ERR(nic::InferInput::Create(&dim_ptr, "WAV_DATA_DIM", shape, "INT32"),
+  FAIL_IF_ERR(ti::InferInput::Create(&dim_ptr, "WAV_DATA_DIM", shape, "INT32"),
               "unable to create 'WAV_DATA_DIM'");
-  std::shared_ptr<nic::InferInput> dim_in(dim_ptr);
+  std::shared_ptr<ti::InferInput> dim_in(dim_ptr);
   FAIL_IF_ERR(dim_in->Reset(), "unable to reset WAVE_DATA_DIM");
   int nsamples = chunk_byte_size / sizeof(float);
   FAIL_IF_ERR(
       dim_in->AppendRaw(reinterpret_cast<uint8_t*>(&nsamples), sizeof(int32_t)),
       "unable to set data for WAVE_DATA_DIM");
 
-  std::vector<nic::InferInput*> inputs = {wave_data_in.get(), dim_in.get()};
+  std::vector<ti::InferInput*> inputs = {wave_data_in.get(), dim_in.get()};
 
-  std::vector<const nic::InferRequestedOutput*> outputs;
-  std::shared_ptr<nic::InferRequestedOutput> raw_lattice, text;
+  std::vector<const ti::InferRequestedOutput*> outputs;
+  std::shared_ptr<ti::InferRequestedOutput> raw_lattice, text;
   outputs.reserve(2);
   if (end_of_sequence) {
-    nic::InferRequestedOutput* raw_lattice_ptr;
+    ti::InferRequestedOutput* raw_lattice_ptr;
     FAIL_IF_ERR(
-        nic::InferRequestedOutput::Create(&raw_lattice_ptr, "RAW_LATTICE"),
+        ti::InferRequestedOutput::Create(&raw_lattice_ptr, "RAW_LATTICE"),
         "unable to get 'RAW_LATTICE'");
     raw_lattice.reset(raw_lattice_ptr);
     outputs.push_back(raw_lattice.get());
 
     // Request the TEXT results only when required for printing
     if (print_results_) {
-      nic::InferRequestedOutput* text_ptr;
+      ti::InferRequestedOutput* text_ptr;
       FAIL_IF_ERR(
-          nic::InferRequestedOutput::Create(&text_ptr, ctm_ ? "CTM" : "TEXT"),
+          ti::InferRequestedOutput::Create(&text_ptr, ctm_ ? "CTM" : "TEXT"),
           "unable to get 'TEXT' or 'CTM'");
       text.reset(text_ptr);
       outputs.push_back(text.get());
     }
   } else if (print_partial_results_) {
-    nic::InferRequestedOutput* text_ptr;
-    FAIL_IF_ERR(nic::InferRequestedOutput::Create(&text_ptr, "TEXT"),
+    ti::InferRequestedOutput* text_ptr;
+    FAIL_IF_ERR(ti::InferRequestedOutput::Create(&text_ptr, "TEXT"),
                 "unable to get 'TEXT'");
     text.reset(text_ptr);
     outputs.push_back(text.get());
@@ -190,7 +190,7 @@ void TritonASRClient::SendChunk(uint64_t corr_id, bool start_of_sequence,
   }
 
   TritonClient* client = &clients_[corr_id % nclients_];
-  // nic::InferenceServerGrpcClient& triton_client = *client->triton_client;
+  // ti::InferenceServerGrpcClient& triton_client = *client->triton_client;
   FAIL_IF_ERR(client->triton_client->AsyncStreamInfer(options, inputs, outputs),
               "unable to run model");
 }
