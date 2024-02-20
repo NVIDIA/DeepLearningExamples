@@ -87,6 +87,6 @@ class NormSE3(nn.Module):
                 for degree, feat in features.items():
                     norm = clamped_norm(feat, self.NORM_CLAMP)
                     new_norm = self.nonlinearity(self.layer_norms[degree](norm.squeeze(-1)).unsqueeze(-1))
-                    output[degree] = rescale(new_norm, feat, norm)
+                    output[degree] = rescale(feat, norm, new_norm)
 
             return output
