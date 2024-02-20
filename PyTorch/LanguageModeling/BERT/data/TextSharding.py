@@ -135,14 +135,6 @@ class Sharding:
         print('End: Init Output Files')
 
 
-    def get_sentences_per_shard(self, shard):
-        result = 0
-        for article_id in shard:
-            result += len(self.sentences[article_id])
-
-        return result
-
-
     def distribute_articles_over_shards(self):
         print('Start: Distribute Articles Over Shards')
         assert len(self.articles) >= self.n_training_shards + self.n_test_shards, 'There are fewer articles than shards. Please add more data or reduce the number of shards requested.'
@@ -166,6 +158,9 @@ class Sharding:
         consumed_article_set = set({})
         unused_article_set = set(self.articles.keys())
 
+        training_counts = {f: 0 for f in self.output_training_files}
+        test_counts = {f: 0 for f in self.output_test_files}
+
         # Make first pass and add one article worth of lines per file
         for file in self.output_training_files:
             current_article_id = sentence_counts[max_sentences][-1]
@@ -173,6 +168,7 @@ class Sharding:
             self.output_training_files[file].append(current_article_id)
             consumed_article_set.add(current_article_id)
             unused_article_set.remove(current_article_id)
+            training_counts[file] += len(self.sentences[current_article_id])
 
             # Maintain the max sentence count
             while len(sentence_counts[max_sentences]) == 0 and max_sentences > 0:
@@ -188,6 +184,7 @@ class Sharding:
             self.output_test_files[file].append(current_article_id)
             consumed_article_set.add(current_article_id)
             unused_article_set.remove(current_article_id)
+            test_counts[file] += len(self.sentences[current_article_id])
 
             # Maintain the max sentence count
             while len(sentence_counts[max_sentences]) == 0 and max_sentences > 0:
@@ -197,25 +194,16 @@ class Sharding:
                 nominal_sentences_per_test_shard = len(self.sentences[current_article_id])
                 print('Warning: A single article contains more than the nominal number of sentences per test shard.')
 
-        training_counts = []
-        test_counts = []
-
-        for shard in self.output_training_files:
-            training_counts.append(self.get_sentences_per_shard(self.output_training_files[shard]))
-
-        for shard in self.output_test_files:
-            test_counts.append(self.get_sentences_per_shard(self.output_test_files[shard]))
-
-        training_median = statistics.median(training_counts)
-        test_median = statistics.median(test_counts)
+        training_median = statistics.median(training_counts.values())
+        test_median = statistics.median(test_counts.values())
 
         # Make subsequent passes over files to find articles to add without going over limit
         history_remaining = []
         n_history_remaining = 4
 
         while len(consumed_article_set) < len(self.articles):
-            for fidx, file in enumerate(self.output_training_files):
-                nominal_next_article_size = min(nominal_sentences_per_training_shard - training_counts[fidx], max_sentences)
+            for file in self.output_training_files:
+                nominal_next_article_size = min(nominal_sentences_per_training_shard - training_counts[file], max_sentences)
 
                 # Maintain the max sentence count
                 while len(sentence_counts[max_sentences]) == 0 and max_sentences > 0:
@@ -224,7 +212,7 @@ class Sharding:
                 while len(sentence_counts[nominal_next_article_size]) == 0 and nominal_next_article_size > 0:
                     nominal_next_article_size -= 1
 
-                if nominal_next_article_size not in sentence_counts or nominal_next_article_size is 0 or training_counts[fidx] > training_median:
+                if nominal_next_article_size not in sentence_counts or nominal_next_article_size is 0 or training_counts[file] > training_median:
                     continue    # skip adding to this file, will come back later if no file can accept unused articles
 
                 current_article_id = sentence_counts[nominal_next_article_size][-1]
@@ -233,9 +221,10 @@ class Sharding:
                 self.output_training_files[file].append(current_article_id)
                 consumed_article_set.add(current_article_id)
                 unused_article_set.remove(current_article_id)
+                training_counts[file] += len(self.sentences[current_article_id])
 
-            for fidx, file in enumerate(self.output_test_files):
-                nominal_next_article_size = min(nominal_sentences_per_test_shard - test_counts[fidx], max_sentences)
+            for file in self.output_test_files:
+                nominal_next_article_size = min(nominal_sentences_per_test_shard - test_counts[file], max_sentences)
 
                 # Maintain the max sentence count
                 while len(sentence_counts[max_sentences]) == 0 and max_sentences > 0:
@@ -244,7 +233,7 @@ class Sharding:
                 while len(sentence_counts[nominal_next_article_size]) == 0 and nominal_next_article_size > 0:
                     nominal_next_article_size -= 1
 
-                if nominal_next_article_size not in sentence_counts or nominal_next_article_size is 0 or test_counts[fidx] > test_median:
+                if nominal_next_article_size not in sentence_counts or nominal_next_article_size is 0 or test_counts[file] > test_median:
                     continue    # skip adding to this file, will come back later if no file can accept unused articles
 
                 current_article_id = sentence_counts[nominal_next_article_size][-1]
@@ -253,6 +242,7 @@ class Sharding:
                 self.output_test_files[file].append(current_article_id)
                 consumed_article_set.add(current_article_id)
                 unused_article_set.remove(current_article_id)
+                test_counts[file] += len(self.sentences[current_article_id])
 
             # If unable to place articles a few times, bump up nominal sizes by fraction until articles get placed
             if len(history_remaining) == n_history_remaining:
@@ -267,29 +257,19 @@ class Sharding:
                 nominal_sentences_per_training_shard += 1
                 # nominal_sentences_per_test_shard += 1
 
-            training_counts = []
-            test_counts = []
-            for shard in self.output_training_files:
-                training_counts.append(self.get_sentences_per_shard(self.output_training_files[shard]))
-
-            for shard in self.output_test_files:
-                test_counts.append(self.get_sentences_per_shard(self.output_test_files[shard]))
-
-            training_median = statistics.median(training_counts)
-            test_median = statistics.median(test_counts)
+            training_median = statistics.median(training_counts.values())
+            test_median = statistics.median(test_counts.values())
 
             print('Distributing data over shards:', len(unused_article_set), 'articles remaining.')
-
 
         if len(unused_article_set) != 0:
             print('Warning: Some articles did not make it into output files.')
 
-
         for shard in self.output_training_files:
-            print('Training shard:', self.get_sentences_per_shard(self.output_training_files[shard]))
+            print('Training shard:', training_counts[shard])
 
         for shard in self.output_test_files:
-            print('Test shard:', self.get_sentences_per_shard(self.output_test_files[shard]))
+            print('Test shard:', test_counts[shard])
 
         print('End: Distribute Articles Over Shards')
 
