@@ -16,7 +16,7 @@ In this collection, we will cover:
 
 Source: https://developer.nvidia.com/blog/how-to-build-domain-specific-automatic-speech-recognition-models-on-gpus/
 
-Speech to text is a challenging process, as it introduces a series of tasks which are as follows-
+Speech to text is a challenging process, as it introduces a series of tasks which are as follows.
 
 ### Feature extraction: 
 Initially we resample the raw analog audio signals into convert into the discrete form following with some traditional signal preprocessing techniques such as standardization, windowing and conversion to a machine-understandable form by spectrogram transformation. 
@@ -50,8 +50,8 @@ Medical doctors and clinicians can avail this technique in the respective field 
 ---
 ## Where to get started
 
-NVIDIA provides Deep Learning Examples for Image Segmentation on its GitHub repository. These examples provide you with easy to consume and highly optimized scripts for both training and inferencing. The quick start guide at our GitHub repository will help you in setting up the environment using NGC Docker Images, download pre-trained models from NGC and adapt the model training and inference for your application/use-case. 
-Here are the examples relevant for image segmentation, directly from [Deep Learning Examples](https://github.com/NVIDIA/DeepLearningExamples):
+NVIDIA provides Deep Learning Examples for speech-to-text on its GitHub repository. These examples provide you with easy to consume and highly optimized scripts for both training and inferencing. The quick start guide at our GitHub repository will help you in setting up the environment using NGC Docker Images, download pre-trained models from NGC and adapt the model training and inference for your application/use-case. 
+Here are the examples relevant for speech-to-text, directly from [Deep Learning Examples](https://github.com/NVIDIA/DeepLearningExamples):
 
 1. Jasper on Librispeech for English ASR using PyTorch
 - [Git repository](https://github.com/NVIDIA/DeepLearningExamples/tree/master/PyTorch/SpeechRecognition/Jasper)
