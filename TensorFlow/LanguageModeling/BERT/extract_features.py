@@ -27,7 +27,7 @@ import modeling
 import tokenization
 import tensorflow as tf
 
-flags = tf.flags
+flags = tf.compat.v1.flags
 
 FLAGS = flags.FLAGS
 
@@ -416,4 +416,4 @@ if __name__ == "__main__":
   flags.mark_flag_as_required("bert_config_file")
   flags.mark_flag_as_required("init_checkpoint")
   flags.mark_flag_as_required("output_file")
-  tf.app.run()
+  tf.compat.v1.app.run()

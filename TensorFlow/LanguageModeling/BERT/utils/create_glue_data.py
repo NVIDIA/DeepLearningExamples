@@ -29,7 +29,7 @@ import horovod.tensorflow as hvd
 import time
 import csv
 
-flags = tf.flags
+flags = tf.compat.v1.flags
 FLAGS = None
 
 def extract_flags():

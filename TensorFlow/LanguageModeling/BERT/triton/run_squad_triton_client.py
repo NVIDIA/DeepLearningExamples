@@ -28,7 +28,7 @@ else:
   import Queue as queue
 
 
-flags = tf.flags
+flags = tf.compat.v1.flags
 FLAGS = flags.FLAGS
 
 ## Required parameters

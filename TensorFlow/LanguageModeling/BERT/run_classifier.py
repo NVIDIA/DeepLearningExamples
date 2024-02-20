@@ -37,7 +37,7 @@ from utils.create_glue_data import *
 import numpy as np
 import tf_metrics
 
-flags = tf.flags
+flags = tf.compat.v1.flags
 
 FLAGS = flags.FLAGS
 
