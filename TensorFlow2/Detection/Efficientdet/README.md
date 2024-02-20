@@ -156,7 +156,7 @@ To train your model using mixed or TF32 precision with Tensor Cores or using FP3
 ### 1. Clone the repository
 ```
 git clone https://github.com/NVIDIA/DeepLearningExamples.git
-cd DeepLearningExamples/Tensorflow2/Detection/EfficientDet
+cd DeepLearningExamples/TensorFlow2/Detection/Efficientdet
 ```
 
 ### 2. Download and preprocess the dataset
@@ -173,7 +173,7 @@ By default, the data is organized into the following structure:
   val-*****-of-00032.tfrecord
 ```
 
-### 3. Build the EfficientDet PyTorch NGC container
+### 3. Build the EfficientDet TensorFlow 2 NGC container
 ```
 bash scripts/docker/build.sh
 ```
