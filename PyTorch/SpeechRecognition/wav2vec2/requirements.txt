@@ -1,5 +1,5 @@
 editdistance==0.6.0
-librosa==0.10.1
+librosa>=0.10.1
 omegaconf==2.0.6  # optional for handling certain Fairseq ckpts
 pyarrow==6.0.1
 soundfile==0.12.1

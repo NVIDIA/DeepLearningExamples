@@ -31,7 +31,6 @@
 """https://github.com/NVIDIA/tacotron2"""
 
 import torch
-from librosa.filters import mel as librosa_mel_fn
 
 
 class LinearNorm(torch.nn.Module):

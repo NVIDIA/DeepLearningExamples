@@ -28,7 +28,7 @@ import sys
 import time
 
 import fire
-import librosa
+import soundfile
 import torch
 
 from fastspeech.data_load import PadDataLoader
@@ -158,7 +158,7 @@ def generate(hparam='infer.yaml',
                     wav = wav[:wav_len]
 
                     path = os.path.join(results_path, text[:MAX_FILESIZE] + ".wav")
-                    librosa.output.write_wav(path, wav, hp.sr)
+                    soundfile.write(path, wav, hp.sr)
 
         except StopIteration:
             tprint("Generation has been done.")
