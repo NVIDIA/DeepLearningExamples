@@ -127,8 +127,8 @@ We use [NVIDIA DALI](https://github.com/NVIDIA/DALI),
 which speeds up data loading when CPU becomes a bottleneck.
 DALI can use CPU or GPU, and outperforms the PyTorch native dataloader.
 
-Run training with `--data-backends dali-gpu` or `--data-backends dali-cpu` to enable DALI.
-For DGXA100 and DGX1 we recommend `--data-backends dali-cpu`.
+Run training with `--data-backend dali-gpu` or `--data-backend dali-cpu` to enable DALI.
+For DGXA100 and DGX1 we recommend `--data-backend dali-cpu`.
 
 ### Mixed precision training
 
@@ -172,7 +172,7 @@ To enable mixed precision, you can:
 
 #### Enabling TF32
 
-TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs.
 
 TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
 

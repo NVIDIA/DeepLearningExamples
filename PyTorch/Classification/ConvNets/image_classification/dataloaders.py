@@ -41,13 +41,13 @@ from image_classification.autoaugment import AutoaugmentImageNetPolicy
 DATA_BACKEND_CHOICES = ["pytorch", "synthetic"]
 try:
     from nvidia.dali.plugin.pytorch import DALIClassificationIterator
-    from nvidia.dali.pipeline import Pipeline
-    import nvidia.dali.ops as ops
     import nvidia.dali.types as types
+
+    from image_classification.dali import training_pipe, validation_pipe
 
     DATA_BACKEND_CHOICES.append("dali-gpu")
     DATA_BACKEND_CHOICES.append("dali-cpu")
-except ImportError:
+except ImportError as e:
     print(
         "Please install DALI from https://www.github.com/NVIDIA/DALI to run this example."
     )
@@ -77,138 +77,26 @@ def load_jpeg_from_file(path, cuda=True):
     return input
 
 
-class HybridTrainPipe(Pipeline):
-    def __init__(
-        self,
-        batch_size,
-        num_threads,
-        device_id,
-        data_dir,
-        interpolation,
-        crop,
-        dali_cpu=False,
-    ):
-        super(HybridTrainPipe, self).__init__(
-            batch_size, num_threads, device_id, seed=12 + device_id
-        )
-        interpolation = {
-            "bicubic": types.INTERP_CUBIC,
-            "bilinear": types.INTERP_LINEAR,
-            "triangular": types.INTERP_TRIANGULAR,
-        }[interpolation]
-        if torch.distributed.is_initialized():
-            rank = torch.distributed.get_rank()
-            world_size = torch.distributed.get_world_size()
-        else:
-            rank = 0
-            world_size = 1
-
-        self.input = ops.FileReader(
-            file_root=data_dir,
-            shard_id=rank,
-            num_shards=world_size,
-            random_shuffle=True,
-            pad_last_batch=True,
-        )
-
-        if dali_cpu:
-            dali_device = "cpu"
-            self.decode = ops.ImageDecoder(device=dali_device, output_type=types.RGB)
-        else:
-            dali_device = "gpu"
-            # This padding sets the size of the internal nvJPEG buffers to be able to handle all images from full-sized ImageNet
-            # without additional reallocations
-            self.decode = ops.ImageDecoder(
-                device="mixed",
-                output_type=types.RGB,
-                device_memory_padding=211025920,
-                host_memory_padding=140544512,
-            )
-
-        self.res = ops.RandomResizedCrop(
-            device=dali_device,
-            size=[crop, crop],
-            interp_type=interpolation,
-            random_aspect_ratio=[0.75, 4.0 / 3.0],
-            random_area=[0.08, 1.0],
-            num_attempts=100,
-            antialias=False,
-        )
-
-        self.cmnp = ops.CropMirrorNormalize(
-            device="gpu",
-            dtype=types.FLOAT,
-            output_layout=types.NCHW,
-            crop=(crop, crop),
-            mean=[0.485 * 255, 0.456 * 255, 0.406 * 255],
-            std=[0.229 * 255, 0.224 * 255, 0.225 * 255],
-        )
-        self.coin = ops.CoinFlip(probability=0.5)
-
-    def define_graph(self):
-        rng = self.coin()
-        self.jpegs, self.labels = self.input(name="Reader")
-        images = self.decode(self.jpegs)
-        images = self.res(images)
-        output = self.cmnp(images.gpu(), mirror=rng)
-        return [output, self.labels]
-
-
-class HybridValPipe(Pipeline):
-    def __init__(
-        self, batch_size, num_threads, device_id, data_dir, interpolation, crop, size
-    ):
-        super(HybridValPipe, self).__init__(
-            batch_size, num_threads, device_id, seed=12 + device_id
-        )
-        interpolation = {
-            "bicubic": types.INTERP_CUBIC,
-            "bilinear": types.INTERP_LINEAR,
-            "triangular": types.INTERP_TRIANGULAR,
-        }[interpolation]
-        if torch.distributed.is_initialized():
-            rank = torch.distributed.get_rank()
-            world_size = torch.distributed.get_world_size()
-        else:
-            rank = 0
-            world_size = 1
-
-        self.input = ops.FileReader(
-            file_root=data_dir,
-            shard_id=rank,
-            num_shards=world_size,
-            random_shuffle=False,
-            pad_last_batch=True,
-        )
-
-        self.decode = ops.ImageDecoder(device="mixed", output_type=types.RGB)
-        self.res = ops.Resize(
-            device="gpu",
-            resize_shorter=size,
-            interp_type=interpolation,
-            antialias=False,
-        )
-        self.cmnp = ops.CropMirrorNormalize(
-            device="gpu",
-            dtype=types.FLOAT,
-            output_layout=types.NCHW,
-            crop=(crop, crop),
-            mean=[0.485 * 255, 0.456 * 255, 0.406 * 255],
-            std=[0.229 * 255, 0.224 * 255, 0.225 * 255],
-        )
-
-    def define_graph(self):
-        self.jpegs, self.labels = self.input(name="Reader")
-        images = self.decode(self.jpegs)
-        images = self.res(images)
-        output = self.cmnp(images)
-        return [output, self.labels]
-
-
 class DALIWrapper(object):
+
     def gen_wrapper(dalipipeline, num_classes, one_hot, memory_format):
         for data in dalipipeline:
-            input = data[0]["data"].contiguous(memory_format=memory_format)
+            if memory_format == torch.channels_last:
+                # If we requested the data in channels_last form, utilize the fact that DALI
+                # can return it as NHWC. The network expects NCHW shape with NHWC internal memory,
+                # so we can keep the memory and just create a view with appropriate shape and
+                # strides reflacting that memory layouyt
+                shape = data[0]["data"].shape
+                stride = data[0]["data"].stride()
+
+                # permute shape and stride from NHWC to NCHW
+                def nhwc_to_nchw(t):
+                    return t[0], t[3], t[1], t[2]
+
+                input = torch.as_strided(data[0]["data"], size=nhwc_to_nchw(shape),
+                                         stride=nhwc_to_nchw(stride))
+            else:
+                input = data[0]["data"].contiguous(memory_format=memory_format)
             target = torch.reshape(data[0]["label"], [-1]).cuda().long()
             if one_hot:
                 target = expand(num_classes, torch.float, target)
@@ -227,7 +115,7 @@ class DALIWrapper(object):
         )
 
 
-def get_dali_train_loader(dali_cpu=False):
+def get_dali_train_loader(dali_device="gpu"):
     def gdtl(
         data_path,
         image_size,
@@ -249,21 +137,27 @@ def get_dali_train_loader(dali_cpu=False):
             rank = 0
             world_size = 1
 
-        traindir = os.path.join(data_path, "train")
-        if augmentation is not None:
-            raise NotImplementedError(
-                f"Augmentation {augmentation} for dali loader is not supported"
-            )
+        interpolation = {
+            "bicubic": types.INTERP_CUBIC,
+            "bilinear": types.INTERP_LINEAR,
+            "triangular": types.INTERP_TRIANGULAR,
+        }[interpolation]
 
-        pipe = HybridTrainPipe(
-            batch_size=batch_size,
-            num_threads=workers,
-            device_id=rank % torch.cuda.device_count(),
-            data_dir=traindir,
-            interpolation=interpolation,
-            crop=image_size,
-            dali_cpu=dali_cpu,
-        )
+        output_layout = "HWC" if memory_format == torch.channels_last else "CHW"
+
+        traindir = os.path.join(data_path, "train")
+
+        pipeline_kwargs = {
+            "batch_size" : batch_size,
+            "num_threads" : workers,
+            "device_id" : rank % torch.cuda.device_count(),
+            "seed": 12 + rank % torch.cuda.device_count(),
+        }
+
+        pipe = training_pipe(data_dir=traindir, interpolation=interpolation, image_size=image_size,
+                             output_layout=output_layout, automatic_augmentation=augmentation,
+                             dali_device=dali_device, rank=rank, world_size=world_size,
+                             **pipeline_kwargs)
 
         pipe.build()
         train_loader = DALIClassificationIterator(
@@ -299,17 +193,26 @@ def get_dali_val_loader():
             rank = 0
             world_size = 1
 
+        interpolation = {
+            "bicubic": types.INTERP_CUBIC,
+            "bilinear": types.INTERP_LINEAR,
+            "triangular": types.INTERP_TRIANGULAR,
+        }[interpolation]
+
+        output_layout = "HWC" if memory_format == torch.channels_last else "CHW"
+
         valdir = os.path.join(data_path, "val")
 
-        pipe = HybridValPipe(
-            batch_size=batch_size,
-            num_threads=workers,
-            device_id=rank % torch.cuda.device_count(),
-            data_dir=valdir,
-            interpolation=interpolation,
-            crop=image_size,
-            size=image_size + crop_padding,
-        )
+        pipeline_kwargs = {
+            "batch_size" : batch_size,
+            "num_threads" : workers,
+            "device_id" : rank % torch.cuda.device_count(),
+            "seed": 12 + rank % torch.cuda.device_count(),
+        }
+
+        pipe = validation_pipe(data_dir=valdir, interpolation=interpolation,
+                               image_size=image_size + crop_padding, image_crop=image_size,
+                               output_layout=output_layout, **pipeline_kwargs)
 
         pipe.build()
         val_loader = DALIClassificationIterator(

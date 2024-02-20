@@ -92,7 +92,7 @@ This model uses SGD optimizer for B0 models and RMSPROP optimizer alpha=0.853  e
   * 0.0125 for 128 batch size for B0 models
   * 4.09e-06 for 32 batch size for B4 models
 scale the learning rate.
-* Learning rate schedule: 
+* Learning rate schedule:
   * cosine LR schedule for B0 models
   * linear LR schedule for B4 models
 * Weight decay (WD):
@@ -128,7 +128,7 @@ The following features are supported by this model:
 
 | Feature               | EfficientNet
 |-----------------------|--------------------------
-|[DALI](https://docs.nvidia.com/deeplearning/dali/release-notes/index.html)   |   Yes (without autoaugmentation)
+|[DALI](https://docs.nvidia.com/deeplearning/dali/release-notes/index.html)   |   Yes
 |[APEX AMP](https://nvidia.github.io/apex/amp.html) | Yes
 |[QAT](https://github.com/NVIDIA/TensorRT/tree/master/tools/pytorch-quantization)  |   Yes
 
@@ -143,10 +143,11 @@ We use [NVIDIA DALI](https://github.com/NVIDIA/DALI),
 which speeds up data loading when CPU becomes a bottleneck.
 DALI can use CPU or GPU, and outperforms the PyTorch native dataloader.
 
-Run training with `--data-backends dali-gpu` or `--data-backends dali-cpu` to enable DALI.
-For DGXA100 and DGX1 we recommend `--data-backends dali-cpu`.
+Run training with `--data-backend dali-gpu` or `--data-backend dali-cpu` to enable DALI.
+For DGXA100 and DGX1 we recommend `--data-backend dali-gpu`.
 
-DALI currently does not support Autoaugmentation, so for best accuracy it has to be disabled.
+DALI supports [AutoAugment](https://docs.nvidia.com/deeplearning/dali/user-guide/docs/auto_aug/auto_augment.html),
+as well as other [Automatic Augmentation schemes](https://docs.nvidia.com/deeplearning/dali/user-guide/docs/auto_aug/auto_aug.html).
 
 
 **[APEX](https://github.com/NVIDIA/apex)**
@@ -199,7 +200,7 @@ To enable mixed precision, you can:
 
 #### Enabling TF32
 
-TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs. 
+TensorFloat-32 (TF32) is the new math mode in [NVIDIA A100](https://www.nvidia.com/en-us/data-center/a100/) GPUs for handling the matrix math also called tensor operations. TF32 running on Tensor Cores in A100 GPUs can provide up to 10x speedups compared to single-precision floating-point math (FP32) on Volta GPUs.
 
 TF32 Tensor Cores can speed up networks using FP32, typically with no loss of accuracy. It is more robust than FP16 for models which require high dynamic range for weights or activations.
 
@@ -319,9 +320,9 @@ For example:
 You can download pre-trained weights from NGC:
 
 ```bash
-wget --content-disposition  -O 
+wget --content-disposition  -O
 
-unzip 
+unzip
 ```
 
 To run inference on ImageNet, run:
@@ -441,12 +442,12 @@ URL for each model can be found in the following table:
 
 | **Model** | **NGC weights URL** |
 |:---------:|:-------------------:|
-| efficientnet-b0 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b0_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-b0_210412.pth | 
-| efficientnet-b4 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b4_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-b4_210412.pth | 
-| efficientnet-widese-b0 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_widese_b0_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-widese-b0_210412.pth | 
-| efficientnet-widese-b4 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_widese_b4_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-widese-b4_210412.pth | 
-| efficientnet-quant-b0 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b0_pyt_qat_ckpt_fp32/versions/21.03.0/files/nvidia-efficientnet-quant-b0-130421.pth | 
-| efficientnet-quant-b4 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b4_pyt_qat_ckpt_fp32/versions/21.03.0/files/nvidia-efficientnet-quant-b4-130421.pth | 
+| efficientnet-b0 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b0_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-b0_210412.pth |
+| efficientnet-b4 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b4_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-b4_210412.pth |
+| efficientnet-widese-b0 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_widese_b0_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-widese-b0_210412.pth |
+| efficientnet-widese-b4 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_widese_b4_pyt_amp/versions/20.12.0/files/nvidia_efficientnet-widese-b4_210412.pth |
+| efficientnet-quant-b0 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b0_pyt_qat_ckpt_fp32/versions/21.03.0/files/nvidia-efficientnet-quant-b0-130421.pth |
+| efficientnet-quant-b4 | https://api.ngc.nvidia.com/v2/models/nvidia/efficientnet_b4_pyt_qat_ckpt_fp32/versions/21.03.0/files/nvidia-efficientnet-quant-b4-130421.pth |
 
 To run inference on ImageNet, run:
 
@@ -469,7 +470,7 @@ During the QAT process, evaluation is done in the same way as during standard tr
 
 or to evaluate a created checkpoint with the flag `--evaluate`:
 
-`python ./quant_main.py --arch efficientnet-quant-<version> --evaluate --epochs 1 --resume <path to checkpoint> -b <batch size> <path to imagenet>` 
+`python ./quant_main.py --arch efficientnet-quant-<version> --evaluate --epochs 1 --resume <path to checkpoint> -b <batch size> <path to imagenet>`
 
 It also can run on multi-GPU in an identical way as the standard `main.py` script:
 

@@ -105,9 +105,9 @@ anchors:
         mixup: 0.2
         lr_schedule: cosine
         momentum: 0.9
-        warmup: 16 
+        warmup: 16
         epochs: 400
-        data_backend: pytorch
+        data_backend: dali-gpu
         augmentation: autoaugment
         num_classes: 1000
         interpolation: bicubic

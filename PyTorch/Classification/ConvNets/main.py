@@ -101,7 +101,7 @@ def add_parser_arguments(parser, skip_arch=False):
         "--interpolation",
         metavar="INTERPOLATION",
         default="bilinear",
-        help="interpolation type for resizing images: bilinear, bicubic or triangular(DALI only)",
+        help="interpolation type for resizing images: bilinear, bicubic or triangular (DALI only)",
     )
     if not skip_arch:
         model_names = available_models().keys()
@@ -129,7 +129,7 @@ def add_parser_arguments(parser, skip_arch=False):
         default=2,
         type=int,
         metavar="N",
-        help="number of samples prefetched by each loader",
+        help="number of samples prefetched by each loader (PyTorch only)",
     )
     parser.add_argument(
         "--epochs",
@@ -498,10 +498,10 @@ def prepare_for_training(args, model_args, model_arch):
         get_train_loader = get_pytorch_train_loader
         get_val_loader = get_pytorch_val_loader
     elif args.data_backend == "dali-gpu":
-        get_train_loader = get_dali_train_loader(dali_cpu=False)
+        get_train_loader = get_dali_train_loader(dali_device="gpu")
         get_val_loader = get_dali_val_loader()
     elif args.data_backend == "dali-cpu":
-        get_train_loader = get_dali_train_loader(dali_cpu=True)
+        get_train_loader = get_dali_train_loader(dali_device="cpu")
         get_val_loader = get_dali_val_loader()
     elif args.data_backend == "synthetic":
         get_val_loader = get_synthetic_loader
