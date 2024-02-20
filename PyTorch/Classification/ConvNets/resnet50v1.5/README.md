@@ -310,14 +310,14 @@ To run a non standard configuration use:
 
 * For 1 GPU
     * FP32
-        `python ./main.py --arch resnet50 -c fanin --label-smoothing 0.1 <path to imagenet>`
-        `python ./main.py --arch resnet50 -c fanin --label-smoothing 0.1 --amp --static-loss-scale 256 <path to imagenet>`
+        `python ./main.py --arch resnet50 --label-smoothing 0.1 <path to imagenet>`
+        `python ./main.py --arch resnet50 --label-smoothing 0.1 --amp --static-loss-scale 256 <path to imagenet>`
 
 * For multiple GPUs
     * FP32
-        `python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 -c fanin --label-smoothing 0.1 <path to imagenet>`
+        `python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 --label-smoothing 0.1 <path to imagenet>`
     * AMP
-        `python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 -c fanin --label-smoothing 0.1 --amp --static-loss-scale 256 <path to imagenet>`
+        `python ./multiproc.py --nproc_per_node 8 ./main.py --arch resnet50 --label-smoothing 0.1 --amp --static-loss-scale 256 <path to imagenet>`
 
 Use `python ./main.py -h` to obtain the list of available options in the `main.py` script.
 
