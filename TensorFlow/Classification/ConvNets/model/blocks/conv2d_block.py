@@ -39,10 +39,10 @@ def conv2d_block(
 ):
 
     if not isinstance(conv2d_hparams, tf.contrib.training.HParams):
-        raise ValueError("The paramater `conv2d_hparams` is not of type `HParams`")
+        raise ValueError("The parameter `conv2d_hparams` is not of type `HParams`")
 
     if not isinstance(batch_norm_hparams, tf.contrib.training.HParams) and use_batch_norm:
-        raise ValueError("The paramater `conv2d_hparams` is not of type `HParams`")
+        raise ValueError("The parameter `conv2d_hparams` is not of type `HParams`")
 
     with tf.variable_scope(name):
         if cardinality == 1:
