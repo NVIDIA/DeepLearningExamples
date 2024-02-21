@@ -3,3 +3,4 @@ sacrebleu==1.2.10
 sacremoses==0.0.19
 pynvml==8.0.4
 git+https://github.com/rsennrich/subword-nmt.git@48ba99e657591c329e0003f0c6e32e493fa959ef
+git+https://github.com/NVIDIA/dllogger#egg=dllogger
