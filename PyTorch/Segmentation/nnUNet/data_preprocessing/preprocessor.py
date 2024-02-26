@@ -217,7 +217,7 @@ class Preprocessor:
         spacing = np.array(spacing)
         target_spacing = np.median(spacing, axis=0)
         if max(target_spacing) / min(target_spacing) >= 3:
-            lowres_axis = np.argmin(target_spacing)
+            lowres_axis = np.argmax(target_spacing)
             target_spacing[lowres_axis] = np.percentile(spacing[:, lowres_axis], 10)
         self.target_spacing = list(target_spacing)
 
