@@ -68,7 +68,7 @@ class Dataset:
     def _get_val_train_indices(self, length, fold, ratio=0.8):
         assert 0 < ratio <= 1, "Train/total data ratio must be in range (0.0, 1.0]"
         np.random.seed(self._seed)
-        indices = np.arange(0, length, 1, dtype=np.int)
+        indices = np.arange(0, length, 1, dtype=np.int32)
         np.random.shuffle(indices)
         if fold is not None:
             indices = deque(indices)
