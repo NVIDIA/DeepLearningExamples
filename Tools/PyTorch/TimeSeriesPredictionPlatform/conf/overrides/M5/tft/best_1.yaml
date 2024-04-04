@@ -1,0 +1,27 @@
+trainer:
+  config:
+    batch_size: 1024
+    ema: False
+    num_epochs: 20
+  
+  optimizer:
+    lr: 0.0005273969385515224
+  
+  criterion:
+    _target_: criterion.TweedieLoss
+    p: 1.2220328364966142
+
+model:
+  config:
+    dropout: 0.6037804765285399
+    hidden_size: 384
+    n_head: 1 
+
+dataset:
+  config:
+    memory_mapped: True 
+    train_samples: 1000000
+
+evaluator:
+  config:
+    save_predictions: True

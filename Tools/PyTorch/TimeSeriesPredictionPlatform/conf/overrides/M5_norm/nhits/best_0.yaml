@@ -1,0 +1,32 @@
+trainer:
+  config:
+    ema_decay: 0.9718722865939765
+    batch_size: 16384
+    ema: True
+    num_epochs: 30
+  
+  optimizer:
+    lr: 0.00035461667991371743
+  
+  criterion:
+    _target_: torch.nn.L1Loss
+
+model:
+  config:
+    activation: LeakyReLU
+    pooling_mode: AvgPool1d
+    hidden_size: 2048
+    n_blocks: [1,1,1]
+    n_freq_downsample: [6,2,1]
+    n_pool_kernel_size: [4,2,1]
+    n_mlp_layers: 4
+
+dataset:
+  config:
+    memory_mapped: True 
+    train_samples: 1000000
+
+evaluator:
+  config:
+    save_predictions: True
+    batch_size: 16384

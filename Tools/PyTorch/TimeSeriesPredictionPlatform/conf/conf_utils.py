@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,8 +14,10 @@
 
 from omegaconf import OmegaConf
 from data.data_utils import InputTypes, DataTypes, FeatureSpec
+import functools
+from hydra.utils import get_method
 
-OmegaConf.register_new_resolver("and", lambda x, y: x and y, use_cache=True)
+OmegaConf.register_new_resolver("and", lambda x, y: bool(x and y), use_cache=True)
 OmegaConf.register_new_resolver("feature.selector",
         lambda x,feat_type,embed_type:
             OmegaConf.create([elem for elem in x if elem.feature_type == feat_type and elem.feature_embed_type == embed_type])
@@ -27,10 +29,12 @@ OmegaConf.register_new_resolver("len", len)
 OmegaConf.register_new_resolver("cmp", lambda x, y: x == y)
 OmegaConf.register_new_resolver("cont.lower", lambda x, y: y.lower() in x.lower())
 
-# XXX I don't know whether it is the best idea to allow user to sum over nested structure without checks
 def sum_nested(*args):
     if len(args) == 1 and isinstance(args[0], (int, float)):
         return args[0]
     return sum(arg if isinstance(arg, (int, float)) else sum_nested(*arg) for arg in args)
 
 OmegaConf.register_new_resolver("sum", sum_nested)
+
+def partial(func, *args, **kwargs):
+    return functools.partial(get_method(func), *args, **kwargs)

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,20 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from typing import Dict, List, Optional, Tuple
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from apex.normalization.fused_layer_norm import FusedLayerNorm
 from torch import Tensor
 
 from models.tft_pyt.modeling import *
 
 
 class LSTM(nn.Module):
-    """ 
-    Implementation from LSTM portion of https://arxiv.org/abs/1912.09363 
+    """
+    Implementation from LSTM portion of https://arxiv.org/abs/1912.09363
     """
 
     def __init__(self, config):
@@ -58,7 +54,7 @@ class LSTM(nn.Module):
             _historical_inputs.insert(0, t_observed_inp[:, : self.encoder_steps, :])
 
         historical_inputs = torch.cat(_historical_inputs, dim=-2)
-        future_inputs = t_known_inp[:, self.encoder_steps :]
+        future_inputs = t_known_inp[:, self.encoder_steps:]
 
         # Encoders
         historical_features, _ = self.history_vsn(historical_inputs, cs)

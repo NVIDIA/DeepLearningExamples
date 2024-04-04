@@ -1,4 +1,4 @@
-/# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,4 +27,5 @@ python launch_training.py \
 	hydra/sweeper=optuna           \
     hydra.sweeper.direction=[minimize,minimize] \
 	hydra.sweeper.n_trials=3       \
-	hydra.sweeper.n_jobs=1         \
+	hydra/launcher=joblib 		   \
+	hydra.launcher.n_jobs=1

@@ -1,0 +1,27 @@
+model:
+  config:
+    n_head: 1
+    hidden_size: 256
+    dropout: 0.3010440002313035
+    quantiles: [0.1, 0.5, 0.9]
+    output_selector: 1
+
+dataset:
+  config:
+    train_samples: 1000000
+    MultiID: False
+    binarized: True
+
+trainer:
+  config:
+    batch_size: 1024
+    num_epochs: 15
+    ema: true
+    ema_decay: 0.9936653681182668
+
+  optimizer:
+    lr: 0.0012094445645442153
+
+  criterion:
+    _target_: criterion.QuantileLoss
+    quantiles: [0.1, 0.5, 0.9]

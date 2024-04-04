@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# SPDX-License-Identifier: Apache-2.0
 import sys
 import numpy as np
 
 from abc import ABC, abstractmethod
+from numba import jit, prange
 
 
 class AbstractMetric(ABC):
@@ -24,6 +26,86 @@ class AbstractMetric(ABC):
     def __call__(pred, label, weights):
         pass
 
+
+class TemporalDistortionIndex(AbstractMetric):
+    name = "TDI"
+
+    @staticmethod
+    @jit(nopython=True, parallel=True)
+    def _calculate_tdi(X, Y):
+        """Calculate TDI scores
+        
+        Parameters
+        ----------
+        X: np.ndarray
+            2D array with shape (B x seq_len) of predictions
+        Y: np.ndarray
+            2D array with shape (B x seq_len) of labels
+        
+        Returns
+        -------
+        np.ndarray
+            tdi scores for each example
+        """
+
+        batch_size, n  = X.shape
+        tdis = np.full(batch_size, 0, dtype=np.float64)
+        for tidx in prange(batch_size):
+            d = np.abs(X[tidx].reshape(-1, 1) - Y[tidx])
+            dist_matrix = np.ones((n, 2), dtype=np.float64) * np.inf
+            step_matrix = np.full((n, n), -1, dtype=np.int8)
+
+            dist_matrix[:, 0] = np.cumsum(d[:, 0])
+            step_matrix[0, 1:] = 1
+            step_matrix[1:, 0] = 2
+            pattern_cost = np.ones(3, dtype=np.float64)
+
+            for j in range(1, n):
+                dist_matrix[0, j%2] = dist_matrix[0, (j-1)%2] + d[0, j]
+                for i in range(1, n):
+                    # modulo operator is used to avoid copying memory 
+                    # from column 1 to column 0 at the end of iteration (traid memops for ops)
+                    #diagonal
+                    pattern_cost[0] = dist_matrix[i-1, (j-1)%2] + d[i, j] * 2
+                    #left
+                    pattern_cost[1] = dist_matrix[i, (j-1)%2] + d[i, j]
+                    #up
+                    pattern_cost[2] = dist_matrix[i-1, j%2] + d[i, j]
+                    
+                    step = np.argmin(pattern_cost)
+                    dist_matrix[i, j%2] = pattern_cost[step]
+                    step_matrix[i, j] = step
+            tdi = 0.0
+            y = 0.0
+            dx = 0
+            dy = 0
+            step = -1
+            i = n-1
+            j = n-1
+            while i != 0 or j != 0:
+                step = int(step_matrix[i, j])
+                if i < 0 or j < 0:break
+                dx = int((step == 0) + 1)
+                dy = int((step == 2) - (step == 1))
+                tdi += abs(y + float(dy) / 2) * float(dx)
+                y = y + dy
+                i -= int((dx + dy) / 2)
+                j -= int((dx - dy) / 2)
+            tdis[tidx] = tdi
+        return tdis
+                        
+
+    @staticmethod
+    def __call__(pred, label, weights):
+        if weights.size:
+            print('Weights are not supported for TDI metric', file=sys.stderr)
+        normalizer = (pred.shape[1]-1)**2
+        if not pred.flags['C_CONTIGUOUS']:
+            pred = np.ascontiguousarray(pred)
+        tdi = np.mean(TemporalDistortionIndex._calculate_tdi(pred, label)) / normalizer
+        return tdi
+
+
 class SMAPE(AbstractMetric):
     name = "SMAPE"
 
@@ -31,8 +113,10 @@ class SMAPE(AbstractMetric):
     def __call__(preds, labels, weights):
         if not weights.size:
             weights = None
-        return 100 * np.average(2 * np.abs(preds - labels) / (np.abs(labels) + np.abs(preds)), weights=weights)
-
+        a = 2 * np.abs(preds - labels)
+        b = np.abs(labels) + np.abs(preds)
+        b[b == 0] = 1  # numerator for this values is also 0 anyway
+        return 100 * np.average(a / b, weights=weights)
 
 
 def normalised_quantile_loss(y_pred, y, quantile, weights=None):                                       
@@ -65,6 +149,7 @@ class P90_loss(AbstractMetric):
     @staticmethod
     def __call__(labels, preds, weights):
         return normalised_quantile_loss(labels, preds, 0.9,weights)
+
 
 # Normalized Deviation
 class ND(AbstractMetric):
@@ -163,4 +248,5 @@ METRICS = {
     "RMSE": RMSE,
     "R_Squared": R_Squared,
     "ND": ND,
+    "TDI": TemporalDistortionIndex
 }

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,16 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# SPDX-License-Identifier: Apache-2.0
+import sys
+import gc
 import warnings
-import os
-import hydra
-from omegaconf import OmegaConf
-import torch
 
-import conf.conf_utils
+from hydra.core.hydra_config import HydraConfig
+import conf.conf_utils  # loads resolvers
+import hydra
+import torch
 from distributed_utils import is_main_process, init_distributed, init_parallel
-from training.utils import set_seed, get_optimization_objectives
+from evaluators.evaluator import unpack_predictions
 from loggers.log_helper import log_parameters
+from training.utils import set_seed, get_optimization_objectives
+
 warnings.filterwarnings("ignore")
 
 
@@ -34,35 +38,62 @@ def main(config):
 
     train, valid, test = hydra.utils.call(config.dataset)
     evaluator = hydra.utils.instantiate(config.evaluator, test_data=test)
+    logger = hydra.utils.call(config.logger)
+    log_parameters(logger, config)
 
     if 'CTLTrainer' in trainer_type:
-
         init_parallel()
         init_distributed()
-        model = model.to(device=config.model.config.device)
+        model = model.to(device=config.model.config.device)  # This has to be done before recursive trainer instantiation
         trainer = hydra.utils.instantiate(
             config.trainer,
             optimizer={'params': model.parameters()},
             model=model,
             train_dataset=train,
             valid_dataset=valid,
+            logger=logger,
         )
-        log_parameters(trainer.logger, config)
 
-        trainer.train()
+        try:
+            trainer.train()
+        except RuntimeError as e:
+            if 'CUDNN_STATUS_NOT_INITIALIZED' in str(e):
+                print(str(e), file=sys.stderr)
+                print('This happens sometimes. IDK why. Sorry... Exiting gracefully...', file=sys.stderr)
+                logger.log(step=[], data={}, verbosity=0)  # close loggers
+                return
+            elif 'CUDA out of memory' in str(e):
+                print('Job {} caused OOM'.format(HydraConfig.get().job.num), file=sys.stderr)
+                print(str(e), file=sys.stderr)
+                print('Exiting gracefully...', file=sys.stderr)
+                logger.log(step=[], data={}, verbosity=0)  # close loggers
+                return
+            raise e
+
         if is_main_process():
             checkpoint = torch.load("best_checkpoint.zip", map_location=evaluator.device)
             model.load_state_dict(checkpoint["model_state_dict"])
-            preds, labels, ids, weights = evaluator.predict(model)
-            eval_metrics = evaluator.evaluate(preds, labels, ids, weights)
-            trainer.logger.log(step=[], data=eval_metrics, verbosity=0)
-            trainer.logger.flush()
+            predictions_dict = evaluator.predict(model)
+            preds, labels, ids, weights, timestamps, figures = unpack_predictions(predictions_dict)
+            eval_metrics = evaluator.evaluate(preds, labels, ids, weights, timestamps)
+            logger.log_figures(figures=figures)
+            logger.log(step=[], data=eval_metrics, verbosity=0)
+            logger.flush()
 
-            del train, valid, test, model, trainer
+            # This frees memory when using parallel trainings with joblib. We should stress test it
+            # It leaves some memory though which is hard to tell what allocated it. 
+            # gc.get_objects() indicate that no tensors are left to collect.
+            # joblib's loky backend reuses processes for efficiency reason and prevents PyTorch to cleanup after itself.
+            del train, valid, test, model, trainer, evaluator, preds, labels, ids, weights
+            torch.cuda.synchronize()
+            gc.collect()
             torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+            torch.cuda.synchronize()
+
             objectives = get_optimization_objectives(config, eval_metrics)
             return objectives
-    elif 'XGBTrainer' in trainer_type or "StatTrainer" in trainer_type:
+    elif 'XGBTrainer' in trainer_type:
         del config.trainer.criterion
 
         trainer = hydra.utils.instantiate(
@@ -70,13 +101,34 @@ def main(config):
             model=model,
             train_dataset=train,
             valid_dataset=valid,
+            logger=logger,
         )
 
         trainer.train()
 
-        preds, labels, ids, weights = evaluator.predict(model)
-        eval_metrics = evaluator.evaluate(preds, labels, ids, weights)
-        trainer.logger.log(step=[], data=eval_metrics, verbosity=0)
+        predictions_dict = evaluator.predict(model)
+        preds, labels, ids, weights, timestamps, _ = unpack_predictions(predictions_dict)
+        eval_metrics = evaluator.evaluate(preds, labels, ids, weights, timestamps)
+        logger.log(step=[], data=eval_metrics, verbosity=0)
+        objectives = get_optimization_objectives(config, eval_metrics)
+        return objectives
+    elif "StatTrainer" in trainer_type:
+        del config.trainer.criterion
+
+        test.test = True
+        trainer = hydra.utils.instantiate(
+            config.trainer,
+            model=model,
+            train_dataset=train,
+            valid_dataset=test,
+            logger=logger,
+            evaluator=evaluator
+        )
+
+        predictions_dict = trainer.train()
+        preds, labels, ids, weights, timestamps, _ = unpack_predictions(predictions_dict)
+        eval_metrics = evaluator.evaluate(preds, labels, ids, weights, timestamps)
+        logger.log(step=[], data=eval_metrics, verbosity=0)
         objectives = get_optimization_objectives(config, eval_metrics)
         return objectives
     else:

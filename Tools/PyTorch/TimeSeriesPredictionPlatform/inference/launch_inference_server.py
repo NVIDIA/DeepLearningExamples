@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+# SPDX-License-Identifier: Apache-2.0
 import os
 import shutil
 import subprocess
@@ -21,7 +21,6 @@ import dllogger
 import shutil
 import hydra
 from triton.dataloader import get_dataloader_fn
-from loggers.log_helper import setup_logger
 def run_server_launch(config):
     cfg = config
     # export model

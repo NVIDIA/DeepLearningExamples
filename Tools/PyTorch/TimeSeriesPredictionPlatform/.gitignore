@@ -3,3 +3,5 @@ __pycache__
 /outputs/
 *.zip
 /datasets/*/
+/datasets/
+/notebooks/

@@ -1,0 +1,22 @@
+model:
+  config:
+    stacks:
+        - type: "trend"
+          num_blocks: 4
+          theta_dim: 2
+          share_weights: True
+          hidden_size: 1024
+        - type: "generic"
+          num_blocks: 8
+          theta_dim: 0
+          share_weights: False
+          hidden_size: 2048
+
+trainer:
+  config:
+    batch_size: 16384
+    num_epochs: 20
+    ema: true
+    ema_decay: 0.9497343596459132
+  optimizer:
+    lr: 0.00020687079735984997

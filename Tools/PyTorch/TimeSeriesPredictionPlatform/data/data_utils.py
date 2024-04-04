@@ -1,4 +1,4 @@
-# Copyright 2021-2022 NVIDIA Corporation
+# Copyright 2021-2024 NVIDIA Corporation
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ import pandas as pd
 from omegaconf.listconfig import ListConfig
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import FunctionTransformer
-from typing import Union
+from typing import Union, List, Dict
 
 
 class DataTypes(enum.IntEnum):
@@ -52,7 +52,7 @@ class DataTypes(enum.IntEnum):
 DTYPE_MAP = {
     DataTypes.CONTINUOUS: np.float32,
     DataTypes.CATEGORICAL: np.int64,
-    DataTypes.DATE: np.datetime64,
+    DataTypes.DATE: 'datetime64[ns]', #This can be a string because this is meant to be used as an argument to ndarray.astype 
     DataTypes.STR: str,
 }
 
@@ -95,39 +95,54 @@ class FeatureSpec:
     def __repr__(self):
         return str(self)
 
+# Since Python 3.7, dictionaries are ordered by default and maintain their insertion order
+FEAT_NAME_MAP = {
+    "s_cat":             (InputTypes.STATIC, DataTypes.CATEGORICAL),
+    "s_cont":            (InputTypes.STATIC, DataTypes.CONTINUOUS),
+    "k_cat":             (InputTypes.KNOWN, DataTypes.CATEGORICAL),
+    "k_cont":            (InputTypes.KNOWN, DataTypes.CONTINUOUS),
+    "o_cat":             (InputTypes.OBSERVED, DataTypes.CATEGORICAL),
+    "o_cont":            (InputTypes.OBSERVED, DataTypes.CONTINUOUS),
+    "target":            (InputTypes.TARGET, DataTypes.CONTINUOUS),
+    "weight":            (InputTypes.WEIGHT, DataTypes.CONTINUOUS),
+    "sample_weight":     (InputTypes.SAMPLE_WEIGHT, DataTypes.CONTINUOUS),
+    "id":                (InputTypes.ID, DataTypes.CATEGORICAL),
+    "timestamp":         (InputTypes.TIME, DataTypes.CATEGORICAL) # During preprocessing we cast all time data to int
+}
 
-FEAT_ORDER = [
-    (InputTypes.STATIC, DataTypes.CATEGORICAL),
-    (InputTypes.STATIC, DataTypes.CONTINUOUS),
-    (InputTypes.KNOWN, DataTypes.CATEGORICAL),
-    (InputTypes.KNOWN, DataTypes.CONTINUOUS),
-    (InputTypes.OBSERVED, DataTypes.CATEGORICAL),
-    (InputTypes.OBSERVED, DataTypes.CONTINUOUS),
-    (InputTypes.TARGET, DataTypes.CONTINUOUS),
-    (InputTypes.WEIGHT, DataTypes.CONTINUOUS),
-    (InputTypes.SAMPLE_WEIGHT, DataTypes.CONTINUOUS),
-    (InputTypes.ID, DataTypes.CATEGORICAL),
-]
-FEAT_NAMES = ["s_cat", "s_cont", "k_cat", "k_cont", "o_cat", "o_cont", "target", "weight", "sample_weight", "id"]
 
 def group_ids(df, features):
-    col_names = ["_id_"] + [
-                x.name
-                for x in features
-                if x.feature_embed_type != DataTypes.STR
-                and x.feature_type != InputTypes.TIME
-                and x.feature_type != InputTypes.ID
+    sizes = df['_id_'].value_counts(dropna=False, sort=False).sort_index()
+    #sizes = sizes[sizes >= example_length]
+    #valid_ids = set(sizes.index)
+    sizes = sizes.values
+    
+    feature_col_map = {k: [
+                f.name for f in features 
+                if (f.feature_type, f.feature_embed_type) == v
             ]
-    grouped = [x[1][col_names].values.astype(np.float32).view(dtype=np.int32) for x in df.groupby("_id_")]
-    return grouped
+            for k, v in FEAT_NAME_MAP.items()
+        }
+
+    # These 2 columns are defined at preprocessing stage. We should redesign it so it wouldn't be necessary
+    feature_col_map['id'] = ['_id_']
+    feature_col_map['timestamp'] = ['_timestamp_']
+    
+    # df is sorted by _id_ and time feature, so there is no need to group df
+    grouped = [
+        df.loc[:, feature_col_map[feat]].values.astype(DTYPE_MAP[dtype])
+        for feat, (_, dtype) in FEAT_NAME_MAP.items()
+    ]
+    return grouped, sizes
+
 
 def translate_features(features, preproc=False):
     all_features = [FeatureSpec(feature) for feature in features]
     if preproc:
         return all_features
-    return [FeatureSpec({"name": "_id_", "feature_type": "ID", "feature_embed_type": "CATEGORICAL"})] + [
-        feature for feature in all_features if feature.feature_type != InputTypes.ID
-    ]
+    return [FeatureSpec({"name": "_id_", "feature_type": "ID", "feature_embed_type": "CATEGORICAL"}),
+            FeatureSpec({"name": "_timestamp_", "feature_type": "TIME", "feature_embed_type": "CATEGORICAL"})] + \
+            [feature for feature in all_features if feature.feature_type not in [InputTypes.ID, InputTypes.TIME]]
 
 
 def map_dt(dt):
@@ -136,7 +151,11 @@ def map_dt(dt):
     elif isinstance(dt, ListConfig):
         dt = datetime.datetime(*dt)
     elif isinstance(dt, str):
-        dt = datetime.datetime.strptime(dt, "%Y-%m-%d")
+        try:
+            dt = datetime.datetime.strptime(dt, "%Y-%m-%d")
+        except ValueError:
+            dt = datetime.datetime.strptime(dt, '%Y-%m-%d %H:%M:%S')
+
     return dt
 
 
@@ -163,6 +182,10 @@ def map_scalers(features):
     return mapping
 
 
+def get_alignment_compliment_bytes(size, dtype):
+    # return two's compliment for the dtype, so new array starts on multiple of dtype 
+    return (~size + 1) & (dtype.alignment - 1)  
+
 class Log1pScaler(FunctionTransformer):
     @staticmethod
     def _inverse(x):
@@ -183,10 +206,13 @@ class CompositeScaler:
         self.target_scalers = {}
 
     def fit(self, df):
+        if self.scale_per_id:
+            grouped_df = df.groupby("_id_")
+
         for k, v in self.continuous_mapping.items():
             self.continuous_scalers[k] = {}
             if self.scale_per_id:
-                for identifier, sliced in df.groupby("_id_"):
+                for identifier, sliced in grouped_df:
                     scaler = hydra.utils.instantiate(k).fit(sliced[v])
                     self.continuous_scalers[k][identifier] = scaler
 
@@ -197,7 +223,7 @@ class CompositeScaler:
         for k, v in self.target_mapping.items():
             self.target_scalers[k] = {}
             if self.scale_per_id:
-                for identifier, sliced in df.groupby("_id_"):
+                for identifier, sliced in grouped_df:
                     scaler = hydra.utils.instantiate(k).fit(sliced[v])
                     self.target_scalers[k][identifier] = scaler
 
@@ -220,31 +246,34 @@ class CompositeScaler:
         else:
             df = self.apply_scalers(df, name="")
         return df
-
+    
     def inverse_transform_targets(self, values, ids=None):
-        # TODO: Assuming single targets for now. This has to be adapted to muti-target
-        if len(self.target_scalers) > 0:
+        if len(self.target_scalers) <= 0:
+            return values
+        scalers = list(self.target_scalers.values())[0]
 
-            shape = values.shape
-            scalers = list(self.target_scalers.values())[0]
-            if self.scale_per_id:
-                assert ids is not None
-                flat_values = values.flatten()
-                flat_ids = np.repeat(ids, values.shape[1])
-                df = pd.DataFrame({"id": flat_ids, "value": flat_values})
-                df_list = []
-                for identifier, sliced in df.groupby("id"):
-                    df_list.append(np.stack(
-                        [scalers[identifier].inverse_transform(sliced["value"].values.reshape(-1, 1)).flatten(),
-                         sliced.index.values], axis=-1))
-                tmp = np.concatenate(df_list)
-                tmp = tmp[tmp[:, -1].argsort()]
-                return tmp[:, 0].reshape(shape)
-            else:
-                flat_values = values.reshape(-1, 1)
-                flat_values = scalers[""].inverse_transform(flat_values)
-                return flat_values.reshape(shape)
-        return values
+        # Assumption in 4D case: ids: NxI, values: NxTxIxH
+        if self.scale_per_id:
+            assert ids is not None
+            # Move time id to the second dim
+            if len(values.shape) == 4:
+                values = values.transpose(0,2,1,3)
+
+            uids = np.unique(ids)
+            inversed = np.zeros_like(values)
+            for i in uids:
+                idx = ids == i
+                x = values[idx]
+                x = scalers[i].inverse_transform(x)
+                inversed[idx] = x
+
+            if len(values.shape) == 4:
+                inversed = inversed.transpose(0,2,1,3)
+            return inversed
+        else:
+            flat_values = values.reshape(-1, 1)
+            flat_values = scalers[""].inverse_transform(flat_values)
+            return flat_values.reshape(values.shape)
 
 class Preprocessor:
     def __init__(self, config):
@@ -255,6 +284,8 @@ class Preprocessor:
         self.dest_path = self.config.dest_path
         self.source_path = self.config.source_path
         self.preprocessor_state = {}
+        self.scaler = None
+        self.alt_scaler = None
     
     def _get_feature_splits(self):
         splits = {}
@@ -313,8 +344,14 @@ class Preprocessor:
                 df[categorical.name] = cat_feature.cat.codes + 1
             self.preprocessor_state["categorical_mappings"] = input_categorical_map_dict
 
+    def _map_time_col(self, df):
+        time_feat = self.feat_splits["time_feature"].name
+        df['_timestamp_'] = df[time_feat]
+        self.preprocessor_state['timestamp_embed_type'] = self.feat_splits["time_feature"].feature_embed_type
+
     def _get_dataset_splits(self, df):
         print("Splitting datasets")
+        time_feat = self.feat_splits['time_feature']
         if hasattr(self.config, "valid_boundary") and self.config.valid_boundary is not None:
             forecast_len = self.config.example_length - self.config.encoder_length
             # The valid split is shifted from the train split by number of the forecast steps to the future.
@@ -323,69 +360,103 @@ class Preprocessor:
 
             grouped = df.groupby('_id_')
 
-            train_mask = grouped[self.config.time_ids].apply(lambda dates: dates < valid_boundary)
+            train_mask = grouped[time_feat.name].apply(lambda dates: dates < valid_boundary)
             train = df[train_mask]
             print('Calculated train.')
             train_sizes = train.groupby('_id_').size()
+            exclude_name = train_sizes < self.config.example_length
 
-            valid_indexes = grouped[self.config.time_ids].apply(
+            valid_indexes = grouped[time_feat.name].apply(
                 lambda dates: dates.iloc[(train_sizes[dates.name] - self.config.encoder_length):
                                         (train_sizes[dates.name] + forecast_len)].index
-                              if dates.name in train_sizes else pd.Series()
+                              if dates.name in train_sizes and not exclude_name[dates.name] else pd.Series()
                 )
             valid = df.loc[np.concatenate(valid_indexes)]
             print('Calculated valid.')
 
-            test_indexes = grouped[self.config.time_ids].apply(
+            test_indexes = grouped[time_feat.name].apply(
                 lambda dates: dates.iloc[(train_sizes[dates.name] - self.config.encoder_length + forecast_len):
                                         (train_sizes[dates.name] + 2 * forecast_len)].index
-                              if dates.name in train_sizes else pd.Series()
+                              if dates.name in train_sizes and not exclude_name[dates.name] else pd.Series()
                 )
             test = df.loc[np.concatenate(test_indexes)]
             print('Calculated test.')
-        elif df.dtypes[self.config.time_ids] not in [np.float64, np.int]:
-            index = df[self.config.time_ids]
+        elif time_feat.feature_embed_type == DataTypes.DATE:
+            index = df[time_feat.name]
 
             train = df.loc[(index >= map_dt(self.config.train_range[0])) & (index < map_dt(self.config.train_range[1]))]
             valid = df.loc[(index >= map_dt(self.config.valid_range[0])) & (index < map_dt(self.config.valid_range[1]))]
             test = df.loc[(index >= map_dt(self.config.test_range[0])) & (index < map_dt(self.config.test_range[1]))]
         else:
-            index = df[self.config.time_ids]
+            index = df[time_feat.name]
+
             train = df.loc[(index >= self.config.train_range[0]) & (index < self.config.train_range[1])]
             valid = df.loc[(index >= self.config.valid_range[0]) & (index < self.config.valid_range[1])]
             test = df.loc[(index >= self.config.test_range[0]) & (index < self.config.test_range[1])]
 
-        train = train[(train.groupby('_id_').size()[train['_id_']] > self.config.encoder_length).values]
-        valid = valid[(valid.groupby('_id_').size()[valid['_id_']] > self.config.encoder_length).values]
-        test = test[(test.groupby('_id_').size()[test['_id_']] > self.config.encoder_length).values]
+        train = train[(train.groupby('_id_').size()[train['_id_']] >= self.config.example_length).values]
+        valid = valid[(valid.groupby('_id_').size()[valid['_id_']] >= self.config.example_length).values]
+        test = test[(test.groupby('_id_').size()[test['_id_']] >= self.config.example_length).values]
 
         return train, valid, test
-
-    def _recombine_datasets(self, train, valid, test):
+    
+    def _get_dataset_splits_stat(self, df):
+        print("Splitting stats datasets")
+        time_feat = self.feat_splits['time_feature']
+        forecast_len = self.config.example_length - self.config.encoder_length
         if hasattr(self.config, "valid_boundary") and self.config.valid_boundary is not None:
-            forecast_len = self.config.example_length - self.config.encoder_length
             # The valid split is shifted from the train split by number of the forecast steps to the future.
             # The test split is shifted by the number of the forecast steps from the valid split
-            train_temp = []
-            valid_temp = []
-            for g0, g1 in zip(train.groupby("_id_"), valid.groupby("_id_")):
-                _train = g0[1].iloc[: -self.config.encoder_length]
-                _valid = g1[1].iloc[:forecast_len]
-                train_temp.append(_train)
-                valid_temp.append(_valid)
-            train = pd.concat(train_temp, axis=0)
-            valid = pd.concat(valid_temp, axis=0)
-        elif train.dtypes[self.config.time_ids] not in [np.float64, np.int]:
+            valid_boundary = map_dt(self.config.valid_boundary)
 
-            train = train[train[self.config.time_ids] < map_dt(self.config.valid_range[0])]
-            valid = valid[valid[self.config.time_ids] < map_dt(self.config.test_range[0])]
+            data_sizes = df['_id_'].value_counts(dropna=False, sort=False)
+            train_sizes = df.loc[df[time_feat.name] < valid_boundary, '_id_'].value_counts(dropna=False, sort=False)
+            exclude_name = train_sizes < self.config.example_length
+
+            grouped = df.groupby('_id_')
+
+            train_stat_index = grouped[time_feat.name].apply(
+                lambda dates: dates.iloc[:train_sizes[dates.name] + forecast_len].index
+                       if dates.name in train_sizes and not exclude_name[dates.name] and train_sizes[dates.name] + 2*forecast_len <= data_sizes[dates.name] else pd.Series()
+            )
+            train_stat = df.loc[np.concatenate(train_stat_index)]
+            print('Calculated stat train.')
+            test_stat_indexes = grouped[time_feat.name].apply(
+                lambda dates: dates.iloc[train_sizes[dates.name] + forecast_len:
+                                        train_sizes[dates.name] + 2*forecast_len].index
+                              if dates.name in train_sizes and not exclude_name[dates.name] and train_sizes[dates.name] + 2*forecast_len <= data_sizes[dates.name] else pd.Series()
+                )
+            test_stat = df.loc[np.concatenate(test_stat_indexes)]
+            print('Calculated stat test.')
+            return train_stat, test_stat
+        elif time_feat.feature_embed_type == DataTypes.DATE:
+            index = df[time_feat.name]
+
+            delta = (index[1] - index[0]) * self.config.encoder_length
+
+            train_stat = df.loc[(index >= map_dt(self.config.train_range[0])) & (index < map_dt(self.config.test_range[0]) + delta)]
+            test_stat = df.loc[(index >= map_dt(self.config.test_range[0]) + delta) & (index < map_dt(self.config.test_range[1]))]
         else:
-            train = train[train[self.config.time_ids] < self.config.valid_range[0]]
-            valid = valid[valid[self.config.time_ids] < self.config.test_range[0]]
-        return pd.concat((train, valid, test))
+            index = df[time_feat.name]
+            train_stat = df.loc[(index >= self.config.train_range[0]) & (index < self.config.test_range[0] + self.config.encoder_length)]
+            test_stat = df.loc[(index >= self.config.test_range[0] + self.config.encoder_length) & (index < self.config.test_range[1])]
+        
+        train_sizes = train_stat['_id_'].value_counts(dropna=False, sort=False)
+        test_sizes = test_stat['_id_'].value_counts(dropna=False, sort=False)
 
-    def _drop_unseen_categoricals(self, train, valid, test, drop_unseen=True):
-        # TODO: Handle this for inference preprocess function
+        # filter short examples
+        train_sizes = train_sizes[train_sizes >= self.config.example_length]
+        test_sizes = test_sizes[test_sizes >= forecast_len]
+
+        # cross check sets to ensure that train and test contain the same _id_'s
+        train_sizes = train_sizes[train_sizes.index.isin(test_sizes.index)]
+        test_sizes = test_sizes[test_sizes.index.isin(train_sizes.index)]
+
+        train_stat[train_stat['_id_'].isin(train_sizes.index)]
+        test_stat[test_stat['_id_'].isin(test_sizes.index)]
+        return train_stat, test_stat
+
+    def _drop_unseen_categoricals(self, train, valid=None, test=None, drop_unseen=True):
         if self.config.get("drop_unseen", False):
             print("Dropping unseen categoricals")
             if not drop_unseen:
@@ -396,44 +467,69 @@ class Preprocessor:
             else:
                 arriter = [cat.name for cat in self.feat_splits["input_categoricals"]] + ["_id_"]
             
-            if train is not None:
+            if train is not None and (valid is not None or test is not None):
                 for categorical in arriter:
                     seen_values = train[categorical].unique()
-                    valid = valid[valid[categorical].isin(seen_values)]
-                    test = test[test[categorical].isin(seen_values)]
+                    if valid is not None:
+                        valid = valid[valid[categorical].isin(seen_values)]
+                    if test is not None:
+                        test = test[test[categorical].isin(seen_values)]
         return train, valid, test
 
-    def fit_scalers(self, df):
+    def fit_scalers(self, df, alt_scaler=False):
         print("Calculating scalers")
-        self.scaler = CompositeScaler(
+        scaler = CompositeScaler(
             self.feat_splits["target_features"], self.feat_splits["input_continuous"], scale_per_id=self.config.get('scale_per_id', False)
         )
-        self.scaler.fit(df)
-        self.preprocessor_state["scalers"] = self.scaler
+        scaler.fit(df)
+        if alt_scaler:
+            self.alt_scaler = scaler
+            self.preprocessor_state["alt_scalers"] = scaler
+        else:
+            self.scaler = scaler
+            self.preprocessor_state["scalers"] = scaler
 
-    def apply_scalers(self, df):
+    def apply_scalers(self, df, alt_scaler=False):
         print("Applying scalers")
-        return self.preprocessor_state["scalers"].transform(df)
+        return self.preprocessor_state["alt_scalers" if alt_scaler else "scalers"].transform(df)
 
-    def save_datasets(self, train, valid, test):
+    def save_datasets(self, train, valid, test, train_stat, test_stat):
         print(F"Saving processed data at {self.dest_path}")
         os.makedirs(self.dest_path, exist_ok=True)
 
         train.to_csv(os.path.join(self.dest_path, "train.csv"))
         valid.to_csv(os.path.join(self.dest_path, "valid.csv"))
         test.to_csv(os.path.join(self.dest_path, "test.csv"))
-        self._recombine_datasets(train, valid, test).to_csv(os.path.join(self.dest_path, "full.csv"))
+        train_stat.to_csv(os.path.join(self.dest_path, "train_stat.csv"))
+        test_stat.to_csv(os.path.join(self.dest_path, "test_stat.csv"))
 
         # Save relevant columns in binary form for faster dataloading
         # IMORTANT: We always expect id to be a single column indicating the complete timeseries
         # We also expect a copy of id in form of static categorical input!!!]]
         if self.config.get("binarized", False):
-            grouped_train = group_ids(train, self.features)
-            grouped_valid = group_ids(valid, self.features)
-            grouped_test = group_ids(test, self.features)
-            pickle.dump(grouped_train, open(os.path.join(self.dest_path, "train.bin"), "wb"))
-            pickle.dump(grouped_valid, open(os.path.join(self.dest_path, "valid.bin"), "wb"))
-            pickle.dump(grouped_test, open(os.path.join(self.dest_path, "test.bin"), "wb"))
+            train = group_ids(train, self.features)
+            valid = group_ids(valid, self.features)
+            test = group_ids(test, self.features)
+            train_stat = group_ids(train_stat, self.features)
+            test_stat = group_ids(test_stat, self.features)
+
+            for file, (grouped_ds, sizes) in (('train.bin', train),
+                                              ('valid.bin', valid),
+                                              ('test.bin', test),
+                                              ('train_stat.bin', train_stat),
+                                              ('test_stat.bin', test_stat)):
+                metadata = {
+                    'group_sizes': sizes,
+                    'col_desc': [
+                        (g.dtype, g.shape, g.nbytes) for g in grouped_ds
+                    ]
+                }
+                with open(os.path.join(self.dest_path, file), "wb") as f:
+                    pickle.dump(metadata, f)
+                    for col in grouped_ds:
+                        f.write(b'\0' * get_alignment_compliment_bytes(f.tell(), col.dtype))
+                        col.tofile(f)
+                    
 
     def save_state(self):
         filepath = os.path.join(self.dest_path, "tspp_preprocess.bin")
@@ -469,16 +565,15 @@ class Preprocessor:
             df = pd.read_csv(dataset, parse_dates=[d.name for d in self.feat_splits["dates"]])
         elif isinstance(dataset, pd.DataFrame):
             print("Input DataFrame provided for preprocessing")
-            #TODO: check support for parse dates as done during read csv
             # Currently date related features are only used for dataset splits during training
             df = dataset.copy()
         else:
             raise ValueError(F"Function either accepts a path to a csv file or a dataframe")
+
         print("Sorting on time feature")
-        #TODO: Check if we sort df for inference only case
-        df = df.sort_values([self.feat_splits["time_feature"].name])
-        f_names = [feature.name for feature in self.features] + [self.config.time_ids]
-        df = df[list(dict.fromkeys(f_names))]
+        df = df.sort_values([id_feat.name for id_feat in self.feat_splits["id_features"]] + [self.feat_splits["time_feature"].name])
+        f_names = {feature.name for feature in self.features}
+        df = df[f_names]
         
         if self.config.get("missing_data_label", False):
             df = df.replace(self.config.get("missing_data_label"), np.NaN)
@@ -491,15 +586,18 @@ class Preprocessor:
     def preprocess(self):
         df = self._init_setup()
         self._map_ids(df)
+        self._map_time_col(df)
         self._map_categoricals(df)
         train, valid, test = self._get_dataset_splits(df)
         train, valid, test = self._drop_unseen_categoricals(train, valid, test)
-        return train, valid, test
+
+        train_stat, test_stat = self._get_dataset_splits_stat(df)
+        train_stat, _, test_stat = self._drop_unseen_categoricals(train_stat, test=test_stat)
+        return train, valid, test, train_stat, test_stat
 
     def preprocess_test(self, dataset: Union[str, pd.DataFrame]) -> pd.DataFrame:
         df = self._init_setup(dataset=dataset, drop_na=False)
         self._map_ids(df)
         self._map_categoricals(df)
-        #TODO: this is a workaround and maybe needs to be handled properly in the future
         _, _, df = self._drop_unseen_categoricals(None, None, df, drop_unseen=False)
         return df

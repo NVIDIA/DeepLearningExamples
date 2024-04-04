@@ -1,0 +1,33 @@
+trainer:
+  config:
+    ema_decay: 0.960244325551214
+    batch_size: 16384
+    ema: True
+    num_epochs: 30
+  
+  optimizer:
+    lr: 0.005050844709519404
+  
+  criterion:
+    _target_: criterion.TweedieLoss
+    p: 1.474664464655759
+
+model:
+  config:
+    activation: SELU
+    pooling_mode: MaxPool1d
+    hidden_size: 2048
+    n_blocks: [1,1,2]
+    n_freq_downsample: [4,2,1]
+    n_pool_kernel_size: [6,3,1]
+    n_mlp_layers: 3
+
+dataset:
+  config:
+    memory_mapped: True 
+    train_samples: 1000000
+
+evaluator:
+  config:
+    save_predictions: True
+    batch_size: 16384

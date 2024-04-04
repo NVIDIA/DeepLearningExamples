@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,12 +23,15 @@ import glob
 
 import dask_cudf
 from distributed_utils import create_client
+#Deal with the pateince and log_interval.  Also objective, cluster
 class TSPPXGBoost():
     def __init__(self, config):
         self.config = config
         self.models = []
 
     def fit(self, train, label, valid, valid_label, **kwargs):
+        train = train.drop(['_id_', '_timestamp_'], axis=1, errors='ignore')
+        valid = valid.drop(['_id_', '_timestamp_'], axis=1, errors='ignore')
         X = xgb.DeviceQuantileDMatrix(cudf.from_pandas(train), label=cudf.from_pandas(label))
         V = xgb.DMatrix(cudf.from_pandas(valid), label=cudf.from_pandas(valid_label))
         model = xgb.train(params=self.config,
@@ -41,6 +44,7 @@ class TSPPXGBoost():
         self.models.append(model)
 
     def predict(self, test, i):
+        test = test.drop(['_id_', '_timestamp_'], axis=1, errors='ignore')
         model = self.models[i]
         X = xgb.DMatrix(cudf.from_pandas(test))
         return model.predict(X)

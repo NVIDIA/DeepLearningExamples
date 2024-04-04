@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# SPDX-License-Identifier: Apache-2.0
 import os
 import random
 
@@ -25,6 +26,7 @@ from dask_cuda import LocalCUDACluster
 
 from hydra.core.hydra_config import HydraConfig
 from joblib.externals.loky.backend.context import get_context
+
 
 def generate_seeds(rng, size):
     """
@@ -50,7 +52,6 @@ def broadcast_seeds(seeds, device):
         torch.distributed.broadcast(seeds_tensor, 0)
         seeds = seeds_tensor.tolist()
     return seeds
-
 
 def setup_seeds(master_seed, epochs, device):
     """
@@ -137,16 +138,19 @@ def is_main_process():
 
 def init_parallel():
     if is_parallel():
-        torch.cuda.set_device(HydraConfig.get().job.num % torch.cuda.device_count())
+        device_id = conf['device_id'] if 'device_id' in (conf := HydraConfig.get()) else conf.job.num % torch.cuda.device_count()
+        torch.cuda.set_device(device_id)
+
 
 def is_parallel():
-    return HydraConfig.get().launcher.get('n_jobs', 0) > 1 or HydraConfig.get().sweeper.get('n_jobs', 0) > 1
+    return HydraConfig.get().launcher.get('n_jobs', 0) > 1 or \
+           HydraConfig.get().launcher.get('max_workers', 0) > 1 or \
+           HydraConfig.get().launcher.get('processes', 0) > 1 or \
+           HydraConfig.get().sweeper.get('n_jobs', 0) > 1
 
 
 def get_mp_context():
-    if HydraConfig.get().launcher.get('n_jobs', 0) > 1 or HydraConfig.get().sweeper.get('n_jobs', 0) > 1:
-        return get_context('loky')
-    return None
+    return get_context('loky')
 
 
 def _pynvml_mem_size(kind="total", index=0):
@@ -195,7 +199,7 @@ def calculate_frac(num_rows, num_feat, world_size):
 
 
 def create_client(config):
-    device_pool_frac = config.cluster.device_pool_frac 
+    device_pool_frac = config.cluster.device_pool_frac # allocate 80% of total GPU memory on each GPU
     device_size = device_mem_size(kind="total")
     device_pool_size = int(device_pool_frac * device_size)
     dask_space = "/tmp/dask_space/"

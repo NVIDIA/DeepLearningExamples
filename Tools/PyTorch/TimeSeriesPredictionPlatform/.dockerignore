@@ -6,3 +6,7 @@
 .gitignore
 Dockerfile
 .dockerignore
+/outputs/
+/datasets/
+/multirun/
+/notebooks/

@@ -1,2 +1,0 @@
-tensorboard
-pandas==1.1.4

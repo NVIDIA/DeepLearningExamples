@@ -1,0 +1,37 @@
+trainer:
+  config:
+    batch_size: 16384
+    ema: False
+    num_epochs: 30
+  
+  optimizer:
+    lr: 0.005938839698979487
+  
+  criterion:
+    _target_: criterion.TweedieLoss
+    p: 1.6113852243885698
+
+model:
+  config:
+    stacks:
+        - type: "generic"
+          num_blocks: 8
+          theta_dim: 8
+          share_weights: False
+          hidden_size: 4096
+        - type: "seasonality"
+          num_blocks: 8
+          theta_dim: 8
+          share_weights: True
+          hidden_size: 256
+
+
+dataset:
+  config:
+    memory_mapped: True 
+    train_samples: 1000000
+
+evaluator:
+  config:
+    save_predictions: True
+    batch_size: 16384

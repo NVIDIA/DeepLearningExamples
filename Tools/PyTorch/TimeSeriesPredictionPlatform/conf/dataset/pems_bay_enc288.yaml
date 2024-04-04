@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: Apache-2.0
+_target_: data.datasets.create_datasets
+config:
+    source_path: /workspace/datasets/pems_bay/pems_bay.csv
+    dest_path: /workspace/datasets/pems_bay_enc288/
+    binarized: True
+    graph: graph.bin
+    graph_partitions: 1
+    partition_joining_coef: 1
+    time_ids: 'Timestamp'
+    train_range:
+      - '2017-1-1'
+      - '2017-3-8'
+    valid_range:
+      - '2017-3-8'
+      - [2017,4,25,17,50]
+    test_range:
+      - [2017,4,25,17,50]
+      - '2017-7-01'
+    dataset_stride: 1
+    scale_per_id: False
+    encoder_length: 288
+    input_length: 288
+    example_length: 300
+    MultiID: False
+    features:
+      - name: 'id'
+        feature_type: 'ID'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 325
+      - name: 'Timestamp'
+        feature_type: 'TIME'
+        feature_embed_type: 'DATE'
+      - name: 'Avg Speed'
+        feature_type: 'TARGET'
+        feature_embed_type: 'CONTINUOUS'
+        scaler:
+            _target_: sklearn.preprocessing.StandardScaler
+      - name: 'Station'
+        feature_type: 'STATIC'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 326
+      - name: 'Freeway #'
+        feature_type: 'STATIC'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 9
+      - name: 'Direction of Travel'
+        feature_type: 'STATIC'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 5
+      #- name: 'Station Length'
+      #  feature_type: 'STATIC'
+      #  feature_embed_type: 'CONTINUOUS'
+      #  scaler:
+      #      _target_: sklearn.preprocessing.StandardScaler
+      - name: 'Avg Occupancy'
+        feature_type: 'OBSERVED'
+        feature_embed_type: 'CONTINUOUS'
+        scaler:
+            _target_: sklearn.preprocessing.StandardScaler
+      - name: 'Total Flow' 
+        feature_type: 'OBSERVED'
+        feature_embed_type: 'CONTINUOUS'
+        scaler:
+            _target_: sklearn.preprocessing.StandardScaler
+      - name: 'Day of week'
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 8
+      - name: 'Month'
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CONTINUOUS'
+        scaler:
+            _target_: sklearn.preprocessing.StandardScaler
+      - name: 'Day'
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CONTINUOUS'
+        scaler:
+            _target_: sklearn.preprocessing.StandardScaler
+      - name: 'Hour'
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CONTINUOUS'
+        scaler:
+            _target_: sklearn.preprocessing.StandardScaler
+      - name: 'Minute'
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CONTINUOUS'
+        scaler:
+            _target_: sklearn.preprocessing.StandardScaler
+
+    time_series_count: 325
+    train_samples: 1000000

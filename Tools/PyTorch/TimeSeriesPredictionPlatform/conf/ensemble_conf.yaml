@@ -1,0 +1,13 @@
+defaults:
+  - logger
+
+model:
+  _target_: models.ensembling.ModelEnsemble
+  config:
+    model_list: ???
+
+# Used to override the defaults got from checkpoint
+evaluator:
+  config:
+    metrics: ['MAE', 'RMSE', 'SMAPE']
+    per_step_metrics: False

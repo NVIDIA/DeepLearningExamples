@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,10 +24,6 @@ from omegaconf import OmegaConf
 
 def update_argparser(parser):
     parser.add_argument("--model-dir", type=str, help="Path to the model directory you would like to use (likely in outputs)", required=True)
-
-
-
-
 
 class MetricsCalculator(BaseMetricsCalculator):
     def __init__(self, model_dir):
@@ -60,11 +56,8 @@ class MetricsCalculator(BaseMetricsCalculator):
         x,
         y_real,
     ):
-        #can probably just pass all of this to the evaluator main class
         self.targets.append(y_real['target__0'][:,:,0][:,:,np.newaxis])
         self.ids.append(ids)
         self.weights.append(x["weight__9"])
         preds = y_pred["target__0"]
         self.predictions.append(preds)
-
-        # return self.metrics

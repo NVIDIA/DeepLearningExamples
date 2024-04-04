@@ -1,0 +1,52 @@
+# SPDX-License-Identifier: Apache-2.0
+_target_: data.datasets.create_datasets
+config:
+    graph: False
+    source_path: /workspace/datasets/electricity/electricity.csv
+    dest_path: /workspace/datasets/electricity_xgb/
+    train_range:
+      - 0
+      - 32136
+    valid_range:
+      - 31392
+      - 32136
+    test_range:
+      - 31968
+      - 35000
+    dataset_stride: 1
+    scale_per_id: True
+    encoder_length: 168
+    input_length: 168
+    example_length: 192
+    MultiID: False
+    features:
+      - name: 'categorical_id'
+        feature_type: 'ID'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 371
+      - name: 'hours_from_start'
+        feature_type: 'TIME'
+        feature_embed_type: 'CONTINUOUS'
+      - name: 'power_usage_weight'
+        feature_type: 'WEIGHT'
+        feature_embed_type: 'CONTINUOUS'
+      - name: 'power_usage'
+        feature_type: 'TARGET'
+        feature_embed_type: 'CONTINUOUS'
+        scaler:
+            _target_: sklearn.preprocessing.StandardScaler
+      - name: 'hour'
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 25
+      - name: 'day_of_week'
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 8
+      - name: 'categorical_id'
+        feature_type: 'STATIC'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 371
+
+    binarized: False
+    time_series_count: 369

@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools", "wheel", "read-version"]
+build-backend = "setuptools.build_meta"
+
+
+[tool.towncrier]
+    package = "hydra_plugins.hydra_joblib_launcher"
+    filename = "NEWS.md"
+    directory = "news/"
+    title_format = "{version} ({project_date})"
+    template = "../../news/_template.rst"
+    issue_format = "[#{issue}](https://github.com/facebookresearch/hydra/issues/{issue})"
+    start_string = "<!-- TOWNCRIER -->\n"
+
+  [[tool.towncrier.type]]
+  directory = "feature"
+  name = "Features"
+  showcontent = true
+
+  [[tool.towncrier.type]]
+  directory = "api_change"
+  name = "API Change (Renames, deprecations and removals)"
+  showcontent = true
+
+  [[tool.towncrier.type]]
+  directory = "bugfix"
+  name = "Bug Fixes"
+  showcontent = true
+
+  [[tool.towncrier.type]]
+  directory = "config"
+  name = "Configuration structure changes"
+  showcontent = true
+
+  [[tool.towncrier.type]]
+  directory = "docs"
+  name = "Improved Documentation"
+  showcontent = true
+
+  [[tool.towncrier.type]]
+  directory = "maintenance"
+  name = "Maintenance Changes"
+  showcontent = true

@@ -1,0 +1,15 @@
+_target_: models.nhits.NHITS
+config:
+  n_blocks: [1, 1, 1]
+  n_mlp_layers: 3
+  hidden_size: 512
+  n_pool_kernel_size: [2, 2, 1]
+  n_freq_downsample: [4, 2, 1]
+  pooling_mode: 'MaxPool1d'
+  interpolation_mode: 'linear'
+  dropout_prob_theta: 0. #unused
+  activation: 'ReLU'
+
+defaults:
+    - _self_
+    - /trainer@_global_/trainer: ctltrainer

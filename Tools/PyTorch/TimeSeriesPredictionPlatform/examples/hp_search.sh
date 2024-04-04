@@ -1,4 +1,4 @@
-/# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,20 +12,39 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# More info here: https://hydra.cc/docs/plugins/optuna_sweeper/
+set -x
+set -e
+
+: ${MODEL:=nbeats}
+: ${DATASET:=electricity}
+: ${SUFFIX:=}
+: ${DISTRIBUTED:=0}
+
+RESULTS=/results/${MODEL}_${DATASET}_hp_search${SUFFIX}
+mkdir -p ${RESULTS}
+
+if [[ ${DISTRIBUTED} == 0 ]]
+then
+    LAUNCHER='hydra.sweeper.experiment_sequence=hydra_utils.TSPPOptunaExperimentSequence '
+    LAUNCHER+='hydra/launcher=multiprocessing '
+    LAUNCHER+='hydra.launcher.n_jobs=8'
+else
+    LAUNCHER='hydra/launcher=torchrun '
+fi
+
 python launch_training.py \
-	-m \
-	'model.config.n_head=choice(1,2,4)' \
-    'trainer.optimizer.lr=tag(log, interval(1e-5, 1e-2))' \
-	model=tft \
-	dataset=electricity            \
-	trainer/criterion=quantile     \
-	trainer.config.batch_size=1024 \
-	trainer.config.num_epochs=2    \
+    -m \
+    model=${MODEL} \
+    dataset=${DATASET}             \
+    overrides=${DATASET}/${MODEL}/hp_search${SUFFIX} \
     trainer.config.log_interval=-1 \
-	"evaluator.config.metrics=[P50, P90, MAE, MSE]" \
-	+optuna_objectives=[P50]       \
-	hydra/sweeper=optuna           \
-	hydra.sweeper.n_trials=3       \
-	hydra.sweeper.n_jobs=1         \
-    hydra.sweeper.storage=sqlite:////workspace/hp_search_multiobjective.db
+    +trainer.config.force_rerun=True \
+    ~trainer.callbacks.save_checkpoint \
+    evaluator.config.metrics=[MAE,RMSE] \
+    hydra/sweeper=optuna           \
+    +optuna_objectives=[MAE,RMSE]   \
+    hydra.sweeper.direction=[minimize,minimize] \
+    hydra.sweeper.n_trials=16      \
+    hydra.sweeper.storage="sqlite:///${RESULTS}/hp_search_multiobjective.db" \
+    hydra.sweeper.study_name="${MODEL}_${DATASET}_DIST_${DISTRIBUTED}" \
+    ${LAUNCHER}

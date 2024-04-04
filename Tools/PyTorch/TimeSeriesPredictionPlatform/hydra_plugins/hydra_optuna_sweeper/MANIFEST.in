@@ -1,0 +1,3 @@
+global-exclude *.pyc
+global-exclude __pycache__
+recursive-include hydra_plugins/* *.yaml py.typed

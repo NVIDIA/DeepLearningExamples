@@ -1,0 +1,21 @@
+hydra:
+  sweeper:
+    params:
+      model.config.n_head: choice(1,2,4)
+      model.config.hidden_size: choice(128,196,256,384)
+      model.config.dropout: interval(0.0, 0.9)
+      trainer.optimizer.lr: tag(log, interval(1e-5, 1e-2))
+      trainer.config.ema: choice(true, false)
+      +trainer.config.ema_decay: interval(0.9, 0.9999)
+      trainer.config.batch_size: choice(1024)
+      trainer/criterion: choice(tweedie)
+      trainer.criterion.p: interval(1.1,1.7)
+
+trainer:
+  config:
+    num_epochs: 10
+
+dataset:
+  config:
+    train_samples: 100000
+    memory_mapped: True

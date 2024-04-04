@@ -1,0 +1,27 @@
+trainer:
+  config:
+    ema: True
+    ema_decay: 0.9801014862597447
+    batch_size: 128
+    num_epochs: 20
+  optimizer:
+    lr: 1.9813457277507318e-05
+  criterion:
+    _target_: torch.nn.L1Loss
+
+
+model:
+  config:
+    dropout: 0.6075438265717921
+    embedding_dim: 32
+    hidden_size: 512 
+    num_layers: 4
+
+dataset:
+  config:
+    train_samples: 1000000
+    memory_mapped: True
+
+evaluator:
+  config:
+    save_predictions: True

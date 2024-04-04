@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib
 import os
+import time
 from abc import ABC
 
-import dgl
 import dllogger
-import hydra
 import numpy as np
 import torch
 import torch.nn as nn
-import importlib
+import hydra
 try:
     from apex import amp
 except ImportError:
@@ -31,12 +31,11 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 
 from callbacks.ctl_callbacks import CTLCallbackContainer
-from data.datasets import TSBaseDataset, get_collate_fn
-from distributed_utils import reduce_tensor, get_mp_context
-from loggers.log_helper import setup_logger
-from training.ema import ModelEmaV2
 from criterion import TSPP_criterion_wrapper
+from data.datasets import TSBaseDataset, get_collate_fn
+from distributed_utils import get_mp_context, reduce_tensor
 from training.checkpoint_utils import maybe_continue_run
+from training.ema import ModelEmaV2
 from training.utils import to_device
 
 
@@ -54,7 +53,9 @@ class CTLTrainer(Trainer):
             optimizer,
             criterion,
             callbacks,
+            logger,
             config,
+            scheduler=None,
     ):
         self.config = config
         self._stop_training = False
@@ -77,16 +78,22 @@ class CTLTrainer(Trainer):
         self.encoder_length = config.encoder_length
 
         if self.world_size > 1:
-            # XXX: is the seed argument here needed for reproducibility?
-            # It should be set in launch_training.py with other seeds
             self.train_sampler = DistributedSampler(
                 train_dataset, self.world_size, seed=config.get("seed", 1), drop_last=True
             )
             self.valid_sampler = DistributedSampler(
                 valid_dataset, self.world_size, seed=config.get("seed", 1), drop_last=False
             )
-        self.logger = setup_logger(self.config)
+        self.logger = logger
         self.optimizer = optimizer
+
+        if scheduler is not None:
+            scheduler._target_ = scheduler.target
+            del scheduler.target
+            self.scheduler = hydra.utils.instantiate(scheduler, optimizer=optimizer)
+        else:
+            self.scheduler = None
+
         self.amp_enabled = self.config.get("amp", False)
         if not importlib.util.find_spec("apex"):
             self.amp_enabled = False
@@ -97,17 +104,7 @@ class CTLTrainer(Trainer):
         if not self.config.get('force_rerun'):
             maybe_continue_run(self)
 
-        if config.get("ema", False):
-            self.ema = ModelEmaV2(model, decay=self.config.get('ema_decay', 0.999), device=self.device)
-        else:
-            self.ema = None
-        if self.amp_enabled:
-            self.model, self.optimizer = amp.initialize(self.model, self.optimizer, opt_level="O2", loss_scale="dynamic")
-        if self.world_size > 1:
-            self.model = DDP(self.model, device_ids=[self.local_rank], output_device=self.local_rank, find_unused_parameters=True)
-
-        mp_context = get_mp_context()
-
+        mp_context = get_mp_context() if self.config.num_workers else None
         self.train_dataloader = DataLoader(
             train_dataset,
             batch_size=self.config.batch_size,
@@ -128,13 +125,22 @@ class CTLTrainer(Trainer):
             multiprocessing_context=mp_context
         )
 
-        # TODO: make it reccursively instantiated
-        if self.config.get("scheduler", None):
-            self.config.scheduler._target_ = self.config.scheduler.target
-            del self.config.scheduler.target
-            self.scheduler = hydra.utils.instantiate(self.config.scheduler, optimizer)
+        # Before calling copy on model parameters we want to be sure that they are defined. Regards lazy modules
+        dummy_batch, dummy_labels, dummy_weights = next(iter(self.train_dataloader))
+        dummy_batch, _, _ = self.prep_data(dummy_batch, dummy_labels, dummy_weights)
+        self.model(dummy_batch)
+
+        if config.get("ema", False):
+            self.ema = ModelEmaV2(model, decay=self.config.get('ema_decay', 0.999), device=self.device)
         else:
-            self.scheduler = None
+            self.ema = None
+        if self.amp_enabled:
+            self.model, self.optimizer = amp.initialize(self.model, self.optimizer, opt_level="O2", loss_scale="dynamic")
+        if self.world_size > 1:
+            self.model = DDP(self.model,
+                             device_ids=[self.local_rank],
+                             output_device=self.local_rank,
+                             find_unused_parameters=True)
 
         cl_start_horizon = config.get("cl_start_horizon")
         cl_update = config.get("cl_update")
@@ -173,8 +179,8 @@ class CTLTrainer(Trainer):
             running_losses = running_losses.unsqueeze(0)
         running_losses = [loss.item() for loss in running_losses]
         data = {"val_loss": sum(running_losses)}
-        for i, elem in enumerate(running_losses):
-            data["val_loss_component_" + str(i)] = elem
+        #for i, elem in enumerate(running_losses):
+        #    data["val_loss_component_" + str(i)] = elem
         self.logger.log(step=self.global_step, data=data, verbosity=dllogger.Verbosity.VERBOSE)
 
         self.model.train()
@@ -215,8 +221,6 @@ class CTLTrainer(Trainer):
                     losses = [losses]
                 losses = [loss.item() for loss in losses]
                 data = {"loss": loss.item()}
-                for k, v in enumerate(losses):
-                    data["loss_component_" + str(k)] = v
 
                 self.logger.log(step=self.global_step, data=data, verbosity=dllogger.Verbosity.VERBOSE)
 
@@ -226,9 +230,13 @@ class CTLTrainer(Trainer):
                 self.global_step += 1
             if self.scheduler:
                 self.scheduler.step()
+                self.logger.log(step=self.global_step, 
+                                data={f'lr_{i}': x for i, x in enumerate(self.scheduler.get_last_lr())},
+                                verbosity=dllogger.Verbosity.VERBOSE
+                                )
             self.callbacks.on_valid_begin(self.epoch)
             validation_loss = self.validate()
-            if validation_loss != validation_loss: #NaN check
+            if validation_loss != validation_loss:  # NaN check
                 self._stop_training = True
             data = {"val_loss": validation_loss}
             self.callbacks.on_valid_end(self.epoch, logs=data)
@@ -246,44 +254,91 @@ class CTLTrainer(Trainer):
         self.callbacks.on_train_end(logs=self.metrics)
 
 
+def _get_continious_bound_iterator():
+        _get_continious_bound_iterator.i = 0
+        def inner(dataset, id):
+            while _get_continious_bound_iterator.i < len(dataset) and dataset[_get_continious_bound_iterator.i]['id'] == id:
+                yield dataset[_get_continious_bound_iterator.i]
+                _get_continious_bound_iterator.i += 1
+        return inner
+
+
 class StatTrainer(Trainer):
+    '''This trainer fits statistical models with a single time serie at a time.
+    If `input_length` is specified in dataset, model will training only on last `input_lengs` observations,
+    otherwise whole series will be used.
+    '''
     def __init__(self,
                  config,
                  model,
                  train_dataset,
-                 valid_dataset
+                 valid_dataset,
+                 logger,
+                 evaluator,
                  ):
         self.config = config
         self.train_dataset = train_dataset
+        self.valid_dataset = valid_dataset
         self.global_step = 0
         self.epoch = 0
         self.model = model
-        self.logger = setup_logger(self.config)
+        self.logger = logger
+        self.evaluator = evaluator
+        self.log_interval = self.config.get('log_interval', 25)
 
     def train(self):
-        for train_batch in self.train_dataset:
-            self.model.fit(train_batch["endog"], train_batch["exog"])
+        bound_iterator = _get_continious_bound_iterator()
 
+        total_steps = len(self.train_dataset)
+        prev_timestemp = time.time()
+        time_running_avarage = 0
+        predictions_dict = {}
+        for step_id, train_example in enumerate(self.train_dataset):
+            self.model.fit(train_example)
+            next_timestemp = time.time()
+            
+            if time_running_avarage == 0:
+                time_running_avarage = (next_timestemp - prev_timestemp)
+            else:
+                time_running_avarage = time_running_avarage * 0.9 + (next_timestemp - prev_timestemp) * 0.1
+            prev_timestemp = next_timestemp
+            if (step_id + 1) % self.log_interval == 0:
+                self.logger.log(step=step_id, data={'steps:': f'{step_id+1} / {total_steps}', 's/iter': time_running_avarage}, verbosity=dllogger.Verbosity.DEFAULT)
+                self.logger.flush()
+            
+            evaluation_timer = time.time()
+            preds = self.evaluator.predict(self.model, dataloader=bound_iterator(self.valid_dataset, train_example['id']))
+            if predictions_dict:
+                for k in predictions_dict: 
+                    predictions_dict[k] = np.concatenate((predictions_dict[k], preds[k]))
+            else:
+                predictions_dict = preds
+            
+            if (step_id + 1) % self.log_interval == 0:
+                self.logger.log(step=step_id, data={'log': f'Evaluation finished in {time.time() - evaluation_timer}s'}, verbosity=dllogger.Verbosity.DEFAULT)
+                self.logger.flush()
         self.model.save()
+        return predictions_dict
 
     def validate(self):
         raise RuntimeError("Validation is not supported for StatTrainer")
 
 
 class XGBTrainer(Trainer):
-    def __init__(self, config, callbacks, model, train_dataset, valid_dataset):
+    def __init__(self, config, callbacks, model, train_dataset, valid_dataset, logger):
         '''
-        The idea behind this trainer is that we are given data at a time step t and want to create models to predict the value of a target
-        from t+1 to t+n.  At time step t we have access to every feature including the target, and if we are trying to predict at time step
-        t+i, we have access to the known and static values from there, using the function target_shift.  To aid in prediction and
-        give the model access to the history, lag and moving features can be specified in the configs.
-        Lag features can either be specifed by a min value and max value or a list of values.  If a min and max
-        value are specified then the range(min, max+1) is used as the list.  Moving average (or rolling features) are specified
-        by a window size.  These values are added with the feat_adder function.  A new model is trained for every step we want
-        to predict.  The trainer is not recursive so each model is independent and does not rely on the previous trained models.
+        The idea behind this trainer is that we are given data at a time step t and want to create models to predict
+        the value of a target from t+1 to t+n.  At time step t we have access to every feature including the target,
+        and if we are trying to predict at time step t+i, we have access to the known and static values from there,
+        using the function target_shift. To aid in prediction and give the model access to the history, lag and moving
+        features can be specified in the configs. Lag features can either be specifed by a min value and max value
+        or a list of values. If a min and max value are specified then the range(min, max+1) is used as the list.
+        Moving average (or rolling features) are specified by a window size. These values are added with the feat_adder function.
+        A new model is trained for every step we want to predict.  The trainer is not recursive so each model is
+        independent and does not rely on the previous trained models.
         '''
         self.config = config
-        self.logger = setup_logger(config)
+        self.logger = logger
         self.train_dataset = train_dataset
         self.valid_dataset = valid_dataset
         self.patience = callbacks.early_stopping.patience
@@ -296,4 +351,3 @@ class XGBTrainer(Trainer):
                            patience=self.patience,
                            log_interval=self.log_interval)
         self.model.save(os.getcwd())
-

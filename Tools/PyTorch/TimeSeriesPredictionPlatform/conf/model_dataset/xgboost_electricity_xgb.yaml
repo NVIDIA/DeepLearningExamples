@@ -1,0 +1,20 @@
+dataset:
+  config:
+    binarized: false
+    lag_features:
+      - name: power_usage
+        min_value: 1
+        max_value: 168
+model:
+  config:
+    max_depth: 8
+    learning_rate: 0.01 # alias: eta
+    subsample: 1.00
+    colsample_bytree: 0.90
+    objective: reg:absoluteerror
+    n_rounds: 1250
+
+trainer:
+  callbacks:
+    early_stopping:
+      patience: null

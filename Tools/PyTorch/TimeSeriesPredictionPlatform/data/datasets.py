@@ -1,4 +1,4 @@
-# Copyright 2021-2022 NVIDIA Corporation
+# Copyright 2021-2024 NVIDIA Corporation
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,66 +26,200 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from abc import abstractmethod
+from typing import Union, List
+import enum
+import warnings
+import mmap
 import math
 import os
 import pickle
+import logging
 from bisect import bisect
+from collections import Counter, namedtuple, Iterable
+from itertools import product
 
-import dgl
 import numpy as np
 import pandas as pd
 import torch
-from data.data_utils import InputTypes, DataTypes, FEAT_NAMES, FEAT_ORDER, DTYPE_MAP, translate_features
 import dgl
 
-from dgl.transform import metis_partition_assignment
+from dgl import metis_partition_assignment
 from torch.utils.data import Dataset
 from torch.utils.data.dataloader import default_collate
 
-from data.xgb_util import load_xgb_df, feat_adder, data_label_split, select_test_group, target_shift, \
-    xgb_multiID_preprocess
-from bisect import bisect
-from data.data_utils import InputTypes, DataTypes, FEAT_NAMES, FEAT_ORDER, DTYPE_MAP, translate_features, group_ids
+from data.xgb_util import feat_adder, data_label_split, select_test_group, target_shift, xgb_multiID_preprocess
+from bisect import bisect, bisect_left
+from data.data_utils import InputTypes, DataTypes, FEAT_NAME_MAP, DTYPE_MAP, translate_features, group_ids, get_alignment_compliment_bytes
 
-class TSBaseDataset(Dataset):
+
+ArgDesc = namedtuple(
+    'ArgDesc',
+    ['name', 'required', 'default', 'extractor'],
+)
+
+DatasetDesc = namedtuple(
+    'DatasetDesc',
+    ['type',  # ether xgb, stat or default (DL) dataset
+     'data_layout',  # e.g. binarized
+     'entity_type',  # e.g. graph, multi_id, ect
+     'target_type'],  # single or multi target
+)
+
+class DatasetType(enum.IntEnum):
+    DL = 0
+    XGB = 1
+    STAT = 2
+
+    @staticmethod
+    def parse(config):
+        dataset_type = DatasetType.DL
+        if config.get('xgb', False):
+            dataset_type = DatasetType.XGB
+        elif config.get('stat', False):
+            dataset_type = DatasetType.STAT
+        return dataset_type
+
+class DataLayout(enum.IntEnum):
+    DEFAULT = 0
+    BINARIZED = 1
+    MEMORY_MAPPED = 2
+
+    @staticmethod
+    def parse(config):
+        data_layout = DataLayout.DEFAULT
+        if config.get('memory_mapped', False):
+            data_layout = DataLayout.MEMORY_MAPPED
+        elif config.get('binarized', False):
+            data_layout = DataLayout.BINARIZED
+        return data_layout
+
+class EntityType(enum.IntEnum):
+    DEFAULT = 0
+    GRAPH = 1
+    SHARDED = 2
+    MULTIID = 3
+
+    @staticmethod
+    def parse(config):
+        entity_type = EntityType.DEFAULT
+        if config.get("construct_graph", False):
+            entity_type = EntityType.GRAPH
+        elif config.get('sharded', False):
+            entity_type = EntityType.SHARDED
+        elif config.get("MultiID", False):
+            entity_type = EntityType.MULTIID
+        return entity_type
+
+class TargetType(enum.IntEnum):
+    SINGLE = 0
+    MULTI = 1
+
+    @staticmethod
+    def parse(config):
+        target_type = TargetType.MULTI if config.get("MultiID", False) else TargetType.SINGLE
+        if config.get('single_target', False) or config.get('construct_graph', False):
+            target_type = TargetType.SINGLE
+        return target_type
+
+
+class BaseDataset(Dataset):
+    configuration_args = [
+        ArgDesc(name='features', required=True, default=None, extractor=lambda config: translate_features(config.features)),
+        ArgDesc(name='encoder_length', required=True, default=None, extractor=None),
+        ArgDesc(name='example_length', required=True, default=None, extractor=None),
+        ArgDesc(name='stride', required=False, default=1, extractor=None)
+    ]
+
+    @abstractmethod
+    def __getitem__(self, index):
+        raise NotImplementedError
+
+
+class DatasetFactory:
+    _dataset_registry = {}
+
+    @classmethod
+    def register(cls, type: Union[DatasetType, List[DatasetType]], 
+                 data_layout: Union[DataLayout, List[DataLayout]], 
+                 entity_type: Union[EntityType, List[EntityType]], 
+                 target_type: Union[TargetType, List[TargetType]]
+                ):
+        def inner_wrapper(wrapped_class: BaseDataset):
+            descriptions = [d if isinstance(d, Iterable) else [d] 
+                     for d in (type, data_layout, entity_type, target_type)]
+            for desc in product(*descriptions):
+                if desc in cls._dataset_registry:
+                    raise ValueError(f'{wrapped_class.__class__.__name__} and {cls._dataset_registry[desc].__class__.__name__} '
+                                     'datasets match same description. Please, resolve the conflict manually.')
+                cls._dataset_registry[desc] = wrapped_class
+            return wrapped_class
+        return inner_wrapper
+    
+    @classmethod
+    def construct_dataset(cls, dataset_desc, df, config):
+        if dataset_desc not in cls._dataset_registry:
+            raise ValueError(f'Failed to create dataset: There is no dataset that matches description {dataset_desc}.')
+        dataset_class: BaseDataset = cls._dataset_registry[dataset_desc]
+        dataset_kwargs = {}
+        for arg in dataset_class.configuration_args:
+            val = arg.default
+            if arg.extractor:
+                try:
+                    val = arg.extractor(config)
+                except Exception as e:
+                    if arg.required:
+                        raise
+                    else:
+                        print('Encountered error during config parsing', e)
+            else:
+                if arg.required:
+                    val = config[arg.name]
+                else:
+                    val = config.get(arg.name, arg.default) 
+            dataset_kwargs[arg.name] = val
+        
+        ds = dataset_class(df=df, **dataset_kwargs)
+        return ds
+    
+
+class TSBaseDataset(BaseDataset):
     def __init__(self, features, df, encoder_length, example_length, stride=1, **kwargs):
         super().__init__()
         assert example_length > encoder_length
         self.features = features
+        self.time_feat = [i for i in self.features if i.feature_type == InputTypes.TIME][0]
         self.encoder_length = encoder_length
         self.example_length = example_length
         self.stride = stride
         self.df = df
         self.load()
-        self.features = [i for i in self.features if i.feature_type != InputTypes.TIME]
-        self.feature_type_col_map = [
-            [i for i, f in enumerate(self.features) if (f.feature_type, f.feature_embed_type) == x] for x in FEAT_ORDER
-        ]
 
+    @abstractmethod
     def load(self):
         raise NotImplementedError
 
+
+@DatasetFactory.register(
+    type=DatasetType.DL,
+    data_layout=DataLayout.DEFAULT,
+    entity_type=EntityType.DEFAULT,
+    target_type=TargetType.SINGLE
+)
 class TSDataset(TSBaseDataset):
     def __init__(self, features, df=None, encoder_length=52, example_length=54, stride=1, **kwargs):
         super().__init__(features, df, encoder_length, example_length, stride)
-        self.grouped = [x for x in self.grouped if x.shape[0] >= self.example_length]
-        self.group_lens = [(g.shape[0] - self.example_length + 1) // self.stride for g in self.grouped]
-        self._cum_examples_in_group = np.cumsum(self.group_lens)
 
-        self.grouped = [
-            [
-                arr[:, idxs].view(dtype=np.float32).astype(DTYPE_MAP[t[1]])
-                for t, idxs in zip(FEAT_ORDER, self.feature_type_col_map)
-            ]
-            for arr in self.grouped
-        ]
+        group_lens = (self.group_sizes - self.example_length + 1) // self.stride
+        self._cum_examples_in_group = np.cumsum(group_lens)
+        self._group_last_idx = np.cumsum(self.group_sizes)
 
     def load(self):
         if isinstance(self.df, pd.DataFrame):
             data = self.df
         else:
-            data = pd.read_csv(self.df, index_col=0)
-        self.grouped = group_ids(data, self.features)
+            data = pd.read_csv(self.df, index_col=0, engine='pyarrow')
+        self.grouped, self.group_sizes = group_ids(data, self.features)
 
     def get_probabilities(self):
         sampled = []
@@ -102,28 +236,136 @@ class TSDataset(TSBaseDataset):
 
     def __getitem__(self, idx):
         g_idx = bisect(self._cum_examples_in_group, idx)
+        offset = self._group_last_idx[g_idx - 1] if g_idx else 0
         e_idx = idx - self._cum_examples_in_group[g_idx - 1] if g_idx else idx
 
-        group = self.grouped[g_idx]
+        start = offset + e_idx * self.stride
+        end = offset + e_idx * self.stride + self.example_length
+        assert end <= self._group_last_idx[g_idx]
 
-        tensors = [
-            torch.from_numpy(feat[e_idx * self.stride: e_idx * self.stride + self.example_length])
-            if feat.size
-            else torch.empty(0)
-            for feat in group
-        ]
+        out = {
+            name: torch.from_numpy(feat[start:end])
+            for name, feat in zip(FEAT_NAME_MAP.keys(), self.grouped)
+        }
 
-        out = dict(zip(FEAT_NAMES, tensors))
         out["id"] = out["id"][0, :]
+        out["timestamp"] = out["timestamp"][0, :]
+
         return out
 
+
+@DatasetFactory.register(
+    type=DatasetType.DL,
+    data_layout=DataLayout.DEFAULT,
+    entity_type=EntityType.SHARDED,
+    target_type=TargetType.SINGLE
+)
+class TSShardedDataset(TSBaseDataset):
+    """
+    Experimental class.
+    """
+    def __init__(self, features, df=None, encoder_length=52, example_length=54, stride=1, **kwargs):
+        super().__init__(features, df, encoder_length, example_length, stride)
+
+    def autodetect_shards(self, df):
+        time_feat = [i for i in self.features if i.feature_type == InputTypes.TIME][0]
+        time_diffs = df[time_feat.name].diff()
+        counter = Counter(time_diffs)
+        timestep = counter.most_common()[0][0]
+
+        # create groups based on consecutive time differences
+        groups = (time_diffs != timestep).cumsum()
+        # group the DataFrame by the groups and create a dictionary of continuous blocks
+        shards = {group: data for group, data in df.groupby(groups) if len(data) >= self.encoder_length}
+        return shards
+
+    def load(self):
+        if isinstance(self.df, pd.DataFrame):
+            data = self.df
+        else:
+            data = pd.read_csv(self.df, index_col=0, engine='pyarrow')
+
+        shards = self.autodetect_shards(data)
+
+        self.shards = [TSDataset(self.features, 
+                                 df=shard, 
+                                 encoder_length=self.encoder_length, 
+                                 example_length=self.example_length,
+                                 stride=1)
+                                 for shard in shards.values()
+        ]
+        self._cum_shards_len = np.cumsum([len(ds) for ds in self.shards])
+
+    def __len__(self):
+        return self._cum_shards_len[-1]
+
+    def __getitem__(self, idx):
+        g_idx = bisect(self._cum_shards_len, idx)
+        e_idx = idx - self._cum_shards_len[g_idx - 1] if g_idx else idx
+
+        return self.shards[g_idx][e_idx]
+
+
+@DatasetFactory.register(
+    type=DatasetType.DL,
+    data_layout=DataLayout.BINARIZED,
+    entity_type=EntityType.DEFAULT,
+    target_type=TargetType.SINGLE
+)
 class TSBinaryDataset(TSDataset):
     def load(self):
         if isinstance(self.df, pd.DataFrame):
             data = self.df
-            self.grouped = group_ids(data, self.features)
+            self.grouped, self.group_sizes = group_ids(data, self.features)
         else:
-            self.grouped = pickle.load(open(self.df, "rb"))
+            with open(self.df, "rb") as f:
+                metadata = pickle.load(f)
+                self.group_sizes = metadata['group_sizes']
+                self.grouped = []
+                for dtype, shape, _ in metadata['col_desc']:
+                    offset = get_alignment_compliment_bytes(f.tell(), dtype)
+                    self.grouped.append(
+                        np.fromfile(f, dtype=dtype, count=np.prod(shape), offset=offset).reshape(*shape)
+                    )
+
+
+@DatasetFactory.register(
+    type=DatasetType.DL,
+    data_layout=DataLayout.MEMORY_MAPPED,
+    entity_type=EntityType.DEFAULT,
+    target_type=TargetType.SINGLE
+)
+class TSMemoryMappedDataset(TSDataset):
+    warnings.filterwarnings('ignore', category=UserWarning, message='The given NumPy array is not writable,')
+
+    def load(self):
+        if isinstance(self.df, pd.DataFrame):
+            raise ValueError(f'{self.__class__.__name__} does not support loading from DataFrame')
+        
+        f = open(self.df, "rb")
+        metadata = pickle.load(f)
+        self.group_sizes = metadata['group_sizes']
+
+        offset = f.tell()
+        buf = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        try:
+            # try to enable huge pages to improve performance
+            buf.madvise(mmap.MADV_HUGEPAGE)
+        except Exception:
+            logging.info("Failed to enable huge pages on mapped dataset")
+
+        # it would be nice for the OS to load some pages ahead
+        # in case they are on an actual file system and not shmem/tmpfs
+        buf.madvise(mmap.MADV_WILLNEED)
+
+        self.grouped = []
+        for dtype, shape, nbytes in metadata['col_desc']:
+            offset += get_alignment_compliment_bytes(offset, dtype)
+            self.grouped.append(
+                np.frombuffer(buffer=buf, dtype=dtype, count=np.prod(shape), offset=offset).reshape(*shape)
+            )
+            offset += nbytes
+
 
 class TSMultiIDDatasetBase(TSBaseDataset):
     def __init__(self,
@@ -137,10 +379,6 @@ class TSMultiIDDatasetBase(TSBaseDataset):
             ):
         super().__init__(features, df, encoder_length, example_length, stride)
 
-        # This part is tricky: we want to do this only for training dataset and then apply the same changes to valid and test splits to maintain coherence.
-        # We can't do this in the preprocessing step because many different dataset classes rely on the same csv file. Thus the first time dataset is created
-        # if we pass empty list of collumns to collapse and populate it here. This list is a part for common argument set for the train, valid and test splits
-        # so is maintained throughout construction of all the splits.
         if collumns_to_collapse is not None:
             if not collumns_to_collapse:
                 for name, df in self.tables.items():
@@ -157,16 +395,15 @@ class TSMultiIDDatasetBase(TSBaseDataset):
                         self.tables[name] = self.tables[name].iloc[:, :1]
 
         self.data = {}
-        for fname, ftype in zip(FEAT_NAMES, FEAT_ORDER):
+        for fname, ftype in FEAT_NAME_MAP.items():
             names = [f.name for f in self.features if (f.feature_type, f.feature_embed_type) == ftype]
             if names:
-                df = pd.concat([v for k,v in self.tables.items() if k in names], axis=1)
-                self.data[fname] = df.values.astype(dtype=DTYPE_MAP[ftype[1]])
+                self.data[fname] = [v.values.astype(dtype=DTYPE_MAP[ftype[1]]) for k,v in self.tables.items() if k in names]
             else:
                 self.data[fname] = None
 
         del self.tables
-        self._n_timeslices = (next(len(df) for df in self.data.values() if df is not None) - self.example_length + 1) // self.stride
+        self._n_timeslices = (next(len(x[0]) for x in self.data.values() if x is not None) - self.example_length + 1) // self.stride
 
     def load(self):
         time_col_name = next(x.name for x in self.features if x.feature_type == InputTypes.TIME)
@@ -174,12 +411,30 @@ class TSMultiIDDatasetBase(TSBaseDataset):
         if isinstance(self.df, pd.DataFrame):
             data = self.df
         else:
-            data = pd.read_csv(self.df, index_col=0)
+            data = pd.read_csv(self.df, index_col=0, engine='pyarrow')
         self.tables = {}
         for f in self.features:
             self.tables[f.name] = data.pivot(index=time_col_name, columns=id_col_name, values=f.name)
 
+
+@DatasetFactory.register(
+    type=DatasetType.DL,
+    data_layout=DataLayout.DEFAULT,
+    entity_type=EntityType.MULTIID,
+    target_type=TargetType.MULTI
+)
 class TSMultiTargetDataset(TSMultiIDDatasetBase):
+    configuration_args = (
+        TSMultiIDDatasetBase.configuration_args + 
+        [
+            ArgDesc(name='collumns_to_collapse', required=False, default=None, extractor=lambda config: [] if config.get('collapse_identical_columns', False) else None)
+        ]
+    )
+    def __init__(self, *args, **kwargs):
+        assert kwargs.get('columns_to_collapse') is None, "Can't use TSMultiTargetDataset with collapse_identical_columns=True"
+        super().__init__(*args, **kwargs)
+        self.data = {k: np.stack(v, axis=-1) if v is not None else None for k, v in self.data.items()}
+
 
     def __len__(self):
         return self._n_timeslices 
@@ -196,12 +451,29 @@ class TSMultiTargetDataset(TSMultiIDDatasetBase):
               for k,v in self.data.items()
               }
 
+        # There is only one id column, so squeeze dimension which was produced by torch.stack
+        out['id'] = out['id'].squeeze(-1)
+        out['timestamp'] = out['timestamp'].squeeze(-1)
+
         return out
 
-class TSMultiIDDataset(TSMultiIDDatasetBase):
 
+@DatasetFactory.register(
+    type=DatasetType.DL,
+    data_layout=DataLayout.DEFAULT,
+    entity_type=EntityType.MULTIID,
+    target_type=TargetType.SINGLE
+)
+class TSMultiIDDataset(TSMultiIDDatasetBase):
+    configuration_args = (
+        TSMultiIDDatasetBase.configuration_args + 
+        [
+            ArgDesc(name='collumns_to_collapse', required=False, default=None, extractor=lambda config: [] if config.get('collapse_identical_columns', False) else None)
+        ]
+    )
     def __init__(self, features, df=None, encoder_length=52, example_length=54, stride=1, collumns_to_collapse=None, **kwargs):
         super().__init__(features, df, encoder_length, example_length, stride, collumns_to_collapse)
+        self.data = {k: np.concatenate(v, axis=-1) if v is not None else None for k, v in self.data.items()}
 
     def __len__(self):
         return self._n_timeslices * self.data['id'].shape[1]
@@ -217,7 +489,6 @@ class TSMultiIDDataset(TSMultiIDDatasetBase):
               for k,v in self.data.items()
               }
         out['o_cont'] = torch.cat([out['o_cont'], targets], dim=-1)
-
         out['s_cat'] = out['s_cat'][:, g_idx].unsqueeze(1) if out['s_cat'].numel() else out['s_cat']
         out['s_cont'] = out['s_cont'][:, g_idx].unsqueeze(1) if out['s_cont'].numel() else out['s_cont']
         out['id'] = out['id'][:, g_idx]
@@ -226,93 +497,173 @@ class TSMultiIDDataset(TSMultiIDDatasetBase):
         out['weight'] = out['weight'][:, g_idx].unsqueeze(1) if out['weight'].numel() else out['weight']
 
         return out
-        
-class StatDataset(Dataset):
-    def __init__(self, features, path_stat, df=None, encoder_length=52, example_length=54, stride=1, split=None, split_feature=None, ds_type=None):
 
-        self.ds_type = ds_type
-        if ds_type == "valid":
-            return
-        super().__init__()
-        assert example_length > encoder_length, "Length of example longer than encoder length"
-        assert split, "Split not given"
-        assert ds_type in ["train", "test"]
 
-        self.features = features
-        self.time_feature = split_feature
-        self.weight_features = [feature.name for feature in self.features if feature.feature_type == InputTypes.WEIGHT]
-        self.encoder_length = encoder_length
-        self.example_length = example_length
+@DatasetFactory.register(
+    type=DatasetType.STAT,
+    data_layout=DataLayout.DEFAULT,
+    entity_type=EntityType.DEFAULT,
+    target_type=TargetType.SINGLE
+) 
+class StatDataset(TSBaseDataset):
+    configuration_args = (
+        TSBaseDataset.configuration_args + 
+        [
+            ArgDesc(name='use_last', required=False, default=0, extractor=None)
+        ]
+    )
+    def __init__(self, features, df=None, encoder_length=52, example_length=54, stride=1, use_last=0):
+        self.use_last = use_last
+        super().__init__(features, df, encoder_length, example_length, stride)
+        self.test = False
+
         self.horizon = self.example_length - self.encoder_length
-        self.stride = stride
-        self.split = split
-        self.id_col_name = next(x.name for x in self.features if x.feature_type == InputTypes.ID)
-        self.col_dtypes = {v.name: DTYPE_MAP[v.feature_embed_type] for v in self.features}
-        if isinstance(df, pd.DataFrame):
-            self.data = df.astype(self.col_dtypes)
-        else:
-            self.data = pd.read_csv(os.path.join(path_stat, "full.csv"), dtype=self.col_dtypes)
-        self.data = self.data.groupby(self.id_col_name).filter(lambda group: len(group) >= self.example_length)
-        self.grouped = list(self.data.groupby(self.id_col_name))
-        self.endog = [feature.name for feature in self.features if feature.feature_type == InputTypes.TARGET]
-        self.exog = [
-            feature.name
-            for feature in self.features
-            if feature.feature_type in [InputTypes.KNOWN, InputTypes.OBSERVED, InputTypes.STATIC]
-               and feature.feature_embed_type == DataTypes.CONTINUOUS
-        ]
-        self.grouped = [group[1] for group in self.grouped]
-        self.grouped = [
-            group
-            for group in self.grouped
-            if len(group[group[self.time_feature] <= self.split]) >= self.encoder_length
-               and len(group[group[self.time_feature] > self.split]) >= self.horizon
-        ]
+        feat_names = list(FEAT_NAME_MAP.keys())
+        self.id_col_id = feat_names.index('id')
+        self.weight_col_id = feat_names.index('weight')
+        self.endog_col_id = feat_names.index('target')
+        self.exog_col_id = [i for i, feat in enumerate(feat_names) if feat.endswith('cont')]
 
-        self._cum_examples_in_group = np.cumsum(
-            [(len(group[group[self.time_feature] > split]) - self.horizon) // self.stride + 1 for group in self.grouped]
-        )
+        self._group_last_idx = np.cumsum(self.group_sizes)
+        self._cum_examples_in_group = np.cumsum((self.group_sizes - self.horizon + 1) // self.stride)
+    
+    def load(self):
+        if isinstance(self.df, pd.DataFrame):
+            self.data = self.df
+        else:
+            data = pd.read_csv(self.df, index_col=0, engine='pyarrow')
+        self.grouped, self.group_sizes = group_ids(data, self.features)
 
     def __len__(self):
-        if self.ds_type == "valid":
-            raise ValueError
-        return self._cum_examples_in_group[-1]
+        return self._cum_examples_in_group[-1] if self.test else len(self.group_sizes)
 
     def __getitem__(self, idx):
-        if self.ds_type == "valid":
-            raise ValueError
-        if idx > self._cum_examples_in_group[-1]:
+        if ((self.test and idx > self._cum_examples_in_group[-1]) or 
+            (not self.test and idx > len(self.group_sizes))):
             raise StopIteration
-        g_idx = bisect(self._cum_examples_in_group, idx)
-        e_idx = idx - self._cum_examples_in_group[g_idx - 1] if g_idx else idx
-        group = self.grouped[g_idx]
-        test = group[group[self.time_feature] > self.split]
-        if self.ds_type == "test":
-            test_slice = test[self.stride * e_idx: self.stride * e_idx + self.horizon]
-            test_out = {"endog": test_slice[self.endog], "exog": test_slice[self.exog], "id": test_slice[self.id_col_name]}
-            if len(self.weight_features):
-                test_out["weight"] = test_slice[self.weight_features]
-            return test_out
+        
+        if not self.test:
+            start = self._group_last_idx[idx - 1] if idx else 0
+            end = self._group_last_idx[idx]
+            if self.use_last > 0:
+                start = end - self.use_last
+            
+            update_start = 0
+            update_end = 0
         else:
-            train = group[group[self.time_feature] <= self.split]
-            if (self.encoder_length - self.stride * e_idx) > 0:
-                train_slice = train[-(self.encoder_length - self.stride * e_idx):].append(
-                    test[max(0, self.stride * e_idx - self.encoder_length): self.stride * e_idx]
-                )
-            else:
-                train_slice = test[max(0, self.stride * e_idx - self.encoder_length): self.stride * e_idx]
+            g_idx = bisect(self._cum_examples_in_group, idx)
+            offset = self._group_last_idx[g_idx - 1] if g_idx else 0
+            e_idx = idx - self._cum_examples_in_group[g_idx - 1] if g_idx else idx
 
-            train_out = {"endog": train_slice[self.endog], "exog": train_slice[self.exog]}
-            return train_out
+            start = offset + e_idx * self.stride
+            end = offset + e_idx * self.stride + self.horizon
+            assert end <= self._group_last_idx[g_idx]
+            update_start = (e_idx - 1 if e_idx else 0) * self.stride
+            update_end = e_idx * self.stride
+        
+        out = {
+            'endog': self.grouped[self.endog_col_id][start:end],
+            'exog': np.hstack(self.grouped[i][start:end] for i in self.exog_col_id),
+            'id': self.grouped[self.id_col_id][start].item(),
+            'weight': self.grouped[self.weight_col_id][start:end],
+            'endog_update': self.grouped[self.endog_col_id][update_start:update_end],
+            'exog_update': np.hstack(self.grouped[i][update_start:update_end] for i in self.exog_col_id),
+        }
+        return out
+
+@DatasetFactory.register(
+    type=DatasetType.STAT,
+    data_layout=DataLayout.BINARIZED,
+    entity_type=EntityType.DEFAULT,
+    target_type=TargetType.SINGLE
+) 
+class BinaryStatDataset(StatDataset):
+    def load(self):
+        if isinstance(self.df, pd.DataFrame):
+            data = self.df
+            self.grouped, self.group_sizes = group_ids(data, self.features)
+        else:
+            with open(self.df, "rb") as f:
+                metadata = pickle.load(f)
+                self.group_sizes = metadata['group_sizes']
+                self.grouped = []
+                for dtype, shape, _ in metadata['col_desc']:
+                    offset = get_alignment_compliment_bytes(f.tell(), dtype)
+                    self.grouped.append(
+                        np.fromfile(f, dtype=dtype, count=np.prod(shape), offset=offset).reshape(*shape)
+                    )
+
+@DatasetFactory.register(
+    type=DatasetType.STAT,
+    data_layout=DataLayout.MEMORY_MAPPED,
+    entity_type=EntityType.DEFAULT,
+    target_type=TargetType.SINGLE
+) 
+class TSMemoryMappedDataset(StatDataset):
+    def load(self):
+        if isinstance(self.df, pd.DataFrame):
+            raise ValueError(f'{self.__class__.__name__} does not support loading from DataFrame')
+        
+        f = open(self.df, "rb")
+        metadata = pickle.load(f)
+        self.group_sizes = metadata['group_sizes']
+
+        offset = f.tell()
+        buf = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        try:
+            # try to enable huge pages to improve performance
+            buf.madvise(mmap.MADV_HUGEPAGE)
+        except Exception:
+            logging.info("Failed to enable huge pages on mapped dataset")
+
+        # it would be nice for the OS to load some pages ahead
+        # in case they are on an actual file system and not shmem/tmpfs
+        buf.madvise(mmap.MADV_WILLNEED)
+
+        self.grouped = []
+        for dtype, shape, nbytes in metadata['col_desc']:
+            offset += get_alignment_compliment_bytes(offset, dtype)
+            self.grouped.append(
+                np.frombuffer(buffer=buf, dtype=dtype, count=np.prod(shape), offset=offset).reshape(*shape)
+            )
+            offset += nbytes
 
 
-class XGBDataset(Dataset):
-    def __init__(self, df, path_xgb, features_xgb, lag_features, moving_average_features, example_length, encoder_length, time_series_count, MultiID, ds_type, **kwargs):
-        self.ds_type = ds_type
-        features = features_xgb
-        dest_path = df if isinstance(df, pd.DataFrame) else path_xgb
-        self.encoder_length = encoder_length
-        self.example_length = example_length
+@DatasetFactory.register(
+    type=DatasetType.XGB,
+    data_layout=DataLayout.DEFAULT,
+    entity_type=[EntityType.DEFAULT, EntityType.MULTIID],
+    target_type=TargetType.SINGLE
+) 
+class XGBDataset(TSBaseDataset):
+    configuration_args = (
+        TSBaseDataset.configuration_args + 
+        [
+            ArgDesc(name='lag_features', required=False, default=[], extractor=None),
+            ArgDesc(name='moving_average_features', required=False, default=[], extractor=None),
+            ArgDesc(name='MultiID', required=False, default=False, extractor=None),
+        ]
+    )
+
+    def __init__(self, features, df, encoder_length, example_length, lag_features, moving_average_features, MultiID, **kwargs):
+        super().__init__(features, df, encoder_length, example_length, stride=1)
+
+        self.test = False
+
+        self.horizon = example_length - encoder_length
+        self.target = [feature.name for feature in features if
+                       feature.feature_type == InputTypes.TARGET]
+        self.time_feat = [feature.name for feature in features if
+                       feature.feature_type == InputTypes.TIME]
+
+        # Filter out special features
+        self.features = [f for f in self.features if not f.feature_type in (InputTypes.TIME, InputTypes.WEIGHT, InputTypes.ID)]
+
+        self.observed = [feature.name for feature in features if
+                         feature.feature_type == InputTypes.OBSERVED]
+        self.known = [feature.name for feature in features if
+                      feature.feature_type in [InputTypes.KNOWN, InputTypes.STATIC]]
+        
         lag_features_conf = lag_features
         self.lag_features = {}
         for feat in lag_features_conf:
@@ -329,31 +680,37 @@ class XGBDataset(Dataset):
             assert feat.get("window_size", None) is not None
             self.moving_average_features[feat.name] = self.moving_average_features.get(feat.name, []) + [
                 feat.window_size]
-        self.horizon = example_length - encoder_length
-        self.target = [feature.name for feature in features if
-                       feature.feature_type == "TARGET"]
-        self.observed = [feature.name for feature in features if
-                         feature.feature_type == "OBSERVED"]
-        self.known = [feature.name for feature in features if
-                      feature.feature_type in ["KNOWN", "STATIC"]]
-        assert len(self.target) == 1, "Only 1 target feature is currently supported with xgboost"
-        self.data = load_xgb_df(dest_path, features, ds_type)
-        self.extra_columns = [[f'{k}_{i}' for i in v] for k, v in self.lag_features.items()]
+
         if MultiID:
             target = self.target[0]
             lag_target_value = self.lag_features.pop(target, [])
+
+            time_series_count = self.data['_id_'].nunique()
             for i in range(time_series_count):
                 self.lag_features[f'{target}_{i}'] = lag_target_value
             self.moving_average_features[f'{target}_{i}'] = self.moving_average_features.pop(target, [])
-            self.data = xgb_multiID_preprocess(self.data,  features, time_series_count) # XXX need to work with 
+            self.data = xgb_multiID_preprocess(self.data,  self.time_feat[0], target)
+
         self.data = feat_adder(self.data, self.lag_features, self.moving_average_features)
+        self.data = self.data.loc[:, sorted(self.data.columns)]
+
+    def load(self):
+        if isinstance(self.df, pd.DataFrame):
+            data = self.df
+        else:
+            data = pd.read_csv(self.df, index_col=0, engine='pyarrow')
+
+        all_features = {f.name for f in self.features}
+        data = data[all_features]
+        data = data.select_dtypes(exclude='object')
+        self.data = data
 
     def __getitem__(self, idx):
         if idx >= self.horizon:
             raise StopIteration
         data_step = self.data.copy()
-        data_step = target_shift(data_step, self.target, self.known, idx)
-        if self.ds_type == 'test':
+        data_step = target_shift(data_step, self.target, [], idx)
+        if self.test:
             data_step = select_test_group(data_step, self.encoder_length, self.example_length)
         labels = data_label_split(data_step, [f'{i}_target' for i in self.target])
         return data_step, labels
@@ -361,15 +718,38 @@ class XGBDataset(Dataset):
     def __len__(self):
         return self.horizon
 
-class ClusteredGraphDataset(Dataset):
-    def __init__(self, graph, graph_partitions=10, partition_joining_coef=2, **kwargs):
-        if isinstance(graph, str):
-            self.graph = pickle.load(open(graph, "rb"))
-        else:
-            self.graph = graph
 
+@DatasetFactory.register(
+    type=DatasetType.DL,
+    data_layout=DataLayout.DEFAULT,
+    entity_type=EntityType.GRAPH,
+    target_type=TargetType.SINGLE
+) 
+class TemporalClusteredGraphDataset(TSMultiIDDatasetBase):
+    configuration_args = (
+        TSMultiIDDatasetBase.configuration_args + 
+        [
+            ArgDesc(name='graph', required=True, default=None, extractor=lambda config: os.path.join(config.dest_path, config.graph)),
+            ArgDesc(name='graph_partitions', required=True, default=None, extractor=None),
+            ArgDesc(name='partition_joining_coef', required=True, default=None, extractor=None),
+        ]
+    )
+    def __init__(self, features, graph, df=None, encoder_length=52, example_length=54, stride=1, graph_partitions=1, partition_joining_coef=1, **kwargs):
         assert isinstance(graph_partitions, int) and graph_partitions > 0
         assert partition_joining_coef <= graph_partitions
+        assert graph is not None
+
+        super().__init__(features, df, encoder_length, example_length, stride, collumns_to_collapse=None)
+
+        if isinstance(graph, str):
+            self.graph = pickle.load(open(graph, "rb"))
+            if isinstance(self.graph, np.ndarray):
+                edges = np.nonzero(self.graph)
+                weights = self.graph[edges]
+                self.graph = dgl.graph(edges)
+                self.graph.edata['w'] = torch.tensor(weights)
+        else:
+            self.graph = graph
 
         self.part_count = graph_partitions
         if graph_partitions > 1:
@@ -378,16 +758,30 @@ class ClusteredGraphDataset(Dataset):
             self.partition = torch.zeros(self.graph.num_nodes(), dtype=torch.int64)
         self.joining_coef = partition_joining_coef
 
+        for k,v in self.data.items():
+            if v is not None:
+                self.data[k] = np.stack(self.data[k], axis=1).transpose(2,0,1)
+
     def __len__(self):
-        return math.comb(self.part_count, self.joining_coef)
+        return math.comb(self.part_count, self.joining_coef) * self._n_timeslices
 
     def __getitem__(self, idx):
-        indicator = self.idx_to_combination(self.part_count, self.joining_coef, idx)
-        c_ids = np.nonzero(indicator)[0]
-        subgraph = self.get_subgraph(c_ids)
+        g_idx = idx // self._n_timeslices
+        t_idx = idx - g_idx * self._n_timeslices
+        subgraph = self.get_subgraph(g_idx)
+        node_ids = np.array(subgraph.ndata["_ID"])
+        for k, v in self.data.items():
+            subgraph.ndata[k] = torch.from_numpy(
+                v[node_ids, t_idx * self.stride: t_idx * self.stride + self.example_length, :]
+            ) if v is not None else torch.empty((self.graph.num_nodes(),0))
+
+        subgraph.ndata['id'] = subgraph.ndata['id'][:,0,:]
+
         return subgraph
 
-    def get_subgraph(self, c_ids):
+    def get_subgraph(self, idx):
+        indicator = self.idx_to_combination(self.part_count, self.joining_coef, idx)
+        c_ids = np.nonzero(indicator)[0]
         ids = sum([self.partition == i for i in c_ids]).bool()
         return self.graph.subgraph(ids)
 
@@ -415,130 +809,46 @@ class ClusteredGraphDataset(Dataset):
         return out
 
 
-class TemporalClusteredGraphDataset(ClusteredGraphDataset):
-    def __init__(self, features, graph, df=None, encoder_length=52, example_length=54, stride=1, **kwargs):
-        super().__init__(graph, **kwargs)
-        assert example_length > encoder_length
-        self.features = [i for i in features if i.feature_type != InputTypes.TIME]
-        self.encoder_length = encoder_length
-        self.example_length = example_length
-        self.stride = stride
-        self.df = df
-
-        self.feature_type_col_map = [
-            np.array([i for i, f in enumerate(self.features) if (f.feature_type, f.feature_embed_type) == x])
-            for x in FEAT_ORDER
-        ]
-        if isinstance(df, pd.DataFrame):
-            data = self.df
-            grouped = group_ids(data, self.features)
-        else:
-            grouped = pickle.load(open(self.df, "rb"))
-        # We assume that all the time series are of the same length and have the same set of features
-        assert all([x.shape == grouped[0].shape for x in grouped])
-
-        ndata = np.stack(grouped)
-        self.ndata = {
-            name: ndata[:, :, ids].view(dtype=np.float32).astype(DTYPE_MAP[f[1]])
-            if not ids.size == 0
-            else np.empty((*ndata.shape[:-1], 0))
-            for name, f, ids in zip(FEAT_NAMES, FEAT_ORDER, self.feature_type_col_map)
-        }
-
-        self.t_dim = ndata.shape[1]
-        self.n_timeslices = (self.t_dim - self.example_length + 1) // self.stride
-
-    def __len__(self):
-        # the number of possible subgraphs times the number of possible time slices
-        return super().__len__() * self.n_timeslices
-
-    def __getitem__(self, idx):
-        g_idx = idx // self.n_timeslices
-        t_idx = idx - g_idx * self.n_timeslices
-        subgraph = super().__getitem__(g_idx)
-        node_ids = np.array(subgraph.ndata["_ID"])
-        for k, v in self.ndata.items():
-            subgraph.ndata[k] = torch.from_numpy(
-                v[node_ids, t_idx * self.stride: t_idx * self.stride + self.example_length, :]
-            )
-
-        return subgraph
-
-
+def _parse_dataset_description(config):
+    dataset_type = DatasetType.parse(config=config)
+    data_layout = DataLayout.parse(config=config)
+    entity_type = EntityType.parse(config=config)
+    target_type = TargetType.parse(config=config)
+    
+    return DatasetDesc(
+        type=dataset_type,
+        data_layout=data_layout,
+        entity_type=entity_type,
+        target_type=target_type
+    )
 
 def create_datasets(config, input_df=None):
-    def select_dataset_class(config):
-        binarized = config.get("binarized", False)
-        graph_dataset = config.get("construct_graph", False)
-        multi_id_dataset = config.get("MultiID", False)
-        single_target = config.get('single_target', False)
-        if config.get("xgb", False):
-            specific_args = {
-                "path_xgb": config.dest_path,
-                "features_xgb": config.features,
-                "lag_features": config.get("lag_features", []),
-                "moving_average_features": config.get("moving_average_features", []),
-                "time_series_count": config.time_series_count,
-                "MultiID": config.get("MultiID", False)
-            }
-            return XGBDataset, specific_args
-
-        if config.get("stat", False):
-
-            specific_args = {
-                "path_stat": config.dest_path,
-                "split": config.test_range[0],
-                "split_feature": config.time_ids
-            }
-            return StatDataset, specific_args
-        if binarized and graph_dataset:
-            specific_args = {
-                "graph": os.path.join(config.dest_path, "graph.bin"),
-                "graph_partitions": config.graph_partitions,
-                "partition_joining_coef": config.partition_joining_coef,
-            }
-            return TemporalClusteredGraphDataset, specific_args
-        elif binarized and multi_id_dataset:
-            raise NotImplementedError
-        elif binarized:
-            return TSBinaryDataset, {}
-        elif not binarized and graph_dataset:
-            raise NotImplementedError
-        elif not binarized and multi_id_dataset and not single_target:
-            specific_args = {}
-            if config.get('collapse_identical_columns', False):
-                specific_args['collumns_to_collapse'] = []
-            return TSMultiTargetDataset, specific_args
-        elif not binarized and multi_id_dataset and single_target:
-            specific_args = {}
-            if config.get('collapse_identical_columns', False):
-                specific_args['collumns_to_collapse'] = []
-            return TSMultiIDDataset, specific_args
-        else:
-            return TSDataset, {}
-
-    common_args = {
-        "features": translate_features(config.features),
-        "encoder_length": config.encoder_length,
-        "example_length": config.example_length,
-        "stride": config.get("stride", 1),
-    }
-
-    dataset_class, specific_args = select_dataset_class(config)
-
+    dataset_desc = _parse_dataset_description(config)
     if input_df is not None:
         print("Input DataFrame provided to create_datasets functions")
         print("Warning: Please make sure the dataframe is preprocessed")
-        test = dataset_class(df=input_df, **common_args, **specific_args, ds_type='test')
+        test = DatasetFactory.construct_dataset(dataset_desc, df=input_df, config=config)
         train = None
         valid = None
     else:
         path_template = os.path.join(config.dest_path, "{{subset}}.{extension}")
-        path_template = path_template.format(extension="bin" if config.get("binarized", False) else "csv")
+        path_template = path_template.format(extension="bin" if config.get("binarized", False) or config.get("memory_mapped", False) else "csv")
 
-        train = dataset_class(df=path_template.format(subset="train"), **common_args, **specific_args, ds_type="train")
-        valid = dataset_class(df=path_template.format(subset="valid"), **common_args, **specific_args, ds_type="valid")
-        test = dataset_class(df=path_template.format(subset="test"), **common_args, **specific_args, ds_type="test")
+        train = DatasetFactory.construct_dataset(dataset_desc, 
+                                                 df=path_template.format(subset="train" if dataset_desc.type is not DatasetType.STAT else "train_stat"), 
+                                                 config=config, 
+                                                 )
+        
+        valid = DatasetFactory.construct_dataset(dataset_desc, 
+                                                 df=path_template.format(subset="valid"), 
+                                                 config=config, 
+                                                 ) if dataset_desc.type is not DatasetType.STAT else None
+        
+        test = DatasetFactory.construct_dataset(dataset_desc, 
+                                                 df=path_template.format(subset="test" if dataset_desc.type is not DatasetType.STAT else "test_stat"), 
+                                                 config=config, 
+                                                 )
+        
         if not (config.get("xgb", False) or config.get("stat", False)):
             train = sample_data(train, config.get("train_samples", -1))
             valid = sample_data(valid, config.get("valid_samples", -1))
@@ -568,24 +878,43 @@ def get_collate_fn(model_type, encoder_length, test=False):
             weights = weights[:, encoder_length :, :]
         return batch, labels, weights
 
-    def collate_ar(samples):
-        batch = default_collate(samples)
-        labels = batch["target"]
-        weights = batch['weight']
-        return batch, labels, weights
-
     def collate_dict(samples):
         """Default TSPP collater"""
         batch = default_collate(samples)
-        labels = batch["target"][:, encoder_length:, :]
+        labels = batch["target"][:, encoder_length :, :]
+        if test:
+            labels = labels.clone()
+            batch['target'][:, encoder_length :, :] = 0
+            if batch['o_cat'].numel():
+                batch['o_cat'][:, encoder_length :, :] = 0
+            if batch['o_cont'].numel():
+                batch['o_cont'][:, encoder_length :, :] = 0
         weights = batch['weight']
         if weights is not None and weights.numel():
-            weights = weights[:, encoder_length:, :]
+            weights = weights[:, encoder_length :, :]
+        return batch, labels, weights
+
+    def collate_ar(samples):
+        """A collater for autoregressive models"""
+        batch = default_collate(samples)
+        labels = batch["target"]
+        weights = batch['weight']
+        if test:
+            labels = labels.clone()
+            labels = labels[:, encoder_length:, :]
+            batch['target'][:, encoder_length:, :] = 0
+            if batch['o_cat'].numel():
+                batch['o_cat'][:, encoder_length:, :] = 0
+            if batch['o_cont'].numel():
+                batch['o_cont'][:, encoder_length:, :] = 0
+            if weights is not None and weights.numel():
+                weights = weights[:, encoder_length:, :]
+
         return batch, labels, weights
 
     if model_type == 'graph':
         return collate_graph
-    elif model_type == 'autoregressive' and not test:
+    if model_type == 'autoregressive':
         return collate_ar
     else:
         return collate_dict

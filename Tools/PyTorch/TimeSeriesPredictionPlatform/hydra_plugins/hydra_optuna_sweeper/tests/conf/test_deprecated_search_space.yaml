@@ -1,0 +1,20 @@
+defaults:
+  - override hydra/sweeper: optuna
+
+hydra:
+  sweeper:
+    direction: minimize
+    study_name: sphere
+    storage: null
+    n_trials: 20
+    n_jobs: 1
+    search_space:
+      x:
+        type: float
+        low: -5.5
+        high: 5.5
+        step: 0.5
+
+x: 1
+y: 1
+z: foo

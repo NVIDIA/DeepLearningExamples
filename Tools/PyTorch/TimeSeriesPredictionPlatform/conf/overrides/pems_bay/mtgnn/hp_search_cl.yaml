@@ -1,0 +1,32 @@
+hydra:
+  sweeper:
+    params:
+      model.config.gcn_depth: choice(2,3,4)
+      model.config.dropout: interval(0,0.4)
+      model.config.subgraph_size: choice(7,10,15)
+      model.config.node_dim: choice(32,40,64,128)
+      model.config.conv_channels: choice(16,32,64)
+      model.config.residual_channels: choice(16,32,64)
+      model.config.skip_channels: choice(32,64)
+      model.config.end_channels: choice(32,64)
+      model.config.num_layers: choice(3,4,5)
+      model.config.propalpha: interval(0.01, 0.2)
+      model.config.tanhalpha: interval(2, 6)
+      model.config.in_dim: choice(4, 8, 16, 24, 32, 64)
+      trainer.optimizer.lr: tag(log, interval(1e-5, 5e-3))
+      trainer.config.ema: choice(true, false)
+      +trainer.config.ema_decay: interval(0.9, 0.9999)
+      trainer/criterion: choice(L1,MSE)
+      +trainer.config.cl_update: choice(300,500,1000,1500)
+
+model:
+  config:
+    use_embedding: false
+trainer:
+  config:
+    cl_start_horizon: 1
+    batch_size: 64
+    num_epochs: 50
+evaluator:
+  config:
+    batch_size: 64

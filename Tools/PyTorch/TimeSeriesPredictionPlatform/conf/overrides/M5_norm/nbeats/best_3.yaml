@@ -1,0 +1,37 @@
+trainer:
+  config:
+    ema_decay: 0.9713445961834636
+    batch_size: 16384
+    ema: True
+    num_epochs: 30
+  
+  optimizer:
+    lr: 1.0430232386402735e-05
+  
+  criterion:
+    _target_: torch.nn.L1Loss
+
+model:
+  config:
+    stacks:
+        - type: "trend"
+          num_blocks: 8
+          theta_dim: 2
+          share_weights: True
+          hidden_size: 2048
+        - type: "seasonality"
+          num_blocks: 8
+          theta_dim: 0
+          share_weights: True
+          hidden_size: 1024
+
+
+dataset:
+  config:
+    memory_mapped: True 
+    train_samples: 1000000
+
+evaluator:
+  config:
+    save_predictions: True
+    batch_size: 16384

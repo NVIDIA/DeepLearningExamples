@@ -7,7 +7,7 @@ import numpy as np
 import xgboost as xgb
 import hydra
 import subprocess
-from loggers.log_helper import setup_logger
+
 def generate_config(
         model_name,
         *,
@@ -62,7 +62,6 @@ dynamic_batching {{
 
 def format_checkpoint(ckpt, total_features, max_batch_size):
     main_output_path = ckpt
-    #TODO hardcoded the num features
     #make deployment
     checkpoint_path = os.path.join(main_output_path, 'checkpoints')
     #make navigator_workspace

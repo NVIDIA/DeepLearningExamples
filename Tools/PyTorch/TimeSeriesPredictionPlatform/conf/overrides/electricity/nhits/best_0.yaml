@@ -1,0 +1,23 @@
+model:
+  config:
+    n_mlp_layers: 4
+    hidden_size: 2048
+    activation: ReLU
+    pooling_mode: MaxPool1d
+
+    n_blocks: [2,1,2]
+    n_pool_kernel_size: [2,2,1]
+    n_freq_downsample: [6,3,1]
+
+trainer:
+  config:
+    ema: True
+    ema_decay: 0.9703328617748128
+    batch_size: 16384
+    num_epochs: 25
+
+  optimizer:
+    lr: 0.0003483066522056015
+
+  criterion:
+    _target_: torch.nn.L1Loss

@@ -1,0 +1,37 @@
+model:
+  config:
+    in_dim: 32
+    conv_channels: 32
+    end_channels: 32
+    residual_channels: 16
+    skip_channels: 64
+    subgraph_size: 15
+    num_layers: 2
+    node_dim: 128
+    gcn_depth: 3
+    propalpha: 0.1436050341698628
+    dropout: 0.39020897175131136
+    tanhalpha: 2.761077470114226
+    temporal_observed_continuous_inp_size: 0
+
+trainer:
+  config:
+    ema: True
+    ema_decay: 0.9831133243513078
+    batch_size: 16
+    num_epochs: 25
+  optimizer:
+    lr: 0.00024334834818612688
+  criterion:
+    _target_: torch.nn.L1Loss
+
+dataset:
+  config:
+    binarized: False
+    MultiID: True
+    train_samples: -1
+    valid_samples: -1
+
+evaluator:
+  config:
+    batch_size: 16

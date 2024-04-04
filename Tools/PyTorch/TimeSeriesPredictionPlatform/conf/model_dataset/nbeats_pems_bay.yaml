@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT
+trainer:
+  config:
+    batch_size: 16384
+    num_epochs: 20
+
+dataset:
+  config:
+    MultiID: false

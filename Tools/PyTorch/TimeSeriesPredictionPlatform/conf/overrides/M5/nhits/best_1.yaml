@@ -1,0 +1,32 @@
+trainer:
+  config:
+    batch_size: 16384
+    ema: False
+    num_epochs: 30
+  
+  optimizer:
+    lr: 2.2641405995693264e-05
+  
+  criterion:
+    _target_: criterion.TweedieLoss
+    p: 1.033391495108709
+
+model:
+  config:
+    activation: ReLU
+    pooling_mode: AvgPool1d
+    hidden_size: 2048
+    n_blocks: [1,1,2]
+    n_freq_downsample: [4,2,1]
+    n_pool_kernel_size: [2,2,1]
+    n_mlp_layers: 4
+
+dataset:
+  config:
+    memory_mapped: True 
+    train_samples: 1000000
+
+evaluator:
+  config:
+    save_predictions: True
+    batch_size: 16384

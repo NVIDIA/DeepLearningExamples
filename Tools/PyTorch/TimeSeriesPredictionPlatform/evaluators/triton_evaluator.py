@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -79,7 +79,14 @@ class TritonEvaluator(MetricEvaluator):
         if self.save_predictions:
             self.example_history = np.concatenate(self.example_history, axis=0)
 
-        return preds_full, labels_full, ids_full, weights_full
+        predictions_dict = {
+            'preds_full': preds_full,
+            'labels_full': labels_full,
+            'ids_full': ids_full,
+            'weights_full': weights_full
+        }
+
+        return predictions_dict
 
     def predict_xgboost(self, dataloader, max_batch_size, server_url="localhost:8001"):
         grpc_client = triton_grpc.InferenceServerClient(
@@ -132,4 +139,12 @@ class TritonEvaluator(MetricEvaluator):
                 windows_labels = np.lib.stride_tricks.sliding_window_view(labels_all, dataloader.example_length)
                 self.example_history.append(windows_labels.copy()[:, :dataloader.encoder_length])
             self.example_history = np.concatenate(self.example_history, axis=0)[:, :, np.newaxis]
-        return outtemp, labels_temp, ids_temp[:,0], np.stack(weights)
+
+        predictions_dict = {
+            'preds_full': outtemp,
+            'labels_full': labels_temp,
+            'ids_full': ids_temp[:,0],
+            'weights_full': np.stack(weights)
+        }
+
+        return predictions_dict

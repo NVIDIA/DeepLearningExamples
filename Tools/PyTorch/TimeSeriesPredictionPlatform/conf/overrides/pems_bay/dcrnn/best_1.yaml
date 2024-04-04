@@ -1,0 +1,23 @@
+model:
+  config:
+    activation: tanh
+    include_static_data: True
+    input_dim: 8
+    max_diffusion_step: 1
+    num_rnn_layers: 2
+    rnn_units: 64
+    use_embedding: True
+trainer:
+  config:
+    ema_decay: 0.9971634063439073
+    ema: True
+    batch_size: 64
+    num_epochs: 50
+  optimizer:
+    lr: 0.002047912357577
+  criterion:
+    _target_: torch.nn.MSELoss
+
+evaluator:
+  config:
+    batch_size: 64

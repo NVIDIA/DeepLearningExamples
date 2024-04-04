@@ -1,0 +1,29 @@
+hydra:
+  sweeper:
+    params:
+      model.config.n_head: choice(1,2,4)
+      model.config.hidden_size: choice(96,128,192,256)
+      model.config.dropout: interval(0,0.5)
+      trainer.optimizer.lr: tag(log, interval(1e-5, 1e-2))
+      trainer.config.ema: choice(true, false)
+      +trainer.config.ema_decay: interval(0.9, 0.9999)
+
+model:
+  config:
+    quantiles: [0.1, 0.5, 0.9]
+    output_selector: 1
+
+dataset:
+  config:
+    train_samples: 1000000
+    MultiID: False
+    binarized: True
+
+trainer:
+  config:
+    batch_size: 512
+    num_epochs: 10
+
+  criterion:
+    _target_: criterion.QuantileLoss
+    quantiles: [0.1, 0.5, 0.9]

@@ -1,0 +1,24 @@
+model:
+  config:
+    dropout: 0.4314910225729797
+    embedding_dim: 32
+    hidden_size: 512
+    num_layers: 2
+    use_embedding: True
+
+trainer:
+  config: 
+    ema_decay: 0.977085992883599
+    ema: True
+    num_epochs: 30
+    batch_size: 1024
+  optimizer:
+    lr: 0.000290039852036727
+  criterion:
+    _target_: criterion.GaussianLogLikelihood
+
+dataset:
+  config:
+    train_samples: 1000000
+    MultiID: False
+    binarized: True

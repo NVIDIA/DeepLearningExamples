@@ -1,0 +1,24 @@
+model:
+  config:
+    conv_channels: 32
+    dropout: 0.19360183884699175
+    end_channels: 32
+    gcn_depth: 2
+    in_dim: 64
+    include_static_data: true
+    node_dim: 64
+    num_layers: 4
+    propalpha: 0.17556084891019508
+    residual_channels: 16
+    subgraph_size: 10
+    skip_channels: 32
+    tanhalpha: 2.1088432196246396
+
+trainer:
+  config:
+    ema: false
+  optimizer:
+    lr: 0.0002885058906688422
+  # IDK how to do a proper subtree substitution. That's the problem for the future me
+  criterion:
+    _target_: torch.nn.L1Loss

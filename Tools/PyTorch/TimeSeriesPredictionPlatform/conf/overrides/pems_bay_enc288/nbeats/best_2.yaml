@@ -1,0 +1,31 @@
+model:
+  config:
+    stacks:
+        - type: "generic"
+          num_blocks: 8
+          theta_dim: 8
+          share_weights: False
+          hidden_size: 1024
+        - type: "generic"
+          num_blocks: 4
+          theta_dim: 0
+          share_weights: False
+          hidden_size: 2048
+
+trainer:
+  config:
+    ema: True
+    ema_decay: 0.969555169903302
+    batch_size: 16384
+    num_epochs: 30
+  criterion:
+    _target_: torch.nn.MSELoss
+
+  optimizer:
+    lr: 0.0008749171957806745
+
+dataset:
+  config:
+    train_samples: 1000000
+    MultiID: False
+    binarized: True

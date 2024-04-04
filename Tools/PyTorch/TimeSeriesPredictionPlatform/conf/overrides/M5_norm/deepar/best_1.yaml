@@ -1,0 +1,26 @@
+trainer:
+  config:
+    ema: False
+    batch_size: 128
+    num_epochs: 20
+  optimizer:
+    lr: 0.0050003507487785225
+  criterion:
+    _target_: torch.nn.L1Loss
+
+
+model:
+  config:
+    dropout: 0.6408337621928981 
+    embedding_dim: 32
+    hidden_size: 512 
+    num_layers: 4
+
+dataset:
+  config:
+    train_samples: 1000000
+    memory_mapped: True
+
+evaluator:
+  config:
+    save_predictions: True

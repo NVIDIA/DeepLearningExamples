@@ -1,0 +1,23 @@
+_target_: models.mtgnn.MTGNN
+config:
+  use_gcn: True
+  use_embedding: True
+  include_static_data: True
+  gcn_depth: 2
+  num_nodes: ${dataset.config.time_series_count} # this will depend on the nodes/ids in the input dataset
+  dropout: 0.3
+  subgraph_size: 20
+  node_dim: 40
+  dilation_exponential: 1
+  conv_channels: 32
+  residual_channels: 32
+  skip_channels: 64
+  end_channels: 128
+  in_dim: 2
+  out_channels: 12
+  num_layers: 3
+  propalpha: 0.05
+  tanhalpha: 3
+defaults:
+    - _self_
+    - /trainer@_global_/trainer: ctltrainer

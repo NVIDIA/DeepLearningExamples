@@ -1,4 +1,4 @@
-# Copyright 2022 NVIDIA Corporation
+# Copyright 2022-2024 NVIDIA Corporation
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import pandas as pd
 import os
 
@@ -34,44 +35,21 @@ def select_test_group(df, encoder, example):
         final.append(g[encoder-1: encoder + len(g) - example])
     return  pd.concat((final))
 
-def load_xgb_df(dest_path, features, ds_type):
-    '''
-    Loads and does some light preprocessing on the train, valid and test.
-    First the csvs are read for each, then the features not present in the feature spec are dropped,
-    and finally the features with datatype as object are dropped.  The final step is to prevent issues with
-    xgboost training and cuDF casting.
-    '''
-    path = dest_path
-    if not isinstance(path, pd.DataFrame):
-        df = pd.read_csv(os.path.join(path, f"{ds_type}.csv"))
-    else:
-        df = path
-    all_features = [f.name for f in features] + ['_id_']
-    all_read = df.columns
-    to_drop = [c for c in all_read if c not in all_features]
-    df.drop(columns=to_drop, inplace=True)
-
-    object_columns = [c for c, d in zip(df.columns, df.dtypes) if d == "object"]
-    df.drop(columns=object_columns, inplace=True)
-
-    return df
-
-def xgb_multiID_preprocess(df, features, time_series_count):
-    date = [feature.name for feature in features if feature.feature_type == "TIME"][0]
-    target = [feature.name for feature in features if feature.feature_type == "TARGET"][0]
-    time_series_count = time_series_count
+def xgb_multiID_preprocess(df, time_feat, target_feat):
     target_values = []
-    for _, g in df.groupby("_id_"):
-        target_values.append(g[[date, target]])
-    final = target_values[0]
-    final.rename(columns={target: f'{target}_{0}'}, inplace=True)
-    for i in range(1, time_series_count):
-        target_values[i].rename(columns={target: f'{target}_{i}'}, inplace=True)
-        final = final.merge(target_values[i], on=date, how='outer')
-    
-    df = df.merge(final, on=date, how='outer')
-    return df
 
+    for i, g in df.groupby("_id_"):
+        d = g[[time_feat, target_feat]]
+        d.rename(columns={target_feat: f'{target_feat}_{i}'}, inplace=True)
+        target_values.append(d)
+
+    # faster than calling functools.reduce
+    final = target_values[0]
+    for t in target_values[1:]:
+        final = final.merge(t, on=time_feat, how='outer')
+    
+    df = df.merge(final, on=time_feat, how='outer')
+    return df
 
 def feat_adder(df, lag_feats, rolling_feats):
     '''

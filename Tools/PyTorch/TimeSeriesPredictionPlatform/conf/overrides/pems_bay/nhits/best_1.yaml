@@ -1,0 +1,23 @@
+model:
+  config:
+    n_mlp_layers: 4
+    hidden_size: 1024
+    activation: PReLU
+    pooling_mode: MaxPool1d
+
+    n_blocks: [2,2,2]
+    n_pool_kernel_size: [6,3,1]
+    n_freq_downsample: [3,3,1]
+
+trainer:
+  config:
+    ema: True
+    ema_decay: 0.9502718434543242
+    batch_size: 16384
+    num_epochs: 30
+
+  optimizer:
+    lr: 0.00011277779029888044
+
+  criterion:
+    _target_: torch.nn.MSELoss

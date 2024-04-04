@@ -1,0 +1,23 @@
+hydra:
+  sweeper:
+    params:
+      model.config.max_diffusion_step: choice(1,2)
+      model.config.input_dim: choice(4,8,16,32)
+      model.config.activation: choice(tanh,relu)
+      model.config.include_static_data: choice(true,false)
+      trainer.config.ema: choice(true, false)
+      +trainer.config.ema_decay: interval(0.9,0.9999)
+      trainer.optimizer.lr: tag(log,interval(1e-5,1e-2))
+      trainer/criterion: choice(L1,MSE)
+
+model:
+  config:
+    num_rnn_layers: 2
+    rnn_units: 128
+trainer:
+  config:
+    batch_size: 64
+    num_epochs: 30
+evaluator:
+  config:
+    batch_size: 64

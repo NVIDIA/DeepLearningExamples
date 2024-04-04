@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+_target_: models.deepar.DeepAR
+config:
+    model_type: autoregressive
+    num_layers: 3
+    hidden_size: 40
+    use_embedding: true
+    embedding_dim: 20
+    dropout: 0.1
+    quantiles: [0.5, 0.9]
+defaults:
+    - _self_
+    - /trainer@_global_/trainer: ctltrainer

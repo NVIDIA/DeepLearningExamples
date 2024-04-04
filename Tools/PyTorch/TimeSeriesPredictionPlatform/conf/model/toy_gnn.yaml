@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+_target_: models.gnn.ToyModel
+config:
+    model_type: graph
+    hidden_size: 128
+    num_layers: 3
+defaults:
+    - _self_
+    - /trainer@_global_/trainer: ctltrainer

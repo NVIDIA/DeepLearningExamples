@@ -1,0 +1,20 @@
+dataset:
+  config:
+    binarized: false
+    lag_features:
+      - name: 'Avg Speed'
+        min_value: 1
+        max_value: 12
+model:
+  config:
+    max_depth: 7
+    learning_rate: 0.01 # alias: eta
+    subsample: 0.95
+    colsample_bytree: 0.95
+    objective: reg:absoluteerror
+    n_rounds: 5000
+
+trainer:
+  callbacks:
+    early_stopping:
+      patience: 100

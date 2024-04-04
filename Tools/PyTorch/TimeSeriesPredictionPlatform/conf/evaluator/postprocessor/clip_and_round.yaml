@@ -1,0 +1,8 @@
+_target_: evaluators.evaluator.Postprocessor
+transformations:
+  - _target_: conf.conf_utils.partial
+    func: numpy.clip
+    a_min: 0
+    a_max: .inf
+  - _target_: conf.conf_utils.partial
+    func: numpy.round

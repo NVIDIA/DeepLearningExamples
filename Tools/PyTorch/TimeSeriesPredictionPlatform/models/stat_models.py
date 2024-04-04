@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,12 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# SPDX-License-Identifier: Apache-2.0
 from abc import ABC
 import os
 import pmdarima as pm
-# import cuml
 import numpy as np
-from cuml.tsa.auto_arima import AutoARIMA as cuMLAutoArima
 import pickle as pkl
 
 class StatModel(ABC):
@@ -40,38 +39,29 @@ class StatModel(ABC):
 class AutoARIMA(StatModel):
     def __init__(self, config):
         super().__init__(config)
-        self.models = []
+        self.models = {}
 
-    def fit(self, label, data):
-        self.model = pm.auto_arima(label, X=data)
-        self.models.append(self.model)
+    def fit(self, example):
+        id, label, data = example['id'], example['endog'], example['exog']
+        data = data if data.shape[-1] != 0 else None
+        model = pm.auto_arima(label, X=data, **self.config)
+        self.model = model
 
-    def predict(self, data, i):
-        model = self.models[i]
-        return model.predict(self.horizon, X=data)
-    
-    def save(self):
-        with open('arima.pkl', 'wb') as f:
-            pkl.dump(self.models, f)
-    
-    def load(self, path):
-        with open(os.path.join(path, 'arima.pkl'), 'rb') as f:
-            self.models = pkl.load(f)
-
-class CUMLAutoARIMA(StatModel):
-    def __init__(self, config):
-        super().__init__(config)
-        self.models = []
-
-    def fit(self, label, data):
-        self.model = cuMLAutoArima(label.astype(np.float64))
-        self.model.search()
-        self.model.fit()
-        self.models.append(self.model)
-
-    def predict(self, data, i):
-        model = self.models[i]
-        return model.forecast(self.horizon).get()
+    def predict(self, example):
+        model = self.model
+        if len(example['endog_update']) != 0:
+            model.update(example['endog_update'], X=data if (data := example['exog_update']).shape[-1] != 0 else None)
+        # Issue is related to https://github.com/alkaline-ml/pmdarima/issues/492
+        try:
+            preds = model.predict(self.horizon, X=data if (data := example['exog']).shape[-1] != 0 else None)
+        except ValueError as e:
+            if "Input contains NaN, infinity or a value too large for dtype('float64')." in str(e):
+                print(str(e))
+                preds = np.empty(self.horizon)
+                preds.fill(self.model.arima_res_.data.endog[-1])
+            else:
+                raise
+        return preds
     
     def save(self):
         with open('arima.pkl', 'wb') as f:

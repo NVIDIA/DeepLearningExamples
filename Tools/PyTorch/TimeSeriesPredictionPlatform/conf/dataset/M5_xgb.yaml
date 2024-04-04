@@ -1,0 +1,92 @@
+# SPDX-License-Identifier: MIT
+_target_: data.datasets.create_datasets
+config:
+    source_path: /workspace/datasets/M5/M5.csv
+    dest_path: /workspace/datasets/M5/
+    iterable: False
+    encoder_length: 28
+    input_length: 28
+    example_length: 56
+    valid_boundary: '2016-04-25'
+    train_samples: 1000000
+    time_series_count: 30490
+    drop_unseen: True
+    MultiID: False
+    features:
+      - name: 'id'
+        feature_type: 'ID'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 30490
+      - name: "date"
+        feature_type: 'TIME'
+        feature_embed_type: 'DATE'
+      - name: "weight"
+        feature_type: 'WEIGHT'
+        feature_embed_type: 'CONTINUOUS'
+      - name: "item_id"
+        feature_type: 'STATIC'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 3050
+      - name: "dept_id"
+        feature_type: 'STATIC'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 8
+      - name: "cat_id"
+        feature_type: 'STATIC'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 4
+      - name: "store_id"
+        feature_type: 'STATIC'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 11
+      - name: "state_id"
+        feature_type: 'STATIC'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 4
+      - name: "items_sold"
+        feature_type: 'TARGET'
+        feature_embed_type: 'CONTINUOUS'
+        scaler:
+            _target_: data.data_utils.Log1pScaler
+      - name: "wday"
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 8
+      - name: "month"
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 13
+      - name: "event_name_1"
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 31
+      - name: "event_type_1"
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 5
+      - name: "event_type_2"
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 3
+      - name: "event_name_2"
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 5
+      - name: "snap_CA"
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 3
+      - name: "snap_TX"
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 3
+      - name: "snap_WI"
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CATEGORICAL'
+        cardinality: 3
+      - name: "sell_price"
+        feature_type: 'KNOWN'
+        feature_embed_type: 'CONTINUOUS'
+        scaler:
+            _target_: sklearn.preprocessing.StandardScaler
+    binarized: False

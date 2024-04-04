@@ -1,0 +1,21 @@
+hydra:
+  sweeper:
+    params:
+      model.config.n_mlp_layers: choice(2,3,4)
+      model.config.hidden_size: choice(256,512,1024,2048)
+      model.config.activation: choice(ReLU,Softplus,Tanh,SELU,LeakyReLU,PReLU,Sigmoid)
+      model.config.pooling_mode: choice(MaxPool1d,AvgPool1d)
+
+      model.config.n_blocks: choice([1,1,1],[1,1,2],[1,2,1],[1,2,2],[2,1,1],[2,1,2],[2,2,1],[2,2,2])
+      model.config.n_pool_kernel_size: choice([6,3,1],[6,2,1],[4,2,1],[3,3,1],[2,2,1])
+      model.config.n_freq_downsample: choice([6,3,1],[6,2,1],[4,2,1],[3,3,1],[2,2,1])
+
+      trainer.optimizer.lr: tag(log, interval(1e-5, 1e-2))
+      trainer.config.ema: choice(true, false)
+      +trainer.config.ema_decay: interval(0.9, 0.9999)
+      trainer/criterion: choice(L1,MSE)
+
+trainer:
+  config:
+    batch_size: 16384
+    num_epochs: 15 

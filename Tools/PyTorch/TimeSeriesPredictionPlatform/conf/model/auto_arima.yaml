@@ -1,18 +1,21 @@
-# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#           http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
+# SPDX-License-Identifier: Apache-2.0
 _target_: models.stat_models.AutoARIMA
+config:
+    m: 1
+    start_p: 2
+    start_q: 2
+    max_p: 5
+    max_q: 5
+    max_d: 2
+    start_P: 1
+    start_Q: 1
+    max_P: 2
+    max_Q: 2
+    max_D: 1
+    information_criterion: aic
+    method: lbfgs
+    maxiter: 50
+
 
 defaults:
     - _self_

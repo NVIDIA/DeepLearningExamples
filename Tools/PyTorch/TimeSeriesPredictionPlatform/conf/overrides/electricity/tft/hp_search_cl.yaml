@@ -1,0 +1,16 @@
+hydra:
+  sweeper:
+    params:
+      model.config.n_head: choice(1,2,4)
+      model.config.hidden_size: choice(128,192,256,512)
+      model.config.dropout: interval(0,0.5)
+      trainer.optimizer.lr: tag(log, interval(1e-4, 1e-2))
+      trainer.config.ema: choice(true, false)
+      +trainer.config.ema_decay: interval(0.9, 0.9999)
+      +trainer.config.cl_update: choice(300,500,1000,1500)
+
+trainer:
+  config:
+    cl_start_horizon: 1
+    num_epochs: 15
+

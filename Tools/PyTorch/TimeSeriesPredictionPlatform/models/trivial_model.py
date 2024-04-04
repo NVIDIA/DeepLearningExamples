@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+# SPDX-License-Identifier: Apache-2.0
 import torch
 import torch.nn as nn
 
@@ -37,11 +37,9 @@ class TrivialModel(nn.Module):
         prev_predictions = targets.roll(1, 1)
         return prev_predictions[:, -self.predict_steps :, :]
 
-    # TODO: reenable usage of such functions 
     def test_with_last(self, batch):
         bs = max([tensor.shape[0] if tensor is not None else 0 for tensor in batch.values()])
         values = (
-            # TODO: this will become disfuntional after removing "targer_masked" from dataset. Seed comment in data_utils.py
             batch["target_masked"]
             .clone()[:, -1, :]
             .reshape((bs, 1, self.output_dim))

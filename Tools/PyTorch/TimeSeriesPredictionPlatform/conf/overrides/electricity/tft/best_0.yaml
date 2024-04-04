@@ -1,0 +1,21 @@
+model:
+  config:
+    dropout: 0.016031236175686903 
+    hidden_size: 192
+    n_head: 2
+    quantiles: [0.1, 0.5, 0.9]
+    output_selector: 1
+
+trainer:
+  config:
+    ema: True
+    ema_decay: 0.9960484760709238
+    batch_size: 1024
+    num_epochs: 15
+
+  optimizer:
+    lr: 0.002173780101542564
+
+  criterion:
+    _target_: criterion.QuantileLoss
+    quantiles: [0.1, 0.5, 0.9]

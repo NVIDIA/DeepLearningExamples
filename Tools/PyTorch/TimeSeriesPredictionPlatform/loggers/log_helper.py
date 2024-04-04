@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,23 +12,47 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# SPDX-License-Identifier: Apache-2.0
 import os
 import json
 import pandas as pd
 
 import dllogger
-from dllogger import JSONStreamBackend, Logger, StdOutBackend
-from .backends import AggregatorBackend, TensorBoardBackend, AverageMeter
+from dllogger import Logger
+from .backends import TensorBoardBackend, WandBBackend
 from omegaconf import OmegaConf
 
 from distributed_utils import is_main_process
+
+
+FIGURE_LOGGERS = (TensorBoardBackend, WandBBackend)
+
+
+class ExtendedLogger(Logger):
+    def __init__(self, *args, **kwargs):
+        super(ExtendedLogger, self).__init__(*args, **kwargs)
+        self._init_figure_loggers()
+
+    def _init_figure_loggers(self):
+        figure_loggers = [logger for logger in self.backends if isinstance(logger, FIGURE_LOGGERS)]
+        if not figure_loggers:
+            figure_loggers = None
+        self.figure_loggers = figure_loggers
+
+    def log_figures(self, figures=None):
+        if self.figure_loggers is None or not figures:
+            return
+        for fig, name, step in figures:
+            for logger in self.figure_loggers:
+                logger.log_figure(fig=fig, name=name, step=step)
+
 
 def jsonlog_2_df(path, keys):
     with open(path, 'r') as f:
         log = [json.loads(l[4:]) for l in f.readlines()]
         log = [l for l in log if l['type'] == 'LOG' and isinstance(l['step'], (int, list))]
         assert log[-1]['step'] == [], "Logfile is corrupted"
-        log[-1]['step']=log[-2]['step'] # Every log ends with step == []
+        log[-1]['step'] = log[-2]['step']  # Every log ends with step == []
         log = [
                 {
                     **{k:v for k,v in l.items() if not isinstance(v, dict)},
@@ -41,6 +65,7 @@ def jsonlog_2_df(path, keys):
         df = pd.DataFrame(log)
         df = df.groupby('step').mean()
         return df
+
 
 def empty_step_format(step):
     return ""
@@ -58,45 +83,29 @@ def no_string_metric_format(metric, metadata, value):
     return "{} : {} {}".format(metric, format.format(value) if value is not None else value, unit)
 
 
-def setup_logger(config, resume_training=False):
-    log_filename = config.get("log_filename", "log.json")
+def setup_logger(backends=[]):#, resume_training=False):
     if is_main_process():
-        backends = [
-            TensorBoardBackend(verbosity=dllogger.Verbosity.VERBOSE),
-            JSONStreamBackend(verbosity=dllogger.Verbosity.VERBOSE, filename=log_filename, append=True),
-            AggregatorBackend(verbosity=dllogger.Verbosity.VERBOSE, agg_dict={"loss": AverageMeter}),
-            StdOutBackend(
-                verbosity=dllogger.Verbosity.DEFAULT,
-                step_format=empty_step_format,
-                metric_format=no_string_metric_format,
-                prefix_format=empty_prefix_format,
-                ),
-        ]
-
-        logger = Logger(backends=backends)
+        logger = ExtendedLogger(backends=backends)
     else:
-        logger = Logger(backends=[])
+        logger = ExtendedLogger(backends=[])
 
     container_setup_info = get_framework_env_vars()
     logger.log(step="PARAMETER", data=container_setup_info, verbosity=dllogger.Verbosity.VERBOSE)
+    logger.metadata("loss", {"unit": "nat", "GOAL": "MINIMIZE", "STAGE": "TRAIN"})
+    logger.metadata("val_loss", {"unit": "nat", "GOAL": "MINIMIZE", "STAGE": "VAL"})
 
-    if not resume_training:
-        logger.metadata("loss", {"unit": "nat", "GOAL": "MINIMIZE", "STAGE": "TRAIN"})
-        logger.metadata("val_loss", {"unit": "nat", "GOAL": "MINIMIZE", "STAGE": "VAL"})
     return logger
 
-def restart_logger(config, logger):
-    """An utility function to nealty close every backend holding resources"""
-    for b in logger.backends:
-        if hasattr(b, 'close'):
-            b.close()
-    return setup_logger(config, resume_training=True)
 
 def log_parameters(logger, config):
     model_config = flatten_config(config.model)
     trainer_config = flatten_config(config.trainer)
     additional_fields = {'seed': config.seed}
-    logger.log(step="PARAMETER", data={**model_config, **trainer_config, **additional_fields}, verbosity=dllogger.Verbosity.VERBOSE)
+    logger.log(step="PARAMETER",
+               data={**model_config, **trainer_config, **additional_fields},
+               verbosity=dllogger.Verbosity.VERBOSE
+               )
+
 
 def flatten_config(config):
     config = OmegaConf.to_container(config, resolve=True)
@@ -109,6 +118,7 @@ def flatten_config(config):
     config = pd.json_normalize(config, sep='.')
     config = config.to_dict(orient='records')[0]
     return config
+
 
 def get_framework_env_vars():
     return {

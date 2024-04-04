@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@ import hydra
 from omegaconf import OmegaConf
 from triton.dataloader import get_dataloader_fn
 
-from loggers.log_helper import setup_logger
 import dllogger
 from data.data_utils import Preprocessor
+from evaluators.evaluator import unpack_predictions
 
 def run_inference_triton(config):
     cfg = config
@@ -70,18 +70,19 @@ def run_inference_triton(config):
         else:
             train, valid, test = hydra.utils.call(config.dataset)
         del train, valid
-        preds_full, labels_full, ids_full, weights_full = evaluator.predict_xgboost(test, max_batch_size=cfg.batch_size)
+        predictions_dict = evaluator.predict_xgboost(test, max_batch_size=cfg.batch_size)
+        preds_full, labels_full, ids_full, weights_full, _ = unpack_predictions(predictions_dict)
+
     elif config.dataset.config.get('stat', False):
         raise ValueError("Stat models not supported on triton")
     else:
         model_name = cfg.get("model_name") if cfg.get("model_name", None) else files_in_store[0]
         dataloader = get_dataloader_fn(cfg.checkpoint, cfg.batch_size)
-        preds_full, labels_full, ids_full, weights_full = evaluator.predict(dataloader, model_name)
+        predictions_dict = evaluator.predict(dataloader, model_name)
+        preds_full, labels_full, ids_full, weights_full, _ = unpack_predictions(predictions_dict)
 
-    #Need to merge the eval configs here
-    
     metrics = evaluator.evaluate(preds_full, labels_full, ids_full, weights_full)
-    logger = setup_logger(cfg)
+    logger = hydra.utils.call(config.logger)
     logger.log(step=[], data={k: float(v) for k, v in metrics.items()}, verbosity=dllogger.Verbosity.VERBOSE)
     logger.log(step='event', data={"String": "Evaluation Metrics: {}".format(metrics)}, verbosity=dllogger.Verbosity.DEFAULT)
     print(metrics)

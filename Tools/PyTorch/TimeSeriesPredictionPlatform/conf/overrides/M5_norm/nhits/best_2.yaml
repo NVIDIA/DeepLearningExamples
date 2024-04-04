@@ -1,0 +1,31 @@
+trainer:
+  config:
+    batch_size: 16384
+    ema: False
+    num_epochs: 30
+  
+  optimizer:
+    lr: 0.00048837469680114
+  
+  criterion:
+    _target_: torch.nn.MSELoss
+
+model:
+  config:
+    activation: Sigmoid
+    pooling_mode: AvgPool1d
+    hidden_size: 2048
+    n_blocks: [2,1,1]
+    n_freq_downsample: [2,2,1]
+    n_pool_kernel_size: [6,3,1]
+    n_mlp_layers: 2
+
+dataset:
+  config:
+    memory_mapped: True 
+    train_samples: 1000000
+
+evaluator:
+  config:
+    save_predictions: True
+    batch_size: 16384

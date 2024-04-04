@@ -1,0 +1,15 @@
+dataset:
+  config:
+    lag_features:
+      - name: value
+        min_value: 1
+        max_value: 25
+model:
+  config:
+    max_depth: 6
+    learning_rate: 0.17
+    subsample: 1.0
+    colsample_bytree: 0.8
+    colsample_bylevel: 0.8
+    gamma: 0.1
+    n_rounds: 300

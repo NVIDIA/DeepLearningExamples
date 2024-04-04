@@ -1,0 +1,46 @@
+hydra:
+  sweeper:
+    params:
+      model.config.stacks.0.n_blocks: choice(1,2,4,8)
+      model.config.stacks.1.n_blocks: choice(1,2,4,8)
+      model.config.stacks.2.n_blocks: choice(1,2,4,8)
+
+      model.config.stacks.0.n_freq_downsample: choice(1,2,4,8)
+      model.config.stacks.1.n_freq_downsample: choice(1,2,4,8)
+      model.config.stacks.2.n_freq_downsample: choice(1,2,4,8)
+
+      model.config.stacks.0.n_pool_kernel_size: choice(1,2,4)
+      model.config.stacks.1.n_pool_kernel_size: choice(1,2,4)
+      model.config.stacks.2.n_pool_kernel_size: choice(1,2,4)
+
+      model.config.stacks.0.pooling_mode: choice(MaxPool1d,AvgPool1d)
+      model.config.stacks.1.pooling_mode: choice(MaxPool1d,AvgPool1d)
+      model.config.stacks.2.pooling_mode: choice(MaxPool1d,AvgPool1d)
+
+      model.config.stacks.0.activation: choice(ReLU,Softplus,Tanh,SELU,LeakyReLU,PReLU,Sigmoid)
+      model.config.stacks.1.activation: choice(ReLU,Softplus,Tanh,SELU,LeakyReLU,PReLU,Sigmoid)
+      model.config.stacks.2.activation: choice(ReLU,Softplus,Tanh,SELU,LeakyReLU,PReLU,Sigmoid)
+
+      model.config.stacks.0.hidden_size: choice(512,1024,2048)
+      model.config.stacks.1.hidden_size: choice(512,1024,2048)
+      model.config.stacks.2.hidden_size: choice(512,1024,2048)
+
+      model.config.stacks.0.mlp_layers: choice(2,3,4,5)
+      model.config.stacks.1.mlp_layers: choice(2,3,4,5)
+      model.config.stacks.2.mlp_layers: choice(2,3,4,5)
+
+      trainer.optimizer.lr: tag(log, interval(1e-5, 1e-2))
+      trainer.config.ema: choice(true, false)
+      +trainer.config.ema_decay: interval(0.9, 0.9999)
+
+dataset:
+  config:
+    train_samples: 1000000
+    MultiID: False
+    binarized: True
+
+
+trainer:
+  config:
+    batch_size: 16384
+    num_epochs: 30

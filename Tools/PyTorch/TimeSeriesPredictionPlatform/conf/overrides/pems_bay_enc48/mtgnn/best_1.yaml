@@ -1,0 +1,27 @@
+model:
+  config:
+    gcn_depth: 2
+    dropout: 0.016036807238775166
+    subgraph_size: 10
+    node_dim: 128
+    conv_channels: 128
+    residual_channels: 128
+    skip_channels: 128
+    end_channels: 128
+    num_layers: 4
+    propalpha: 0.06561429105075554
+    tanhalpha: 2.830891112175783
+    in_dim: 16
+
+trainer:
+  config:
+    num_epochs: 20
+    ema: true
+    ema_decay: 0.9524567685080492
+    batch_size: 64
+
+  optimizer:
+    lr: 0.0004674225053420664
+
+  criterion: 
+    _target_: torch.nn.MSELoss

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# SPDX-License-Identifier: Apache-2.0
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -33,6 +34,13 @@ class TSPP_criterion_wrapper(nn.Module):
         self.cl_counter = 0
 
     def forward(self, preds, labels, weights=None, **kwargs):
+        """
+        preds: Tensor of size BS x time x num_targets x num_estimators
+               or BS x time x num_ids x num_targets x num_estimators in case of MultiTarget dataset
+        labels: Tensor of size BS x time x num_targets
+               or BS x time x num_ids x num_targets case of MultiTarget dataset
+        weights: Tensor of the same shape as labels
+        """
         disallowed_kwargs = set(kwargs.keys()) - self.allowed_arguments
         if disallowed_kwargs:
             raise TypeError(f'Invalid keyword arguments {disallowed_kwargs} for {type(self.criterion)}')
@@ -47,8 +55,6 @@ class TSPP_criterion_wrapper(nn.Module):
                     self.curr_horizon += 1
                 self.cl_counter += 1
     
-        # We expect preds to be shaped batch_size x time x num_estimators in 3D case
-        # or batch_size x time x num_targets x num_estimators in 4D case
         if len(preds.shape) == 4 and len(labels.shape) == 3:
             labels = labels.unsqueeze(-1)
             if weights is not None:
@@ -56,7 +62,6 @@ class TSPP_criterion_wrapper(nn.Module):
 
         loss = self.criterion(preds, labels, **kwargs) 
         if weights is not None and weights.numel():
-            # Presence of weights is detected on config level. Loss is reduced accordingly
             loss *= weights
             loss = loss.view(-1, *loss.shape[2:]).mean(0)
 
@@ -69,7 +74,7 @@ class QuantileLoss(nn.Module):
         self.quantiles = quantiles
         self.reduce = reduction == 'mean'
 
-    def forward(self, predictions, targets,weights=None):
+    def forward(self, predictions, targets):
         if not hasattr(self, 'q'):
             self.register_buffer('q', predictions.new(self.quantiles))
         diff = predictions - targets
@@ -88,12 +93,35 @@ class GaussianLogLikelihood(nn.Module):
         # Targets with shape [BS, window, 1]
 
         mu = predictions[..., 0:1]
-        sigma = predictions[..., 1:2]
-        distribution = torch.distributions.normal.Normal(mu, sigma)
-        likelihood = distribution.log_prob(targets)
-        likelihood = -likelihood.view(targets.shape[0], targets.shape[1])
-        loss = torch.unsqueeze(likelihood,-1)
+        sig = predictions[..., 1:2]
+        var = sig ** 2
+        loss =  -((targets - mu) ** 2) / (2 * var) - sig.log()
+        if self.reduce:
+            loss = loss.mean(0)
+        return -loss
+
+
+class TweedieLoss(nn.Module):
+    def __init__(self, reduction='mean', p=1.1):
+        super().__init__()
+        assert 1.0 < p < 2.0, 'Variance power should be in 1..2 interval'
+        self.reduce = reduction == 'mean'
+        self.register_buffer('variance_power', torch.tensor(p))
+    
+    def forward(self, predictions, targets):
+        # Inputs with shape [BS, window, 1]
+        # Targets with shape [BS, window, 1]
+
+        rho = self.get_buffer('variance_power').to(device=predictions.device)
+        predictions[predictions < 1e-10] = 1e-10
+        log_preds = torch.log(predictions) 
+        likelihood = -targets * torch.exp(log_preds * (1 - rho)) / (1 - rho) + torch.exp(log_preds * (2 - rho)) / (2 - rho)
+
+        likelihood = likelihood.view(targets.shape[0], targets.shape[1])
+
+        loss = torch.unsqueeze(likelihood, -1)
 
         if self.reduce:
             loss = loss.mean(0)
         return loss
+

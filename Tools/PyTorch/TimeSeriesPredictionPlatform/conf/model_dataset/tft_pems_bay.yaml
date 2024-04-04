@@ -1,0 +1,13 @@
+dataset:
+  config:
+    MultiID: false
+
+model:
+  config:
+    quantiles: [0.1, 0.5, 0.9]
+    output_selector: 1
+
+trainer:
+  criterion:
+    _target_: criterion.QuantileLoss
+    quantiles: [0.1, 0.5, 0.9]

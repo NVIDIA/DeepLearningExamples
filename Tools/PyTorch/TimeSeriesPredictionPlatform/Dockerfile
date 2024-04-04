@@ -1,5 +1,19 @@
+# Copyright 2021-2024 NVIDIA CORPORATION
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 #SPDX-License-Identifier: Apache-2.0
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:22.04-py3
+ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:22.12-py3
 
 FROM ${FROM_IMAGE_NAME}
 
@@ -30,15 +44,15 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 
-# Install perf_client required library
 RUN apt-get update && \
     apt-get install -y libb64-dev libb64-0d curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Set workdir and python path
 WORKDIR /workspace
 ENV PYTHONPATH /workspace
+
+RUN rm /usr/lib/libxgboost.so
 
 ADD requirements.txt /workspace/requirements.txt
 ADD triton/requirements.txt /workspace/triton/requirements.txt
@@ -46,10 +60,15 @@ RUN pip install -r /workspace/requirements.txt
 RUN pip install -r /workspace/triton/requirements.txt
 RUN pip install nvidia-pyindex
 RUN pip install git+https://github.com/NVIDIA/dllogger#egg=dllogger
-RUN pip install --no-cache-dir -r requirements.txt -f https://data.dgl.ai/wheels/repo.html
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install dgl==1.0.1 -f https://data.dgl.ai/wheels/cu117/repo.html
 
-# Add model files to workspace
+ADD ./hydra_plugins /workspace/hydra_plugins
+RUN pip install /workspace/hydra_plugins/hydra_optuna_sweeper/
+RUN pip install /workspace/hydra_plugins/hydra_joblib_launcher/
+RUN pip install /workspace/hydra_plugins/hydra_multiprocessing_launcher/
+RUN pip install /workspace/hydra_plugins/hydra_torchrun_launcher/
+RUN cp /workspace/hydra_plugins/optuna_sweeper.py /usr/local/lib/python3.8/dist-packages/hydra/plugins/sweeper.py
+
 ADD . /workspace
-
-RUN pip install -e distributed_launcher
 RUN rm -rf examples docker-examples tutorials

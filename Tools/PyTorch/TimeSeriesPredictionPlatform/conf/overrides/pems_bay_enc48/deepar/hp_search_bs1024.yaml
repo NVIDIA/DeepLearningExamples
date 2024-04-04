@@ -1,0 +1,19 @@
+hydra:
+  sweeper:
+    params:
+      model.config.num_layers: choice(2,3,4,5)
+      model.config.hidden_size: choice(64,128,256,512,1024)
+      model.config.embedding_dim: choice(16,32,64,128)
+      model.config.dropout: interval(0,0.5)
+      trainer.optimizer.lr: tag(log, interval(1e-4, 1e-2))
+      trainer.config.ema: choice(true, false)
+      +trainer.config.ema_decay: interval(0.9, 0.9999)
+model:
+  config:
+    use_embedding: true
+trainer:
+  config:
+    batch_size: 1024
+    num_epochs: 20
+  criterion:
+    _target_: criterion.GaussianLogLikelihood

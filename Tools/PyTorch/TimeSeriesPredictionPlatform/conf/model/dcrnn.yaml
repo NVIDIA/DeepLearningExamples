@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+_target_: models.dcrnn.DCRNN
+config:
+    cl_decay_steps: 2000
+    horizon: 12
+    use_embedding: True
+    include_static_data: True
+    input_dim: 2
+    max_diffusion_step: 2
+    num_nodes: 325
+    num_rnn_layers: 2
+    output_dim: 1
+    rnn_units: 64
+    encoder_length: 12
+    use_curriculum_learning: true 
+    activation: tanh
+    model_type: graph
+
+defaults:
+    - _self_
+    - /trainer@_global_/trainer: ctltrainer

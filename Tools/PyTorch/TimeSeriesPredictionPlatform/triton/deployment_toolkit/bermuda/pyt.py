@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -161,6 +161,8 @@ class PyTorchModelLoader(BaseLoader):
     def _trace(self, model: Model, dataloader_fn) -> Model:
         device = get_model_device(model.handle)
         dummy_input = get_sample_input(dataloader_fn(), device)
+        # Run dummy forward to initialize lazy modules
+        model.handle(*dummy_input)
         traced_model = torch.jit.trace_module(model.handle, {"forward": dummy_input})
         return Model(traced_model, precision=model.precision, inputs=model.inputs, outputs=model.outputs)
 

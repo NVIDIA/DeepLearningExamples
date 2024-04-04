@@ -1,0 +1,27 @@
+logger:
+  _target_: loggers.log_helper.setup_logger
+  backends:
+    - _target_: dllogger.JSONStreamBackend
+      verbosity: 1 #dllogger.Verbosity.VERBOSE
+      filename: log.json
+      append: true
+    - _target_: loggers.backends.AggregatorBackend
+      verbosity: 1 #dllogger.Verbosity.VERBOSE
+      agg_dict:
+        loss: 
+          _target_: loggers.backends.AverageMeter
+    - _target_: dllogger.StdOutBackend
+      verbosity: 0 #dllogger.Verbosity.DEFAULT
+      # The 3 following entries are hacks to prevent recursive instantiation
+      # and pass function as an argument to StdOutBackend
+      step_format:
+        _target_: hydra.utils.get_method
+        path: loggers.log_helper.empty_step_format
+      metric_format:
+        _target_: hydra.utils.get_method
+        path: loggers.log_helper.no_string_metric_format
+      prefix_format:
+        _target_: hydra.utils.get_method
+        path: loggers.log_helper.empty_prefix_format
+    #- _target_: loggers.backends.WandBBackend
+    #  verbosity: 1

@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION. All rights reserved.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,12 +20,17 @@ import dllogger
 import hydra
 import numpy as np
 import torch
-from apex import amp
+import importlib
+try:
+    from apex import amp
+except ImportError:
+    print("Nvidia apex not available. Can't use apex Automatic Mixed Precision (AMP) for training.\
+    Please check: https://github.com/NVIDIA/apex for installation")
 from omegaconf import OmegaConf
 
 import conf.conf_utils
-from loggers.log_helper import setup_logger
 from data.data_utils import Preprocessor
+from evaluators.evaluator import unpack_predictions
 
 
 def run_inference(config):
@@ -62,13 +67,15 @@ def run_inference(config):
         model.to(device=device)
         precision = cfg.precision
         assert precision in ["fp16", "fp32"], "Precision needs to be either fp32 or fp16"
-        if precision == "fp16":
+        if precision == "fp16" and importlib.util.find_spec("apex"):
             model = amp.initialize(model, opt_level="O2")
     else:
         model.load(cfg.checkpoint)
-    preds_full, labels_full, ids_full, weights_full = evaluator.predict(model)
-    eval_metrics = evaluator.evaluate(preds_full, labels_full, ids_full, weights_full)
-    logger = setup_logger(cfg)
+
+    predictions_dict = evaluator.predict(model)
+    preds, labels, ids, weights, timestamps, _ = unpack_predictions(predictions_dict)
+    eval_metrics = evaluator.evaluate(preds, labels, ids, weights, timestamps)
+    logger = hydra.utils.call(config.logger)
     logger.log(step=[], data={k: float(v) for k, v in eval_metrics.items()}, verbosity=dllogger.Verbosity.VERBOSE)
     logger.log(step='event', data={"String": "Evaluation Metrics: {}".format(eval_metrics)}, verbosity=dllogger.Verbosity.DEFAULT)
     return eval_metrics

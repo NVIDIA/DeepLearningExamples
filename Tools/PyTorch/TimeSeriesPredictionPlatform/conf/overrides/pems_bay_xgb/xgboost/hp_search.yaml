@@ -1,0 +1,10 @@
+hydra:
+  sweeper:
+    params:
+      model.config.max_depth: choice(4,5,6,7,8)
+      model.config.learning_rate: interval(1e-4, 1e-2)
+      model.config.subsample: interval(0.7,1)
+      model.config.colsample_bytree: interval(0.8,1)
+      model.config.n_rounds: choice(500, 1000, 2000, 3000, 4000, 5000, 7000)
+      model.config.objective: choice(reg:squarederror, reg:absolutederror)
+      +model.config.min_child_weight: choice(1,2,4,8,16,32)

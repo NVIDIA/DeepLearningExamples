@@ -1,0 +1,21 @@
+hydra:
+  sweeper:
+    params:
+      model.config.stacks.0.type: choice(trend,generic)
+      model.config.stacks.1.type: choice(seasonality,generic)
+      model.config.stacks.0.num_blocks: choice(2,4,8)
+      model.config.stacks.1.num_blocks: choice(2,4,8)
+      model.config.stacks.0.theta_dim: choice(2,4,8,16)
+      model.config.stacks.1.theta_dim: choice(0,2,4,8,16)
+      model.config.stacks.0.share_weights: choice(True,False)
+      model.config.stacks.1.share_weights: choice(True,False)
+      model.config.stacks.0.hidden_size: choice(512,1024,2048)
+      model.config.stacks.1.hidden_size: choice(512,1024,2048,4096)
+      trainer.optimizer.lr: tag(log, interval(1e-5, 1e-2))
+      trainer.config.ema: choice(true, false)
+      +trainer.config.ema_decay: interval(0.9, 0.9999)
+      trainer.config.batch_size: choice(2048, 4096, 8192, 16384)
+
+trainer:
+  config:
+    num_epochs: 15 

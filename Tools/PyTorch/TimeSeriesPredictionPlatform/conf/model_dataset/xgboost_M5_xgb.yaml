@@ -1,0 +1,59 @@
+dataset:
+  config:
+    lag_features:
+      - name: items_sold
+        min_value: 1
+        max_value: 15
+    moving_average_features:
+      - name: items_sold
+        window_size: 28
+        op: median
+      - name: items_sold
+        window_size: 28
+        op: mean
+      - name: items_sold
+        window_size: 28
+        op: max
+      - name: items_sold
+        window_size: 28
+        op: min
+      - name: items_sold
+        window_size: 28
+        op: std
+      - name: items_sold
+        window_size: 7
+        op: median
+      - name: items_sold
+        window_size: 7
+        op: mean
+      - name: items_sold
+        window_size: 7
+        op: max
+      - name: items_sold
+        window_size: 7
+        op: min
+      - name: items_sold
+        window_size: 7
+        op: std
+model:
+  config:
+    max_depth: 8
+    learning_rate: 0.04
+    eta: 0.04
+    subsample: 0.85
+    colsample_bytree: 0.95
+    objective: reg:absoluteerror
+    nthread: 28
+    n_rounds: 10000
+    eval_metric: mae
+
+evaluator:
+  postprocessor:
+    _target_: evaluators.evaluator.Postprocessor
+    transformations:
+      - _target_: conf.conf_utils.partial
+        func: numpy.clip
+        a_min: 0
+        a_max: .inf
+      - _target_: conf.conf_utils.partial
+        func: numpy.round

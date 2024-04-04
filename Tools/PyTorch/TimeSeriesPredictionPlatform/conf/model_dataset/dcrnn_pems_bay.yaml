@@ -1,0 +1,12 @@
+trainer:
+  config:
+    batch_size: 64
+    num_epochs: 50
+
+dataset:
+  config:
+    binarized: False
+
+evaluator:
+  config:
+    batch_size: 64

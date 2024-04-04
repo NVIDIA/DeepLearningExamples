@@ -1,0 +1,19 @@
+defaults:
+  - override hydra/sweeper: optuna
+  - override hydra/sweeper/sampler: grid
+
+hydra:
+  sweeper:
+    direction: minimize
+    study_name: sphere
+    storage: null
+    n_trials: 20
+    n_jobs: 1
+    params:
+      x: choice(-1, 1)
+      y: range(-1.0, 1.0, step=1)
+      z: choice("foo", "bar")
+
+x: 1
+y: 1
+z: foo
