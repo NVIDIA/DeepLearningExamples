@@ -28,7 +28,7 @@ import tensorflow as tf
 import horovod.tensorflow as hvd
 import time
 
-flags = tf.flags
+flags = tf.compat.v1.flags
 FLAGS = None
 
 def extract_flags():
@@ -509,7 +509,6 @@ class FeatureWriter(object):
     self._writer.close()
 
 def main():
-
     FLAGS = extract_flags()
     tokenizer = tokenization.FullTokenizer(
         vocab_file=FLAGS.vocab_file, do_lower_case=FLAGS.do_lower_case)

@@ -71,7 +71,7 @@ class LogTrainRunHook(tf.estimator.SessionRunHook):
     self.count += 1
 
     # Removing first 100 step + first five steps after every checkpoint save
-    if (self.global_step - self.init_global_step) <= self.num_steps_ignore_xla or (self.global_step - self.init_global_step) % self.save_checkpoints_steps < 5:
+    if (self.global_step - self.init_global_step) <= self.num_steps_ignore_xla or (self.save_checkpoints_steps > 0 and (self.global_step - self.init_global_step) % self.save_checkpoints_steps < 5):
       print("Skipping time record for ", self.global_step, " due to checkpoint-saving/warmup overhead")
       self.skipped += 1
     else:
