@@ -22,8 +22,7 @@
 #ifndef TRITON_KALDI_ASR_CLIENT_H_
 #define TRITON_KALDI_ASR_CLIENT_H_
 
-namespace ni = nvidia::inferenceserver;
-namespace nic = nvidia::inferenceserver::client;
+namespace ti = triton::client;
 
 // time with arbitrary reference
 double inline gettime_monotonic() {
@@ -36,7 +35,7 @@ double inline gettime_monotonic() {
 
 class TritonASRClient {
   struct TritonClient {
-    std::unique_ptr<nic::InferenceServerGrpcClient> triton_client;
+    std::unique_ptr<ti::InferenceServerGrpcClient> triton_client;
   };
 
   std::string url_;
