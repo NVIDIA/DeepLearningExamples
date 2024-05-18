@@ -13,7 +13,7 @@
 # limitations under the License.
 networkx==2.5
 numpy
-onnx==1.8.0
+onnx==1.13.0
 onnxruntime==1.5.2
 pycuda>=2019.1.2
 PyYAML>=5.2
