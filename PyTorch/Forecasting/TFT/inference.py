@@ -111,7 +111,8 @@ def predict(args, config, model, data_loader, scalers, cat_encodings, extend_tar
 
 def visualize_v2(args, config, model, data_loader, scalers, cat_encodings):
     unscaled_predictions, unscaled_targets, ids, _ = predict(args, config, model, data_loader, scalers, cat_encodings, extend_targets=True)
-
+    unscaled_predictions = torch.tensor(unscaled_predictions)
+    unscaled_targets = torch.tensor(unscaled_targets)
     num_horizons = config.example_length - config.encoder_length + 1
     pad = unscaled_predictions.new_full((unscaled_targets.shape[0], unscaled_targets.shape[1] - unscaled_predictions.shape[1], unscaled_predictions.shape[2]), fill_value=float('nan'))
     pad[:,-1,:] = unscaled_targets[:,-num_horizons,:]
@@ -138,6 +139,8 @@ def inference(args, config, model, data_loader, scalers, cat_encodings):
     if args.joint_visualization or args.save_predictions:
         ids = torch.from_numpy(ids.squeeze())
         #ids = torch.cat([x['id'][0] for x in data_loader.dataset])
+        unscaled_predictions = torch.tensor(unscaled_predictions)
+        unscaled_targets = torch.tensor(unscaled_targets)
         joint_graphs = torch.cat([unscaled_targets, unscaled_predictions], dim=2)
         graphs = {i:joint_graphs[ids == i, :, :] for i in set(ids.tolist())}
         for key, g in graphs.items(): #timeseries id, joint targets and predictions
