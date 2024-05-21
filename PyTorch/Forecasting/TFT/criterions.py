@@ -29,6 +29,10 @@ class QuantileLoss(nn.Module):
         return losses
 
 def qrisk(pred, tgt, quantiles):
+    if isinstance(pred, torch.Tensor):
+        pred = pred.detach().cpu().numpy()
+    if isinstance(tgt, torch.Tensor):
+        tgt = tgt.detach().cpu().numpy()
     diff = pred - tgt
     ql = (1-quantiles)*np.clip(diff,0, float('inf')) + quantiles*np.clip(-diff,0, float('inf'))
     losses = ql.reshape(-1, ql.shape[-1])
