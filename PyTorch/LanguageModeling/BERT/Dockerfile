@@ -29,7 +29,7 @@ COPY . .
 
 # Install lddl
 RUN apt-get install -y libjemalloc-dev
-RUN pip install git+https://github.com/NVIDIA/lddl.git
+RUN pip install git+https://github.com/NVIDIA/LDDL.git
 RUN python -m nltk.downloader punkt
 
 RUN pip install lamb_amp_opt/
