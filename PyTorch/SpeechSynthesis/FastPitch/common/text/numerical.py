@@ -112,7 +112,7 @@ def _expand_roman(m):
 def _expand_number(m):
     _, number, suffix = re.split(r"(\d+(?:'?\d+)?)", m.group(0))
     number = int(number)
-    if number > 1000 < 10000 and (number % 100 == 0) and (number % 1000 != 0):
+    if 1000 < number < 10000 and (number % 100 == 0) and (number % 1000 != 0):
         text = _inflect.number_to_words(number // 100) + " hundred"
     elif number > 1000 and number < 3000:
         if number == 2000:
