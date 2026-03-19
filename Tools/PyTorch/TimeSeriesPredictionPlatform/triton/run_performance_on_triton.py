@@ -40,16 +40,10 @@ from .deployment_toolkit.warmup import performance_evaluation_warmup
 
 LOGGER = logging.getLogger("run_performance_on_triton")
 
-if LooseVersion(sys.version) >= LooseVersion("3.8.0"):
-    from importlib.metadata import version
+from importlib.metadata import version
 
-    TRITON_CLIENT_VERSION = LooseVersion(version("tritonclient"))
-    TRITON_MODEL_ANALYZER_VERSION = LooseVersion(version("triton-model-analyzer"))
-else:
-    import pkg_resources
-
-    TRITON_CLIENT_VERSION = LooseVersion(pkg_resources.get_distribution("tritonclient").version)
-    TRITON_MODEL_ANALYZER_VERSION = LooseVersion(pkg_resources.get_distribution("triton-model-analyzer").version)
+TRITON_CLIENT_VERSION = LooseVersion(version("tritonclient"))
+TRITON_MODEL_ANALYZER_VERSION = LooseVersion(version("triton-model-analyzer"))
 
 
 def _log_dict(title: str, dict_: Dict[str, Any]):
