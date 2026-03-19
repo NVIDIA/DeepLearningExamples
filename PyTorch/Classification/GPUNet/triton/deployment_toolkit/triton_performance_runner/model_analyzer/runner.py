@@ -29,16 +29,10 @@ from ...utils import log_dict, parse_server_url
 from .model_analyzer import ModelAnalyzer, ModelAnalyzerMode
 from .model_analyzer_config import ModelAnalyzerConfig
 
-if LooseVersion(sys.version) >= LooseVersion("3.8.0"):
-    from importlib.metadata import version
+from importlib.metadata import version
 
-    TRITON_CLIENT_VERSION = LooseVersion(version("tritonclient"))
-    TRITON_MODEL_ANALYZER_VERSION = LooseVersion(version("triton-model-analyzer"))
-else:
-    import pkg_resources
-
-    TRITON_CLIENT_VERSION = LooseVersion(pkg_resources.get_distribution("tritonclient").version)
-    TRITON_MODEL_ANALYZER_VERSION = LooseVersion(pkg_resources.get_distribution("triton-model-analyzer").version)
+TRITON_CLIENT_VERSION = LooseVersion(version("tritonclient"))
+TRITON_MODEL_ANALYZER_VERSION = LooseVersion(version("triton-model-analyzer"))
 
 LOGGER = logging.getLogger("triton_performance_runner.model_analyzer")
 

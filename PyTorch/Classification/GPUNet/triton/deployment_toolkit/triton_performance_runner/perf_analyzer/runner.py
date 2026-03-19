@@ -29,14 +29,9 @@ from ...utils import log_dict, parse_server_url
 from .perf_analyzer import PerfAnalyzer
 from .perf_config import PerfAnalyzerConfig
 
-if LooseVersion(sys.version) >= LooseVersion("3.8.0"):
-    from importlib.metadata import version
+from importlib.metadata import version
 
-    TRITON_CLIENT_VERSION = LooseVersion(version("tritonclient"))
-else:
-    import pkg_resources
-
-    TRITON_CLIENT_VERSION = LooseVersion(pkg_resources.get_distribution("tritonclient").version)
+TRITON_CLIENT_VERSION = LooseVersion(version("tritonclient"))
 
 LOGGER = logging.getLogger("triton_performance_runner.perf_analyzer")
 
