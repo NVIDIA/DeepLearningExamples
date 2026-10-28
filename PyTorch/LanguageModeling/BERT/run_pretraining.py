@@ -720,9 +720,21 @@ def main():
                         return args, train_time_raw, stats, skip_fwd_bwd_for_perf
 
                 if no_log_steps == 0:
+                    # Mirrors the final-step branch above: average_loss is a per-rank sum, so it
+                    # must be divided and all-reduced across every rank, not just the main one
+                    # (all_reduce is a collective op -- calling it only under is_main_process()
+                    # would hang the other ranks). Without this, every periodic log line here
+                    # reported rank 0's local-shard loss instead of the true cross-rank mean;
+                    # only the final_loss logged once training ends was ever actually averaged.
+                    stats.device_stat('average_loss').div_(args.log_freq * args.gradient_accumulation_steps)
+                    if torch.distributed.is_initialized():
+                        stats.device_stat('average_loss').div_(get_world_size())
+                        torch.distributed.all_reduce(stats.device_stat('average_loss'))
+                    stats.host_stat('average_loss').copy_(stats.device_stat('average_loss'))
+
                     if is_main_process():
                         dllogger.log(step=(epoch, dynamic_optimizer_step,),
-                                     data={"average_loss": stats.host_stat_value('average_loss') / (args.log_freq * args.gradient_accumulation_steps),
+                                     data={"average_loss": stats.host_stat_value('average_loss'),
                                            "learning_rate": stats.host_stat_value('learning_rate'),
                                            "skipped_steps": int(stats.host_stat_value('skipped_optimizer_steps'))})
                         if stats.host_stat_value('skip_optimizer_step') > 0.:
